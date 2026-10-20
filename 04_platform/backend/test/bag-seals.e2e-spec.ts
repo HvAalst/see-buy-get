@@ -259,6 +259,11 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     expect((await http().get(`/v1/sbg/ops/tamper/${two}`).set(operator).expect(200)).body.exceptions[0]).toMatchObject({ byAs: 'driver', byName: 'Baraka' });
     await http().post(`/v1/sbg/ops/tamper/${two}/release`).set(operator).send({ reason: 'Rider called it in; the hub counts the parcel on arrival', by: 'Halima at operations' }).expect(201);
     expect((await drop(two, { photoRef: await photo(hubToken, 'seal'), asClosed: false }).expect(201)).body.emptied).toHaveLength(1);
+    // The trail: closed, taken, reported, received — each anchored as it was kept, and intact.
+    const trail = (await http().get(`/v1/sbg/ops/trail/${two}`).set(operator).expect(200)).body as { kind: string; steps: Array<{ kind: string; state: string }> };
+    expect(trail.kind).toBe('bag');
+    expect(trail.steps.map((s) => s.kind)).toEqual(expect.arrayContaining(['bag_closed', 'bag_taken', 'exception', 'bag_received']));
+    expect(trail.steps.every((s) => s.state === 'intact')).toBe(true);
 
     // A bag its driver never read — their phone lost — is not stranded: the hub reports it, operations releases it, and it
     // is received as found.

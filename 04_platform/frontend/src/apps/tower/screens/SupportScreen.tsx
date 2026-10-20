@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import type { LoadFound } from '../../../shared/loadFinder';
 import { isLoadLabel, ssccOfScan } from '../../../shared/scan';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
+import { TrailPanel } from './TrailPanel';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -79,6 +80,7 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
           <p class="crow__sub">{t('common.loadScan.what', { description: load.description, from: load.pickupLabel, to: load.destLabel })}</p>
           {load.sscc ? <p class="chint mono-t">SSCC {load.sscc}</p> : null}
           <ConsignmentNoteCard freightId={load.freightId} api={actions.client()?.api as never} />
+          <TrailPanel unitRef={load.code} actions={actions} />
         </section>
       ) : null}
       {state.done ? (

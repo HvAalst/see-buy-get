@@ -44,6 +44,8 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Declare one lost after a search — refused before a week without a scan — or mark it found. */
     declareLost: (parcelId: string, body: { reason: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/lost' as never, { params: { path: { id: parcelId } }, body } as never) as never),
+    /** The trail: a load's or a bag's anchored steps, each checked now against the chain. */
+    trail: (ref: string) => sbg.request((c) => c.GET('/v1/sbg/ops/trail/{ref}', { params: { path: { ref } } })),
     /** What staff opened: each record a member of staff read by its name or number, who, when, how many times. */
     staffReads: (query: { by?: string; record?: string }) => sbg.request((c) => c.GET('/v1/sbg/staff-reads', { params: { query } })),
     /** Round 35 — a unit held under the tamper protocol, by its code or number: every exception, who found it, the photographs. */

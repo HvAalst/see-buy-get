@@ -60,6 +60,10 @@ export interface BagClosure {
   /** Round 37 — the driver who took it: the number read off the seal, a photograph, as it was closed. */
   taken?: BagReceipt;
   receipt?: BagReceipt;
+  /** The trail: the closing, the take and the receipt, each anchored in the chain as it was kept. */
+  closedTxId?: string;
+  takenTxId?: string;
+  receiptTxId?: string;
 }
 
 /** How a bag is closed: the number on its coded seal and a photograph — or, without a seal, the photograph alone. */

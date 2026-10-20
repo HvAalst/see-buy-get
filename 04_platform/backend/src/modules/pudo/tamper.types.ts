@@ -70,6 +70,8 @@ export interface TamperException {
   hash: string;
   /** Kept beside the fingerprinted body, never inside it. */
   release?: { at: string; by: string; reason: string };
+  /** Its fingerprint anchored in the chain as it was kept (exceptionAnchorOf). */
+  anchorTxId?: string;
 }
 
 export class TamperRelease {

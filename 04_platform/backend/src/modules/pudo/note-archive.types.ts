@@ -42,6 +42,8 @@ export interface NoteVersion {
   sha256: string;
   /** The note exactly as it read at that moment. */
   note: ConsignmentNote;
+  /** Its fingerprint anchored in the chain (noteAnchorOf), when it was frozen. Absent on copies made before. */
+  anchorTxId?: string;
 }
 
 /**
@@ -147,6 +149,11 @@ export function canonicalJson(value: unknown): string {
 }
 
 /** This copy's fingerprint. Printed on the document so two people can compare what they are holding. */
+/** What is anchored of a frozen copy: which note, which copy, at which moment, and its fingerprint. */
+export function noteAnchorOf(number: string, v: { seq: number; stage: string; sha256: string; at: string }): Record<string, unknown> {
+  return { n: number, seq: v.seq, st: v.stage, sha256: v.sha256, at: v.at };
+}
+
 export function noteFingerprint(note: ConsignmentNote): string {
   return createHash('sha256').update(canonicalJson(note)).digest('hex');
 }

@@ -5,6 +5,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { AgentService } from './agent.service';
 import { DispatchService } from './dispatch.service';
 import type { Freight } from './dispatch.types';
@@ -92,6 +93,8 @@ export class TamperService implements OnModuleInit {
     private readonly events: EventBus,
     private readonly closures: BagClosureService,
     @Optional() private readonly cases?: FlagCaseService,
+    // The trail: each exception's fingerprint anchored as it is kept. Optional for the specs.
+    @Optional() private readonly ledger?: LedgerService,
   ) {}
 
   onModuleInit(): void {
@@ -371,7 +374,9 @@ export class TamperService implements OnModuleInit {
       at: new Date(seen.at).toISOString(),
       ...(seen.receivedAt ? { receivedAt: seen.receivedAt } : {}),
     };
-    const e: TamperException = { ...unsigned, hash: createHash('sha256').update(canonicalJson(unsigned)).digest('hex') };
+    const signed = { ...unsigned, hash: createHash('sha256').update(canonicalJson(unsigned)).digest('hex') };
+    const anchorTxId = this.ledger?.anchor(exceptionAnchorOf(signed)).txId;
+    const e: TamperException = { ...signed, ...(anchorTxId ? { anchorTxId } : {}) };
     this.log.set(e.exceptionId, e);
     return e;
   }
@@ -427,6 +432,20 @@ export interface BagTamperInput {
  * Round 36 — where the reporter holds the bag or is receiving it: a shop, a bag standing at it or on a bus addressed to it;
  * a hub, a bag standing at it or on a bus (a hub's dock takes any bag a bus drops, as dropBag does).
  */
+/** What is anchored of an exception: which, and its fingerprint. */
+export function exceptionAnchorOf(e: { exceptionId: string; hash: string }): Record<string, unknown> {
+  return { e: e.exceptionId, h: e.hash };
+}
+
+/** An exception's fingerprint worked out again from what is kept: everything but the fingerprint, its anchor and the release. */
+export function exceptionHashOf(e: TamperException): string {
+  const { hash: _h, anchorTxId: _a, release: _r, ...unsigned } = e;
+  void _h;
+  void _a;
+  void _r;
+  return createHash('sha256').update(canonicalJson(unsigned)).digest('hex');
+}
+
 function bagPlaceOf(t: Tote, r: BagReporter): TamperStage | undefined {
   if (t.status === 'free') return undefined;
   // Round 37 — the driver: a bag claimed for them and still where it stands, or one they carry.

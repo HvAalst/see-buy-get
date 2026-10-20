@@ -299,6 +299,12 @@ export class FreightReload {
   @ApiPropertyOptional({ type: GeoPoint }) location?: GeoPoint;
 }
 
+/** The trail: a load taken over or delivered, anchored in the chain as it was kept. */
+export class CustodyAnchor {
+  @ApiProperty({ enum: ['picked_up', 'delivered'] }) step!: 'picked_up' | 'delivered';
+  txId!: string;
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -470,6 +476,8 @@ export class Freight {
    * kept here beside it, wherever the two differ — so a phone with a wrong clock can be seen.
    */
   pickupReceivedAt?: string;
+  /** The trail: taken over and delivered, each anchored in the chain as it was kept (custodyAnchorOf). */
+  @ApiPropertyOptional({ type: [CustodyAnchor] }) custodyAnchors?: CustodyAnchor[];
   deliveryReceivedAt?: string;
   // S34 — the price is LOCKED at claim (the claiming vehicle's profile × the market multiplier at that
   // moment), so a later surge or a driver profile edit never changes what was agreed. paidStatus tracks the

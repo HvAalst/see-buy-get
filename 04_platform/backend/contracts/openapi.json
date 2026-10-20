@@ -28868,6 +28868,33 @@
         }
       }
     },
+    "/v1/sbg/ops/trail/{ref}": {
+      "get": {
+        "operationId": "Trail.of",
+        "parameters": [
+          {
+            "name": "ref",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrailView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -40569,6 +40596,25 @@
           "paidTo"
         ]
       },
+      "CustodyAnchor": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string",
+            "enum": [
+              "picked_up",
+              "delivered"
+            ]
+          },
+          "txId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "txId"
+        ]
+      },
       "ClientRef": {
         "type": "object",
         "properties": {
@@ -41309,6 +41355,13 @@
                 "$ref": "#/components/schemas/FreightClaim"
               }
             ]
+          },
+          "custodyAnchors": {
+            "description": "The trail: taken over and delivered, each anchored in the chain as it was kept (custodyAnchorOf).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustodyAnchor"
+            }
           },
           "priceOrigin": {
             "type": "string",
@@ -59180,6 +59233,96 @@
         "required": [
           "items",
           "total"
+        ]
+      },
+      "TrailStep": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "picked_up",
+              "delivered",
+              "note",
+              "exception",
+              "bag_closed",
+              "bag_taken",
+              "bag_received"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "intact",
+              "altered",
+              "not_anchored"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "description": "What it was, in a word: the note copy's moment, the exception's finding."
+          },
+          "txId": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "state",
+          "at"
+        ]
+      },
+      "TrailChain": {
+        "type": "object",
+        "properties": {
+          "brokenAt": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "anchors": {
+            "type": "number"
+          },
+          "whole": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "anchors",
+          "whole"
+        ]
+      },
+      "TrailView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "load",
+              "bag"
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrailStep"
+            }
+          },
+          "chain": {
+            "$ref": "#/components/schemas/TrailChain"
+          },
+          "ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "steps",
+          "ref"
         ]
       },
       "MilestoneTermDto": {

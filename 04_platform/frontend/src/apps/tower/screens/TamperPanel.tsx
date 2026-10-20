@@ -3,6 +3,7 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { findingWords, heldLine, heldWhen, releaseBlocker, type TamperUnit } from '../../../shared/tamper';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { DocumentStrip } from './DocumentStrip';
+import { TrailPanel } from './TrailPanel';
 
 const BY_KEY: Record<'driver' | 'shop' | 'hub', MessageKey> = {
   driver: 'tower.tamper.byDriver',
@@ -90,6 +91,8 @@ export function TamperPanel({ subject, live, state, actions, onReleased }: { sub
           </div>
         ) : null}
       </section>
+      {/* The trail: a load's or a bag's steps, anchored as they were kept, checked now. */}
+      {unit.unitType !== 'parcel' ? <TrailPanel unitRef={unit.ref} actions={actions} /> : null}
 
       {live && unit.held && releasing ? (
         <section class="cons__panel">

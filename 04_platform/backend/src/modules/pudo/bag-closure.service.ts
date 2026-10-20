@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { type BagClosure, type BagClosureKind, type BagParty, MAX_BAG_SEAL } from './bag-closure.types';
 import { keyOf } from './load-seal.service';
 import { MediaService } from './media.service';
@@ -27,6 +28,8 @@ export class BagClosureService {
   constructor(
     private readonly media: MediaService,
     private readonly totes: ToteService,
+    // The trail: each closing, take and receipt anchored as it is kept. Optional for the specs.
+    @Optional() private readonly ledger?: LedgerService,
   ) {}
 
   /** Registered rather than injected: the tamper protocol reads bags. */
@@ -71,7 +74,9 @@ export class BagClosureService {
         ...(step.receivedAt ? { closedReceivedAt: step.receivedAt } : {}),
         closedBy: by,
       };
-      const closure: BagClosure = { ...unsigned, hash: createHash('sha256').update(canonicalJson(unsigned)).digest('hex') };
+      const hash = createHash('sha256').update(canonicalJson(unsigned)).digest('hex');
+      const closedTxId = this.ledger?.anchor({ c: closureId, h: hash }).txId;
+      const closure: BagClosure = { ...unsigned, hash, ...(closedTxId ? { closedTxId } : {}) };
       this.closures.set(closureId, closure);
       this.media.adopt(photoRef, ownerDid, link, 'seal');
       this.totes.markClosed(tote.code, kind, closureId);
@@ -94,10 +99,9 @@ export class BagClosureService {
     }
     const { photoRef, numberRead, reported, link } = this.read(tote, closure, ownerDid, input, 'receipt');
     return (step) => {
-      this.closures.set(closure.closureId, {
-        ...closure,
-        receipt: { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), by, photoRef, ...(numberRead ? { numberRead } : {}), asClosed: !reported, ...(reported ? { asFound: true } : {}) },
-      });
+      const receipt = { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), by, photoRef, ...(numberRead ? { numberRead } : {}), asClosed: !reported, ...(reported ? { asFound: true } : {}) };
+      const receiptTxId = this.ledger?.anchor({ c: closure.closureId, receipt }).txId;
+      this.closures.set(closure.closureId, { ...closure, receipt, ...(receiptTxId ? { receiptTxId } : {}) });
       this.media.adopt(photoRef, ownerDid, link, 'seal');
       this.media.anchorBagTerminal(closure.closureId);
     };
@@ -116,10 +120,9 @@ export class BagClosureService {
     if (closure.taken?.by.did === driverDid) return () => undefined;
     const { photoRef, numberRead, reported, link } = this.read(tote, closure, driverDid, input, 'take');
     return (step) => {
-      this.closures.set(closure.closureId, {
-        ...closure,
-        taken: { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), by, photoRef, ...(numberRead ? { numberRead } : {}), asClosed: !reported, ...(reported ? { asFound: true } : {}) },
-      });
+      const taken = { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), by, photoRef, ...(numberRead ? { numberRead } : {}), asClosed: !reported, ...(reported ? { asFound: true } : {}) };
+      const takenTxId = this.ledger?.anchor({ c: closure.closureId, taken }).txId;
+      this.closures.set(closure.closureId, { ...closure, taken, ...(takenTxId ? { takenTxId } : {}) });
       this.media.adopt(photoRef, driverDid, link, 'seal');
     };
   }
@@ -167,6 +170,13 @@ export class BagClosureService {
   private travelling(key: string): boolean {
     return [...this.closures.values()].some((c) => c.key === key && !c.receipt);
   }
+}
+
+/** A closing's fingerprint worked out again from what is kept: what was closed, never what came after it. */
+export function closureHashOf(c: BagClosure): string {
+  const { hash: _h, taken: _t, receipt: _r, closedTxId: _c, takenTxId: _tt, receiptTxId: _rt, ...unsigned } = c;
+  void [_h, _t, _r, _c, _tt, _rt];
+  return createHash('sha256').update(canonicalJson(unsigned)).digest('hex');
 }
 
 /** How each reading says what it asks for and what follows. */

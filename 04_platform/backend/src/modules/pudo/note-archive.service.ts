@@ -1,4 +1,5 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { actingDid } from '../../foundation/auth/acting';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -22,6 +23,7 @@ import {
   ProofAnswer,
   STAGE_WORDS,
   boardDocId,
+  noteAnchorOf,
   noteFingerprint,
   runDocId,
 } from './note-archive.types';
@@ -76,6 +78,8 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
     private readonly departures: DepartureService,
     private readonly departureNotes: DepartureNoteService,
     private readonly events: EventBus,
+    // The trail (the ISO 28000 check): each copy's fingerprint anchored in the chain. Optional for the specs.
+    @Optional() private readonly ledger?: LedgerService,
   ) {}
 
   onModuleInit(): void {
@@ -255,7 +259,10 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
     if (last && last.stage === stage && last.sha256 === sha256) return;
 
     const at = new Date().toISOString();
-    const version: NoteVersion = { seq: (last?.seq ?? 0) + 1, stage, event, at, sha256, note };
+    const seq = (last?.seq ?? 0) + 1;
+    // Anchored as it is frozen: a stored copy changed later no longer matches what the chain holds.
+    const anchorTxId = this.ledger?.anchor(noteAnchorOf(note.number, { seq, stage, sha256, at })).txId;
+    const version: NoteVersion = { seq, stage, event, at, sha256, note, ...(anchorTxId ? { anchorTxId } : {}) };
     const doc: ArchivedNote = {
       docId,
       number: note.number,
@@ -565,6 +572,11 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
    * THE DOCUMENT HAS TO STOP MOVING, so from the first copy onward the note somebody reads is the copy,
    * not a fresh render against whatever the parties are called today.
    */
+  /** Every frozen copy of a load's note, oldest first: for the trail. */
+  versionsOfFreight(freightId: string): NoteVersion[] {
+    return [...(this.docs.get(boardDocId(freightId))?.versions ?? [])];
+  }
+
   latestForFreight(freightId: string): NoteVersion | undefined {
     return this.latest(boardDocId(freightId));
   }

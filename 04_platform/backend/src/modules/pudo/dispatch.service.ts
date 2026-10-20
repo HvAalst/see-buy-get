@@ -58,6 +58,7 @@ import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRe
 import { LoadSealService, sealCheck } from './load-seal.service';
 import { BagClosureService } from './bag-closure.service';
 import type { HeldByAuthority } from './load-detention.types';
+import { LedgerService } from '../../foundation/ledger/ledger.service';
 import type { LoadSeal, LoadSealView, SealBreakCause, SealsAtDelivery } from './load-seal.types';
 import { FINDING_WORDS, type TamperStage, type UnitHold } from './tamper.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
@@ -346,6 +347,13 @@ export interface TamperHooks {
   noteLines(freightId: string): string[];
 }
 
+/** What is anchored of a load changing hands, worked out from the load as kept: a field changed later no longer matches. */
+export function custodyAnchorOf(f: Freight, step: 'picked_up' | 'delivered'): Record<string, unknown> {
+  return step === 'picked_up'
+    ? { f: f.freightId, st: step, at: f.pickedUpAt, by: f.loadSafety?.by, photo: f.loadSafety?.securementPhotoRef }
+    : { f: f.freightId, st: step, at: f.deliveredAt, by: f.proofOfDelivery?.by, receiver: f.proofOfDelivery?.receiverName, photo: f.proofOfDelivery?.photoRef };
+}
+
 /** A load held by an authority (load-detention.service.ts), as dispatch reads it. */
 export interface DetentionHooks {
   current(freightId: string): HeldByAuthority | undefined;
@@ -416,6 +424,8 @@ export class DispatchService {
     @Optional() private readonly seals?: LoadSealService,
     // Round 37 — how a bag was closed, for the driver holding it. Optional for the same reason; without it a bag says nothing.
     @Optional() private readonly bagClosures?: BagClosureService,
+    // The trail (the ISO 28000 check): a load taken over and delivered, anchored in the chain. Optional for the specs.
+    @Optional() private readonly ledger?: LedgerService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
@@ -2946,6 +2956,7 @@ export class DispatchService {
     // FP3 — box 18: what the carrier saw when the goods were handed over. Optional, and only ever the driver's words.
     const reservations = check?.reservations?.trim();
     f.reservations = reservations ? { note: reservations.slice(0, 500), at: f.pickedUpAt, by: driverDid } : undefined;
+    this.anchorCustody(f, 'picked_up');
     // Bind the securement photo to the freight so its retention clock is the freight's, not the 48h orphan
     // reaper. adopt() (not link()) because this id came from the CLIENT: it only re-kinds/links a photo the
     // DRIVER owns and that isn't attached elsewhere, so a passed id can never launder another actor's media
@@ -3010,6 +3021,7 @@ export class DispatchService {
     f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])], at: f.deliveredAt, by: driverDid };
     const remarks = check?.remarks?.trim();
     f.proofOfDelivery = { receiverName: receiverName.slice(0, 120), photoRef: podPhotoId, ...(remarks ? { remarks: remarks.slice(0, 500) } : {}), at: f.deliveredAt, by: driverDid };
+    this.anchorCustody(f, 'delivered');
     // Same adopt-not-link rule as the securement photo (S29): only the driver's own, unattached upload is taken.
     this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     // S34 — pay the driver their LOCKED earning on delivery, exactly once. A system-level ledger outflow
@@ -3409,6 +3421,12 @@ export class DispatchService {
   /** A load held by the police or customs (load-detention.service.ts) registers itself here: it reads the load. */
   registerDetentions(hooks: DetentionHooks): void {
     this.detentions = hooks;
+  }
+
+  /** The trail: a step of custody anchored in the chain as it is kept — what changed hands, when, from whom, to whom. */
+  private anchorCustody(f: Freight, step: 'picked_up' | 'delivered'): void {
+    const txId = this.ledger?.anchor(custodyAnchorOf(f, step)).txId;
+    if (txId) f.custodyAnchors = [...(f.custodyAnchors ?? []).filter((a) => a.step !== step), { step, txId }];
   }
 
   /** Held by an authority now, as its driver said: only on the road. */
