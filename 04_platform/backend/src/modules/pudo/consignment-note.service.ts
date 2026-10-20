@@ -102,11 +102,29 @@ export class ConsignmentNoteService implements OnModuleInit {
 
   /* ------------------------------------------------------------------ the note -- */
 
-  noteFor(freightId: string): ConsignmentNote {
-    return this.build(this.dispatch.requireFreightPublic(freightId) as Freight);
+  /** The note as it reads now — for this reader, where it says the seals (see readsSealNumbers). */
+  noteFor(freightId: string, reader?: IntrospectionResult): ConsignmentNote {
+    const f = this.dispatch.requireFreightPublic(freightId) as Freight;
+    return this.build(f, { sealNumbers: this.readsSealNumbers(f, reader) });
   }
 
-  build(f: Freight): ConsignmentNote {
+  /**
+   * Round 35 — WHO READS A SEAL'S NUMBER (the user: "Fix both now"). The shipper that wrote it, and staff, always.
+   * Anybody else — the carrier, whoever holds the tracking link — only once the goods are taken over: until then the
+   * driver is to read each number off the door, and a number he could look up first would make that reading worth nothing.
+   */
+  readsSealNumbers(f: Freight, reader: IntrospectionResult | undefined): boolean {
+    if (f.pickedUpAt || reader?.role === 'operator') return true;
+    return Boolean(reader?.did) && this.isShipper(f, reader!.did!);
+  }
+
+  /** The business or store that sends the goods: the one that wrote the seals. */
+  isShipper(f: Freight, did: string): boolean {
+    return f.postedByDid === did || this.shipperDidOf(f) === did;
+  }
+
+  /** `sealNumbers` defaults to whether the goods are taken over: a copy frozen for every reader says them only then. */
+  build(f: Freight, opts: { sealNumbers?: boolean } = {}): ConsignmentNote {
     const sender = this.senderOf(f);
     const agent = f.onBehalfOf ? this.agentOf(f.postedByDid) : undefined;
     const carrier = this.carrierOf(f);
@@ -145,7 +163,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     // A reload onto another of the carrier's vehicles after a breakdown is written here, and nowhere else.
     for (const r of (f.reloads ?? []).filter((x) => x.aboard)) reservations.push(reloadLine(r));
     // Round 15 — the seals: each with what became of it; a broken one, or one not as written at the door, observed in box 18.
-    const seals = this.dispatch.sealsOnNote?.(f.freightId) ?? { lines: [], observations: [] };
+    const seals = this.dispatch.sealsOnNote?.(f.freightId, opts.sealNumbers ?? Boolean(f.pickedUpAt)) ?? { lines: [], observations: [] };
     reservations.push(...seals.observations);
     const carriage = this.carriageOf(f);
     const attempts = (f.deliveryAttempts ?? []).map((a) => `Delivery attempted ${when(a.at)}: ${a.outcome === 'absent' ? 'nobody to receive the goods' : a.outcome === 'refused' ? 'the receiver refused the goods' : 'the place could not be reached'}${a.note ? ` — ${a.note}` : ''}`);
@@ -265,10 +283,11 @@ export class ConsignmentNoteService implements OnModuleInit {
         const facts = this.dispatch.passageFacts(f, now);
         return facts.passages ? { ...facts, passages: facts.passages.map(withoutSeals) } : facts;
       })(),
-      // Round 15 — the seal numbers, for whoever receives it to look at the door; and whether each is still on.
+      // Round 15 — the seal numbers, for whoever receives it to look at the door; and whether each is still on. Round 35 —
+      // only once the goods are taken over: the link is printed on the load's labels, where the driver reads it too.
       ...(() => {
-        const seals = this.dispatch.sealsOf?.(f) ?? [];
-        return seals.length ? { seals: seals.map((s) => ({ number: s.number, state: s.state })) } : {};
+        const seals = f.pickedUpAt ? (this.dispatch.sealsOf?.(f) ?? []) : [];
+        return seals.length ? { seals: seals.map((s) => ({ number: s.number!, state: s.state })) } : {}; // sealsOf reads them whole
       })(),
     };
   }

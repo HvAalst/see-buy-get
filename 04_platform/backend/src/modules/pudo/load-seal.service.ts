@@ -52,9 +52,9 @@ export class LoadSealService {
     return this.of(freightId).filter((s) => s.state === 'on');
   }
 
-  views(freightId: string): LoadSealView[] {
+  views(freightId: string, numbers = true): LoadSealView[] {
     const all = this.of(freightId);
-    return all.map((s) => viewOf(s, all));
+    return all.map((s) => (numbers ? viewOf(s, all) : withheld(viewOf(s, all))));
   }
 
   /** What the driver's app is told: which seals to find on the door, and what each is — never its number. */
@@ -269,11 +269,14 @@ export class LoadSealService {
 
   /* ------------------------------------------------------------------ the note -- */
 
-  /** The seals as the consignment note says them: one line a seal, with what became of it, in order. */
-  noteLines(freightId: string): string[] {
+  /**
+   * The seals as the consignment note says them: one line a seal, with what became of it, in order. Round 35 — `numbers`
+   * false for a reader the numbers are withheld from until the goods are taken over (see ConsignmentNoteService).
+   */
+  noteLines(freightId: string, numbers = true): string[] {
     const all = this.of(freightId);
     return all.map((s, i) => {
-      const what = [`Seal ${i + 1}: ${s.number}`, s.sealClass ? `ISO 17712 class ${s.sealClass}` : '', s.maker ?? '', s.appliedBy === 'customs' ? 'customs seal' : 'the sender’s seal'].filter(Boolean).join(' · ');
+      const what = [`Seal ${i + 1}: ${numbers ? s.number : 'its number is read off the door at taking over'}`, s.sealClass ? `ISO 17712 class ${s.sealClass}` : '', s.maker ?? '', s.appliedBy === 'customs' ? 'customs seal' : 'the sender’s seal'].filter(Boolean).join(' · ');
       const replaces = s.replaces ? all.find((x) => x.sealId === s.replaces) : undefined;
       const story = [
         replaces ? `put on by customs in place of ${replaces.number}${replaces.replaced?.post ? ` at ${replaces.replaced.post}` : ''}, ${day(s.writtenAt)}${replaces.replaced?.officer ? ` (officer: ${replaces.replaced.officer})` : ''}` : `written by ${s.writtenBy}, ${day(s.writtenAt)}`,
@@ -313,6 +316,16 @@ const BREAK_WORDS: Record<SealBreakCause, string> = {
   found_broken: 'found broken',
   other: 'broken',
 };
+
+/**
+ * Round 35 — a seal as a reader sees it before the goods are taken over, when it is not the shipper's or staff's to read:
+ * which seal and what it is, never its number — the driver reads that off the door, and could not if he had looked it up.
+ */
+function withheld(v: LoadSealView): LoadSealView {
+  const { number: _number, ...rest } = v;
+  void _number;
+  return { ...rest, numberWithheld: true };
+}
 
 function viewOf(s: LoadSeal, all: LoadSeal[]): LoadSealView {
   const matched = s.readings.find((r) => r.stage === 'pickup');

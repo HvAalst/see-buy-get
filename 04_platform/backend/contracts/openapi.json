@@ -45177,6 +45177,14 @@
       "LoadSealView": {
         "type": "object",
         "properties": {
+          "number": {
+            "type": "string",
+            "description": "As printed on it. Round 35 — withheld from the carrier and the tracking page until the goods are taken over."
+          },
+          "numberWithheld": {
+            "type": "boolean",
+            "description": "Round 35 — the number is not this reader's yet: it is read off the door at taking over."
+          },
           "sealClass": {
             "type": "string",
             "enum": [
@@ -45265,9 +45273,6 @@
           "sealId": {
             "type": "string"
           },
-          "number": {
-            "type": "string"
-          },
           "writtenAt": {
             "type": "string"
           }
@@ -45279,7 +45284,6 @@
           "broken",
           "atDelivery",
           "sealId",
-          "number",
           "writtenAt"
         ]
       },

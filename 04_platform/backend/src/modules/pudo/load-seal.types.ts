@@ -86,7 +86,10 @@ export interface LoadSeal {
 /** A seal as the shipper, its system, the note and staff read it: what it is and what became of it — never who read it. */
 export class LoadSealView {
   sealId: string;
-  number: string;
+  /** As printed on it. Round 35 — withheld from the carrier and the tracking page until the goods are taken over. */
+  @ApiPropertyOptional() number?: string;
+  /** Round 35 — the number is not this reader's yet: it is read off the door at taking over. */
+  @ApiPropertyOptional() numberWithheld?: boolean;
   @ApiPropertyOptional({ enum: SEAL_CLASSES }) sealClass?: SealClass;
   @ApiPropertyOptional() maker?: string;
   @ApiProperty({ enum: SEAL_APPLIED_BY }) appliedBy: SealAppliedBy;

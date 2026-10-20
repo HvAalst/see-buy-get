@@ -3377,8 +3377,8 @@ export class DispatchService {
   }
 
   /** The seals as the consignment note says them, and what box 18 must observe of them. */
-  sealsOnNote(freightId: string): { lines: string[]; observations: string[] } {
-    return { lines: this.seals?.noteLines(freightId) ?? [], observations: this.seals?.noteObservations(freightId) ?? [] };
+  sealsOnNote(freightId: string, numbers = true): { lines: string[]; observations: string[] } {
+    return { lines: this.seals?.noteLines(freightId, numbers) ?? [], observations: this.seals?.noteObservations(freightId) ?? [] };
   }
 
   /** What its driver said on the road, and — crossing a border — where it has got to: for the shipper, its system, the page. */

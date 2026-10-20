@@ -512,6 +512,21 @@ describe('route constraints — the road as its drivers report it', () => {
       expect(codesOf(s.checkRoute({ from: NAIROBI, to: NAKURU }))).toEqual(['ROAD_WASHED_OUT']);
     });
 
+    it('stops everything on a road or at a border reported closed — declared as blocking, and now blocking (round 35)', () => {
+      const road = svc();
+      road.report({ kind: 'ROAD_CLOSED', at: ON_THE_ROAD, by: 'did:driver:a' });
+      expect(road.checkRoute({ from: NAIROBI, to: NAKURU })).toEqual([expect.objectContaining({ kind: 'legal', code: 'ROAD_CLOSED' })]);
+      const border = svc();
+      border.report({ kind: 'BORDER_CLOSED', at: ON_THE_ROAD, by: 'did:driver:a' });
+      expect(codesOf(border.checkRoute({ from: NAIROBI, to: NAKURU }))).toEqual(['BORDER_CLOSED']);
+      // Every kind declared as blocking blocks with nothing about the load to clear it: none is dropped in silence.
+      for (const kind of CONSTRAINT_KINDS.filter((k) => CONSTRAINT_EFFECT[k].blocks && CONSTRAINT_EFFECT[k].measure === 'none' && k !== 'NO_HAZMAT')) {
+        const s = svc();
+        s.report({ kind, at: ON_THE_ROAD, by: 'did:driver:a' });
+        expect(s.checkRoute({ from: NAIROBI, to: NAKURU }).length).toBeGreaterThan(0);
+      }
+    });
+
     it('never turns an ADVISORY into a reason to refuse a load', () => {
       // A ferry, a weighbridge and a checkpoint cost a haulier time and nothing else. A board that weights
       // "there is a weighbridge" the same as "this bridge will not take you" teaches them to skim past both.

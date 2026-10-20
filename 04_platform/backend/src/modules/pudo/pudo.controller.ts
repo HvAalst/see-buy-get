@@ -6745,7 +6745,7 @@ export class SbgController {
     // ONCE A COPY HAS BEEN FROZEN, THAT IS THE NOTE. A live re-render against today's facts is not the
     // document anybody signed — see note-archive.types.ts. Before the goods move there is nothing to
     // freeze, and the load's own record is the only truth there is.
-    return this.archive.latestForFreight(id)?.note ?? this.notes.noteFor(id);
+    return this.archive.latestForFreight(id)?.note ?? this.notes.noteFor(id, actor);
   }
 
   /** The same note as a printable page. */
@@ -6756,7 +6756,7 @@ export class SbgController {
   @AtTheCounter()
   consignmentNoteHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
     this.notes.requireReader(id, actor);
-    return this.notes.htmlFor(this.archive.latestForFreight(id)?.note ?? this.notes.noteFor(id));
+    return this.notes.htmlFor(this.archive.latestForFreight(id)?.note ?? this.notes.noteFor(id, actor));
   }
 
   /* ------------------------------------------------------------ THE SHIPMENT ARCHIVE -- */

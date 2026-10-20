@@ -288,10 +288,19 @@ export class RouteConstraintService {
         } else if (c.value != null && input.grossWeightKg > c.value) {
           out.push({ kind: effect.kind, code: 'OVER_WEIGHT', message: `${Math.round(c.value / 1000)} t limit on this road — you would cross at ${Math.round(input.grossWeightKg / 1000)} t` });
         }
-      } else if (c.kind === 'NO_HAZMAT' && input.hazmat) {
-        out.push({ kind: effect.kind, code: 'HAZMAT_PROHIBITED', message: 'Hazardous cargo is not allowed on this road' });
+      } else if (c.kind === 'NO_HAZMAT') {
+        if (input.hazmat) out.push({ kind: effect.kind, code: 'HAZMAT_PROHIBITED', message: 'Hazardous cargo is not allowed on this road' });
       } else if (c.kind === 'WASHOUT') {
         out.push({ kind: effect.kind, code: 'ROAD_WASHED_OUT', message: 'This road is reported washed out' });
+      } else if (c.kind === 'ROAD_CLOSED') {
+        // Round 35 — declared as blocking from the start, and never turned into a blocker: a load on a road reported closed
+        // was offered as if nothing were there.
+        out.push({ kind: effect.kind, code: 'ROAD_CLOSED', message: `This road is reported closed${c.status === 'disputed' ? ' (somebody reports it open again; still treat it as closed)' : ''}` });
+      } else if (c.kind === 'BORDER_CLOSED') {
+        out.push({ kind: effect.kind, code: 'BORDER_CLOSED', message: `The border on this road is reported closed${c.status === 'disputed' ? ' (somebody reports it open again; still treat it as closed)' : ''}` });
+      } else {
+        // A kind declared as blocking with no sentence of its own still blocks: never dropped in silence again.
+        out.push({ kind: effect.kind, code: c.kind, message: `Reported on this road: ${c.kind.toLowerCase().replace(/_/g, ' ')}` });
       }
     }
     return out;
