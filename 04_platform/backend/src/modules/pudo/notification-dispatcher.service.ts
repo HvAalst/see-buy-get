@@ -146,6 +146,17 @@ interface DisputeDecided { parcelId: string; decision: 'upheld' | 'partly_upheld
 import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
+import { HELD_BY_WORDS, type HeldByAuthority } from './load-detention.types';
+
+/** A load held by an authority, or let go, as the event says it. */
+interface HeldOnTheRoad {
+  freightId: string;
+  code: string;
+  driverDid?: string;
+  posterDid?: string;
+  carrierDid?: string;
+  held?: HeldByAuthority;
+}
 
 /** How often to look for somebody who started joining and stopped. */
 const SIGNUP_SWEEP_MS = 60 * 60 * 1000;
@@ -421,6 +432,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
     // Round 15 — a seal on its load found broken on the road: the shipper is told at once.
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; seal?: { number?: string; broken?: { cause?: string; note?: string } } }>(GlosEvent.Pudo.FreightSealBroken, (e) => this.onFreightSealBroken(e.payload));
+    this.events.subscribe<HeldOnTheRoad>(GlosEvent.Pudo.FreightHeld, (e) => this.onFreightHeld(e.payload, false));
+    this.events.subscribe<HeldOnTheRoad>(GlosEvent.Pudo.FreightLetGo, (e) => this.onFreightHeld(e.payload, true));
     // Round 35 — its load held under the tamper protocol, and released: the shipper whose goods they are is told both.
     this.events.subscribe<UnitHeldPayload>(GlosEvent.Pudo.UnitHeld, (e) => this.onLoadHeld(e.payload));
     this.events.subscribe<UnitReleasedPayload>(GlosEvent.Pudo.UnitReleased, (e) => this.onLoadReleased(e.payload));
@@ -726,6 +739,27 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`load-released notify failed for ${payload.unitId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * A LOAD HELD BY AN AUTHORITY ON THE ROAD, as its driver said — and let go. The shipper owns the goods and the fleet's
+   * office can call its driver; each hears who holds it and where, in the driver's words, and when. Never by text.
+   */
+  private async onFreightHeld(p: HeldOnTheRoad, letGo: boolean): Promise<void> {
+    const h = p.held;
+    if (!h) return;
+    const by = HELD_BY_WORDS[h.by] ?? 'an authority';
+    const who = h.who ? ` (${h.who})` : '';
+    const title = letGo ? `Load ${p.code} was let go` : `Load ${p.code} is held by ${by}`;
+    const late = h.receivedAt && !letGo ? ` The driver said it with no signal; it reached us ${utcWords(h.receivedAt)}.` : '';
+    const body = letGo
+      ? `It was held by ${by}${who} from ${utcWords(h.since)} until ${utcWords(h.letGoAt ?? h.since)}, as the driver said${h.letGoNote ? ` — "${h.letGoNote}"` : ''}. It is on its way again.`
+      : `The driver said ${utcWords(h.since)} that ${by}${who} holds it${h.note ? ` — "${h.note}"` : ''}.${late} SeeBuyGet operations has been told. You are told again when it is let go.`;
+    const tag = `freight:${p.freightId}:held`;
+    if (p.posterDid) await this.tell(p.posterDid, { kind: 'freight_problem', title, body, tag, data: { freightId: p.freightId } });
+    if (p.carrierDid && p.carrierDid !== p.driverDid && p.carrierDid !== p.posterDid) {
+      await this.tell(p.carrierDid, { kind: 'freight_problem', title, body: letGo ? body : `${body} Call the driver.`, tag, data: { freightId: p.freightId } });
     }
   }
 

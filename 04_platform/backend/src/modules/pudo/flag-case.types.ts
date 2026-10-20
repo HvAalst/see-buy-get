@@ -8,7 +8,7 @@
  * says so. Its history is kept, never rewritten.
  */
 
-export const FLAG_KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target', 'Tamper_Hold'] as const;
+export const FLAG_KINDS = ['Stagnant_Inventory', 'Ghost_Bus', 'Stuck_At_MDP', 'Uncollected', 'Never_Dropped_Off', 'Connectivity_Loss', 'Blocked_Corridor', 'Buyer_Dispute', 'Short_Shipped', 'Temp_Breach', 'Not_Seen', 'Pilot_Off_Target', 'Tamper_Hold', 'Held_By_Authority'] as const;
 export type FlagKind = (typeof FLAG_KINDS)[number];
 
 export const CASE_SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
@@ -23,6 +23,9 @@ export const CASE_SEVERITY: Record<FlagKind, CaseSeverity> = {
   Temp_Breach: 'critical',
   // Round 35 — a unit held under the tamper protocol: nobody takes it over until operations has looked. Escalates in 1 h.
   Tamper_Hold: 'critical',
+  // A load held by the police, customs or another authority, as its driver said: somebody calls the driver. Clears itself
+  // when the driver says it was let go.
+  Held_By_Authority: 'critical',
   Ghost_Bus: 'critical',
   Short_Shipped: 'high',
   // A week with no scan: the search before a parcel is declared lost.

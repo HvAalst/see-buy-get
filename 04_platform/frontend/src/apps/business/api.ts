@@ -8,6 +8,7 @@ import type { QuoteView } from '../../shared/quote';
 import type { ArrivalView, CrossingView, PassageView } from '../../shared/passages';
 import type { SealView } from '../../shared/seals';
 import type { UnitHold } from '../../shared/tamper';
+import type { HeldByAuthorityView } from '../../shared/heldByAuthority';
 import { downscaleImage } from '../../shared/media';
 import type { SealsView } from './seals';
 
@@ -225,6 +226,8 @@ export interface PostedLoad {
   seals?: SealView[];
   /** Round 35 — held under the tamper protocol: what was found, where, since when. */
   held?: UnitHold;
+  /** Held by the police, customs or another authority on the road, as its driver said: who and where, since when. */
+  heldByAuthority?: HeldByAuthorityView;
   /** Round 25 — its cold chain broken on the road: the reading that broke it, the band, when — and when it reached us, if later. */
   coldChainBroken?: { celsius: number; at: string; minC: number; maxC: number; receivedAt?: string };
   /** Round 26 — in one country, on the road: when it is expected, and at what pace. Absent where its carrier's plan has the hour. */

@@ -247,6 +247,8 @@ export interface Claimable {
   doorReported?: boolean;
   /** Round 37 — a bag, to the driver holding it: how it was closed (never the number), what a reading is checked against, read yet. */
   bagSeal?: { closedWith: 'seal' | 'photo'; check?: string; taken: boolean };
+  /** Held by the police, customs or another authority on the road, as this driver said: until they say it was let go. */
+  heldByAuthority?: HeldByAuthorityView;
   ref: string; // the API id used for pickup/load/deliver
   code?: string; // S32b — the human reference to show (TOTE-042 / FRT-007); ref for freight is an opaque id
   pickupLocation?: { lat: number; lng: number };
@@ -279,6 +281,7 @@ export interface Claimable {
  * takeable, because deciding otherwise would be the platform overruling the operator who drives the road.
  */
 import type { InstructionsView } from '../../shared/instructions';
+import type { HeldByAuthorityView } from '../../shared/heldByAuthority';
 export type { BlockerKind, BoardBlocker } from '../../shared/board';
 import type { BoardBlocker } from '../../shared/board';
 

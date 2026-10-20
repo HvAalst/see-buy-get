@@ -141,6 +141,8 @@ export const GlosEvent = {
     FreightDelivered: 'pudo.freight_delivered', // FP2 — the consignment closes: the sender is sent its receipt // a dedicated-freight load registered → ping drivers near its pickup
     FreightCancelled: 'pudo.freight_cancelled', // FP3 — the sender (or the network) withdrew a load before it was taken over; a driver who had claimed it is told
     FreightDeliveryFailed: 'pudo.freight_delivery_failed', // FP3b — the driver was at the door and could not hand over; the load stays on the van, the sender is told
+    FreightHeld: 'pudo.freight_held', // a load held by the police, customs or another authority, as its driver said; operations' case, the shipper and the fleet told
+    FreightLetGo: 'pudo.freight_let_go', // …and let go, as its driver said
     FreightPassed: 'pudo.freight_passed', // round 14 — the driver said the load is at a border post, cleared it, or is at a hub; its shipper's and its fleet's systems are told
     UnitHeld: 'pudo.unit_held', // round 35 — a load or a parcel held under the tamper protocol: operations' case at once, the shipper's bell, the store's system
     UnitReleased: 'pudo.unit_released', // round 35 — operations released it, with a reason; the same people told

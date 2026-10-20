@@ -6,6 +6,8 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { DispatchService } from './dispatch.service';
 import { LoadPassageService } from './load-passage.service';
 import { BorderWaitRow, PassageRecorded, RecordPassageDto } from './load-passage.types';
+import { LoadDetentionService } from './load-detention.service';
+import { HeldSaid, SayHeldDto, SayLetGoDto } from './load-detention.types';
 
 /**
  * A LOAD AT A BORDER OR A HUB (round 14). The driver carrying it says the step from the load in their app; staff read
@@ -17,6 +19,7 @@ export class LoadPassageController {
   constructor(
     private readonly dispatch: DispatchService,
     private readonly passages: LoadPassageService,
+    private readonly detentions: LoadDetentionService,
   ) {}
 
   /**
@@ -30,6 +33,26 @@ export class LoadPassageController {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A border or a hub is said by the driver carrying the load');
     if (!actor?.did) throw new GlosError('UNAUTHORIZED', 'Sign in as the driver carrying this load');
     return this.dispatch.recordPassage(id, actor.did, { kind: dto.kind, post: dto.post, hub: dto.hub, location: dto.location, observedAt: dto.observedAt, seals: dto.seals });
+  }
+
+  /**
+   * Held by the police, customs or another authority — and let go. Said by the driver carrying the load, and nobody else:
+   * it is their word about where they are, refused to staff by name like a border.
+   */
+  @Roles('driver')
+  @Post('dispatch/freight/:id/held')
+  held(@Param('id') id: string, @Body() dto: SayHeldDto, @Actor() actor: IntrospectionResult): HeldSaid {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A load held on the road is said by the driver carrying it');
+    if (!actor?.did) throw new GlosError('UNAUTHORIZED', 'Sign in as the driver carrying this load');
+    return this.detentions.sayHeld(id, actor.did, { by: dto.by, who: dto.who, note: dto.note, location: dto.location, observedAt: dto.observedAt });
+  }
+
+  @Roles('driver')
+  @Post('dispatch/freight/:id/let-go')
+  letGo(@Param('id') id: string, @Body() dto: SayLetGoDto, @Actor() actor: IntrospectionResult): HeldSaid {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A load let go on the road is said by the driver carrying it');
+    if (!actor?.did) throw new GlosError('UNAUTHORIZED', 'Sign in as the driver carrying this load');
+    return this.detentions.sayLetGo(id, actor.did, { note: dto.note, observedAt: dto.observedAt });
   }
 
   /** Every post's measured wait over the last ninety days, with how many crossings each rests on. */

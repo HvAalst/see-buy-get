@@ -510,6 +510,8 @@ export const enBusiness = {
   'business.system.event.atHub': 'At a hub',
   'business.system.event.sealBroken': 'A seal broken',
   'business.system.event.coldChainBroken': 'The cold chain broken',
+  'business.system.event.held': 'Held by police or customs',
+  'business.system.event.letGo': 'Let go',
   'business.papers.thermal': 'Thermal printer (ZPL)',
   'business.loads.fact.coldChain': 'Cold chain',
   'business.loads.coldChainBroken': 'Broken: {temp} °C read {when}, outside the {min}–{max} °C it must be kept in',

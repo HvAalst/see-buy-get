@@ -148,6 +148,13 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
       if (e.payload?.fleetDid && e.payload.case && this.settings.get(e.payload.fleetDid)?.url) this.enqueue(e.payload.fleetDid, 'vehicle.gone_silent', { case: e.payload.case });
     });
     // Round 15 — a seal on a load it carries found broken on the road: the seal goes with the load.
+    // Held by an authority on the road, as its driver said — and let go.
+    this.events.subscribe<{ freightId?: string; held?: Record<string, unknown> }>(GlosEvent.Pudo.FreightHeld, (e) => {
+      if (e.payload?.freightId) this.relayLoad('load.held', String(e.payload.freightId), { held: e.payload.held });
+    });
+    this.events.subscribe<{ freightId?: string; held?: Record<string, unknown> }>(GlosEvent.Pudo.FreightLetGo, (e) => {
+      if (e.payload?.freightId) this.relayLoad('load.let_go', String(e.payload.freightId), { held: e.payload.held });
+    });
     this.events.subscribe<{ freightId?: string; seal?: Record<string, unknown> }>(GlosEvent.Pudo.FreightSealBroken, (e) => {
       if (e.payload?.freightId) this.relayLoad('load.seal_broken', String(e.payload.freightId), { seal: e.payload.seal });
     });

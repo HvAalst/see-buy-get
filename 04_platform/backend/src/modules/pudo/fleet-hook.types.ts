@@ -33,6 +33,9 @@ export const FLEET_HOOK_EVENTS = [
   'load.seal_broken',
   // Its cold chain broken on the road: the reading that broke it, and when (round 25).
   'load.cold_chain_broken',
+  // Held by the police, customs or another authority on the road, as its driver said — and let go.
+  'load.held',
+  'load.let_go',
   'load.delivery_failed',
   'load.delivered',
   'load.cancelled',

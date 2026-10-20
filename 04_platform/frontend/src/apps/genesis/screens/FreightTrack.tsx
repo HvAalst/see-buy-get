@@ -35,8 +35,13 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
       {/* WHEN — the first thing somebody waiting at a door wants. The day always; the hour once it is on the road. */}
       {expected ? <p class="scr__lede">{expected}</p> : null}
 
-      {said.length || crossing || arrival ? (
+      {said.length || crossing || arrival || view.heldOnTheWay ? (
         <Card label={t('send.freight.roadLabel')}>
+          {view.status === 'in_transit' && view.heldOnTheWay ? (
+            <p class="card__note">
+              <b>{t('send.freight.heldOnTheWay', { since: stepTime(view.heldOnTheWay.since) })}</b>
+            </p>
+          ) : null}
           {said.map((s) => (
             <p key={`${s.kind}-${s.at}`} class="card__note">
               {passageWords(s, t, stepTime)}

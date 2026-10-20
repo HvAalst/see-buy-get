@@ -6,7 +6,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  */
 
 /** What its system hears about a load, as the event names it. Each carries the load exactly as the Loads screen shows it. */
-export const BUSINESS_HOOK_EVENTS = ['load.taken', 'load.handed_back', 'load.picked_up', 'load.at_border', 'load.border_cleared', 'load.at_hub', 'load.seal_broken', 'load.cold_chain_broken', 'load.delivery_failed', 'load.delivered', 'load.cancelled', 'load.claim_opened', 'load.claim_decided'] as const;
+export const BUSINESS_HOOK_EVENTS = ['load.taken', 'load.handed_back', 'load.picked_up', 'load.at_border', 'load.border_cleared', 'load.at_hub', 'load.seal_broken', 'load.cold_chain_broken', 'load.held', 'load.let_go', 'load.delivery_failed', 'load.delivered', 'load.cancelled', 'load.claim_opened', 'load.claim_decided'] as const;
 export type BusinessHookEvent = (typeof BUSINESS_HOOK_EVENTS)[number];
 
 export class BusinessHookMessageView {

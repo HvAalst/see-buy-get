@@ -379,6 +379,12 @@ export function createDriverApi(sbg: SbgClient) {
     recordTemp: (freightId: string, driverDid: string, celsius: number) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/temperature', { params: { path: { id: freightId } }, body: { driverDid, celsius, observedAt: new Date().toISOString() } })),
 
+    /** Held by the police, customs or another authority on the road — and let go. Dated by the phone; who says it, by the sign-in. */
+    sayHeld: (freightId: string, body: { by: 'police' | 'customs' | 'other'; who?: string; note?: string } & { location?: { lat: number; lng: number }; observedAt?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/held', { params: { path: { id: freightId } }, body })),
+    sayLetGo: (freightId: string, body: { note?: string; observedAt?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/let-go', { params: { path: { id: freightId } }, body })),
+
     /** Round 14 — the load is at a border post, has cleared it, or is at a hub. Who says it comes from the sign-in. */
     recordPassage: (
       freightId: string,

@@ -39,6 +39,8 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   'load.at_hub': 'business.system.event.atHub',
   'load.seal_broken': 'business.system.event.sealBroken',
   'load.cold_chain_broken': 'business.system.event.coldChainBroken',
+  'load.held': 'business.system.event.held',
+  'load.let_go': 'business.system.event.letGo',
   'load.delivery_failed': 'business.system.event.deliveryFailed',
   'load.delivered': 'business.system.event.delivered',
   'load.cancelled': 'business.system.event.cancelled',

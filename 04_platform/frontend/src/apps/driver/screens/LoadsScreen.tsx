@@ -8,6 +8,7 @@ import { canLoadBag, capacitySubLine, cash, claimControl, isFull, loadsSummary, 
 import { vehicleWord } from '../vehicle-words';
 import { RunSection } from './RunSection';
 import { PassageSheet, PassageStrip } from './PassageStrip';
+import { HeldSheet, HeldStrip } from './HeldStrip';
 import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, TamperSheet, type SealRead, type TamperTarget } from './SealSteps';
 import { heldLine } from '../../../shared/tamper';
 import { BagReportSheet } from '../../../shared/BagSealFields';
@@ -31,6 +32,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
   const [passage, setPassage] = useState<{ claim: Claimable; kind: PassageKind } | null>(null); // round 14 — a border or a hub being said
   const [brokenFor, setBrokenFor] = useState<Claimable | null>(null); // round 15 — a seal found broken on the road
   const [tamper, setTamper] = useState<TamperTarget | null>(null); // round 35 — tampering found: the load held, operations told
+  const [heldFor, setHeldFor] = useState<Claimable | null>(null); // held by the police or customs: being said
   const [readFor, setReadFor] = useState<Claimable | null>(null); // round 37 — a bag loaded onto them by their pass, to read
   const [bagReport, setBagReport] = useState<{ claim: Claimable; numberRead?: string } | null>(null); // round 37 — a bag not as closed
   const pickTake = useBagTake(pick); // round 37 — the bag taken on its seal
@@ -159,6 +161,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {control === 'deliver' && c.tempBand ? <TempStrip claim={c} onLog={() => setTempFor(c)} /> : null}
                   {/* Round 14 — on the road: at a border post, cleared it, at a hub. */}
                   {control === 'deliver' && c.passage ? <PassageStrip claim={c} state={state} onSay={(kind) => setPassage({ claim: c, kind })} onBroken={() => setBrokenFor(c)} /> : null}
+                  {/* Held by the police or customs on the road — and let go. */}
+                  {control === 'deliver' ? <HeldStrip claim={c} state={state} actions={actions} onSay={() => setHeldFor(c)} /> : null}
                   {/* FP2 — the consignment note travels with the load; the driver can show it at any gate. */}
                   <div class="load__nav">
                     <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(c.ref)} />
@@ -264,6 +268,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       <PassageSheet claim={passage?.claim ?? null} kind={passage?.kind ?? null} state={state} actions={actions} onClose={() => setPassage(null)} />
       <BrokenSealSheet claim={brokenFor} state={state} actions={actions} onClose={() => setBrokenFor(null)} />
       <TamperSheet target={tamper} state={state} actions={actions} onClose={() => setTamper(null)} />
+      <HeldSheet claim={heldFor} state={state} actions={actions} onClose={() => setHeldFor(null)} />
       <BagTakeSheet
         claim={readFor}
         state={state}

@@ -57,6 +57,7 @@ import { LoadPassageService, viewOf as passageView } from './load-passage.servic
 import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
 import { LoadSealService, sealCheck } from './load-seal.service';
 import { BagClosureService } from './bag-closure.service';
+import type { HeldByAuthority } from './load-detention.types';
 import type { LoadSeal, LoadSealView, SealBreakCause, SealsAtDelivery } from './load-seal.types';
 import { FINDING_WORDS, type TamperStage, type UnitHold } from './tamper.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
@@ -343,6 +344,11 @@ export interface TamperHooks {
   sealBroken(f: Freight, driverDid: string, seal: LoadSeal, now: number): void;
   reportedAt(freightId: string, stage: TamperStage): boolean;
   noteLines(freightId: string): string[];
+}
+
+/** A load held by an authority (load-detention.service.ts), as dispatch reads it. */
+export interface DetentionHooks {
+  current(freightId: string): HeldByAuthority | undefined;
 }
 
 @Injectable()
@@ -1689,6 +1695,8 @@ export class DispatchService {
         ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}),
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
         // Round 14 — at a border post, cleared it, at a hub; crossing a border, when it is expected.
+        // Held by an authority on the road, as its driver said.
+        ...(this.heldByAuthority(f) ? { heldByAuthority: this.heldByAuthority(f) } : {}),
         ...this.passageFacts(f, now),
         // Round 15 — its seals, and what became of each.
         ...(this.seals?.of(f.freightId).length ? { seals: this.seals.views(f.freightId) } : {}),
@@ -2968,6 +2976,8 @@ export class DispatchService {
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
     // Round 35 — held under the tamper protocol: not handed to the receiver until operations releases it.
     this.refuseIfHeld(f);
+    // Held by an authority on the road, as the driver said: delivered once they have said it was let go.
+    if (this.heldByAuthority(f)) throw new GlosError('INVALID_STATE', 'It is held by an authority, as you said: say it was let go before you deliver it');
     // S33 — the unload gate: the unload checklist must be complete before the freight is marked delivered.
     const missing = missingKeys(requiredUnloadKeys(), check?.confirmed);
     if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the unload checklist before delivery — ${missing.length} item(s) left`);
@@ -3394,6 +3404,18 @@ export class DispatchService {
     this.tamper = hooks;
   }
 
+  private detentions?: DetentionHooks;
+
+  /** A load held by the police or customs (load-detention.service.ts) registers itself here: it reads the load. */
+  registerDetentions(hooks: DetentionHooks): void {
+    this.detentions = hooks;
+  }
+
+  /** Held by an authority now, as its driver said: only on the road. */
+  heldByAuthority(f: Freight): HeldByAuthority | undefined {
+    return f.status === 'in_transit' ? this.detentions?.current(f.freightId) : undefined;
+  }
+
   /** Held under the tamper protocol: kept on the load, so pickup and delivery refuse by reading the load itself. */
   holdFreight(freightId: string, hold: UnitHold): Freight {
     const f = this.requireFreight(freightId);
@@ -3429,9 +3451,10 @@ export class DispatchService {
   /**
    * ROUND 16 — WHERE A DRIVER HAS REASON TO STAND: its loads' next stops, where it picked up or delivered in the last two
    * hours (a truck is still at the customer's gate after the goods are off), a hub its driver said a load is at — and
-   * whether a load it carries is waiting at a border post its driver said it is at, which has no place on the map.
+   * whether a load it carries is waiting at a border post its driver said it is at, which has no place on the map, or is
+   * held by an authority, as its driver said.
    */
-  reasonsToStand(driverDid: string, now: number = Date.now()): { places: GeoPoint[]; atBorder: boolean } {
+  reasonsToStand(driverDid: string, now: number = Date.now()): { places: GeoPoint[]; atBorder: boolean; held: boolean } {
     const next = this.activeCargo(new Set([driverDid])).items.map((i) => i.nextStop?.location).filter((p): p is GeoPoint => Boolean(p));
     const since = now - 2 * 3_600_000;
     const mine = [...this.freights.values()].filter((f) => f.claimedBy === driverDid);
@@ -3445,7 +3468,9 @@ export class DispatchService {
           return last?.kind === 'at_hub' && last.location ? [last.location] : [];
         })
       : [];
-    return { places: [...next, ...recent, ...hubs], atBorder };
+    // Held by an authority, as its driver said: it stands where it is held, and its fleet has been told why.
+    const held = onRoad.some((f) => Boolean(this.heldByAuthority(f)));
+    return { places: [...next, ...recent, ...hubs], atBorder, held };
   }
 
   /** The seals' photographs: the note's copies carry them. */
@@ -3464,10 +3489,13 @@ export class DispatchService {
     const passages = this.passages.views(f.freightId);
     // Where it has got to is said while it is on the road. Delivered, its steps tell how it went — a driver who never said
     // "cleared" must not leave a delivered load reading as still at the border.
-    const crossing = f.status === 'in_transit' ? this.passages.crossingOf(f, now, this.laneDriveFor(f, now)) : undefined;
+    // Held by an authority, as its driver said: when it arrives cannot be promised until it is let go — said nowhere.
+    const held = Boolean(this.heldByAuthority(f));
+    const onRoad = f.status === 'in_transit' ? this.passages.crossingOf(f, now, this.laneDriveFor(f, now)) : undefined;
+    const crossing = onRoad && held ? { ...onRoad, expectedAt: undefined } : onRoad;
     // Round 26 — in one country, when it is expected (never for a crossing: arrivalOf): unless its carrier's own plan has
     // the hour (planHourOf), which is the carrier's word and is said instead — one load is never promised at two times.
-    const arrival = f.status === 'in_transit' && !planHourOf(f) ? this.passages.arrivalOf(f, this.laneDriveFor(f, now)) : undefined;
+    const arrival = f.status === 'in_transit' && !held && !planHourOf(f) ? this.passages.arrivalOf(f, this.laneDriveFor(f, now)) : undefined;
     return { ...(passages.length ? { passages } : {}), ...(crossing ? { crossing } : {}), ...(arrival ? { arrival } : {}) };
   }
 
@@ -3678,7 +3706,8 @@ export class DispatchService {
     const passage = f.status === 'in_transit' && this.passages ? this.passages.forDriver(f) : undefined;
     // Round 15 — the seals to find on the door: what each is, never its number.
     const sealsToFind = (f.status === 'claimed' || f.status === 'in_transit') && this.seals?.of(f.freightId).length ? this.seals.toFind(f.freightId) : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    const heldByAuthority = this.heldByAuthority(f);
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

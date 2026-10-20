@@ -125,6 +125,8 @@ export interface FreightTrackView {
   /** `run` — space booked on a carrier's scheduled run, which leaves at `scheduledPickupAt`. Absent: a load off the board. */
   on?: 'board' | 'run';
   /** Round 14 — what its driver said on the road: at a border post, cleared it, at a hub. Never who, never where the phone was. */
+  /** Held on the way by an authority, as its driver said: since when — never by whom. */
+  heldOnTheWay?: { since: string };
   passages?: PassageView[];
   /** Round 14 — across a border, on the road: where it has got to, the allowance and on what, when it is expected. */
   crossing?: CrossingView;

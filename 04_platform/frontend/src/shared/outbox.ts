@@ -133,6 +133,9 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   // hub: each says where the load is, dated by the phone (`observedAt`), and asks nothing of anybody. The same step sent
   // twice is answered as it was, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/passages$/, label: 'Border or hub said' },
+  // Held by the police or customs, and let go: said at a checkpoint, where the signal may be gone, dated when said. The
+  // same said again is the one already made, so a replay costs nothing.
+  { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/(held|let-go)$/, label: 'Held or let go said' },
   // Round 15 — a seal found broken on the road: what the driver sees, dated when seen; a second report of the same seal is
   // refused by the server, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/dispatch\/freight\/[^/]+\/seals\/[^/]+\/broken$/, label: 'Broken seal reported' },

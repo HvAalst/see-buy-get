@@ -9513,6 +9513,8 @@
     "/v1/sbg/parcels/{id}": {
       "get": {
         "operationId": "Sbg.getParcel",
+        "summary": "",
+        "description": "A parcel's history, to a counter. NEED TO KNOW (the ISO 28000 check): it answered any shop with every scan and photo\nid, so knowing a parcel's number opened its history. A shop reads the whole of it for a parcel of its own — taken in\nthere (the shop it is committed to, from the moment it is booked) or addressed there — and, for one coming off a bus,\nonly what it needs to take it in.",
         "parameters": [
           {
             "name": "id",
@@ -9525,7 +9527,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -24602,6 +24611,82 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PassageRecorded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/held": {
+      "post": {
+        "operationId": "LoadPassage.held",
+        "summary": "",
+        "description": "Held by the police, customs or another authority — and let go. Said by the driver carrying the load, and nobody else:\nit is their word about where they are, refused to staff by name like a border.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SayHeldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldSaid"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/let-go": {
+      "post": {
+        "operationId": "LoadPassage.letGo",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SayLetGoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldSaid"
                 }
               }
             }
@@ -45452,6 +45537,43 @@
           }
         }
       },
+      "HeldByAuthority": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "enum": [
+              "police",
+              "customs",
+              "other"
+            ]
+          },
+          "who": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "receivedAt": {
+            "type": "string",
+            "description": "Said with no signal: when it reached us."
+          },
+          "letGoAt": {
+            "type": "string",
+            "description": "Let go: when, and anything the driver said."
+          },
+          "letGoNote": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "since"
+        ]
+      },
       "PassageSeals": {
         "type": "object",
         "properties": {
@@ -45981,6 +46103,14 @@
               "edit",
               "amend",
               "none"
+            ]
+          },
+          "heldByAuthority": {
+            "description": "Held by the police, customs or another authority on the road, as its driver said: who and where, since when.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldByAuthority"
+              }
             ]
           },
           "passages": {
@@ -53412,6 +53542,78 @@
           "passage",
           "replayed"
         ]
+      },
+      "HeldLocationDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "SayHeldDto": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "enum": [
+              "police",
+              "customs",
+              "other"
+            ]
+          },
+          "who": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "location": {
+            "$ref": "#/components/schemas/HeldLocationDto"
+          },
+          "observedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by"
+        ]
+      },
+      "HeldSaid": {
+        "type": "object",
+        "properties": {
+          "held": {
+            "$ref": "#/components/schemas/HeldByAuthority"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "held",
+          "replayed"
+        ]
+      },
+      "SayLetGoDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "observedAt": {
+            "type": "string"
+          }
+        }
       },
       "BorderWaitRow": {
         "type": "object",

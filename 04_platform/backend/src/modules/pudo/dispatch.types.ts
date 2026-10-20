@@ -10,6 +10,7 @@ import { BorderAdvice } from './border-rules.types';
 import { LoadArrival, LoadCrossing, LoadPassageForDriver, LoadPassageView } from './load-passage.types';
 import { LoadSealView, SEAL_STATES, SealToFind, type SealState } from './load-seal.types';
 import { UnitHold } from './tamper.types';
+import { HeldByAuthority, HeldOnTheWay } from './load-detention.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
 import { CARGO_CLASS_CODES, CARGO_NATURES, CargoClass, CargoNature, EQUIPMENT, Equipment, VEHICLE_CAPABILITIES, VehicleCapability } from './cargo.types';
@@ -1214,6 +1215,8 @@ export class PostedFreightRow {
   instructionsMode: 'edit' | 'amend' | 'none';
   /** FP3b — true while the sender may still claim: delivered, no claim yet, within the claim window. */
   canClaim: boolean;
+  /** Held by the police, customs or another authority on the road, as its driver said: who and where, since when. */
+  @ApiPropertyOptional({ type: HeldByAuthority }) heldByAuthority?: HeldByAuthority;
   /** Round 14 — what the driver said on the road: at a border post, cleared it, at a hub. In order; no driver, no position. */
   @ApiPropertyOptional({ type: [LoadPassageView] }) passages?: LoadPassageView[];
   /** Round 14 — a load that crosses a border: where it has got to, the wait it is promised, and when it is expected. */
@@ -1333,6 +1336,8 @@ export class Claimable {
   @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
   /** Round 35 — tampering was reported at the receiver's door: the seals may be said not as the note says once released. */
   @ApiPropertyOptional() doorReported?: boolean;
+  /** Held by the police, customs or another authority on the road, as its driver said: until they say it was let go. */
+  @ApiPropertyOptional({ type: HeldByAuthority }) heldByAuthority?: HeldByAuthority;
   ref: string; // toteCode | freightId — the API identifier the pickup/load/deliver calls use
   /** S32b — the human-readable reference to SHOW a driver (TOTE-042 / FRT-007). For a tote this equals ref;
    *  for freight ref is the opaque frt_… id, so the readable FRT-NNN code must ride separately. */
@@ -1535,6 +1540,8 @@ export class FreightTrackView {
    * booked on a carrier's scheduled run, which leaves at `scheduledPickupAt` whether or not anybody else is aboard.
    */
   @ApiPropertyOptional({ enum: ['board', 'run'] }) on?: 'board' | 'run';
+  /** Held on the way by an authority, as its driver said: since when — never by whom, on a page anybody with the link reads. */
+  @ApiPropertyOptional({ type: HeldOnTheWay }) heldOnTheWay?: HeldOnTheWay;
   /** Round 14 — what its driver said on the road: at a border post, cleared it, at a hub. No driver, no position. */
   @ApiPropertyOptional({ type: [LoadPassageView] }) passages?: LoadPassageView[];
   /** Round 14 — crossing a border: where it has got to, the wait it is promised and what that rests on, when it is expected. */

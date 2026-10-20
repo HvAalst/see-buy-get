@@ -279,6 +279,11 @@ export class ConsignmentNoteService implements OnModuleInit {
       ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),
       ...(f.proofOfDelivery?.receiverName ? { receiverName: f.proofOfDelivery.receiverName } : {}),
       ...(f.cancellation ? { cancelled: { at: f.cancellation.at, by: f.cancellation.role === 'operator' ? 'network' : f.contract && f.cancellation.by === f.contract.fleetDid ? 'carrier' : 'sender' } } : {}),
+      // Held on the way by an authority, as its driver said: since when, never by whom — whoever holds the link reads it.
+      ...(() => {
+        const held = this.dispatch.heldByAuthority?.(f);
+        return held ? { heldOnTheWay: { since: held.since } } : {};
+      })(),
       // Round 14 — at a border post, cleared it, at a hub, as its driver said; crossing a border, when it is expected. Never
       // what a step said of the seals (an officer's name): this page is read by whoever holds the link.
       ...(() => {

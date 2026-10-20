@@ -6,10 +6,11 @@ import { WalletGateService } from './wallet-gate.service';
 import { DispatchService } from './dispatch.service';
 import { ToteService } from './tote.service';
 import { FINDING_WORDS } from './tamper.types';
+import { HELD_BY_WORDS } from './load-detention.types';
 import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
 export interface PudoFlag {
-  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold';
+  type: 'Stagnant_Inventory' | 'Ghost_Bus' | 'Stuck_At_MDP' | 'Uncollected' | 'Never_Dropped_Off' | 'Connectivity_Loss' | 'Blocked_Corridor' | 'Buyer_Dispute' | 'Short_Shipped' | 'Temp_Breach' | 'Not_Seen' | 'Pilot_Off_Target' | 'Tamper_Hold' | 'Held_By_Authority';
   subject: string;
   detail: string;
   ageHours?: number;
@@ -137,6 +138,12 @@ export class MonitorService {
     // case stays until operations releases it (TamperService.release closes it with the reason).
     for (const f of this.dispatch.listFreight()) {
       if (f.held) flags.push({ type: 'Tamper_Hold', subject: f.code, detail: `load to ${f.destLabel} · ${FINDING_WORDS[f.held.finding]} · ${f.held.where}`, ageHours: Math.round(hoursSince(f.held.since)) });
+    }
+    // A load held by the police, customs or another authority, as its driver said: operations calls the driver. The case
+    // clears itself when the driver says it was let go.
+    for (const f of this.dispatch.listFreight({ status: 'in_transit' })) {
+      const h = this.dispatch.heldByAuthority(f);
+      if (h) flags.push({ type: 'Held_By_Authority', subject: f.code, detail: `load to ${f.destLabel} · held by ${HELD_BY_WORDS[h.by]}${h.who ? ` (${h.who})` : ''}${h.note ? ` · “${h.note}”` : ''}`, ageHours: Math.round(hoursSince(h.since)) });
     }
     for (const t of this.totes.list()) {
       if (t.held) flags.push({ type: 'Tamper_Hold', subject: t.code, detail: `bag of ${t.parcels.length} · ${FINDING_WORDS[t.held.finding]} · ${t.held.where}`, ageHours: Math.round(hoursSince(t.held.since)) });

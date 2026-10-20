@@ -49,6 +49,9 @@ describe('the outbox', () => {
       expect(queueableLabel('POST', '/v1/sbg/route-constraints/rc_1/refute')).toBe('Road hazard answered');
       // Round 14 — at a border post, cleared it, at a hub: said where the signal is worst.
       expect(queueableLabel('POST', '/v1/sbg/dispatch/freight/frt_1/passages')).toBe('Border or hub said');
+      // Held by the police or customs, and let go: said at a checkpoint.
+      expect(queueableLabel('POST', '/v1/sbg/dispatch/freight/frt_1/held')).toBe('Held or let go said');
+      expect(queueableLabel('POST', '/v1/sbg/dispatch/freight/frt_1/let-go')).toBe('Held or let go said');
       // Round 15 — a seal found broken on the road. Writing a seal is the shipper's, at its desk: it does not wait.
       expect(queueableLabel('POST', '/v1/sbg/dispatch/freight/frt_1/seals/seal_1/broken')).toBe('Broken seal reported');
       expect(queueableLabel('POST', '/v1/sbg/dispatch/freight/frt_1/seals')).toBeNull();

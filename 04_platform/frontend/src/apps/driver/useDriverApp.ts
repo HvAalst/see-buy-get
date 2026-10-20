@@ -6,6 +6,7 @@ import type { SbgError } from '../../lib/sbg';
 import type { CheckResultView, CheckSheetView } from './screens/VehicleCheck';
 import type { BreakdownView, TakeOverView, TakenOverView } from './screens/Breakdown';
 import type { IconName } from '../../shared/ui/Icon';
+import type { HeldByAuthorityView } from '../../shared/heldByAuthority';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
 import type {
@@ -151,6 +152,8 @@ export interface DriverState {
   roadAt: { lat: number; lng: number } | null;
   /** Round 14 — the last border or hub step said on this phone, per load: shown at once, with or without a signal. */
   said: Record<string, SaidPassage>;
+  /** Held by an authority, or let go (null), as said on this phone per load: shown at once, with or without a signal. */
+  held: Record<string, HeldByAuthorityView | null>;
   /** Screen-level failure — rendered as an ErrorNote, never as a raw string. */
   error: SbgError | null;
   toasts: Toast[];
@@ -242,6 +245,7 @@ const INITIAL: DriverState = {
   observations: [],
   roadAt: null,
   said: {},
+  held: {},
   error: null,
   toasts: [],
   busy: null,
@@ -1866,6 +1870,58 @@ export function useDriverApp() {
   );
 
   /**
+   * HELD BY THE POLICE OR CUSTOMS on the road — and let go. SeeBuyGet operations, the shipper and the fleet's office are
+   * told. Said where the signal may be gone: it waits on this phone, dated when said, and the card says it at once.
+   */
+  const sayHeld = useCallback(
+    async (ref: string, body: { by: 'police' | 'customs' | 'other'; who?: string; note?: string }): Promise<boolean> => {
+      if (!client) return false;
+      let ok = false;
+      await run(`held:${ref}`, async () => {
+        const location = await currentPosition(5_000);
+        const at = new Date().toISOString();
+        const r = await client.api.sayHeld(ref, { ...body, ...(location ? { location } : {}), observedAt: at });
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        ok = true;
+        setState((s) => ({ ...s, held: { ...s.held, [ref]: { by: body.by, ...(body.who ? { who: body.who } : {}), ...(body.note ? { note: body.note } : {}), since: at } } }));
+        if (r.status === 202) return pushToast({ tone: 'warn', icon: 'offline', title: t('driver.toast.heldQueued'), detail: t('driver.toast.heldQueuedDetail') });
+        pushToast({ tone: 'warn', icon: 'warning', title: t('driver.toast.held'), detail: t('driver.toast.heldDetail') });
+        setState((s) => ({ ...s, held: Object.fromEntries(Object.entries(s.held).filter(([k]) => k !== ref)) }));
+        await refresh();
+      });
+      return ok;
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  const sayLetGo = useCallback(
+    async (ref: string): Promise<boolean> => {
+      if (!client) return false;
+      let ok = false;
+      await run(`held:${ref}`, async () => {
+        const r = await client.api.sayLetGo(ref, { observedAt: new Date().toISOString() });
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        ok = true;
+        setState((s) => ({ ...s, held: { ...s.held, [ref]: null } }));
+        if (r.status === 202) return pushToast({ tone: 'ok', icon: 'offline', title: t('driver.toast.letGoQueued'), detail: t('driver.toast.letGoQueuedDetail') });
+        pushToast({ tone: 'ok', icon: 'check', title: t('driver.toast.letGo'), detail: t('driver.toast.letGoDetail') });
+        setState((s) => ({ ...s, held: Object.fromEntries(Object.entries(s.held).filter(([k]) => k !== ref)) }));
+        await refresh();
+      });
+      return ok;
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /**
    * Round 15 — a seal on the load found broken on the road: what broke it, its photographs and any official paper. Its
    * shipper is told at once. With no signal it waits on this phone, photographs and all, dated now.
    */
@@ -2059,6 +2115,8 @@ export function useDriverApp() {
       handBack,
       logTemp,
       sayPassage,
+      sayHeld,
+      sayLetGo,
       reportBrokenSeal,
       reportTamper,
       pushToast,

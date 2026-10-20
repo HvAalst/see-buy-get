@@ -311,6 +311,12 @@
       <code>celsius</code>, the <code>band</code> (<code>minC</code>, <code>maxC</code>), <code>at</code> — when it was read — and,
       where the driver read it with no signal, <code>receivedAt</code>, when it reached us: then it may not be how the load
       is now. A business's load carries <code>coldChainBroken</code> with the same. Sent once, however many readings follow.</li>
+    <li><b>Both: held on the road</b> — <code>load.held</code> and <code>load.let_go</code> — when the driver says the police,
+      customs or another authority holds the load, and again when it is let go. Each carries <code>held</code>:
+      <code>by</code> (<code>police</code>, <code>customs</code> or <code>other</code>), <code>who</code> and <code>note</code> in the
+      driver's words where they gave them, <code>since</code>, and once let go <code>letGoAt</code> and <code>letGoNote</code>;
+      where the driver said it with no signal, <code>receivedAt</code>. A business's load carries <code>heldByAuthority</code>
+      with the same while it is held.</li>
     <li><b>Where a fleet's vehicles are</b> — <code>vehicle.position</code> — only once a manager turns it on, every 1, 5
       or 15 minutes a vehicle, only while a driver is on a shift in it. Each driver is told so in their app. A position
       is tried once; the next takes its place.</li>

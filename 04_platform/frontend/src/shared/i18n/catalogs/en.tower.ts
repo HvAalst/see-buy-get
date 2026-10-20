@@ -3172,6 +3172,7 @@ export const enTowerBusinesses = {
   'tower.cases.kind.Not_Seen': 'A parcel not seen for a week',
   'tower.cases.kind.Pilot_Off_Target': 'A pilot number off target',
   'tower.cases.kind.Tamper_Hold': 'Held: tampering found',
+  'tower.cases.kind.Held_By_Authority': 'Held by police or customs',
   // Round 35 — a unit held under the tamper protocol, in its case.
   'tower.tamper.loading': 'Reading what was found…',
   'tower.tamper.unreadable': 'What was found could not be read. Try again in a moment.',

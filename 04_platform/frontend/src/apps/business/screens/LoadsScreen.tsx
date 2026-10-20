@@ -9,6 +9,7 @@ import { businessConfig, type BusinessClient, type BusinessView, type CarriageCo
 import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
 import { passageWords } from '../../../shared/passages';
 import { heldLine } from '../../../shared/tamper';
+import { heldByLine } from '../../../shared/heldByAuthority';
 
 /** A time on the road, as the shipper reads it: its day and hour. */
 const onRoad = (iso: string) => new Date(iso).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -135,7 +136,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                     {/* What a row must not lose to an ellipsis: which load of an order this is, and what its carrier's
                         plan says of it — on no vehicle, outside its window, or (with no tag: it needs nobody) about
                         when. The line above gives way to the width; this one wraps. */}
-                    {r.partOf || says || handed || road || r.held || r.seals?.some((s) => s.state === 'broken') ? (
+                    {r.partOf || says || handed || road || r.held || r.heldByAuthority || r.seals?.some((s) => s.state === 'broken') ? (
                       <span class="biz-loads__flags">
                         {r.partOf ? <span class="ctag ctag--quiet">{t('business.loads.loadOf', { no: r.partOf.no, of: r.partOf.of, order: r.partOf.rootCode })}</span> : null}
                         {says?.state === 'late' ? <span class="ctag ctag--danger">{t('business.loads.late.tag')}</span> : null}
@@ -150,6 +151,9 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
                         {/* Round 35 — held under the tamper protocol: in colour, with what was found, until operations releases it. */}
                         {r.held ? <span class="ctag ctag--danger">{t('common.tamper.heldShort')}</span> : null}
                         {r.held ? <span>{heldLine(r.held, t)}</span> : null}
+                        {/* Held by the police or customs on the road, as its driver said: who and where, until let go. */}
+                        {r.heldByAuthority ? <span class="ctag ctag--danger">{t('common.held.short')}</span> : null}
+                        {r.heldByAuthority ? <span>{heldByLine(r.heldByAuthority, t)}</span> : null}
                         {/* Round 14 — on the road: where its driver said it is, and when it is expected. */}
                         {road ? <span>{[road.row, road.expected].filter(Boolean).join(' · ')}</span> : null}
                       </span>

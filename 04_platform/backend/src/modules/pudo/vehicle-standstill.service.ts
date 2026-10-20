@@ -251,7 +251,7 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
   private hasReasonToStand(fleetDid: string, driverDid: string, point: GeoPoint, now: number): boolean {
     const near = (p: GeoPoint | undefined) => Boolean(p) && haversineKm(p!, point) <= STOP_RADIUS_KM;
     const reasons = this.dispatch.reasonsToStand(driverDid, now);
-    if (reasons.atBorder) return true;
+    if (reasons.atBorder || reasons.held) return true;
     if (reasons.places.some(near)) return true;
     if (this.sites.sitesOf(fleetDid).some((s) => near(s.location))) return true;
     if (this.mdps.list().some((m) => near(m.location))) return true;
