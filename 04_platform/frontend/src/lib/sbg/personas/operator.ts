@@ -870,6 +870,8 @@ export function createOperatorApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/id-disputes/{disputeId}/send-back', { params: { path: { disputeId } }, body: { why, ...(by ? { by } : {}) } })),
     /** Round 18 — two businesses say one GS1 company prefix is theirs: one member of staff proposes whose, another approves. */
     gs1Disputes: () => sbg.request((c) => c.GET('/v1/sbg/gs1-disputes', {})),
+    /** Round 19 — the load a package's SSCC, our label's QR or a load's code names. */
+    findLoad: (scanned: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/find-load', { params: { query: { scanned } } })),
     proposeGs1: (disputeId: string, input: { to: 'claimant' | 'holders'; what: string; reason: string }, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/gs1-disputes/{disputeId}/propose', { params: { path: { disputeId } }, body: { ...input, ...(by ? { by } : {}) } })),
     approveGs1: (disputeId: string, by?: string) => sbg.request((c) => c.POST('/v1/sbg/gs1-disputes/{disputeId}/approve', { params: { path: { disputeId } }, body: { ...(by ? { by } : {}) } })),

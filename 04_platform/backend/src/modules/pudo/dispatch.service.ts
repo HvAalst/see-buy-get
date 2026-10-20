@@ -2498,6 +2498,11 @@ export class DispatchService {
     return [...this.freights.values()].find((f) => f.trackingKey === trackingKey);
   }
 
+  /** Round 19 — a load by the code printed on its label (`FRT-12`), as a person types it. */
+  freightByCode(code: string): Freight | undefined {
+    return [...this.freights.values()].find((f) => f.code === code);
+  }
+
   /**
    * FP6 — the shipper's verdict on a delivered load. Delivered only (there is nothing to judge before), within
    * the window, and only while a carrier is on the record. Last wins on the same load; the driver's composite

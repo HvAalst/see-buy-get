@@ -2650,7 +2650,7 @@ export const enTowerMoney = {
 export const enTowerSupport = {
   'tower.support.title': 'Find a parcel',
   'tower.support.lede': 'Somebody is on the phone or at a counter. One number, and the parcel’s whole story.',
-  'tower.support.placeholder': 'Parcel sticker ID',
+  'tower.support.placeholder': 'Parcel sticker ID, or a load’s barcode or code',
   'tower.support.look': 'Look it up',
   'tower.support.emptyTitle': 'Nothing looked up yet',
   'tower.support.emptyBody': 'Type the number from the sticker. This is not a search of the network — the person you are talking to already has the number.',

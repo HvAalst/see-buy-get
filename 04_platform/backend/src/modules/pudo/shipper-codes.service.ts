@@ -168,7 +168,15 @@ export class ShipperCodesService {
 
   /** The load a package's SSCC belongs to — what a scan of the global barcode is answered with. */
   freightOfSscc(sscc: string): string | undefined {
-    for (const p of this.issued.values()) if (p.codes.includes(sscc)) return p.freightId;
+    return this.packageOf(sscc)?.freightId;
+  }
+
+  /** Round 19 — which load, and which of its packages: the SSCC is package `no` of `of`. */
+  packageOf(sscc: string): { freightId: string; no: number; of: number } | undefined {
+    for (const p of this.issued.values()) {
+      const i = p.codes.indexOf(sscc);
+      if (i >= 0) return { freightId: p.freightId, no: i + 1, of: p.codes.length };
+    }
     return undefined;
   }
 

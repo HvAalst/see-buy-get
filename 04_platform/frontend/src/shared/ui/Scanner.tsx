@@ -138,7 +138,10 @@ export function Scanner({ open, expect, title, onResult, onClose }: ScannerProps
           setTorchable(true);
         }
 
-        const detector = new detectorCtor({ formats: ['qr_code'] });
+        // Round 19 — and the GS1-128 barcode on a load's package (Code 128), where the phone can read one: an SSCC
+        // scanned here finds its load (ScanField). A phone that reads QR only still reads every code we print.
+        const supported = (await detectorCtor.getSupportedFormats?.().catch(() => undefined)) ?? [];
+        const detector = new detectorCtor({ formats: ['qr_code', ...(supported.includes('code_128') ? ['code_128'] : [])] });
         interval = window.setInterval(async () => {
           if (done || !videoRef.current) return;
           let codes: DetectedBarcode[] = [];

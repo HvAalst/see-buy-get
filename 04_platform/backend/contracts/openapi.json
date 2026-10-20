@@ -20165,6 +20165,33 @@
         }
       }
     },
+    "/v1/sbg/dispatch/find-load": {
+      "get": {
+        "operationId": "LoadFinder.find",
+        "parameters": [
+          {
+            "name": "scanned",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadFoundView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/documents/{documentId}/report": {
       "post": {
         "operationId": "CompanyPaperReport.report",
@@ -47389,6 +47416,20 @@
         "required": [
           "why"
         ]
+      },
+      "LoadFoundView": {
+        "type": "object",
+        "properties": {
+          "package": {
+            "type": "number"
+          },
+          "packages": {
+            "type": "number"
+          },
+          "sscc": {
+            "type": "string"
+          }
+        }
       },
       "ReportPaperDto": {
         "type": "object",

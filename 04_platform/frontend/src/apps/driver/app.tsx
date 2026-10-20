@@ -1,5 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { BoardScreen } from './screens/BoardScreen';
@@ -17,6 +17,7 @@ import { driverWorkLine } from './logic';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { useAccount } from '../../shared/account/useAccount';
 import { isRidden, namedVehicleClass, vehicleWord } from './vehicle-words';
+import { LoadFinderContext, loadFinderFor } from '../../shared/loadFinder';
 
 type Tab = 'home' | 'route' | 'board' | 'loads' | 'earnings';
 
@@ -30,6 +31,8 @@ export function App() {
   const [needRefresh] = sw.needRefresh;
   // Who they drive for belongs to the person, so it is a row in the account menu; a fleet's offer is answered in a sheet.
   const [fleetOpen, setFleetOpen] = useState(false);
+  // Round 19 — a load's package scanned into any box finds its load: one of theirs opens on My loads.
+  const loadFinder = useMemo(() => (sbg ? loadFinderFor(sbg, () => actions.go('loads')) : null), [sbg]);
 
   if (state.phase === 'outdated') return <UpdateGate />;
   if (state.phase === 'boot') return <Boot />;
@@ -65,6 +68,7 @@ export function App() {
   ];
 
   return (
+    <LoadFinderContext.Provider value={loadFinder}>
     <div class="app">
       <TopBar
         title={t('driver.appTitle')}
@@ -118,6 +122,7 @@ export function App() {
       <Toasts state={state} actions={actions} />
       <FeedbackFlash />
     </div>
+    </LoadFinderContext.Provider>
   );
 }
 

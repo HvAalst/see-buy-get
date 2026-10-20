@@ -28,6 +28,7 @@ import { useAgentApp, type AgentActions, type AgentState, type Screen } from './
 import '../../shared/screens.css';
 import './agent.css';
 import { agentWorkLine } from './logic';
+import { LoadFinderContext, loadFinderFor } from '../../shared/loadFinder';
 import { ownerOnlyScreen, type StaffAtCounter } from './staff';
 
 type Tab = 'home' | 'accept' | 'release' | 'records';
@@ -45,6 +46,17 @@ export function App() {
   const destination = useDestination(sbg, state.phase === 'ready' && state.screen === 'records');
   // The shop's tax invoices (KRA eTIMS, Kenya only), under Earnings.
   const fiscal = useMemo(() => (sbg ? createFiscalApi(sbg) : null), [sbg]);
+  // Round 19 — a load's package scanned into any box at this counter finds its load: one the shop posted opens here.
+  const loadFinder = useMemo(
+    () =>
+      sbg
+        ? loadFinderFor(sbg, (found) => {
+            actions.go('freight');
+            void actions.openPrices(found.freightId);
+          })
+        : null,
+    [sbg],
+  );
   // A shop signs in with an email and a password, not a PIN — so the menu offers THAT credential, and
   // the sheet lives here beside the row that opens it rather than at the foot of one screen.
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -78,6 +90,7 @@ export function App() {
   ];
 
   return (
+    <LoadFinderContext.Provider value={loadFinder}>
     <div class="app">
       <TopBar
         title={t('agent.appTitle')}
@@ -129,6 +142,7 @@ export function App() {
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={agentConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
       <FeedbackFlash />
     </div>
+    </LoadFinderContext.Provider>
   );
 }
 

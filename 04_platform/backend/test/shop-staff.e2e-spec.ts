@@ -179,6 +179,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'GET sbg/dispatch/freight/:id/consignment-note', 'GET sbg/dispatch/freight/:id/consignment-note.html',
         'GET sbg/dispatch/freight/:id/commercial-invoice', 'GET sbg/dispatch/freight/:id/commercial-invoice.html',
         'GET sbg/dispatch/freight/:id/package-labels', 'GET sbg/dispatch/freight/:id/package-labels.html',
+        // round 19 — a load's package scanned into a counter's box: its load, if the shop may open it
+        'GET sbg/dispatch/find-load',
         // photographs, a parcel's damage report, a word with the receiver, the shop's inbox
         'POST sbg/media//', 'GET sbg/media/:id',
         'GET sbg/parcels/:id/damage-report', 'GET sbg/parcels/:id/damage-report/file', 'GET sbg/parcels/:id/damage-report/links', 'POST sbg/parcels/:id/damage-report/links',

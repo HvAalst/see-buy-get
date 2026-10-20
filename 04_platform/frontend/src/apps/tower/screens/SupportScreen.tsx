@@ -1,6 +1,9 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import type { LoadFound } from '../../../shared/loadFinder';
+import { isLoadLabel, ssccOfScan } from '../../../shared/scan';
+import { ConsignmentNoteCard } from './ConsignmentNoteCard';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -19,11 +22,25 @@ import type { TowerActions, TowerState } from '../useTowerApp';
 export function SupportScreen({ state, actions }: { state: TowerState; actions: TowerActions }) {
   const t = useT();
   const [id, setId] = useState('');
-  const p = state.lookup;
+  // Round 19 — a load's package barcode (SSCC), our label's QR or a load's code finds the LOAD, not a parcel.
+  const [load, setLoad] = useState<LoadFound | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const p = load ? null : state.lookup;
 
-  const submit = (e: Event) => {
+  const submit = async (e: Event) => {
     e.preventDefault();
-    if (id.trim()) void actions.lookupParcel(id.trim());
+    const text = id.trim();
+    if (!text) return;
+    setLoad(null);
+    setLoadError(null);
+    if (ssccOfScan(text) || isLoadLabel(text)) {
+      const client = actions.client();
+      if (!client) return;
+      const r = await client.api.findLoad(text);
+      if (r.data) return setLoad(r.data as unknown as LoadFound);
+      return setLoadError(r.error?.code === 'NOT_FOUND' ? t('common.loadScan.none') : r.error?.detail || r.error?.title || t('common.loadScan.failed'));
+    }
+    void actions.lookupParcel(text);
   };
 
   return (
@@ -33,7 +50,7 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
         <p class="cons__lede">{t('tower.support.lede')}</p>
       </header>
 
-      <form class="twr-lookup" onSubmit={submit}>
+      <form class="twr-lookup" onSubmit={(e) => void submit(e)}>
         <input
           class="cinput"
           value={id}
@@ -46,7 +63,19 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
         </button>
       </form>
 
-      {state.queueError ? <p class="cerr" style="max-width:96ch">{state.queueError}</p> : null}
+      {state.queueError && !load ? <p class="cerr" style="max-width:96ch">{state.queueError}</p> : null}
+      {loadError ? <p class="cerr" style="max-width:96ch">{loadError}</p> : null}
+      {load ? (
+        <section class="cons__panel">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{load.package && load.packages ? t('common.loadScan.package', { no: load.package, of: load.packages, code: load.code }) : t('common.loadScan.load', { code: load.code })}</span>
+            <span class="ctag ctag--info">{load.status.replace(/_/g, ' ')}</span>
+          </div>
+          <p class="crow__sub">{t('common.loadScan.what', { description: load.description, from: load.pickupLabel, to: load.destLabel })}</p>
+          {load.sscc ? <p class="chint mono-t">SSCC {load.sscc}</p> : null}
+          <ConsignmentNoteCard freightId={load.freightId} api={actions.client()?.api as never} />
+        </section>
+      ) : null}
       {state.done ? (
         <p class="twr-done" style="margin:0 0 16px">
           <Icon name="check" size={16} />
@@ -54,7 +83,7 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
         </p>
       ) : null}
 
-      {!p ? (
+      {load ? null : !p ? (
         <div class="cons__panel">
           <div class="cons__empty">
             <p class="cons__emptyt">{t('tower.support.emptyTitle')}</p>

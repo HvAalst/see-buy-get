@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { LoadFinderContext, useLoadFinder, type LoadFinder } from '../../../shared/loadFinder';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
 import { useT } from '../../../shared/i18n';
@@ -58,6 +59,9 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
           detail={t('driver.loads.noBadgeDetail')}
         />
       ) : null}
+
+      {/* Round 19 — at a pickup with a yard of pallets: which of mine is this one? */}
+      {state.claims.some((c) => c.kind === 'freight') ? <FindByLabel claims={state.claims} onOpen={setGate} /> : null}
 
       {state.claims.length === 0 ? (
         <Card title={t('driver.loads.emptyTitle')} tone="soft">
@@ -518,5 +522,32 @@ function FreightGate({ claim, state, actions, onClose }: { claim: Claimable | nu
         </>
       ) : null}
     </Sheet>
+  );
+}
+
+/**
+ * Round 19 — "IS THIS ONE OF MINE?" A package's GS1 barcode, the QR on our label, or the load's code typed off it finds
+ * which of the driver's loads it belongs to — and opens its pickup or delivery from there. A load that is not theirs
+ * reads as no load at all: the wrong pallet is said before it is on the truck.
+ */
+function FindByLabel({ claims, onOpen }: { claims: Claimable[]; onOpen: (c: Claimable) => void }) {
+  const t = useT();
+  const outer = useLoadFinder();
+  const [code, setCode] = useState('');
+  if (!outer) return null;
+  const mine = (freightId: string) => claims.find((c) => c.ref === freightId && (claimControl(c) === 'pickup' || claimControl(c) === 'deliver'));
+  const finder: LoadFinder = {
+    find: outer.find,
+    canOpen: (found) => Boolean(mine(found.freightId)),
+    open: (found) => {
+      const c = mine(found.freightId);
+      if (c) onOpen(c);
+    },
+  };
+  return (
+    <LoadFinderContext.Provider value={finder}>
+      <ScanField id="find-load" label={t('driver.loads.findLabel')} value={code} onValue={setCode} expect="load" loads placeholder="FRT-…" enterKeyHint="search" />
+      <p class="hint">{t('driver.loads.findHint')}</p>
+    </LoadFinderContext.Provider>
   );
 }

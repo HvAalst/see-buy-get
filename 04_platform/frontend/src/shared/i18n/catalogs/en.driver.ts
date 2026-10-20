@@ -362,6 +362,8 @@ export const enDriver = {
   'driver.loads.noBadgeTitle': 'No badge on your record',
   'driver.loads.noBadgeDetail': 'You cannot scan bags on board until the office adds your badge number.',
   'driver.loads.emptyTitle': 'Nothing claimed yet',
+  'driver.loads.findLabel': 'Is this one of mine?',
+  'driver.loads.findHint': 'Scan a package’s barcode or the QR on its label, or type the load’s code: you see which of your loads it belongs to, and open its pickup from there. A package that is not yours reads as no load.',
   'driver.loads.empty1': 'Pick a route',
   'driver.loads.empty2': 'Claim the loads on your way',
   'driver.loads.empty3': 'Scan each bag on board',
