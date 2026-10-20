@@ -1,5 +1,6 @@
 import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '../../foundation/gs1/gs1';
 import { qrSvgGroup } from '../../foundation/label/qr';
+import { zplBox, zplGs1_128, zplLabel, zplQr, zplText } from '../../foundation/label/zpl';
 import { escapeHtml } from '../../foundation/mail/mail.blocks';
 
 /**
@@ -95,6 +96,52 @@ function labelSvg(input: PackageLabelInput, no: number, count: number): string {
     parts.push(t(W / 2, 146, 3.6, e(ssccHumanReadable(sscc)), 'font-family="monospace" text-anchor="middle"'));
   }
   return `<svg class="label" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}mm" height="${H}mm" font-family="Arial, Helvetica, sans-serif" fill="#111" role="img" aria-label="Package ${no} of ${count}, load ${e(input.loadCode)}${sscc ? `, SSCC ${sscc}` : ''}">${parts.join('')}</svg>`;
+}
+
+/**
+ * Round 27 — THE SAME LABELS FOR A THERMAL PRINTER (ZPL): one label a package, every field where the printed page has it,
+ * the QR and the GS1-128 barcode drawn by the printer itself. Sent to the printer as it is, one label after another.
+ */
+export function packageLabelsZpl(input: PackageLabelInput): string {
+  const count = Math.max(1, input.packages ?? 1);
+  return Array.from({ length: count }, (_, i) => labelZpl(input, i + 1, count)).join('\n');
+}
+
+function labelZpl(input: PackageLabelInput, no: number, count: number): string {
+  const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+  const f: string[] = [];
+  f.push(zplBox(0, 0, W, 12));
+  f.push(zplText(4, 8.2, 5, 'SeeBuyGet', { reverse: true }));
+  f.push(zplText(W - 4, 8.4, 5.2, `Package ${no} of ${count}`, { reverse: true, right: true }));
+  f.push(zplText(4, 18, 2.6, 'FROM'));
+  f.push(zplText(4, 22, 3.4, cut(input.from.name, 44)));
+  f.push(zplText(4, 26, 3, cut(placeLine(input.from), 52)));
+  f.push(zplBox(4, 28.85, W - 8, 0.3));
+  f.push(zplText(4, 34, 2.6, 'TO'));
+  f.push(zplText(4, 40, 5, cut(input.to.name, 30), { wide: true }));
+  f.push(zplText(4, 46, 3.6, cut(input.to.name === input.to.place ? (input.to.country ?? '') : placeLine(input.to), 44)));
+  f.push(zplBox(0, 49.75, W, 0.5));
+  if (input.trackingUrl) f.push(zplQr(4, 53, 6, input.trackingUrl));
+  const x = input.trackingUrl ? 38 : 4;
+  f.push(zplText(x, 58, 2.6, 'LOAD'));
+  f.push(zplText(x, 65, 6, input.loadCode, { wide: true }));
+  if (input.trackingKey) f.push(zplText(x, 71, 3.2, `Track: ${input.trackingKey}`));
+  f.push(zplText(x, 76.5, 3, cut(input.description, 34)));
+  f.push(zplText(x, 81.5, 3, `Load gross ${input.grossKg.toLocaleString('en')} kg`));
+  const marks = input.marks.join(' · ');
+  if (marks) f.push(zplText(4, 89, 3.4, cut(marks, 50)));
+  if (no === 1 && input.papers) f.push(zplText(4, 94.5, 3, cut(input.papers, 58)));
+  const sscc = input.codes[no - 1];
+  if (sscc) {
+    f.push(zplBox(0, 97.75, W, 0.5));
+    f.push(zplText(4, 104, 2.8, 'SSCC'));
+    f.push(zplText(4, 110.5, 5, ssccSpaced(sscc, input.companyPrefixLength ?? 7)));
+    f.push(zplGs1_128(113, MODULE, 28, `00${sscc}`));
+    const readable = ssccHumanReadable(sscc);
+    // Centred as the printed label centres it: the printer's font is about 0.6 of its height a character wide.
+    f.push(zplText((W - readable.length * 3.6 * 0.6) / 2, 146, 3.6, readable));
+  }
+  return zplLabel(f);
 }
 
 function placeLine(p: { place: string; country?: string }): string {

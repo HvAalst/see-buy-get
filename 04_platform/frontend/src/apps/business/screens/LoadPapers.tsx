@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { publicRequest } from '../../../lib/sbg';
+import { downloadZpl } from '../../../shared/download';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
 import { businessConfig, type BusinessClient, type BusinessView, type PostedLoad } from '../api';
 import { EMPTY_LINE, EXPORT_REASONS, invoiceBody, invoiceForm, invoiceGaps, invoiceTotals, labelsLine, money, type CommercialInvoiceView, type InvoiceForm, type InvoiceGap, type InvoiceLineForm, type PackageLabels } from '../papers';
@@ -40,6 +41,14 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
     void read();
   }, [read]);
 
+  const thermal = async () => {
+    if (!client) return;
+    setError(null);
+    const r = await client.packageLabelsZpl(row.freightId);
+    if (r.error) return setError(r.error.detail || r.error.title || null);
+    downloadZpl(`labels-${row.code}`, String(r.data ?? ''));
+  };
+
   const sayOwnPaper = async (travels: boolean) => {
     if (!client) return;
     setError(null);
@@ -75,6 +84,10 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
           <span class="crow__tail">
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!client} onClick={() => void print(() => client!.packageLabelsPage(row.freightId))}>
               {t('business.papers.print')}
+            </button>
+            {/* Round 27 — the same labels for a thermal label printer (ZPL), 100 × 150 mm, one a package. */}
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!client} onClick={() => void thermal()}>
+              {t('business.papers.thermal')}
             </button>
           </span>
         </div>

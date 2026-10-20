@@ -849,6 +849,26 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "thermal-labels",
+    apps: [
+      "agent",
+      "vendor",
+      "business"
+    ],
+    title: "Printing labels: on paper, or on a thermal printer",
+    summary: "Every label prints on paper from the page it opens, or on a thermal label printer — the 100 × 150 mm kind couriers use — from a file.",
+    steps: [
+      "Shop app: after taking a parcel in, “Open and print the label” opens it to print on paper; “Thermal printer (ZPL)” saves it as a file for a label printer.",
+      "Store app: the same two once an order is paid — and again later, from the order under Orders: “Print the label again”, or “Thermal printer (ZPL)”.",
+      "Business app: Loads, open the load, then Papers for the goods: “Print labels” for paper, “Thermal printer (ZPL)” for a file with one label a package.",
+      "Send the file to the printer as it is: with the printer maker’s own tool (for a Zebra, Zebra Setup Utilities: Open printer tools, then Action, Send file), or to the label printer shared on your computer."
+    ],
+    notes: [
+      "The file is written for a 203 dpi printer loaded with 100 × 150 mm labels. Set the label size on the printer first: a printer set to another size prints it cut off.",
+      "A label never carries the code that releases a parcel — only its public tracking key."
+    ]
+  },
+  {
     id: "no-signal",
     apps: [
       "agent",

@@ -278,6 +278,10 @@ export function createAgentApi(sbg: SbgClient) {
      *  the take-in screen opens, so it is said before the goods are accepted rather than after a refusal. */
     takeInTerms: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/take-in-terms', { params: { path: { did } } })),
 
+    /** Round 27 — a parcel this shop took in, its label for the counter's thermal printer (ZPL). */
+    labelZpl: (did: string, parcelId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/agents/{did}/parcels/{id}/label.zpl', { params: { path: { did, id: parcelId } }, parseAs: 'text' })),
+
     /** PG4 — take a PRE-MINTED parcel in: a peer send (collect the locked price in cash + proof photo)
      *  or a store order (prepaid, no photo). One scan surface; the parcel's record decides. */
     intake: (id: string, dropoffPhotoRef?: string, takeInSeconds?: number, papersInPouch?: boolean) =>

@@ -518,6 +518,10 @@ function LabelStep({ state, actions }: MintScreenProps) {
           <div class="labelbox" dangerouslySetInnerHTML={{ __html: svg }} />
           <div class="scr__cta">
             <Button onClick={openLabel}>{t('vendor.mint.openPrint')}</Button>
+            {/* Round 27 — the same label for a thermal label printer (ZPL), 100 × 150 mm. */}
+            <Button variant="link" busy={state.busy === `thermal:${m.parcel.parcelId}`} onClick={() => void actions.thermalOrderLabel(m.parcel.parcelId)}>
+              {t('vendor.mint.thermal')}
+            </Button>
           </div>
         </>
       ) : null}

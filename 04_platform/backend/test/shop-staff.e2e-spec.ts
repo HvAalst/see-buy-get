@@ -168,6 +168,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'POST sbg/parcels/:id/pickup', 'POST sbg/parcels/collect', 'POST sbg/parcels/:id/collect-confirm', 'POST sbg/parcels/:id/void', 'POST sbg/parcels/:id/dispute',
         'POST sbg/parcels/handover', 'POST sbg/parcels/handover/manifest', 'POST sbg/parcels/:id/rate', 'POST sbg/drivers/:did/rate', 'POST sbg/parcels/book-freight',
         'GET sbg/parcels/:id', 'GET sbg/parcels', 'GET sbg/agents/:did/parcels',
+        // round 27 — the label of a parcel taken in at this counter, for its thermal label printer
+        'GET sbg/agents/:did/parcels/:id/label.zpl',
         // the shop as the counter sees it, and open or closed now
         'GET sbg/agents/:did', 'GET sbg/agents/:did/shelf', 'GET sbg/agents/:did/bag-plan', 'GET sbg/agents/:did/can-transact', 'GET sbg/agents/:did/take-in-terms',
         'POST sbg/agents/:did/ping', 'POST sbg/agents/:did/availability',
@@ -178,7 +180,7 @@ describe('the people at a shop’s counter, over the wire', () => {
         // the papers of a load booked at the counter, printed there
         'GET sbg/dispatch/freight/:id/consignment-note', 'GET sbg/dispatch/freight/:id/consignment-note.html',
         'GET sbg/dispatch/freight/:id/commercial-invoice', 'GET sbg/dispatch/freight/:id/commercial-invoice.html',
-        'GET sbg/dispatch/freight/:id/package-labels', 'GET sbg/dispatch/freight/:id/package-labels.html',
+        'GET sbg/dispatch/freight/:id/package-labels', 'GET sbg/dispatch/freight/:id/package-labels.html', 'GET sbg/dispatch/freight/:id/package-labels.zpl',
         // round 19 — a load's package scanned into a counter's box: its load, if the shop may open it
         'GET sbg/dispatch/find-load',
         // photographs, a parcel's damage report, a word with the receiver, the shop's inbox

@@ -63,6 +63,8 @@ export const enVendor = {
   'vendor.payNow': 'Pay now from the balance',
   'vendor.buyerCollectionCode': 'Buyer\'s collection code',
   'vendor.scanHeardLate': 'done with no signal · reached us {at}',
+  'vendor.mint.thermal': 'Thermal printer (ZPL)',
+  'vendor.order.printLabel': 'Print the label again',
   'vendor.parcel': 'Parcel',
   'vendor.continue': 'Continue',
   'vendor.close': 'Close',

@@ -345,6 +345,8 @@ export interface BusinessClient {
   /** A load's package labels: what they carry, and the page to print. */
   packageLabels(freightId: string): Promise<Result<PackageLabels>>;
   packageLabelsPage(freightId: string): Promise<Result<string>>;
+  /** Round 27 — the same labels for a thermal label printer (ZPL). */
+  packageLabelsZpl(freightId: string): Promise<Result<string>>;
   /** A load's commercial invoice: read, write and sign, and the page of three copies. */
   invoice(freightId: string): Promise<Result<CommercialInvoiceView>>;
   writeInvoice(freightId: string, body: Record<string, unknown>): Promise<Result<CommercialInvoice>>;
@@ -419,6 +421,7 @@ export function createBusinessClient(): BusinessClient {
     revokeKey: (keyId) => call((c) => c.POST(`/v1/sbg/business/me/keys/${encodeURIComponent(keyId)}/revoke` as never, {} as never) as never),
     packageLabels: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels` as never, {} as never) as never),
     packageLabelsPage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels.html` as never, { parseAs: 'text' } as never) as never),
+    packageLabelsZpl: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/package-labels.zpl` as never, { parseAs: 'text' } as never) as never),
     invoice: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, {} as never) as never),
     writeInvoice: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice` as never, { body } as never) as never),
     invoicePage: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/commercial-invoice.html` as never, { parseAs: 'text' } as never) as never),

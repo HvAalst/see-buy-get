@@ -576,6 +576,17 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
               {t('vendor.payNow')}
             </Button>
           ) : null}
+          {/* Round 27 — its label, to print again once paid: on paper, or on a thermal label printer (ZPL). */}
+          {d.paidStatus === 'ParcelPaid' ? (
+            <div class="kv">
+              <Button variant="link" full={false} busy={state.busy === `label:${d.parcelId}`} onClick={() => void actions.printOrderLabel(d.parcelId)}>
+                {t('vendor.order.printLabel')}
+              </Button>
+              <Button variant="link" full={false} busy={state.busy === `thermal:${d.parcelId}`} onClick={() => void actions.thermalOrderLabel(d.parcelId)}>
+                {t('vendor.mint.thermal')}
+              </Button>
+            </div>
+          ) : null}
           {d.collectionCode ? <CodeCard label={t('vendor.buyerCollectionCode')} code={d.collectionCode} scanAs="collect" /> : null}
           {/* The damage claim report on this order: the store reads it, keeps the file, and hands it on — the same three things the receiver has. */}
           {d.damageReport ? <DamageReportCard client={client} parcelId={d.parcelId} number={d.damageReport.number} /> : null}

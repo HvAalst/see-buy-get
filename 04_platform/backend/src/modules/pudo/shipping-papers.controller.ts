@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Header, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { zplOut } from '../../foundation/label/zpl';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
@@ -11,7 +13,7 @@ import { DispatchService } from './dispatch.service';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { Freight } from './dispatch.types';
 import { tempBand } from './heavy-cargo';
-import { packageLabelsHtml } from './package-labels';
+import { packageLabelsHtml, packageLabelsZpl, type PackageLabelInput } from './package-labels';
 import { CommercialInvoiceDto, OwnInvoicePaperDto } from './shipping-papers.dto';
 import { PackageLabelsView } from './shipping-papers.types';
 import { ShipperCodesService } from './shipper-codes.service';
@@ -61,12 +63,28 @@ export class ShippingPapersController {
   @Header('Cache-Control', 'private, no-store')
   @AtTheCounter()
   labelsHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
-    const f = this.notes.requireReader(id, actor);
+    return packageLabelsHtml(this.labelInput(this.notes.requireReader(id, actor)));
+  }
+
+  /**
+   * Round 27 — the same labels for a thermal label printer (ZPL, 203 dpi, 100 × 150 mm): what is sent to the printer as it
+   * is. Read by whoever reads the labels' page.
+   */
+  @SignedIn()
+  @Get('dispatch/freight/:id/package-labels.zpl')
+  @Header('Cache-Control', 'private, no-store')
+  @AtTheCounter()
+  labelsZpl(@Param('id') id: string, @Actor() actor: IntrospectionResult, @Res({ passthrough: true }) res: Response): string {
+    return zplOut(res, packageLabelsZpl(this.labelInput(this.notes.requireReader(id, actor))));
+  }
+
+  /** What a load's labels carry, printed on a page or by a thermal printer alike. */
+  private labelInput(f: Freight): PackageLabelInput {
     const note = this.notes.noteFor(f.freightId);
     const issued = this.codes.codesFor(f.freightId);
     const band = tempBand(f.natureCode);
     const invoice = this.invoices.current(f.freightId);
-    return packageLabelsHtml({
+    return {
       loadCode: f.code,
       description: f.description,
       ...(f.trackingKey ? { trackingKey: f.trackingKey } : {}),
@@ -79,7 +97,7 @@ export class ShippingPapersController {
       grossKg: f.weightKg,
       marks: [f.fragile ? 'Fragile' : '', band ? `Keep ${band.minC} °C to ${band.maxC} °C` : '', note.goods.dangerous ? 'Dangerous goods' : ''].filter(Boolean),
       ...(invoice ? { papers: `In the pouch: commercial invoice ${invoice.number}, ${invoice.copies} copies` } : {}),
-    });
+    };
   }
 
   /** The load's commercial invoice: the one it travels with now, and the ones it replaced. */

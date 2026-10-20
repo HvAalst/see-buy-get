@@ -9588,6 +9588,43 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/parcels/{id}/label.zpl": {
+      "get": {
+        "operationId": "Sbg.shopLabelZpl",
+        "summary": "",
+        "description": "Round 27 — a parcel's label for the shop's thermal label printer (ZPL): only a parcel this shop took in at its own\ncounter, at that counter. What is sent to the printer as it is.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/parcels/{id}/cancel": {
       "post": {
         "operationId": "Sbg.cancelParcel",
@@ -10500,6 +10537,80 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/orders/{parcelId}/label": {
+      "get": {
+        "operationId": "Sbg.vendorOrderLabel",
+        "summary": "",
+        "description": "Round 27 — an order's label, to print again: the store's own, once paid. Before, a store printed it once or never.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhygitalLabel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/orders/{parcelId}/label.zpl": {
+      "get": {
+        "operationId": "Sbg.vendorOrderLabelZpl",
+        "summary": "",
+        "description": "Round 27 — the same label for the store's thermal label printer (ZPL), sent to the printer as it is.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -22383,6 +22494,35 @@
         "operationId": "ShippingPapers.labelsHtml",
         "summary": "",
         "description": "The labels as a printable page: one 100 × 150 mm label a package.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/dispatch/freight/{id}/package-labels.zpl": {
+      "get": {
+        "operationId": "ShippingPapers.labelsZpl",
+        "summary": "",
+        "description": "Round 27 — the same labels for a thermal label printer (ZPL, 203 dpi, 100 × 150 mm): what is sent to the printer as it\nis. Read by whoever reads the labels' page.",
         "parameters": [
           {
             "name": "id",

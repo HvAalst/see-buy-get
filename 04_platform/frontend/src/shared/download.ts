@@ -3,6 +3,14 @@
  * token). A Blob + a transient object-URL on a synthetic anchor — no server round-trip beyond the fetch
  * the caller already did, and no navigation. Guarded for a non-DOM/SSR context.
  */
+/**
+ * Round 27 — a label for a thermal label printer (ZPL), as a file: what the printer's own tool, or a shared printer, is
+ * sent as it is. Named for what it labels, so a counter can tell one from the next in its downloads.
+ */
+export function downloadZpl(name: string, zpl: string): void {
+  triggerDownload(`${name.replace(/[^A-Za-z0-9_-]+/g, '-')}.zpl`, zpl, 'text/plain;charset=utf-8');
+}
+
 export function triggerDownload(filename: string, content: string, mime = 'text/csv;charset=utf-8'): void {
   triggerDownloadBlob(filename, new Blob([content], { type: mime }));
 }

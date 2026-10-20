@@ -32,6 +32,7 @@ export const enAgent = {
 
   // Bottom navigation.
   'agent.nav.home': 'My shop',
+  'agent.accept.thermalLabel': 'Thermal printer (ZPL)',
   'agent.nav.accept': 'Take in',
   'agent.nav.release': 'Hand out',
   'agent.nav.records': 'Records',

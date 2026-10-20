@@ -37,6 +37,7 @@ import { capabilitiesOf } from '../../foundation/presence/presence.service';
 import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
 import type { Response } from 'express';
+import { zplOut } from '../../foundation/label/zpl';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { HandleService } from '../../foundation/handle/handle.service';
 import { HandleDirectory } from './handle-directory.service';
@@ -2966,6 +2967,20 @@ export class SbgController {
     return this.parcels.labelFor(id);
   }
 
+  /**
+   * Round 27 — a parcel's label for the shop's thermal label printer (ZPL): only a parcel this shop took in at its own
+   * counter, at that counter. What is sent to the printer as it is.
+   */
+  @Roles('agent', 'operator')
+  @Get('agents/:did/parcels/:id/label.zpl')
+  @Header('Cache-Control', 'private, no-store')
+  @AtTheCounter()
+  shopLabelZpl(@Param('did') did: string, @Param('id') id: string, @Actor() actor: IntrospectionResult, @Res({ passthrough: true }) res: Response): string {
+    this.assertAgentOwner(did, actor);
+    this.parcels.takenInAt(did, id);
+    return zplOut(res, this.parcels.labelZplFor(id));
+  }
+
   /** Reverse logistics: cancel a not-yet-delivered parcel (Created / At_PUDO / At_MDP) — operator only. */
   @Roles('operator')
   @Post('parcels/:id/cancel')
@@ -3382,6 +3397,24 @@ export class SbgController {
   vendorOrder(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult) {
     this.assertVendorReads(id, actor);
     return this.parcels.vendorOrderView(id, parcelId);
+  }
+
+  /** Round 27 — an order's label, to print again: the store's own, once paid. Before, a store printed it once or never. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/orders/:parcelId/label')
+  vendorOrderLabel(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult) {
+    this.assertVendorReads(id, actor);
+    return this.parcels.orderLabel(id, parcelId);
+  }
+
+  /** Round 27 — the same label for the store's thermal label printer (ZPL), sent to the printer as it is. */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/orders/:parcelId/label.zpl')
+  @Header('Cache-Control', 'private, no-store')
+  vendorOrderLabelZpl(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult, @Res({ passthrough: true }) res: Response): string {
+    this.assertVendorReads(id, actor);
+    this.parcels.orderLabel(id, parcelId);
+    return zplOut(res, this.parcels.labelZplFor(parcelId));
   }
 
   /** The buyer's checkout selections waiting to be shipped (the console's incoming-orders inbox). Owner-scoped:

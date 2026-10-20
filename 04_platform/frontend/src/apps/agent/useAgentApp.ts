@@ -19,7 +19,7 @@ import { errorSentence } from '../../shared/ui';
 import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
-import { triggerDownload } from '../../shared/download';
+import { downloadZpl, triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import { bodyHintValue, bookFreightMissing, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
@@ -2109,6 +2109,16 @@ export function useAgentApp() {
     });
   }, [client, run, fail, setRelease]);
 
+  /** Round 27 — the label of a parcel this shop took in, as a file for its thermal label printer (ZPL). */
+  const thermalLabel = useCallback(async (parcelId: string) => {
+    if (!client || !did) return;
+    await run('thermal', async () => {
+      const r = await client.api.labelZpl(did, parcelId);
+      if (r.error) return fail(r.error);
+      downloadZpl(`label-${parcelId}`, String(r.data ?? ''));
+    });
+  }, [client, did, run, fail]);
+
   const markArrived = useCallback(async () => {
     if (!client || !did) return;
     const f = stateRef.current.release;
@@ -2391,6 +2401,7 @@ export function useAgentApp() {
       clearBag,
       findRelease,
       markArrived,
+      thermalLabel,
       submitPickup,
       submitRating,
       findCollect,

@@ -14,7 +14,7 @@ export function openLabel(svg: string) {
  * SENDER standing there — not printed on the parcel, and never learned by the collecting shop, so this is where it
  * reaches a human. The same block whether the take-in went at once or waited for a signal.
  */
-export function TakenInLabel({ label }: { label: TakenIn }) {
+export function TakenInLabel({ label, onThermal, busy }: { label: TakenIn; onThermal?: (parcelId: string) => void; busy?: boolean }) {
   const t = useT();
   return (
     <>
@@ -25,6 +25,12 @@ export function TakenInLabel({ label }: { label: TakenIn }) {
           <Button chevron={false} onClick={() => label.svg && openLabel(label.svg)}>
             {t('agent.accept.openLabel')}
           </Button>
+          {/* Round 27 — the same label for a thermal label printer (ZPL), 100 × 150 mm. */}
+          {onThermal ? (
+            <Button variant="link" busy={busy} onClick={() => onThermal(label.parcelId)}>
+              {t('agent.accept.thermalLabel')}
+            </Button>
+          ) : null}
         </>
       ) : null}
       {label.trackingKey ? <p class="hint" style="margin-top:8px">{t('agent.accept.trackingKey', { key: label.trackingKey })}</p> : null}
@@ -52,7 +58,7 @@ export function LateTakeInSheet({ state, actions }: { state: AgentState; actions
       {late ? (
         <>
           <p class="t-body">{t('agent.accept.lateBody', { parcel: late.parcelId, time: new Date(late.queuedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}</p>
-          <TakenInLabel label={late} />
+          <TakenInLabel label={late} onThermal={(id) => void actions.thermalLabel(id)} busy={state.busy === 'thermal'} />
           {late.releaseCode && late.senderMobile ? <p class="hint">{t('agent.accept.lateCall', { phone: late.senderMobile })}</p> : null}
           <Button variant="link" onClick={actions.dismissLateTakeIn}>
             {state.lateTakeIns.length > 1 ? t('agent.accept.lateNext', { n: state.lateTakeIns.length - 1 }) : t('agent.accept.lateDone')}

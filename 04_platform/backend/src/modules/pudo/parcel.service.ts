@@ -29,6 +29,7 @@ import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
 import { handedAt, type Step } from './observed-at';
+import { parcelLabelZpl } from './parcel-label';
 
 const LABEL_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -2700,6 +2701,31 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.label) return parcel.label;
     const destShop = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined;
     return this.label(parcel, destShop);
+  }
+
+  /**
+   * ROUND 27 — THE LABEL FOR A THERMAL PRINTER (the user: "Thermal labels (ZPL)"; "Every label we print"): the same label,
+   * in the language the counters' and docks' label printers read (parcel-label.ts). Who may print it is the door's to say.
+   */
+  labelZplFor(parcelId: string): string {
+    const parcel = this.require(parcelId);
+    const destShop = parcel.destAgentDid ? this.agents.get(parcel.destAgentDid).shopName : undefined;
+    return parcelLabelZpl(parcel, labelDate(parcel.acceptedAt), destShop);
+  }
+
+  /** A parcel this shop took in at its counter — the only parcels whose label it prints. Another's reads as not there. */
+  takenInAt(agentDid: string, parcelId: string): Parcel {
+    const p = this.parcels.get(parcelId);
+    if (!p || p.originAgentDid !== agentDid) throw new GlosError('NOT_FOUND', 'No parcel taken in at this shop has that number');
+    return p;
+  }
+
+  /** A store's own order's label, to print again: once it is paid, when a label is issued, and for that store alone. */
+  orderLabel(vendorId: string, parcelId: string): PhygitalLabel {
+    const p = this.require(parcelId);
+    if (p.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'Order does not belong to this vendor');
+    if (!p.label) throw new GlosError('INVALID_STATE', 'A label is issued once the order is paid: pay for it, and its label prints');
+    return p.label;
   }
 
   /** Keep the plan made as the parcel entered custody — once: a plan is a promise, and it is not rewritten afterwards. */

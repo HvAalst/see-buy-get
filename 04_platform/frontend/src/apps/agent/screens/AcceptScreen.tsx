@@ -328,7 +328,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             <p class="t-body">{t(state.acceptedLabel.queued ? 'agent.accept.queuedBody' : 'agent.accept.labelBody', { parcel: state.acceptedLabel.parcelId })}</p>
             {/* The label, the tracking key and the pickup code for the SENDER standing here — or, taken in without a
                 signal, nothing yet: they are made when it reaches SeeBuyGet, and shown then. */}
-            <TakenInLabel label={state.acceptedLabel} />
+            <TakenInLabel label={state.acceptedLabel} onThermal={(id) => void actions.thermalLabel(id)} busy={state.busy === 'thermal'} />
             <Button variant="link" onClick={actions.dismissAcceptedLabel}>
               {t('agent.accept.doneAnother')}
             </Button>

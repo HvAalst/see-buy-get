@@ -3,7 +3,8 @@ import { isMintSourced, isSignInRequired, narrow, type SbgError } from '../../li
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { openPage } from '../../shared/openPage';
 import { papersBody } from './papers';
-import { triggerDownload } from '../../shared/download';
+import { downloadZpl, triggerDownload } from '../../shared/download';
+import { openSvg } from '../../shared/openPage';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import type { IconName } from '../../shared/ui/Icon';
 import {
@@ -938,6 +939,33 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, refresh],
   );
 
+  /** Round 27 — an order's label, opened to print again: the store's own, once paid. */
+  const printOrderLabel = useCallback(
+    async (parcelId: string) => {
+      if (!client || !creds) return;
+      await run(`label:${parcelId}`, async () => {
+        const r = await client.api.orderLabel(creds.vendorId, parcelId);
+        if (r.error) return fail(r.error);
+        const svg = narrow<{ svg?: string }>(r.data)?.svg;
+        if (svg) openSvg(svg);
+      });
+    },
+    [client, creds, run, fail],
+  );
+
+  /** Round 27 — the same label as a file for the store's thermal label printer (ZPL). */
+  const thermalOrderLabel = useCallback(
+    async (parcelId: string) => {
+      if (!client || !creds) return;
+      await run(`thermal:${parcelId}`, async () => {
+        const r = await client.api.orderLabelZpl(creds.vendorId, parcelId);
+        if (r.error) return fail(r.error);
+        downloadZpl(`label-${parcelId}`, String(r.data ?? ''));
+      });
+    },
+    [client, creds, run, fail],
+  );
+
   const settleOrder = useCallback(
     async (parcelId: string) => {
       if (!client || !creds) return;
@@ -949,7 +977,8 @@ export function useVendorApp() {
         if (!again.error) {
           setState((s) => ({
             ...s,
-            minted: s.minted && s.minted.parcel.parcelId === parcelId ? { ...s.minted, paid: true, parcel: narrow<OrderDetail>(again.data) } : s.minted,
+            // Paid now, its label issues now — kept, so the label step shows it (it read the order and dropped the label).
+            minted: s.minted && s.minted.parcel.parcelId === parcelId ? { ...s.minted, paid: true, parcel: narrow<OrderDetail>(again.data), label: narrow<{ label?: MintView['label'] }>(r.data)?.label ?? s.minted.label } : s.minted,
           }));
         }
         await refresh();
@@ -1227,6 +1256,8 @@ export function useVendorApp() {
       pickOrigin,
       submitMint,
       settleOrder,
+      printOrderLabel,
+      thermalOrderLabel,
       topUp,
       saveLocation,
       openOrder,
