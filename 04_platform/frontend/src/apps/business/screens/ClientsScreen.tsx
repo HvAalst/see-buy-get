@@ -6,6 +6,7 @@ import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelec
 import type { MyBookingRow } from '../../agent/types';
 import { businessConfig, type BusinessClient, type BusinessView, type Client, type PostedLoad } from '../api';
 import { loadStage, mayAct } from '../logic';
+import { ClientGs1 } from './ClientGs1';
 import type { BusinessActions } from '../useBusinessApp';
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
@@ -158,6 +159,11 @@ export function ClientsScreen({ business, client }: { business: BusinessView; ac
           row={open}
           client={client}
           act={act}
+          owner={business.you.role === 'owner'}
+          onRow={(c) => {
+            setOpen(c);
+            void load();
+          }}
           onClose={() => setOpen(null)}
           onChanged={async (message) => {
             setDone(message);
@@ -170,7 +176,7 @@ export function ClientsScreen({ business, client }: { business: BusinessView; ac
   );
 }
 
-function ClientDetail({ row, client, act, onClose, onChanged }: { row: Client; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message: string) => void | Promise<void> }) {
+function ClientDetail({ row, client, act, owner, onRow, onClose, onChanged }: { row: Client; client: BusinessClient | null; act: boolean; owner: boolean; onRow: (c: Client) => void; onClose: () => void; onChanged: (message: string) => void | Promise<void> }) {
   const t = useT();
   const [loads, setLoads] = useState<PostedLoad[] | null>(null);
   const [bookings, setBookings] = useState<MyBookingRow[] | null>(null);
@@ -230,6 +236,9 @@ function ClientDetail({ row, client, act, onClose, onChanged }: { row: Client; c
         </dl>
         <p class="chint">{t('business.clients.agentNote')}</p>
       </section>
+
+      {/* Round 20 — the barcode on the client's packages is the client's: its prefix, entered here. */}
+      <ClientGs1 row={row} client={client} owner={owner} onRow={onRow} />
 
       <section class="cons__panel">
         <div class="cons__panelhead">

@@ -14,6 +14,8 @@ export interface Gs1PartyRow {
   note?: string;
   sentAt?: string;
   digitNow?: number;
+  /** Round 20 — a forwarder's client: the forwarder that answers for it. */
+  forwarder?: string;
 }
 
 export type Gs1Side = 'claimant' | 'holders';

@@ -31,4 +31,15 @@ describe('a GS1 prefix disputed, as a business reads it (round 18)', () => {
     expect(stillWorthShowing(decided, Date.parse('2026-11-25T08:00:00.000Z'))).toBe(false);
     expect(disputeLine({ ...base, state: 'withdrawn', withdrawnAt: '2026-10-20T08:00:00.000Z' }, t as never, day).tone).toBe('idle');
   });
+
+  it('said for a client, every sentence is the client’s — never the forwarder’s (round 20)', () => {
+    const forUnga = { ...base, forClient: 'Unga Millers' };
+    expect(disputeLine({ ...forUnga, side: 'claimant' }, t as never, day).text).toBe('business.gs1.d.claimantOpenClient {"prefix":"6161234","names":"Acme Traders, Acme Kisumu","by":"2026-10-26","client":"Unga Millers"}');
+    expect(disputeLine(forUnga, t as never, day).text).toContain('business.gs1.d.holderAskClient');
+    expect(disputeLine({ ...forUnga, licenceSent: true }, t as never, day).text).toContain('business.gs1.d.holderSentClient');
+    const decided = { ...forUnga, state: 'decided' as const, decided: { mine: true, reason: 'r', at: '2026-10-20T08:00:00.000Z' } };
+    expect(disputeLine(decided, t as never, day).text).toContain('business.gs1.d.decidedMineClient');
+    expect(disputeLine({ ...decided, side: 'claimant', decided: { ...decided.decided, mine: false } }, t as never, day).text).toContain('business.gs1.d.decidedNotClaimantClient');
+    expect(disputeLine({ ...decided, decided: { ...decided.decided, mine: false } }, t as never, day).text).toContain('business.gs1.d.decidedNotHolderClient');
+  });
 });

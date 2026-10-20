@@ -319,7 +319,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
           <label class="cfield">
             <span class="cfield__label">{t('business.loads.f.packages')}</span>
             <input id="load-packages" class="cinput" inputMode="numeric" maxLength={3} value={form.packages} onInput={(e) => setForm((prev) => ({ ...prev, packages: (e.target as HTMLInputElement).value }))} />
-            <span class="chint">{t(business.gs1 ? 'business.loads.f.packagesHintGs1' : 'business.loads.f.packagesHint')}</span>
+            <span class="chint">{t(form.forClientId ? 'business.loads.f.packagesHintClient' : business.gs1 ? 'business.loads.f.packagesHintGs1' : 'business.loads.f.packagesHint')}</span>
           </label>
           <div class="cfield">
             <CountrySelect value={form.destCountry} onChange={(destCountry) => setForm((prev) => ({ ...prev, destCountry }))} label={t('business.loads.f.destCountry')} options={countries} />

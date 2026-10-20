@@ -51,6 +51,21 @@ export interface PrefixOwners {
 /** More packages than this on one load are not labelled one by one here. */
 export const MAX_LABELLED_PACKAGES = 500;
 
+/**
+ * Round 20 — a FORWARDER's CLIENT has its own prefix, entered by the forwarder on the client's record ("The forwarder, on
+ * the client's record"). Its codes are kept under this key beside the businesses', so every rule holds for it: never
+ * another's digit, never a number twice, a decided prefix locked.
+ */
+export function clientCoder(entityId: string, clientId: string): string {
+  return `client:${entityId}:${clientId}`;
+}
+
+/** The forwarder and its client a key names, or nothing for a business's own. */
+export function clientOfCoder(key: string): { entityId: string; clientId: string } | undefined {
+  const m = /^client:([^:]+):(.+)$/.exec(key);
+  return m ? { entityId: m[1], clientId: m[2] } : undefined;
+}
+
 @Injectable()
 export class ShipperCodesService {
   private readonly settings = new PersistentMap<string, ShipperGs1>('shipper-gs1');

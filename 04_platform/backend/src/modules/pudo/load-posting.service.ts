@@ -11,7 +11,7 @@ import type { ContractRef } from './carriage-contract.types';
 import { DispatchService } from './dispatch.service';
 import type { Freight } from './dispatch.types';
 import type { RegisterFreightDto } from './pudo.dto';
-import { ShipperCodesService } from './shipper-codes.service';
+import { ShipperCodesService, clientCoder } from './shipper-codes.service';
 
 /**
  * POSTING A LOAD — one way, whoever posts it: a person in an app, or a business's own system with its key (round 12:
@@ -44,9 +44,9 @@ export class LoadPostingService {
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
     const { forClientId, contractId, deliverOn, orderRef, ...load } = dto;
     // GS1 — a business posting its OWN goods gives its packages SSCCs under its prefix, when it holds one. Asked before
-    // the load exists, so a load is never posted with some packages coded and others not. Not for a client's goods:
-    // those carry the client's code, not the expeditor's.
-    const coder = actor?.role === 'business' && actor.tenant && !forClientId ? actor.tenant : undefined;
+    // the load exists, so a load is never posted with some packages coded and others not. A client's goods carry the
+    // CLIENT's code (round 20: the prefix on the client's record), never the forwarder's.
+    const coder = actor?.role === 'business' && actor.tenant ? (forClientId ? clientCoder(actor.tenant, forClientId) : actor.tenant) : undefined;
     this.shipperCodes?.assertCanIssue(coder, dto.packages);
     const posted = this.dispatch.registerFreight(
       { ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },

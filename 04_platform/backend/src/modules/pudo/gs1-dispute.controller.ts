@@ -37,7 +37,7 @@ export class Gs1DisputeController {
   @Roles('business')
   @Post('business/me/gs1/disputes')
   open(@Body() dto: OpenGs1DisputeDto, @Actor() actor: IntrospectionResult): Gs1DisputeView {
-    return this.disputes.open(this.owner(actor), { companyPrefix: dto.companyPrefix, extensionDigit: dto.extensionDigit, licenceRef: dto.licenceRef, note: dto.note });
+    return this.disputes.open(this.owner(actor), { companyPrefix: dto.companyPrefix, extensionDigit: dto.extensionDigit, licenceRef: dto.licenceRef, note: dto.note, forClientId: dto.forClientId });
   }
 
   /** The business using the prefix sends its own licence. Owner only. */

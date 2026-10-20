@@ -146,8 +146,8 @@ export function Gs1Panel({ business, actions, client, owner }: { business: Busin
   );
 }
 
-/** "This prefix is ours": a photograph or screenshot of the GS1 licence, and a word for staff. */
-function ClaimPrefix({ client, prefix, digit, onOpened }: { client: BusinessClient; prefix: string; digit: number; onOpened: () => void }) {
+/** "This prefix is ours" — or, round 20, our client's: a photograph or screenshot of the GS1 licence, and a word for staff. */
+export function ClaimPrefix({ client, prefix, digit, onOpened, forClient }: { client: BusinessClient; prefix: string; digit: number; onOpened: () => void; forClient?: { clientId: string; name: string } }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [licence, setLicence] = useState<string | null>(null);
@@ -158,7 +158,7 @@ function ClaimPrefix({ client, prefix, digit, onOpened }: { client: BusinessClie
     return (
       <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--ghost" onClick={() => setOpen(true)}>
-          {t('business.gs1.claim')}
+          {forClient ? t('business.gs1.claimClient', { name: forClient.name }) : t('business.gs1.claim')}
         </button>
       </div>
     );
@@ -176,14 +176,14 @@ function ClaimPrefix({ client, prefix, digit, onOpened }: { client: BusinessClie
     if (!licence) return;
     setBusy(true);
     setError(null);
-    const r = await client.openGs1Dispute({ companyPrefix: prefix, extensionDigit: digit, licenceRef: licence, ...(note.trim() ? { note: note.trim() } : {}) });
+    const r = await client.openGs1Dispute({ companyPrefix: prefix, extensionDigit: digit, licenceRef: licence, ...(note.trim() ? { note: note.trim() } : {}), ...(forClient ? { forClientId: forClient.clientId } : {}) });
     setBusy(false);
     if (r.error || !r.data) return setError(r.error?.detail || r.error?.title || null);
     onOpened();
   };
   return (
     <div class="cnote">
-      <p class="chint">{t('business.gs1.claimLede', { prefix })}</p>
+      <p class="chint">{forClient ? t('business.gs1.claimLedeClient', { prefix, name: forClient.name }) : t('business.gs1.claimLede', { prefix })}</p>
       <label class="cfield">
         <span class="cfield__label">{t('business.gs1.licence')}</span>
         <input id="gs1-licence" class="cinput" type="file" accept="image/*" disabled={busy} onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
@@ -231,7 +231,7 @@ function DisputeLine({ d, client, owner, onChanged }: { d: Gs1DisputeView; clien
   };
   return (
     <div class="cnote" style="margin-top:10px">
-      <span class={`ctag ctag--${line.tone === 'idle' ? 'quiet' : line.tone}`}>{t('business.gs1.d.tag', { prefix: d.companyPrefix })}</span>
+      <span class={`ctag ctag--${line.tone === 'idle' ? 'quiet' : line.tone}`}>{d.forClient ? t('business.gs1.d.tagClient', { prefix: d.companyPrefix, name: d.forClient }) : t('business.gs1.d.tag', { prefix: d.companyPrefix })}</span>
       <p class="crow__sub">{line.text}</p>
       {owner && client && maySendLicence(d) ? (
         <label class="cfield">

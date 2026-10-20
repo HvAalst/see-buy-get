@@ -22159,6 +22159,72 @@
         }
       }
     },
+    "/v1/sbg/business/me/clients/{clientId}/gs1": {
+      "post": {
+        "operationId": "Business.setClientGs1",
+        "summary": "",
+        "description": "Round 20 — the client's own GS1 prefix and the extension digit it set aside for this forwarder: its loads' packages are\ncoded under it. An owner sets it, as for the business's own; the same refusals hold. Staff: refused by name.",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessGs1Dto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessClient"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Business.clearClientGs1",
+        "summary": "",
+        "description": "Stop coding the client's packages. The codes its loads already have stay with them.",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessClient"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/businesses": {
       "get": {
         "operationId": "Business.staffList",
@@ -47094,6 +47160,11 @@
           "note": {
             "type": "string",
             "maxLength": 500
+          },
+          "forClientId": {
+            "type": "string",
+            "description": "Round 20 — said for one of the forwarder's clients: the prefix is the CLIENT's.",
+            "maxLength": 80
           }
         },
         "required": [
@@ -47120,6 +47191,10 @@
               "decided",
               "withdrawn"
             ]
+          },
+          "forClient": {
+            "type": "string",
+            "description": "Round 20 — the client this business stands for in it, when it is a client's prefix."
           },
           "decided": {
             "type": "object",
@@ -48873,6 +48948,14 @@
           },
           "archivedBy": {
             "type": "string"
+          },
+          "gs1": {
+            "description": "Round 20 — the client's own GS1 prefix, entered by the forwarder: what its loads' packages are coded under.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BusinessGs1View"
+              }
+            ]
           }
         },
         "required": [

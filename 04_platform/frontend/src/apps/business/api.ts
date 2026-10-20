@@ -161,6 +161,8 @@ export interface Client {
   createdBy: string;
   createdAt: string;
   archivedAt?: string;
+  /** Round 20 — the client's own GS1 prefix, entered by the forwarder. */
+  gs1?: Gs1View;
 }
 export interface ClientRef {
   clientId: string;
@@ -310,6 +312,9 @@ export interface BusinessClient {
   clients(archived?: boolean): Promise<Result<{ items: Client[] }>>;
   addClient(input: Omit<Client, 'clientId' | 'createdBy' | 'createdAt' | 'archivedAt'>): Promise<Result<Client>>;
   archiveClient(clientId: string, archived: boolean): Promise<Result<Client>>;
+  /** Round 20 — the client's own GS1 prefix (owner only): its loads' packages are coded under it. */
+  setClientGs1(clientId: string, companyPrefix: string, extensionDigit: number): Promise<Result<Client>>;
+  clearClientGs1(clientId: string): Promise<Result<Client>>;
   contracts(): Promise<Result<{ items: CarriageContract[] }>>;
   linkContract(code: string): Promise<Result<CarriageContract>>;
   endContract(contractId: string, reason?: string): Promise<Result<CarriageContract>>;
@@ -318,7 +323,7 @@ export interface BusinessClient {
   clearGs1(): Promise<Result<BusinessView>>;
   /** Round 18 — the disputes over a GS1 prefix this business is in; open one with its licence, send its own, take it back. */
   gs1Disputes(): Promise<Result<{ items: Gs1DisputeView[] }>>;
-  openGs1Dispute(body: { companyPrefix: string; extensionDigit: number; licenceRef: string; note?: string }): Promise<Result<Gs1DisputeView>>;
+  openGs1Dispute(body: { companyPrefix: string; extensionDigit: number; licenceRef: string; note?: string; forClientId?: string }): Promise<Result<Gs1DisputeView>>;
   sendGs1Licence(disputeId: string, licenceRef: string, note?: string): Promise<Result<Gs1DisputeView>>;
   withdrawGs1Dispute(disputeId: string): Promise<Result<Gs1DisputeView>>;
   /** A photograph or screenshot of its GS1 licence, uploaded: the media id, or null when it did not go. */
@@ -379,6 +384,8 @@ export function createBusinessClient(): BusinessClient {
     clients: (archived) => call((c) => c.GET('/v1/sbg/business/me/clients' as never, { params: { query: archived ? { archived: 'true' } : {} } } as never) as never),
     addClient: (input) => call((c) => c.POST('/v1/sbg/business/me/clients' as never, { body: input } as never) as never),
     archiveClient: (clientId, archived) => call((c) => c.POST(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/archive` as never, { body: { archived } } as never) as never),
+    setClientGs1: (clientId, companyPrefix, extensionDigit) => call((c) => c.POST(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/gs1` as never, { body: { companyPrefix, extensionDigit } } as never) as never),
+    clearClientGs1: (clientId) => call((c) => c.DELETE(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/gs1` as never, {} as never) as never),
     contracts: () => call((c) => c.GET('/v1/sbg/business/me/contracts' as never, {} as never) as never),
     linkContract: (code) => call((c) => c.POST('/v1/sbg/business/me/contracts/link' as never, { body: { code } } as never) as never),
     endContract: (contractId, reason) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/end` as never, { body: reason ? { reason } : {} } as never) as never),

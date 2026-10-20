@@ -23,9 +23,13 @@ export const GS1_DISPUTE_SIDES = ['claimant', 'holders'] as const;
 export type Gs1DisputeSide = (typeof GS1_DISPUTE_SIDES)[number];
 
 export interface Gs1Party {
+  /** The key its codes are kept under: a business's entityId, or a forwarder's client's (round 20). */
   entityId: string;
+  /** Told, and answering: the business itself — or, for a client, the forwarder that keeps its record. */
   did: string;
   name: string;
+  /** Round 20 — a client's party is answered by its forwarder: that business's entityId. */
+  actsFor?: string;
   licenceRef?: string;
   /** Licences it sent before the one it sent last: evidence is never deleted mid-case, so staff see them too. */
   earlier?: string[];
@@ -64,6 +68,8 @@ export class Gs1DisputeView {
   holderNames: string[];
   /** Whether this business has sent its licence. */
   licenceSent: boolean;
+  /** Round 20 — the client this business stands for in it, when it is a client's prefix. */
+  @ApiPropertyOptional() forClient?: string;
   /** Decided: whether the prefix is this business's to use, and the reason staff gave. */
   @ApiPropertyOptional() decided?: { mine: boolean; reason: string; at: string };
   @ApiPropertyOptional() withdrawnAt?: string;
@@ -78,6 +84,8 @@ export class Gs1PartyRow {
   @ApiPropertyOptional() sentAt?: string;
   /** The digit it prints under now, when it uses the prefix. */
   @ApiPropertyOptional() digitNow?: number;
+  /** Round 20 — a forwarder's client: the forwarder that keeps its record and answers for it. */
+  @ApiPropertyOptional() forwarder?: string;
 }
 
 /** What staff read: both sides with their licences, the proposal waiting, the decision. */
@@ -104,6 +112,8 @@ export class OpenGs1DisputeDto {
   /** The photograph or screenshot of the business's GS1 licence, uploaded as media kind `gs1_licence`. */
   @IsString() @MaxLength(80) licenceRef!: string;
   @IsOptional() @IsString() @MaxLength(500) note?: string;
+  /** Round 20 — said for one of the forwarder's clients: the prefix is the CLIENT's. */
+  @IsOptional() @IsString() @MaxLength(80) forClientId?: string;
 }
 
 export class SendGs1LicenceDto {

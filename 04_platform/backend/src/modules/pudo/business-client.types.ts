@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { BusinessGs1View } from './business.types';
 
 /**
  * B4 — WHO AN EXPEDITOR SENDS FOR. The user, 2026-10-04: the expeditor is the shipper's AGENT, so the client stays the
@@ -23,6 +24,8 @@ export class BusinessClient {
   /** Kept, not deleted: a load sent for them in March still names them. */
   @ApiPropertyOptional() archivedAt?: string;
   @ApiPropertyOptional() archivedBy?: string;
+  /** Round 20 — the client's own GS1 prefix, entered by the forwarder: what its loads' packages are coded under. */
+  @ApiPropertyOptional({ type: BusinessGs1View }) gs1?: BusinessGs1View;
 }
 
 /**

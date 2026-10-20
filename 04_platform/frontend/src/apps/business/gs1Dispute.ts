@@ -18,6 +18,8 @@ export interface Gs1DisputeView {
   claimantName: string;
   holderNames: string[];
   licenceSent: boolean;
+  /** Round 20 — the client this business stands for in it. */
+  forClient?: string;
   decided?: { mine: boolean; reason: string; at: string };
   withdrawnAt?: string;
 }
@@ -32,17 +34,21 @@ const alive = (d: Gs1DisputeView) => d.state === 'open' || d.state === 'proposed
 /** Where a dispute stands for this business, in a sentence — and how loudly to say it. */
 export function disputeLine(d: Gs1DisputeView, t: Translate, day: (iso: string) => string): { text: string; tone: DisputeTone } {
   const prefix = d.companyPrefix;
+  // Round 20 — said for a client, every sentence is the CLIENT's: the prefix is theirs, or not, never the forwarder's.
+  const client = d.forClient;
   if (d.state === 'withdrawn') return { text: t('business.gs1.d.withdrawn', { prefix }), tone: 'idle' };
   if (d.decided) {
-    if (d.decided.mine) return { text: t('business.gs1.d.decidedMine', { prefix, reason: d.decided.reason }), tone: 'ok' };
-    return d.side === 'claimant'
-      ? { text: t('business.gs1.d.decidedNotClaimant', { prefix, reason: d.decided.reason }), tone: 'danger' }
-      : { text: t('business.gs1.d.decidedNotHolder', { prefix, claimant: d.claimantName, reason: d.decided.reason }), tone: 'danger' };
+    const reason = d.decided.reason;
+    if (d.decided.mine) return { text: client ? t('business.gs1.d.decidedMineClient', { prefix, client, reason }) : t('business.gs1.d.decidedMine', { prefix, reason }), tone: 'ok' };
+    if (d.side === 'claimant') return { text: client ? t('business.gs1.d.decidedNotClaimantClient', { prefix, client, reason }) : t('business.gs1.d.decidedNotClaimant', { prefix, reason }), tone: 'danger' };
+    return { text: client ? t('business.gs1.d.decidedNotHolderClient', { prefix, client, claimant: d.claimantName, reason }) : t('business.gs1.d.decidedNotHolder', { prefix, claimant: d.claimantName, reason }), tone: 'danger' };
   }
-  if (d.side === 'claimant') return { text: t('business.gs1.d.claimantOpen', { prefix, names: d.holderNames.join(', '), by: day(d.answerBy) }), tone: 'idle' };
-  return d.licenceSent
-    ? { text: t('business.gs1.d.holderSent', { prefix, claimant: d.claimantName }), tone: 'idle' }
-    : { text: t('business.gs1.d.holderAsk', { prefix, claimant: d.claimantName, by: day(d.answerBy) }), tone: 'warn' };
+  if (d.side === 'claimant') {
+    const vars = { prefix, names: d.holderNames.join(', '), by: day(d.answerBy) };
+    return { text: client ? t('business.gs1.d.claimantOpenClient', { ...vars, client }) : t('business.gs1.d.claimantOpen', vars), tone: 'idle' };
+  }
+  if (d.licenceSent) return { text: client ? t('business.gs1.d.holderSentClient', { prefix, client, claimant: d.claimantName }) : t('business.gs1.d.holderSent', { prefix, claimant: d.claimantName }), tone: 'idle' };
+  return { text: client ? t('business.gs1.d.holderAskClient', { prefix, client, claimant: d.claimantName, by: day(d.answerBy) }) : t('business.gs1.d.holderAsk', { prefix, claimant: d.claimantName, by: day(d.answerBy) }), tone: 'warn' };
 }
 
 /** The business using the prefix can still send its licence — or a clearer one. */

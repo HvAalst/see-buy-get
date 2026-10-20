@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Optional, Param, Patch, Post, Query, Use
 import { BusinessHookService } from './business-hooks.service';
 import { BusinessClientService } from './business-client.service';
 import { BusinessClient } from './business-client.types';
+import { ShipperCodesService, clientCoder } from './shipper-codes.service';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { staffOf } from './staff-of';
@@ -30,7 +31,14 @@ export class BusinessController {
     private readonly businesses: BusinessService,
     private readonly clients: BusinessClientService,
     @Optional() private readonly hooks?: BusinessHookService,
+    @Optional() private readonly codes?: ShipperCodesService,
   ) {}
+
+  /** Round 20 — a client as the forwarder reads it: with the GS1 prefix entered for it, and how many codes are left. */
+  private withGs1(c: BusinessClient): BusinessClient {
+    const g = this.codes?.of(clientCoder(c.entityId, c.clientId));
+    return g ? { ...c, gs1: { companyPrefix: g.companyPrefix, extensionDigit: g.extensionDigit, left: this.codes!.left(clientCoder(c.entityId, c.clientId)) ?? 0, setAt: g.setAt, setBy: g.setBy } } : c;
+  }
 
   /* --------------------------------------------------- a person, as themselves -- */
 
@@ -149,20 +157,20 @@ export class BusinessController {
   @Get('business/me/clients')
   listClients(@Actor() actor: IntrospectionResult, @Query('archived') archived?: string): { items: BusinessClient[] } {
     const acting = this.businesses.requireMember(actor);
-    return { items: this.clients.list(acting.entity.entityId, { archived: archived === 'true' }) };
+    return { items: this.clients.list(acting.entity.entityId, { archived: archived === 'true' }).map((c) => this.withGs1(c)) };
   }
 
   @Roles('business')
   @Post('business/me/clients')
   addClient(@Body() dto: BusinessClientDto, @Actor() actor: IntrospectionResult): BusinessClient {
     const acting = this.businesses.requireMember(actor);
-    return this.clients.add(acting.entity.entityId, dto, acting.member.name);
+    return this.withGs1(this.clients.add(acting.entity.entityId, dto, acting.member.name));
   }
 
   @Roles('business')
   @Patch('business/me/clients/:clientId')
   updateClient(@Param('clientId') clientId: string, @Body() dto: UpdateBusinessClientDto, @Actor() actor: IntrospectionResult): BusinessClient {
-    return this.clients.update(this.businesses.requireMember(actor).entity.entityId, clientId, dto);
+    return this.withGs1(this.clients.update(this.businesses.requireMember(actor).entity.entityId, clientId, dto));
   }
 
   /** Archive, or bring back. Never deleted: what was sent for them keeps naming them. */
@@ -170,7 +178,34 @@ export class BusinessController {
   @Post('business/me/clients/:clientId/archive')
   archiveClient(@Param('clientId') clientId: string, @Body() dto: ArchiveClientDto, @Actor() actor: IntrospectionResult): BusinessClient {
     const acting = this.businesses.requireMember(actor);
-    return this.clients.setArchived(acting.entity.entityId, clientId, dto.archived, acting.member.name);
+    return this.withGs1(this.clients.setArchived(acting.entity.entityId, clientId, dto.archived, acting.member.name));
+  }
+
+  /**
+   * Round 20 — the client's own GS1 prefix and the extension digit it set aside for this forwarder: its loads' packages are
+   * coded under it. An owner sets it, as for the business's own; the same refusals hold. Staff: refused by name.
+   */
+  @Roles('business')
+  @Post('business/me/clients/:clientId/gs1')
+  setClientGs1(@Param('clientId') clientId: string, @Body() dto: BusinessGs1Dto, @Actor() actor: IntrospectionResult): BusinessClient {
+    return this.clientGs1(clientId, actor, { companyPrefix: dto.companyPrefix, extensionDigit: dto.extensionDigit });
+  }
+
+  /** Stop coding the client's packages. The codes its loads already have stay with them. */
+  @Roles('business')
+  @Delete('business/me/clients/:clientId/gs1')
+  clearClientGs1(@Param('clientId') clientId: string, @Actor() actor: IntrospectionResult): BusinessClient {
+    return this.clientGs1(clientId, actor, null);
+  }
+
+  private clientGs1(clientId: string, actor: IntrospectionResult, input: { companyPrefix: string; extensionDigit: number } | null): BusinessClient {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Staff read a client’s GS1 prefix and change none of it: the business that keeps the client sets it');
+    const acting = this.businesses.requireMember(actor);
+    this.businesses.requireOwner(acting);
+    const c = this.clients.require(acting.entity.entityId, clientId);
+    if (!this.codes) throw new GlosError('INVALID_STATE', 'GS1 codes are not available here');
+    this.codes.set(clientCoder(c.entityId, c.clientId), input, acting.member.name);
+    return this.withGs1(c);
   }
 
   /* --------------------------------------------------------------- staff -- */
