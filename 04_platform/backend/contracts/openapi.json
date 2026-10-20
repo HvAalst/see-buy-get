@@ -25062,6 +25062,38 @@
         }
       }
     },
+    "/v1/sbg/totes/{code}/take": {
+      "post": {
+        "operationId": "BagClosure.take",
+        "summary": "",
+        "description": "Round 37 — the driver carrying a bag reads its seal: after a hub or shop loaded it onto them by their pass.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeBagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/managers/{did}/standstill": {
       "get": {
         "operationId": "VehicleStandstill.read",
@@ -39876,6 +39908,14 @@
           "observedAt": {
             "type": "string",
             "description": "Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal."
+          },
+          "take": {
+            "description": "Round 37 — a driver loading it themselves: the number read off its seal, a photograph, as it was closed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BagReceiptDto"
+              }
+            ]
           }
         }
       },
@@ -53639,6 +53679,28 @@
           "fingerprint"
         ]
       },
+      "BagTakenView": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "numberRead": {
+            "type": "string"
+          },
+          "asClosed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "asClosed"
+        ]
+      },
       "BagClosedView": {
         "type": "object",
         "properties": {
@@ -53657,6 +53719,9 @@
           },
           "place": {
             "type": "string"
+          },
+          "taken": {
+            "$ref": "#/components/schemas/BagTakenView"
           }
         },
         "required": [
@@ -53791,6 +53856,24 @@
           "observedAt": {
             "type": "string",
             "description": "When it was closed, by the phone's clock: a step kept on the phone with no signal."
+          }
+        }
+      },
+      "TakeBagDto": {
+        "type": "object",
+        "properties": {
+          "sealNumber": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "photoRef": {
+            "type": "string"
+          },
+          "asClosed": {
+            "type": "boolean"
+          },
+          "observedAt": {
+            "type": "string"
           }
         }
       },

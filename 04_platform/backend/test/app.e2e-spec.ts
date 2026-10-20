@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { contentPhotoOver, hubPhotoOver, shopPhotoOver } from './content-photo';
+import { contentPhotoOver, hubPhotoOver, photoOver, shopPhotoOver } from './content-photo';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 
 describe('GLOS backend (e2e)', () => {
@@ -992,7 +992,9 @@ describe('GLOS backend (e2e)', () => {
     // Round 36 — the shop closes it for the road before the driver takes it: photographed closed.
     const asOrigin = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'agent', did: origin }).expect(201)).body.access_token}` };
     await request(http).post(`/v1/sbg/totes/${bag.body.code}/close`).set(asOrigin).send({ photoRef: await shopPhotoOver(app.getHttpServer(), origin) }).expect(201);
-    const loaded = await request(http).post(`/v1/sbg/totes/${bag.body.code}/load`).set(asMoto).send({}).expect(201);
+    // Round 37 — and the driver takes it on its closing: photographed as taken, as it was closed.
+    expect((await request(http).post(`/v1/sbg/totes/${bag.body.code}/load`).set(asMoto).send({}).expect(400)).body.detail).toMatch(/Photograph the bag as you take it/);
+    const loaded = await request(http).post(`/v1/sbg/totes/${bag.body.code}/load`).set(asMoto).send({ take: { photoRef: await photoOver(app.getHttpServer(), asMoto, 'seal'), asClosed: true } }).expect(201);
     expect(loaded.body.moved).toHaveLength(2);
 
     // Fleet-manager dashboard reflects the on-shift driver (located by the phone) + active cargo.

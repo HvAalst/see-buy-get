@@ -64,6 +64,8 @@ export interface ParcelTamperInput {
 
 /** Who reports a parcel: the shop at its counter (its did) or the hub (its id and the did its sign-in carries). */
 export type ParcelReporter = { as: 'shop'; agentDid: string; name?: string } | { as: 'hub'; mdpId: string; mdpDid: string; mdpName: string; name?: string };
+/** Round 37 — who reports a bag: the shop or hub, or the driver taking or carrying it. */
+export type BagReporter = ParcelReporter | { as: 'driver'; driverDid: string; name?: string };
 
 /** Who reads a unit's exceptions: staff with names; a party to it with the party that found it. */
 export type TamperReader = 'staff' | 'party';
@@ -229,7 +231,7 @@ export class TamperService implements OnModuleInit {
    * closed with, the seal broken, or the bag cut or opened. The bag is held — not opened, received, loaded — and
    * operations told; anybody else is told what they would be told of a code nobody was given.
    */
-  reportOnBag(code: string, reporter: ParcelReporter, input: BagTamperInput, now: number = Date.now()): TamperUnitView {
+  reportOnBag(code: string, reporter: BagReporter, input: BagTamperInput, now: number = Date.now()): TamperUnitView {
     const tote = this.totes.byCodeMaybe(String(code ?? '').trim());
     const place = tote ? bagPlaceOf(tote, reporter) : undefined;
     if (!tote || !place) throw new GlosError('NOT_FOUND', 'No bag you hold or are receiving has that code');
@@ -237,18 +239,18 @@ export class TamperService implements OnModuleInit {
     if (!BAG_FINDINGS.includes(finding)) throw new GlosError('FIELD_REQUIRED', 'Say what you found: a seal that is not the one it was closed with, a broken seal, or the bag cut or opened', { field: 'finding' });
     if (finding === 'seal_broken' && tote.closedWith !== 'seal') throw new GlosError('INVALID_STATE', `Bag ${tote.code} was not closed with a coded seal: report it cut or opened`, { field: 'finding' });
     const seal = finding === 'seal_not_as_written' ? { sealId: tote.closureId ?? tote.toteId, no: 1, ...this.closures.notAsClosed(tote, input.numberRead) } : undefined;
-    const ownerDid = reporter.as === 'shop' ? reporter.agentDid : reporter.mdpDid;
+    const ownerDid = reporter.as === 'shop' ? reporter.agentDid : reporter.as === 'driver' ? reporter.driverDid : reporter.mdpDid;
     const link = { type: 'bag' as const, id: tote.closureId ?? tote.toteId };
     const photos = this.photosOf(input.photoRefs, ownerDid, link);
     if (this.sameHeld('bag', tote.toteId, finding, ownerDid, seal?.sealId)) return this.unitView('bag', tote.toteId, 'party');
-    const where = reporter.as === 'shop' ? `at ${this.agents.find(reporter.agentDid)?.shopName ?? 'the shop'}` : `at ${reporter.mdpName}`;
+    const where = reporter.as === 'shop' ? `at ${this.agents.find(reporter.agentDid)?.shopName ?? 'the shop'}` : reporter.as === 'driver' ? (place === 'pickup' ? 'at pickup' : 'on the road') : `at ${reporter.mdpName}`;
     const e = this.keep(
       {
         unit: { type: 'bag', id: tote.toteId, ref: tote.code },
         ssccs: this.ssccsOf(tote.parcels),
         finding,
         stage: place,
-        by: { did: ownerDid, name: reporter.name?.trim() || where.slice(3), as: reporter.as },
+        by: { did: ownerDid, name: reporter.name?.trim() || (reporter.as === 'driver' ? this.driverName(reporter.driverDid) : where.slice(3)), as: reporter.as },
         where,
         photoRefs: photos,
         note: noteOf(input.note),
@@ -342,7 +344,9 @@ export class TamperService implements OnModuleInit {
     const ref = list[0]?.unit.ref ?? (type === 'load' ? (this.dispatch.requireFreightPublic(id) as Freight).code : tote ? tote.code : id);
     // A bag, for staff: how it was closed — the number to read beside the number reported.
     const closure = tote && reader === 'staff' ? this.closures.current(tote) : undefined;
-    const closedWith = closure ? { kind: closure.kind, ...(closure.number ? { number: closure.number } : {}), closedAt: closure.closedAt, place: closure.closedBy.place } : undefined;
+    // Round 37 — and the driver who took it: the number they read beside the one it was closed with.
+    const taken = closure?.taken ? { by: closure.taken.by.name, at: closure.taken.at, ...(closure.taken.numberRead ? { numberRead: closure.taken.numberRead } : {}), asClosed: closure.taken.asClosed } : undefined;
+    const closedWith = closure ? { kind: closure.kind, ...(closure.number ? { number: closure.number } : {}), closedAt: closure.closedAt, place: closure.closedBy.place, ...(taken ? { taken } : {}) } : undefined;
     return { unitType: type, unitId: id, ref, ...(held ? { held } : {}), exceptions: list.map((e) => viewOf(e, reader)), ...(closedWith ? { closedWith } : {}) };
   }
 
@@ -423,8 +427,10 @@ export interface BagTamperInput {
  * Round 36 — where the reporter holds the bag or is receiving it: a shop, a bag standing at it or on a bus addressed to it;
  * a hub, a bag standing at it or on a bus (a hub's dock takes any bag a bus drops, as dropBag does).
  */
-function bagPlaceOf(t: Tote, r: ParcelReporter): TamperStage | undefined {
+function bagPlaceOf(t: Tote, r: BagReporter): TamperStage | undefined {
   if (t.status === 'free') return undefined;
+  // Round 37 — the driver: a bag claimed for them and still where it stands, or one they carry.
+  if (r.as === 'driver') return t.status === 'in_transit' ? (t.carriedBy === r.driverDid ? 'road' : undefined) : t.claimedBy === r.driverDid ? 'pickup' : undefined;
   if (r.as === 'hub') return t.locationId === r.mdpId || t.status === 'in_transit' ? 'hub' : undefined;
   return t.locationId === r.agentDid || (t.status === 'in_transit' && t.destinationNodeId === r.agentDid) ? 'counter' : undefined;
 }

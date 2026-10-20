@@ -245,6 +245,8 @@ export interface Claimable {
   held?: UnitHold;
   /** Round 35 — tampering reported at the receiver's door: once released, the seals may be said not as the note says. */
   doorReported?: boolean;
+  /** Round 37 — a bag, to the driver holding it: how it was closed (never the number), what a reading is checked against, read yet. */
+  bagSeal?: { closedWith: 'seal' | 'photo'; check?: string; taken: boolean };
   ref: string; // the API id used for pickup/load/deliver
   code?: string; // S32b — the human reference to show (TOTE-042 / FRT-007); ref for freight is an opaque id
   pickupLocation?: { lat: number; lng: number };

@@ -185,6 +185,11 @@ describe('PUDO Light', () => {
   const receivedAtHub = (mdpId: string) => receivedAt(mdps.require(mdpId).did);
   /** Round 36 — a shop's own bag closed with "Close the bag": photographed closed. */
   const closedBy = (did: string) => ({ photoRef: photoBy(did) });
+  /** Round 37 — the driver carrying a bag reads it, as their app asks after a counter loaded it onto them: photographed, as closed. */
+  const takenForTest = (code: string): void => {
+    const t = totes.requireByCode(code);
+    mdps.takeBag(code, t.carriedBy!, 'Test', { photoRef: photoBy(t.carriedBy!), asClosed: true });
+  };
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -3764,6 +3769,7 @@ describe('PUDO Light', () => {
       dispatch.claim(offer.offerId);
       closeForTest(bag.code);
       mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+      takenForTest(bag.code);
       const statuses = () => ids.map((id) => parcels.get(id).status);
       const aboard = statuses();
       const paid = agents.balance(dest.did);
@@ -3833,6 +3839,7 @@ describe('PUDO Light', () => {
 
       closeForTest(bag.code);
       mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+      takenForTest(bag.code);
       const afterLoad = gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did);
       expect(afterLoad).toHaveLength(1);
       expect(afterLoad[0].amount).toBe(TOTE_LOAD_FEE); // the scan is real work and is earned on the spot
@@ -3869,6 +3876,7 @@ describe('PUDO Light', () => {
       dispatch.claim(offer.offerId);
       closeForTest(bag.code);
       mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+      takenForTest(bag.code);
       mdps.deliverBag(dest.did, bag.code, receivedAt(dest.did));
 
       // What was promised is what arrives: the offer's figure equals the sum of the two ledger lines.
@@ -4679,7 +4687,10 @@ describe('PUDO Light', () => {
       expect(() => controller.loadBag(two, { driverBadgeId: badge } as never, asDriver(other.d.did))).toThrow(/their own badge/);
       expect(totes.byCodeMaybe(two)!.status).not.toBe('in_transit');
       closeForTest(two);
-      controller.loadBag(two, {} as never, asDriver(other.d.did));
+      // Round 37 — taken on its seal: the driver photographs it as they take it, as it was closed.
+      expect(() => controller.loadBag(two, {} as never, asDriver(other.d.did))).toThrow(/Photograph the bag as you take it/);
+      expect(totes.byCodeMaybe(two)!.status).not.toBe('in_transit');
+      controller.loadBag(two, { take: { photoRef: photoBy(other.d.did), asClosed: true } } as never, asDriver(other.d.did));
       expect(totes.byCodeMaybe(two)!.carriedBy).toBe(other.d.did);
     });
 

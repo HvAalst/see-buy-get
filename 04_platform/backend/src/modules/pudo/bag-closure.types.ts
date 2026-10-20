@@ -57,6 +57,8 @@ export interface BagClosure {
   closedBy: BagParty;
   /** sha256 of the closing as made (everything above). The receipt is kept beside it. */
   hash: string;
+  /** Round 37 — the driver who took it: the number read off the seal, a photograph, as it was closed. */
+  taken?: BagReceipt;
   receipt?: BagReceipt;
 }
 
@@ -73,6 +75,11 @@ export class BagReceiptDto {
   @IsOptional() @IsString() @MaxLength(MAX_BAG_SEAL) sealNumber?: string;
   @IsOptional() @IsString() photoRef?: string;
   @IsOptional() @IsBoolean() asClosed?: boolean;
+}
+
+/** Round 37 — a driver reading the bag they carry, after a hub loaded it onto them by their pass. */
+export class TakeBagDto extends BagReceiptDto {
+  @IsOptional() @IsDateString() observedAt?: string;
 }
 
 /** Closing a bag at the shop or hub where it stands (a shop's own bag is closed with "Close the bag"). */

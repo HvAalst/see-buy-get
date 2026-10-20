@@ -69,6 +69,7 @@ export function BagReceiptFields({
   upload,
   onReport,
   disabled,
+  take,
 }: {
   id: string;
   closedWith: BagClosedWith | undefined;
@@ -77,19 +78,22 @@ export function BagReceiptFields({
   upload: Upload;
   onReport: () => void;
   disabled?: boolean;
+  /** Round 37 — the driver taking it, rather than whoever receives it. */
+  take?: boolean;
 }) {
   const t = useT();
+  const photo = t(take ? 'common.bag.photoTaken' : 'common.bag.photoArrived');
   return (
     <div class="bag-seal">
-      <p class="field__label">{t('common.bag.receiveTitle')}</p>
+      <p class="field__label">{t(take ? 'common.bag.takeTitle' : 'common.bag.receiveTitle')}</p>
       {closedWith === 'seal' ? (
         <SealInput id={`${id}-read`} label={t('common.bag.readSeal')} hint={t('common.bag.readSealHint')} value={value.sealNumber} onInput={(sealNumber) => onChange({ ...value, sealNumber })} disabled={disabled} />
       ) : closedWith === 'photo' ? (
         <p class="hint">{t('common.bag.unsealed')}</p>
       ) : null}
       <div class="field">
-        <span class="field__label">{t('common.bag.photoArrived')}</span>
-        <PhotoField id={`${id}-photo`} value={value.photoRef} upload={upload} onCapture={(photoRef) => onChange({ ...value, photoRef })} label={t('common.bag.photoArrived')} disabled={disabled} />
+        <span class="field__label">{photo}</span>
+        <PhotoField id={`${id}-photo`} value={value.photoRef} upload={upload} onCapture={(photoRef) => onChange({ ...value, photoRef })} label={photo} disabled={disabled} />
       </div>
       <div class="chips">
         <button type="button" class={'chip chip--tap' + (value.asClosed === true ? ' chip--on' : '')} aria-pressed={value.asClosed === true} disabled={disabled} onClick={() => onChange({ ...value, asClosed: true })}>
@@ -101,7 +105,7 @@ export function BagReceiptFields({
       </div>
       {value.asClosed === false ? (
         <>
-          <Note tone="warn" icon="warning" title={t('common.bag.notAsClosedTitle')} detail={t('common.bag.notAsClosedBody')} />
+          <Note tone="warn" icon="warning" title={t(take ? 'common.bag.notAsClosedTakeTitle' : 'common.bag.notAsClosedTitle')} detail={t(take ? 'common.bag.notAsClosedTakeBody' : 'common.bag.notAsClosedBody')} />
           <Button variant="link" full={false} disabled={disabled} onClick={onReport}>
             {t('common.bag.report')}
           </Button>

@@ -47,7 +47,7 @@ export interface TamperUnit {
   held?: UnitHold;
   exceptions: TamperExceptionRow[];
   /** Round 36 — a bag, for staff: how it was closed. */
-  closedWith?: { kind: 'seal' | 'photo'; number?: string; closedAt: string; place: string };
+  closedWith?: { kind: 'seal' | 'photo'; number?: string; closedAt: string; place: string; taken?: { by: string; at: string; numberRead?: string; asClosed: boolean } };
 }
 
 /** A release says what was found and what was done: no shorter than this (the server's MIN_RELEASE_REASON). */

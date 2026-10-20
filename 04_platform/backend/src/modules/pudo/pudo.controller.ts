@@ -4719,7 +4719,7 @@ export class SbgController {
       const own = actor.did ? this.drivers.get(actor.did).badgeId : undefined;
       if (!own) throw new GlosError('FORBIDDEN', 'Only a driver with a badge can take a bag');
       if (dto.driverBadgeId && dto.driverBadgeId.trim().toUpperCase() !== own) throw new GlosError('FORBIDDEN', 'A driver takes a bag onto their own badge');
-      return this.mdps.loadBag(code, own, dto.observedAt);
+      return this.mdps.loadBag(code, own, dto.observedAt, { driverDid: actor.did!, name: actor.actorName || this.drivers.get(actor.did!).displayName, reading: dto.take });
     }
     if (!dto.driverBadgeId?.trim()) throw new GlosError('FIELD_REQUIRED', 'Scan the badge on the driver’s phone');
     return this.mdps.loadBag(code, this.fleet.badgeShown(dto.driverBadgeId), dto.observedAt);

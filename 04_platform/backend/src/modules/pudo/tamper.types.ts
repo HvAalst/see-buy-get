@@ -101,11 +101,20 @@ export class TamperExceptionView {
 }
 
 /** Round 36 — staff only: how a bag was closed — its coded seal's number — to read beside the number reported. */
+/** Round 37 — the driver who took the bag: who, when, the number they read off it, and whether as it was closed. */
+export class BagTakenView {
+  @ApiProperty() by!: string;
+  @ApiProperty() at!: string;
+  @ApiPropertyOptional() numberRead?: string;
+  @ApiProperty() asClosed!: boolean;
+}
+
 export class BagClosedView {
   @ApiProperty({ enum: ['seal', 'photo'] }) kind!: 'seal' | 'photo';
   @ApiPropertyOptional() number?: string;
   @ApiProperty() closedAt!: string;
   @ApiProperty() place!: string;
+  @ApiPropertyOptional({ type: BagTakenView }) taken?: BagTakenView;
 }
 
 /** A unit's exceptions, newest first, and its hold while it is held. */

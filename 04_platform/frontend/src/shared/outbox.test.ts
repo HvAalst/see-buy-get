@@ -52,6 +52,9 @@ describe('the outbox', () => {
       // Round 15 — a seal found broken on the road. Writing a seal is the shipper's, at its desk: it does not wait.
       expect(queueableLabel('POST', '/v1/sbg/dispatch/freight/frt_1/seals/seal_1/broken')).toBe('Broken seal reported');
       expect(queueableLabel('POST', '/v1/sbg/dispatch/freight/frt_1/seals')).toBeNull();
+      // Round 37 — a driver reading the bag they carry; the bag received is the receiver's, and needs the server's answer.
+      expect(queueableLabel('POST', '/v1/sbg/totes/BAG-001/take')).toBe('Bag’s seal read');
+      expect(queueableLabel('POST', '/v1/sbg/agents/did:glos:a1/receive-bag')).toBeNull();
       // An operator clearing one is a decision, and the office's breakdown typed from a phone call is a desk's: neither waits.
       expect(queueableLabel('POST', '/v1/sbg/route-constraints/rc_1/clear')).toBeNull();
       expect(queueableLabel('POST', '/v1/sbg/vehicles/veh_1/breakdowns')).toBeNull();

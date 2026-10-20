@@ -875,17 +875,21 @@ export const ARTICLES: GuideArticle[] = [
     apps: [
       "agent",
       "mdp",
+      "driver",
       "vendor",
       "console"
     ],
     title: "A bag closed on its coded seal, and received by it",
-    summary: "A bag leaves closed — with a coded seal, its number typed and the bag photographed, or photographed closed without one — and whoever receives it reads the seal and photographs it before opening it.",
+    summary: "A bag leaves closed — with a coded seal, its number typed and the bag photographed, or photographed closed without one — and the driver taking it, and whoever receives it, read the seal and photograph it: the driver before it goes, the receiver before opening it.",
     steps: [
       "Shop app, in Bag parcels: before “Close the bag”, choose a coded seal (suggested), pull it tight through the zip, type its number as printed and photograph the bag with the seal in view — or, without a seal, photograph the bag closed.",
       "Hub app, in Load a bag: a bag not yet closed is closed the same way before the driver’s badge is scanned. Store app, on your dock: “Close the bag” asks the same.",
       "A bag that is not closed is not loaded: the app says “Close the bag first”.",
+      "Driver app, in My loads: taking a bag yourself, read the number off its seal (it is never shown to you), photograph the bag as you take it and say it is as it was closed. A number that is not the one it was closed with is said on the spot, signal or not.",
+      "A bag a shop or hub loads onto you by the pass on your phone: under My loads, “Read its seal”. It is received nowhere until you have; with no signal, your reading waits on your phone and goes when there is signal.",
       "Receiving — Shop app, Receive a bag; Hub app, Drop a bag: scan it, read the number off its seal (it is never shown to you), photograph it as it arrived, and say whether it is as it was closed. Only then is it opened.",
-      "A number that is not the one it was closed with: read it again; still not the same, “Still not the same? Report it”. A broken seal or a cut bag: “Cut, opened or the seal broken”, then report it. The bag is held and SeeBuyGet operations told; it is received once operations releases it."
+      "A number that is not the one it was closed with: read it again; still not the same, “Still not the same? Report it”. A broken seal or a cut bag: “Cut, opened or the seal broken”, then report it. The bag is held and SeeBuyGet operations told; it is received once operations releases it.",
+      "A bag you take or carry that is not right: “Something is not right with this bag”. It is held where it is and SeeBuyGet operations told."
     ],
     notes: [
       "One coded seal closes one bag: a number already on a bag still travelling is refused. Seals and label printers are not sold in SeeBuyGet."

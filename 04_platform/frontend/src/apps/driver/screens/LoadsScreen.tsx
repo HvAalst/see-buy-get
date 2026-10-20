@@ -10,6 +10,9 @@ import { RunSection } from './RunSection';
 import { PassageSheet, PassageStrip } from './PassageStrip';
 import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, TamperSheet, type SealRead, type TamperTarget } from './SealSteps';
 import { heldLine } from '../../../shared/tamper';
+import { BagReportSheet } from '../../../shared/BagSealFields';
+import { receiptBody } from '../../../shared/bagSeal';
+import { BagTakeFields, BagTakeSheet, useBagTake } from './BagTake';
 import type { PassageKind } from '../../../shared/passages';
 import type { SealsAtDelivery } from '../../../shared/seals';
 import type { Claimable } from '../types';
@@ -28,6 +31,9 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
   const [passage, setPassage] = useState<{ claim: Claimable; kind: PassageKind } | null>(null); // round 14 — a border or a hub being said
   const [brokenFor, setBrokenFor] = useState<Claimable | null>(null); // round 15 — a seal found broken on the road
   const [tamper, setTamper] = useState<TamperTarget | null>(null); // round 35 — tampering found: the load held, operations told
+  const [readFor, setReadFor] = useState<Claimable | null>(null); // round 37 — a bag loaded onto them by their pass, to read
+  const [bagReport, setBagReport] = useState<{ claim: Claimable; numberRead?: string } | null>(null); // round 37 — a bag not as closed
+  const pickTake = useBagTake(pick); // round 37 — the bag taken on its seal
   const v = state.vehicle;
   const hasBadge = canLoadBag(state.driver?.badgeId);
 
@@ -92,6 +98,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {c.invoiceMissing ? <span class="load__warn">{t('driver.loads.invoiceMissingShort')}</span> : null}
                   {/* Round 35 — held under the tamper protocol: said on the card, before the walk to the gate. */}
                   {c.held ? <span class="load__warn">{t('driver.loads.heldShort')}</span> : null}
+                  {/* Round 37 — loaded onto them by their pass, its seal not read yet: received nowhere until it is. */}
+                  {control === 'onboard' && c.bagSeal && !c.bagSeal.taken && !c.held ? <span class="load__warn">{t('driver.bag.notRead')}</span> : null}
                 </span>
               </>
             );
@@ -179,6 +187,19 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                     )}
                   </span>
                 </div>
+                {/* Round 37 — a bag on board: its seal read here when a counter loaded it, and reported when it is not as closed. */}
+                {c.kind === 'tote' && c.bagSeal && !c.held ? (
+                  <div class="load__nav">
+                    {!c.bagSeal.taken ? (
+                      <Button full={false} onClick={() => setReadFor(c)}>
+                        {t('driver.bag.read')}
+                      </Button>
+                    ) : null}
+                    <Button variant="link" full={false} onClick={() => setBagReport({ claim: c })}>
+                      {t('driver.bag.report')}
+                    </Button>
+                  </div>
+                ) : null}
               </li>
             );
           })}
@@ -198,13 +219,26 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
           <>
             <p class="t-body">{t('driver.loads.pickBody', { ref: pick.ref, kg: pick.weightKg, dest: pick.destLabel })}</p>
             <Checklist items={[t('driver.loads.pick1', { vehicle: vehicleWord(v?.vehicleClass, t) }), t('driver.loads.pick2'), t('driver.loads.pick3')]} />
+            {/* Round 37 — taken on its seal: read off it, photographed as taken, as it was closed. */}
+            <BagTakeFields
+              claim={pick}
+              take={pickTake}
+              actions={actions}
+              busy={state.busy === `load:${pick.ref}`}
+              onReport={(numberRead) => {
+                setBagReport({ claim: pick, numberRead });
+                setPick(null);
+              }}
+            />
             <Button
               chevron={false}
               busy={state.busy === `load:${pick.ref}`}
+              disabled={!pickTake.ready}
               onClick={() => {
                 const ref = pick.ref;
+                const take = receiptBody(pickTake.form);
                 setPick(null);
-                void actions.loadBag(ref);
+                void actions.loadBag(ref, take);
               }}
             >
               {t('driver.loads.pickConfirm')}
@@ -230,6 +264,29 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       <PassageSheet claim={passage?.claim ?? null} kind={passage?.kind ?? null} state={state} actions={actions} onClose={() => setPassage(null)} />
       <BrokenSealSheet claim={brokenFor} state={state} actions={actions} onClose={() => setBrokenFor(null)} />
       <TamperSheet target={tamper} state={state} actions={actions} onClose={() => setTamper(null)} />
+      <BagTakeSheet
+        claim={readFor}
+        state={state}
+        actions={actions}
+        onClose={() => setReadFor(null)}
+        onReport={(claim, numberRead) => {
+          setReadFor(null);
+          setBagReport({ claim, numberRead });
+        }}
+      />
+      <BagReportSheet
+        code={bagReport ? (bagReport.claim.code ?? bagReport.claim.ref) : null}
+        closedWith={bagReport?.claim.bagSeal?.closedWith}
+        numberRead={bagReport?.numberRead}
+        upload={(f) => actions.uploadPhoto('tamper', f)}
+        busy={!!bagReport && state.busy === `bag-tamper:${bagReport.claim.ref}`}
+        onSend={(body) => {
+          const ref = bagReport?.claim.ref;
+          if (!ref) return;
+          void actions.reportBagTamper(ref, body).then((ok) => ok && setBagReport(null));
+        }}
+        onClose={() => setBagReport(null)}
+      />
     </div>
   );
 }

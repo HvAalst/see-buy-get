@@ -54,7 +54,7 @@ describe('who a counter hands goods to', () => {
           // The statement the call sits in, and what came before it in the route.
           const before = body.slice(0, at);
           const statement = body.slice(before.lastIndexOf('\n'), body.indexOf('\n', at) < 0 ? undefined : body.indexOf('\n', at));
-          const proven = statement.includes('badgeShown(') || /const driverBadgeId = this\.fleet\.badgeShown\(/.test(before) || /return this\.mdps\.loadBag\(code, own(, dto\.observedAt)?\)/.test(statement);
+          const proven = statement.includes('badgeShown(') || /const driverBadgeId = this\.fleet\.badgeShown\(/.test(before) || /return this\.mdps\.loadBag\(code, own(, dto\.observedAt(, \{ driverDid: actor\.did!, [^}]*\})?)?\)/.test(statement);
           if (!proven) open.push(`${r.key}: ${statement.trim()}`);
           at = body.indexOf(call, at + 1);
         }

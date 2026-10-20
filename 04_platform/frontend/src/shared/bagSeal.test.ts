@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { bagFindings, closeReady, closureBody, EMPTY_BAG_CLOSE, EMPTY_BAG_RECEIPT, receiptBody, receiptReady, reportBody, reportReady } from './bagSeal';
+import { bagFindings, closeReady, closureBody, EMPTY_BAG_CLOSE, EMPTY_BAG_RECEIPT, receiptBody, receiptReady, reportBody, reportReady, takeReady } from './bagSeal';
+
+describe('a driver takes a bag on its seal (round 37)', () => {
+  const read = { sealNumber: '1234567', photoRef: 'med_1', asClosed: true as boolean | null };
+  it('is ready as a receipt is, and never on a number the phone found is not the one it was closed with', () => {
+    expect(takeReady(read, 'seal', true)).toBe(true);
+    expect(takeReady(read, 'seal', null)).toBe(true); // a phone that cannot hash: the server answers
+    expect(takeReady(read, 'seal', false)).toBe(false);
+    expect(takeReady({ ...read, photoRef: '' }, 'seal', true)).toBe(false);
+    expect(takeReady({ ...read, sealNumber: '' }, 'seal', null)).toBe(false);
+    expect(takeReady({ ...read, sealNumber: '' }, 'photo', null)).toBe(true);
+  });
+  it('sends not as closed whatever the number: the server answers report it first, or takes it as found once released', () => {
+    expect(takeReady({ ...read, asClosed: false }, 'seal', false)).toBe(true);
+    expect(takeReady({ ...read, asClosed: null }, 'seal', true)).toBe(false);
+  });
+});
 
 describe('a bag closed on our own seal, and received by it (round 36)', () => {
   it('starts on the coded seal, and closes with its number and a photograph — or a photograph alone', () => {

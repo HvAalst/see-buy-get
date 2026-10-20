@@ -1306,6 +1306,19 @@ export class FreightShipmentView {
 }
 
 /** A unit a driver can claim, normalised across totes and freight. */
+/**
+ * Round 37 — A BAG TAKEN ON ITS SEAL: what the driver who holds it is told of how it was closed. Never the number: they
+ * read it off the seal. On a sealed bag, what the app checks a reading against with no signal — the bag in their hands
+ * carries the number anyway, so the check tells them nothing the seal does not.
+ */
+export class BagSealForDriver {
+  @ApiProperty({ enum: ['seal', 'photo'] }) closedWith!: 'seal' | 'photo';
+  /** sha256 of `<bag code>|<number folded>` (load-seal.service sealCheck). */
+  check?: string;
+  /** This driver has read it and photographed it already. */
+  taken!: boolean;
+}
+
 export class Claimable {
   kind: ClaimableKind;
   /** Freight crossing a border whose shipper has not yet signed its commercial invoice: it cannot be taken over yet. */
@@ -1314,6 +1327,8 @@ export class Claimable {
   @ApiPropertyOptional({ type: LoadPassageForDriver }) passage?: LoadPassageForDriver;
   /** Round 15 — the seals to read off the door at pickup (and look at with the receiver): what each is, never its number. */
   @ApiPropertyOptional({ type: [SealToFind] }) seals?: SealToFind[];
+  /** Round 37 — a bag, to the driver holding it: how it was closed, and whether they have read its seal. */
+  @ApiPropertyOptional({ type: BagSealForDriver }) bagSeal?: BagSealForDriver;
   /** Round 35 — held under the tamper protocol: it does not change hands until operations releases it. */
   @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
   /** Round 35 — tampering was reported at the receiver's door: the seals may be said not as the note says once released. */

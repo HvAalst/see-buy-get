@@ -98,6 +98,7 @@ export const ERROR_CODES = {
   UNIT_HELD: { status: 409, title: 'It is held: operations releases it' },
   TAMPER_REPORT_FIRST: { status: 409, title: 'Report it first' },
   BAG_NOT_CLOSED: { status: 409, title: 'Close the bag first' },
+  BAG_NOT_TAKEN: { status: 409, title: 'The driver has not read the seal' },
   // Round 18 — a GS1 company prefix another business prints under with that extension digit, or one staff decided is another's.
   GS1_PREFIX_TAKEN: { status: 409, title: 'Another business uses this GS1 prefix' },
   COMMERCIAL_INVOICE_REQUIRED: { status: 409, title: 'The commercial invoice is not signed' },

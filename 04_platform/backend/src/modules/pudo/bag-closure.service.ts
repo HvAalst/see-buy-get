@@ -83,42 +83,70 @@ export class BagClosureService {
    * RECEIVING A BAG, before it is opened: a photograph of it as it arrived and — on a sealed bag — the number read off
    * the seal, never shown first. Not the number it was closed with, or not as it was closed, and it is reported first
    * (the tamper protocol); once operations has released a report made since the bag was closed, it is received as found.
+   * Round 37 — a bag a driver carried is received only once that driver has read its seal (checkTake).
    */
-  checkReceipt(tote: Tote, by: BagParty, ownerDid: string, input: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined): (step: Step) => void {
+  checkReceipt(tote: Tote, by: BagParty, ownerDid: string, input: BagReadingInput | undefined): (step: Step) => void {
     const closure = this.current(tote);
     if (!closure) throw new GlosError('INVALID_STATE', `Bag ${tote.code} left without being closed: report it, and tell SeeBuyGet operations`);
-    const link = { type: 'bag' as const, id: closure.closureId };
-    if (!input?.photoRef) throw new GlosError('FIELD_REQUIRED', 'Photograph the bag as it arrived, its seal in view, before you open it', { field: 'receipt.photoRef' });
-    this.media.requireHeld(input.photoRef, ownerDid, link, 'receipt.photoRef');
-    const reported = this.tamper?.reportedSince(tote.toteId, closure.closedAt) ?? false;
-    const numberRead = sealNumber(input.sealNumber);
-    if (closure.kind === 'seal' && !reported) {
-      if (!numberRead) throw new GlosError('FIELD_REQUIRED', `Read the number on bag ${tote.code}’s seal off the seal itself, as printed`, { field: 'receipt.sealNumber' });
-      if (keyOf(numberRead) !== closure.key) {
-        throw new GlosError('SEAL_MISMATCH', `The seal on bag ${tote.code} is not the one it was closed with. Read it again — still not the same? Report it: the bag is held and operations told before anybody opens it.`, { field: 'receipt.sealNumber' });
-      }
+    const reportedSoFar = this.tamper?.reportedSince(tote.toteId, closure.closedAt) ?? false;
+    if (tote.carriedBy && !closure.taken && !reportedSoFar) {
+      throw new GlosError('BAG_NOT_TAKEN', `The driver has not read bag ${tote.code}’s seal yet: they read it in their app, under My loads, before handing it over. Read with no signal? Their phone sends it once it has signal`);
     }
-    if (input.asClosed === undefined && !reported) throw new GlosError('FIELD_REQUIRED', 'Say whether the bag is as it was closed: no cut, no broken seal', { field: 'receipt.asClosed' });
-    if (input.asClosed === false && !reported) {
-      throw new GlosError('TAMPER_REPORT_FIRST', 'The bag is not as it was closed: report it first, with a photograph. Operations is told before anybody opens it.', { field: 'receipt.asClosed' });
-    }
-    const photoRef = input.photoRef;
+    const { photoRef, numberRead, reported, link } = this.read(tote, closure, ownerDid, input, 'receipt');
     return (step) => {
       this.closures.set(closure.closureId, {
         ...closure,
-        receipt: {
-          at: step.at,
-          ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}),
-          by,
-          photoRef,
-          ...(numberRead ? { numberRead } : {}),
-          asClosed: !reported,
-          ...(reported ? { asFound: true } : {}),
-        },
+        receipt: { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), by, photoRef, ...(numberRead ? { numberRead } : {}), asClosed: !reported, ...(reported ? { asFound: true } : {}) },
       });
       this.media.adopt(photoRef, ownerDid, link, 'seal');
       this.media.anchorBagTerminal(closure.closureId);
     };
+  }
+
+  /**
+   * Round 37 — A DRIVER TAKES A BAG ON ITS SEAL (the user: "A driver takes a bag on its seal"): the number read off the
+   * seal — never shown first — a photograph of the bag as taken, and whether it is as it was closed. When the driver loads
+   * it from their own app it is part of the load; when a hub scans the driver's pass, the driver reads it afterwards, and
+   * the bag is received nowhere until they have. The same reading by the same driver again (a phone sending what it kept
+   * with no signal) is the one already made.
+   */
+  checkTake(tote: Tote, by: BagParty, driverDid: string, input: BagReadingInput | undefined): (step: Step) => void {
+    const closure = this.current(tote);
+    if (!closure) throw new GlosError('BAG_NOT_CLOSED', `Bag ${tote.code} is not closed: the shop or hub closes it before you take it`);
+    if (closure.taken?.by.did === driverDid) return () => undefined;
+    const { photoRef, numberRead, reported, link } = this.read(tote, closure, driverDid, input, 'take');
+    return (step) => {
+      this.closures.set(closure.closureId, {
+        ...closure,
+        taken: { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), by, photoRef, ...(numberRead ? { numberRead } : {}), asClosed: !reported, ...(reported ? { asFound: true } : {}) },
+      });
+      this.media.adopt(photoRef, driverDid, link, 'seal');
+    };
+  }
+
+  /**
+   * A READING OF A BAG before it changes hands — at its receipt, or by the driver taking it: a photograph, the reader's
+   * own; on a sealed bag the number off the seal, which must be the one it was closed with; and as it was closed. Unless
+   * a report was made since it was closed, which operations has released: then it changes hands as found.
+   */
+  private read(tote: Tote, closure: BagClosure, ownerDid: string, input: BagReadingInput | undefined, field: 'receipt' | 'take') {
+    const link = { type: 'bag' as const, id: closure.closureId };
+    const words = WORDS[field];
+    if (!input?.photoRef) throw new GlosError('FIELD_REQUIRED', words.photo, { field: `${field}.photoRef` });
+    this.media.requireHeld(input.photoRef, ownerDid, link, `${field}.photoRef`);
+    const reported = this.tamper?.reportedSince(tote.toteId, closure.closedAt) ?? false;
+    const numberRead = sealNumber(input.sealNumber);
+    if (closure.kind === 'seal' && !reported) {
+      if (!numberRead) throw new GlosError('FIELD_REQUIRED', `Read the number on bag ${tote.code}’s seal off the seal itself, as printed`, { field: `${field}.sealNumber` });
+      if (keyOf(numberRead) !== closure.key) {
+        throw new GlosError('SEAL_MISMATCH', `The seal on bag ${tote.code} is not the one it was closed with. Read it again — still not the same? Report it: ${words.mismatch}`, { field: `${field}.sealNumber` });
+      }
+    }
+    if (input.asClosed === undefined && !reported) throw new GlosError('FIELD_REQUIRED', 'Say whether the bag is as it was closed: no cut, no broken seal', { field: `${field}.asClosed` });
+    if (input.asClosed === false && !reported) {
+      throw new GlosError('TAMPER_REPORT_FIRST', `The bag is not as it was closed: report it first, with a photograph. ${words.notAsClosed}`, { field: `${field}.asClosed` });
+    }
+    return { photoRef: input.photoRef, numberRead, reported, link };
   }
 
   /** The tamper protocol: a seal said not to be the one the bag was closed with — refused when it is. */
@@ -139,6 +167,18 @@ export class BagClosureService {
   private travelling(key: string): boolean {
     return [...this.closures.values()].some((c) => c.key === key && !c.receipt);
   }
+}
+
+/** How each reading says what it asks for and what follows. */
+const WORDS = {
+  receipt: { photo: 'Photograph the bag as it arrived, its seal in view, before you open it', mismatch: 'the bag is held and operations told before anybody opens it.', notAsClosed: 'Operations is told before anybody opens it.' },
+  take: { photo: 'Photograph the bag as you take it, its seal in view', mismatch: 'the bag is held, and does not leave until operations releases it.', notAsClosed: 'Operations is told before you take it.' },
+} as const;
+
+export interface BagReadingInput {
+  sealNumber?: string;
+  photoRef?: string;
+  asClosed?: boolean;
 }
 
 /** A seal number as printed: trimmed, single spaces, at most so long; absent when there is none. */

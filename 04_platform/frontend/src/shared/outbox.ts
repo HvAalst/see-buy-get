@@ -147,6 +147,9 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   // what the person did and sees, dated by the phone. A second closing of the same bag is refused, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/totes\/[^/]+\/close$/, label: 'Bag closed' },
   { method: 'POST', test: /^\/v1\/sbg\/totes\/[^/]+\/tamper$/, label: 'Tampering reported' },
+  // Round 37 — a driver reading the bag they carry: the number off its seal, its photograph held on the phone, dated when
+  // read. The same driver's reading again is the one already made, so a replay costs nothing.
+  { method: 'POST', test: /^\/v1\/sbg\/totes\/[^/]+\/take$/, label: 'Bag’s seal read' },
   // The vehicle is parked and the driver can see it. Ending twice is a no-op, so a replay costs nothing.
   { method: 'POST', test: /^\/v1\/sbg\/fleet\/drivers\/[^/]+\/end-session$/, label: 'Shift ended' },
   // WHAT THE DRIVER SEES ON THE ROAD (the user, 2026-10-18: "queue reports, rest online"). A breakdown and a road hazard

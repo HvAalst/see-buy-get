@@ -45,6 +45,14 @@ export function receiptReady(f: BagReceiptForm, closedWith: BagClosedWith | unde
   return !(f.asClosed && closedWith === 'seal' && !f.sealNumber.trim());
 }
 
+/**
+ * Round 37 — a driver taking a bag: ready as a receipt is, and not while the number typed — checked on the phone against
+ * how the bag was closed — is not the one it was closed with and the bag is said to be as closed (`match` false).
+ */
+export function takeReady(f: BagReceiptForm, closedWith: BagClosedWith | undefined, match: boolean | null): boolean {
+  return receiptReady(f, closedWith) && !(f.asClosed === true && match === false);
+}
+
 export function receiptBody(f: BagReceiptForm): { sealNumber?: string; photoRef: string; asClosed: boolean } {
   return { ...(f.sealNumber.trim() ? { sealNumber: f.sealNumber.trim() } : {}), photoRef: f.photoRef, asClosed: f.asClosed === true };
 }

@@ -55,7 +55,8 @@ import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { CommercialInvoiceService } from './commercial-invoice.service';
 import { LoadPassageService, viewOf as passageView } from './load-passage.service';
 import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
-import { LoadSealService } from './load-seal.service';
+import { LoadSealService, sealCheck } from './load-seal.service';
+import { BagClosureService } from './bag-closure.service';
 import type { LoadSeal, LoadSealView, SealBreakCause, SealsAtDelivery } from './load-seal.types';
 import { FINDING_WORDS, type TamperStage, type UnitHold } from './tamper.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
@@ -407,6 +408,8 @@ export class DispatchService {
     @Optional() private readonly passages?: LoadPassageService,
     // Round 15 — the seals on a load. Optional for the same reason; without it a load carries none, as before.
     @Optional() private readonly seals?: LoadSealService,
+    // Round 37 — how a bag was closed, for the driver holding it. Optional for the same reason; without it a bag says nothing.
+    @Optional() private readonly bagClosures?: BagClosureService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
@@ -2874,7 +2877,13 @@ export class DispatchService {
 
   /** Loads the driver currently holds (claimed or on the vehicle). */
   claimsFor(driverDid: string): Claimable[] {
-    const totes = this.totes.list().filter((t) => t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')).map((t) => this.wrapTote(t.code)).filter((c): c is Claimable => c != null);
+    // Round 37 — and a bag a hub or shop loaded onto them by their pass without their claiming it: it is on their vehicle,
+    // and they read its seal from here.
+    const totes = this.totes
+      .list()
+      .filter((t) => (t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')) || (t.carriedBy === driverDid && t.status === 'in_transit'))
+      .map((t) => this.wrapTote(t.code, driverDid))
+      .filter((c): c is Claimable => c != null);
     const freight = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).map((f) => this.wrapFreight(f));
     return [...totes, ...freight];
   }
@@ -3591,9 +3600,11 @@ export class DispatchService {
     return [...totes, ...freight];
   }
 
-  private wrapTote(code: string): Claimable | null {
+  private wrapTote(code: string, holder?: string): Claimable | null {
     const t = this.totes.byCodeMaybe(code);
     if (!t) return null;
+    // Round 37 — how it was closed, to the driver holding it only: claimsFor names them, and lists only what they hold.
+    const closure = holder ? this.bagClosures?.current(t) : undefined;
     // A bag has always known where it is going by NAME and never as a place. That gap is why "is this on my
     // way?" could be asked of a freight and not of a bag, why a driver could navigate to the pickup but not
     // through to the drop, and why the haul had to resolve the destination separately to price it. Resolved
@@ -3610,6 +3621,7 @@ export class DispatchService {
       ref: t.code,
       code: t.code,
       ...(t.held ? { held: t.held } : {}),
+      ...(closure ? { bagSeal: { closedWith: closure.kind, ...(closure.key ? { check: sealCheck(t.code, closure.key) } : {}), taken: closure.taken?.by.did === holder } } : {}),
       pickupLocation: place.loc,
       pickupLabel: place.label,
       destLabel: t.destinationLabel || 'destination',

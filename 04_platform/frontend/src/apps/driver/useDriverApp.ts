@@ -1622,11 +1622,12 @@ export function useDriverApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /** Round 37 — taken on its seal: what the driver read off it, photographed, as it was closed. */
   const loadBag = useCallback(
-    async (ref: string) => {
+    async (ref: string, take?: { sealNumber?: string; photoRef: string; asClosed: boolean }) => {
       if (!client || !state.driver?.badgeId) return;
       await run(`load:${ref}`, async () => {
-        const r = await client.api.loadBag(ref, state.driver!.badgeId!);
+        const r = await client.api.loadBag(ref, state.driver!.badgeId!, take);
         if (r.error) return fail(r.error);
         buzz();
         const moved = narrow<LoadBagView>(r.data)?.moved?.length ?? 0;
@@ -1640,6 +1641,53 @@ export function useDriverApp() {
       });
     },
     [client, state.driver, run, fail, pushToast, refresh],
+  );
+
+  /**
+   * Round 37 — A BAG A COUNTER LOADED ONTO THIS DRIVER, by the pass on their phone: read now — the number off its seal,
+   * a photograph, as it was closed. It is received nowhere until they have. With no signal it waits on this phone.
+   */
+  const takeBag = useCallback(
+    async (ref: string, body: { sealNumber?: string; photoRef: string; asClosed: boolean }): Promise<boolean> => {
+      if (!client) return false;
+      let ok = false;
+      await run(`take:${ref}`, async () => {
+        const r = await client.api.takeBag(ref, body);
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        ok = true;
+        if (r.status === 202) return pushToast({ tone: 'info', icon: 'offline', title: t('driver.toast.bagReadQueued'), detail: t('driver.toast.bagReadQueuedDetail') });
+        pushToast({ tone: 'ok', icon: 'box', title: t('driver.toast.bagRead', { ref }), detail: t('driver.toast.bagReadDetail') });
+        await refresh();
+      });
+      return ok;
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /** Round 37 — a bag the driver takes or carries, not as it was closed: held where it is, operations told. */
+  const reportBagTamper = useCallback(
+    async (ref: string, body: { finding: 'seal_not_as_written' | 'seal_broken' | 'wrap_cut'; numberRead?: string; photoRefs: string[]; note?: string }): Promise<boolean> => {
+      if (!client) return false;
+      let ok = false;
+      await run(`bag-tamper:${ref}`, async () => {
+        const r = await client.api.reportBagTamper(ref, body);
+        if (r.error) {
+          if (!isOffline(r.error)) await refresh();
+          return fail(r.error);
+        }
+        buzz();
+        ok = true;
+        if (r.status === 202) return pushToast({ tone: 'warn', icon: 'offline', title: t('driver.toast.tamperQueued'), detail: t('driver.toast.bagHeldQueuedDetail') });
+        pushToast({ tone: 'warn', icon: 'warning', title: t('driver.toast.bagHeld', { ref }), detail: t('driver.toast.bagHeldDetail') });
+        await refresh();
+      });
+      return ok;
+    },
+    [client, run, fail, pushToast, refresh],
   );
 
   /** S26/S33 — downscale + EXIF-strip + upload a captured securement photo → its mediaId (null on failure). */
@@ -2001,6 +2049,8 @@ export function useDriverApp() {
       setOfferIndex,
       answerOffer,
       loadBag,
+      takeBag,
+      reportBagTamper,
       uploadPhoto,
       loadRoadPhoto,
       pickupFreight,

@@ -54,6 +54,15 @@ export function TamperPanel({ subject, live, state, actions, onReleased }: { sub
               : t('tower.tamper.closedPhoto', { place: unit.closedWith.place, when: heldWhen(unit.closedWith.closedAt) })}
           </p>
         ) : null}
+        {/* Round 37 — the driver who took it, and the number they read off it. */}
+        {unit.closedWith?.taken ? (
+          <p class="chint">
+            {unit.closedWith.taken.numberRead
+              ? t('tower.tamper.takenRead', { by: unit.closedWith.taken.by, number: unit.closedWith.taken.numberRead, when: heldWhen(unit.closedWith.taken.at) })
+              : t('tower.tamper.takenPhoto', { by: unit.closedWith.taken.by, when: heldWhen(unit.closedWith.taken.at) })}
+            {unit.closedWith.taken.asClosed ? '' : ` ${t('tower.tamper.takenAsFound')}`}
+          </p>
+        ) : null}
         {unit.exceptions.map((e) => (
           <div key={e.exceptionId} class="cons__panel" style="margin-top:10px">
             <p>

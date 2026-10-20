@@ -67,7 +67,7 @@ export class TamperController {
    * Round 36 — the shop or the hub, about a bag it holds or is receiving: its seal not the one it was closed with, broken,
    * or the bag cut or opened. The bag is held; nobody opens it until operations releases it.
    */
-  @Roles('agent', 'mdp')
+  @Roles('agent', 'mdp', 'driver')
   @Post('totes/:code/tamper')
   @AtTheCounter()
   reportOnBag(@Param('code') code: string, @Body() dto: ReportBagTamperDto, @Actor() actor: IntrospectionResult): TamperUnitView {
@@ -78,6 +78,8 @@ export class TamperController {
       if (!hub) throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
       return this.tamper.reportOnBag(code, { as: 'hub', mdpId: hub.mdpId, mdpDid: hub.did, mdpName: hub.name, name: actor.actorName }, dto);
     }
+    // Round 37 — the driver taking or carrying it.
+    if (actor.role === 'driver') return this.tamper.reportOnBag(code, { as: 'driver', driverDid: actor.did, name: actor.actorName }, dto);
     return this.tamper.reportOnBag(code, { as: 'shop', agentDid: actor.did, name: actor.actorName }, dto);
   }
 

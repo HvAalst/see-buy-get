@@ -359,6 +359,20 @@ export class MdpService {
     return { tote: this.totes.requireByCode(code), closedWith: closed.kind };
   }
 
+  /**
+   * Round 37 — A DRIVER READS THE BAG THEY CARRY, after a hub or shop scanned their pass to load it: the number off the
+   * seal, a photograph, as it was closed. Until they have, nobody receives it (BagClosureService.checkReceipt).
+   */
+  takeBag(code: string, driverDid: string, name: string | undefined, reading: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, observedAt?: string): { code: string; taken: true } {
+    const bag = this.totes.requireByCode(code);
+    if (bag.status !== 'in_transit' || bag.carriedBy !== driverDid) throw new GlosError('NOT_FOUND', 'No bag you carry has that code');
+    const HELD = bag.held;
+    if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    const keep = this.closures.checkTake(bag, { did: driverDid, name: name?.trim() || 'the driver', place: 'the driver' }, driverDid, reading);
+    keep(handedAt(observedAt, Date.now(), [bag.availableAt, bag.sealedAt]));
+    return { code, taken: true };
+  }
+
   // --- bag flow ---
 
   /** Pack a parcel into a bag bound for a destination (used at the origin PUDO and after sorting). */
@@ -381,7 +395,7 @@ export class MdpService {
   /** Scan a bag onto a bus — one scan moves the whole tote and every parcel in it to On_Bus.
    * When the badge resolves to a registered fleet vehicle, the bag must fit that vehicle's limits
    * (a bike/motorcycle feeder takes ≤ its capacity and no fragile items). Unknown badges pass through. */
-  loadBag(code: string, driverBadgeId: string, observedAt?: string): { tote: Tote; moved: string[] } {
+  loadBag(code: string, driverBadgeId: string, observedAt?: string, take?: { driverDid: string; name?: string; reading: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined }): { tote: Tote; moved: string[] } {
     const pending = this.totes.requireByCode(code);
     // Round 35 — a bag moves whole: one held parcel in it and it does not move, refused before anything is written.
     for (const id of pending.parcels) this.parcels.refuseIfHeld(this.parcels.get(id));
@@ -438,9 +452,13 @@ export class MdpService {
         throw new GlosError('CAPACITY_EXCEEDED', `This ${fleet.vehicle.vehicleClass} is carrying all ${capacity} bag(s) it holds — drop one before loading bag ${code}`);
       }
     }
+    // Round 37 — a driver loading it themselves takes it on its seal: read, photographed, as it was closed. Checked last,
+    // after every other refusal and before anything is written; kept once it is on the vehicle.
+    const keepTake = take ? this.closures.checkTake(pending, { did: take.driverDid, name: take.name?.trim() || 'the driver', place: 'the driver' }, take.driverDid, take.reading) : undefined;
     // Loaded when it was loaded (round 23), never before the bag was filled, published or sealed.
     const after = [pending.filledAt, pending.availableAt, pending.sealedAt];
     const tote = this.totes.load(code, driverBadgeId, fleet?.driverDid);
+    keepTake?.(handedAt(observedAt, Date.now(), after));
     for (const parcelId of tote.parcels) {
       this.parcels.setTransit(parcelId, 'On_Bus', driverBadgeId, `bag ${tote.code} → ${tote.destinationLabel ?? tote.destinationNodeId}`, tote.toteId, { observedAt, after });
       // Graduation: the tote path must raise HANDOVER on the M4 timeline like the direct handover does.

@@ -342,8 +342,17 @@ export function createDriverApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/dispatch/proposals/{id}/withdraw', { params: { path: { id: proposalId } }, body: {} })),
 
     /** Scan a released bag onto the vehicle. */
-    loadBag: (code: string, driverBadgeId: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId, observedAt: new Date().toISOString() } })),
+    /** Round 37 — taken on its seal: the number read off it, a photograph as taken, as it was closed. */
+    loadBag: (code: string, driverBadgeId: string, take?: { sealNumber?: string; photoRef: string; asClosed: boolean }) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId, observedAt: new Date().toISOString(), ...(take ? { take } : {}) } })),
+
+    /** Round 37 — a bag a counter loaded onto this driver by their pass: read and photographed afterwards, dated now. */
+    takeBag: (code: string, body: { sealNumber?: string; photoRef: string; asClosed: boolean }) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/take', { params: { path: { code } }, body: { ...body, observedAt: new Date().toISOString() } })),
+
+    /** Round 37 — a bag the driver takes or carries, not as it was closed: held, operations told. */
+    reportBagTamper: (code: string, body: { finding: 'seal_not_as_written' | 'seal_broken' | 'wrap_cut'; numberRead?: string; photoRefs: string[]; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/totes/{code}/tamper', { params: { path: { code } }, body: { ...body, observedAt: new Date().toISOString() } })),
 
     /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID
      *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the

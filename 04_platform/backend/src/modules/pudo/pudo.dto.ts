@@ -1528,6 +1528,8 @@ export class LoadBagDto {
   @IsOptional() @IsString() driverBadgeId?: string;
   /** Round 23 — when the shop or hub did it, by its phone's clock: a step kept on the phone with no signal. */
   @IsOptional() @IsDateString() observedAt?: string;
+  /** Round 37 — a driver loading it themselves: the number read off its seal, a photograph, as it was closed. */
+  @IsOptional() @ValidateNested() @Type(() => BagReceiptDto) take?: BagReceiptDto;
 }
 
 export class DropBagDto {

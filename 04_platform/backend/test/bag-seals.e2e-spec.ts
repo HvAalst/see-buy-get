@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
+import { createHash } from 'crypto';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
 
@@ -160,5 +161,112 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     // Released: received as found — the report is what it was received on.
     const received = (await receive({ photoRef: await photo(south.token, 'seal'), asClosed: false }).expect(201)).body;
     expect(received.delivered).toEqual([ids[0]]);
+  });
+
+  /*
+   * Round 37 — A DRIVER TAKES A BAG ON ITS SEAL (the user: "A driver takes a bag on its seal"). Loading it from their own
+   * app, the driver reads the number off the seal — never shown it — photographs it as taken and says it is as it was
+   * closed. A bag a counter loads onto them by the pass on their phone, they read afterwards, and it is received nowhere
+   * until they have. A bag they find cut on the road, they report: held, operations told.
+   */
+  it('a driver takes a bag on its seal — loading it themselves, or reading it after a counter loaded it onto them — and it is received only then', async () => {
+    const north = await aShop(`North TAKE ${tag}`, `TakeNorth${tag}`);
+    const south = await aShop(`South TAKE ${tag}`, `TakeSouth${tag}`);
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Take Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const storeToken = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
+    const funded = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(storeToken).send({ amount: 5000 }).expect(201);
+    await http().post(`/v1/rails/funding/${funded.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 5000 }).expect(201);
+    const hub = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Take Hub ${tag}`, zones: [`TakeSouth${tag}`], location: { lat: -1.25, lng: 36.9 } }).expect(201)).body;
+    const hubToken = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token);
+    /** A bag of one parcel, closed at the north shop on a coded seal. */
+    const sealedBag = async (seal: string): Promise<string> => {
+      const order = (await http().post('/v1/sbg/inbound/orders').set(storeToken).send({ vendorId: made.vendorId, originPudoDid: north.did, destPudoDid: south.did, buyerMobile: `+2547${digits()}1`, size: 'M', weightKg: 2, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), storeToken) }).expect(201)).body;
+      await http().post(`/v1/sbg/parcels/${order.parcel.parcelId}/intake`).set(north.token).send({ agentDid: north.did }).expect(201);
+      const code = (await http().post(`/v1/sbg/agents/${north.did}/totes`).set(north.token).send({ destZone: `TakeSouth${tag}` }).expect(201)).body.code as string;
+      await http().post(`/v1/sbg/agents/${north.did}/totes/${code}/fill`).set(north.token).send({ parcelId: order.parcel.parcelId }).expect(201);
+      // One parcel a bag: the other bag's parcel is on the shelf still, in a bag of its own.
+      await http().post(`/v1/sbg/agents/${north.did}/totes/${code}/seal`).set(north.token).send({ acknowledgeShortShip: true, shortShipReason: 'in a bag of its own', closure: { seal, photoRef: await photo(north.token, 'seal') } }).expect(201);
+      return code;
+    };
+    /** A motorcycle courier on shift, signed in on their own phone. */
+    const onShift = async (name: string): Promise<{ did: string; token: { authorization: string } }> => {
+      seq += 1;
+      const u = `${tag}${seq}`;
+      const d = (await http().post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: name, fullName: `${name} Rider`, nationalId: `DRV-TK-${u}`, mobile: `+2547${digits().slice(-6)}${seq}`, licenceClasses: ['motorcycle'] }).expect(201)).body;
+      const moto = (await http().post('/v1/sbg/vehicles').set(operator).send({ plate: `TK-${u}`, vehicleClass: 'motorcycle', ownerName: name }).expect(201)).body;
+      await http().post(`/v1/sbg/fleet/drivers/${d.did}/start-session`).set(operator).send({ vehicleId: moto.vehicleId }).expect(201);
+      return { did: d.did as string, token: bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: d.did, type: 'client_credentials' }).expect(201)).body.access_token) };
+    };
+    type Held = { ref: string; bagSeal?: { closedWith: string; check?: string; taken: boolean } };
+    const claimOf = async (driver: { did: string; token: { authorization: string } }, code: string): Promise<Held | undefined> =>
+      ((await http().get(`/v1/sbg/fleet/drivers/${driver.did}/claims`).set(driver.token).expect(200)).body.claims as Held[]).find((c) => c.ref === code);
+    const drop = (code: string, receipt: Record<string, unknown>) => http().post(`/v1/sbg/mdps/${hub.mdpId}/drop-bag`).set(operator).send({ code, receipt });
+    const SEAL_ONE = `KE ${String(Date.now()).slice(-7)}`;
+    const SEAL_TWO = `KE ${String(Date.now() + 7).slice(-7)}`;
+    const one = await sealedBag(SEAL_ONE);
+    const two = await sealedBag(SEAL_TWO);
+    const amina = await onShift('Amina');
+    const baraka = await onShift('Baraka');
+
+    // LOADING IT THEMSELVES: a photograph as taken, the number read off the seal, as it was closed — each asked for, and
+    // each refusal before anything is written.
+    const load = (take?: Record<string, unknown>) => http().post(`/v1/sbg/totes/${one}/load`).set(amina.token).send(take ? { take } : {});
+    expect((await load().expect(400)).body.detail).toMatch(/Photograph the bag as you take it/);
+    expect((await load({ photoRef: await photo(north.token, 'seal'), sealNumber: SEAL_ONE, asClosed: true }).expect(400)).body.code).toBe('PHOTO_REQUIRED');
+    expect((await load({ photoRef: await photo(amina.token, 'seal'), asClosed: true }).expect(400)).body.detail).toMatch(/Read the number on bag .*’s seal/);
+    expect((await load({ photoRef: await photo(amina.token, 'seal'), sealNumber: 'KE 0000000', asClosed: true }).expect(409)).body.detail).toMatch(/not the one it was closed with. Read it again — still not the same\? Report it: the bag is held, and does not leave until operations releases it/);
+    expect((await load({ photoRef: await photo(amina.token, 'seal'), sealNumber: SEAL_ONE, asClosed: false }).expect(409)).body.code).toBe('TAMPER_REPORT_FIRST');
+    expect((await http().get(`/v1/sbg/totes/${one}`).set(operator).expect(200)).body.status).not.toBe('in_transit');
+    // Read as a person reads it — a dash, lower case — and it is the number it was closed with.
+    expect((await load({ photoRef: await photo(amina.token, 'seal'), sealNumber: SEAL_ONE.replace(' ', '-').toLowerCase(), asClosed: true }).expect(201)).body.moved).toHaveLength(1);
+    expect(await claimOf(amina, one)).toMatchObject({ bagSeal: { closedWith: 'seal', taken: true } });
+    await drop(one, { sealNumber: SEAL_ONE, photoRef: await photo(hubToken, 'seal'), asClosed: true }).expect(201);
+
+    // LOADED ONTO THEM AT THE COUNTER, by the pass on their phone: on their vehicle, and received nowhere until they have
+    // read it themselves. What they are shown is how it was closed and what their phone checks a reading against — never
+    // the number.
+    const pass = (await http().get(`/v1/sbg/fleet/drivers/${baraka.did}/session`).set(baraka.token).expect(200)).body.handoverPass as string;
+    await http().post(`/v1/sbg/totes/${two}/load`).set(north.token).send({ driverBadgeId: pass }).expect(201);
+    expect((await drop(two, { sealNumber: SEAL_TWO, photoRef: await photo(hubToken, 'seal'), asClosed: true }).expect(409)).body.detail).toMatch(/The driver has not read bag .*’s seal yet/);
+    expect((await http().get(`/v1/sbg/totes/${two}`).set(operator).expect(200)).body).toMatchObject({ status: 'in_transit' });
+    const mine = await claimOf(baraka, two);
+    expect(mine?.bagSeal).toEqual({ closedWith: 'seal', taken: false, check: createHash('sha256').update(`${two}|${SEAL_TWO.replace(' ', '')}`).digest('hex') });
+    expect(JSON.stringify(mine)).not.toContain(SEAL_TWO.slice(3));
+    expect((await claimOf(amina, two))).toBeUndefined();
+    const take = (who: { authorization: string }, body: Record<string, unknown>) => http().post(`/v1/sbg/totes/${two}/take`).set(who).send(body);
+    await take(operator, { photoRef: 'x', asClosed: true }).expect(403);
+    expect((await take(amina.token, { photoRef: await photo(amina.token, 'seal'), sealNumber: SEAL_TWO, asClosed: true }).expect(404)).body.detail).toBe('No bag you carry has that code');
+    expect((await take(baraka.token, { photoRef: await photo(baraka.token, 'seal'), sealNumber: 'KE 0000000', asClosed: true }).expect(409)).body.code).toBe('SEAL_MISMATCH');
+    const asTaken = await photo(baraka.token, 'seal');
+    expect((await take(baraka.token, { photoRef: asTaken, sealNumber: SEAL_TWO, asClosed: true }).expect(201)).body).toEqual({ code: two, taken: true });
+    // The phone sending it again (kept with no signal): the reading already made stands, whatever is sent after it.
+    await take(baraka.token, { photoRef: await photo(baraka.token, 'seal'), sealNumber: 'KE 0000000', asClosed: true }).expect(201);
+    expect((await claimOf(baraka, two))?.bagSeal).toMatchObject({ taken: true });
+
+    // ON THE ROAD the rider finds it cut: reported with a photograph, held where it is, operations told. Another rider
+    // reports nothing of it. Released, it is received at the hub as found.
+    expect((await http().post(`/v1/sbg/totes/${two}/tamper`).set(amina.token).send({ finding: 'wrap_cut', photoRefs: [await photo(amina.token, 'tamper')] }).expect(404)).body.detail).toBe('No bag you hold or are receiving has that code');
+    const held = (await http().post(`/v1/sbg/totes/${two}/tamper`).set(baraka.token).send({ finding: 'wrap_cut', photoRefs: [await photo(baraka.token, 'tamper')], note: 'Tape torn at the zip' }).expect(201)).body;
+    // Held: not read again either, until operations releases it.
+    expect((await take(baraka.token, { photoRef: await photo(baraka.token, 'seal'), sealNumber: SEAL_TWO, asClosed: true }).expect(409)).body.code).toBe('UNIT_HELD');
+    expect(held).toMatchObject({ unitType: 'bag', ref: two, held: { finding: 'wrap_cut', stage: 'road', where: 'on the road' } });
+    expect((await drop(two, { sealNumber: SEAL_TWO, photoRef: await photo(hubToken, 'seal'), asClosed: true }).expect(409)).body.code).toBe('UNIT_HELD');
+    // Staff read what it was closed with beside what the driver read off it.
+    expect((await http().get(`/v1/sbg/ops/tamper/${two}`).set(operator).expect(200)).body.closedWith).toMatchObject({ kind: 'seal', number: SEAL_TWO, taken: { numberRead: SEAL_TWO, asClosed: true, by: 'Baraka' } });
+    // A driver's session carries no name: their own record names them.
+    expect((await http().get(`/v1/sbg/ops/tamper/${two}`).set(operator).expect(200)).body.exceptions[0]).toMatchObject({ byAs: 'driver', byName: 'Baraka' });
+    await http().post(`/v1/sbg/ops/tamper/${two}/release`).set(operator).send({ reason: 'Rider called it in; the hub counts the parcel on arrival', by: 'Halima at operations' }).expect(201);
+    expect((await drop(two, { photoRef: await photo(hubToken, 'seal'), asClosed: false }).expect(201)).body.emptied).toHaveLength(1);
+
+    // A bag its driver never read — their phone lost — is not stranded: the hub reports it, operations releases it, and it
+    // is received as found.
+    const SEAL_THREE = `KE ${String(Date.now() + 13).slice(-7)}`;
+    const three = await sealedBag(SEAL_THREE);
+    const passAgain = (await http().get(`/v1/sbg/fleet/drivers/${amina.did}/session`).set(amina.token).expect(200)).body.handoverPass as string;
+    await http().post(`/v1/sbg/totes/${three}/load`).set(north.token).send({ driverBadgeId: passAgain }).expect(201);
+    expect((await drop(three, { sealNumber: SEAL_THREE, photoRef: await photo(hubToken, 'seal'), asClosed: true }).expect(409)).body.code).toBe('BAG_NOT_TAKEN');
+    await http().post(`/v1/sbg/totes/${three}/tamper`).set(hubToken).send({ finding: 'wrap_cut', photoRefs: [await photo(hubToken, 'tamper')], note: 'Driver’s phone lost: seal never read on the road' }).expect(201);
+    await http().post(`/v1/sbg/ops/tamper/${three}/release`).set(operator).send({ reason: 'Driver called: phone lost on the way; the hub counts the parcel', by: 'Halima at operations' }).expect(201);
+    expect((await drop(three, { photoRef: await photo(hubToken, 'seal'), asClosed: false }).expect(201)).body.emptied).toHaveLength(1);
   });
 });

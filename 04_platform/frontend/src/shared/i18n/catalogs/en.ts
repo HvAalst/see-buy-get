@@ -391,6 +391,11 @@ export const en = {
   'common.bag.finding.seal_broken': 'The seal is broken',
   'common.bag.finding.wrap_cut': 'The bag is cut or opened',
   'common.bag.heldNote': 'Held: SeeBuyGet operations has been told. Keep it closed until they release it.',
+  // Round 37 — a driver takes a bag on its seal (driver app, LoadsScreen and BagTake).
+  'common.bag.takeTitle': 'Before you take it',
+  'common.bag.photoTaken': 'Photograph the bag as you take it, its seal in view',
+  'common.bag.notAsClosedTakeTitle': 'Report it before you go on',
+  'common.bag.notAsClosedTakeBody': 'Report it with a photograph: the bag is held where it is and SeeBuyGet operations told. Keep it closed; it goes on once operations releases it.',
   'common.outbox.retry': 'Try again',
   'common.outbox.discard': 'Let it go',
 
