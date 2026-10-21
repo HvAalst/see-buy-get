@@ -1640,7 +1640,7 @@ export class SbgController {
     if (own !== entityId) throw new GlosError('FORBIDDEN', 'A company’s own entry is its own');
     const card = this.contacts.set(
       own,
-      { contactName: dto.contactName, phone: dto.phone, phoneAlt: dto.phoneAlt, email: dto.email, website: dto.website, address: dto.address, hours: dto.hours, visitDays: dto.visitDays, visitFrom: dto.visitFrom, visitTo: dto.visitTo, visitHoursByDay: dto.visitHoursByDay, closedDates: dto.closedDates, visitorsPerHour: dto.visitorsPerHour },
+      { contactName: dto.contactName, phone: dto.phone, phoneAlt: dto.phoneAlt, deskPhone: dto.deskPhone, email: dto.email, website: dto.website, address: dto.address, hours: dto.hours, visitDays: dto.visitDays, visitFrom: dto.visitFrom, visitTo: dto.visitTo, visitHoursByDay: dto.visitHoursByDay, closedDates: dto.closedDates, visitorsPerHour: dto.visitorsPerHour },
       this.namedActor(actor, dto.by),
     );
     return { ...card, basis: CONTACT_BASIS } as never;
@@ -1651,7 +1651,8 @@ export class SbgController {
   @Get('entities/:entityId/contact')
   contactCard(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult): ContactCardView {
     const own = actor?.role === 'operator' ? this.entities.get(entityId).entityId : this.actingCompany(actor, entityId);
-    const card = this.contacts.of(own);
+    // The whole card, the desk number too: this is the screen that edits it.
+    const card = this.contacts.own(own);
     if (!card) throw new GlosError('NOT_FOUND', 'That company has written no entry yet');
     return { ...card, basis: CONTACT_BASIS } as never;
   }

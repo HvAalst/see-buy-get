@@ -915,6 +915,7 @@ export const enDriver = {
   'driver.held.who': 'Told to SeeBuyGet operations, the shipper and your fleet’s office — never where your phone is. The tracking page says only that it is held on the way.',
   'driver.held.send': 'Say it — operations is told',
   'driver.held.told': 'Operations, the shipper and your office have been told.',
+  'driver.held.ring': 'Ring {company}’s desk: {phone}',
   'driver.held.letGo': 'Let go — we drive on',
   'driver.toast.held': 'Said — operations has been told',
   'driver.toast.heldDetail': 'The shipper and your fleet’s office are told too. Tap “Let go” when you drive on.',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_HELD, heldBody, heldByLine, heldByWords, heldReady } from './heldByAuthority';
+import { EMPTY_HELD, deskLine, heldBody, heldByLine, heldByWords, heldReady, telHref } from './heldByAuthority';
 import { t } from './i18n';
 
 const when = (iso: string) => iso.slice(11, 16);
@@ -18,5 +18,13 @@ describe('a load held by the police or customs', () => {
     expect(heldReady(EMPTY_HELD)).toBe(false);
     expect(heldReady({ ...EMPTY_HELD, by: 'other' })).toBe(true);
     expect(heldBody({ by: 'police', who: '  Athi River ', note: '' })).toEqual({ by: 'police', who: 'Athi River' });
+  });
+
+  it('names each country’s desk as its company wrote it, and dials only the + and the digits (round 39)', () => {
+    expect(deskLine({ country: 'KE', company: 'SeeBuyGet Kenya', phone: '+254 (20) 765-4321' }, t)).toBe('Ring SeeBuyGet Kenya’s desk: +254 (20) 765-4321');
+    expect(telHref('+254 (20) 765-4321')).toBe('tel:+254207654321');
+    expect(telHref('020 765.4321')).toBe('tel:0207654321');
+    // A + anywhere but in front is not part of a number a phone dials.
+    expect(telHref('+251 11+555 0100')).toBe('tel:+251115550100');
   });
 });

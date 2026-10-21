@@ -124,4 +124,40 @@ describe('a load held by the police or customs, over the wire', () => {
     expect((await http().get('/v1/sbg/dispatch/posted').set(biz).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === freightId).heldByAuthority).toBeUndefined();
     expect(await cases('live')).toEqual([]);
   });
+
+  it('carries each country’s desk number on the load, from its company’s own card — and no directory shows it (round 39)', async () => {
+    const biz = await aBusiness();
+    const posted = await http()
+      .post('/v1/sbg/dispatch/freight')
+      .set(biz)
+      .send({ description: 'Coffee, 40 sacks', pickupLocation: { lat: -1.33, lng: 36.87 }, pickupLabel: 'Mlolongo yard', destLabel: 'Addis depot', destLocation: { lat: 9.0, lng: 38.75 }, weightKg: 2400, packaging: 'bagged', packages: 40, pickupCountry: 'KE', destCountry: 'ET' })
+      .expect(201);
+    const freightId = posted.body.freightId as string;
+    const driver = await aDriver('Kiprop');
+    const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
+    store.set(freightId, { ...store.get(freightId), status: 'in_transit', claimedBy: driver.did, claimedAt: new Date(Date.now() - 3_600_000).toISOString(), pickedUpAt: new Date(Date.now() - 1_800_000).toISOString() });
+    const claim = async () => (await http().get(`/v1/sbg/fleet/drivers/${driver.did}/claims`).set(driver.token).expect(200)).body.claims.find((c: { ref: string }) => c.ref === freightId);
+    const card = (entityId: string, body: Record<string, unknown>) => http().post(`/v1/sbg/entities/${entityId}/contact`).set(operator).send({ ...body, by: 'Grace' });
+
+    // Each company writes its own; a number's shape is checked. Until one is written, there is nothing to show.
+    await card('sbg-ke', { deskPhone: '' }).expect(201);
+    await card('sbg-et', { deskPhone: '' }).expect(201);
+    expect((await claim()).desks).toBeUndefined();
+    await card('sbg-ke', { deskPhone: 'ring the border' }).expect(400);
+    await card('sbg-ke', { deskPhone: '+254 20 765 4321', phone: '+254 20 111 2222' }).expect(201);
+    await card('sbg-et', { deskPhone: '+251 11 555 0100' }).expect(201);
+    // On the load: the country it was taken over in first, then the one it goes to.
+    expect((await claim()).desks).toEqual([
+      { country: 'KE', company: 'SeeBuyGet Kenya', phone: '+254 20 765 4321' },
+      { country: 'ET', company: 'SeeBuyGet Ethiopia', phone: '+251 11 555 0100' },
+    ]);
+    // The company's own screen reads it; switching a country on asks for it.
+    const own = (await http().get('/v1/sbg/entities/sbg-ke/contact').set(operator).expect(200)).body;
+    expect(own).toMatchObject({ deskPhone: '+254 20 765 4321', phone: '+254 20 111 2222' });
+    const readiness = (await http().get('/v1/sbg/entities/sbg-ke/record').set(operator).expect(200)).body.readiness.items as Array<{ key: string; met: boolean }>;
+    expect(readiness.find((i) => i.key === 'desk_phone')).toMatchObject({ met: true });
+    // Delivered, it is the driver's load no longer: no desk is carried with it.
+    store.set(freightId, { ...store.get(freightId), status: 'delivered', deliveredAt: new Date().toISOString() });
+    expect((await claim())?.desks).toBeUndefined();
+  });
 });

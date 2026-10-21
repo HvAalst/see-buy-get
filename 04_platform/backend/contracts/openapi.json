@@ -35290,6 +35290,11 @@
             "type": "string",
             "maxLength": 24
           },
+          "deskPhone": {
+            "type": "string",
+            "description": "Round 39 — the operations desk a driver held at a checkpoint in this company's country rings. Never published.",
+            "maxLength": 24
+          },
           "email": {
             "type": "string",
             "maxLength": 120
@@ -35360,6 +35365,10 @@
           "phoneAlt": {
             "type": "string",
             "description": "The gate and the office are usually different telephones."
+          },
+          "deskPhone": {
+            "type": "string",
+            "description": "Round 39 — the desk a held driver rings: only on the company's own reading of its card, never in a directory."
           },
           "email": {
             "type": "string"

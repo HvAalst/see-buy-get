@@ -680,6 +680,8 @@ export class ContactCardDto {
   @IsOptional() @IsString() @MaxLength(80) contactName?: string;
   @IsOptional() @IsString() @MaxLength(24) phone?: string;
   @IsOptional() @IsString() @MaxLength(24) phoneAlt?: string;
+  /** Round 39 — the operations desk a driver held at a checkpoint in this company's country rings. Never published. */
+  @IsOptional() @IsString() @MaxLength(24) deskPhone?: string;
   @IsOptional() @IsString() @MaxLength(120) email?: string;
   @IsOptional() @IsString() @MaxLength(160) website?: string;
   @IsOptional() @IsString() @MaxLength(300) address?: string;

@@ -54,3 +54,24 @@ export function heldReady(f: HeldForm): boolean {
 export function heldBody(f: HeldForm): { by: HeldBy; who?: string; note?: string } {
   return { by: f.by as HeldBy, ...(f.who.trim() ? { who: f.who.trim() } : {}), ...(f.note.trim() ? { note: f.note.trim() } : {}) };
 }
+
+/**
+ * Round 39 — A COUNTRY'S OPERATIONS DESK (the user: "One per country"): the number a driver held at a checkpoint rings,
+ * written by that country's company on its own card and carried on the load, so it is on the phone without signal.
+ */
+export interface DeskNumber {
+  country: string;
+  company: string;
+  phone: string;
+}
+
+/** What the desk is called on the strip: its company, and the number as the company wrote it. */
+export function deskLine(d: DeskNumber, t: Translate): string {
+  return t('driver.held.ring', { company: d.company, phone: d.phone });
+}
+
+/** The number as a phone dials it: the + and the digits, nothing the company spaced it with. */
+export function telHref(phone: string): string {
+  const digits = phone.replace(/[^\d+]/g, '');
+  return `tel:${digits.startsWith('+') ? `+${digits.slice(1).replace(/\+/g, '')}` : digits.replace(/\+/g, '')}`;
+}

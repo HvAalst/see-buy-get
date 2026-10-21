@@ -417,6 +417,8 @@ export const enTower = {
   'tower.contact.f.phone': 'Telephone',
   'tower.contact.f.phoneAlt': 'A second number',
   'tower.contact.f.phoneAltPh': 'The gate, if the office is a different line',
+  'tower.contact.f.desk': 'Operations desk, for drivers held at a checkpoint',
+  'tower.contact.f.deskHint': 'A driver held by the police or customs in your country is shown this number to ring, on any load taken over in your country or going to it. It is never published.',
   'tower.contact.f.email': 'Email',
   'tower.contact.f.website': 'Website',
   'tower.contact.f.address': 'Where the gate is',

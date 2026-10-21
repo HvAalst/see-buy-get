@@ -121,6 +121,12 @@ export interface ContactCard {
   phone?: string;
   /** A second number, because in most of these markets the gate and the office are different telephones. */
   phoneAlt?: string;
+  /**
+   * Round 39 — THE OPERATIONS DESK (the user: "One per country"): the number a driver held by the police or customs in
+   * this company's country rings, shown on the driver's held strip. A sister company's own to set. Never published:
+   * every directory and public page reads the card without it (`of`).
+   */
+  deskPhone?: string;
   email?: string;
   website?: string;
   /** Where the gate is, in the words a driver needs. Not the registered address, which is a legal fact. */
@@ -182,6 +188,8 @@ export class ContactCardService {
         { key: 'visitors_address', met: Boolean(card?.address), label: 'Where people are sent when they have to come in person: its address, written by the company in its own Settings' },
         // Every day it receives on has hours to receive in: the ones it keeps on most days, or the day's own.
         { key: 'visiting_days', met: Boolean(card?.visitDays?.length && card.visitDays.every((d) => card.visitHoursByDay?.[d] || (card.visitFrom && card.visitTo))), label: 'The days and hours it receives visitors, set by the company in its own Settings' },
+        // Round 39 — from the first load taken over in its country, a driver held at a checkpoint there has a number to ring.
+        { key: 'desk_phone', met: Boolean(card?.deskPhone), label: 'The number a driver held by the police or customs in its country rings, set by the company in its own Settings' },
       ];
     });
   }
@@ -195,7 +203,7 @@ export class ContactCardService {
    */
   set(
     entityId: string,
-    patch: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; visitHoursByDay?: Record<string, { from?: string; to?: string } | null>; closedDates?: ClosedDate[]; visitorsPerHour?: number | null },
+    patch: { contactName?: string; phone?: string; phoneAlt?: string; deskPhone?: string; email?: string; website?: string; address?: string; hours?: string; visitDays?: string[]; visitFrom?: string; visitTo?: string; visitHoursByDay?: Record<string, { from?: string; to?: string } | null>; closedDates?: ClosedDate[]; visitorsPerHour?: number | null },
     by: string,
     now = Date.now(),
   ): ContactCard {
@@ -208,7 +216,7 @@ export class ContactCardService {
       saidBy: by,
     };
 
-    const put = (key: 'contactName' | 'phone' | 'phoneAlt' | 'email' | 'website' | 'address' | 'hours', raw: string | undefined, max: number, check?: (v: string) => boolean, why?: string) => {
+    const put = (key: 'contactName' | 'phone' | 'phoneAlt' | 'deskPhone' | 'email' | 'website' | 'address' | 'hours', raw: string | undefined, max: number, check?: (v: string) => boolean, why?: string) => {
       if (raw === undefined) return; // absent means UNCHANGED, which is what makes this a merge
       const value = raw.trim();
       if (!value) {
@@ -222,6 +230,7 @@ export class ContactCardService {
     put('contactName', patch.contactName, 80);
     put('phone', patch.phone, 24, (v) => PHONE.test(v), 'A telephone number is digits, with an optional + in front — we check the shape and never dial it');
     put('phoneAlt', patch.phoneAlt, 24, (v) => PHONE.test(v), 'A telephone number is digits, with an optional + in front — we check the shape and never dial it');
+    put('deskPhone', patch.deskPhone, 24, (v) => PHONE.test(v), 'The desk’s number is digits, with an optional + in front — we check the shape and never dial it');
     put('email', patch.email, 120, (v) => EMAIL.test(v), 'That is not the shape of an email address');
     put(
       'website',
@@ -320,8 +329,23 @@ export class ContactCardService {
     return card;
   }
 
+  /** The card as every directory and public page reads it: without the desk number, which is for drivers on the road. */
   of(entityId: string): ContactCard | undefined {
+    const card = this.cards.get(entityId);
+    if (!card) return undefined;
+    const published = { ...card };
+    delete published.deskPhone;
+    return published;
+  }
+
+  /** The whole card, desk number included: for the company's own screen that edits it. */
+  own(entityId: string): ContactCard | undefined {
     return this.cards.get(entityId);
+  }
+
+  /** Round 39 — the number a driver held at a checkpoint in this company's country rings, where it has said one. */
+  deskOf(entityId: string): string | undefined {
+    return this.cards.get(entityId)?.deskPhone;
   }
 
   /** Nothing to reach them by is a fact worth knowing, so an empty card is not the same as a full one. */

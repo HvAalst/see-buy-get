@@ -1330,6 +1330,15 @@ export class BagSealForDriver {
   taken!: boolean;
 }
 
+/** Round 39 — one country's operations desk, as its company wrote it on its own card: the number a held driver rings. */
+export class DeskNumber {
+  /** ISO-3166 — the country this desk answers for. */
+  @ApiProperty() country!: string;
+  /** The company of ours in that country. */
+  @ApiProperty() company!: string;
+  @ApiProperty() phone!: string;
+}
+
 export class Claimable {
   kind: ClaimableKind;
   /** Freight crossing a border whose shipper has not yet signed its commercial invoice: it cannot be taken over yet. */
@@ -1338,6 +1347,8 @@ export class Claimable {
   invoiceToShow?: boolean;
   /** Round 38 — a seal the pickup country's company requires on this load, and none written: why, in words. Not to be taken over yet. */
   sealMissing?: string;
+  /** Round 39 — the operations desks a driver held at a checkpoint rings: the pickup country's company's, and the destination's when it is another. */
+  @ApiPropertyOptional({ type: [DeskNumber] }) desks?: DeskNumber[];
   /** Round 14 — a load on the road: what the driver needs to say it is at a border, has cleared it, or is at a hub. */
   @ApiPropertyOptional({ type: LoadPassageForDriver }) passage?: LoadPassageForDriver;
   /** Round 15 — the seals to read off the door at pickup (and look at with the receiver): what each is, never its number. */

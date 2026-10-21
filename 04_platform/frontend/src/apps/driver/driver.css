@@ -267,6 +267,15 @@
   gap: 0 12px;
 }
 
+/* Round 39 — the desks a held driver rings: one line each, a number the phone dials. */
+.held-desks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 8px;
+  font-weight: 600;
+}
+
 /* Round 15 — the seals in the gates: one block a seal, its number in the type read off a bolt, the check said beneath. */
 .seal-steps {
   margin-top: 14px;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
-import { EMPTY_HELD, HELD_BY, heldBody, heldByLine, heldReady, type HeldBy, type HeldByAuthorityView, type HeldForm } from '../../../shared/heldByAuthority';
+import { EMPTY_HELD, HELD_BY, deskLine, heldBody, heldByLine, heldReady, telHref, type HeldBy, type HeldByAuthorityView, type HeldForm } from '../../../shared/heldByAuthority';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
@@ -36,6 +36,8 @@ export function HeldStrip({ claim, state, actions, onSay }: { claim: Claimable; 
         <span class="passage-strip__info">
           <b>{heldByLine(held, t, clock)}</b>
           <span>{t('driver.held.told')}</span>
+          {/* Round 39 — who to ring: each country's desk, as its company wrote it; on the phone without signal. */}
+          <Desks claim={claim} />
         </span>
       ) : null}
       <span class="passage-strip__acts">
@@ -50,6 +52,24 @@ export function HeldStrip({ claim, state, actions, onSay }: { claim: Claimable; 
         )}
       </span>
     </div>
+  );
+}
+
+/**
+ * Round 39 — THE DESKS TO RING (the user: "One per country"): the company of the country the load was taken over in, and
+ * of the one it goes to when that is another. A link the phone dials. Nothing at all where no company has written one.
+ */
+function Desks({ claim }: { claim: Claimable }) {
+  const t = useT();
+  if (!claim.desks?.length) return null;
+  return (
+    <span class="held-desks">
+      {claim.desks.map((d) => (
+        <a key={d.country} href={telHref(d.phone)}>
+          {deskLine(d, t)}
+        </a>
+      ))}
+    </span>
   );
 }
 
@@ -85,6 +105,7 @@ export function HeldSheet({ claim, state, actions, onClose }: { claim: Claimable
             <textarea id="held-note" class="input" rows={2} maxLength={500} value={form.note} disabled={busy} onInput={(e) => setForm({ ...form, note: e.currentTarget.value })} />
           </div>
           <p class="hint">{t('driver.held.who')}</p>
+          <Desks claim={claim} />
           <Button
             chevron={false}
             busy={busy}

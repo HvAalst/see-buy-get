@@ -74,6 +74,21 @@ describe('how to reach a company', () => {
     expect(cards.reachable(yardId)).toBe(true);
   });
 
+  it('keeps the desk a held driver rings on the company’s own card, and out of every directory (round 39)', () => {
+    cards.set(yardId, { phone: '+254712345678', deskPhone: '+254 20 765 4321' }, 'Grace');
+    // The company's own screen reads it, and so does the driver's load; a directory or a public page never does.
+    expect(cards.own(yardId)?.deskPhone).toBe('+254 20 765 4321');
+    expect(cards.deskOf(yardId)).toBe('+254 20 765 4321');
+    expect(cards.of(yardId)).toMatchObject({ phone: '+254712345678' });
+    expect(cards.of(yardId)).not.toHaveProperty('deskPhone');
+    // Its shape is checked like any number; an empty string clears it, and the rest of the card stays.
+    expect(() => cards.set(yardId, { deskPhone: 'ask at the border' }, 'Grace')).toThrow(/desk’s number is digits/);
+    const cleared = cards.set(yardId, { deskPhone: '' }, 'Grace');
+    expect(cleared.deskPhone).toBeUndefined();
+    expect(cleared.phone).toBe('+254712345678');
+    expect(cards.deskOf(yardId)).toBeUndefined();
+  });
+
   it('refuses a company that does not exist', () => {
     expect(() => cards.set('partner-ke-nobody', { phone: '+254712345678' }, 'Grace')).toThrow();
   });

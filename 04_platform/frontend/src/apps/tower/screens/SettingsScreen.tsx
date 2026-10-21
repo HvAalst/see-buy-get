@@ -31,6 +31,8 @@ export function SettingsScreen({ state, actions }: { state: TowerState; actions:
   const [sites, setSites] = useState<SiteView[] | null>(null);
   // Their own public address, read off their own record — the one place that knows it.
   const [handle, setHandle] = useState<string | undefined>(undefined);
+  // Round 39 — a country's company keeps the desk a held driver rings, on the same card.
+  const [sister, setSister] = useState(false);
 
   const load = useCallback(async () => {
     if (!client || !entityId) return;
@@ -38,7 +40,10 @@ export function SettingsScreen({ state, actions }: { state: TowerState; actions:
     const r = await api.sites(entityId);
     setSites(r.error || !r.data ? [] : ((r.data as { sites: SiteView[] }).sites ?? []));
     const rec = await api.companyRecord(entityId);
-    if (!rec.error && rec.data) setHandle((rec.data as { handle?: string }).handle);
+    if (!rec.error && rec.data) {
+      setHandle((rec.data as { handle?: string }).handle);
+      setSister((rec.data as { entity?: { kind?: string } }).entity?.kind === 'sister');
+    }
   }, [client, entityId]);
 
   useEffect(() => {
@@ -61,7 +66,7 @@ export function SettingsScreen({ state, actions }: { state: TowerState; actions:
       {/* Their own entry, and the one thing on the public page nobody else can write for them. It was
           reachable only from the yard screen, so a company that holds no empties could not publish a
           telephone number while their page carried a slot for one. */}
-      <ContactCardPanel entityId={entityId} who={state.who?.name} client={client} />
+      <ContactCardPanel entityId={entityId} who={state.who?.name} client={client} desk={sister} />
 
       <section class="cons__panel">
         <div class="cons__panelhead">

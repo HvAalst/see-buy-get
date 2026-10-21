@@ -179,15 +179,16 @@ describe('the first day of a new installation, as it would be live', () => {
       await must(http().post(`/v1/sbg/entities/${kenya}/documents/${put.documentId}/verify`).set(bearer(amina)).send({}), 403);
       await must(http().post(`/v1/sbg/entities/${kenya}/documents/${put.documentId}/verify`).set(bearer(brian)).send({}));
     }
-    // What is left is the company's OWN to say, and staff cannot say it for them: where people come in person, and when.
-    expect(await missing()).toEqual(['visitors_address', 'visiting_days']);
+    // What is left is the company's OWN to say, and staff cannot say it for them: where people come in person, and when —
+    // and (round 39) the number a driver held at a checkpoint in Kenya rings.
+    expect(await missing()).toEqual(['visitors_address', 'visiting_days', 'desk_phone']);
     const admin = await must(http().post(`/v1/sbg/entities/${kenya}/admins`).set(bearer(amina)).send({ email: 'wanjiru@kenya.sbg-rehearsal.org', name: 'Wanjiru Kamau' }));
     wanjiru = (await must(http().post('/v1/sbg/entities/admins/login').send({ email: 'wanjiru@kenya.sbg-rehearsal.org', password: admin.temporaryPassword ?? admin.password }))).token.access_token as string;
     await must(
       http()
         .post(`/v1/sbg/entities/${kenya}/contact`)
         .set(bearer(wanjiru))
-        .send({ contactName: 'Front desk', phone: '+254700100200', address: '1 Kenyatta Avenue, Nairobi', visitDays: ['mon', 'tue', 'wed', 'thu', 'fri'], visitFrom: '09:00', visitTo: '16:00', visitorsPerHour: 6 }),
+        .send({ contactName: 'Front desk', phone: '+254700100200', deskPhone: '+254700100300', address: '1 Kenyatta Avenue, Nairobi', visitDays: ['mon', 'tue', 'wed', 'thu', 'fri'], visitFrom: '09:00', visitTo: '16:00', visitorsPerHour: 6 }),
     );
     expect(await missing()).toEqual([]);
     expect((await record()).readiness.ready).toBe(true);

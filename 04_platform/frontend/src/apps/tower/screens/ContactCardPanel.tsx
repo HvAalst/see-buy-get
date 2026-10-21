@@ -6,6 +6,8 @@ export interface ContactCardView {
   contactName?: string;
   phone?: string;
   phoneAlt?: string;
+  /** Round 39 — the desk a driver held at a checkpoint in this country rings. On the company's own card only. */
+  deskPhone?: string;
   email?: string;
   website?: string;
   address?: string;
@@ -51,9 +53,12 @@ export function ContactCardPanel({
   entityId,
   who,
   client,
+  desk = false,
 }: {
   entityId: string;
   who?: string;
+  /** Round 39 — a country's company: it also keeps the desk a held driver rings. Nowhere else is it asked. */
+  desk?: boolean;
   client: { api: Record<string, (...args: never[]) => Promise<{ data?: unknown; error?: { detail?: string; title?: string } | null }>> } | null;
 }) {
   const t = useT();
@@ -62,6 +67,7 @@ export function ContactCardPanel({
     contactName: '',
     phone: '',
     phoneAlt: '',
+    deskPhone: '',
     email: '',
     website: '',
     address: '',
@@ -92,6 +98,7 @@ export function ContactCardPanel({
         contactName: got.contactName ?? '',
         phone: got.phone ?? '',
         phoneAlt: got.phoneAlt ?? '',
+        deskPhone: got.deskPhone ?? '',
         email: got.email ?? '',
         website: got.website ?? '',
         address: got.address ?? '',
@@ -117,8 +124,11 @@ export function ContactCardPanel({
     setDone(null);
     // Every field travels, including the empty ones: an empty string — or an empty list of days — is how the
     // server is told to CLEAR a field, and sending only what changed would leave a wrong number on the page for ever.
+    // The desk number travels only from a screen that shows it: a card saved anywhere else leaves it as it was.
+    const { deskPhone, ...rest } = form;
     const r = await (client.api as never as { setContactCard: (id: string, body: Record<string, unknown>) => Promise<{ error?: { detail?: string; title?: string } | null }> }).setContactCard(entityId, {
-      ...form,
+      ...rest,
+      ...(desk ? { deskPhone } : {}),
       // A number, or zero to say none — and the whole list of closed dates, which replaces the one before.
       visitorsPerHour: visitorsPerHourOf(form.visitorsPerHour),
       // The ticked days' own hours, which replace the ones before: a day left alone keeps the usual hours. A day
@@ -159,6 +169,13 @@ export function ContactCardPanel({
           <span class="cfield__label">{t('tower.contact.f.phoneAlt')}</span>
           <input class="cinput" value={form.phoneAlt} onChange={(e) => setForm({ ...form, phoneAlt: (e.target as HTMLInputElement).value })} placeholder={t('tower.contact.f.phoneAltPh')} />
         </label>
+        {desk ? (
+          <label class="twr-knob cfield">
+            <span class="cfield__label">{t('tower.contact.f.desk')}</span>
+            <input class="cinput" value={form.deskPhone} onChange={(e) => setForm({ ...form, deskPhone: (e.target as HTMLInputElement).value })} placeholder="+254 20 765 4321" />
+            <span class="chint">{t('tower.contact.f.deskHint')}</span>
+          </label>
+        ) : null}
         <label class="twr-knob cfield">
           <span class="cfield__label">{t('tower.contact.f.email')}</span>
           <input class="cinput" value={form.email} onChange={(e) => setForm({ ...form, email: (e.target as HTMLInputElement).value })} placeholder="gate@example.com" />

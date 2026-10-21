@@ -1011,10 +1011,11 @@ export const ARTICLES: GuideArticle[] = [
     summary: "Say it from the load in the Driver app: SeeBuyGet operations, the shipper and your fleet’s office are told at once, and again when you are let go.",
     steps: [
       "Driver app, My loads: under a load on the road, “Held by police or customs?”. Choose who holds it — the police, customs or somebody else — and, if you can, who and where (“Traffic police, Athi River”) and what they said or want. Then “Say it — operations is told”.",
-      "The load’s card says it is held, since when, and that operations, the shipper and your office have been told. With no signal it waits on your phone, dated when you said it, and goes when there is signal.",
+      "The load’s card says it is held, since when, and that operations, the shipper and your office have been told — and the number of the desk to ring, for the country the load was taken over in and the one it goes to. Tap it to ring. With no signal it waits on your phone, dated when you said it, and goes when there is signal; the desk numbers are on your phone already.",
       "It is not delivered while it is held. When you drive on, “Let go — we drive on”.",
       "Business app: the load says “Held by an authority”, by whom and since when, until it is let go; you are told both times in your bell, and your system hears load.held and load.let_go.",
-      "Operator console, Cases: “Held by police or customs”, critical. Call the driver. It clears itself when they say they were let go."
+      "Operator console, Cases: “Held by police or customs”, critical. Call the driver. It clears itself when they say they were let go.",
+      "Operator console, signed in for a country’s company: Settings, “How to reach you”, Operations desk. Its number is shown to every driver held in your country, and is never published."
     ],
     notes: [
       "The tracking page, which anybody with the label’s key reads, says only that the load is held on the way and since when: never by whom or where, and never where your phone is. A vehicle held where its driver said it is held is not a vehicle standing still for no reason."

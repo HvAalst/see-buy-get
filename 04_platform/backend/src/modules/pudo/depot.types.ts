@@ -13,6 +13,8 @@ export class ContactCardView {
   @ApiPropertyOptional() phone?: string;
   /** The gate and the office are usually different telephones. */
   @ApiPropertyOptional() phoneAlt?: string;
+  /** Round 39 — the desk a held driver rings: only on the company's own reading of its card, never in a directory. */
+  @ApiPropertyOptional() deskPhone?: string;
   @ApiPropertyOptional() email?: string;
   @ApiPropertyOptional() website?: string;
   /** Where the gate is, in the words a driver needs — not the registered address, which is a legal fact. */
