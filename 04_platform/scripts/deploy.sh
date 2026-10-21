@@ -88,12 +88,13 @@ snapshot() { # label
   ls -1t backups/data-*.tgz | tail -n +$((KEEP_BACKUPS + 1)) | xargs -r rm -f --
 }
 
-# Never builds and never pulls: the images are the ones this script fetched and named `current`.
+# Never builds and never pulls: ours are the ones this script fetched and named `current`, the database's the one
+# step 4b fetched.
 up() { docker compose up --detach --remove-orphans --no-build --pull never --wait --wait-timeout "$WAIT_SECONDS"; }
 
 show_failure() {
   docker compose ps --all || true
-  docker compose logs --tail 60 api web || true
+  docker compose logs --tail 60 db api web || true
 }
 
 exec 9> .deploy.lock
@@ -181,6 +182,10 @@ case "$edge" in
     ;;
   *) die "CADDY_EDGE is 'direct' or 'cloudflare' — .env says '$edge'" ;;
 esac
+# From here on .env is the only place these are read. The workflow passes the repository's variables in, an unset one
+# as an empty value, and Compose takes a value from the environment over .env's, even an empty one: left in place, an
+# empty CONSOLE_ALLOW_IPS from GitHub would open a console that .env had closed. Step 4 writes what was offered.
+unset SBG_PUBLIC_URL SBG_CONSOLE_URL SBG_REDIRECT_HOSTS CONSOLE_ALLOW_IPS
 
 # --- 2. The images ----------------------------------------------------------------------------------------------
 say "Fetching release $RELEASE"
@@ -231,6 +236,16 @@ if (( ${#made[@]} )); then
   say "MADE ON THIS SERVER, JUST NOW: ${made[*]}"
   echo "They are in $PWD/.env and nowhere else. Copy that file somewhere safe today (DEPLOY.md)."
 fi
+
+# --- 4b. The images the stack runs and does not build: the database --------------------------------------------
+# Ours came in step 2. The others are fetched here, when this server does not have them yet, before anything is
+# stopped. One already here is kept: up() never pulls, so a release never changes the database's version by itself.
+images="$(docker compose config --images)" || die "Compose could not read docker-compose.yml with this .env: look at the output above"
+for image in $images; do
+  if [[ "$image" == "$API:"* || "$image" == "$WEB:"* || -n "$(image_id "$image")" ]]; then continue; fi
+  say "Fetching $image, which runs beside the release"
+  docker pull --quiet "$image" || die "could not fetch $image, which the stack runs beside the release"
+done
 
 # --- 5. The change ----------------------------------------------------------------------------------------------
 before="$(recorded current)"
