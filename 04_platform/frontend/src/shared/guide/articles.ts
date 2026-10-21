@@ -83,6 +83,25 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "risk-register",
+    apps: [
+      "agent",
+      "mdp",
+      "console"
+    ],
+    title: "The risk register: corridors and hubs rated, seals and no night running",
+    summary: "SeeBuyGet rates every corridor and hub low, medium or high for pilferage, hijacking, unrest and roadblock extortion, and looks at each rating again every quarter. Where something is rated high, parcels move only in bags closed on a coded seal, and nothing moves at night.",
+    steps: [
+      "Operator console: Waiting on you, “Risk register”. What incidents proposed comes first — tampering found at a hub proposes a raise for pilferage there, and for the corridor of whoever carried it. Raise it, or keep it as it is with a reason.",
+      "Below, every corridor and hub with its four ratings. “Rate” sets them, with why; “Still right” when a rating has come up for its quarterly look. Each is dated in your name.",
+      "A corridor rated high: a shop hands no loose parcel onto it — bag them, and close the bag on a coded seal — and nothing goes onto it between 19:00 and 06:00, on the clock where the shop or hub is.",
+      "A hub rated high: a bag leaves it only on a coded seal, and none is loaded there between 19:00 and 06:00. The hub is told in its bell when its rating changes, and so is a fleet that runs a corridor."
+    ],
+    notes: [
+      "Shop app and Hub app: a refusal says which corridor or hub is rated high, for what, and what lets the parcels go — a bag on a seal, or the morning."
+    ]
+  },
+  {
     id: "security-declaration",
     apps: [
       "agent",

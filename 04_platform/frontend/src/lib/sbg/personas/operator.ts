@@ -937,6 +937,12 @@ export function createOperatorApi(sbg: SbgClient) {
      * vetted"). Until approved a hub works for nobody. A refusal says why: the hub is shown it.
      */
     hubPapersQueue: () => sbg.request((c) => c.GET('/v1/sbg/hub-papers', {})),
+    /** Round 39 — the risk register: every corridor and hub rated per threat, and what incidents proposed; a rating; a decision. */
+    riskRegister: () => sbg.request((c) => c.GET('/v1/sbg/risk-register', {})),
+    rateRisk: (body: { subject: 'corridor' | 'hub'; id: string; threat: 'pilferage' | 'hijacking' | 'unrest' | 'extortion'; level: 'low' | 'medium' | 'high'; why?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/risk-register/rate', { body })),
+    decideRisk: (proposalId: string, body: { accept: boolean; reason?: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/risk-register/proposals/{proposalId}/decide', { params: { path: { proposalId } }, body })),
     /** Round 39 — every partner's yearly security declaration, and where it stands. */
     declarations: () => sbg.request((c) => c.GET('/v1/sbg/declarations', {})),
     /** Round 39 — light couriers whose ID photo waits to be seen; and the decision: seen, or not, with the reason. */

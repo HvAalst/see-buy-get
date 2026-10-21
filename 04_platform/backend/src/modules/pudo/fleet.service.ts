@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { RiskRegisterService } from './risk-register.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -150,7 +151,11 @@ export class FleetService {
     private readonly vehicles: VehicleService,
     private readonly corridors: CorridorService,
     private readonly events: EventBus,
-  ) {}
+    // Round 39 — the risk register asks which corridor a driver is on, to propose a raise where tampering was carried.
+    @Optional() risk?: RiskRegisterService,
+  ) {
+    risk?.registerCorridorOf((did) => this.activeForDriver(did)?.corridorId);
+  }
 
   /** Couple a driver to a vehicle (the flexible bond), optionally declaring the leg they are running. */
   couple(driverDid: string, vehicleId: string, corridorId?: string, leg?: LegInput): Assignment {

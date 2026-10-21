@@ -953,6 +953,13 @@ describe('GLOS backend (e2e)', () => {
     const unsigned = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: pass, parcelIds }).expect(409);
     expect(unsigned.body.detail).toMatch(/^This rider has not signed their security declaration: nothing new is taken on until they have/);
     declared(app, 'driver', driver.body.did);
+    // Round 39 — a corridor rated high takes no loose parcel (they travel in a bag on a coded seal) — and nothing at night.
+    const rateCorridor = (level: string) => request(http).post('/v1/sbg/risk-register/rate').set(auth).send({ subject: 'corridor', id: corridor.body.corridorId, threat: 'hijacking', level, by: 'Halima' }).expect(201);
+    await rateCorridor('high');
+    const risky = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: pass, parcelIds }).expect(409);
+    expect(risky.body.code).toMatch(/^(RISK_SEAL_REQUIRED|RISK_NIGHT)$/);
+    expect(risky.body.detail).toMatch(/^feeder is rated high for hijacking: (parcels travel on it only in a bag closed on a coded seal|nothing goes onto it between 19:00 and 06:00)/);
+    await rateCorridor('low');
     const h = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: pass, parcelIds }).expect(201);
     expect(h.body.handed).toEqual([`OK-${u}`]);
     expect(h.body.driverBadgeId).toBe(driver.body.badgeId);

@@ -46,6 +46,8 @@ export const NOTIFICATION_KINDS = [
   'claim_decided',
   /** Their country was lowered: what stops for them there from today, and what does not (CountryNoticeService). */
   'country_changed',
+  /** Round 39 — where they work was rated for a threat in the risk register: what a high rating asks of them from now. */
+  'risk_rated',
   /**
    * A DRIVER'S HOURS, said by the clock: an hour before the shift limit, at the limit, and — to somebody who asked —
    * when their rest is over. The fleet's office hears the limit being passed too. Until this, everything about the

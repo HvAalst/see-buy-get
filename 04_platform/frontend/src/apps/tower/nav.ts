@@ -43,7 +43,7 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: 'clock',
     // `support` belongs here rather than in a group of its own: somebody looking a parcel up is doing it
     // because a person is waiting on the other end of a phone.
-    screens: ['cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'imports', 'reports', 'support'],
+    screens: ['cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'risks', 'imports', 'reports', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
   { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures', 'connections', 'staffreads'] },
@@ -70,6 +70,8 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   iddisputes: { labelKey: 'tower.nav.iddisputes', icon: 'lock' },
   paperreports: { labelKey: 'tower.nav.paperreports', icon: 'warning' },
   papers: { labelKey: 'tower.nav.papers', icon: 'truck' },
+  // Round 39 — the risk register: what incidents proposed, and every corridor and hub rated per threat.
+  risks: { labelKey: 'tower.nav.risks', icon: 'warning' },
   imports: { labelKey: 'tower.nav.imports', icon: 'box' },
   market: { labelKey: 'tower.nav.market', icon: 'scale' },
   movers: { labelKey: 'tower.nav.movers', icon: 'truck' },

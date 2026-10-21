@@ -3876,6 +3876,93 @@
         }
       }
     },
+    "/v1/sbg/risk-register": {
+      "get": {
+        "operationId": "RiskRegister.register",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskRegisterView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/risk-register/rate": {
+      "post": {
+        "operationId": "RiskRegister.rate",
+        "summary": "",
+        "description": "Rated, or looked at again at the same level: by a named member of staff, with why.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RateRiskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/risk-register/proposals/{proposalId}/decide": {
+      "post": {
+        "operationId": "RiskRegister.decide",
+        "summary": "",
+        "description": "What an incident proposed: raised, or kept as it is with the reason.",
+        "parameters": [
+          {
+            "name": "proposalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideRiskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/declarations/mine": {
       "get": {
         "operationId": "SecurityDeclaration.mine",
@@ -31214,6 +31301,232 @@
         "required": [
           "glosShipmentId",
           "action"
+        ]
+      },
+      "RiskCellView": {
+        "type": "object",
+        "properties": {
+          "threat": {
+            "type": "string",
+            "enum": [
+              "pilferage",
+              "hijacking",
+              "unrest",
+              "extortion"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "why": {
+            "type": "string"
+          },
+          "ratedBy": {
+            "type": "string"
+          },
+          "ratedAt": {
+            "type": "string"
+          },
+          "reviewBy": {
+            "type": "string"
+          },
+          "overdue": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "threat",
+          "overdue"
+        ]
+      },
+      "RiskRowView": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string",
+            "enum": [
+              "corridor",
+              "hub"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ratings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RiskCellView"
+            }
+          },
+          "high": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "subject",
+          "id",
+          "name",
+          "ratings",
+          "high"
+        ]
+      },
+      "RiskProposalView": {
+        "type": "object",
+        "properties": {
+          "proposalId": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string",
+            "enum": [
+              "corridor",
+              "hub"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "threat": {
+            "type": "string",
+            "enum": [
+              "pilferage",
+              "hijacking",
+              "unrest",
+              "extortion"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "to": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "because": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposalId",
+          "subject",
+          "id",
+          "name",
+          "threat",
+          "to",
+          "because",
+          "at"
+        ]
+      },
+      "RiskRegisterView": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RiskRowView"
+            }
+          },
+          "proposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RiskProposalView"
+            }
+          },
+          "overdue": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "rows",
+          "proposals",
+          "overdue"
+        ]
+      },
+      "RateRiskDto": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string",
+            "enum": [
+              "corridor",
+              "hub"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "threat": {
+            "type": "string",
+            "enum": [
+              "pilferage",
+              "hijacking",
+              "unrest",
+              "extortion"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "why": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "subject",
+          "id",
+          "threat",
+          "level"
+        ]
+      },
+      "DecideRiskDto": {
+        "type": "object",
+        "properties": {
+          "accept": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accept"
         ]
       },
       "DeclarationView": {

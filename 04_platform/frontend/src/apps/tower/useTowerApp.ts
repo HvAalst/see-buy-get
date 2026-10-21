@@ -17,6 +17,7 @@ import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, c
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, HubApplication, RiderIdRow, StalledRow } from './queues';
+import type { RiskLevel, RiskRegisterView, RiskSubject, RiskThreat } from './risks';
 import { triggerDownloadBlob } from '../../shared/download';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
@@ -31,7 +32,7 @@ import { holds, rolesOf, type StaffRole } from './staffRoles';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'pilot' | 'stores' | 'cases' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections' | 'staffreads';
+export type Screen = 'network' | 'pilot' | 'stores' | 'cases' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections' | 'staffreads' | 'risks';
 
 export interface TowerState {
   phase: Phase;
@@ -127,6 +128,8 @@ export interface TowerState {
   hubApplications: HubApplication[] | null;
   /** Round 39 — light couriers whose photo of their ID waits for one of us to see it. Null while unread. */
   riderIds: RiderIdRow[] | null;
+  /** Round 39 — the risk register: every corridor and hub rated per threat, and what incidents proposed. Null while unread. */
+  risk: RiskRegisterView | null;
   /** Every fleet and where it stands in being set up — a fleet is set up by staff, here. Null while unread. */
   fleets: FleetSetupRow[] | null;
   /** What the last act on a fleet came to, said in the fleets panel itself and not at the top of the screen. */
@@ -339,6 +342,10 @@ export interface TowerActions {
   decideHub(mdpId: string, approve: boolean, reason?: string): Promise<void>;
   /** Round 39 — a light courier's ID photo: seen (their cap grows from now), or not, with the reason they are shown. */
   decideRiderId(did: string, seen: boolean, reason?: string): Promise<void>;
+  /** Round 39 — rate a corridor or hub for a threat, or look at a rating again at the same level. */
+  rateRisk(subject: RiskSubject, id: string, threat: RiskThreat, level: RiskLevel, why?: string): Promise<void>;
+  /** Round 39 — what an incident proposed: raised, or kept as it is with the reason. */
+  decideRisk(proposalId: string, accept: boolean, reason?: string): Promise<void>;
   /** A fleet is set up by staff: register it, put its four papers on record, approve or send back, record its bond. */
   registerFleet(form: FleetForm): Promise<boolean>;
   putFleetPapers(did: string, pictures: Record<FleetPaperKey, string>): Promise<boolean>;
@@ -439,6 +446,7 @@ const INITIAL: TowerState = {
   driverApplications: null,
   hubApplications: null,
   riderIds: null,
+  risk: null,
   fleets: null,
   fleetNote: null,
   presence: null,
@@ -888,6 +896,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     }));
   }, []);
 
+  /** Round 39 — the risk register, for administration: read whole, as it is short and every row is a decision. */
+  const loadRisks = useCallback(async (client: TowerClient, roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
+    if (!holds(roles, 'admin')) return;
+    const { data, error } = await client.api.riskRegister();
+    setState((s) => ({ ...s, risk: error ? s.risk : (narrow<RiskRegisterView>(data) ?? null) }));
+  }, []);
+
   /**
    * What network staff's console reads on opening, whichever way they came in — only what their roles reach. `roles` is
    * the sign-in's own: the state it sets has not landed when these start. Undefined (the setup key) reads everything.
@@ -900,8 +915,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       await loadPapers(client, roles);
       await loadNetwork(client);
       await loadEntities(client, roles);
+      await loadRisks(client, roles);
     },
-    [loadHazards, loadCases, loadQueues, loadPapers, loadNetwork, loadEntities],
+    [loadHazards, loadCases, loadQueues, loadPapers, loadNetwork, loadEntities, loadRisks],
   );
 
   // Boot: a credential in this tab means the console picks up where it left off; nothing means sign-in.
@@ -1118,6 +1134,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'businesses' || state.screen === 'accountmoves' || state.screen === 'iddisputes' || state.screen === 'paperreports') await loadQueues(client);
     else if (state.screen === 'movers') await loadMovers(client);
     else if (state.screen === 'cases') await loadCases(client);
+    else if (state.screen === 'risks') await loadRisks(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
       // reloading a list — there is no list here.
@@ -1212,6 +1229,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         // Read fresh every time: a hand-back that happened this morning is the reason somebody opened it.
         if (screen === 'movers' && client) void loadMovers(client);
         if (screen === 'cases' && client) void loadCases(client);
+        // Round 39 — fresh: an incident may have proposed a raise since.
+        if (screen === 'risks' && client) void loadRisks(client);
       },
       refresh,
       caseAct: async (caseId, act, body) => {
@@ -1539,6 +1558,30 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }
         setState((s) => ({ ...s, busyId: null, queueError: null, done: t(approve ? 'tower.hubs.approved' : 'tower.hubs.refused') }));
         await loadQueues(client);
+      },
+      rateRisk: async (subject: RiskSubject, id: string, threat: RiskThreat, level: RiskLevel, why?: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: id, queueError: null }));
+        const { error } = await client.api.rateRisk({ subject, id, threat, level, ...(why ? { why } : {}), ...(stateRef.current.who?.name ? { by: stateRef.current.who.name } : {}) });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, queueError: null, done: t('tower.risks.rated') }));
+        await loadRisks(client);
+      },
+      decideRisk: async (proposalId: string, accept: boolean, reason?: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: proposalId, queueError: null }));
+        const { error } = await client.api.decideRisk(proposalId, { accept, ...(reason ? { reason } : {}), ...(stateRef.current.who?.name ? { by: stateRef.current.who.name } : {}) });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, queueError: null, done: t(accept ? 'tower.risks.raised' : 'tower.risks.kept') }));
+        await loadRisks(client);
       },
       decideRiderId: async (did: string, seen: boolean, reason?: string) => {
         const client = clientRef.current;

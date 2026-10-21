@@ -20,6 +20,7 @@ import type { ResolvedTax } from '../../foundation/entity/entity.types';
 import { capWords, standingOf, unseenStanding, type CustodyStanding } from './custody-cap';
 import { DriverService, idUnseen } from './driver.service';
 import { SecurityDeclarationService } from './security-declaration.service';
+import { RiskRegisterService } from './risk-register.service';
 import { Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
@@ -714,6 +715,8 @@ export class ParcelService implements OnApplicationBootstrap {
     @Optional() private readonly drivers?: DriverService,
     // Round 39 — the security declarations: no new work without one in force. Optional for the specs.
     @Optional() private readonly declarations?: SecurityDeclarationService,
+    // Round 39 — the risk register: a corridor rated high takes parcels only in a sealed bag, and nothing at night.
+    @Optional() private readonly risk?: RiskRegisterService,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -1419,6 +1422,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // Round 39 — a rider whose security declaration (or whose fleet's) is not in force takes nothing new on: refused whole,
     // before anything is written, in words for the counter.
     if (fleet) this.declarations?.assertMayCarry(fleet.driverDid, Date.now(), true);
+    // Round 39 — a corridor rated high takes no loose parcel (they go in a bag on a coded seal), and nothing at night.
+    this.risk?.assertCorridorAllows(this.corridors.listCorridors().find((c) => c.corridorId === corridorId), { loose: true, country: this.agents.countryOf(this.agents.get(input.agentDid)) });
     // Round 38 — a new independent rider carries no more than their company's cap: the rest stay at the counter, said why.
     const riderNow = fleet ? this.riderStanding(fleet.driverDid) : undefined;
     const riderRoom = riderNow ? Math.max(0, riderNow.cap - riderNow.holds) : Number.POSITIVE_INFINITY;

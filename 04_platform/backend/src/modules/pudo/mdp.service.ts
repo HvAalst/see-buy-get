@@ -1,5 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { SecurityDeclarationService } from './security-declaration.service';
+import { RiskRegisterService } from './risk-register.service';
+import { CorridorService } from './corridor.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
@@ -60,6 +62,9 @@ export class MdpService {
     private readonly closures: BagClosureService,
     // Round 39 — the security declarations: a hub adds no new tote, and no bag goes onto a driver, without one in force.
     @Optional() private readonly declarations?: SecurityDeclarationService,
+    // Round 39 — the risk register: a hub or corridor rated high asks for a coded seal, and no night running.
+    @Optional() private readonly risk?: RiskRegisterService,
+    @Optional() private readonly corridors?: CorridorService,
   ) {}
 
   /** The kilos left on a driver's vehicle, everything they hold counted (DispatchService.remainingCapacity). */
@@ -454,6 +459,8 @@ export class MdpService {
     if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
     const placeName = hub ? hub.name : this.agents.get(placeId).shopName;
     const ownerDid = hub ? hub.did : placeId;
+    // Round 39 — a bag leaves a hub rated high only on a coded seal: asked before anything is written.
+    if (hub) this.risk?.assertHubSeal(hub, closure);
     const keep = this.closures.checkClose(bag, { did: ownerDid, name: byName?.trim() || placeName, place: placeName }, ownerDid, closure);
     const step = handedAt(observedAt, Date.now(), [bag.filledAt, bag.availableAt]);
     const announce = bag.status === 'filling';
@@ -517,6 +524,15 @@ export class MdpService {
     const fleet = this.fleet.resolveBadge(driverBadgeId);
     if (fleet) this.declarations?.assertMayCarry(fleet.driverDid, Date.now(), true);
     if (!pending.closureId) throw new GlosError('BAG_NOT_CLOSED', `Close bag ${code} first: put a coded seal on it and photograph it, or photograph it closed`);
+    // Round 39 — a corridor or a hub rated high: a bag goes onto it only on a coded seal, and nothing at night.
+    if (this.risk) {
+      const hereHub = this.mdps.get(pending.locationId);
+      const country = hereHub ? this.countryOf(hereHub) : this.agents.find(pending.locationId) ? this.agents.countryOf(this.agents.get(pending.locationId)) : undefined;
+      if (hereHub) this.risk.assertHubDay(hereHub, country);
+      const corridorId = fleet?.corridorId ?? this.corridors?.driverByBadge(driverBadgeId)?.corridorId;
+      const corridor = corridorId ? this.corridors?.listCorridors().find((c) => c.corridorId === corridorId) : undefined;
+      this.risk.assertCorridorAllows(corridor, { bagSealed: this.closures.current(pending)?.kind === 'seal', country });
+    }
     // Round 38 — a new independent rider carries no more than their company's cap: the bag counts every parcel in it.
     if (fleet) this.parcels.assertRiderWithinCap(fleet.driverDid, pending.parcels.length);
     // A claimed bag may only be loaded by the driver who claimed it.

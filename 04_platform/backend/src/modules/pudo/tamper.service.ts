@@ -1,4 +1,5 @@
 import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
+import { RiskRegisterService } from './risk-register.service';
 import { createHash, randomBytes } from 'crypto';
 import type { Signer } from '../../foundation/entity/same-person';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -95,6 +96,8 @@ export class TamperService implements OnModuleInit {
     @Optional() private readonly cases?: FlagCaseService,
     // The trail: each exception's fingerprint anchored as it is kept. Optional for the specs.
     @Optional() private readonly ledger?: LedgerService,
+    // Round 39 — tampering proposes a raise for pilferage in the risk register. Optional for the specs.
+    @Optional() private readonly risk?: RiskRegisterService,
   ) {}
 
   onModuleInit(): void {
@@ -224,6 +227,8 @@ export class TamperService implements OnModuleInit {
     if (bag && bag.status !== 'in_transit' && bag.parcels.includes(p.parcelId)) this.totes.takeOut(bag.code, p.parcelId, p.size);
     this.parcels.hold(p.parcelId, holdOf(e), e.by.name);
     this.told(e, undefined, now, p);
+    // Round 39 — found at a hub: proposed for a person to decide, a raise for pilferage there.
+    if (reporter.as === 'hub') this.risk?.proposeFromTamper({ hubMdpId: reporter.mdpId, because: `Parcel ${p.parcelId}: ${FINDING_WORDS[e.finding]}, found ${where}`, ref: p.parcelId }, now);
     return this.unitView('parcel', p.parcelId, 'party');
   }
 
@@ -265,6 +270,8 @@ export class TamperService implements OnModuleInit {
     for (const ref of photos) this.media.adopt(ref, ownerDid, link, 'tamper');
     this.totes.hold(tote.toteId, holdOf(e));
     this.told(e, undefined, now);
+    // Round 39 — proposed, for a person to decide: the hub where it was found, the corridor of whoever carried it.
+    this.risk?.proposeFromTamper({ ...(reporter.as === 'hub' ? { hubMdpId: reporter.mdpId } : {}), carrierDid: reporter.as === 'driver' ? reporter.driverDid : tote.carriedBy, because: `Bag ${tote.code}: ${FINDING_WORDS[e.finding]}, found ${where}`, ref: tote.code }, now);
     return this.unitView('bag', tote.toteId, 'party');
   }
 

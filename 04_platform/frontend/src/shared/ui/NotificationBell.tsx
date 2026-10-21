@@ -28,6 +28,8 @@ const KIND_ICON: Record<string, IconName> = {
   claim_decided: 'check',
   // Their country was lowered: what stops there for them, and what does not.
   country_changed: 'pin',
+  // Round 39 — where they work was rated for a threat: seals, and no night running, when it is high.
+  risk_rated: 'warning',
   bus_inbound: 'bag',
   intake_expected: 'box',
   bag_ready_to_close: 'bag',

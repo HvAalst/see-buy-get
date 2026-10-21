@@ -5,6 +5,7 @@ import { createHash } from 'crypto';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
 import { declared } from './declared';
+import { CorridorService } from '../src/modules/pudo/corridor.service';
 
 /**
  * A BAG CLOSED ON OUR OWN SEAL, AND RECEIVED BY IT, over the wire (round 36; the user: "Receiving on our own seals"; "we
@@ -119,6 +120,10 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     // Still not the same: reported with the number read. Held: not emptied until operations releases it — then as found.
     expect((await http().post(`/v1/sbg/totes/${shopBag}/tamper`).set(hubToken).send({ finding: 'seal_not_as_written', numberRead: 'KE 0000000', photoRefs: [await photo(hubToken, 'tamper')] }).expect(201)).body.held).toMatchObject({ finding: 'seal_not_as_written', stage: 'hub' });
     expect((await drop({ sealNumber: SEAL, photoRef: await photo(hubToken, 'seal'), asClosed: true }).expect(409)).body.code).toBe('UNIT_HELD');
+    // Round 39 — tampering found at the hub proposes a raise for pilferage there, for a person to decide.
+    const register = async () => (await http().get('/v1/sbg/risk-register').set(operator).expect(200)).body;
+    const proposed = (await register()).proposals.find((p: { subject: string; id: string }) => p.subject === 'hub' && p.id === hub.mdpId);
+    expect(proposed).toMatchObject({ threat: 'pilferage', to: 'medium', because: expect.stringContaining(shopBag) });
     expect((await http().get(`/v1/sbg/ops/tamper/${shopBag}`).set(operator).expect(200)).body).toMatchObject({ closedWith: { kind: 'seal', number: SEAL } });
     await http().post(`/v1/sbg/ops/tamper/${shopBag}/release`).set(operator).send({ reason: 'Shop confirms it used seal 0000000 by mistake from an old roll', by: 'Halima at operations' }).expect(201);
     expect((await drop({ sealNumber: 'KE 0000000', photoRef: await photo(hubToken, 'seal'), asClosed: false }).expect(201)).body.emptied).toEqual(ids);
@@ -130,6 +135,17 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     expect((await http().post(`/v1/sbg/totes/${sorted.toteCode}/load`).set(operator).send({ driverBadgeId: 'BUS-7' }).expect(409)).body.code).toBe('BAG_NOT_CLOSED');
     expect((await http().post(`/v1/sbg/totes/${sorted.toteCode}/close`).set(north.token).send({ photoRef: await photo(north.token, 'seal') }).expect(403)).body.detail).toMatch(/is not here/);
     expect((await http().post(`/v1/sbg/totes/${sorted.toteCode}/close`).set(hubToken).send({ photoRef: await photo(north.token, 'seal') }).expect(400)).body.code).toBe('PHOTO_REQUIRED');
+    // Round 39 — the proposal accepted, then rated high by hand: the hub is told, and a bag leaves it only on a coded seal.
+    await http().post(`/v1/sbg/risk-register/proposals/${proposed.proposalId}/decide`).set(operator).send({ accept: true, by: 'Halima at operations' }).expect(201);
+    const rate = (level: string) => http().post('/v1/sbg/risk-register/rate').set(operator).send({ subject: 'hub', id: hub.mdpId, threat: 'pilferage', level, why: 'A seal not as written this week', by: 'Halima at operations' }).expect(201);
+    await rate('high');
+    expect((await register()).rows.find((r: { id: string }) => r.id === hub.mdpId)).toMatchObject({ high: true, ratings: expect.arrayContaining([expect.objectContaining({ threat: 'pilferage', level: 'high', ratedBy: 'Halima at operations', overdue: false })]) });
+    expect(JSON.stringify((await http().get('/v1/sbg/notifications/inbox').set(hubToken).expect(200)).body)).toMatch(/is rated high for pilferage/);
+    const unsealed = (await http().post(`/v1/sbg/totes/${sorted.toteCode}/close`).set(hubToken).send({ photoRef: await photo(hubToken, 'seal') }).expect(409)).body;
+    expect(unsealed).toMatchObject({ code: 'RISK_SEAL_REQUIRED' });
+    expect(unsealed.detail).toMatch(/is rated high for pilferage: a bag leaves it only on a coded seal/);
+    // Looked at again and lowered: a photograph is enough once more.
+    await rate('low');
     const closed = (await http().post(`/v1/sbg/totes/${sorted.toteCode}/close`).set(hubToken).send({ photoRef: await photo(hubToken, 'seal') }).expect(201)).body;
     expect(closed).toMatchObject({ closedWith: 'photo', tote: { status: 'available' } });
     expect((await http().post(`/v1/sbg/totes/${sorted.toteCode}/close`).set(hubToken).send({ photoRef: await photo(hubToken, 'seal') }).expect(400)).body.detail).toMatch(/closed already/);
@@ -144,6 +160,18 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     await http().post(`/v1/sbg/totes/${next.toteCode}/close`).set(hubToken).send({ seal: `KE ${String(Date.now() + 1).slice(-7)}`, photoRef: await photo(hubToken, 'seal') }).expect(201);
     await http().post(`/v1/sbg/totes/${next.toteCode}/tamper`).set(hubToken).send({ finding: 'seal_broken', photoRefs: [await photo(hubToken, 'tamper')] }).expect(201);
     expect((await http().post(`/v1/sbg/totes/${next.toteCode}/load`).set(operator).send({ driverBadgeId: 'BUS-8' }).expect(409)).body.code).toBe('UNIT_HELD');
+    // Round 39 — a bus on a corridor rated high: a bag closed with only a photograph does not go onto it (nor anything at night).
+    const line = (await http().post('/v1/sbg/corridors').set(operator).send({ name: `Risky line ${Date.now()}`, originZone: 'RiskA', destZone: 'RiskB' }).expect(201)).body;
+    const bus = `BUS-R${String(Date.now()).slice(-6)}`;
+    await http().post('/v1/sbg/drivers').set(operator).send({ driverDid: `did:glos:bus-${bus}`, name: 'Risky bus', corridorId: line.corridorId, badgeId: bus }).expect(201);
+    const busCorridor = app.get(CorridorService).driverByBadge(bus)?.corridorId as string;
+    expect(busCorridor).toBe(line.corridorId);
+    const rateCorridor = (level: string) => http().post('/v1/sbg/risk-register/rate').set(operator).send({ subject: 'corridor', id: busCorridor, threat: 'unrest', level, by: 'Halima at operations' }).expect(201);
+    await rateCorridor('high');
+    const onHigh = (await http().post(`/v1/sbg/totes/${sorted.toteCode}/load`).set(operator).send({ driverBadgeId: bus }).expect(409)).body;
+    expect(onHigh.code).toMatch(/^(RISK_SEAL_REQUIRED|RISK_NIGHT)$/);
+    expect(onHigh.detail).toMatch(/is rated high for unrest: (a bag travels on it only on a coded seal, and this one was closed with a photograph|nothing goes onto it between 19:00 and 06:00)/);
+    await rateCorridor('low');
     await http().post(`/v1/sbg/totes/${sorted.toteCode}/load`).set(operator).send({ driverBadgeId: 'BUS-8' }).expect(201);
 
     // AT THE SHOP: the bag is cut. Reported before it is opened: held, operations told; not received until released.

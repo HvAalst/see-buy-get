@@ -460,6 +460,23 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     });
     this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
+    // Round 39 — the risk register: a hub, or the fleet running a corridor, is told when where it works is rated anew.
+    this.events.subscribe<{ subject: 'corridor' | 'hub'; id: string; threat: string; level: string; from?: string; tell?: { did: string; name: string } }>(GlosEvent.Pudo.RiskRated, (e) => {
+      const p = e.payload;
+      if (!p.tell) return;
+      const threat = p.threat === 'extortion' ? 'roadblock extortion' : p.threat;
+      const high = p.subject === 'hub'
+        ? 'From now a bag leaves it only on a coded seal, and none is loaded there between 19:00 and 06:00.'
+        : 'From now parcels travel on it only in a bag closed on a coded seal, and nothing goes onto it between 19:00 and 06:00.';
+      const lowered = p.subject === 'hub' ? 'A bag may leave it on a photograph again, and loading at night is allowed again.' : 'Loose parcels may go onto it again, and at night.';
+      void this.tell(p.tell.did, {
+        kind: 'risk_rated',
+        title: `${p.tell.name} is rated ${p.level} for ${threat}`,
+        body: p.level === 'high' ? high : p.from === 'high' ? lowered : 'SeeBuyGet rates the risks where you work, and looks at them again every quarter.',
+        tag: `risk:${p.subject}:${p.id}:${p.threat}`,
+        data: { subject: p.subject, id: p.id, threat: p.threat, level: p.level },
+      });
+    });
     // Round 39 — a light courier's ID photo looked at: seen, and their cap grows from now; or sent back, with the reason.
     this.events.subscribe<{ did: string; seen: boolean; reason?: string }>(GlosEvent.Pudo.DriverIdPhotoDecided, (e) => {
       const p = e.payload;

@@ -60,6 +60,8 @@ export const SCREEN_ROLES: Partial<Record<Screen, readonly StaffRole[]>> = {
   pictures: ['admin'],
   connections: ['admin'],
   staffreads: ['admin'],
+  // Round 39 — rating a corridor or hub changes what the network asks there: administration's.
+  risks: ['admin'],
   companies: ['admin'],
   // A company's record: its settings are administration's, its papers vetting's.
   company: ['admin', 'vetting'],

@@ -48,6 +48,8 @@ import { waitingLine } from './queues';
 import { useWideScreen } from '../../shared/useWideScreen';
 import { useTowerApp, type Screen } from './useTowerApp';
 import { holds, offered } from './staffRoles';
+import { riskWaiting } from './risks';
+import { RisksScreen } from './screens/RisksScreen';
 import '../../shared/console.css';
 import './tower.css';
 
@@ -166,7 +168,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections', 'staffreads'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections', 'staffreads', 'risks'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -207,6 +209,8 @@ export function App() {
     // whose licence is merely running out is waiting on nobody; one who has sent the new card is waiting on us.
     papers: waitingCount(state.papers),
     reports: state.reports?.length ?? null,
+    // Round 39 — what incidents proposed, and ratings past their quarter.
+    risks: riskWaiting(state.risk),
     // A company's own record is not a queue — except when a licence or a policy of theirs has lapsed or is in its last
     // two weeks: that waits on them and on nobody else, and their console opens on another screen.
     ...(isOperator ? {} : { company: papersWaiting(state.expiring) }),
@@ -337,6 +341,8 @@ export function App() {
             <PapersScreen state={state} actions={actions} />
           ) : state.screen === 'cases' ? (
             <CasesScreen state={state} actions={actions} />
+          ) : state.screen === 'risks' ? (
+            <RisksScreen state={state} actions={actions} />
           ) : (
             <HazardsScreen state={state} actions={actions} />
           )}
