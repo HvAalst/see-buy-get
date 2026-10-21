@@ -21,6 +21,7 @@ import {
   RateStack,
   ResolvedCarrierPapers,
   ResolvedSealRules,
+  ResolvedCustodyCaps,
   ResolvedInsurance,
   ResolvedRates,
   ResolvedTax,
@@ -574,6 +575,37 @@ export class EntityService implements OnApplicationBootstrap {
     return entity;
   }
 
+  /** Round 38 — the custody cap for new shops and new independent riders here. Nothing for a company that has not set one. */
+  custodyCapsFor(entityId: string): ResolvedCustodyCaps {
+    return EntityService.resolveCustodyCaps(this.get(entityId));
+  }
+
+  static resolveCustodyCaps(from: Pick<Entity, 'custodyCaps'>): ResolvedCustodyCaps {
+    const c = from.custodyCaps;
+    return { ...(c?.shop ? { shop: { ...c.shop } } : {}), ...(c?.rider ? { rider: { ...c.rider } } : {}) };
+  }
+
+  /**
+   * Round 38 — SET THE CUSTODY CAP (the user: "Count cap that grows"; "each country's company sets the numbers"). The whole
+   * rule every time: a kind left out is not capped. Whole numbers, a start of at least one, lifted no sooner than it starts.
+   * Saving what is already set is not a decision and is not logged as one.
+   */
+  setCustodyCaps(entityId: string, caps: { shop?: { start: number; liftedAfter: number }; rider?: { start: number; liftedAfter: number } }, by?: string): Entity {
+    const entity = this.requireTransacting(entityId);
+    for (const [kind, c] of Object.entries(caps) as Array<['shop' | 'rider', { start: number; liftedAfter: number } | undefined]>) {
+      if (!c) continue;
+      if (!Number.isInteger(c.start) || c.start < 1 || c.start > MAX_CUSTODY_START) throw new GlosError('VALIDATION_FAILED', `A ${kind === 'shop' ? 'shop' : 'rider'}'s cap starts at a whole number from 1 to ${MAX_CUSTODY_START}`, { field: `${kind}.start` });
+      if (!Number.isInteger(c.liftedAfter) || c.liftedAfter < c.start || c.liftedAfter > MAX_CUSTODY_LIFT) throw new GlosError('VALIDATION_FAILED', `It lifts after a whole number of hand-overs, no fewer than it starts at and at most ${MAX_CUSTODY_LIFT}`, { field: `${kind}.liftedAfter` });
+    }
+    const before = EntityService.resolveCustodyCaps(entity);
+    const next = { ...(caps.shop ? { shop: { start: caps.shop.start, liftedAfter: caps.shop.liftedAfter } } : {}), ...(caps.rider ? { rider: { start: caps.rider.start, liftedAfter: caps.rider.liftedAfter } } : {}) };
+    if (custodyCapsLine(before) === custodyCapsLine(next)) return entity;
+    entity.custodyCaps = next.shop || next.rider ? next : undefined;
+    this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, { at: new Date().toISOString(), by: by ?? 'unknown', what: 'custodyCaps', from: custodyCapsLine(before), to: custodyCapsLine(next) });
+    return entity;
+  }
+
   /** Round 38 — where this company requires a seal on loads taken over in its country. Both false for one that has never said. */
   sealRulesFor(entityId: string): ResolvedSealRules {
     return EntityService.resolveSealRules(this.get(entityId));
@@ -997,6 +1029,7 @@ export class EntityService implements OnApplicationBootstrap {
       amounts: EntityService.amountRows(entity),
       carrierPapers: EntityService.resolveCarrierPapers(entity),
       sealRules: EntityService.resolveSealRules(entity),
+      custodyCaps: EntityService.resolveCustodyCaps(entity),
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.
       lanes: [rowFor(), ...lanes.map((l) => rowFor(l))],
@@ -1046,6 +1079,17 @@ function coverLine(i: { premiumPct: number; freeLimit: number }, currency?: stri
  * "nothing" reads better in a change log than an empty list, and says what was actually decided. The
  * kinds are spelled as words ("operator licence") because this line is shown to a person as-is.
  */
+/** Round 38 — the most a custody cap may start at, and the most hand-overs it may take to lift: sane bounds, not policy. */
+const MAX_CUSTODY_START = 1000;
+const MAX_CUSTODY_LIFT = 100_000;
+
+/** The custody cap, as the change log says it. */
+function custodyCapsLine(c: { shop?: { start: number; liftedAfter: number }; rider?: { start: number; liftedAfter: number } }): string {
+  const one = (name: string, x?: { start: number; liftedAfter: number }) => (x ? `${name}: ${x.start}, lifted after ${x.liftedAfter}` : '');
+  const said = [one('new shops', c.shop), one('new independent riders', c.rider)].filter(Boolean);
+  return said.length ? said.join(' · ') : 'no cap';
+}
+
 /** Where a seal is required, as the change log says it. */
 function sealRulesLine(r: { crossBorder: boolean; containers: boolean }): string {
   const where = [r.crossBorder ? 'loads that cross a border' : '', r.containers ? 'container legs' : ''].filter(Boolean);

@@ -23,6 +23,7 @@ import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, re
 import { signal } from '../../shared/feedback';
 import { downloadZpl, triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
+import type { CustodyCapView } from '../../shared/custodyCap';
 import { bodyHintValue, bookFreightMissing, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import { peopleApi } from './people';
@@ -182,6 +183,8 @@ export interface AgentState {
   /** What this sister charges to put money in, so the sheet can say it BEFORE the shop commits to an
    *  amount. Null where nobody decided a fee, which is the default and shows no sentence at all. */
   topUpTerms: TopUpTerms | null;
+  /** Round 38 — where this shop stands under its company's custody cap. Null until read; `capped` false when none applies. */
+  custodyCap: CustodyCapView | null;
   /** Parcels waiting at this shop for the bus (loaded when the handover screen opens). */
   shopParcels: ParcelView[];
   shopParcelsState: 'idle' | 'loading' | 'ready' | 'error';
@@ -326,6 +329,7 @@ const INITIAL: AgentState = {
   gate: null,
   funding: null,
   topUpTerms: null,
+  custodyCap: null,
   shopParcels: [],
   shopParcelsState: 'idle',
   bagPlan: { groups: [], bags: [] },
@@ -531,6 +535,10 @@ export function useAgentApp() {
       // committed to, not in the register afterwards. Kept from the last good read on a failure, because
       // a fee that flickers out of existence when one request fails is the worst of both answers.
       const topUpTerms = !fundingR || fundingR.error ? undefined : topUpTermsOf(fundingState?.terms);
+      // Round 38 — the custody cap: a soft read, kept from the last good one on a failure, like the top-up terms.
+      const capR = await client.api.custodyCap();
+      if (superseded()) return;
+      const custodyCap = capR.error ? undefined : narrow<CustodyCapView>(capR.data) ?? null;
 
       setState((s) => ({
         ...s,
@@ -539,6 +547,7 @@ export function useAgentApp() {
         gate,
         funding,
         topUpTerms: topUpTerms === undefined ? s.topUpTerms : topUpTerms,
+        custodyCap: custodyCap === undefined ? s.custodyCap : custodyCap,
         error: null,
         stale: false,
         refreshing: false,
@@ -2084,12 +2093,16 @@ export function useAgentApp() {
       buzz();
       const v = narrow<HandoverView>(r.data);
       const left = v?.missed?.length ?? 0;
+      // Round 38 — left at the counter because the rider carries the most a new rider may: said as that, not as missing.
+      const capped = v?.rejected?.filter((x) => x.reason === 'custody_cap').length ?? 0;
       setState((s) => ({ ...s, handover: { ...EMPTY_HANDOVER }, screen: 'home' }));
       pushToast({
         tone: left ? 'warn' : 'ok',
         icon: 'truck',
         title: t('agent.toast.onBusTitle', { count: v?.handed?.length ?? f.selected.length }),
-        detail: left
+        detail: capped
+          ? t('agent.toast.onBusCapped', { count: capped })
+          : left
           ? t('agent.toast.onBusLeft', { count: left })
           : v?.vehicle
             ? t('agent.toast.onBusLoaded', { vehicle: v.vehicle })

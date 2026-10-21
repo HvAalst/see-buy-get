@@ -50,6 +50,8 @@ export function createAgentApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/submit-kyc', { params: { path: { did } }, body })),
 
     /** The 'no money, no scan' gate — { ok, code, balance, shortfall } as readable state. */
+    /** Round 38 — where this shop stands under its company's custody cap; `capped` false when none applies now. */
+    custodyCap: () => sbg.request((c) => c.GET('/v1/sbg/custody-cap', {})),
     canTransact: (did: string) => sbg.request((c) => c.GET('/v1/sbg/agents/{did}/can-transact', { params: { path: { did } } })),
 
     /**

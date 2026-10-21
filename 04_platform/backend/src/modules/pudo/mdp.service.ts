@@ -509,6 +509,8 @@ export class MdpService {
     if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
     if (!pending.closureId) throw new GlosError('BAG_NOT_CLOSED', `Close bag ${code} first: put a coded seal on it and photograph it, or photograph it closed`);
     const fleet = this.fleet.resolveBadge(driverBadgeId);
+    // Round 38 — a new independent rider carries no more than their company's cap: the bag counts every parcel in it.
+    if (fleet) this.parcels.assertRiderWithinCap(fleet.driverDid, pending.parcels.length);
     // A claimed bag may only be loaded by the driver who claimed it.
     if (pending.claimedBy && (!fleet || fleet.driverDid !== pending.claimedBy)) throw new GlosError('BAG_RESERVED', `Bag ${code} is reserved for another driver`);
     // S31: this is the tote/MDP mixing point — the second place cargo rides a vehicle. A bag loads ATOMICALLY

@@ -391,6 +391,16 @@ export class CustodyLeg {
   receivedAt?: string;
 }
 
+/** Round 38 — where the caller stands under the custody cap; `capped` false when none applies to them now. */
+export class CustodyCapView {
+  capped: boolean;
+  kind?: 'shop' | 'rider';
+  holds?: number;
+  cap?: number;
+  completed?: number;
+  liftedAfter?: number;
+}
+
 /** A hub's papers, as a shop's: a copy of the responsible person's ID, the trading licence, a photograph of the premises. */
 export class HubPapers {
   idCopyRef: string;

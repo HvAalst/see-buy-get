@@ -101,6 +101,7 @@ export const ERROR_CODES = {
   BAG_NOT_TAKEN: { status: 409, title: 'The driver has not read the seal' },
   HUB_NOT_APPROVED: { status: 409, title: 'The hub is not approved yet' },
   SEAL_REQUIRED: { status: 409, title: 'A seal is required on this load' },
+  CUSTODY_CAP_REACHED: { status: 409, title: 'The most a new partner holds here for now' },
   // Round 18 — a GS1 company prefix another business prints under with that extension digit, or one staff decided is another's.
   GS1_PREFIX_TAKEN: { status: 409, title: 'Another business uses this GS1 prefix' },
   COMMERCIAL_INVOICE_REQUIRED: { status: 409, title: 'The commercial invoice is not signed' },

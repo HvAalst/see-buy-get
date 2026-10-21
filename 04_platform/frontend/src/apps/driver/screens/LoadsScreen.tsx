@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { capLine } from '../../../shared/custodyCap';
 import { LoadFinderContext, useLoadFinder, type LoadFinder } from '../../../shared/loadFinder';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
@@ -45,6 +46,12 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       <h1 class="scr__title">{t('driver.nav.loads')}</h1>
 
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+
+      {/* Round 38 — a new independent rider's custody cap: what they carry, the most they may now, how it grows. */}
+      {(() => {
+        const line = capLine(state.custodyCap, t);
+        return line ? <Note tone={line.full ? 'warn' : 'info'} icon="info" title={line.title} detail={line.detail} /> : null;
+      })()}
 
       {/* F3 — the runs the fleet rostered this driver onto. Here rather than on the home screen because a
           booked consignment on a scheduled run IS a load, and this is the tab called My loads. Renders

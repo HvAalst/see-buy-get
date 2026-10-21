@@ -208,7 +208,7 @@ describe('the people at a shop’s counter, over the wire', () => {
         // round 27 — the label of a parcel taken in at this counter, for its thermal label printer
         'GET sbg/agents/:did/parcels/:id/label.zpl',
         // the shop as the counter sees it, and open or closed now
-        'GET sbg/agents/:did', 'GET sbg/agents/:did/shelf', 'GET sbg/agents/:did/bag-plan', 'GET sbg/agents/:did/can-transact', 'GET sbg/agents/:did/take-in-terms',
+        'GET sbg/agents/:did', 'GET sbg/custody-cap', 'GET sbg/agents/:did/shelf', 'GET sbg/agents/:did/bag-plan', 'GET sbg/agents/:did/can-transact', 'GET sbg/agents/:did/take-in-terms',
         'POST sbg/agents/:did/ping', 'POST sbg/agents/:did/availability',
         // bags
         'POST sbg/totes/:code/assign', 'POST sbg/totes/:code/fill', 'POST sbg/totes/:code/load', 'POST sbg/totes/:code/release', 'GET sbg/totes/:code',

@@ -363,6 +363,8 @@ export interface TowerActions {
   saveAmounts(body: Record<string, number | null>): Promise<void>;
   /** Which carrier papers this sister refuses to trade without. The whole list; empty enforces nothing. */
   saveCarrierPapers(enforce: Array<'operator_licence' | 'carrier_insurance'>): Promise<void>;
+  /** Round 38 — the custody cap for new shops and new independent riders. */
+  saveCustodyCaps(caps: { shop?: { start: number; liftedAfter: number }; rider?: { start: number; liftedAfter: number } }): Promise<void>;
   /** Round 38 — where this company requires a seal. */
   saveSealRules(rules: { crossBorder: boolean; containers: boolean }): Promise<void>;
   /** Record the dates on one fleet operator's own papers — staff only. */
@@ -1887,6 +1889,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           (client, entityId) => client.api.setCarrierPapers(entityId, enforce),
           enforce.length ? t('tower.carrierPapers.saved') : t('tower.carrierPapers.savedNone'),
         ),
+      // Round 38 — the custody cap: not a lane either.
+      saveCustodyCaps: (caps) =>
+        saveKnob('custodyCaps', (client, entityId) => client.api.setCustodyCaps(entityId, caps), caps.shop || caps.rider ? t('tower.custodyCaps.saved') : t('tower.custodyCaps.savedNone')),
       // Round 38 — not a lane: its own busy id and its own words, as the carrier papers.
       saveSealRules: (rules) =>
         saveKnob(

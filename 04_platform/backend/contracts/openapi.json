@@ -8000,6 +8000,76 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/custody-caps": {
+      "post": {
+        "operationId": "Sbg.setEntityCustodyCaps",
+        "summary": "",
+        "description": "Round 38 — the custody cap for new shops and new independent riders here (the user: \"Count cap that grows\"): what a\nnew one holds or carries at once, and after how many hand-overs it lifts. Staff and the company's own administrators.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustodyCapsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.entityCustodyCaps",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/custody-cap": {
+      "get": {
+        "operationId": "Sbg.custodyCap",
+        "summary": "",
+        "description": "Round 38 — WHERE THE CALLER STANDS UNDER THE CUSTODY CAP: a shop (and its people at the counter) or an independent rider.\nNothing when no cap applies to them now — set by nobody, lifted, or a fleet's driver.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustodyCapView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/rate-impact": {
       "get": {
         "operationId": "Sbg.entityRateImpact",
@@ -32266,6 +32336,21 @@
           "amount"
         ]
       },
+      "CustodyCap": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "number"
+          },
+          "liftedAfter": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "start",
+          "liftedAfter"
+        ]
+      },
       "CompanyAddress": {
         "type": "object",
         "properties": {
@@ -32676,6 +32761,19 @@
             "type": "object",
             "description": "Round 38 — where a seal is required on loads taken over here. Read it through EntityService.sealRulesFor(), never off the record."
           },
+          "custodyCaps": {
+            "type": "object",
+            "properties": {
+              "shop": {
+                "required": false,
+                "$ref": "#/components/schemas/CustodyCap"
+              },
+              "rider": {
+                "required": false,
+                "$ref": "#/components/schemas/CustodyCap"
+              }
+            }
+          },
           "parentEntityId": {
             "type": "string",
             "description": "Sisters point at the group they belong to."
@@ -32705,6 +32803,7 @@
           "did",
           "kind",
           "name",
+          "custodyCaps",
           "createdAt"
         ]
       },
@@ -35963,6 +36062,17 @@
           "startsAt"
         ]
       },
+      "ResolvedCustodyCaps": {
+        "type": "object",
+        "properties": {
+          "shop": {
+            "$ref": "#/components/schemas/CustodyCap"
+          },
+          "rider": {
+            "$ref": "#/components/schemas/CustodyCap"
+          }
+        }
+      },
       "ResolvedRates": {
         "type": "object",
         "properties": {
@@ -36116,6 +36226,7 @@
               "amounts",
               "carrierPapers",
               "sealRules",
+              "custodyCaps",
               "created",
               "record",
               "activated",
@@ -36243,6 +36354,14 @@
               "$ref": "#/components/schemas/CompanyAmount"
             }
           },
+          "custodyCaps": {
+            "description": "Round 38 — the custody cap for new shops and new independent riders here. Company-wide; absent caps nobody.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedCustodyCaps"
+              }
+            ]
+          },
           "lanes": {
             "description": "The sister's default first, then one row per lane.",
             "type": "array",
@@ -36294,6 +36413,7 @@
         "required": [
           "kind",
           "amounts",
+          "custodyCaps",
           "lanes",
           "recentChanges",
           "entityId",
@@ -36847,6 +36967,60 @@
         "required": [
           "crossBorder",
           "containers"
+        ]
+      },
+      "CustodyCapDto": {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "number",
+            "minimum": 1
+          },
+          "liftedAfter": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "start",
+          "liftedAfter"
+        ]
+      },
+      "CustodyCapsDto": {
+        "type": "object",
+        "properties": {
+          "shop": {
+            "$ref": "#/components/schemas/CustodyCapDto"
+          },
+          "rider": {
+            "$ref": "#/components/schemas/CustodyCapDto"
+          }
+        }
+      },
+      "CustodyCapView": {
+        "type": "object",
+        "properties": {
+          "capped": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "object"
+          },
+          "holds": {
+            "type": "number"
+          },
+          "cap": {
+            "type": "number"
+          },
+          "completed": {
+            "type": "number"
+          },
+          "liftedAfter": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "capped"
         ]
       },
       "AvailabilityDto": {

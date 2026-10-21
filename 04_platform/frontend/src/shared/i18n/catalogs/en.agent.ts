@@ -1169,6 +1169,7 @@ export const enAgent = {
   'agent.toast.takenInPrepaid': 'Prepaid by the store — nothing to collect.',
   'agent.toast.onBusTitle': '{count, plural, one {# parcel} other {# parcels}} on the bus',
   'agent.toast.onBusLeft': '{count} left behind — the control tower has been told.',
+  'agent.toast.onBusCapped': '{count} stay here: the rider carries the most a new rider may for now. Hand them to the next one.',
   'agent.toast.onBusLoaded': 'Loaded onto {vehicle}.',
   'agent.toast.arrived': 'Parcel arrived',
   'agent.toast.arrivedDetail': 'It is on the shelf, waiting for its code.',

@@ -4581,6 +4581,105 @@ describe('PUDO Light', () => {
     expect(r.vehicle).toBe('bus'); // a bike maps onto the bus corridor-vehicle
   });
 
+  it('a new independent rider carries no more than the custody cap: the rest stay at the counter, said why (round 38)', () => {
+    const origin = onboardAgent('Cap Origin', 'NorthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'cap-feeder', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = drivers.register({ displayName: 'Cap', fullName: 'Cap Rider', nationalId: 'DRV-CAP-1', mobile: '+254900071', licenceClasses: ['motorcycle'] });
+    const moto = vehicles.register({ plate: 'CP-1', vehicleClass: 'motorcycle', ownerName: 'Cap Rider' });
+    fleet.couple(d.did, moto.vehicleId, corridor.corridorId);
+    const entity = entities.forJurisdiction(drivers.get(d.did).jurisdiction)!;
+    entities.setCustodyCaps(entity.entityId, { rider: { start: 2, liftedAfter: 10 } }, 'test');
+    for (const id of ['CAP-1', 'CAP-2', 'CAP-3']) parcels.accept({ agentDid: origin.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+    expect(parcels.riderStanding(d.did)).toMatchObject({ kind: 'rider', holds: 0, cap: 2, completed: 0, liftedAfter: 10 });
+
+    const r = parcels.handover({ agentDid: origin.did, driverBadgeId: d.badgeId!, parcelIds: ['CAP-1', 'CAP-2', 'CAP-3'], acknowledgeShortShip: true, shortShipReason: 'test' });
+    expect(r.handed).toEqual(['CAP-1', 'CAP-2']);
+    expect(r.rejected).toEqual([{ parcelId: 'CAP-3', reason: 'custody_cap' }]);
+    expect(parcels.riderStanding(d.did)).toMatchObject({ holds: 2, cap: 2 });
+    expect(() => parcels.assertRiderWithinCap(d.did)).toThrow(/This rider carries 2 parcels?; a new independent rider carries at most 2 here for now/);
+    // Handed on at the other end: the parcel is off them, and the limit grew by one.
+    Object.assign(parcels.get('CAP-1'), { status: 'Ready_For_Pickup' });
+    parcels.get('CAP-1').scans.push({ at: new Date().toISOString(), status: 'Ready_For_Pickup', by: 'did:shop:far', note: 'arrived' } as never);
+    expect(parcels.riderStanding(d.did)).toMatchObject({ holds: 1, cap: 3, completed: 1 });
+    // A fleet's driver is never capped here; nor anybody once the company caps nobody.
+    entities.setCustodyCaps(entity.entityId, {}, 'test');
+    expect(parcels.riderStanding(d.did)).toBeUndefined();
+  });
+
+  it('a new shop holds no more than its custody cap; each parcel handed on grows it, and it lifts (round 38)', () => {
+    const shop = onboardAgent('Cap Shop', 'NorthTown', 50);
+    const entity = entities.forJurisdiction(agents.countryOf(shop))!;
+    expect(parcels.shopStanding(shop.did)).toBeUndefined(); // a company that set no cap caps nobody
+    entities.setCustodyCaps(entity.entityId, { shop: { start: 2, liftedAfter: 3 } }, 'test');
+    const take = (id: string) => parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
+    take('CS-1');
+    take('CS-2');
+    expect(() => take('CS-3')).toThrow(/Cap Shop holds 2 parcels?; a new shop holds at most 2 here for now/);
+    expect(() => parcels.get('CS-3')).toThrow(); // refused before anything was written
+    // One handed on: the shop holds one fewer, and its limit grew by one.
+    Object.assign(parcels.get('CS-1'), { status: 'On_Bus' });
+    expect(parcels.shopStanding(shop.did)).toMatchObject({ kind: 'shop', holds: 1, cap: 3, completed: 1, liftedAfter: 3 });
+    take('CS-3');
+    take('CS-4');
+    expect(() => take('CS-5')).toThrow(/at most 3/);
+    // Lifted after three handed on: no cap at all.
+    Object.assign(parcels.get('CS-2'), { status: 'On_Bus' });
+    Object.assign(parcels.get('CS-3'), { status: 'Delivered' });
+    expect(parcels.shopStanding(shop.did)).toBeUndefined();
+    take('CS-5');
+    entities.setCustodyCaps(entity.entityId, {}, 'test');
+  });
+
+  it('the custody cap reaches every way a parcel comes into a shop’s hands: a store’s, a peer send’s, one arrived for it (round 38)', () => {
+    const shop = onboardAgent('Cap Intake', 'NorthTown', 500);
+    const dest = onboardAgent('Cap Intake Dest', 'SouthTown', 50);
+    corridors.addCorridor({ name: 'cap-intake', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const entity = entities.forJurisdiction(agents.countryOf(shop))!;
+    const vendor = vendors.register({ name: 'Cap Store', callbackUrl: 'https://cap.example/hook', secret: 'whsec' });
+    vendors.topUp(vendor.vendorId, 50);
+    const mint = (n: number) => parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: `CAP-ORD-${n}`, originAgentDid: shop.did, destAgentDid: dest.did, buyerMobile: '+254700', size: 'S', contentPhotoRef: photoOf(vendor.vendorId), items: [{ name: 'Soap', qty: 1 }], shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(shop.did, dest.did, 'S') }).parcel;
+    const peer = () => parcels.createConsumerSend({ senderPersonDid: 'did:person:cap', senderPhoneHash: 'h-cap', receiverMobile: '+254700556', originAgentDid: shop.did, destAgentDid: dest.did, dimensionsCm: { l: 10, w: 10, h: 10 }, weightKg: 1, quote: routing.quoteShipment(shop.did, dest.did) }).parcel;
+    const one = mint(1);
+    const two = mint(2);
+    const sent = peer();
+    entities.setCustodyCaps(entity.entityId, { shop: { start: 1, liftedAfter: 50 } }, 'test');
+    parcels.intakeInbound(one.parcelId, shop.did);
+    // A store's parcel and a peer send, each refused at the limit before anything is written.
+    expect(() => parcels.intakeInbound(two.parcelId, shop.did)).toThrow(/Cap Intake holds 1 parcel;/);
+    expect(parcels.get(two.parcelId).status).toBe('Created');
+    expect(() => parcels.intakeConsumerSend(sent.parcelId, shop.did, photoBy(shop.did))).toThrow(/Cap Intake holds 1 parcel;/);
+    expect(parcels.get(sent.parcelId).status).toBe('Created');
+    // Arrived for the other shop: in that shop's hands until collected, and handed on from this one.
+    Object.assign(parcels.get(one.parcelId), { status: 'Ready_For_Pickup' });
+    expect(parcels.shopStanding(dest.did)).toMatchObject({ holds: 1, completed: 0 });
+    expect(parcels.shopStanding(shop.did)).toMatchObject({ holds: 0, completed: 1 });
+    Object.assign(parcels.get(one.parcelId), { status: 'Delivered' });
+    expect(parcels.shopStanding(dest.did)).toMatchObject({ holds: 0, completed: 1 });
+    entities.setCustodyCaps(entity.entityId, {}, 'test');
+  });
+
+  it('a bag counts every parcel in it against a new rider’s custody cap (round 38)', () => {
+    const shop = onboardAgent('Cap Bag Shop', 'NorthTown', 50);
+    const corridor = corridors.addCorridor({ name: 'cap-bag', originZone: 'NorthTown', destZone: 'SouthTown' });
+    const d = drivers.register({ displayName: 'Bag Cap', fullName: 'Bag Cap Rider', nationalId: 'DRV-CAP-2', mobile: '+254900072', licenceClasses: ['motorcycle'] });
+    const moto = vehicles.register({ plate: 'CP-2', vehicleClass: 'motorcycle', ownerName: 'Bag Cap Rider' });
+    fleet.couple(d.did, moto.vehicleId, corridor.corridorId);
+    for (const id of ['CB-1', 'CB-2']) parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
+    const bag = totes.register(shop.did);
+    totes.assign(bag.code, 'SouthTown', 'SouthTown');
+    mdps.fillTote(bag.code, 'CB-1');
+    mdps.fillTote(bag.code, 'CB-2');
+    closeForTest(bag.code);
+    const entity = entities.forJurisdiction(drivers.get(d.did).jurisdiction)!;
+    entities.setCustodyCaps(entity.entityId, { rider: { start: 1, liftedAfter: 10 } }, 'test');
+    expect(() => mdps.loadBag(bag.code, drivers.get(d.did).badgeId!)).toThrow(/This rider carries 0 parcels?; a new independent rider carries at most 1/);
+    expect(parcels.get('CB-1').status).toBe('At_PUDO'); // nothing moved
+    entities.setCustodyCaps(entity.entityId, { rider: { start: 2, liftedAfter: 10 } }, 'test');
+    mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+    expect(parcels.riderStanding(d.did)).toMatchObject({ holds: 2, cap: 2 });
+    entities.setCustodyCaps(entity.entityId, {}, 'test');
+  });
+
   /**
    * A LOAD SAYS THE MONEY ITS BUDGET WAS SET IN. A shop's freight screen wrote the budget, the prices offered, the one
    * agreed and any refund as bare numbers: the load recorded its carrier's money once claimed, never its poster's. The

@@ -1630,6 +1630,18 @@ export class RefuseCarrierPaperDto {
  * unsettable here. `@ApiProperty` is spelled out because `@IsIn(..., { each: true })` publishes a SCALAR
  * enum into the schema, not an array of one — a trap this codebase has been caught by twice.
  */
+/** Round 38 — one kind of partner's custody cap: what a new one holds or carries at once, and after how many hand-overs it lifts. */
+export class CustodyCapDto {
+  @IsInt() @Min(1) start!: number;
+  @IsInt() @Min(1) liftedAfter!: number;
+}
+
+/** Round 38 — the custody cap for new shops and new independent riders. A kind left out is not capped: the whole rule, not a patch. */
+export class CustodyCapsDto {
+  @IsOptional() @ValidateNested() @Type(() => CustodyCapDto) shop?: CustodyCapDto;
+  @IsOptional() @ValidateNested() @Type(() => CustodyCapDto) rider?: CustodyCapDto;
+}
+
 /** Round 38 — where a country's company requires a seal. Both said every time: the whole rule, not a patch. */
 export class SealRulesDto {
   @IsBoolean() crossBorder!: boolean;

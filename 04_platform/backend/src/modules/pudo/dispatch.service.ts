@@ -53,6 +53,7 @@ import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { carrierReadsInvoice, CommercialInvoiceService, crossesBorder } from './commercial-invoice.service';
+import { ParcelService } from './parcel.service';
 import { LoadPassageService, viewOf as passageView } from './load-passage.service';
 import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
 import { LoadSealService, sealCheck } from './load-seal.service';
@@ -426,12 +427,25 @@ export class DispatchService {
     @Optional() private readonly bagClosures?: BagClosureService,
     // The trail (the ISO 28000 check): a load taken over and delivered, anchored in the chain. Optional for the specs.
     @Optional() private readonly ledger?: LedgerService,
+    // Round 38 — the custody cap: a load taken over by a new independent rider counts against it. Optional for the specs.
+    @Optional() private readonly parcels?: ParcelService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
     // The hub weighs a bag against what is aboard: the kilos left, when the driver has a vehicle to leave them on.
     this.mdps.registerRoom((did) => (this.fleet.vehicleForDriver(did) ? this.remainingCapacity(did) : undefined));
+    // Round 38 — what a rider carries and has delivered, for the custody cap: each load counts as one.
+    this.parcels?.registerRiderLoads((did) => {
+      let carrying = 0;
+      let delivered = 0;
+      for (const f of this.freights.values()) {
+        if (f.claimedBy !== did) continue;
+        if (f.status === 'in_transit') carrying += 1;
+        if (f.status === 'delivered') delivered += 1;
+      }
+      return { carrying, delivered };
+    });
   }
 
   /** An account is moving off a number: every order still addressed to that number and to no account is theirs. */
@@ -2933,6 +2947,8 @@ export class DispatchService {
     // Round 38 — where the country the goods are taken over in requires it, the load leaves sealed ("Each country decides").
     const noSeal = this.sealRefusal(f);
     if (noSeal) throw new GlosError('SEAL_REQUIRED', noSeal);
+    // Round 38 — a new independent rider carries no more than their company's cap: a load counts as one.
+    if (driverDid) this.parcels?.assertRiderWithinCap(driverDid);
     // S33 — the load-safety gate. Every dedicated freight must clear the load-safety checklist THIS cargo
     // requires (re-derived from the freight, so a client that under-reports can't bypass it) AND carry a
     // securement photo, before it leaves the pickup. The check happens BEFORE any mutation, so a failed gate

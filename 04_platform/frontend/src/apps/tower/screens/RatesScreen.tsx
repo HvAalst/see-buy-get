@@ -37,6 +37,7 @@ import {
   type AmountsForm,
 } from '../money';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { custodyCapsBody } from '../custodyCaps';
 
 /**
  * What each sister charges — the three rate layers, the tax it collects, and the cover it carries.
@@ -141,6 +142,7 @@ export function RatesScreen({ state, actions }: { state: TowerState; actions: To
           <TopUpFee pricing={pricing} state={state} actions={actions} />
           <CarrierPapers pricing={pricing} state={state} actions={actions} />
           <SealRules pricing={pricing} state={state} actions={actions} />
+          <CustodyCaps pricing={pricing} state={state} actions={actions} />
           <RecentChanges pricing={pricing} />
           <Administrators pricing={pricing} state={state} actions={actions} />
           <RateImpact state={state} />
@@ -360,6 +362,61 @@ function TopUpFee({ pricing, state, actions }: { pricing: EntityPricing; state: 
 const CARRIER_KINDS = ['operator_licence', 'carrier_insurance'] as const;
 type CarrierKind = (typeof CARRIER_KINDS)[number];
 
+/**
+ * Round 38 — THE CUSTODY CAP here (the user: "Count cap that grows"; "each country's company sets the numbers"): what a new
+ * shop holds and a new independent rider carries at once, and after how many hand-overs it lifts. Empty is no cap — the
+ * default. A fleet's drivers are never capped here: the fleet answers for them.
+ */
+function CustodyCaps({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const stored = pricing.custodyCaps ?? {};
+  const text = (n?: number) => (n == null ? '' : String(n));
+  const fromStored = () => ({ shopStart: text(stored.shop?.start), shopLift: text(stored.shop?.liftedAfter), riderStart: text(stored.rider?.start), riderLift: text(stored.rider?.liftedAfter) });
+  const [draft, setDraft] = useState(fromStored);
+  useEffect(() => setDraft(fromStored()), [pricing]);
+  const busy = state.busyId === 'custodyCaps';
+  const body = custodyCapsBody(draft);
+  const changed = JSON.stringify(body.value ?? null) !== JSON.stringify({ ...(stored.shop ? { shop: stored.shop } : {}), ...(stored.rider ? { rider: stored.rider } : {}) });
+  const field = (key: keyof typeof draft, id: string, label: string) => (
+    <label class="cfield" style="max-width:16ch">
+      <span class="cfield__label">{label}</span>
+      <input id={id} class="cinput" inputMode="numeric" value={draft[key]} disabled={!pricing.editable || busy} onInput={(e) => setDraft({ ...draft, [key]: (e.target as HTMLInputElement).value })} />
+    </label>
+  );
+  const said = (c?: { start: number; liftedAfter: number }) => (c ? t('tower.custodyCaps.said', { start: c.start, lift: c.liftedAfter }) : t('tower.custodyCaps.none'));
+
+  return (
+    <section class="cons__panel" style="margin-top:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.custodyCaps.title')}</span>
+        <span class="ctbl__sub">{t('tower.custodyCaps.current', { shop: said(stored.shop), rider: said(stored.rider) })}</span>
+      </div>
+      <div class="twr-knobs">
+        <p class="chint">{t('tower.custodyCaps.hint')}</p>
+        <div class="twr-knobs__row">
+          <section class="twr-knob">
+            <p class="twr-clear__t">{t('tower.custodyCaps.shops')}</p>
+            <div style="display:flex;flex-wrap:wrap;gap:12px">
+              {field('shopStart', 'cap-shop-start', t('tower.custodyCaps.start'))}
+              {field('shopLift', 'cap-shop-lift', t('tower.custodyCaps.lift'))}
+            </div>
+          </section>
+          <section class="twr-knob">
+            <p class="twr-clear__t">{t('tower.custodyCaps.riders')}</p>
+            <div style="display:flex;flex-wrap:wrap;gap:12px">
+              {field('riderStart', 'cap-rider-start', t('tower.custodyCaps.start'))}
+              {field('riderLift', 'cap-rider-lift', t('tower.custodyCaps.lift'))}
+            </div>
+          </section>
+        </div>
+        {body.error ? <p class="cerr">{t(body.error)}</p> : <p class="chint">{t('tower.custodyCaps.effect')}</p>}
+        <button type="button" class="cbtn cbtn--primary" disabled={!pricing.editable || busy || !changed || Boolean(body.error)} onClick={() => body.value && void actions.saveCustodyCaps(body.value)}>
+          {t('tower.rates.save')}
+        </button>
+      </div>
+    </section>
+  );
+}
 /**
  * Round 38 — WHERE THIS COMPANY REQUIRES A SEAL (the user: "Each country decides"): on loads taken over in its country that
  * cross a border, on container legs. A required seal not written and the load is not taken over; the shipper and the

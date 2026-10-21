@@ -255,6 +255,21 @@ export interface SealRulesRule {
   containers?: boolean;
 }
 
+/** Round 38 — a count cap for one kind of new partner: what a new one holds or carries at once, and after how many hand-overs there is none. */
+export class CustodyCap {
+  start: number;
+  liftedAfter: number;
+}
+
+/**
+ * Round 38 — THE CUSTODY CAP for new shops and new independent riders, set by each country's company (the user: "Count cap
+ * that grows"). Absent caps nobody, which is where every company starts.
+ */
+export class ResolvedCustodyCaps {
+  @ApiPropertyOptional({ type: CustodyCap }) shop?: CustodyCap;
+  @ApiPropertyOptional({ type: CustodyCap }) rider?: CustodyCap;
+}
+
 /** Where a sister requires a seal, resolved: both always said, false for a company that has not decided. */
 export class ResolvedSealRules {
   crossBorder: boolean;
@@ -434,8 +449,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'created', 'record', 'activated', 'verification'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'created' | 'record' | 'activated' | 'verification';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'custodyCaps', 'created', 'record', 'activated', 'verification'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'custodyCaps' | 'created' | 'record' | 'activated' | 'verification';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -568,6 +583,8 @@ export class EntityPricing {
   carrierPapers: ResolvedCarrierPapers;
   /** Round 38 — where this company requires a seal on loads taken over in its country. Company-wide; both false until decided. */
   sealRules: ResolvedSealRules;
+  /** Round 38 — the custody cap for new shops and new independent riders here. Company-wide; absent caps nobody. */
+  @ApiProperty({ type: ResolvedCustodyCaps }) custodyCaps: ResolvedCustodyCaps;
   /** The sister's default first, then one row per lane. */
   @ApiProperty({ type: [LanePricing] })
   lanes: LanePricing[];
@@ -666,6 +683,8 @@ export class Entity {
   carrierPapers?: CarrierPapersRule;
   /** Round 38 — where a seal is required on loads taken over here. Read it through EntityService.sealRulesFor(), never off the record. */
   sealRules?: SealRulesRule;
+  /** Round 38 — the custody cap for new shops and new independent riders. Read it through EntityService.custodyCapsFor(). */
+  custodyCaps?: { shop?: CustodyCap; rider?: CustodyCap };
   /** Sisters point at the group they belong to. */
   parentEntityId?: string;
   /**

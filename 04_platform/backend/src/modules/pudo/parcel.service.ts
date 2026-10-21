@@ -17,6 +17,8 @@ import type { Amounts } from './amounts';
 import { DEFAULT_TAX_LABEL, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, NOT_SEEN_H, OTP_MAX_ATTEMPTS, PARCEL_LATE_GRACE_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
+import { capWords, standingOf, type CustodyStanding } from './custody-cap';
+import { DriverService } from './driver.service';
 import { Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
@@ -668,6 +670,11 @@ export interface TakeInTerms {
  * receiver) → Void (5-minute reverse-logistics window). Every transition is anchored and emitted on
  * the shared event bus, so SSE/M5 can graduate onto these signals later.
  */
+/** Round 38 — a parcel past its origin shop's hands: handed on, on its way or arrived. Counted as a hand-over the shop completed. */
+const HANDED_ON_FROM_ORIGIN: ReadonlyArray<ParcelStatus> = ['On_Bus', 'At_MDP', 'Ready_For_Pickup', 'Unclaimed', 'Delivered'];
+/** Round 38 — a parcel whose custody did not end well: not counted as handed on. */
+const UNFINISHED_CUSTODY: ReadonlyArray<ParcelStatus> = ['On_Bus', 'Lost', 'Disputed', 'Voided'];
+
 @Injectable()
 export class ParcelService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ParcelService.name);
@@ -702,6 +709,8 @@ export class ParcelService implements OnApplicationBootstrap {
     @Optional() private readonly persons?: PersonService,
     // Round 29 — a store's GS1 prefix, for the SSCC its paid parcels are given.
     @Optional() private readonly codes?: ShipperCodesService,
+    // Round 38 — who a rider is, for the custody cap: independent or a fleet's, and in which country. Optional for the specs.
+    @Optional() private readonly drivers?: DriverService,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -1224,6 +1233,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // A walk-up is a parcel MADE here: a shop held over its national ID starts none, however it is paid for —
     // and none is made here for a held shop to hand out.
     this.agents.assertMayTakeIn(input.agentDid);
+    // Round 38 — a new shop holds no more than its company's cap for it: asked before anything is written.
+    this.assertShopWithinCap(input.agentDid);
     this.agents.assertNamedAtMint(input.destPudoDid);
 
     const mode: PaymentMode = input.paymentMode ?? 'cash';
@@ -1400,6 +1411,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // S30: the natures already ON this vehicle, so each new parcel can be checked against the whole manifest
     // (the platform's first pairwise cargo awareness — before this, a manifest accumulated blind).
     const loadedNatures: CargoNature[] = [];
+    // Round 38 — a new independent rider carries no more than their company's cap: the rest stay at the counter, said why.
+    const riderNow = fleet ? this.riderStanding(fleet.driverDid) : undefined;
+    const riderRoom = riderNow ? Math.max(0, riderNow.cap - riderNow.holds) : Number.POSITIVE_INFINITY;
 
     for (const parcelId of input.parcelIds) {
       const parcel = this.parcels.get(parcelId);
@@ -1429,6 +1443,7 @@ export class ParcelService implements OnApplicationBootstrap {
         if (parcel.fragile && !fleet.allowsFragile) { rejected.push({ parcelId, reason: 'fragile_not_allowed_on_vehicle' }); continue; }
         if (loadKg + parcel.weightKg > fleet.capacityKg) { rejected.push({ parcelId, reason: 'vehicle_full' }); continue; }
       }
+      if (handed.length >= riderRoom) { rejected.push({ parcelId, reason: 'custody_cap' }); continue; }
 
       loadedNatures.push(nature);
       parcel.status = 'On_Bus';
@@ -2078,6 +2093,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Drop-off only at the shop the sender chose — the price is locked to that route');
     if (!dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
     this.media.requireHeld(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoffPhotoRef'); // round 31 — before the cash is counted
+    this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before the cash is counted
     this.admitBooked(parcel, agentDid);
     const due = parcel.shipmentCost ?? 0;
     const gate = this.gate.canTransact(agentDid);
@@ -2107,6 +2123,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Created`);
     if (parcel.paidStatus !== 'ParcelPaid') throw new GlosError('SHIPMENT_NOT_PAID', 'Shipment is not paid — the vendor must prepay before the PUDO accepts it');
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Intake only at the vendor-selected origin PUDO');
+    this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before anything is written
     // ROUND 13 — A PARCEL CROSSING A BORDER GOES WITH ITS PAPERS: the store prints the commercial invoice with the label, and
     // the shop looks for the copies in the pouch before it takes the parcel in. Without them it is held at the border.
     if (parcel.customs && !papersInPouch) {
@@ -2929,6 +2946,81 @@ export class ParcelService implements OnApplicationBootstrap {
     } catch {
       return badgeId;
     }
+  }
+
+  /* ------------------------------------------------- round 38 — the custody cap -- */
+
+  /** Loads on the road, for the rider cap: DispatchService registers what a rider carries and has delivered (a hook, not a dependency). */
+  private riderLoads?: (driverDid: string) => { carrying: number; delivered: number };
+  registerRiderLoads(fn: (driverDid: string) => { carrying: number; delivered: number }): void {
+    this.riderLoads = fn;
+  }
+
+  /**
+   * WHERE A SHOP STANDS: the parcels in its hands — taken in and not yet handed on, or arrived and not yet collected — and
+   * those it has handed on: to a driver from its counter, or to the person who collects them. Nothing when its company caps
+   * no shop, or its cap is lifted.
+   */
+  shopStanding(agentDid: string): CustodyStanding | undefined {
+    let agent;
+    try {
+      agent = this.agents.get(agentDid);
+    } catch {
+      return undefined;
+    }
+    const entity = this.entities.forJurisdiction(this.agents.countryOf(agent));
+    const rule = entity ? this.entities.custodyCapsFor(entity.entityId).shop : undefined;
+    if (!rule) return undefined;
+    let holds = 0;
+    let completed = 0;
+    for (const p of this.parcels.values()) {
+      if (p.originAgentDid === agentDid && p.status === 'At_PUDO') holds += 1;
+      else if (p.destAgentDid === agentDid && isCollectable(p.status)) holds += 1;
+      if (p.originAgentDid === agentDid && HANDED_ON_FROM_ORIGIN.includes(p.status)) completed += 1;
+      if (p.destAgentDid === agentDid && p.status === 'Delivered') completed += 1;
+    }
+    return standingOf('shop', rule, holds, completed);
+  }
+
+  /**
+   * WHERE AN INDEPENDENT RIDER STANDS: the parcels in their hands — scanned onto them and not yet off — and the loads they
+   * carry; and those they have handed on. A fleet's driver is not capped here: the fleet was vetted and answers for them.
+   */
+  riderStanding(driverDid: string): CustodyStanding | undefined {
+    let driver;
+    try {
+      driver = this.drivers?.get(driverDid);
+    } catch {
+      return undefined;
+    }
+    if (!driver || driver.managerDid) return undefined;
+    const entity = this.entities.forJurisdiction(driver.jurisdiction);
+    const rule = entity ? this.entities.custodyCapsFor(entity.entityId).rider : undefined;
+    if (!rule) return undefined;
+    const ids = new Set([driverDid, ...(driver.badgeId ? [driver.badgeId] : [])]);
+    let holds = 0;
+    let completed = 0;
+    for (const p of this.parcels.values()) {
+      const onThem = p.scans.map((s, i) => [s, i] as const).filter(([s]) => s.status === 'On_Bus' && ids.has(s.by));
+      if (!onThem.length) continue;
+      const last = onThem[onThem.length - 1][1];
+      if (last === p.scans.length - 1 && p.status === 'On_Bus') holds += 1; // still in their hands
+      else if (!UNFINISHED_CUSTODY.includes(p.status)) completed += 1; // scanned off them since: handed on
+    }
+    const loads = this.riderLoads?.(driverDid) ?? { carrying: 0, delivered: 0 };
+    return standingOf('rider', rule, holds + loads.carrying, completed + loads.delivered);
+  }
+
+  /** Refused when taking `adding` more would put this shop over its cap: asked before anything is written. */
+  assertShopWithinCap(agentDid: string, adding = 1): void {
+    const s = this.shopStanding(agentDid);
+    if (s && s.holds + adding > s.cap) throw new GlosError('CUSTODY_CAP_REACHED', capWords(s, this.agents.get(agentDid).shopName), { holds: s.holds, cap: s.cap, completed: s.completed, liftedAfter: s.liftedAfter });
+  }
+
+  /** Refused when `adding` more would put this rider over their cap: asked before anything is written. */
+  assertRiderWithinCap(driverDid: string, adding = 1): void {
+    const s = this.riderStanding(driverDid);
+    if (s && s.holds + adding > s.cap) throw new GlosError('CUSTODY_CAP_REACHED', capWords(s, 'This rider'), { holds: s.holds, cap: s.cap, completed: s.completed, liftedAfter: s.liftedAfter });
   }
 
   private scan(parcel: Parcel, status: Parcel['status'], by: string, note: string, step: Step = stepNow()): void {

@@ -8,6 +8,7 @@ import type { BreakdownView, TakeOverView, TakenOverView } from './screens/Break
 import type { IconName } from '../../shared/ui/Icon';
 import type { HeldByAuthorityView } from '../../shared/heldByAuthority';
 import { forgetPapers, invoicePaperRef, keepPaper, keptPaper, needsKeeping } from '../../shared/keptPapers';
+import type { CustodyCapView } from '../../shared/custodyCap';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
 import type {
@@ -94,6 +95,8 @@ export interface DriverState {
   remainingTotes: number | null;
   claims: ClaimsView['claims'];
   rates: RatesView | null;
+  /** Round 38 — where this rider stands under their company's custody cap. Null until read; `capped` false when none applies. */
+  custodyCap: CustodyCapView | null;
   nodes: NodeOption[];
   nodesState: 'idle' | 'loading' | 'ready' | 'error';
   offers: OfferView[];
@@ -217,6 +220,7 @@ const INITIAL: DriverState = {
   remainingTotes: null,
   claims: [],
   rates: null,
+  custodyCap: null,
   nodes: [],
   nodesState: 'idle',
   offers: [],
@@ -503,6 +507,11 @@ export function useDriverApp() {
 
       // In no fleet: the other way back onto the road, and whether this app can offer it. Soft-fail to "not said"
       // — the sheet then shows only how a fleet takes somebody on, which is still true.
+      // Round 38 — the custody cap: only an independent rider can be under one. Soft, kept from the last good read.
+      const capR = driver && !driver.managerDid ? await client.api.custodyCap() : null;
+      if (superseded()) return;
+      const custodyCap = !capR ? null : capR.error ? undefined : narrow<CustodyCapView>(capR.data) ?? null;
+
       let rideAlone: RideAloneTerms | null = null;
       if (driver && !driver.managerDid && driver.removedFrom) {
         const aloneR = await client.api.rideAloneTerms(did);
@@ -524,6 +533,7 @@ export function useDriverApp() {
         remainingTotes,
         claims,
         rates,
+        custodyCap: custodyCap === undefined ? s.custodyCap : custodyCap,
         route: savedRoute(did),
         legs,
         vehicles,
