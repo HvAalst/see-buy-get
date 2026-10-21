@@ -25496,11 +25496,110 @@
         }
       }
     },
+    "/v1/sbg/hub/staff": {
+      "get": {
+        "operationId": "ShopStaff.hubList",
+        "summary": "",
+        "description": "A HUB'S PEOPLE (the ISO 28000 check: \"a hub's own people by name\"): the hub's owner — its own sign-in — the same way.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShopStaffView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "ShopStaff.hubInvite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopStaffInviteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopStaffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/hub/staff/{memberId}/remove": {
+      "post": {
+        "operationId": "ShopStaff.hubRemove",
+        "parameters": [
+          {
+            "name": "memberId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopStaffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/hub/floor-log": {
+      "get": {
+        "operationId": "ShopStaff.floorLog",
+        "summary": "",
+        "description": "Who did what on the hub's floor, newest first: the owner's own record.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CounterAct"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/shop-invitations": {
       "get": {
         "operationId": "ShopStaff.mine",
         "summary": "",
-        "description": "The shops I was added to — from my own sign-in, by phone and PIN.",
+        "description": "The shops — and hubs — I was added to, from my own sign-in, by phone and PIN.",
         "parameters": [],
         "responses": {
           "200": {
@@ -25574,6 +25673,35 @@
         "parameters": [
           {
             "name": "shopDid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShopStaffSession"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/hubs/{hubDid}/staff-session": {
+      "post": {
+        "operationId": "ShopStaff.hubSession",
+        "summary": "",
+        "description": "A session on this hub's floor, under my name.",
+        "parameters": [
+          {
+            "name": "hubDid",
             "required": true,
             "in": "path",
             "schema": {
@@ -54611,6 +54739,13 @@
           },
           "invitedAt": {
             "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "A hub's floor rather than a shop's counter; `shopDid` and `shopName` are then the hub's.",
+            "enum": [
+              "hub"
+            ]
           }
         },
         "required": [

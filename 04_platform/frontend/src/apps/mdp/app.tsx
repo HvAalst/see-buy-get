@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
+import type { StaffAtCounter } from '../agent/staff';
 import { useMemo, useState } from 'preact/hooks';
 import { ParcelFinderContext, parcelFinderFor } from '../../shared/parcelFinder';
 import { AccountMenu } from '../../shared/account/AccountMenu';
@@ -26,7 +27,8 @@ export function App() {
   const { state, actions , sbg } = useMdpApp();
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
   // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
-  const account = useAccount(sbg, state.phase === 'ready');
+  // A hub's people sign in as the hub: there is no account of theirs behind the hub's menu.
+  const account = useAccount(sbg, state.phase === 'ready' && !state.staff);
   // Round 32 — a store parcel's GS1 barcode scanned at the sort finds the parcel, for what stands at this hub.
   const parcelFinder = useMemo(() => (sbg ? parcelFinderFor(sbg) : null), [sbg]);
   // A hub signs in with an email and a password, not a PIN — the menu offers that credential instead.
@@ -86,7 +88,7 @@ export function App() {
               {state.hub ? (state.hub.zones.length === 1 ? t('mdp.zoneOne', { count: state.hub.zones.length }) : t('mdp.zoneMany', { count: state.hub.zones.length })) : '…'}
             </Pill>
             {/* Last in the bar: live state first, the place you visit last. */}
-            <AccountMenu api={account} app="mdp" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} />
+            {state.staff ? <StaffChip who={state.staff} onSignOut={actions.signOut} /> : <AccountMenu api={account} app="mdp" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} />}
           </>
         }
       />
@@ -118,10 +120,30 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: MdpSt
     case 'newtote':
       return <NewToteScreen state={state} actions={actions} />;
     case 'rates':
-      return <RatesScreen state={state} actions={actions} />;
+      // The fee is the owner's: one of the hub's people is shown the floor instead (the server refuses them the door).
+      return state.staff ? <HomeScreen state={state} actions={actions} /> : <RatesScreen state={state} actions={actions} />;
     default:
       return <HomeScreen state={state} actions={actions} />;
   }
+}
+
+/** WHO IS ON THE FLOOR, in the bar where the hub's account menu is for the owner: their name, and signing out. */
+function StaffChip({ who, onSignOut }: { who: StaffAtCounter; onSignOut: () => void }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" class="topbar__lead" onClick={() => setOpen(true)} aria-label={t('mdp.staff.chipAria', { name: who.name })} title={who.name}>
+        <Icon name="person" size={24} />
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('mdp.staff.sheetTitle', { name: who.name })}>
+        <p class="t-body">{t('mdp.staff.sheetLede', { hub: who.shopName })}</p>
+        <Button chevron={false} onClick={onSignOut}>
+          {t('mdp.staff.signOut')}
+        </Button>
+      </Sheet>
+    </>
+  );
 }
 
 function Toasts({ state, actions, noNav }: { state: MdpState; actions: MdpActions; noNav?: boolean }) {

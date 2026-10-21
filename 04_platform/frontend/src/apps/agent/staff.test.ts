@@ -92,4 +92,22 @@ describe('the people at the counter, signing in', () => {
       globalThis.fetch = realFetch;
     }
   });
+
+  it('opens a session on a hub’s floor at the hub’s door, and keeps who is on the floor apart from the shop’s counter', async () => {
+    const { fetch, asked } = fakeFetch(() => ({ shopDid: 'did:hub:a', shopName: 'Central Sort', name: 'Otieno', memberId: 'ssm_9', token: { access_token: 'staff' } }));
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = fetch;
+    try {
+      const places = counterPlaces(makeConfig('mdp', '1.0.0'), { personId: 'did:person:o', token: { access_token: 'own', expires_in: 600 } });
+      await places.open('did:hub:a', 'hub');
+      expect(asked.map((a) => [a.method, a.url.replace(/^.*\/v1/, '/v1')])).toEqual([['POST', '/v1/sbg/hubs/did%3Ahub%3Aa/staff-session']]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    saveStaff({ shopDid: 'did:hub:a', shopName: 'Central Sort', name: 'Otieno', memberId: 'ssm_9' }, 'glos-mdp-staff');
+    expect(readStaff('did:hub:a', 'glos-mdp-staff')?.name).toBe('Otieno');
+    expect(readStaff('did:hub:a')).toBeNull(); // the shop app's own key knows nothing of the hub's floor
+    clearStaff('glos-mdp-staff');
+    expect(readStaff('did:hub:a', 'glos-mdp-staff')).toBeNull();
+  });
 });

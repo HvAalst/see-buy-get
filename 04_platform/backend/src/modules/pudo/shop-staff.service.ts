@@ -6,6 +6,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AgentService } from './agent.service';
+import { MdpService } from './mdp.service';
 import { PersonService } from './person.service';
 import { CounterAct, isShopStaff, MAX_SHOP_STAFF, ShopInvitationView, ShopStaffMember, ShopStaffSession, ShopStaffState, ShopStaffView, STAFF_KEY_PREFIX } from './shop-staff.types';
 
@@ -28,6 +29,15 @@ export const COUNTER_ACTS: Readonly<Record<string, string | ((body: Record<strin
   sealShopBag: 'sealed a bag',
   bookFreight: 'booked a load',
   setAvailability: (body) => (body.open === true ? 'opened the shop' : 'closed the shop'),
+  // At a hub's floor (the ISO 28000 check: "a hub's own people by name"), and the bag steps both places share.
+  sortParcel: 'sorted a parcel',
+  dropBag: 'received a bag off the road',
+  registerTote: 'added a new tote',
+  fillTote: 'put a parcel in a bag',
+  loadBag: 'loaded a bag onto a vehicle',
+  close: 'closed a bag',
+  reportAtHub: 'reported a parcel not as it was',
+  reportOnBag: 'reported a bag not as it was closed',
 };
 
 /**
@@ -43,6 +53,7 @@ export class ShopStaffService {
     private readonly agents: AgentService,
     private readonly persons: PersonService,
     private readonly auth: AuthService,
+    private readonly mdps: MdpService,
   ) {}
 
   /** The shop's people, and who is invited. The owner's. */
@@ -54,19 +65,20 @@ export class ShopStaffService {
   }
 
   /** Add somebody by their phone number, under the name the shop knows them by. The same answer whoever has that number. */
-  invite(shopDid: string, input: { phone: string; name: string }, by: string, now: number = Date.now()): ShopStaffView {
-    this.agents.get(shopDid);
+  invite(shopDid: string, input: { phone: string; name: string }, by: string, now: number = Date.now(), kind?: 'hub'): ShopStaffView {
+    this.placeName(shopDid, kind, true);
     if (!isPlausiblePhone(input.phone ?? '')) throw new GlosError('PHONE_INVALID', 'Enter the phone number they sign in with', { field: 'phone' });
     const name = (input.name ?? '').trim().slice(0, 60);
     if (!name) throw new GlosError('FIELD_REQUIRED', 'Say who this is — what they do at the counter is recorded under this name', { field: 'name' });
     const phoneHash = hashPhone(input.phone);
     const live = this.live(shopDid);
     if (live.some((m) => m.phoneHash === phoneHash)) throw new GlosError('CONFLICT', 'That number is already at this counter, or invited to it', { field: 'phone' });
-    if (live.length >= MAX_SHOP_STAFF) throw new GlosError('INVALID_STATE', `A shop can have ${MAX_SHOP_STAFF} people at its counter`);
+    if (live.length >= MAX_SHOP_STAFF) throw new GlosError('INVALID_STATE', kind === 'hub' ? `A hub can have ${MAX_SHOP_STAFF} people on its floor` : `A shop can have ${MAX_SHOP_STAFF} people at its counter`);
     const settled = this.persons.settledAt(phoneHash, now);
     const member: ShopStaffMember = {
       memberId: `ssm_${randomBytes(8).toString('hex')}`,
       shopDid,
+      ...(kind ? { kind } : {}),
       phoneHash,
       ...(settled ? { forPersonDid: settled.personDid } : {}),
       phoneEnds: normalizePhone(input.phone).replace(/\D/g, '').slice(-3),
@@ -97,7 +109,7 @@ export class ShopStaffService {
     if (!person) throw new GlosError('NOT_FOUND', 'Sign in first');
     return [...this.members.values()]
       .filter((m) => !m.removedAt && !m.declinedAt && (m.personDid === personDid || (!m.joinedAt && isFor(m, person.personDid, person.phoneHash))))
-      .map((m) => ({ memberId: m.memberId, shopDid: m.shopDid, shopName: this.shopName(m.shopDid), name: m.name, state: m.joinedAt ? ('working' as const) : ('invited' as const), invitedAt: m.invitedAt }));
+      .map((m) => ({ memberId: m.memberId, shopDid: m.shopDid, shopName: this.placeName(m.shopDid, m.kind), name: m.name, state: m.joinedAt ? ('working' as const) : ('invited' as const), invitedAt: m.invitedAt, ...(m.kind ? { kind: m.kind } : {}) }));
   }
 
   /** Yes — as the person the number was sent to, signed in with their own PIN. */
@@ -123,15 +135,16 @@ export class ShopStaffService {
    */
   session(personDid: string, shopDid: string): ShopStaffSession {
     const member = [...this.members.values()].find((m) => m.shopDid === shopDid && m.personDid === personDid && m.joinedAt && !m.removedAt);
-    if (!member) throw new GlosError('FORBIDDEN', 'You are not at this shop’s counter. The owner adds you by your number; you say yes from your own sign-in.');
-    const token = this.auth.mintActorToken({ role: 'agent', did: shopDid, actorName: member.name, personDid, revocationKey: `${STAFF_KEY_PREFIX}${member.memberId}` });
-    return { shopDid, shopName: this.shopName(shopDid), name: member.name, memberId: member.memberId, token };
+    if (!member) throw new GlosError('FORBIDDEN', 'You are not one of this place’s people. The owner adds you by your number; you say yes from your own sign-in.');
+    // A hub's people sign in as the hub, as a shop's do as the shop: what the place may do, under their own name.
+    const token = this.auth.mintActorToken({ role: member.kind === 'hub' ? 'mdp' : 'agent', did: shopDid, actorName: member.name, personDid, revocationKey: `${STAFF_KEY_PREFIX}${member.memberId}` });
+    return { shopDid, shopName: this.placeName(shopDid, member.kind), name: member.name, memberId: member.memberId, token };
   }
 
   /** An act at the counter, under who did it: a person's name, or the owner for the shop's own sign-in. */
   note(actor: IntrospectionResult | undefined, handler: string, ref: string | undefined, body: Record<string, unknown> = {}, now: number = Date.now()): void {
     const words = COUNTER_ACTS[handler];
-    if (!words || actor?.role !== 'agent' || !actor.did) return;
+    if (!words || (actor?.role !== 'agent' && actor?.role !== 'mdp') || !actor.did) return;
     const act = typeof words === 'function' ? words(body) : words;
     const staff = isShopStaff(actor);
     const id = `ca_${now.toString(36)}_${randomBytes(4).toString('hex')}`;
@@ -160,10 +173,17 @@ export class ShopStaffService {
     return member;
   }
 
-  private shopName(shopDid: string): string {
+  /** The place's name — a shop's, or a hub's — and, asked to, refusing a place that is not there. */
+  private placeName(did: string, kind?: 'hub', strict = false): string {
+    if (kind === 'hub') {
+      const hub = this.mdps.list().find((m) => m.did === did);
+      if (!hub && strict) throw new GlosError('NOT_FOUND', 'No such hub');
+      return hub?.name ?? 'A hub';
+    }
     try {
-      return this.agents.get(shopDid).shopName;
-    } catch {
+      return this.agents.get(did).shopName;
+    } catch (err) {
+      if (strict) throw err;
       return 'A shop';
     }
   }

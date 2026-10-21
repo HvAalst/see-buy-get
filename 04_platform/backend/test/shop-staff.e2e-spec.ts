@@ -134,6 +134,40 @@ describe('the people at a shop’s counter, over the wire', () => {
     await http().post(`/v1/sbg/shops/${shop.did}/staff-session`).set(person).expect(403);
   });
 
+  it('a hub’s people work its floor the same way — added by the hub, in under their own name, never at the owner’s doors', async () => {
+    const hub = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Sort Hub ${digits()}`, zones: [`ZH${digits()}`], location: { lat: -1.25, lng: 36.9 } }).expect(201)).body;
+    const owner = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token);
+    const phone = `+2547${digits()}3`;
+    const added = (await http().post('/v1/sbg/hub/staff').set(owner).send({ phone, name: 'Otieno' }).expect(201)).body;
+    expect(added).toMatchObject({ name: 'Otieno', state: 'invited' });
+    expect((await http().get('/v1/sbg/hub/staff').set(operator).expect(403)).body.detail).toMatch(/the hub’s own/);
+
+    // Yes from their own sign-in; the invitation says it is a hub's floor; a session on it acts as the hub, by name.
+    const person = await aPerson(phone);
+    expect((await http().get('/v1/sbg/shop-invitations').set(person).expect(200)).body).toEqual([expect.objectContaining({ shopDid: hub.did, shopName: hub.name, kind: 'hub', state: 'invited' })]);
+    await http().post(`/v1/sbg/shop-invitations/${added.memberId}/accept`).set(person).expect(201);
+    const session = (await http().post(`/v1/sbg/hubs/${hub.did}/staff-session`).set(person).expect(201)).body;
+    const staff = bearer(session.token.access_token as string);
+
+    // The floor is theirs: the bags standing here, a new bag opened. The owner's doors are refused by name.
+    await http().get('/v1/sbg/totes').query({ location: hub.mdpId }).set(staff).expect(200);
+    const bag = (await http().post(`/v1/sbg/mdps/${hub.mdpId}/totes`).set(staff).expect(201)).body;
+    for (const [method, path, body] of [
+      ['patch', `/v1/sbg/mdps/${hub.mdpId}/pricing`, { pricePerParcel: 1 }],
+      ['get', '/v1/sbg/hub/staff', undefined],
+      ['get', '/v1/sbg/hub/floor-log', undefined],
+      ['get', '/v1/sbg/payout-number', undefined],
+    ] as Array<['get' | 'post' | 'patch', string, Record<string, unknown> | undefined]>) {
+      const refused = await http()[method](path).set(staff).send(body ?? {});
+      expect([path, refused.status, refused.body.detail]).toEqual([path, 403, expect.stringMatching(/owner/)]);
+    }
+
+    // The owner's record of the floor, under each name; taken out, their session ends at once.
+    expect((await http().get('/v1/sbg/hub/floor-log').set(owner).expect(200)).body[0]).toMatchObject({ act: 'added a new tote', by: 'Otieno', staff: true, ref: bag.code });
+    await http().post(`/v1/sbg/hub/staff/${added.memberId}/remove`).set(owner).expect(201);
+    await http().get('/v1/sbg/totes').query({ location: hub.mdpId }).set(staff).expect(401);
+  });
+
   /**
    * THE DOORS A SHOP'S OWN PEOPLE MAY USE, read off the running application. A member of staff signs in as the shop, so
    * the guard lets them through a door marked `@AtTheCounter()` and no other. A door added to this list is a decision
@@ -155,7 +189,8 @@ describe('the people at a shop’s counter, over the wire', () => {
           routes += 1;
           if (Reflect.getMetadata(AT_THE_COUNTER_KEY, h) !== true) continue;
           marked.push(`${VERB[Reflect.getMetadata(METHOD_METADATA, h) as number]} ${base}/${String(Reflect.getMetadata(PATH_METADATA, h))}`);
-          if (type.name === 'SbgController') handlers.add(name);
+          // The controllers whose acts the counter's own record keeps (CounterLogInterceptor).
+          if (['SbgController', 'BagClosureController', 'TamperController'].includes(type.name)) handlers.add(name);
         }
       }
     }
@@ -190,6 +225,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'POST sbg/parcels/:id/tamper',
         // round 36 — a bag closed for the road on its coded seal, and one found tampered with: held
         'POST sbg/totes/:code/close', 'POST sbg/totes/:code/tamper',
+        // a hub's floor, worked by its own people (the ISO 28000 check: "a hub's own people by name")
+        'POST sbg/mdps/:id/drop-bag', 'POST sbg/mdps/:id/sort', 'POST sbg/mdps/:id/totes', 'GET sbg/totes', 'POST sbg/mdps/:id/parcels/:parcelId/tamper',
         // photographs, a parcel's damage report, a word with the receiver, the shop's inbox
         'POST sbg/media//', 'GET sbg/media/:id',
         'GET sbg/parcels/:id/damage-report', 'GET sbg/parcels/:id/damage-report/file', 'GET sbg/parcels/:id/damage-report/links', 'POST sbg/parcels/:id/damage-report/links',

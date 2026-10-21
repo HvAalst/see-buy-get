@@ -22,7 +22,10 @@ export const STAFF_KEY_PREFIX = SHOP_STAFF_KEY_PREFIX;
 
 export interface ShopStaffMember {
   memberId: string;
+  /** The place: a shop's DID, or — where `kind` says hub — a hub's. */
   shopDid: string;
+  /** A hub's people (the ISO 28000 check: "a hub's own people by name"); absent, a shop's. */
+  kind?: 'hub';
   /** Who the invitation is for until they accept: the number's hash, and the account that number was certainly for. */
   phoneHash: string;
   forPersonDid?: string;
@@ -59,6 +62,8 @@ export class ShopInvitationView {
   @ApiProperty({ description: 'What the shop calls them.' }) name: string;
   @ApiProperty({ enum: ['invited', 'working'] }) state: 'invited' | 'working';
   @ApiProperty() invitedAt: string;
+  /** A hub's floor rather than a shop's counter; `shopDid` and `shopName` are then the hub's. */
+  @ApiPropertyOptional({ enum: ['hub'] }) kind?: 'hub';
 }
 
 /** A staff session: a sign-in that acts as the shop, under this person's name. */

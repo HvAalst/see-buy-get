@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, ErrorNote, Icon, Note, Sheet } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { actLine, canRemove, staffLine, type CounterActRow, type PeopleApi, type StaffRow } from '../people';
 
@@ -9,8 +9,10 @@ import { actLine, canRemove, staffLine, type CounterActRow, type PeopleApi, type
  * number; they say yes from their own phone + PIN sign-in and work the counter under their own name; take them out and
  * they are signed out at once. "Who did what" is the counter's own record — the owner's, never on a parcel.
  */
-export function PeopleSheet({ open, onClose, api }: { open: boolean; onClose: () => void; api: PeopleApi | undefined }) {
-  const t = useT();
+export function PeopleSheet({ open, onClose, api, words, statePrefix }: { open: boolean; onClose: () => void; api: PeopleApi | undefined; words?: Partial<Record<MessageKey, MessageKey>>; statePrefix?: string }) {
+  const tt = useT();
+  // A hub's owner reads the same sheet in a hub's words (its floor, not a counter).
+  const t = ((key: MessageKey, params?: Record<string, string | number>) => tt(words?.[key] ?? key, params)) as typeof tt;
   const [view, setView] = useState<'people' | 'log'>('people');
   const [rows, setRows] = useState<StaffRow[] | null>(null);
   const [acts, setActs] = useState<CounterActRow[] | null>(null);
@@ -106,7 +108,7 @@ export function PeopleSheet({ open, onClose, api }: { open: boolean; onClose: ()
                   </span>
                   <span class="row__body">
                     <span class="row__t">{r.name}</span>
-                    <span class="row__s">{staffLine(r, t)}</span>
+                    <span class="row__s">{staffLine(r, tt, statePrefix)}</span>
                   </span>
                   {canRemove(r) ? (
                     <span class="row__end">

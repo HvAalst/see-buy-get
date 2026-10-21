@@ -24,6 +24,8 @@ export interface CounterPlace {
   name: string;
   state: 'invited' | 'working';
   invitedAt: string;
+  /** A hub's floor rather than a shop's counter (the ISO 28000 check: "a hub's own people by name"). */
+  kind?: 'hub';
 }
 
 /** A session at one shop's counter, under this person's name. */
@@ -78,8 +80,8 @@ export function counterPlaces(config: SbgConfig, signIn: PersonSignIn) {
     list: () => get<CounterPlace[]>('/v1/sbg/shop-invitations'),
     accept: (memberId: string) => post<CounterPlace>(`/v1/sbg/shop-invitations/${encodeURIComponent(memberId)}/accept`),
     decline: (memberId: string) => post<{ declined: true }>(`/v1/sbg/shop-invitations/${encodeURIComponent(memberId)}/decline`),
-    open: async (shopDid: string): Promise<Result<StaffSession>> => {
-      const r = await post<StaffSession>(`/v1/sbg/shops/${encodeURIComponent(shopDid)}/staff-session`);
+    open: async (shopDid: string, kind?: 'hub'): Promise<Result<StaffSession>> => {
+      const r = await post<StaffSession>(`/v1/sbg/${kind === 'hub' ? 'hubs' : 'shops'}/${encodeURIComponent(shopDid)}/staff-session`);
       if (!r.error) forget();
       return r;
     },
@@ -106,10 +108,10 @@ export function placesInOrder(places: CounterPlace[]): CounterPlace[] {
 const STAFF_KEY = 'glos-agent-staff';
 
 /** The person working this shop's counter on this phone, if the session here is theirs — never another shop's. */
-export function readStaff(shopDid: string | null): StaffAtCounter | null {
+export function readStaff(shopDid: string | null, key: string = STAFF_KEY): StaffAtCounter | null {
   if (!shopDid) return null;
   try {
-    const raw = globalThis.sessionStorage?.getItem(STAFF_KEY);
+    const raw = globalThis.sessionStorage?.getItem(key);
     const v = raw ? (JSON.parse(raw) as Partial<StaffAtCounter>) : null;
     return v && v.shopDid === shopDid && typeof v.name === 'string' && typeof v.memberId === 'string' ? { shopDid, shopName: String(v.shopName ?? ''), name: v.name, memberId: v.memberId } : null;
   } catch {
@@ -117,17 +119,17 @@ export function readStaff(shopDid: string | null): StaffAtCounter | null {
   }
 }
 
-export function saveStaff(who: StaffAtCounter): void {
+export function saveStaff(who: StaffAtCounter, key: string = STAFF_KEY): void {
   try {
-    globalThis.sessionStorage?.setItem(STAFF_KEY, JSON.stringify(who));
+    globalThis.sessionStorage?.setItem(key, JSON.stringify(who));
   } catch {
     /* storage unavailable — the screens show the owner's rows, and the server refuses them by name */
   }
 }
 
-export function clearStaff(): void {
+export function clearStaff(key: string = STAFF_KEY): void {
   try {
-    globalThis.sessionStorage?.removeItem(STAFF_KEY);
+    globalThis.sessionStorage?.removeItem(key);
   } catch {
     /* nothing kept */
   }

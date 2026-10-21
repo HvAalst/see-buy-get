@@ -4,6 +4,8 @@ import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import { bagLine, fillPercent, fillingBags, freeBags, homeSummary, money, swatchIndex, unsortedAt } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
+import { PeopleSheet } from '../../agent/screens/PeopleSheet';
+import { HUB_PEOPLE_WORDS } from '../staffWords';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -18,6 +20,7 @@ export interface HomeScreenProps {
 export function HomeScreen({ state, actions }: HomeScreenProps) {
   const t = useT();
   const [priceOpen, setPriceOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const hub = state.hub;
   const unsorted = hub ? unsortedAt(state.inbound, hub.mdpId) : [];
   const filling = fillingBags(state.totes);
@@ -101,6 +104,16 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
         </Card>
       ) : null}
 
+      {/* The hub's people work the floor; its fee and its people are the owner's (the server refuses them those doors). */}
+      {state.staff ? null : (
+        <Card title={t('mdp.people.row')}>
+          <p class="card__note">{t('mdp.people.rowSub')}</p>
+          <Button variant="link" full={false} onClick={() => setPeopleOpen(true)}>
+            {t('mdp.people.open')}
+          </Button>
+        </Card>
+      )}
+      {state.staff ? null : (
       <Card title={t('mdp.home.yourFee')} aside={<b class="mono">{money(hub?.pricePerParcel, hub?.currency)}</b>}>
         <p class="card__note">{t('mdp.home.feeNote')}</p>
         <div class="btnrow">
@@ -112,6 +125,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
           </Button>
         </div>
       </Card>
+      )}
 
       <div class="scr__foot">
         <ReadAloud text={() => homeSummary(unsorted.length, filling.length, t)} label={t('mdp.readAloud')} />
@@ -122,6 +136,7 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
       </div>
 
       <PriceSheet open={priceOpen} onClose={() => setPriceOpen(false)} state={state} actions={actions} />
+      <PeopleSheet open={peopleOpen} onClose={() => setPeopleOpen(false)} api={actions.people} words={HUB_PEOPLE_WORDS} statePrefix="mdp.people.state" />
     </div>
   );
 }

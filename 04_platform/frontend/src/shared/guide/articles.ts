@@ -65,6 +65,24 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "people-at-work",
+    apps: [
+      "agent",
+      "mdp"
+    ],
+    title: "Your people at the counter or on the hub’s floor",
+    summary: "The people who work a shop’s counter or a hub’s floor sign in as themselves, with their own phone and PIN, and what each of them does is kept under their name.",
+    steps: [
+      "The owner — signed in as the shop or the hub — opens People at the counter (Shop app) or People on the floor (Hub app) on the home screen, and adds a person by their phone number and the name they go by.",
+      "They say yes from their own SeeBuyGet sign-in. Then, on the shop’s or the hub’s phone: “I work at the counter here” or “I work on the floor here — sign in as myself”, with their number and their PIN.",
+      "What they do is kept under their name, in “Who did what” in the same place. The fee, the money, the hours and the people stay with the owner: those are not shown to them, and refused if tried.",
+      "Take somebody out and they are signed out at once, wherever they are signed in."
+    ],
+    notes: [
+      "A person’s PIN is theirs: never ask for it, and never share the owner’s password with the people who work for you."
+    ]
+  },
+  {
     id: "shop-papers",
     apps: [
       "agent"

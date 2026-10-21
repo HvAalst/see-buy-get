@@ -1,4 +1,5 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Param, Post, UseInterceptors } from '@nestjs/common';
+import { CounterLogInterceptor } from './shop-staff.controller';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -16,6 +17,7 @@ const HOLDER_ONLY = 'A bag is closed by the shop or hub that has it: staff read 
  * the shop's own bag (that one is closed with "Close the bag"). Its coded seal's number and a photograph, or a photograph.
  */
 @Controller('sbg')
+@UseInterceptors(CounterLogInterceptor)
 export class BagClosureController {
   constructor(
     private readonly mdps: MdpService,

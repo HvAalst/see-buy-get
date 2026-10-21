@@ -25,4 +25,17 @@ describe('the people at the counter', () => {
     await api.log();
     expect(seen).toEqual(['POST /v1/sbg/shop/staff {"phone":"+254712000111","name":"Wanjiru"}', 'POST /v1/sbg/shop/staff/ssm_1/remove {}', 'GET /v1/sbg/shop/counter-log']);
   });
+
+  it('asks a hub’s own routes for a hub’s people, and says where they stand in a hub’s words', async () => {
+    const seen: string[] = [];
+    const get = (async (path: string) => (seen.push(`GET ${path}`), { data: [], error: null })) as never;
+    const post = (async (path: string, body: unknown) => (seen.push(`POST ${path} ${JSON.stringify(body)}`), { data: {}, error: null })) as never;
+    const api = peopleApi(get, post, 'hub');
+    await api.list();
+    await api.add('+254712000222', 'Otieno');
+    await api.remove('ssm_2');
+    await api.log();
+    expect(seen).toEqual(['GET /v1/sbg/hub/staff', 'POST /v1/sbg/hub/staff {"phone":"+254712000222","name":"Otieno"}', 'POST /v1/sbg/hub/staff/ssm_2/remove {}', 'GET /v1/sbg/hub/floor-log']);
+    expect(staffLine({ state: 'working', phoneEnds: '222' }, t, 'mdp.people.state')).toBe('Works the floor · number ending 222');
+  });
 });

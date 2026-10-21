@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseInterceptors } from '@nestjs/common';
+import { CounterLogInterceptor } from './shop-staff.controller';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -18,6 +19,7 @@ const HOLDER_ONLY = 'Tampering is reported by whoever has the goods in front of 
  * a hub report on a parcel in theirs; staff read every exception and release a hold, with a reason.
  */
 @Controller('sbg')
+@UseInterceptors(CounterLogInterceptor)
 export class TamperController {
   constructor(
     private readonly tamper: TamperService,
@@ -56,6 +58,8 @@ export class TamperController {
   /** The hub, from its own sign-in: a parcel standing at it, its wrap or packaging cut or opened. */
   @Roles('mdp')
   @Post('mdps/:id/parcels/:parcelId/tamper')
+  // The hub's floor (the ISO 28000 check: "a hub's own people by name"): its people work it, under their own name.
+  @AtTheCounter()
   reportAtHub(@Param('id') id: string, @Param('parcelId') parcelId: string, @Body() dto: ReportParcelTamperDto, @Actor() actor: IntrospectionResult): TamperUnitView {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', HOLDER_ONLY);
     const mdp = this.mdps.require(id);

@@ -27,8 +27,8 @@ export interface CounterActRow {
 }
 
 /** The line under a person: where they stand, and the number they were added by (its last three digits). */
-export function staffLine(row: Pick<StaffRow, 'state' | 'phoneEnds'>, t: Translate): string {
-  return t(`agent.people.state.${row.state}` as MessageKey, { ends: row.phoneEnds });
+export function staffLine(row: Pick<StaffRow, 'state' | 'phoneEnds'>, t: Translate, prefix = 'agent.people.state'): string {
+  return t(`${prefix}.${row.state}` as MessageKey, { ends: row.phoneEnds });
 }
 
 /** Whether the owner can still take this person out: invited or working. */
@@ -52,11 +52,13 @@ export interface PeopleApi {
   log: () => Promise<Result<CounterActRow[]>>;
 }
 
-export function peopleApi(get: GetJson, post: Post): PeopleApi {
+/** A shop's people (its counter), or a hub's (its floor: the ISO 28000 check, "a hub's own people by name"). */
+export function peopleApi(get: GetJson, post: Post, place: 'shop' | 'hub' = 'shop'): PeopleApi {
+  const base = place === 'hub' ? '/v1/sbg/hub/staff' : '/v1/sbg/shop/staff';
   return {
-    list: () => get<StaffRow[]>('/v1/sbg/shop/staff'),
-    add: (phone, name) => post<StaffRow>('/v1/sbg/shop/staff', { phone: phone.trim(), name: name.trim() }),
-    remove: (memberId) => post<StaffRow>(`/v1/sbg/shop/staff/${encodeURIComponent(memberId)}/remove`, {}),
-    log: () => get<CounterActRow[]>('/v1/sbg/shop/counter-log'),
+    list: () => get<StaffRow[]>(base),
+    add: (phone, name) => post<StaffRow>(base, { phone: phone.trim(), name: name.trim() }),
+    remove: (memberId) => post<StaffRow>(`${base}/${encodeURIComponent(memberId)}/remove`, {}),
+    log: () => get<CounterActRow[]>(place === 'hub' ? '/v1/sbg/hub/floor-log' : '/v1/sbg/shop/counter-log'),
   };
 }

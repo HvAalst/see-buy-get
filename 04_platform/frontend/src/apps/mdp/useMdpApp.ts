@@ -10,6 +10,11 @@ import { holdPhoto } from '../../shared/heldPhotos';
 import { errorSentence } from '../../shared/ui';
 import type { UnitHold } from '../../shared/tamper';
 import type { DropView, LoadView, MdpView, NewToteView, ParcelRow, RatesView, SortView, ToteView } from './types';
+import { clearStaff, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from '../agent/staff';
+import { peopleApi } from '../agent/people';
+
+/** Where this device keeps who is working the hub's floor: the tab's, like the session. */
+export const HUB_STAFF_KEY = 'glos-mdp-staff';
 
 export type Screen = 'home' | 'drop' | 'sort' | 'load' | 'newtote' | 'rates';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
@@ -46,6 +51,8 @@ export interface MdpState {
   tamper: { parcelId: string; photoRef: string; note: string } | null;
   /** Round 36 — the bag scanned to drop, looked at before it is opened: how it was closed, held; a seal read that did not match. */
   drop: { bag?: { closedWith?: 'seal' | 'photo'; held?: UnitHold } | null; mismatch?: string };
+  /** One of the hub's people working its floor on this device, under their own name; null for the hub's own sign-in. */
+  staff: StaffAtCounter | null;
 }
 
 const EMPTY_FORM = { dropCode: '', sortId: '', loadCode: '', badge: '' };
@@ -68,6 +75,7 @@ const INITIAL: MdpState = {
   stale: false,
   form: { ...EMPTY_FORM },
   tamper: null,
+  staff: null,
   drop: {},
 };
 
@@ -242,6 +250,8 @@ export function useMdpApp() {
 
   useEffect(() => {
     if (did) purgeMdpTokens(did);
+    // Who is on the floor on this device: the session here is theirs, under their name — or the hub's own.
+    setState((s) => ({ ...s, staff: readStaff(did, HUB_STAFF_KEY) }));
     if (client && did) void refresh();
   }, [client, did, refresh]);
 
@@ -270,6 +280,7 @@ export function useMdpApp() {
       return;
     }
     purgeMdpTokens(null);
+    clearStaff(HUB_STAFF_KEY);
     saveDid(login.did);
     saveEmail(mail);
     const next = createMdpClient(login.did);
@@ -277,6 +288,34 @@ export function useMdpApp() {
     setState((s) => ({ ...INITIAL, phase: 'boot', toasts: s.toasts }));
     setDid(login.did);
   }, []);
+
+  /**
+   * ONE OF THE HUB'S PEOPLE, signed in as themselves and now on its floor (the ISO 28000 check: "a hub's own people by
+   * name"): their session acts as the hub under their name. Everything of the last sign-in on this device is dropped first.
+   */
+  const enterAsStaff = useCallback(async (session: StaffSession) => {
+    purgeMdpTokens(null);
+    saveDid(session.shopDid);
+    const who = { shopDid: session.shopDid, shopName: session.shopName, name: session.name, memberId: session.memberId };
+    saveStaff(who, HUB_STAFF_KEY);
+    const next = createMdpClient(session.shopDid);
+    await next.client.seed({ access_token: session.token.access_token, expires_in: session.token.expires_in ?? 3600 });
+    setState((s) => ({ ...INITIAL, phase: 'boot', staff: who, toasts: s.toasts }));
+    setDid(session.shopDid);
+  }, []);
+
+  /** The hub's people, for its owner: added by number, taken out at once, and who did what on the floor. */
+  const people = useMemo(
+    () =>
+      client
+        ? peopleApi(
+            (path) => client.client.sbg.request((raw) => raw.GET(path as never, {} as never) as never),
+            (path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never),
+            'hub',
+          )
+        : undefined,
+    [client],
+  );
 
   /** After a password change: the server signed every session out and handed this device a fresh sign-in. */
   const adoptToken = useCallback(
@@ -289,6 +328,7 @@ export function useMdpApp() {
   const signOut = useCallback(() => {
     client?.client.session.clear();
     purgeMdpTokens(null);
+    clearStaff(HUB_STAFF_KEY);
     clearDid();
     setDid(null);
     setState(() => ({ ...INITIAL, phase: 'signin' }));
@@ -602,6 +642,8 @@ export function useMdpApp() {
       refresh,
       signIn,
       signOut,
+      enterAsStaff,
+      people,
       adoptToken,
       forgot,
       reset,

@@ -4670,6 +4670,8 @@ export class SbgController {
   /** Register a fresh laminated tote (QR + human code) into the pool at this MDP. */
   @Roles('mdp', 'operator')
   @Post('mdps/:id/totes')
+  // The hub's floor (the ISO 28000 check: "a hub's own people by name"): its people work it, under their own name.
+  @AtTheCounter()
   registerTote(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     this.assertMdpActs(id, actor);
     return this.mdps.registerTote(id);
@@ -4678,6 +4680,8 @@ export class SbgController {
   /** Totes currently at a location. A hub reads the bags standing at it; the whole pool (no location) is read by network staff. */
   @Roles('mdp', 'operator')
   @Get('totes')
+  // The hub's floor (the ISO 28000 check: "a hub's own people by name"): its people work it, under their own name.
+  @AtTheCounter()
   listTotes(@Actor() actor: IntrospectionResult, @Query('location') location?: string, @Query('status') status?: string) {
     // Any sign-in could read every bag on the network, with what is in each.
     if (actor?.role !== 'operator') {
@@ -4739,6 +4743,8 @@ export class SbgController {
   /** A bus drops a bag at an MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */
   @Roles('mdp', 'operator')
   @Post('mdps/:id/drop-bag')
+  // The hub's floor (the ISO 28000 check: "a hub's own people by name"): its people work it, under their own name.
+  @AtTheCounter()
   dropBag(@Param('id') id: string, @Body() dto: DropBagDto, @Actor() actor: IntrospectionResult) {
     this.assertMdpActs(id, actor);
     return this.mdps.dropBag(id, dto.code, dto.receipt, actor?.actorName);
@@ -4747,6 +4753,8 @@ export class SbgController {
   /** Sort a parcel at an MDP → returns its next destination + the bag code to drop it in. */
   @Roles('mdp', 'operator')
   @Post('mdps/:id/sort')
+  // The hub's floor (the ISO 28000 check: "a hub's own people by name"): its people work it, under their own name.
+  @AtTheCounter()
   sortParcel(@Param('id') id: string, @Body() dto: SortParcelDto, @Actor() actor: IntrospectionResult) {
     this.assertMdpActs(id, actor);
     return this.mdps.sortParcel(id, dto.parcelId);

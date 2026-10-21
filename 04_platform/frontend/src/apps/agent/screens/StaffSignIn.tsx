@@ -1,7 +1,7 @@
-import { useState } from 'preact/hooks';
+import { useMemo, useState } from 'preact/hooks';
 import { Button, Card, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, Note } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
-import type { SbgError } from '../../../lib/sbg';
+import type { SbgConfig, SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { TroubleSheet } from '../../../shared/account/TroubleSheet';
@@ -21,17 +21,36 @@ const TITLE: Record<Step, MessageKey> = {
   places: 'agent.staff.placesTitle',
 };
 
-// Built once: the doors a person uses before they are signed in.
-const doors = staffDoors(agentConfig());
-const recovery = recoveryApi(agentConfig());
+// Built once per app: the doors a person uses before they are signed in.
+const shopDoors = staffDoors(agentConfig());
+const shopRecovery = recoveryApi(agentConfig());
 
 /**
  * ONE OF THE SHOP'S PEOPLE, SIGNING IN AT ITS COUNTER (the user, 2026-10-18: "own phone + PIN"). Their number and their
  * PIN — the same as in any SeeBuyGet app — and, the first time on this phone, a code to their number. Somebody new to
  * SeeBuyGet chooses a PIN here, with a recovery email behind it. Then the shops that added them: say yes, and work one.
  */
-export function StaffSignIn({ onBack, onSession }: { onBack: () => void; onSession: (s: StaffSession) => Promise<void> }) {
-  const t = useT();
+export function StaffSignIn({
+  onBack,
+  onSession,
+  config,
+  place = 'shop',
+  words,
+}: {
+  onBack: () => void;
+  onSession: (s: StaffSession) => Promise<void>;
+  /** A hub's floor (the ISO 28000 check: "a hub's own people by name"): the hub app's config and its words. */
+  config?: SbgConfig;
+  place?: 'shop' | 'hub';
+  words?: Partial<Record<MessageKey, MessageKey>>;
+}) {
+  const tt = useT();
+  const t = ((key: MessageKey, params?: Record<string, string | number>) => tt(words?.[key] ?? key, params)) as typeof tt;
+  const cfg = config ?? agentConfig();
+  const doors = useMemo(() => (config ? staffDoors(config) : shopDoors), [config]);
+  const recovery = useMemo(() => (config ? recoveryApi(config) : shopRecovery), [config]);
+  /** Only the places of this app's kind: a shop's phone opens counters, a hub's opens floors. */
+  const mine = (all: CounterPlace[]) => placesInOrder(all.filter((p) => (place === 'hub' ? p.kind === 'hub' : p.kind !== 'hub')));
   const [step, setStep] = useState<Step>('login');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
@@ -58,12 +77,12 @@ export function StaffSignIn({ onBack, onSession }: { onBack: () => void; onSessi
 
   /** Signed in as themselves: the shops that added them. */
   const signedIn = async (who: PersonSignIn) => {
-    const places = counterPlaces(agentConfig(), who);
+    const places = counterPlaces(cfg, who);
     const r = await places.list();
     setBusy(false);
     if (r.error) return setError(r.error);
     setApi(places);
-    setPlaces(placesInOrder(r.data ?? []));
+    setPlaces(mine(r.data ?? []));
     setPin('');
     setStep('places');
   };
@@ -132,14 +151,14 @@ export function StaffSignIn({ onBack, onSession }: { onBack: () => void; onSessi
     const again = await api.list();
     setBusy(false);
     if (again.error) return setError(again.error);
-    setPlaces(placesInOrder(again.data ?? []));
+    setPlaces(mine(again.data ?? []));
   };
 
   const work = async (place: CounterPlace) => {
     if (!api) return;
     setBusy(true);
     setError(null);
-    const r = await api.open(place.shopDid);
+    const r = await api.open(place.shopDid, place.kind);
     if (r.error || !r.data) {
       setBusy(false);
       return setError(r.error);

@@ -5,6 +5,9 @@ import { Button, Card, Checklist, ErrorNote, NeedsSignalNote, ReadAloud, Sheet }
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { MdpActions } from '../useMdpApp';
+import { StaffSignIn } from '../../agent/screens/StaffSignIn';
+import { mdpConfig } from '../api';
+import { HUB_STAFF_WORDS } from '../staffWords';
 
 export interface SignInScreenProps {
   actions: MdpActions;
@@ -18,6 +21,9 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
   const [email, setEmail] = useState(actions.readEmail() ?? '');
   const [password, setPassword] = useState('');
   const [help, setHelp] = useState(false);
+  // One of the hub's people, signing in as themselves (the ISO 28000 check: "a hub's own people by name").
+  const [asStaff, setAsStaff] = useState(false);
+  if (asStaff) return <StaffSignIn place="hub" config={mdpConfig()} words={HUB_STAFF_WORDS} onBack={() => setAsStaff(false)} onSession={actions.enterAsStaff} />;
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -84,6 +90,9 @@ export function SignInScreen({ actions, error, busy }: SignInScreenProps) {
           {t('mdp.signin.forgot')}
         </Button>
         <HelpLink app="mdp" label="signin" />
+        <Button variant="link" full={false} onClick={() => setAsStaff(true)}>
+          {t('mdp.staff.entry')}
+        </Button>
         <ReadAloud text={() => t('mdp.signin.spoken')} label={t('mdp.readAloud')} />
       </div>
 
