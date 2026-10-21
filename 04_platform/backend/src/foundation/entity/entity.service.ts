@@ -20,6 +20,7 @@ import {
   RateOrigins,
   RateStack,
   ResolvedCarrierPapers,
+  ResolvedSealRules,
   ResolvedInsurance,
   ResolvedRates,
   ResolvedTax,
@@ -573,6 +574,31 @@ export class EntityService implements OnApplicationBootstrap {
     return entity;
   }
 
+  /** Round 38 — where this company requires a seal on loads taken over in its country. Both false for one that has never said. */
+  sealRulesFor(entityId: string): ResolvedSealRules {
+    return EntityService.resolveSealRules(this.get(entityId));
+  }
+
+  static resolveSealRules(from: Pick<Entity, 'sealRules'>): ResolvedSealRules {
+    return { crossBorder: Boolean(from.sealRules?.crossBorder), containers: Boolean(from.sealRules?.containers) };
+  }
+
+  /**
+   * Round 38 — SAY WHERE A SEAL IS REQUIRED (the user: "Each country decides"). The whole rule every time, as the carrier
+   * papers are: "where do you require a seal" has a complete answer. Saving what is already set is not a decision and is
+   * not logged as one.
+   */
+  setSealRules(entityId: string, rules: { crossBorder: boolean; containers: boolean }, by?: string): Entity {
+    const entity = this.requireTransacting(entityId);
+    const before = EntityService.resolveSealRules(entity);
+    const next = { crossBorder: Boolean(rules.crossBorder), containers: Boolean(rules.containers) };
+    if (next.crossBorder === before.crossBorder && next.containers === before.containers) return entity;
+    entity.sealRules = next.crossBorder || next.containers ? { ...(next.crossBorder ? { crossBorder: true } : {}), ...(next.containers ? { containers: true } : {}) } : undefined;
+    this.entities.set(entity.entityId, entity);
+    this.record(entity.entityId, { at: new Date().toISOString(), by: by ?? 'unknown', what: 'sealRules', from: sealRulesLine(before), to: sealRulesLine(next) });
+    return entity;
+  }
+
   /** Which of a carrier's own papers this sister will not trade without. Empty for one that has never said. */
   carrierPapersFor(entityId: string): ResolvedCarrierPapers {
     return EntityService.resolveCarrierPapers(this.get(entityId));
@@ -970,6 +996,7 @@ export class EntityService implements OnApplicationBootstrap {
       topUpFee: entity.topUpFee,
       amounts: EntityService.amountRows(entity),
       carrierPapers: EntityService.resolveCarrierPapers(entity),
+      sealRules: EntityService.resolveSealRules(entity),
       // The default first: every lane row below is read against it, and a table whose fallback row is
       // buried in the middle makes "inherited from where?" a question you have to hunt for.
       lanes: [rowFor(), ...lanes.map((l) => rowFor(l))],
@@ -1019,6 +1046,12 @@ function coverLine(i: { premiumPct: number; freeLimit: number }, currency?: stri
  * "nothing" reads better in a change log than an empty list, and says what was actually decided. The
  * kinds are spelled as words ("operator licence") because this line is shown to a person as-is.
  */
+/** Where a seal is required, as the change log says it. */
+function sealRulesLine(r: { crossBorder: boolean; containers: boolean }): string {
+  const where = [r.crossBorder ? 'loads that cross a border' : '', r.containers ? 'container legs' : ''].filter(Boolean);
+  return where.length ? `a seal on ${where.join(' and ')}` : 'no seal required';
+}
+
 function papersLine(p: { enforce: string[] }): string {
   return p.enforce.length ? p.enforce.map((k) => k.replace(/_/g, ' ')).join(', ') : 'nothing';
 }

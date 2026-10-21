@@ -239,6 +239,8 @@ export interface Claimable {
   invoiceMissing?: boolean;
   /** Round 38 — the commercial invoice is this driver's to show at the border: across one, from pickup on. */
   invoiceToShow?: boolean;
+  /** Round 38 — a seal its pickup country's company requires, not written yet: why, in words. Not to be taken over yet. */
+  sealMissing?: string;
   /** Round 14 — on the road: what the driver may say of it (at a border post, cleared it, at a hub). */
   passage?: PassageForDriver;
   /** Round 15 — the seals to read off the door: what each is, never its number; a fingerprint to check a reading on the phone. */

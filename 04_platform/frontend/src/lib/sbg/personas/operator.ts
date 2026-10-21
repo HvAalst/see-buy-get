@@ -114,6 +114,9 @@ export function createOperatorApi(sbg: SbgClient) {
      * Say which of a CARRIER's own papers this sister will not trade without. The whole list every time —
      * an empty one is how "enforce nothing" is said, and it is the default.
      */
+    /** Round 38 — where this company requires a seal on loads taken over in its country. */
+    setSealRules: (entityId: string, body: { crossBorder: boolean; containers: boolean }) =>
+      sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/seal-rules', { params: { path: { entityId } }, body })),
     setCarrierPapers: (entityId: string, enforce: Array<'operator_licence' | 'carrier_insurance'>) =>
       sbg.request((c) => c.POST('/v1/sbg/entities/{entityId}/carrier-papers', { params: { path: { entityId } }, body: { enforce } })),
 

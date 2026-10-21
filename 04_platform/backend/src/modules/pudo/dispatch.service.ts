@@ -52,7 +52,7 @@ import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
-import { carrierReadsInvoice, CommercialInvoiceService } from './commercial-invoice.service';
+import { carrierReadsInvoice, CommercialInvoiceService, crossesBorder } from './commercial-invoice.service';
 import { LoadPassageService, viewOf as passageView } from './load-passage.service';
 import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
 import { LoadSealService, sealCheck } from './load-seal.service';
@@ -2930,6 +2930,9 @@ export class DispatchService {
     // 2026-10-18). Asked before anything is written, so the load stays claimed and the driver is told why.
     const noInvoice = this.invoices?.pickupRefusal(f, this.postedByBusiness(f));
     if (noInvoice) throw new GlosError('COMMERCIAL_INVOICE_REQUIRED', noInvoice);
+    // Round 38 — where the country the goods are taken over in requires it, the load leaves sealed ("Each country decides").
+    const noSeal = this.sealRefusal(f);
+    if (noSeal) throw new GlosError('SEAL_REQUIRED', noSeal);
     // S33 — the load-safety gate. Every dedicated freight must clear the load-safety checklist THIS cargo
     // requires (re-derived from the freight, so a client that under-reports can't bypass it) AND carry a
     // securement photo, before it leaves the pickup. The check happens BEFORE any mutation, so a failed gate
@@ -3715,6 +3718,27 @@ export class DispatchService {
     return this.entities.byDid(f.postedByDid)?.kind === 'business';
   }
 
+  /**
+   * Round 38 — WHY A SEAL IS REQUIRED ON THIS LOAD, if it is (the user: "Each country decides"): the company of the country
+   * the goods are taken over in requires one on loads that cross a border, or on container legs. Said with that company, so
+   * the shipper and the driver read whose rule it is. Undefined where no rule asks for one.
+   */
+  sealRequiredBy(f: Freight): { why: 'crossBorder' | 'container'; company: string } | undefined {
+    const entity = f.pickupCountry ? this.entities.forJurisdiction(f.pickupCountry) : undefined;
+    if (!entity) return undefined;
+    const rules = this.entities.sealRulesFor(entity.entityId);
+    if (rules.crossBorder && crossesBorder(f)) return { why: 'crossBorder', company: entity.name };
+    if (rules.containers && f.containerNo) return { why: 'container', company: entity.name };
+    return undefined;
+  }
+
+  /** Why this load may not be taken over unsealed: a seal is required on it and none is on. Asked before anything is written. */
+  sealRefusal(f: Freight): string | undefined {
+    const required = this.sealRequiredBy(f);
+    if (!required || (this.seals?.on(f.freightId).length ?? 0) > 0) return undefined;
+    return `${required.company} requires a seal on ${required.why === 'crossBorder' ? 'a load that crosses a border' : 'a container leg'}: the shipper writes one before the goods are taken over`;
+  }
+
   private wrapFreight(f: Freight): Claimable {
     // S32: freight now carries its cargo model, so it matches vehicles on capability AND equipment like a tote.
     // S32b: status lets the driver app drive the claimed → picked-up → delivered flow in-app.
@@ -3722,12 +3746,14 @@ export class DispatchService {
     const invoiceMissing = f.status === 'claimed' && Boolean(this.invoices?.pickupRefusal(f, this.postedByBusiness(f)));
     // Round 38 — an invoice written here, this driver's to show at the border: across one, from pickup on.
     const invoiceToShow = Boolean(this.invoices?.current(f.freightId)) && carrierReadsInvoice(f, f.claimedBy);
+    // Round 38 — a seal its country requires and none written: not to be taken over yet, and the driver told why.
+    const sealMissing = f.status === 'claimed' ? this.sealRefusal(f) : undefined;
     // Round 14 — on the road: what the driver needs to say a border or a hub.
     const passage = f.status === 'in_transit' && this.passages ? this.passages.forDriver(f) : undefined;
     // Round 15 — the seals to find on the door: what each is, never its number.
     const sealsToFind = (f.status === 'claimed' || f.status === 'in_transit') && this.seals?.of(f.freightId).length ? this.seals.toFind(f.freightId) : undefined;
     const heldByAuthority = this.heldByAuthority(f);
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

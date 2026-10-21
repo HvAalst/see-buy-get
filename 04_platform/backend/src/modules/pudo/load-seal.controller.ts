@@ -35,7 +35,8 @@ export class LoadSealController {
   read(@Param('id') id: string, @Actor() actor: IntrospectionResult): LoadSealsView {
     const f = this.notes.requireReader(id, actor);
     // Round 35 — the carrier reads which seals, not their numbers, until it has read them off the door.
-    return { freightId: f.freightId, seals: this.seals.views(f.freightId, this.notes.readsSealNumbers(f, actor)), editable: this.mayWrite(f, actor) };
+    const required = this.dispatch.sealRequiredBy(f);
+    return { freightId: f.freightId, seals: this.seals.views(f.freightId, this.notes.readsSealNumbers(f, actor)), editable: this.mayWrite(f, actor), ...(required ? { required } : {}) };
   }
 
   /** The shipper writes a seal on its load: before pickup, a member who may act, with the three photographs. */

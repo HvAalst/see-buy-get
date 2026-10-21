@@ -275,6 +275,9 @@ export const enBusiness = {
   // Round 15 — the seals on a load.
   'business.seals.title': 'Seals',
   'business.seals.hint': 'Written before pickup; the driver reads each off the door, and the load does not leave on a number that is not the one written.',
+  'business.seals.requiredCrossBorder': 'A seal is required: {company} requires one on loads that cross a border. Write it before pickup — the goods are not taken over without it.',
+  'business.seals.requiredContainer': 'A seal is required: {company} requires one on container legs. Write it before pickup — the goods are not taken over without it.',
+  'business.seals.noneYetRequired': 'No seal written yet. Write it here before pickup.',
   'business.seals.noneYet': 'No seal written. A seal is not required; where you seal the load, write each one here before pickup.',
   'business.seals.none': 'This load carries no seal.',
   'business.seals.add': 'Write a seal',

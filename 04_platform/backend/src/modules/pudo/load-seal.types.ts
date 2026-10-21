@@ -137,11 +137,19 @@ export class SealToFind {
   check: string;
 }
 
+/** Round 38 — a seal required on this load by its pickup country's company: on a load that crosses a border, or a container leg. */
+export class SealRequired {
+  @ApiProperty({ enum: ['crossBorder', 'container'] }) why: 'crossBorder' | 'container';
+  company: string;
+}
+
 /** The seals of a load, and whether the shipper may still write them (until the goods are taken over). */
 export class LoadSealsView {
   freightId: string;
   @ApiProperty({ type: [LoadSealView] }) seals: LoadSealView[];
   editable: boolean;
+  /** Round 38 — required by the company of the country the goods are taken over in; absent where nobody requires one. */
+  @ApiPropertyOptional({ type: SealRequired }) required?: SealRequired;
 }
 
 class SealPhotosDto {

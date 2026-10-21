@@ -246,6 +246,21 @@ export interface CarrierPapersRule {
   enforce?: string[];
 }
 
+/**
+ * Round 38 — WHERE A SEAL IS REQUIRED, said by each country's company (the user: "Each country decides"): on loads taken over
+ * in its country that cross a border, on container legs, or both. Absent requires none, which is where every company starts.
+ */
+export interface SealRulesRule {
+  crossBorder?: boolean;
+  containers?: boolean;
+}
+
+/** Where a sister requires a seal, resolved: both always said, false for a company that has not decided. */
+export class ResolvedSealRules {
+  crossBorder: boolean;
+  containers: boolean;
+}
+
 /** What a sister enforces against its carriers, resolved. */
 export class ResolvedCarrierPapers {
   @ApiProperty({ type: [String] }) enforce: string[];
@@ -419,8 +434,8 @@ export class EntityChange {
   at: string;
   /** The name the token carried, or the DID when a machine did it. Never a string from a request body. */
   by: string;
-  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'created', 'record', 'activated', 'verification'] })
-  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'created' | 'record' | 'activated' | 'verification';
+  @ApiProperty({ enum: ['rates', 'tax', 'cover', 'fee', 'topUpFee', 'amounts', 'carrierPapers', 'sealRules', 'created', 'record', 'activated', 'verification'] })
+  what: 'rates' | 'tax' | 'cover' | 'fee' | 'topUpFee' | 'amounts' | 'carrierPapers' | 'sealRules' | 'created' | 'record' | 'activated' | 'verification';
   /** The lane it applies to; absent means the company's default for everything. */
   @ApiPropertyOptional()
   lane?: string;
@@ -551,6 +566,8 @@ export class EntityPricing {
    * the console says "nothing enforced" in words, because an empty list is a decision that shows.
    */
   carrierPapers: ResolvedCarrierPapers;
+  /** Round 38 — where this company requires a seal on loads taken over in its country. Company-wide; both false until decided. */
+  sealRules: ResolvedSealRules;
   /** The sister's default first, then one row per lane. */
   @ApiProperty({ type: [LanePricing] })
   lanes: LanePricing[];
@@ -647,6 +664,8 @@ export class Entity {
    * is where every sister starts. Read it through EntityService.carrierPapersFor(), never off the record.
    */
   carrierPapers?: CarrierPapersRule;
+  /** Round 38 — where a seal is required on loads taken over here. Read it through EntityService.sealRulesFor(), never off the record. */
+  sealRules?: SealRulesRule;
   /** Sisters point at the group they belong to. */
   parentEntityId?: string;
   /**

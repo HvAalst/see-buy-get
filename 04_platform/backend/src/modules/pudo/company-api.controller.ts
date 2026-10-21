@@ -138,7 +138,9 @@ export class CompanyApiController {
   @Get('business/loads/:freightId/seals')
   sealsOn(@Param('freightId') freightId: string, @CompanyKey() caller: CompanyCaller): LoadSealsView {
     const f = this.ownLoad(caller, freightId);
-    return { freightId: f.freightId, seals: this.seals.views(f.freightId), editable: this.seals.editable(f) };
+    // Round 38 — whether its pickup country's company requires a seal on it, and whose rule it is: as the Business app says it.
+    const required = this.dispatch.sealRequiredBy(f);
+    return { freightId: f.freightId, seals: this.seals.views(f.freightId), editable: this.seals.editable(f), ...(required ? { required } : {}) };
   }
 
   /** A photograph for a seal, sent before the seal names it: its `photoId`. Unused, it is removed after two days. */

@@ -140,6 +140,7 @@ export function RatesScreen({ state, actions }: { state: TowerState; actions: To
           <Amounts pricing={pricing} state={state} actions={actions} />
           <TopUpFee pricing={pricing} state={state} actions={actions} />
           <CarrierPapers pricing={pricing} state={state} actions={actions} />
+          <SealRules pricing={pricing} state={state} actions={actions} />
           <RecentChanges pricing={pricing} />
           <Administrators pricing={pricing} state={state} actions={actions} />
           <RateImpact state={state} />
@@ -359,6 +360,60 @@ function TopUpFee({ pricing, state, actions }: { pricing: EntityPricing; state: 
 const CARRIER_KINDS = ['operator_licence', 'carrier_insurance'] as const;
 type CarrierKind = (typeof CARRIER_KINDS)[number];
 
+/**
+ * Round 38 — WHERE THIS COMPANY REQUIRES A SEAL (the user: "Each country decides"): on loads taken over in its country that
+ * cross a border, on container legs. A required seal not written and the load is not taken over; the shipper and the
+ * driver are told whose rule it is. Two toggles and a save, the carrier papers' shape beside it.
+ */
+function SealRules({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const stored = pricing.sealRules ?? { crossBorder: false, containers: false };
+  const [draft, setDraft] = useState(stored);
+  useEffect(() => setDraft(pricing.sealRules ?? { crossBorder: false, containers: false }), [pricing]);
+  const busy = state.busyId === 'sealRules';
+  const changed = draft.crossBorder !== stored.crossBorder || draft.containers !== stored.containers;
+  const where = (r: { crossBorder: boolean; containers: boolean }) => [r.crossBorder ? t('tower.sealRules.crossBorder') : '', r.containers ? t('tower.sealRules.containers') : ''].filter(Boolean).join(', ');
+  const KINDS = ['crossBorder', 'containers'] as const;
+
+  return (
+    <section class="cons__panel" style="margin-top:18px">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.sealRules.title')}</span>
+        <span class="ctbl__sub">{where(stored) ? t('tower.sealRules.current', { where: where(stored) }) : t('tower.sealRules.currentNone')}</span>
+      </div>
+      <div class="twr-knobs">
+        <p class="chint">{t('tower.sealRules.hint')}</p>
+        <div class="twr-knobs__row">
+          <section class="twr-knob">
+            <p class="twr-clear__t">{t('tower.sealRules.question')}</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              {KINDS.map((k) => {
+                const on = draft[k];
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    class={`cbtn cbtn--sm ${on ? 'cbtn--primary' : 'cbtn--ghost'}`}
+                    aria-pressed={on}
+                    disabled={!pricing.editable || busy}
+                    onClick={() => setDraft({ ...draft, [k]: !on })}
+                  >
+                    {on ? <Icon name="check" size={14} /> : null}
+                    {t(k === 'crossBorder' ? 'tower.sealRules.crossBorder' : 'tower.sealRules.containers')}
+                  </button>
+                );
+              })}
+            </div>
+            <p class="chint">{draft.crossBorder || draft.containers ? t('tower.sealRules.effectOn') : t('tower.sealRules.effectOff')}</p>
+            <button type="button" class="cbtn cbtn--primary" disabled={!pricing.editable || busy || !changed} onClick={() => void actions.saveSealRules(draft)}>
+              {t('tower.rates.save')}
+            </button>
+          </section>
+        </div>
+      </div>
+    </section>
+  );
+}
 function CarrierPapers({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
   const t = useT();
   const stored = (pricing.carrierPapers?.enforce ?? []) as CarrierKind[];

@@ -1336,6 +1336,8 @@ export class Claimable {
   invoiceMissing?: boolean;
   /** Round 38 — the load's commercial invoice is this driver's to show at the border: across one, from pickup on. */
   invoiceToShow?: boolean;
+  /** Round 38 — a seal the pickup country's company requires on this load, and none written: why, in words. Not to be taken over yet. */
+  sealMissing?: string;
   /** Round 14 — a load on the road: what the driver needs to say it is at a border, has cleared it, or is at a hub. */
   @ApiPropertyOptional({ type: LoadPassageForDriver }) passage?: LoadPassageForDriver;
   /** Round 15 — the seals to read off the door at pickup (and look at with the receiver): what each is, never its number. */

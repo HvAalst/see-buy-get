@@ -1630,6 +1630,12 @@ export class RefuseCarrierPaperDto {
  * unsettable here. `@ApiProperty` is spelled out because `@IsIn(..., { each: true })` publishes a SCALAR
  * enum into the schema, not an array of one — a trap this codebase has been caught by twice.
  */
+/** Round 38 — where a country's company requires a seal. Both said every time: the whole rule, not a patch. */
+export class SealRulesDto {
+  @IsBoolean() crossBorder!: boolean;
+  @IsBoolean() containers!: boolean;
+}
+
 export class CarrierPapersDto {
   @IsOptional()
   @IsArray()

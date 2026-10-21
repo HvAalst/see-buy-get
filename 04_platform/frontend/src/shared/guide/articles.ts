@@ -1001,7 +1001,7 @@ export const ARTICLES: GuideArticle[] = [
     ],
     notes: [
       "The driver is never shown a seal’s number before pickup: they read it off the door, so a number looked up cannot stand in for one read.",
-      "A seal is not required. Where you seal a load, write every seal on it."
+      "Whether a seal is required is the rule of the company of the country your goods are taken over in: on loads that cross a border, on container legs, or not at all. Where it is required, Seals says so and names the company, and the goods are not taken over until a seal is written. Where it is not, a seal is your choice; where you seal a load, write every seal on it."
     ]
   },
   {

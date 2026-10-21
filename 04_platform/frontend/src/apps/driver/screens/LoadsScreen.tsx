@@ -99,6 +99,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {hasInstructions(c.instructions) ? <InstructionsBlock view={c.instructions} compact /> : null}
                   {/* No papers, no loading: said on the card, before the drive to the gate. */}
                   {c.invoiceMissing ? <span class="load__warn">{t('driver.loads.invoiceMissingShort')}</span> : null}
+                  {c.sealMissing ? <span class="load__warn">{t('driver.loads.sealMissingShort')}</span> : null}
                   {/* Round 35 — held under the tamper protocol: said on the card, before the walk to the gate. */}
                   {c.held ? <span class="load__warn">{t('driver.loads.heldShort')}</span> : null}
                   {/* Round 37 — loaded onto them by their pass, its seal not read yet: received nowhere until it is. */}
@@ -428,6 +429,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               : t('driver.loads.gateBodyDeliver', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })}
           </p>
           {isPickup && claim.invoiceMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.invoiceMissingTitle')} detail={t('driver.loads.invoiceMissingDetail')} /> : null}
+          {isPickup && claim.sealMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.sealMissingTitle')} detail={t('driver.loads.sealMissingDetail', { why: claim.sealMissing })} /> : null}
           {/* Round 35 — held under the tamper protocol: it changes hands with nobody until operations releases it. */}
           {held ? <Note tone="warn" icon="warning" title={t('common.tamper.heldTitle')} detail={`${heldLine(held, t)} ${t('common.tamper.heldWait')}`} /> : null}
           {/* FP7 — the sender's instructions, at the gate where they are acted on. */}

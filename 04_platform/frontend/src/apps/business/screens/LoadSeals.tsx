@@ -74,6 +74,12 @@ export function LoadSeals({ row, client, act }: { row: PostedLoad; client: Busin
         <span class="cons__panelt">{t('business.seals.title')}</span>
         <span class="chint">{t('business.seals.hint')}</span>
       </div>
+      {/* Round 38 — whose rule, and what it asks: a required seal not written and the goods are not taken over. */}
+      {view.required ? (
+        <p class={view.seals.some((s) => s.state === 'on') ? 'chint' : 'chint biz-papers__held'}>
+          {t(view.required.why === 'crossBorder' ? 'business.seals.requiredCrossBorder' : 'business.seals.requiredContainer', { company: view.required.company })}
+        </p>
+      ) : null}
       {view.seals.length ? (
         <div class="crows">
           {view.seals.map((s) => (
@@ -102,7 +108,7 @@ export function LoadSeals({ row, client, act }: { row: PostedLoad; client: Busin
           ))}
         </div>
       ) : (
-        <p class="cons__empty">{t(view.editable ? 'business.seals.noneYet' : 'business.seals.none')}</p>
+        <p class="cons__empty">{t(!view.editable ? 'business.seals.none' : view.required ? 'business.seals.noneYetRequired' : 'business.seals.noneYet')}</p>
       )}
 
       {act && view.editable && !form ? (

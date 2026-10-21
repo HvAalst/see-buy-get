@@ -363,6 +363,8 @@ export interface TowerActions {
   saveAmounts(body: Record<string, number | null>): Promise<void>;
   /** Which carrier papers this sister refuses to trade without. The whole list; empty enforces nothing. */
   saveCarrierPapers(enforce: Array<'operator_licence' | 'carrier_insurance'>): Promise<void>;
+  /** Round 38 — where this company requires a seal. */
+  saveSealRules(rules: { crossBorder: boolean; containers: boolean }): Promise<void>;
   /** Record the dates on one fleet operator's own papers — staff only. */
   recordCarrierPapers(did: string, body: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null }): Promise<boolean>;
   /** Turn down a document a fleet sent, with the reason the fleet is shown. */
@@ -1884,6 +1886,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           'carrierPapers',
           (client, entityId) => client.api.setCarrierPapers(entityId, enforce),
           enforce.length ? t('tower.carrierPapers.saved') : t('tower.carrierPapers.savedNone'),
+        ),
+      // Round 38 — not a lane: its own busy id and its own words, as the carrier papers.
+      saveSealRules: (rules) =>
+        saveKnob(
+          'sealRules',
+          (client, entityId) => client.api.setSealRules(entityId, rules),
+          rules.crossBorder || rules.containers ? t('tower.sealRules.saved') : t('tower.sealRules.savedNone'),
         ),
     },
   };

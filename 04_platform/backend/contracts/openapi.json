@@ -7950,6 +7950,56 @@
         }
       }
     },
+    "/v1/sbg/entities/{entityId}/seal-rules": {
+      "post": {
+        "operationId": "Sbg.setEntitySealRules",
+        "summary": "",
+        "description": "Round 38 — where this country's company requires a seal (the user: \"Each country decides\"): on loads taken over in its\ncountry that cross a border, on container legs. Staff and the company's own administrators, as for the carrier papers.",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SealRulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "operationId": "Sbg.entitySealRules",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/{entityId}/rate-impact": {
       "get": {
         "operationId": "Sbg.entityRateImpact",
@@ -32622,6 +32672,10 @@
             "type": "object",
             "description": "Which of a CARRIER'S own papers this sister will not trade without. Absent enforces nothing, which\nis where every sister starts. Read it through EntityService.carrierPapersFor(), never off the record."
           },
+          "sealRules": {
+            "type": "object",
+            "description": "Round 38 — where a seal is required on loads taken over here. Read it through EntityService.sealRulesFor(), never off the record."
+          },
           "parentEntityId": {
             "type": "string",
             "description": "Sisters point at the group they belong to."
@@ -36061,6 +36115,7 @@
               "topUpFee",
               "amounts",
               "carrierPapers",
+              "sealRules",
               "created",
               "record",
               "activated",
@@ -36106,6 +36161,21 @@
         },
         "required": [
           "enforce"
+        ]
+      },
+      "ResolvedSealRules": {
+        "type": "object",
+        "properties": {
+          "crossBorder": {
+            "type": "boolean"
+          },
+          "containers": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "crossBorder",
+          "containers"
         ]
       },
       "PricingBounds": {
@@ -36205,6 +36275,14 @@
               }
             ]
           },
+          "sealRules": {
+            "description": "Round 38 — where this company requires a seal on loads taken over in its country. Company-wide; both false until decided.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResolvedSealRules"
+              }
+            ]
+          },
           "bounds": {
             "$ref": "#/components/schemas/PricingBounds"
           },
@@ -36222,6 +36300,7 @@
           "name",
           "transacting",
           "carrierPapers",
+          "sealRules",
           "bounds",
           "editable"
         ]
@@ -36754,6 +36833,21 @@
             }
           }
         }
+      },
+      "SealRulesDto": {
+        "type": "object",
+        "properties": {
+          "crossBorder": {
+            "type": "boolean"
+          },
+          "containers": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "crossBorder",
+          "containers"
+        ]
       },
       "AvailabilityDto": {
         "type": "object",
@@ -52779,6 +52873,25 @@
           "reason"
         ]
       },
+      "SealRequired": {
+        "type": "object",
+        "properties": {
+          "why": {
+            "type": "string",
+            "enum": [
+              "crossBorder",
+              "container"
+            ]
+          },
+          "company": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "why",
+          "company"
+        ]
+      },
       "LoadSealsView": {
         "type": "object",
         "properties": {
@@ -52787,6 +52900,14 @@
             "items": {
               "$ref": "#/components/schemas/LoadSealView"
             }
+          },
+          "required": {
+            "description": "Round 38 — required by the company of the country the goods are taken over in; absent where nobody requires one.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SealRequired"
+              }
+            ]
           },
           "freightId": {
             "type": "string"
