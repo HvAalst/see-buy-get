@@ -1,6 +1,7 @@
 import type { Freight } from './dispatch.types';
-import { keyOf, LoadSealService, sealCheck } from './load-seal.service';
+import { keyOf, LoadSealService, sealCheck, sealWrittenOf } from './load-seal.service';
 import type { MediaService } from './media.service';
+import type { ShipperCodesService } from './shipper-codes.service';
 
 const shipper = 'did:glos:biz-jenga';
 const driver = 'did:glos:driver-otieno';
@@ -198,5 +199,45 @@ describe('a seal’s photographs, and a seal a test key writes (round 33)', () =
     svc.remove(f, kept.sealId, false);
     expect(svc.of(f.freightId)).toHaveLength(1);
     expect(() => svc.remove(load({ status: 'in_transit' }), kept.sealId, false)).toThrow(/taken over/);
+  });
+});
+
+describe('what a seal closes (ISO 28000: seals bound to the container number and the SSCCs)', () => {
+  const SSCCS = ['006141411234567890', '006141411234567906'];
+  const codes = { codesFor: (id: string) => (id === 'frt_1' ? { freightId: id, codes: SSCCS } : undefined) } as unknown as ShipperCodesService;
+
+  it('binds a seal, as it is written, to the container the load names and its package codes — and a customs seal to what the one it replaced closed', () => {
+    const { media, photo } = mediaStub();
+    const svc = new LoadSealService(media, undefined, codes);
+    const f = load({ containerNo: 'MSKU1234565' });
+    const seal = svc.write(f, { did: shipper, name: 'Wanjiku' }, { number: 'KE1234567', sealClass: 'H', appliedBy: 'sender', photos: three(photo) }, t0);
+    expect(seal.boundTo).toEqual({ containerNo: 'MSKU1234565', ssccs: SSCCS });
+    expect(svc.views(f.freightId)[0]).toMatchObject({ containerNo: 'MSKU1234565', ssccs: SSCCS });
+    expect(svc.views(f.freightId, false)[0]).toMatchObject({ numberWithheld: true, containerNo: 'MSKU1234565' });
+    // The driver is told which door to read it off; never the number.
+    expect(svc.toFind(f.freightId)[0]).toMatchObject({ containerNo: 'MSKU1234565' });
+    expect(svc.noteLines(f.freightId)[0]).toContain('on container MSKU1234565 · over the 2 packages marked SSCC above');
+    // Anchored with the seal, so a binding changed afterwards reads as altered on the trail.
+    expect(sealWrittenOf(seal).b).toEqual({ containerNo: 'MSKU1234565', ssccs: SSCCS });
+
+    const atPost = svc.checkAtPost(load({ status: 'in_transit', containerNo: 'MSKU1234565' }), driver, { replaced: [{ sealId: seal.sealId, newNumber: 'UG 990011', photoRef: photo(driver) }] })!;
+    atPost.keep(iso(t0 + 3_600_000), 'Malaba');
+    const [customs] = svc.on(f.freightId);
+    expect([customs.number, customs.boundTo]).toEqual(['UG 990011', seal.boundTo]);
+  });
+
+  it('a load that names no container and has no package codes binds nothing and says nothing of it; one package is named by its code', () => {
+    const { media, photo } = mediaStub();
+    const svc = new LoadSealService(media, undefined, codes);
+    const bare = svc.write(load({ freightId: 'frt_2' }), { did: shipper, name: 'Wanjiku' }, { number: 'KE1234567', sealClass: 'H', appliedBy: 'sender', photos: three(photo) }, t0);
+    expect(bare.boundTo).toBeUndefined();
+    expect(Object.keys(svc.views('frt_2')[0])).not.toEqual(expect.arrayContaining(['containerNo']));
+    expect(svc.views('frt_2')[0].ssccs).toBeUndefined();
+    expect(svc.noteLines('frt_2')[0]).not.toMatch(/container|SSCC/);
+
+    const one = new LoadSealService(media, undefined, { codesFor: () => ({ codes: ['006141411234567890'] }) } as unknown as ShipperCodesService);
+    one.write(load({ freightId: 'frt_3' }), { did: shipper, name: 'Wanjiku' }, { number: 'KE1234567', sealClass: 'H', appliedBy: 'sender', photos: three(photo) }, t0);
+    expect(one.noteLines('frt_3')[0]).toContain('over the package SSCC 006141411234567890');
+    expect(one.noteLines('frt_3')[0]).not.toContain('container');
   });
 });

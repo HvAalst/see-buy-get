@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
-import { SEAL_CLASSES, sealStory, sealWhat, type SealClass } from '../../../shared/seals';
+import { SEAL_CLASSES, sealOver, sealStory, sealWhat, type SealClass } from '../../../shared/seals';
 import type { BusinessClient, PostedLoad } from '../api';
 import { EMPTY_SEAL, SEAL_PHOTOS, sealBody, sealGaps, type SealForm, type SealPhoto, type SealsView } from '../seals';
 
@@ -84,6 +84,7 @@ export function LoadSeals({ row, client, act }: { row: PostedLoad; client: Busin
                   <span class={`ctag ${s.state === 'broken' ? 'ctag--danger' : s.state === 'replaced' ? 'ctag--quiet' : 'ctag--ok'}`}>{t(`business.seals.state.${s.state}` as MessageKey)}</span>
                 </span>
                 <span class="crow__sub">{sealWhat({ ...s, number: undefined }, t)}</span>
+                {sealOver(s, t) ? <span class="crow__sub">{sealOver(s, t)}</span> : null}
                 <span class="crow__sub">
                   {sealStory(s, t, onRoad)}
                   {s.state === 'replaced' && s.replaced?.officer ? ` · ${t('business.seals.officer', { officer: s.replaced.officer })}` : ''}

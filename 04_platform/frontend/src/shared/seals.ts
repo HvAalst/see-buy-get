@@ -21,6 +21,10 @@ export interface SealView {
   sealClass?: SealClass;
   maker?: string;
   appliedBy: 'sender' | 'customs';
+  /** The container it closes, as the load named it when the seal was written. */
+  containerNo?: string;
+  /** The load's package codes (SSCC) it closes. */
+  ssccs?: string[];
   state: SealState;
   writtenAt: string;
   matchedAt?: string;
@@ -37,6 +41,8 @@ export interface SealToFind {
   sealClass?: SealClass;
   maker?: string;
   appliedBy: 'sender' | 'customs';
+  /** The container to find it on: it is read off THAT door. */
+  containerNo?: string;
   state: SealState;
   /** sha256 of `<freightId>|<number folded>`: a reading is checked against it on the phone, with or without a signal. */
   check: string;
@@ -63,6 +69,15 @@ export async function readingMatches(freightId: string, reading: string, check: 
 /** What a seal is, in a line: its number (where it may be shown), class and maker. */
 export function sealWhat(s: { number?: string; sealClass?: SealClass; maker?: string; appliedBy: 'sender' | 'customs' }, t: Translate): string {
   return [s.number, s.sealClass ? t('common.seal.class', { c: s.sealClass }) : '', s.maker ?? '', t(s.appliedBy === 'customs' ? 'common.seal.byCustoms' : 'common.seal.bySender')].filter(Boolean).join(' · ');
+}
+
+/**
+ * WHAT A SEAL CLOSES, in a line (the ISO 28000 check: "a seal bound to the container number and the SSCCs"): the
+ * container it was put on, and the packages under it — one by its code, more by their count. Empty where it names neither.
+ */
+export function sealOver(s: { containerNo?: string; ssccs?: string[] }, t: Translate): string {
+  const n = s.ssccs?.length ?? 0;
+  return [s.containerNo ? t('common.seal.onContainer', { container: s.containerNo }) : '', n === 1 ? t('common.seal.overPackage', { sscc: s.ssccs![0] }) : n > 1 ? t('common.seal.overPackages', { n }) : ''].filter(Boolean).join(' · ');
 }
 
 /** What became of a seal, in a line. */

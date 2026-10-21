@@ -55,6 +55,8 @@ describe('the trail, over the wire', () => {
 
   it('anchors each step as it is kept, and reads a record changed afterwards as altered', async () => {
     const biz = await aBusiness();
+    // Its own GS1 prefix: every package of the load gets an SSCC, and the seal is bound to them as it is written.
+    await http().post('/v1/sbg/business/me/gs1').set(biz).send({ companyPrefix: `61${String(Math.floor(Math.random() * 90_000) + 10_000)}`, extensionDigit: 4 }).expect(201);
     const posted = await http()
       .post('/v1/sbg/dispatch/freight')
       .set(biz)
@@ -90,6 +92,13 @@ describe('the trail, over the wire', () => {
     // Only staff.
     await http().get(`/v1/sbg/ops/trail/${code}`).set(driver).expect(403);
     await http().get('/v1/sbg/ops/trail/FRT-NOPE').set(operator).expect(404);
+    // The seal says what it closes — the load's forty package codes — and any of them, as a GS1-128 scan reads it, opens
+    // the load's trail (the ISO 28000 check: "seals bound to the SSCCs").
+    const sealsRead = (await http().get(`/v1/sbg/dispatch/freight/${freightId}/seals`).set(biz).expect(200)).body.seals as Array<{ sealId: string; ssccs?: string[] }>;
+    const bound = sealsRead.find((s) => s.sealId === seal.sealId)!.ssccs ?? [];
+    expect(bound).toHaveLength(40);
+    const byPackage = (await http().get(`/v1/sbg/ops/trail/${encodeURIComponent(`(00)${bound[17]}`)}`).set(operator).expect(200)).body;
+    expect([byPackage.kind, byPackage.ref]).toEqual(['load', code]);
 
     // CHANGED AFTERWARDS, each in the store as somebody with the database might: the receiver's name; a word of the note's
     // copy as it was taken over; the exception's note. Each reads altered; the rest stay intact.

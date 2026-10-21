@@ -141,7 +141,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.externalOrderId) documents.push(...this.imports.papersOnNote(f.externalOrderId));
     const invoiceLine = this.invoices?.noteLine(f.freightId);
     if (invoiceLine) documents.push(invoiceLine);
-    const marks = this.codes?.codesFor(f.freightId)?.codes.map((c) => `SSCC ${c}`);
+    // The container the goods ride in is the first mark: the seals on its door are recorded against its number (ISO 17712).
+    const marks = [...(f.containerNo ? [`Container ${f.containerNo}`] : []), ...(this.codes?.codesFor(f.freightId)?.codes.map((c) => `SSCC ${c}`) ?? [])];
     if (f.loadSafety?.securementPhotoRef) documents.push(`Photo of the secured load (${f.loadSafety.securementPhotoRef})`);
     if (f.tempReadings?.length) documents.push(`Temperature log, ${f.tempReadings.length} reading(s)`);
     if (f.unloadReport) documents.push(`Unload report, ${f.unloadReport.confirmed.length} item(s) confirmed`);

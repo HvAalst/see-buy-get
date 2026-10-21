@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Note, PhotoField, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
-import { readingMatches, SEAL_BREAK_CAUSES, sealWhat, type SealBreakCause, type SealsAtDelivery, type SealToFind } from '../../../shared/seals';
+import { readingMatches, SEAL_BREAK_CAUSES, sealOver, sealWhat, type SealBreakCause, type SealsAtDelivery, type SealToFind } from '../../../shared/seals';
 import type { Claimable } from '../types';
 import type { DriverActions, DriverState } from '../useDriverApp';
 import { atPostBody, atPostReady, EMPTY_AT_POST, pickupSealsReady, sealsOn, type SealRead, type SealsAtPost } from '../seals';
@@ -51,6 +51,8 @@ export function PickupSeals({
         return (
           <div class="seal-steps__one" key={s.sealId}>
             <p class="seal-steps__what">{t('driver.seal.which', { no: s.no, what: sealWhat(s, t) })}</p>
+            {/* The door to read it off: a seal on another box is not this seal, whatever its number. */}
+            {s.containerNo ? <p class="hint">{sealOver({ containerNo: s.containerNo }, t)}</p> : null}
             <div class="field">
               <label class="field__label" for={`seal-read-${s.no}`}>
                 {t('driver.seal.readLabel')}

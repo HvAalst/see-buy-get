@@ -58,6 +58,17 @@ export interface SealReading {
   by: string;
 }
 
+/**
+ * WHAT A SEAL CLOSES (the ISO 28000 check: "ISO 17712 seals bound to the container number and the SSCCs"): the container
+ * the load names, and the load's package codes, as they stood when the seal was written. Kept with the seal, never read
+ * again from the load: the record says what this seal was put on. A seal customs put on in place of another closes what
+ * that one closed. Absent where the load names neither.
+ */
+export interface SealBinding {
+  containerNo?: string;
+  ssccs: string[];
+}
+
 /** One seal, as kept. */
 export interface LoadSeal {
   sealId: string;
@@ -72,6 +83,8 @@ export interface LoadSeal {
   maker?: string;
   appliedBy: SealAppliedBy;
   photos: Partial<Record<SealPhoto, string>>;
+  /** The container and the package codes it closes, as they stood when it was written. */
+  boundTo?: SealBinding;
   state: SealState;
   writtenAt: string;
   /** Who wrote it down: the shipper's member, or — for one customs put on at a post — the driver's word. */
@@ -93,6 +106,10 @@ export class LoadSealView {
   @ApiPropertyOptional({ enum: SEAL_CLASSES }) sealClass?: SealClass;
   @ApiPropertyOptional() maker?: string;
   @ApiProperty({ enum: SEAL_APPLIED_BY }) appliedBy: SealAppliedBy;
+  /** The container it closes, as the load named it when the seal was written. */
+  @ApiPropertyOptional() containerNo?: string;
+  /** The load's package codes (SSCC) it closes, as they stood when it was written. */
+  @ApiPropertyOptional({ type: [String] }) ssccs?: string[];
   @ApiProperty({ enum: SEAL_STATES }) state: SealState;
   writtenAt: string;
   /** Found on the door at pickup, as written. */
@@ -113,6 +130,8 @@ export class SealToFind {
   @ApiPropertyOptional({ enum: SEAL_CLASSES }) sealClass?: SealClass;
   @ApiPropertyOptional() maker?: string;
   @ApiProperty({ enum: SEAL_APPLIED_BY }) appliedBy: SealAppliedBy;
+  /** The container to find it on: the seal is read off THAT door. */
+  @ApiPropertyOptional() containerNo?: string;
   @ApiProperty({ enum: SEAL_STATES }) state: SealState;
   /** sha256 of `<freightId>|<number folded>`: the app checks a reading against it with no signal (load-seal.service sealCheck). */
   check: string;

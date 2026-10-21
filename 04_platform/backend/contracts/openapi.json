@@ -46169,6 +46169,17 @@
               "customs"
             ]
           },
+          "containerNo": {
+            "type": "string",
+            "description": "The container it closes, as the load named it when the seal was written."
+          },
+          "ssccs": {
+            "description": "The load's package codes (SSCC) it closes, as they stood when it was written.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "state": {
             "type": "string",
             "enum": [

@@ -15,6 +15,7 @@ import {
   SEALS_AT_DELIVERY,
   type LoadSeal,
   type LoadSealView,
+  type SealBinding,
   type SealAppliedBy,
   type SealBreakCause,
   type SealClass,
@@ -23,6 +24,7 @@ import {
   type SealToFind,
 } from './load-seal.types';
 import { MediaService } from './media.service';
+import { ShipperCodesService } from './shipper-codes.service';
 import { whenSeen } from './observed-at';
 import type { GeoPoint } from './pudo.types';
 
@@ -44,7 +46,16 @@ export class LoadSealService {
     private readonly media: MediaService,
     // The trail: each seal written, read, broken or replaced anchored as it is kept. Optional for the specs.
     @Optional() private readonly anchors?: AnchorBook,
+    // The load's package codes, which a seal is bound to as it is written. Optional for the specs.
+    @Optional() private readonly codes?: ShipperCodesService,
   ) {}
+
+  /** What a seal written on this load now closes: the container it names and its package codes. Undefined where it names neither. */
+  private bindingOf(f: Freight): SealBinding | undefined {
+    const ssccs = this.codes?.codesFor(f.freightId)?.codes ?? [];
+    if (!f.containerNo && !ssccs.length) return undefined;
+    return { ...(f.containerNo ? { containerNo: f.containerNo } : {}), ssccs: [...ssccs] };
+  }
 
   /** Keep a seal as it now stands, and anchor whatever happened to it since it was last kept. */
   private put(seal: LoadSeal): void {
@@ -77,7 +88,7 @@ export class LoadSealService {
 
   /** What the driver's app is told: which seals to find on the door, and what each is — never its number. */
   toFind(freightId: string): SealToFind[] {
-    return this.of(freightId).map((s, i) => ({ sealId: s.sealId, no: i + 1, ...(s.sealClass ? { sealClass: s.sealClass } : {}), ...(s.maker ? { maker: s.maker } : {}), appliedBy: s.appliedBy, state: s.state, check: sealCheck(freightId, s.key) }));
+    return this.of(freightId).map((s, i) => ({ sealId: s.sealId, no: i + 1, ...(s.sealClass ? { sealClass: s.sealClass } : {}), ...(s.maker ? { maker: s.maker } : {}), appliedBy: s.appliedBy, ...(s.boundTo?.containerNo ? { containerNo: s.boundTo.containerNo } : {}), state: s.state, check: sealCheck(freightId, s.key) }));
   }
 
   /** Whether the shipper may still write the seals: until the goods are taken over. */
@@ -121,6 +132,7 @@ export class LoadSealService {
     }
     if (keep) for (const photo of SEAL_PHOTOS) this.media.adopt(input.photos[photo], writer.did, { type: 'freight', id: f.freightId }, 'seal');
     const maker = input.maker?.trim().slice(0, 60);
+    const boundTo = this.bindingOf(f);
     const seal: LoadSeal = {
       sealId: `${keep ? '' : 'test_'}seal_${randomBytes(6).toString('hex')}`,
       freightId: f.freightId,
@@ -130,6 +142,7 @@ export class LoadSealService {
       ...(maker ? { maker } : {}),
       appliedBy: input.appliedBy,
       photos: { loadedOpen: input.photos.loadedOpen, closedWithSeal: input.photos.closedWithSeal, sealCloseUp: input.photos.sealCloseUp },
+      ...(boundTo ? { boundTo } : {}),
       state: 'on',
       writtenAt: new Date(now).toISOString(),
       writtenBy: writer.name,
@@ -241,6 +254,8 @@ export class LoadSealService {
           key: keyOf(newNumber),
           appliedBy: 'customs',
           photos: { sealCloseUp: r.photoRef },
+          // Customs closed the same box over the same goods: the new seal is bound to what the old one was.
+          ...(seal.boundTo ? { boundTo: seal.boundTo } : {}),
           state: 'on',
           writtenAt: at,
           writtenBy: 'the driver, at the post',
@@ -308,7 +323,7 @@ export class LoadSealService {
   noteLines(freightId: string, numbers = true): string[] {
     const all = this.of(freightId);
     return all.map((s, i) => {
-      const what = [`Seal ${i + 1}: ${numbers ? s.number : 'its number is read off the door at taking over'}`, s.sealClass ? `ISO 17712 class ${s.sealClass}` : '', s.maker ?? '', s.appliedBy === 'customs' ? 'customs seal' : 'the sender’s seal'].filter(Boolean).join(' · ');
+      const what = [`Seal ${i + 1}: ${numbers ? s.number : 'its number is read off the door at taking over'}`, s.sealClass ? `ISO 17712 class ${s.sealClass}` : '', s.maker ?? '', s.appliedBy === 'customs' ? 'customs seal' : 'the sender’s seal', ...bindingWords(s.boundTo)].filter(Boolean).join(' · ');
       const replaces = s.replaces ? all.find((x) => x.sealId === s.replaces) : undefined;
       const story = [
         replaces ? `put on by customs in place of ${replaces.number}${replaces.replaced?.post ? ` at ${replaces.replaced.post}` : ''}, ${day(s.writtenAt)}${replaces.replaced?.officer ? ` (officer: ${replaces.replaced.officer})` : ''}` : `written by ${s.writtenBy}, ${day(s.writtenAt)}`,
@@ -370,6 +385,8 @@ function viewOf(s: LoadSeal, all: LoadSeal[]): LoadSealView {
     ...(s.sealClass ? { sealClass: s.sealClass } : {}),
     ...(s.maker ? { maker: s.maker } : {}),
     appliedBy: s.appliedBy,
+    ...(s.boundTo?.containerNo ? { containerNo: s.boundTo.containerNo } : {}),
+    ...(s.boundTo?.ssccs.length ? { ssccs: [...s.boundTo.ssccs] } : {}),
     state: s.state,
     writtenAt: s.writtenAt,
     ...(matched ? { matchedAt: matched.at } : {}),
@@ -386,9 +403,16 @@ function sealNumber(raw: string | undefined): string | undefined {
   return s ? s.slice(0, MAX_SEAL_NUMBER) : undefined;
 }
 
-/** What is anchored of a seal as it was written: what it is, on which load, its photographs, when and by whom. */
+/** What is anchored of a seal as it was written: what it is, on which load and over what, its photographs, when and by whom. */
 export function sealWrittenOf(s: LoadSeal): Record<string, unknown> {
-  return { s: s.sealId, f: s.freightId, k: s.key, c: s.sealClass, m: s.maker, a: s.appliedBy, p: s.photos, at: s.writtenAt, by: s.writtenBy, r: s.replaces };
+  return { s: s.sealId, f: s.freightId, k: s.key, c: s.sealClass, m: s.maker, a: s.appliedBy, p: s.photos, at: s.writtenAt, by: s.writtenBy, r: s.replaces, b: s.boundTo };
+}
+
+/** What a seal closes, as the note says it: the container by its number, the packages by count and, for one, by its code. */
+function bindingWords(b: SealBinding | undefined): string[] {
+  if (!b) return [];
+  const over = b.ssccs.length === 1 ? `over the package SSCC ${b.ssccs[0]}` : b.ssccs.length ? `over the ${b.ssccs.length} packages marked SSCC above` : '';
+  return [b.containerNo ? `on container ${b.containerNo}` : '', over];
 }
 
 /** A seal number folded for matching: what a person reads off a bolt, without the spaces, dashes and dots between. */

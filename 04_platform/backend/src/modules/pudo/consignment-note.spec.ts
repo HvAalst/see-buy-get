@@ -187,6 +187,9 @@ describe('the consignment note', () => {
     expect(note.consignee.name).not.toContain('buyer');
     // Sending your own goods to your own yard is an ordinary CMR; the CARRIER is the third party.
     expect(note.consignee.address).toBe('Riverside Corner');
+    // The box itself, by its number, is the first of the marks: the seals on its door are recorded against it (ISO 17712).
+    expect(note.goods.marks).toBeUndefined();
+    expect(service.build(base({ externalOrderId: 'IMP-001', containerNo: 'MSKU1234565', postedByDid: undefined, shipperDid: undefined })).goods.marks).toEqual(['Container MSKU1234565']);
   });
 
   it('lists the clearance pack in box 5, which is what travels WITH the goods', () => {

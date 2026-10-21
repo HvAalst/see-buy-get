@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readingMatches, sealKey, sealStory, sealWhat, type SealView } from './seals';
+import { readingMatches, sealKey, sealOver, sealStory, sealWhat, type SealView } from './seals';
 
 const t = (key: string, vars?: Record<string, unknown>) => `${key}${vars ? ` ${JSON.stringify(vars)}` : ''}`;
 const when = (iso: string) => `@${iso.slice(11, 16)}`;
@@ -28,5 +28,14 @@ describe('a seal on a load, as everybody reads it (round 15)', () => {
     expect(sealStory({ ...base, state: 'broken', broken: { at: '2026-10-19T18:10:00.000Z', cause: 'police' } }, t as never, when)).toBe('common.seal.broken {"how":"common.seal.cause.police","when":"@18:10"}');
     expect(sealStory({ ...base, atDelivery: { at: '2026-10-20T06:00:00.000Z', result: 'not_as_on_the_note' } }, t as never, when)).toBe('common.seal.deliveredNotAsWritten {"when":"@06:00"}');
     expect(sealStory({ ...base, appliedBy: 'customs', replaces: 'KE1234567' }, t as never, when)).toBe('common.seal.inPlaceOf {"number":"KE1234567"}');
+  });
+});
+
+describe('what a seal closes, in a line (ISO 28000: seals bound to the container number and the SSCCs)', () => {
+  it('names the container and counts the packages — one package by its code — and says nothing where it names neither', () => {
+    expect(sealOver({ containerNo: 'MSKU1234565', ssccs: ['006141411234567890', '006141411234567906'] }, t as never)).toBe('common.seal.onContainer {"container":"MSKU1234565"} · common.seal.overPackages {"n":2}');
+    expect(sealOver({ ssccs: ['006141411234567890'] }, t as never)).toBe('common.seal.overPackage {"sscc":"006141411234567890"}');
+    expect(sealOver({ containerNo: 'MSKU1234565' }, t as never)).toBe('common.seal.onContainer {"container":"MSKU1234565"}');
+    expect([sealOver({}, t as never), sealOver({ ssccs: [] }, t as never)]).toEqual(['', '']);
   });
 });

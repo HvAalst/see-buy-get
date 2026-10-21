@@ -986,6 +986,25 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "load-seals",
+    apps: [
+      "business"
+    ],
+    title: "Sealing a load: each seal written before pickup",
+    summary: "Where you seal a load, you write each seal in the Business app before the goods are taken over. The driver reads each one off the door at pickup, and every seal is recorded against what it closes: the container and the load’s package codes.",
+    steps: [
+      "Open the load in the Business app and go to Seals. Before pickup, press Write a seal: its number as printed on it, its class as marked (ISO 17712: H, S or I), the maker if it shows one, and who closed it — your own seal, or customs.",
+      "Take the three photographs as you seal it: the load open, blocked and braced; the doors closed with the vehicle’s or container’s number and the seal in view; the seal close up, its whole number readable. Then press Write the seal.",
+      "Each seal is kept with what it closes: the container the load names and the load’s package codes (SSCC), as they are when you write it. Its line says so — on container …, over the packages labelled for this load — and the consignment note says it too.",
+      "At pickup the driver reads each seal off the door and photographs it. A number that is not the one you wrote and the load does not leave.",
+      "After pickup the seals stay on the record: one customs replaced at a post, one found broken on the road, and the look at the door at delivery are all said on the seal’s line."
+    ],
+    notes: [
+      "The driver is never shown a seal’s number before pickup: they read it off the door, so a number looked up cannot stand in for one read.",
+      "A seal is not required. Where you seal a load, write every seal on it."
+    ]
+  },
+  {
     id: "tampering",
     apps: [
       "driver",

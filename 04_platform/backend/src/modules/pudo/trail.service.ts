@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
+import { ssccFromScan } from '../../foundation/gs1/gs1';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { createHash } from 'crypto';
 import { AnchorBook } from './anchor-book.service';
@@ -13,6 +14,7 @@ import type { Freight } from './dispatch.types';
 import { NoteArchiveService } from './note-archive.service';
 import { canonicalJson, noteAnchorOf, noteFingerprint } from './note-archive.types';
 import { exceptionAnchorOf, exceptionHashOf, TamperService } from './tamper.service';
+import { ShipperCodesService } from './shipper-codes.service';
 import { ToteService } from './tote.service';
 import type { TrailState, TrailStep, TrailView } from './trail.types';
 
@@ -30,19 +32,25 @@ export class TrailService {
     private readonly anchors: AnchorBook,
     private readonly parcels: ParcelService,
     private readonly reports: DamageReportService,
+    // A package's SSCC, scanned off its label, names the load or the store parcel it was given to.
+    private readonly codes: ShipperCodesService,
   ) {}
 
   /** A load by its code or id, a bag by its code, or a parcel by its number. */
   of(ref: string): TrailView {
     const key = ref.trim();
-    const f = this.dispatch.freightByCode(key) ?? this.freightById(key);
+    // An SSCC as read off a label — with its spaces, or with the (00) in front that a GS1-128 scan carries.
+    const sscc = ssccFromScan(key);
+    const viaSscc = sscc ? this.codes.freightOfSscc(sscc) : undefined;
+    const f = this.dispatch.freightByCode(key) ?? this.freightById(key) ?? (viaSscc ? this.freightById(viaSscc) : undefined);
     const chain = this.ledger.check();
     if (f) return { ref: f.code, kind: 'load', steps: byTime(this.ofLoad(f)), ...(chain ? { chain } : {}) };
     const tote = this.totes.byCodeMaybe(key.toUpperCase());
     if (tote) return { ref: tote.code, kind: 'bag', steps: byTime(this.ofBag(tote.toteId)), ...(chain ? { chain } : {}) };
-    const parcel = this.parcelById(key);
+    const storeParcel = sscc ? this.codes.parcelOfSscc(sscc) : undefined;
+    const parcel = this.parcelById(key) ?? (storeParcel ? this.parcelById(storeParcel) : undefined);
     if (parcel) return { ref: parcel.parcelId, kind: 'parcel', steps: byTime(this.ofParcel(parcel)), ...(chain ? { chain } : {}) };
-    throw new GlosError('NOT_FOUND', 'No load, bag or parcel has that code');
+    throw new GlosError('NOT_FOUND', 'No load, bag, parcel or package has that code');
   }
 
   private ofLoad(f: Freight): TrailStep[] {
@@ -138,3 +146,4 @@ export class TrailService {
 function byTime(steps: TrailStep[]): TrailStep[] {
   return [...steps].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
+
