@@ -157,6 +157,7 @@ describe('the people at a shop’s counter, over the wire', () => {
       ['get', '/v1/sbg/hub/staff', undefined],
       ['get', '/v1/sbg/hub/floor-log', undefined],
       ['get', '/v1/sbg/payout-number', undefined],
+      ['post', `/v1/sbg/mdps/${hub.mdpId}/papers`, { idCopyRef: 'id', licenceRef: 'licence', photoRefs: ['front'] }],
     ] as Array<['get' | 'post' | 'patch', string, Record<string, unknown> | undefined]>) {
       const refused = await http()[method](path).set(staff).send(body ?? {});
       expect([path, refused.status, refused.body.detail]).toEqual([path, 403, expect.stringMatching(/owner/)]);

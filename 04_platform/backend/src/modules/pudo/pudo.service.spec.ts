@@ -2150,7 +2150,7 @@ describe('PUDO Light', () => {
       expect(agents.get(shop.did).entityId).toBe(ke.entityId);
       expect(agents.entityIdOf(agents.get(shop.did))).toBe(ke.entityId);
 
-      const hub = mdps.register({ name: 'Entity Hub', zones: ['NorthTown'], location: { lat: -1.2, lng: 36.8 } });
+      const hub = mdps.register({ name: 'Entity Hub', zones: ['NorthTown'], location: { lat: -1.2, lng: 36.8 } }, { approvedBy: 'staff' });
       expect(hub.entityId).toBe(ke.entityId);
       // A record written before entities existed still resolves — to the network's home sister.
       expect(mdps.entityIdOf({ ...hub, entityId: undefined })).toBe(ke.entityId);
@@ -2949,7 +2949,7 @@ describe('PUDO Light', () => {
   });
 
   it('enforces tote-bag capacity: 10 mediums, 50 letters + 1 medium, and a heavy fills a bag alone (Ch 17)', () => {
-    const hub = mdps.register({ name: 'Cap MDP', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const hub = mdps.register({ name: 'Cap MDP', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
 
     // 10 mediums fill a bag; the 11th is rejected.
     const t1 = mdps.registerTote(hub.mdpId);
@@ -2978,7 +2978,7 @@ describe('PUDO Light', () => {
   it('routes a journey through an MDP hub (PUDO → MDP → PUDO) when a hub covers the zones', () => {
     const origin = onboardAgent('Hub Origin', 'NorthTown', 50);
     const dest = onboardAgent('Hub Dest', 'SouthTown', 50);
-    mdps.register({ name: 'Central MDP', zones: ['NorthTown', 'SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    mdps.register({ name: 'Central MDP', zones: ['NorthTown', 'SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
 
     const plan = routing.planJourney({ originAgentDid: origin.did, destAgentDid: dest.did, weightKg: 5 });
     expect(plan.mdpRouted).toBe(true);
@@ -2989,13 +2989,62 @@ describe('PUDO Light', () => {
     expect(new Date(plan.pickupReadyAt).getTime()).toBeGreaterThanOrEqual(new Date(plan.transitArrivalAt).getTime());
   });
 
+  it('a hub that signed itself up works for nobody until staff approve its papers (ISO 28000: hubs are vetted)', () => {
+    const origin = onboardAgent('Vet Origin', 'VetNorth', 50);
+    const dest = onboardAgent('Vet Dest', 'VetSouth', 50);
+    const hub = mdps.register({ name: 'Joining Hub', zones: ['VetNorth', 'VetSouth'], location: { lat: -1.25, lng: 36.85 } }, 'joining');
+    expect(hub.vetting?.state).toBe('draft');
+    // Chosen for no zone, so routed nothing; refused its floor work before anything is written.
+    expect(mdps.mdpForZone('VetSouth')).toBeUndefined();
+    expect(mdps.approvedList().map((m) => m.mdpId)).not.toContain(hub.mdpId);
+    expect(() => routing.planJourney({ originAgentDid: origin.did, destAgentDid: dest.did, weightKg: 5 })).toThrow(/no MDP hub to route through/);
+    expect(() => mdps.registerTote(hub.mdpId)).toThrow(/not approved yet — it has not sent its papers/);
+    expect(() => mdps.decidePapers(hub.mdpId, true, 'Ops One')).toThrow(/no papers waiting/);
+
+    mdps.submitPapers(hub.mdpId, { idCopyRef: 'm_id', licenceRef: 'm_lic', photoRefs: ['m_front'] });
+    expect(() => mdps.submitPapers(hub.mdpId, { idCopyRef: 'm_id', licenceRef: 'm_lic', photoRefs: ['m_front'] })).toThrow(/with SeeBuyGet already/);
+    expect(mdps.papersQueue().map((m) => m.mdpId)).toContain(hub.mdpId);
+    expect(() => mdps.registerTote(hub.mdpId)).toThrow(/its papers are with SeeBuyGet/);
+
+    // Refused: always with a reason, the papers let go, and the hub sends them again.
+    expect(() => mdps.decidePapers(hub.mdpId, false, 'Ops One', '  ')).toThrow(/says why/);
+    const refused = mdps.decidePapers(hub.mdpId, false, 'Ops One', 'The licence photo is unreadable');
+    expect(refused.vetting).toMatchObject({ state: 'draft', refusal: { reason: 'The licence photo is unreadable', by: 'Ops One' } });
+    expect(refused.vetting?.papers).toBeUndefined();
+    expect(mdps.papersQueue().map((m) => m.mdpId)).not.toContain(hub.mdpId);
+    expect(() => mdps.registerTote(hub.mdpId)).toThrow(/were not accepted: send them again/);
+
+    mdps.submitPapers(hub.mdpId, { idCopyRef: 'm_id2', licenceRef: 'm_lic2', photoRefs: ['m_front2'] });
+    expect(mdps.decidePapers(hub.mdpId, true, 'Ops Two').vetting).toMatchObject({ state: 'approved', approvedBy: 'Ops Two', papers: { licenceRef: 'm_lic2' } });
+    expect(() => mdps.submitPapers(hub.mdpId, { idCopyRef: 'x', licenceRef: 'y', photoRefs: ['z'] })).toThrow(/approved: there are no papers/);
+    expect(mdps.mdpForZone('VetSouth')?.mdpId).toBe(hub.mdpId);
+    expect(mdps.approvedList().map((m) => m.mdpId)).toContain(hub.mdpId);
+    expect(mdps.registerTote(hub.mdpId).locationId).toBe(hub.mdpId);
+
+    // A hub staff register themselves is approved by them, by name; a bag at it is not addressed to a hub still joining.
+    const staffHub = mdps.register({ name: 'Staff Hub', zones: ['VetStaff'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'Ops One' });
+    expect(staffHub.vetting).toMatchObject({ state: 'approved', approvedBy: 'Ops One' });
+    const another = mdps.register({ name: 'Another Joining Hub', zones: ['VetElse'], location: { lat: -1.25, lng: 36.85 } }, 'joining');
+    const bag = mdps.registerTote(staffHub.mdpId);
+    expect(() => mdps.assignTote(bag.code, another.mdpId, another.name)).toThrow(/Another Joining Hub is not approved yet/);
+
+    // A record from before hubs were vetted carries none, which is not approved: a bag standing there moves nowhere.
+    const old = mdps.register({ name: 'Old Hub', zones: ['VetOld'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'Ops One' });
+    const standing = mdps.registerTote(old.mdpId);
+    delete mdps.require(old.mdpId).vetting;
+    expect(() => mdps.fillTote(standing.code, 'ANY-PARCEL')).toThrow(/Old Hub is not approved yet/);
+    expect(() => mdps.loadBag(standing.code, 'ANY-BADGE')).toThrow(/Old Hub is not approved yet/);
+    expect(() => mdps.assignTote(standing.code, 'dest-x', 'Dest X')).toThrow(/Old Hub is not approved yet/);
+    expect(() => mdps.closeBag(standing.code, { mdpId: old.mdpId }, undefined, undefined)).toThrow(/Old Hub is not approved yet/);
+  });
+
   it('runs the MDP tote-bag flow: pack → bus scans the bag → drop+empty → sort each parcel → re-bag', async () => {
     const flush = () => new Promise((r) => setImmediate(r));
     twin.onModuleInit();
     graduation.onModuleInit();
     const origin = onboardAgent('Pack Origin', 'NorthTown', 50);
     const dest = onboardAgent('Pack Dest', 'SouthTown', 50);
-    const hub = mdps.register({ name: 'Central MDP', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const hub = mdps.register({ name: 'Central MDP', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
     const vendor = vendors.register({ name: 'ShopX' });
 
     // Three inbound parcels destined for the SouthTown PUDO, intaken at the origin.
@@ -3066,7 +3115,7 @@ describe('PUDO Light', () => {
   it('S31: sortParcel never co-totes incompatible cargo — it opens a fresh bag instead', () => {
     const origin = onboardAgent('Sort Origin', 'NorthTown', 50);
     const dest = onboardAgent('Sort Dest', 'SouthTown', 50);
-    const hub = mdps.register({ name: 'Sort MDP', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const hub = mdps.register({ name: 'Sort MDP', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
     const vendor = vendors.register({ name: 'SortCo' });
     vendors.topUp(vendor.vendorId, 50);
     const quote = routing.quoteShipment(origin.did, dest.did, 'M');
@@ -4390,7 +4439,7 @@ describe('PUDO Light', () => {
 
   it('rolls up the fleet dashboard: sessions + working hours + live positions + active cargo', () => {
     const origin = onboardAgent('Dash Feeder', 'NorthTown', 50);
-    const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
     const d = drivers.register({ displayName: 'Dora', fullName: 'Do', nationalId: 'FD-1', mobile: '+254fd1', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'FD-1', vehicleClass: 'motorcycle', ownerName: 'Do' });
     fleet.startSession(d.did, moto.qr);
@@ -4431,7 +4480,7 @@ describe('PUDO Light', () => {
    */
   it('counts a bag handed straight to a driver as cargo, and against the vehicle it is on', () => {
     const origin = onboardAgent('Counter Feeder', 'NorthTown', 50);
-    const mdp = mdps.register({ name: 'Counter Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const mdp = mdps.register({ name: 'Counter Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
     const d = drivers.register({ displayName: 'Hana', fullName: 'Ha', nationalId: 'FD-2', mobile: '+254fd2', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'FD-2', vehicleClass: 'motorcycle', ownerName: 'Ha' });
     fleet.startSession(d.did, moto.qr);
@@ -4666,7 +4715,7 @@ describe('PUDO Light', () => {
     it('takes a bag onto a driver the same way, and a driver takes one onto their own badge only', () => {
       const { origin, d, badge, pass } = onShift();
       const other = onShift();
-      const mdp = mdps.register({ name: `Pass Hub ${seq}`, zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+      const mdp = mdps.register({ name: `Pass Hub ${seq}`, zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
       const bagWith = (id: string) => {
         const bag = totes.register(origin.did);
         totes.assign(bag.code, mdp.mdpId, mdp.name);
@@ -5058,7 +5107,7 @@ describe('PUDO Light', () => {
 
   it('publishes a PUDO tote for claim when full, and otherwise after the 24 h max wait (Ch 19)', () => {
     const origin = onboardAgent('Dispatch PUDO', 'NorthTown', 50);
-    const mdp = mdps.register({ name: 'South Hub', zones: ['SouthTown'], location: { lat: -1.3, lng: 36.9 } });
+    const mdp = mdps.register({ name: 'South Hub', zones: ['SouthTown'], location: { lat: -1.3, lng: 36.9 } }, { approvedBy: 'staff' });
 
     // (a) a full bag is published immediately
     const full = totes.register(origin.did);
@@ -5081,7 +5130,7 @@ describe('PUDO Light', () => {
 
   it('suggests on-route loads sized to remaining capacity; a claim reserves it against the vehicle total', () => {
     const origin = onboardAgent('Feeder PUDO', 'NorthTown', 50);
-    const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
     const d = drivers.register({ displayName: 'Moto', fullName: 'Mo', nationalId: 'DSP-1', mobile: '+254dsp1', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'MT-1', vehicleClass: 'motorcycle', ownerName: 'Mo' }); // 50 kg total
     fleet.couple(d.did, moto.vehicleId);
@@ -5108,7 +5157,7 @@ describe('PUDO Light', () => {
 
   it('auto-ignores an unanswered offer when it lapses, and blocks a late claim', () => {
     const origin = onboardAgent('Lapse PUDO', 'NorthTown', 50);
-    const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
     const d = drivers.register({ displayName: 'Moto', fullName: 'Mo', nationalId: 'DSP-2', mobile: '+254dsp2', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'MT-2', vehicleClass: 'motorcycle', ownerName: 'Mo' });
     fleet.couple(d.did, moto.vehicleId);
@@ -5126,7 +5175,7 @@ describe('PUDO Light', () => {
 
   it('reserves a claimed bag for its driver — another driver cannot load it away', () => {
     const origin = onboardAgent('Reserve PUDO', 'NorthTown', 50);
-    const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+    const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
     const a = drivers.register({ displayName: 'A', fullName: 'Amos', nationalId: 'DSP-A', mobile: '+254dspa', licenceClasses: ['motorcycle'] });
     const b = drivers.register({ displayName: 'B', fullName: 'Ben', nationalId: 'DSP-B', mobile: '+254dspb', licenceClasses: ['motorcycle'] });
     fleet.couple(a.did, vehicles.register({ plate: 'MA-1', vehicleClass: 'motorcycle', ownerName: 'Amos' }).vehicleId);
@@ -5452,7 +5501,7 @@ describe('PUDO Light', () => {
   it('closes the tote last mile: an outbound parcel nominates a dest PUDO, is MDP-sorted, and delivered as a bag', () => {
     const origin = onboardAgent('TM Origin', 'NorthTown', 50);
     const dest = onboardAgent('TM Dest', 'EastTown', 50);
-    const hub = mdps.register({ name: 'East Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.9 } });
+    const hub = mdps.register({ name: 'East Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.9 } }, { approvedBy: 'staff' });
 
     // Outbound parcel that nominates its destination PUDO → has destAgentDid → MDP-sortable (P1 #2).
     parcels.accept({ agentDid: origin.did, parcelId: 'TM-1', size: 'M', destZone: 'EastTown', destPudoDid: dest.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did), paymentMode: 'prepaid' });
@@ -6997,8 +7046,8 @@ describe('PUDO Light', () => {
     });
 
     it('a hub’s price, its bags and what is dropped and sorted at it are the hub’s own to change', () => {
-      const hub = mdps.register({ name: 'Who Hub', zones: ['WhoZone'], location: at });
-      const elsewhere = mdps.register({ name: 'Another Hub', zones: ['WhoElse'], location: at });
+      const hub = mdps.register({ name: 'Who Hub', zones: ['WhoZone'], location: at }, { approvedBy: 'staff' });
+      const elsewhere = mdps.register({ name: 'Another Hub', zones: ['WhoElse'], location: at }, { approvedBy: 'staff' });
       const own = as('mdp', hub.did);
       // Another hub, a shop, and a hub's role with no hub behind it.
       for (const who of [as('mdp', elsewhere.did), as('agent', 'did:glos:a-shop'), as('mdp')]) {
@@ -7150,8 +7199,8 @@ describe('PUDO Light', () => {
     });
 
     it('every hub: where it is and what it charges for anybody; its number and its bags for the hub itself and for staff', () => {
-      const hub = mdps.register({ name: 'Read Hub', zones: ['ReadZone'], location: at, contactPhone: '+254700999001', address: 'Depot Road 1' });
-      const other = mdps.register({ name: 'Other Read Hub', zones: ['ReadElse'], location: at, contactPhone: '+254700999002' });
+      const hub = mdps.register({ name: 'Read Hub', zones: ['ReadZone'], location: at, contactPhone: '+254700999001', address: 'Depot Road 1' }, { approvedBy: 'staff' });
+      const other = mdps.register({ name: 'Other Read Hub', zones: ['ReadElse'], location: at, contactPhone: '+254700999002' }, { approvedBy: 'staff' });
       mdps.registerTote(hub.mdpId);
       const row = (who: never) => (controller.listMdps(who) as Row[]).find((m) => m.mdpId === hub.mdpId)!;
       for (const who of [staff, as('mdp', hub.did)]) expect(row(who)).toMatchObject({ contactPhone: '+254700999001', totes: 1, entityId: hub.entityId });
@@ -7165,8 +7214,8 @@ describe('PUDO Light', () => {
     it('a hub’s sort fee is said in its company’s money, and set beside the hubs in that money only', () => {
       // A circle drawn near a border reaches a hub of another company: a median of shillings and birr is a number about
       // nothing. The fee is public, and so is the money it is in — without it the figure says nothing.
-      const home = mdps.register({ name: 'Nairobi Fee Hub', zones: ['FeeZone'], location: at });
-      const ets = [mdps.register({ name: 'Addis Fee Hub A', zones: ['FeeAddisA'], location: at, country: 'ET' } as never), mdps.register({ name: 'Addis Fee Hub B', zones: ['FeeAddisB'], location: at, country: 'ET' } as never)];
+      const home = mdps.register({ name: 'Nairobi Fee Hub', zones: ['FeeZone'], location: at }, { approvedBy: 'staff' });
+      const ets = [mdps.register({ name: 'Addis Fee Hub A', zones: ['FeeAddisA'], location: at, country: 'ET' } as never, { approvedBy: 'staff' }), mdps.register({ name: 'Addis Fee Hub B', zones: ['FeeAddisB'], location: at, country: 'ET' } as never, { approvedBy: 'staff' })];
       mdps.setPrice(home.mdpId, 0.4);
       ets.forEach((h, i) => mdps.setPrice(h.mdpId, 20 + i * 5));
       const listed = (who: never, id: string) => (controller.listMdps(who) as Row[]).find((m) => m.mdpId === id)!;
@@ -7190,8 +7239,8 @@ describe('PUDO Light', () => {
     });
 
     it('the bags standing at a hub are read by that hub; the whole pool by staff', () => {
-      const hub = mdps.register({ name: 'Bag Hub', zones: ['BagZone'], location: at });
-      const other = mdps.register({ name: 'Other Bag Hub', zones: ['BagElse'], location: at });
+      const hub = mdps.register({ name: 'Bag Hub', zones: ['BagZone'], location: at }, { approvedBy: 'staff' });
+      const other = mdps.register({ name: 'Other Bag Hub', zones: ['BagElse'], location: at }, { approvedBy: 'staff' });
       const bag = mdps.registerTote(hub.mdpId);
       const codes = (list: unknown) => (list as Array<{ code: string }>).map((t) => t.code);
       expect(codes(controller.listTotes(as('mdp', hub.did), hub.mdpId))).toEqual([bag.code]);
@@ -7445,8 +7494,8 @@ describe('PUDO Light', () => {
       expect(ids(staff)).toEqual(['QR-L1', 'QR-L2']);
 
       // A hub: what stands at it, and nothing of another hub's.
-      const hub = mdps.register({ name: 'List Hub', zones: ['ListZone'], location: at });
-      const elsewhere = mdps.register({ name: 'List Hub 2', zones: ['ListElse'], location: at });
+      const hub = mdps.register({ name: 'List Hub', zones: ['ListZone'], location: at }, { approvedBy: 'staff' });
+      const elsewhere = mdps.register({ name: 'List Hub 2', zones: ['ListElse'], location: at }, { approvedBy: 'staff' });
       parcels.get('QR-L1').atMdpId = hub.mdpId;
       expect(ids(as('mdp', hub.did))).toEqual(['QR-L1']);
       expect(ids(as('mdp', elsewhere.did))).toEqual([]);
@@ -9265,7 +9314,7 @@ describe('PUDO Light', () => {
   });
 
   it('REP3: an MDP hub resolves a derived operational scorecard (an empty hub reads clean)', () => {
-    const hub = mdps.register({ name: 'Central Hub', zones: ['NorthTown'], location: { lat: -1.2, lng: 36.8 } });
+    const hub = mdps.register({ name: 'Central Hub', zones: ['NorthTown'], location: { lat: -1.2, lng: 36.8 } }, { approvedBy: 'staff' });
     expect(monitor.mdpScorecard(hub.mdpId)).toEqual({ handling: 0, stuck: 0, onTimeRate: 1 });
     const profile = controller.reputationProfile(hub.did) as Record<string, unknown> & { scorecard: { onTimeRate: number } };
     expect(profile.kind).toBe('mdp');
@@ -9583,7 +9632,7 @@ describe('PUDO Light', () => {
       set({ mdpSortFee: 25 });
       const origin = onboardAgent('Sort Origin', 'NorthTown', 50);
       const dest = onboardAgent('Sort Dest', 'SouthTown', 50);
-      const hub = mdps.register({ name: 'Sort Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } });
+      const hub = mdps.register({ name: 'Sort Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
       const vendor = vendors.register({ name: 'SortStore' });
       vendors.topUp(vendor.vendorId, 50);
       const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700222', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });

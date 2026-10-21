@@ -18,7 +18,7 @@ const STOP = { lat: -0.3031, lng: 36.08 };
 const NEAR = { lat: -0.3022, lng: 36.08 };
 const FAR = { lat: -0.285, lng: 36.08 };
 
-function harness(over: { shift?: boolean; managerDid?: string | null; reasons?: { places: Array<{ lat: number; lng: number }>; atBorder: boolean }; sites?: Array<{ location: { lat: number; lng: number } }>; mdps?: Array<{ location: { lat: number; lng: number } }>; shops?: Array<{ location: { lat: number; lng: number } }>; brokenDown?: boolean } = {}) {
+function harness(over: { shift?: boolean; managerDid?: string | null; reasons?: { places: Array<{ lat: number; lng: number }>; atBorder: boolean }; sites?: Array<{ location: { lat: number; lng: number } }>; mdps?: Array<{ location: { lat: number; lng: number } }>; shops?: Array<{ location: { lat: number; lng: number }; status?: string }>; brokenDown?: boolean } = {}) {
   const published: Array<{ topic: string; payload: unknown }> = [];
   const state = { shift: over.shift ?? true };
   const events = { subscribe: () => undefined, publish: (topic: string, payload: unknown) => (published.push({ topic, payload }), Promise.resolve()) } as unknown as EventBus;
@@ -28,7 +28,8 @@ function harness(over: { shift?: boolean; managerDid?: string | null; reasons?: 
   const reasonsAt: number[] = [];
   const dispatch = { reasonsToStand: (_d: string, now: number) => (reasonsAt.push(now), over.reasons ?? { places: [], atBorder: false }) } as unknown as DispatchService;
   const sites = { sitesOf: () => over.sites ?? [] } as unknown as FleetSiteService;
-  const mdps = { list: () => over.mdps ?? [] } as unknown as MdpService;
+  // The hubs SeeBuyGet has approved: MdpService.approvedList does the filtering, and is tested where it lives.
+  const mdps = { approvedList: () => over.mdps ?? [] } as unknown as MdpService;
   const agents = { list: () => over.shops ?? [] } as unknown as AgentService;
   const breakdowns = { openForFleet: () => (over.brokenDown ? [{ vehicleId: 'veh_1', status: 'open' }] : []) } as unknown as VehicleBreakdownService;
   const svc = new VehicleStandstillService(events, fleet, drivers, vehicles, dispatch, sites, mdps, agents, breakdowns);
@@ -87,6 +88,9 @@ describe('a vehicle standing still (round 16)', () => {
     expect(at(harness({ sites: [{ location: NEAR }] }))).toEqual([]);
     expect(at(harness({ mdps: [{ location: NEAR }] }))).toEqual([]);
     expect(at(harness({ shops: [{ location: NEAR }] }))).toEqual([]);
+    // A shop that merely signed up there, or whose papers are still with staff, is no reason: anybody can sign up anywhere.
+    expect(at(harness({ shops: [{ location: NEAR, status: 'DRAFT' }] }))).toHaveLength(1);
+    expect(at(harness({ shops: [{ location: NEAR, status: 'KYC_PENDING' }] }))).toHaveLength(1);
     expect(at(harness({ brokenDown: true }))).toEqual([]);
     expect(at(harness({ managerDid: null }))).toEqual([]);
     const off = harness();
@@ -134,6 +138,9 @@ describe('a vehicle standing still (round 16)', () => {
     expect(at(harness({ sites: [{ location: NEAR }] }))).toEqual([]);
     expect(at(harness({ mdps: [{ location: NEAR }] }))).toEqual([]);
     expect(at(harness({ shops: [{ location: NEAR }] }))).toEqual([]);
+    // A shop that merely signed up there, or whose papers are still with staff, is no reason: anybody can sign up anywhere.
+    expect(at(harness({ shops: [{ location: NEAR, status: 'DRAFT' }] }))).toHaveLength(1);
+    expect(at(harness({ shops: [{ location: NEAR, status: 'KYC_PENDING' }] }))).toHaveLength(1);
     expect(at(harness({ brokenDown: true }))).toEqual([]);
     expect(at(harness({ managerDid: null }))).toEqual([]);
     const off = harness();

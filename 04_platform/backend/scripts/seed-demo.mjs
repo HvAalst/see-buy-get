@@ -228,6 +228,15 @@ const run = async () => {
   const hubRow = need(await req('GET', '/v1/sbg/mdps', { token: tokHub }), 'mdps').find((m) => m.did === hub.did);
   if (!hubRow) die('hub row missing from /mdps');
   say(`hub   Central Sort      ${hubRow.mdpId}`);
+  // A hub that signs itself up works once staff have seen its papers, as a shop does: it sends them, and staff approve.
+  if (hubRow.vetting?.state !== 'approved') {
+    if (hubRow.vetting?.state !== 'pending') {
+      const [idCopyRef, licenceRef, premises] = [await uploadDoc(tokHub, 'kyc_id', 'id', 31), await uploadDoc(tokHub, 'kyc_licence', 'licence', 32), await uploadDoc(tokHub, 'shop', 'shop', 33)];
+      need(await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/papers`, { token: tokHub, body: { idCopyRef, licenceRef, photoRefs: [premises] } }), 'hub papers');
+    }
+    need(await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/papers-decision`, { token: op, body: { approve: true } }), 'approve hub');
+    say('hub   Central Sort      papers seen and approved');
+  }
 
   const hubTotes = need(await req('GET', `/v1/sbg/totes?location=${encodeURIComponent(hubRow.mdpId)}&status=`, { token: tokHub }), 'totes');
   for (let i = hubTotes.filter((t) => t.status === 'free').length; i < 2; i++) {
@@ -586,8 +595,15 @@ const run = async () => {
   for (const p of [p4, p5]) {
     need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(bag.code)}/fill`, { token: tokA1, body: { parcelId: p.parcelId } }), `fill ${p.parcelId}`);
   }
+  // Rounds 36–37: a bag leaves closed (here photographed closed), the driver carrying it reads it as closed, and the hub
+  // receives it on a photograph before it opens it — each photograph its taker's own.
+  need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(bag.code)}/close`, { token: tokA1, body: { photoRef: await uploadDoc(tokA1, 'seal', 'shop', 41) } }), 'close bag');
   need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(bag.code)}/load`, { token: tokA1, body: { driverBadgeId: await amosPass() } }), 'load bag');
-  need(await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/drop-bag`, { token: tokHub, body: { code: bag.code } }), 'drop bag');
+  need(await req('POST', `/v1/sbg/totes/${encodeURIComponent(bag.code)}/take`, { token: amosToken, body: { photoRef: await uploadDoc(amosToken, 'seal', 'shop', 42), asClosed: true } }), 'Amos reads the bag');
+  need(
+    await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/drop-bag`, { token: tokHub, body: { code: bag.code, receipt: { photoRef: await uploadDoc(tokHub, 'seal', 'shop', 43), asClosed: true } } }),
+    'drop bag',
+  );
   const sorted = need(
     await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/sort`, { token: tokHub, body: { parcelId: p5.parcelId } }),
     'sort p5',

@@ -233,6 +233,30 @@ export const QUEUE_LABEL: Record<'claims' | 'disposal' | 'approvals', MessageKey
   approvals: 'tower.nav.approvals',
 };
 
+/* -------------------------------------------------------------- hub applications -- */
+
+/**
+ * A HUB THAT SIGNED ITSELF UP, its papers waiting on us (the ISO 28000 check: "hubs are not vetted at all"). Until it is
+ * approved it sorts nothing and nothing is routed to it. What is judged is whether this is a real place, licensed to
+ * trade, run by the person on the ID.
+ */
+export interface HubApplication {
+  mdpId: string;
+  did: string;
+  name: string;
+  country: string;
+  zones: string[];
+  address?: string;
+  contactPhone?: string;
+  createdAt: string;
+  papers: { idCopyRef: string; licenceRef: string; photoRefs: string[]; submittedAt: string };
+}
+
+/** The papers to look at, the licence first: it is what the decision is about. Then the ID, then the premises. */
+export function hubPapersOf(row: Pick<HubApplication, 'papers'>): string[] {
+  return [row.papers.licenceRef, row.papers.idCopyRef, ...row.papers.photoRefs].filter((x): x is string => Boolean(x));
+}
+
 /* ----------------------------------------------------------- driver applications -- */
 
 /**

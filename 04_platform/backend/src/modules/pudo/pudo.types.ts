@@ -391,6 +391,35 @@ export class CustodyLeg {
   receivedAt?: string;
 }
 
+/** A hub's papers, as a shop's: a copy of the responsible person's ID, the trading licence, a photograph of the premises. */
+export class HubPapers {
+  idCopyRef: string;
+  licenceRef: string;
+  photoRefs: string[];
+  submittedAt: string;
+}
+
+/** Why SeeBuyGet said no: the hub is shown it, and sends its papers again. */
+export class HubRefusal {
+  reason: string;
+  at: string;
+  by?: string;
+}
+
+/**
+ * WHERE A HUB STANDS WITH SEEBUYGET (the ISO 28000 check: "hubs are not vetted at all"). A hub that signs itself up
+ * starts at `draft`, sends its papers (`pending`), and is `approved` by a member of staff who has seen them — or sent
+ * back to `draft`, with the reason. A hub staff register themselves is approved by that person at registration. Until
+ * approved a hub does no floor work and is chosen for no zone. Absent: not vetted, the same as `draft`.
+ */
+export class HubVetting {
+  state: 'draft' | 'pending' | 'approved';
+  papers?: HubPapers;
+  approvedAt?: string;
+  approvedBy?: string;
+  refusal?: HubRefusal;
+}
+
 /**
  * MDP hub (Compendium Ch 17 — Main Distribution Point). A regional sort centre, distinct from a PUDO
  * shop: parcels are NOT shelved here, they are sorted into tote bags by next destination. One MDP
@@ -414,6 +443,8 @@ export class Mdp {
   address?: string; // physical address (the map pin gives the coordinates)
   pricePerParcel: number; // open-data sort fee the hub advertises (public)
   createdAt: string;
+  /** Where it stands with SeeBuyGet: read it through MdpService.isApproved, never the field alone. */
+  vetting?: HubVetting;
 }
 
 /**

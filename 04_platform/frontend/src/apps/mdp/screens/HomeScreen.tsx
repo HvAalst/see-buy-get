@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Note, PhotoField, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
-import { bagLine, fillPercent, fillingBags, freeBags, homeSummary, money, swatchIndex, unsortedAt } from '../logic';
+import { bagLine, fillPercent, fillingBags, floorOpen, freeBags, homeSummary, hubPapersStep, money, swatchIndex, unsortedAt } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { PeopleSheet } from '../../agent/screens/PeopleSheet';
 import { HUB_PEOPLE_WORDS } from '../staffWords';
@@ -10,6 +10,63 @@ import { HUB_PEOPLE_WORDS } from '../staffWords';
 export interface HomeScreenProps {
   state: MdpState;
   actions: MdpActions;
+}
+
+/**
+ * A HUB NOT YET APPROVED (the ISO 28000 check: "hubs are vetted"): what is wanted of it, and the way to send it — the
+ * shop's papers card, in a hub's words. Papers with staff show that they are, and no button: sending them twice is not an
+ * action. The hub's people are told whose move it is; the papers are the owner's, signed in as the hub.
+ */
+function HubPapers({ state, actions }: HomeScreenProps) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [idCopy, setIdCopy] = useState('');
+  const [licence, setLicence] = useState('');
+  const [premises, setPremises] = useState('');
+  const step = hubPapersStep(state.hub);
+  if (!step) return null;
+  if (step.kind === 'with_staff') return <Note tone="info" icon="check" title={t('mdp.papers.pendingTitle')} detail={t('mdp.papers.pendingBody')} />;
+  if (state.staff) return <Note tone="warn" icon="badge" title={t('mdp.papers.notYetTitle')} detail={t('mdp.papers.staffBody')} />;
+
+  return (
+    <>
+      {step.refusedWhy ? (
+        <Note tone="danger" icon="warning" title={t('mdp.papers.refusedTitle')} detail={t('mdp.papers.refusedBody', { reason: step.refusedWhy })} />
+      ) : (
+        <Note tone="warn" icon="badge" title={t('mdp.papers.needTitle')} detail={t('mdp.papers.needBody')} />
+      )}
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        {t(step.refusedWhy ? 'mdp.papers.sendAgain' : 'mdp.papers.send')}
+      </Button>
+
+      {open ? (
+        <Sheet open onClose={() => setOpen(false)} title={t('mdp.papers.send')}>
+          <p class="t-body">{t('mdp.papers.sheetBody')}</p>
+          <PhotoField id="papers-id" value={idCopy} label={t('mdp.papers.idPhoto')} upload={(file) => actions.uploadPhoto(file, 'kyc_id')} onCapture={setIdCopy} />
+          <PhotoField id="papers-licence" value={licence} label={t('mdp.papers.licencePhoto')} upload={(file) => actions.uploadPhoto(file, 'kyc_licence')} onCapture={setLicence} />
+          <PhotoField id="papers-premises" value={premises} label={t('mdp.papers.premisesPhoto')} upload={(file) => actions.uploadPhoto(file, 'shop')} onCapture={setPremises} />
+          <Button
+            chevron={false}
+            disabled={!(idCopy && licence && premises)}
+            busy={state.busy === 'papers'}
+            onClick={async () => {
+              const sent = await actions.sendPapers({ idCopyRef: idCopy, licenceRef: licence, photoRefs: [premises] });
+              if (!sent) return;
+              setOpen(false);
+              setIdCopy('');
+              setLicence('');
+              setPremises('');
+            }}
+          >
+            {t('mdp.papers.submit')}
+          </Button>
+          <Button variant="link" onClick={() => setOpen(false)}>
+            {t('mdp.papers.notNow')}
+          </Button>
+        </Sheet>
+      ) : null}
+    </>
+  );
 }
 
 /**
@@ -25,11 +82,17 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
   const unsorted = hub ? unsortedAt(state.inbound, hub.mdpId) : [];
   const filling = fillingBags(state.totes);
   const free = freeBags(state.totes);
+  // Not yet approved: the floor is shut (the server refuses the work), so the papers stand where the floor would.
+  const open = floorOpen(hub);
 
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
 
+      {hub && !open ? <HubPapers state={state} actions={actions} /> : null}
+
+      {open ? (
+      <>
       <div class="tiles">
         <Tile value={unsorted.length} label={t('mdp.home.tileToSort')} alert={unsorted.length > 0} />
         <Tile value={filling.length} label={t('mdp.home.tileOutbound')} />
@@ -92,6 +155,8 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
           </Button>
         </div>
       </Card>
+      </>
+      ) : null}
 
       {hub?.location ? (
         <Card label={t('mdp.home.whereHub')}>

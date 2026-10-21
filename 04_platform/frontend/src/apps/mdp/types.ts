@@ -21,6 +21,11 @@ export interface MdpView {
   currency?: string;
   /** Merged in by the controller: totes currently at this hub. */
   totes?: number;
+  /**
+   * Where it stands with SeeBuyGet (the ISO 28000 check: "hubs are vetted"), shown to the hub itself and to staff. A hub
+   * that signed itself up works once staff have seen its papers. Absent: not vetted.
+   */
+  vetting?: { state: 'draft' | 'pending' | 'approved'; refusal?: { reason: string } };
 }
 
 export interface ToteView {

@@ -574,8 +574,9 @@ export class AccountService implements OnApplicationBootstrap {
       return { did: driver.did, entityStatus: this.drivers.get(driver.did).status };
     }
     if (role === 'mdp') {
-      const mdp = this.mdps.register((profile.mdp ?? {}) as never);
-      return { did: mdp.did }; // the real DID now (was the mdp_<hex> id — a type lie)
+      // A hub that signs itself up is vetted from its papers before it works (the ISO 28000 check: "hubs are not vetted").
+      const mdp = this.mdps.register((profile.mdp ?? {}) as never, 'joining');
+      return { did: mdp.did, entityStatus: mdp.vetting?.state }; // the real DID now (was the mdp_<hex> id — a type lie)
     }
     throw new GlosError('UNKNOWN_ROLE', `Unknown account role: ${role}`);
   }

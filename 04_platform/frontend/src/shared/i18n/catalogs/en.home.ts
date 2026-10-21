@@ -496,6 +496,7 @@ export const enHome = {
   'home.join.done.pending1': 'SeeBuyGet checks your details — usually same day',
   'home.join.done.pending2': 'You can open your app and look around now',
   'home.join.done.pending3': 'You start working the moment you are approved',
+  'home.join.done.hubPapers': 'Open the Hub app and send its papers: an ID, the trading licence and a photo of the hub',
   'home.join.done.openApp': 'Open the {name} app',
   'home.join.done.restart': 'Back to the start',
 

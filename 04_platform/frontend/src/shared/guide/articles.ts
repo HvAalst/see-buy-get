@@ -102,6 +102,25 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "hub-papers",
+    apps: [
+      "mdp"
+    ],
+    title: "Getting your hub approved: send its papers",
+    summary: "A hub that signs itself up takes no bags in and sorts nothing, and nothing is routed to it, until SeeBuyGet has seen three things: the ID of the person who answers for the hub, its trading licence and a photo of the premises. You send them from the Hub app, and it tells you where you stand.",
+    steps: [
+      "Sign in to the Hub app as the hub. While it is not approved, the home screen says Send your papers to be approved, where the floor would be.",
+      "Press Send the hub’s papers. Photograph the ID, the trading licence and the hub from outside with its entrance, one after the other. Take each in good light, with every corner in the picture.",
+      "When all three say Photo saved, press Send to SeeBuyGet. The screen then says Your papers are with SeeBuyGet. There is nothing more for you to do while they are read.",
+      "If something is wrong with them, the screen says Your papers were not accepted and shows what SeeBuyGet wrote. Put that right and press Send them again.",
+      "When the hub is approved you are told, and the floor opens: drop a bag, sort, bags out."
+    ],
+    notes: [
+      "Only SeeBuyGet staff see these photographs.",
+      "The owner sends them, signed in as the hub. The people who work its floor cannot send them, and nobody can send them for you."
+    ]
+  },
+  {
     id: "change-password",
     apps: [
       "agent",

@@ -23,7 +23,7 @@ export const MEDIA_KINDS = [
   /** A COMPANY's own papers, put on record when a fleet is set up: its certificate of registration, and proof of where it is. */
   'kyc_registration',
   'kyc_address',
-  'shop', // shop premises photo
+  'shop', // a shop's or a hub's premises photo
   'avatar', // a person's profile picture (S29)
   'securement', // S33 — a driver's photo of a secured dedicated-freight load at pickup
   'seal', // round 15 — a seal on a load: the shipper's three when it seals it, the driver's at pickup, a re-seal, a break
@@ -76,7 +76,7 @@ export type MediaStatus = 'active' | 'expired';
 /** What a media item is attached to — drives who may see it and when its retention clock starts. */
 export interface MediaLink {
   /** `fleet` — a fleet OPERATOR's own papers (its transport licence, its cover), sent from the fleet app. */
-  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet' | 'id-dispute' | 'gs1-dispute' | 'bag';
+  type: 'parcel' | 'vehicle' | 'agent' | 'driver' | 'person' | 'freight' | 'constraint' | 'box' | 'fleet' | 'id-dispute' | 'gs1-dispute' | 'bag' | 'hub';
   id: string;
 }
 

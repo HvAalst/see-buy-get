@@ -525,13 +525,14 @@ export function useMdpApp() {
 
   /** Round 35 — a photograph for the tamper report: prepared on the phone; with no signal it waits here and goes with the report. */
   const uploadPhoto = useCallback(
-    async (file: File, kind: 'tamper' | 'seal' = 'tamper'): Promise<string | null> => {
+    async (file: File, kind: 'tamper' | 'seal' | 'kyc_id' | 'kyc_licence' | 'shop' = 'tamper'): Promise<string | null> => {
       if (!client) return null;
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
-          const held = isOffline(r.error) ? holdPhoto(kind, dataUrl, thumbDataUrl) : null;
+          // A report waits on the phone with its photograph; papers do not — staff cannot approve a photograph we never had.
+          const held = isOffline(r.error) && (kind === 'tamper' || kind === 'seal') ? holdPhoto(kind, dataUrl, thumbDataUrl) : null;
           if (held) return held;
           pushToast({ tone: 'danger', icon: 'camera', title: t('mdp.tamper.photoFail'), detail: errorSentence(r.error) });
           return null;
@@ -616,6 +617,28 @@ export function useMdpApp() {
     });
   }, [client, run, fail, refresh]);
 
+  /**
+   * The hub's papers (the ISO 28000 check: "hubs are vetted"): each the id of a photograph it has just taken — the server
+   * takes nothing else. True when they went: the sheet closes on that and on nothing else.
+   */
+  const sendPapers = useCallback(
+    async (papers: { idCopyRef: string; licenceRef: string; photoRefs: string[] }): Promise<boolean> => {
+      if (!client) return false;
+      const hub = stateRef.current.hub;
+      if (!hub) return false;
+      let sent = false;
+      await run('papers', async () => {
+        const r = await client.api.sendPapers(hub.mdpId, papers);
+        if (r.error) return fail(r.error);
+        sent = true;
+        pushToast({ tone: 'ok', icon: 'check', title: t('mdp.papers.sentToast') });
+        await refresh();
+      });
+      return sent;
+    },
+    [client, run, fail, refresh, pushToast],
+  );
+
   const setPrice = useCallback(
     async (price: number) => {
       if (!client) return;
@@ -662,6 +685,7 @@ export function useMdpApp() {
       submitSort,
       submitLoad,
       submitNewTote,
+      sendPapers,
       setPrice,
       pushToast,
       dismissToast,

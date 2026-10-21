@@ -65,6 +65,8 @@ export const GlosEvent = {
     AgentKycRejected: 'pudo.agent_kyc_rejected',
     /** The same, for a heavy-registry driver: they are shown the reason and can send fresh papers. */
     DriverKycRejected: 'pudo.driver_kyc_rejected',
+    /** A member of staff decided on a hub's papers: approved, or sent back with the reason it is shown. Told to the hub. */
+    HubPapersDecided: 'pudo.hub_papers_decided',
     // A driver in no fleet asked to ride for themselves on something heavy, and staff decided: told to the driver.
     DriverRideAloneDecided: 'pudo.driver_ride_alone_decided',
     // A fleet office put a driver on a day's roster, or took them off a day they had been told they drive.

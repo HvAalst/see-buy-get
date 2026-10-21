@@ -18,7 +18,7 @@ import { DEFAULT_MDP_PRICE_PER_PARCEL, NETWORK_CURRENCY } from './pudo.config';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { Mdp, NextHop, Tote } from './pudo.types';
+import { HubPapers, Mdp, NextHop, Tote } from './pudo.types';
 import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
@@ -116,7 +116,12 @@ export class MdpService {
 
   // --- registry ---
 
-  register(input: { name: string; zones: string[]; country?: string; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number }): Mdp {
+  /**
+   * `vouched` says who stands behind the hub (the ISO 28000 check: "hubs are not vetted at all"): a member of staff who
+   * registered it themselves, and so approved it, by name — or `'joining'`, a hub that signed itself up and is vetted
+   * from its papers before it works. Asked of every caller, so that no new way in can skip it by leaving it out.
+   */
+  register(input: { name: string; zones: string[]; country?: string; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number }, vouched: { approvedBy: string } | 'joining'): Mdp {
     if (!input.zones?.length) throw new GlosError('ZONES_REQUIRED', 'An MDP must cover at least one zone');
     // Same question a shop answers: does the network operate here at all? Where we only match, a hub stands with
     // no sister behind it — it sorts and records custody, and nothing of ours is booked for the work.
@@ -128,7 +133,8 @@ export class MdpService {
     // (tier/tokenVersion) like every other participant. No PII goes to the core (contact/address stay
     // on the domain record only).
     const did = this.dids.generate(`mdp:${input.name}`, { role: 'pudo-mdp' }).id;
-    this.core.upsert({ did, tier: 2, status: 'active', capabilities: ['pudo-mdp'], metadata: { zones: input.zones } });
+    const now = new Date().toISOString();
+    this.core.upsert({ did, tier: 2, status: vouched === 'joining' ? 'pending' : 'active', capabilities: ['pudo-mdp'], metadata: { zones: input.zones } });
     const mdp: Mdp = {
       mdpId: `mdp_${randomBytes(5).toString('hex')}`,
       did,
@@ -140,10 +146,95 @@ export class MdpService {
       contactPhone: input.contactPhone,
       address: input.address?.trim() || undefined,
       pricePerParcel: input.pricePerParcel ?? DEFAULT_MDP_PRICE_PER_PARCEL,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      vetting: vouched === 'joining' ? { state: 'draft' } : { state: 'approved', approvedAt: now, approvedBy: vouched.approvedBy },
     };
     this.mdps.set(mdp.mdpId, mdp);
     return mdp;
+  }
+
+  // --- vetting (the ISO 28000 check: "hubs are not vetted at all") ---
+
+  /** Approved by a member of staff who saw its papers, or who registered it. Nothing else lets a hub work. */
+  isApproved(mdp: Mdp): boolean {
+    return mdp.vetting?.state === 'approved';
+  }
+
+  /**
+   * THE HUB, IF IT MAY WORK. Every act on a hub's floor asks this first: a bag received, a parcel sorted, a tote added, a
+   * bag filled, closed, addressed or loaded. Refused before anything is written, in words the hub can act on.
+   */
+  working(mdpId: string): Mdp {
+    const mdp = this.require(mdpId);
+    if (!this.isApproved(mdp)) throw this.notApproved(mdp);
+    return mdp;
+  }
+
+  /** The same for a bag: where it stands, if that is a hub, must be one that may work. A shop's bag is the shop's to answer. */
+  private workingWhereBagIs(locationId: string): void {
+    const hub = this.mdps.get(locationId);
+    if (hub && !this.isApproved(hub)) throw this.notApproved(hub);
+  }
+
+  private notApproved(mdp: Mdp): GlosError {
+    const state = mdp.vetting?.state ?? 'draft';
+    const why = state === 'pending' ? 'its papers are with SeeBuyGet' : mdp.vetting?.refusal ? 'its papers were not accepted: send them again' : 'it has not sent its papers yet';
+    return new GlosError('HUB_NOT_APPROVED', `${mdp.name} is not approved yet — ${why}. A hub works once SeeBuyGet has seen its papers.`, { state });
+  }
+
+  /**
+   * The hub sends its papers: a copy of the responsible person's ID, its trading licence, a photograph of the premises.
+   * From `draft` only — papers with staff are not sent twice, and an approved hub has nothing to send. The controller has
+   * checked each is a photograph this hub took, before this writes anything.
+   */
+  submitPapers(mdpId: string, papers: { idCopyRef: string; licenceRef: string; photoRefs: string[] }, now: Date = new Date()): Mdp {
+    const mdp = this.require(mdpId);
+    this.assertCanSend(mdp);
+    if (!papers.idCopyRef || !papers.licenceRef || !papers.photoRefs?.length) throw new GlosError('KYC_INCOMPLETE', 'Send a copy of an ID, the trading licence and a photograph of the hub');
+    const sent: HubPapers = { idCopyRef: papers.idCopyRef, licenceRef: papers.licenceRef, photoRefs: [...papers.photoRefs], submittedAt: now.toISOString() };
+    mdp.vetting = { ...(mdp.vetting ?? { state: 'draft' }), state: 'pending', papers: sent };
+    this.mdps.set(mdp.mdpId, mdp);
+    return mdp;
+  }
+
+  /** Refused unless the hub is still to send its papers: asked before the photographs are taken in. */
+  assertCanSend(mdp: Mdp): void {
+    const state = mdp.vetting?.state ?? 'draft';
+    if (state === 'pending') throw new GlosError('INVALID_STATE', 'Your papers are with SeeBuyGet already');
+    if (state === 'approved') throw new GlosError('INVALID_STATE', 'This hub is approved: there are no papers to send');
+  }
+
+  /**
+   * A member of staff decides, having seen the papers. Approved: the hub works from now on. Refused: back to `draft`, with
+   * the reason — required, because the hub is shown it — and the papers let go, so it sends a fresh set. The hub is told.
+   */
+  decidePapers(mdpId: string, approve: boolean, by: string, reason?: string, now: Date = new Date()): Mdp {
+    const mdp = this.require(mdpId);
+    if (mdp.vetting?.state !== 'pending') throw new GlosError('INVALID_STATE', `${mdp.name} has no papers waiting for a decision`);
+    const at = now.toISOString();
+    if (approve) {
+      mdp.vetting = { state: 'approved', papers: mdp.vetting.papers, approvedAt: at, approvedBy: by };
+      this.core.upsert({ did: mdp.did, tier: 2, status: 'active', capabilities: ['pudo-mdp'], metadata: { zones: mdp.zones, by } });
+    } else {
+      const why = reason?.trim();
+      if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal says why: the hub is shown it');
+      mdp.vetting = { state: 'draft', refusal: { reason: why, at, by } };
+    }
+    this.mdps.set(mdp.mdpId, mdp);
+    void this.events
+      .publish(GlosEvent.Pudo.HubPapersDecided, { did: mdp.did, mdpId: mdp.mdpId, name: mdp.name, approved: approve, ...(approve ? {} : { reason: mdp.vetting.refusal?.reason }) }, { source: 'pudo' })
+      .catch(() => undefined);
+    return mdp;
+  }
+
+  /** Hubs whose papers wait for a member of staff, the oldest first. */
+  papersQueue(): Mdp[] {
+    return [...this.mdps.values()].filter((m) => m.vetting?.state === 'pending').sort((a, b) => (a.vetting?.papers?.submittedAt ?? '').localeCompare(b.vetting?.papers?.submittedAt ?? ''));
+  }
+
+  /** The hubs that may work: what anybody but the hub itself and staff is shown, and all the network routes through. */
+  approvedList(): Mdp[] {
+    return this.list().filter((m) => this.isApproved(m));
   }
 
   /** Set the hub's open-data per-parcel sort price (public, drives the shipment quote). */
@@ -166,12 +257,13 @@ export class MdpService {
 
   /** The hub that last-mile-serves a delivery zone (the regional sort centre for that zone). */
   mdpForZone(zone: string): Mdp | undefined {
-    return [...this.mdps.values()].find((m) => m.zones.includes(zone));
+    // Only a hub that may work: one not yet approved is chosen for nothing, so nothing is routed to it.
+    return [...this.mdps.values()].find((m) => m.zones.includes(zone) && this.isApproved(m));
   }
 
   /** Register a fresh laminated tote into the pool at this MDP. */
   registerTote(mdpId: string): Tote {
-    this.require(mdpId);
+    this.working(mdpId);
     return this.totes.register(mdpId);
   }
 
@@ -212,6 +304,9 @@ export class MdpService {
    */
   assignTote(code: string, destinationNodeId: string, destinationLabel: string): Tote {
     const tote = this.totes.requireByCode(code);
+    this.workingWhereBagIs(tote.locationId);
+    const toHub = this.mdps.get(destinationNodeId);
+    if (toHub && !this.isApproved(toHub)) throw this.notApproved(toHub);
     const shop = this.agents.list().find((a) => a.did === tote.locationId);
     if (shop) this.assertStagingRoom(shop.did);
     return this.totes.assign(code, destinationNodeId, destinationLabel);
@@ -345,7 +440,7 @@ export class MdpService {
    */
   closeBag(code: string, place: { shopDid?: string; mdpId?: string }, byName: string | undefined, closure: { seal?: string; photoRef?: string } | undefined, observedAt?: string): { tote: Tote; closedWith: BagClosureKind } {
     const bag = this.totes.requireByCode(code);
-    const hub = place.mdpId ? this.require(place.mdpId) : undefined;
+    const hub = place.mdpId ? this.working(place.mdpId) : undefined;
     const placeId = hub ? hub.mdpId : place.shopDid;
     if (!placeId || bag.locationId !== placeId) throw new GlosError('WRONG_PUDO', `Bag ${code} is not here`);
     if (bag.sealRequired) throw new GlosError('INVALID_STATE', `Bag ${code} is the shop's own bag: close it with “Close the bag”, where the shop's check runs`);
@@ -385,6 +480,7 @@ export class MdpService {
 
   /** Pack a parcel into a bag bound for a destination (used at the origin PUDO and after sorting). */
   fillTote(code: string, parcelId: string, observedAt?: string): { tote: Tote; fillPct: number } {
+    this.workingWhereBagIs(this.totes.requireByCode(code).locationId); // a bag at a hub that may not work takes nothing
     const parcel = this.parcels.get(parcelId);
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: into no bag
     // S31: this worker chose a specific bag — refuse to drop in a parcel whose cargo is incompatible with the
@@ -405,6 +501,7 @@ export class MdpService {
    * (a bike/motorcycle feeder takes ≤ its capacity and no fragile items). Unknown badges pass through. */
   loadBag(code: string, driverBadgeId: string, observedAt?: string, take?: { driverDid: string; name?: string; reading: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined }): { tote: Tote; moved: string[] } {
     const pending = this.totes.requireByCode(code);
+    this.workingWhereBagIs(pending.locationId);
     // Round 35 — a bag moves whole: one held parcel in it and it does not move, refused before anything is written.
     for (const id of pending.parcels) this.parcels.refuseIfHeld(this.parcels.get(id));
     // Round 36 — a bag leaves closed (its coded seal on, or photographed closed), and never while it is held.
@@ -488,7 +585,7 @@ export class MdpService {
 
   /** A bus drops a bag at this MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */
   dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string): { mdpId: string; emptied: string[] } {
-    const mdp = this.require(mdpId);
+    const mdp = this.working(mdpId);
     const before = this.totes.requireByCode(code);
     if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
     for (const id of before.parcels) this.parcels.refuseIfHeld(this.parcels.get(id)); // round 35 — the bag moves whole
@@ -576,7 +673,7 @@ export class MdpService {
    * in. Returns exactly what the worker's screen shows — the next destination + the bag code to use.
    */
   sortParcel(mdpId: string, parcelId: string): { parcelId: string; nextDestination: NextHop; toteCode: string; toteId: string; fillPct: number } {
-    const mdp = this.require(mdpId);
+    const mdp = this.working(mdpId);
     const parcel = this.parcels.get(parcelId);
     if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, must be At_MDP to sort`);
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: not sorted on

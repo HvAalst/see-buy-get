@@ -75,9 +75,9 @@ export function fleetsWaitingOnMe(rows: FleetSetupRow[] | null): number | null {
  * a fleet that sits until somebody happens to look. Null only while NONE of the three has been read: a zero says
  * "you are up to date", which is another claim than "we have not looked yet".
  */
-export function joiningWaiting(shops: unknown[] | null, drivers: unknown[] | null, fleets: FleetSetupRow[] | null): number | null {
-  if (shops === null && drivers === null && fleets === null) return null;
-  return (shops?.length ?? 0) + (drivers?.length ?? 0) + (fleetsWaitingOnMe(fleets) ?? 0);
+export function joiningWaiting(shops: unknown[] | null, drivers: unknown[] | null, fleets: FleetSetupRow[] | null, hubs: unknown[] | null): number | null {
+  if (shops === null && drivers === null && fleets === null && hubs === null) return null;
+  return (shops?.length ?? 0) + (drivers?.length ?? 0) + (fleetsWaitingOnMe(fleets) ?? 0) + (hubs?.length ?? 0);
 }
 
 /* ------------------------------------------------------------------ the form -- */

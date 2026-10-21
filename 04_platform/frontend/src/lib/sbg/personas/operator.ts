@@ -927,6 +927,14 @@ export function createOperatorApi(sbg: SbgClient) {
     recordFleetBond: (did: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/managers/{did}/bond', { params: { path: { did } } })),
 
     /**
+     * HUBS THAT SIGNED THEMSELVES UP, waiting for somebody to look at their papers (the ISO 28000 check: "hubs are not
+     * vetted"). Until approved a hub works for nobody. A refusal says why: the hub is shown it.
+     */
+    hubPapersQueue: () => sbg.request((c) => c.GET('/v1/sbg/hub-papers', {})),
+    decideHubPapers: (mdpId: string, body: { approve: boolean; reason?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/papers-decision', { params: { path: { id: mdpId } }, body })),
+
+    /**
      * Shops that started joining and STOPPED — a chase list, not a queue.
      *
      * Nothing in it is waiting on a decision by us: a draft shop is waiting on the shopkeeper to send

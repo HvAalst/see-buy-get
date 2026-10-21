@@ -48,6 +48,10 @@ export function createMdpApi(sbg: SbgClient) {
     loadBag: (code: string, driverBadgeId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/totes/{code}/load', { params: { path: { code } }, body: { driverBadgeId, observedAt: new Date().toISOString() } })),
 
+    /** The hub's papers, from its own sign-in (the ISO 28000 check: "hubs are vetted"): each the id of a photograph it took. */
+    sendPapers: (mdpId: string, body: { idCopyRef: string; licenceRef: string; photoRefs: string[] }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/papers', { params: { path: { id: mdpId } }, body })),
+
     /** Register a fresh laminated tote into this hub's pool. */
     newTote: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/totes', { params: { path: { id: mdpId } } })),
 

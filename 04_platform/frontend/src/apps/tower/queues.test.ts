@@ -13,6 +13,7 @@ import {
   coverLine,
   daysWaiting,
   documentsOf,
+  hubPapersOf,
   missingWords,
   money,
   shelfSlots,
@@ -267,5 +268,11 @@ describe('an ask to ride for themselves, on the driver applications row', () => 
     expect(answersLine({ requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-42', criminalRecordClear: true }, openingHours: every }, t)).toBe('tower.approvals.android(version=13) · tower.approvals.powerYes · tower.approvals.hours(from=07:30,to=19:00) · tower.approvals.licence(licence=TL-42) · tower.approvals.recordDeclared');
     expect(answersLine({ requirements: {}, openingHours: { ...every, sun: null } }, t)).toBe('tower.approvals.android(version=—) · tower.approvals.powerNo · tower.approvals.hours(from=07:30,to=19:00) · tower.approvals.licence(licence=—) · tower.approvals.recordNot');
     expect(answersLine({ requirements: { androidVersion: 12 }, openingHours: { ...every, sat: { open: '09:00', close: '13:00' } } }, t)).toContain('tower.approvals.hoursVary');
+  });
+});
+
+describe('hubPapersOf — what a member of staff looks at before letting a hub work', () => {
+  it('puts the licence first, then the ID, then the premises', () => {
+    expect(hubPapersOf({ papers: { idCopyRef: 'id', licenceRef: 'licence', photoRefs: ['front', 'yard'], submittedAt: '2026-10-21T08:00:00.000Z' } })).toEqual(['licence', 'id', 'front', 'yard']);
   });
 });

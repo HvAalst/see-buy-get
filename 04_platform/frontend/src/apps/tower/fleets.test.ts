@@ -114,16 +114,20 @@ describe('joiningWaiting — the number beside the screen', () => {
     createdAt: '2026-10-11T08:00:00.000Z',
     ...(status === 'DRAFT' ? {} : { papers: { businessRegCertRef: 'a', operatorLicenceRef: 'b', ownerIdRef: 'c', proofOfAddressRef: 'd', submittedAt: '2026-10-11T09:00:00.000Z', enteredByMe } }),
   });
-  it('counts shops, drivers and the fleets this reader can move — and not the fleet waiting on a colleague', () => {
-    expect(joiningWaiting([{}, {}], [{}], [fleet('KYC_PENDING'), fleet('KYC_PENDING', true), fleet('ACTIVE')])).toBe(4);
+  it('counts shops, drivers, hubs and the fleets this reader can move — and not the fleet waiting on a colleague', () => {
+    expect(joiningWaiting([{}, {}], [{}], [fleet('KYC_PENDING'), fleet('KYC_PENDING', true), fleet('ACTIVE')], [{}])).toBe(5);
+  });
+  it('a hub alone is counted, and nothing read is not a zero', () => {
+    expect(joiningWaiting(null, null, null, [{}])).toBe(1);
+    expect(joiningWaiting(null, null, null, null)).toBeNull();
   });
   it('a fleet alone is enough to be counted: the screen held nothing but shops once', () => {
-    expect(joiningWaiting([], [], [fleet('DRAFT')])).toBe(1);
-    expect(joiningWaiting([], [], [fleet('APPROVED')])).toBe(1);
+    expect(joiningWaiting([], [], [fleet('DRAFT')], [])).toBe(1);
+    expect(joiningWaiting([], [], [fleet('APPROVED')], [])).toBe(1);
   });
   it('is unknown only while nothing has been read, and counts what HAS been read meanwhile', () => {
-    expect(joiningWaiting(null, null, null)).toBeNull();
-    expect(joiningWaiting(null, null, [fleet('DRAFT')])).toBe(1);
-    expect(joiningWaiting([], null, null)).toBe(0);
+    expect(joiningWaiting(null, null, null, null)).toBeNull();
+    expect(joiningWaiting(null, null, [fleet('DRAFT')], null)).toBe(1);
+    expect(joiningWaiting([], null, null, null)).toBe(0);
   });
 });

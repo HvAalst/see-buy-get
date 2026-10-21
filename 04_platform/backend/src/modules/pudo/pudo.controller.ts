@@ -3716,7 +3716,7 @@ export class SbgController {
     // nobody compares themselves against, keeps every rate as it always has.
     const inAskersMoney = <T,>(all: T[], moneyOf: (x: T) => string | undefined): T[] => (!type ? all : money ? all.filter((x) => moneyOf(x) === money) : []);
     const rowsFor = (t: string): Row[] => {
-      if (t === 'mdp') return inAskersMoney(this.mdps.list(), (m) => this.mdps.currencyOf(m)).map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
+      if (t === 'mdp') return inAskersMoney(this.mdps.approvedList(), (m) => this.mdps.currencyOf(m)).map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
       if (t === 'vehicle') {
         return inAskersMoney(this.vehicles.list({ status: 'ACTIVE' }), (v) => this.drivers.rateCurrencyOf(v)).map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
       }
@@ -4649,8 +4649,9 @@ export class SbgController {
   /** Register an MDP sort hub covering one or more zones. Network staff (and the seeder): it took any valid token. */
   @Roles('operator')
   @Post('mdps')
-  registerMdp(@Body() dto: RegisterMdpDto) {
-    return this.mdps.register(dto);
+  registerMdp(@Body() dto: RegisterMdpDto, @Actor() actor: IntrospectionResult) {
+    // Staff who register a hub themselves have vetted it, and are named as the one who did.
+    return this.mdps.register(dto, { approvedBy: auditActor(actor) });
   }
 
   /** Every hub: where it is and what it charges. The hub itself and network staff also read its number and its bag count. */
@@ -4659,7 +4660,8 @@ export class SbgController {
   @AtTheCounter()
   listMdps(@Actor() actor: IntrospectionResult) {
     // The number to ring, the company a hub contracts with and how many bags stand there went to any sign-in that asked.
-    return this.mdps.list().map((m) => {
+    // A hub not yet approved is shown to itself and to staff, and to nobody else: it works for nobody yet.
+    return this.mdps.list().filter((m) => actor?.role === 'operator' || (actor?.did && actor.did === m.did) || this.mdps.isApproved(m)).map((m) => {
       // What it charges is said with the money it charges in: the company's that contracts the hub.
       const currency = this.mdps.currencyOf(m);
       if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length };

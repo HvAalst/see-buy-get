@@ -254,8 +254,9 @@ export class VehicleStandstillService implements OnModuleInit, OnModuleDestroy {
     if (reasons.atBorder || reasons.held) return true;
     if (reasons.places.some(near)) return true;
     if (this.sites.sitesOf(fleetDid).some((s) => near(s.location))) return true;
-    if (this.mdps.list().some((m) => near(m.location))) return true;
-    return this.agents.list().some((a) => near(a.location));
+    // Only places SeeBuyGet has vetted: a hub or shop that merely signed up somewhere would otherwise excuse a stop there.
+    if (this.mdps.approvedList().some((m) => near(m.location))) return true;
+    return this.agents.list().some((a) => a.status !== 'DRAFT' && a.status !== 'KYC_PENDING' && near(a.location));
   }
 
   private brokenDown(fleetDid: string, vehicleId: string): boolean {

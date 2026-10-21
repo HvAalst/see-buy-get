@@ -68,7 +68,7 @@ export class HandleDirectory implements OnApplicationBootstrap {
     // that makes the next sweep run.
     const companies = this.entities.list().filter(listedPublicly);
     const shops = this.agents.list();
-    const hubs = this.mdps.list();
+    const hubs = this.mdps.approvedList(); // as a company's: a handle is never taken back, so not before staff have seen the papers
     const fleets = this.managers.list();
     const owners = ownerDrivers(this.drivers.list());
     const total = companies.length + shops.length + hubs.length + fleets.length + owners.length;

@@ -8,7 +8,7 @@ import { ChangePasswordSheet } from '../../shared/account/ChangePasswordSheet';
 import { mdpConfig } from './api';
 import { useAccount } from '../../shared/account/useAccount';
 import { useT } from '../../shared/i18n';
-import { fillingBags, homeSummary, unsortedAt } from './logic';
+import { fillingBags, floorOpen, homeSummary, unsortedAt } from './logic';
 import { DropScreen } from './screens/DropScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoadScreen } from './screens/LoadScreen';
@@ -99,7 +99,7 @@ export function App() {
         <ScreenRouter screen={state.screen} state={state} actions={actions} />
       </main>
 
-      <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} />
+      {floorOpen(state.hub) ? <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} /> : null}
 
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={mdpConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
       <Toasts state={state} actions={actions} />
@@ -110,6 +110,8 @@ export function App() {
 }
 
 function ScreenRouter({ screen, state, actions }: { screen: Screen; state: MdpState; actions: MdpActions }) {
+  // A hub not yet approved has no floor to work (the server refuses it): its papers, on the home screen, instead.
+  if (screen !== 'rates' && !floorOpen(state.hub)) return <HomeScreen state={state} actions={actions} />;
   switch (screen) {
     case 'drop':
       return <DropScreen state={state} actions={actions} />;

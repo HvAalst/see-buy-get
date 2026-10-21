@@ -22,6 +22,8 @@ import {
   reportRowWords,
   applicationPapers,
   needsRecordTick,
+  hubPapersOf,
+  type HubApplication,
   type ApprovalRow,
   type DamageReportRow,
   type ClaimCap,
@@ -565,6 +567,8 @@ export function ApprovalsScreen({ state, actions }: { state: TowerState; actions
 
       <DriverApplicationsPanel state={state} actions={actions} />
 
+      <HubApplicationsPanel state={state} actions={actions} />
+
       <FleetsPanel state={state} actions={actions} />
 
       <StalledPanel rows={state.stalled} />
@@ -714,6 +718,109 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
   );
 }
 
+/**
+ * HUBS WAITING TO BE VETTED (the ISO 28000 check: "hubs are not vetted at all"). A hub that signed itself up sorts nothing
+ * and is routed nothing until one of us has looked at its papers — the licence, the ID of the person who answers for it,
+ * the premises — which are open on the row, as a driver's licence is above: a decision without looking is a rubber stamp.
+ */
+function HubApplicationsPanel({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const rows = state.hubApplications;
+
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.hubs.title')}</span>
+        {/* Null is "not read yet" and must never render as a zero. */}
+        {rows === null ? null : <span class="ctbl__sub">{t('tower.hubs.count', { n: rows.length })}</span>}
+      </div>
+      <p class="cons__lede">{t('tower.hubs.lede')}</p>
+      {rows === null ? (
+        <p class="cons__empty">{t('tower.hubs.loading')}</p>
+      ) : rows.length === 0 ? (
+        <p class="cons__empty">{t('tower.hubs.none')}</p>
+      ) : (
+        <table class="ctbl ctbl--stack">
+          <thead>
+            <tr>
+              <th>{t('tower.hubs.col.hub')}</th>
+              <th>{t('tower.hubs.col.serves')}</th>
+              <th>{t('tower.hubs.col.papers')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <HubApplicationRow key={row.mdpId} row={row} state={state} actions={actions} />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function HubApplicationRow({ row, state, actions }: { row: HubApplication; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const busy = state.busyId === row.mdpId;
+  const [why, setWhy] = useState<string | null>(null);
+
+  return (
+    <>
+      <tr>
+        <td>
+          <div class="ctbl__strong">{row.name}</div>
+          <div class="ctbl__sub">
+            {countryNameOf(row.country, state.catalogue)}
+            {row.address ? ` · ${row.address}` : ''}
+            {row.contactPhone ? ` · ${row.contactPhone}` : ''}
+          </div>
+        </td>
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.hubs.col.serves')}</span>{row.zones.join(', ')}</td>
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.hubs.col.papers')}</span>{t('tower.hubs.sent', { date: row.papers.submittedAt.slice(0, 10) })}</td>
+        <td>
+          <span class="twr-clear__act">
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideHub(row.mdpId, true)}>
+              {t('tower.approvals.approve')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} aria-expanded={why != null} onClick={() => setWhy(why == null ? '' : null)}>
+              {t('tower.approvals.refuse')}
+            </button>
+          </span>
+        </td>
+      </tr>
+      <tr class="ctbl__editor">
+        <td colSpan={4}>
+          <DocumentStrip refs={hubPapersOf(row)} state={state} actions={actions} emptyKey="tower.hubs.nothingToSee" titleKey="tower.hubs.whatTheySent" />
+          {why != null ? (
+            <>
+              <label class="cfield">
+                <span class="cfield__label">{t('tower.hubs.whyLabel')}</span>
+                <textarea class="ctextarea" rows={2} value={why} disabled={busy} onInput={(e) => setWhy((e.target as HTMLTextAreaElement).value)} />
+              </label>
+              <span class="twr-clear__act">
+                <button
+                  type="button"
+                  class="cbtn cbtn--danger cbtn--sm"
+                  disabled={busy || !why.trim()}
+                  onClick={() => {
+                    void actions.decideHub(row.mdpId, false, why.trim());
+                    setWhy(null);
+                  }}
+                >
+                  {t('tower.approvals.refuseConfirm')}
+                </button>
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setWhy(null)}>
+                  {t('common.close')}
+                </button>
+              </span>
+            </>
+          ) : null}
+        </td>
+      </tr>
+    </>
+  );
+}
 /**
  * THE SHOPS NOBODY IS CHASING — the second half of this screen, and deliberately not a queue.
  *

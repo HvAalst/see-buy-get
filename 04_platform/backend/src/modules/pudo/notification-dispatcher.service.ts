@@ -448,6 +448,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.AgentKycRejected, (e) => this.onSignupStalled(e.payload.did));
     // …and the same for a driver, who was left in exactly the same silence.
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
+    // …and a hub, whose papers staff approved or sent back: the hub is the one waiting, so the hub is told.
+    this.events.subscribe<{ did: string; mdpId: string; name: string; approved: boolean; reason?: string }>(GlosEvent.Pudo.HubPapersDecided, (e) => {
+      const p = e.payload;
+      void this.tell(p.did, {
+        kind: 'papers_checked',
+        title: p.approved ? `${p.name} is approved` : `${p.name}: your papers were not accepted`,
+        body: p.approved ? 'SeeBuyGet has seen your papers. The hub can take bags in and sort from now on.' : `${p.reason ?? 'Something was wrong with them.'} Send them again from the Hub app.`,
+        tag: `hub-papers:${p.mdpId}`,
+        data: { mdpId: p.mdpId, approved: p.approved },
+      });
+    });
     this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
     this.events.subscribe<DriverRostered>(GlosEvent.Pudo.DriverRostered, (e) => this.onDriverRostered(e.payload));
     this.events.subscribe<VehicleDefectReported>(GlosEvent.Pudo.VehicleDefectReported, (e) => this.onDefectReported(e.payload));

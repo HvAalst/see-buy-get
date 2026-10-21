@@ -16,7 +16,7 @@ import { t } from '../../shared/i18n'; // plain t(): these strings are built at 
 import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, myStaffAccount, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds, type TwoStepSetup } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
-import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, StalledRow } from './queues';
+import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, HubApplication, StalledRow } from './queues';
 import { triggerDownloadBlob } from '../../shared/download';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
@@ -122,6 +122,8 @@ export interface TowerState {
   /** Heavy-registry drivers waiting to be vetted. A real queue — somebody is waiting on US — and it had
    *  no screen at all until now, though the route has been live the whole time. Null while unread. */
   driverApplications: DriverApplication[] | null;
+  /** Hubs that signed themselves up, their papers waiting on us (the ISO 28000 check: "hubs are vetted"). Null while unread. */
+  hubApplications: HubApplication[] | null;
   /** Every fleet and where it stands in being set up — a fleet is set up by staff, here. Null while unread. */
   fleets: FleetSetupRow[] | null;
   /** What the last act on a fleet came to, said in the fleets panel itself and not at the top of the screen. */
@@ -330,6 +332,8 @@ export interface TowerActions {
   /** `criminalRecordClear` is the vetting staff member's own tick — never the applicant's. */
   /** `asked`: the row was a driver in no fleet asking to ride for themselves — said so in what the screen confirms. */
   decideDriver(did: string, approve: boolean, reason?: string, criminalRecordClear?: boolean, asked?: boolean): Promise<void>;
+  /** A hub's papers: approve, or refuse with the reason the hub is shown. */
+  decideHub(mdpId: string, approve: boolean, reason?: string): Promise<void>;
   /** A fleet is set up by staff: register it, put its four papers on record, approve or send back, record its bond. */
   registerFleet(form: FleetForm): Promise<boolean>;
   putFleetPapers(did: string, pictures: Record<FleetPaperKey, string>): Promise<boolean>;
@@ -418,6 +422,7 @@ const INITIAL: TowerState = {
   paperReports: null,
   stalled: null,
   driverApplications: null,
+  hubApplications: null,
   fleets: null,
   fleetNote: null,
   presence: null,
@@ -717,7 +722,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    */
   const loadQueues = useCallback(async (client: TowerClient) => {
     setState((s) => ({ ...s, loading: true }));
-    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets, damageReports, gs1Disputes] = await Promise.all([
+    const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets, damageReports, gs1Disputes, hubApplications] = await Promise.all([
       client.api.disputes(),
       client.api.freightClaims(),
       client.api.disposalQueue(),
@@ -740,6 +745,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       client.api.damageReports(),
       // Two businesses say one GS1 prefix is theirs: two of us decide, on the Businesses screen.
       client.api.gs1Disputes(),
+      // A hub that signed itself up works for nobody until one of us has looked at its papers.
+      client.api.hubPapersQueue(),
     ]);
     setState((s) => ({
       ...s,
@@ -751,6 +758,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       approvals: approvals.error ? null : (narrow<ApprovalRow[]>(approvals.data) ?? []),
       stalled: stalled.error ? null : (narrow<{ items: StalledRow[] }>(stalled.data)?.items ?? []),
       driverApplications: driverApplications.error ? null : (narrow<DriverApplication[]>(driverApplications.data) ?? []),
+      hubApplications: hubApplications.error ? null : (narrow<HubApplication[]>(hubApplications.data) ?? []),
       businesses: businesses.error ? null : (narrow<{ items: BusinessRow[] }>(businesses.data)?.items ?? []),
       accountMoves: accountMoves.error ? null : (narrow<{ items: MoveRow[] }>(accountMoves.data)?.items ?? []),
       idDisputes: idDisputes.error ? null : (narrow<{ items: DisputeRow[] }>(idDisputes.data)?.items ?? []),
@@ -1467,6 +1475,19 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }
         const said = asked ? (approve ? 'tower.drivers.askApproved' : 'tower.drivers.askRefused') : approve ? 'tower.drivers.approved' : 'tower.drivers.refused';
         setState((s) => ({ ...s, busyId: null, queueError: null, done: t(said) }));
+        await loadQueues(client);
+      },
+      /** A hub's papers, looked at: approved, it works from now on; refused, it is shown the reason and sends them again. */
+      decideHub: async (mdpId: string, approve: boolean, reason?: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: mdpId, queueError: null }));
+        const { error } = await client.api.decideHubPapers(mdpId, { approve, ...(reason ? { reason } : {}) });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, queueError: null, done: t(approve ? 'tower.hubs.approved' : 'tower.hubs.refused') }));
         await loadQueues(client);
       },
       /**

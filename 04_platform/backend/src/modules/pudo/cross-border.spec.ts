@@ -390,7 +390,7 @@ describe('crossing a border', () => {
       presence.set({ jurisdiction: 'ZM', level: 'matched' });
       expect(drivers.register({ displayName: 'Z', fullName: 'Z', nationalId: 'NID-ZM-1', mobile: '+260977000111', licenceClasses: ['bike'], jurisdiction: 'ZM' } as never).entityId).toBeUndefined();
       expect(() => vendors.register({ name: 'Lusaka Store', country: 'MW' })).toThrow(/does not operate in MW/);
-      expect(() => mdps.register({ name: 'Lilongwe Hub', zones: ['LL'], country: 'MW', location: DAR })).toThrow(/does not operate in MW/);
+      expect(() => mdps.register({ name: 'Lilongwe Hub', zones: ['LL'], country: 'MW', location: DAR }, { approvedBy: 'staff' })).toThrow(/does not operate in MW/);
     });
 
     it('lets a store register with no till — every read answers, every money path refuses by name', () => {
@@ -408,7 +408,7 @@ describe('crossing a border', () => {
 
     it('lets a hub register and sort with no sister, booking nothing for the work', () => {
       presence.set({ jurisdiction: 'TZ', level: 'matched' });
-      const hub = mdps.register({ name: 'Dar Hub', zones: ['DAR'], country: 'TZ', location: DAR });
+      const hub = mdps.register({ name: 'Dar Hub', zones: ['DAR'], country: 'TZ', location: DAR }, { approvedBy: 'staff' });
       expect(hub.entityId).toBeUndefined();
       expect(mdps.entityIdOrNone(hub)).toBeUndefined();
       expect(() => mdps.entityIdOf(hub)).toThrow(/cannot pay out in this country/i);
@@ -518,10 +518,10 @@ describe('crossing a border', () => {
     });
 
     it('asks a hub the same question — a hub may serve zones across a border, but it stands in one country', () => {
-      const hub = mdps.register({ name: 'Addis Sort', zones: ['AddisAbaba', 'Hawassa'], country: 'ET', location: ADDIS });
+      const hub = mdps.register({ name: 'Addis Sort', zones: ['AddisAbaba', 'Hawassa'], country: 'ET', location: ADDIS }, { approvedBy: 'staff' });
       expect(mdps.countryOf(hub)).toBe('ET');
       expect(mdps.entityIdOf(hub)).toBe(entities.requireForJurisdiction('ET').entityId);
-      expect(() => mdps.register({ name: 'Dar Sort', zones: ['DarEsSalaam'], country: 'TZ', location: { lat: -6.79, lng: 39.21 } })).toThrow(/TZ/);
+      expect(() => mdps.register({ name: 'Dar Sort', zones: ['DarEsSalaam'], country: 'TZ', location: { lat: -6.79, lng: 39.21 } }, { approvedBy: 'staff' })).toThrow(/TZ/);
     });
 
     it('lets a store put its dock in another country than the one it is registered in', () => {
@@ -572,8 +572,8 @@ describe('crossing a border', () => {
       // the border, the crossing, then the other country's own last mile. Only ONE leg is international.
       const from = shop('Nairobi CBD', 'Nairobi', NAIROBI);
       const to = shop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
-      mdps.register({ name: 'Moyale Hub', zones: ['Nairobi'], location: MOYALE_KE }); // KE by default
-      mdps.register({ name: 'Hawassa Hub', zones: ['AddisAbaba'], country: 'ET', location: HAWASSA });
+      mdps.register({ name: 'Moyale Hub', zones: ['Nairobi'], location: MOYALE_KE }, { approvedBy: 'staff' }); // KE by default
+      mdps.register({ name: 'Hawassa Hub', zones: ['AddisAbaba'], country: 'ET', location: HAWASSA }, { approvedBy: 'staff' });
 
       const plan = routing.planJourney({ originAgentDid: from.did, destAgentDid: to.did });
       expect(plan.hops.map((h) => h.country)).toEqual(['KE', 'KE', 'ET', 'ET']);

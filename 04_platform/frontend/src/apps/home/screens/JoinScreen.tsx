@@ -778,7 +778,10 @@ function DoneStep({ state, actions }: JoinScreenProps) {
             items={
               acc.entityStatus === 'ACTIVE'
                 ? [t('home.join.done.active1'), t('home.join.done.active2'), t('home.join.done.active3')]
-                : [t('home.join.done.pending1'), t('home.join.done.pending2'), t('home.join.done.pending3')]
+                : role.id === 'mdp'
+                  ? // A hub sends its papers from the Hub app first: nobody checks what has not been sent.
+                    [t('home.join.done.hubPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
+                  : [t('home.join.done.pending1'), t('home.join.done.pending2'), t('home.join.done.pending3')]
             }
           />
         </Card>

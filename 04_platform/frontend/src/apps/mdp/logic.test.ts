@@ -8,7 +8,9 @@ import {
   fillPercent,
   fillingBags,
   findMyHub,
+  floorOpen,
   freeBags,
+  hubPapersStep,
   homeSummary,
   loadableBags,
   money,
@@ -168,5 +170,22 @@ describe('speaking', () => {
     ).toBe('Place parcel P-1 in bag BAG-2. 3 left to sort.');
     expect(money(0.5)).toBe('0.50');
     expect(money(0.5, 'KES')).toBe('KES 0.50');
+  });
+});
+
+describe('a hub not yet approved: its papers, and whose move it is', () => {
+  it('says send, with the reason when they came back; with staff while they are read; nothing once approved', () => {
+    expect(hubPapersStep(hub())).toEqual({ kind: 'send' });
+    expect(hubPapersStep(hub({ vetting: { state: 'draft' } }))).toEqual({ kind: 'send' });
+    expect(hubPapersStep(hub({ vetting: { state: 'draft', refusal: { reason: 'The licence is out of date. ' } } }))).toEqual({ kind: 'send', refusedWhy: 'The licence is out of date' });
+    expect(hubPapersStep(hub({ vetting: { state: 'draft', refusal: { reason: '   ' } } }))).toEqual({ kind: 'send' });
+    expect(hubPapersStep(hub({ vetting: { state: 'pending' } }))).toEqual({ kind: 'with_staff' });
+    expect(hubPapersStep(hub({ vetting: { state: 'approved' } }))).toBeNull();
+    expect(hubPapersStep(null)).toBeNull(); // not read yet: nothing said about papers it has not seen
+  });
+
+  it('opens the floor only to an approved hub — not one that never said, and not one not read yet', () => {
+    expect(floorOpen(hub({ vetting: { state: 'approved' } }))).toBe(true);
+    expect([floorOpen(hub()), floorOpen(hub({ vetting: { state: 'pending' } })), floorOpen(hub({ vetting: { state: 'draft' } })), floorOpen(null)]).toEqual([false, false, false, false]);
   });
 });

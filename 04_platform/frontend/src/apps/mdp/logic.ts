@@ -11,6 +11,26 @@ import type { Benchmark, MdpView, ParcelRow, SortView, ToteView } from './types'
 /* ------------------------------------------------------------------- hub -- */
 
 /** The signed-in DID's own hub. Login binds the token to the hub's real DID (S2). */
+/**
+ * A HUB NOT YET APPROVED (the ISO 28000 check: "hubs are vetted"), and whose move it is: `send` — the hub's, with the
+ * reason when its papers came back; `with_staff` — ours, and nothing for the hub to do. Null once approved, and while
+ * the hub is not read yet: a screen says nothing about papers it has not seen.
+ */
+export type HubPapersStep = { kind: 'send'; refusedWhy?: string } | { kind: 'with_staff' };
+export function hubPapersStep(hub: Pick<MdpView, 'vetting'> | null | undefined): HubPapersStep | null {
+  if (!hub) return null;
+  if (hub.vetting?.state === 'approved') return null;
+  if (hub.vetting?.state === 'pending') return { kind: 'with_staff' };
+  // Quoted inside a sentence on the screen, so without the full stop its writer may have ended it on.
+  const why = hub.vetting?.refusal?.reason?.trim().replace(/[.\s]+$/, '');
+  return why ? { kind: 'send', refusedWhy: why } : { kind: 'send' };
+}
+
+/** The floor is open: the hub is approved. The floor screens ask this, and send a hub that is not to its papers. */
+export function floorOpen(hub: Pick<MdpView, 'vetting'> | null | undefined): boolean {
+  return hub?.vetting?.state === 'approved';
+}
+
 export function findMyHub(mdps: MdpView[] | null, did: string): MdpView | null {
   return (mdps ?? []).find((m) => m.did === did) ?? null;
 }
