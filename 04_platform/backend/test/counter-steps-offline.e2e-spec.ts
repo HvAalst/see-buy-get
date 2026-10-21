@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { shopPhotoOver } from './content-photo';
+import { declared } from './declared';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
 import { ToteService } from '../src/modules/pudo/tote.service';
 
@@ -44,6 +45,7 @@ describe('a counter’s step done with no signal keeps its time, over the wire',
       .send({ idCopyRef: await photo(shop, 'kyc_id'), tradingLicenceRef: await photo(shop, 'kyc_licence'), shopPhotoRefs: [await photo(shop, 'shop')] })
       .expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true }).expect(201);
+    declared(app, 'shop', did);
     return did;
   };
   const asShop = async (did: string) => ({ authorization: `Bearer ${(await http().post('/v1/auth/token').send({ role: 'agent', did }).expect(201)).body.access_token}` });

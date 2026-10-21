@@ -1,0 +1,185 @@
+import { Test } from '@nestjs/testing';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
+import request from 'supertest';
+import { AppModule } from '../src/app.module';
+import { shopPhotoOver } from './content-photo';
+import { declared } from './declared';
+import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
+import { MdpService } from '../src/modules/pudo/mdp.service';
+import { VehicleService } from '../src/modules/pudo/vehicle.service';
+import { DispatchService } from '../src/modules/pudo/dispatch.service';
+
+/**
+ * ROUND 39 — THE YEARLY SECURITY DECLARATION, OVER THE WIRE (the user: "At joining and yearly (Recommended)"). A shop, a
+ * hub, a fleet's office and a rider in no fleet each sign one short declaration — at joining, and again each year; a new
+ * wording is signed again. Not in force: nothing new is taken on, in words that say where it is signed. A fleet's driver
+ * signs nothing of their own: the fleet does. Staff read who stands where, and sign for nobody.
+ */
+describe('the yearly security declaration — over the wire', () => {
+  let app: INestApplication;
+  let http: () => ReturnType<typeof request>;
+  let staff: { authorization: string };
+  const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
+  const digits = () => String(Math.floor(Math.random() * 9_000_000) + 1_000_000);
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = moduleRef.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.setGlobalPrefix('v1');
+    await app.init();
+    http = () => request(app.getHttpServer());
+    staff = bearer((await http().post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token);
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  async function aShop(shopName: string): Promise<{ did: string; token: { authorization: string } }> {
+    const u = digits();
+    const hours = { open: '08:00', close: '18:00' };
+    const reg = await http()
+      .post('/v1/sbg/agents')
+      .set(staff)
+      .send({
+        shopName, zone: `Decl${u}`, country: 'KE', location: { lat: -1.286, lng: 36.817 }, landmark: 'by the market', shelf: { rows: 3, cols: 3 },
+        openingHours: { mon: hours, tue: hours, wed: hours, thu: hours, fri: hours, sat: hours, sun: null },
+        fullName: `${shopName} owner`, nationalId: `ID-DECL-${u}`, mobile: `+2547${u}8`, deviceImei: `IMEI-DECL-${u}`,
+        requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true },
+      })
+      .expect(201);
+    const did = reg.body.did as string;
+    const token = bearer((await http().post('/v1/auth/token').send({ role: 'agent', did }).expect(201)).body.access_token);
+    const photograph = async (kind: string) => {
+      const dataUrl = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`${kind}:${did}`)]).toString('base64')}`;
+      return (await http().post('/v1/sbg/media').set(token).send({ kind, dataUrl }).expect(201)).body.mediaId as string;
+    };
+    await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(token).send({ idCopyRef: await photograph('kyc_id'), tradingLicenceRef: await photograph('kyc_licence'), shopPhotoRefs: [await photograph('shop')] }).expect(201);
+    await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true }).expect(201);
+    return { did, token };
+  }
+
+  it('a shop takes nothing in until it has signed, from its own sign-in, the wording it was shown', async () => {
+    const shop = await aShop('Mama Neema');
+    const mine = async () => (await http().get('/v1/sbg/declarations/mine').set(shop.token).expect(200)).body;
+    const first = await mine();
+    expect(first).toMatchObject({ required: true, kind: 'shop', state: 'missing', version: expect.any(Number), title: expect.stringMatching(/security declaration/) });
+    expect(first.lines.length).toBeGreaterThanOrEqual(4);
+
+    // Nothing new taken in — said with where it is signed.
+    const walkUp = (id: string) => ({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'Elsewhere', senderMobile: '+254700000501', receiverMobile: '+254700000502', paymentMode: 'prepaid' });
+    const refused = await http().post('/v1/sbg/parcels/accept').set(shop.token).send({ ...walkUp(`DECL-${digits()}`), dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) }).expect(409);
+    expect(refused.body).toMatchObject({ code: 'DECLARATION_REQUIRED' });
+    expect(refused.body.detail).toBe('Mama Neema has not signed its security declaration: nothing new is taken on until it has. It is signed in the Shop app, on the home screen.');
+
+    // Not staff's to sign, and only the wording in force.
+    await http().post('/v1/sbg/declarations/mine/sign').set(staff).send({ version: first.version }).expect(403);
+    await http().post('/v1/sbg/declarations/mine/sign').set(shop.token).send({ version: first.version + 1 }).expect(409);
+    const signed = (await http().post('/v1/sbg/declarations/mine/sign').set(shop.token).send({ version: first.version, by: 'Neema Wanjiru' }).expect(201)).body;
+    expect(signed).toMatchObject({ required: true, state: 'signed', signedBy: 'Neema Wanjiru', until: expect.any(String) });
+    expect(Date.parse(signed.until) - Date.parse(signed.signedAt)).toBe(365 * 86_400_000);
+
+    // Signed: the parcel comes in.
+    await http().post('/v1/sbg/parcels/accept').set(shop.token).send({ ...walkUp(`DECL-${digits()}`), dropoffPhotoRef: await shopPhotoOver(app.getHttpServer(), shop.did) }).expect(201);
+
+    // Staff read where it stands — and the report is vetting's.
+    const report = (await http().get('/v1/sbg/declarations').set(staff).expect(200)).body.items as Array<{ did: string; kind: string; state: string }>;
+    expect(report.find((r) => r.did === shop.did)).toMatchObject({ kind: 'shop', state: 'signed' });
+  });
+
+  it('a rider in no fleet signs their own; a fleet’s driver signs nothing, and their fleet answers for them', async () => {
+    const u = digits();
+    const rider = (await http().post('/v1/sbg/drivers/onboard').set(staff).send({ displayName: `Rider ${u.slice(-3)}`, fullName: `Rider ${u}`, nationalId: `ID-DR-${u}`, mobile: `+2547${u}7`, licenceClasses: ['motorcycle'], licenceNumber: `L-${u}`, licenceExpiresAt: '2031-01-01', jurisdiction: 'KE' }).expect(201)).body;
+    const riderToken = bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: rider.did, type: 'client_credentials' }).expect(201)).body.access_token);
+    const own = (await http().get('/v1/sbg/declarations/mine').set(riderToken).expect(200)).body;
+    expect(own).toMatchObject({ required: true, kind: 'driver', state: 'missing' });
+    // Waiting on them, on staff's list, before anybody who has signed.
+    const before = (await http().get('/v1/sbg/declarations').set(staff).expect(200)).body.items as Array<{ did: string; state: string }>;
+    expect(before.find((r) => r.did === rider.did)).toMatchObject({ state: 'missing' });
+    expect(before.findIndex((r) => r.state === 'signed')).toBeGreaterThan(before.findIndex((r) => r.did === rider.did));
+    // Out on a motorcycle, a hub loads a bag onto them: refused, in words for the hub, before anything is moved.
+    const moto = (await http().post('/v1/sbg/vehicles').set(staff).send({ plate: `DM-${u}`, vehicleClass: 'motorcycle', ownerName: 'Rider' }).expect(201)).body;
+    await http().post(`/v1/sbg/fleet/drivers/${rider.did}/start-session`).set(staff).send({ vehicleId: moto.vehicleId }).expect(201);
+    const mdps = app.get(MdpService);
+    const hub = mdps.register({ name: `Decl Sort ${u}`, zones: [`DS${u}`], country: 'KE', location: { lat: -1.29, lng: 36.82 } }, { approvedBy: 'Test' });
+    declared(app, 'hub', hub.did);
+    const bag = mdps.registerTote(hub.mdpId);
+    expect(() => mdps.loadBag(bag.code, rider.badgeId)).toThrow(/^This rider has not signed their security declaration: nothing new is taken on until they have/);
+    await http().post('/v1/sbg/declarations/mine/sign').set(riderToken).send({ version: own.version }).expect(201);
+    expect((await http().get('/v1/sbg/declarations/mine').set(riderToken).expect(200)).body.state).toBe('signed');
+
+    // A fleet's office signs for the fleet, from its own sign-in.
+    const managers = app.get(FleetManagerService);
+    const v = digits();
+    const m = managers.register({
+      companyName: `Decl Fleet ${v}`, contactPhone: `+2548${v}1`, ownerFullName: 'O O', ownerNationalId: `MGR-DECL-${v}`, location: { lat: -1.2, lng: 36.8 },
+      requirements: { businessRegistrationNo: `BRN-DECL-${v}`, transportOperatorLicence: `TOL-DECL-${v}`, taxId: `TAX-DECL-${v}` },
+    });
+    managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+    managers.decideKyc(m.did, true);
+    managers.recordBond(m.did);
+    const office = bearer((await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token);
+    const theirs = (await http().get('/v1/sbg/declarations/mine').set(office).expect(200)).body;
+    expect(theirs).toMatchObject({ required: true, kind: 'fleet', state: 'missing', title: expect.stringMatching(/as a SeeBuyGet fleet/) });
+    await http().post('/v1/sbg/declarations/mine/sign').set(office).send({ version: theirs.version }).expect(201);
+    const fleet = { did: m.did, companyName: m.companyName };
+    // A fleet's driver: covered by the fleet, and nothing of their own to sign.
+    const fleetDriver = (await http().post('/v1/sbg/drivers/onboard').set(staff).send({ displayName: `Fleet ${v.slice(-3)}`, fullName: `Fleet Driver ${v}`, nationalId: `ID-FD-${v}`, mobile: `+2547${v}6`, licenceClasses: ['motorcycle'], licenceNumber: `L-${v}`, licenceExpiresAt: '2031-01-01', managerDid: fleet.did }).expect(201)).body;
+    const fleetToken = bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: fleetDriver.did, type: 'client_credentials' }).expect(201)).body.access_token);
+    expect((await http().get('/v1/sbg/declarations/mine').set(fleetToken).expect(200)).body).toEqual({ required: false, coveredBy: fleet.companyName });
+    expect((await http().post('/v1/sbg/declarations/mine/sign').set(fleetToken).send({ version: own.version }).expect(400)).body.detail).toMatch(/signs the security declaration for its drivers/);
+  });
+
+  it('a hub opens no new tote, and a fleet’s driver takes no load, until the hub — and the fleet — has signed', async () => {
+    // A hub staff registered: no new tote until its own sign-in has signed.
+    const mdps = app.get(MdpService);
+    const hub = mdps.register({ name: `Decl Hub ${digits()}`, zones: [`DZ${digits()}`], country: 'KE', location: { lat: -1.29, lng: 36.82 } }, { approvedBy: 'Test' });
+    const hubToken = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did, type: 'client_credentials' }).expect(201)).body.access_token);
+    const tote = () => http().post(`/v1/sbg/mdps/${hub.mdpId}/totes`).set(hubToken);
+    const refused = (await tote().expect(409)).body;
+    expect(refused).toMatchObject({ code: 'DECLARATION_REQUIRED' });
+    expect(refused.detail).toMatch(/has not signed its security declaration: nothing new is taken on until it has\. It is signed in the Hub app/);
+    const hubs = (await http().get('/v1/sbg/declarations/mine').set(hubToken).expect(200)).body;
+    await http().post('/v1/sbg/declarations/mine/sign').set(hubToken).send({ version: hubs.version }).expect(201);
+    await tote().expect(201);
+
+    // A fleet's driver out in its truck: the office puts no load on them until the fleet has signed.
+    const managers = app.get(FleetManagerService);
+    const n = digits();
+    const m = managers.register({
+      companyName: `Decl Haulage ${n}`, contactPhone: `+2548${n}2`, ownerFullName: 'O O', ownerNationalId: `MGR-DH-${n}`, location: { lat: -1.2, lng: 36.8 },
+      requirements: { businessRegistrationNo: `BRN-DH-${n}`, transportOperatorLicence: `TOL-DH-${n}`, taxId: `TAX-DH-${n}` },
+    });
+    managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+    managers.decideKyc(m.did, true);
+    managers.recordBond(m.did);
+    const office = bearer((await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token);
+    const phone = `+2547${digits()}4`;
+    const driver = (await http().post('/v1/sbg/drivers/onboard').set(staff).send({ displayName: 'Baraka', fullName: 'Baraka Driver', nationalId: `ID-DH-${n}`, mobile: phone, licenceClasses: ['truck'], licenceNumber: `L-DH-${n}`, licenceExpiresAt: new Date(Date.now() + 400 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: m.did }).expect(201)).body;
+    await http().post(`/v1/sbg/fleet/drivers/${driver.did}/submit-kyc`).set(staff).send({ idCopyRef: 'id.jpg', licenceCopyRef: 'licence.jpg' }).expect(201);
+    await http().post(`/v1/sbg/fleet/drivers/${driver.did}/kyc-decision`).set(staff).send({ approve: true, by: 'Test' }).expect(201);
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    const email = `decl${digits()}@example.com`;
+    const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
+    const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: '48261', device: enrolled.body.device }).expect(201);
+    const truck = app.get(VehicleService).register({ plate: `DCL ${n.slice(-3)}T`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Decl Haulage', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);
+    await http().post(`/v1/sbg/fleet/drivers/${driver.did}/start-session`).set(bearer(session.body.token.access_token)).send({ vehicleId: truck.vehicleId, pin: '48261' }).expect(201);
+    const dispatch = app.get(DispatchService);
+    const load = dispatch.registerFreight({ description: 'Cement, 40 bags', pickupLocation: { lat: -1.3, lng: 36.85 }, pickupLabel: 'Bamburi depot', destLabel: 'Site 7', destLocation: { lat: -1.25, lng: 36.9 }, weightKg: 2000, packaging: 'palletised' } as never);
+    const assign = () => {
+      try {
+        dispatch.assign(load.freightId, driver.did, { managerDid: m.did, name: 'Office' });
+        return 'assigned';
+      } catch (e) {
+        return `${(e as { code?: string }).code}: ${(e as Error).message}`;
+      }
+    };
+    expect(assign()).toBe('DECLARATION_REQUIRED: Your fleet has not signed its security declaration: nothing new is taken on until it has. It is signed in the Fleet app, on the home screen.');
+    const fleets = (await http().get('/v1/sbg/declarations/mine').set(office).expect(200)).body;
+    await http().post('/v1/sbg/declarations/mine/sign').set(office).send({ version: fleets.version }).expect(201);
+    expect(assign()).toBe('assigned');
+  });
+});

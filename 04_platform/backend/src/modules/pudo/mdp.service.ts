@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { SecurityDeclarationService } from './security-declaration.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
@@ -57,6 +58,8 @@ export class MdpService {
     private readonly entities: EntityService,
     private readonly presence: PresenceService,
     private readonly closures: BagClosureService,
+    // Round 39 — the security declarations: a hub adds no new tote, and no bag goes onto a driver, without one in force.
+    @Optional() private readonly declarations?: SecurityDeclarationService,
   ) {}
 
   /** The kilos left on a driver's vehicle, everything they hold counted (DispatchService.remainingCapacity). */
@@ -263,7 +266,9 @@ export class MdpService {
 
   /** Register a fresh laminated tote into the pool at this MDP. */
   registerTote(mdpId: string): Tote {
-    this.working(mdpId);
+    const hub = this.working(mdpId);
+    // Round 39 — a new tote is new work: not without the hub's security declaration in force.
+    this.declarations?.assertHubMayOpen(hub.did, hub.name);
     return this.totes.register(mdpId);
   }
 
@@ -507,8 +512,11 @@ export class MdpService {
     // Round 36 — a bag leaves closed (its coded seal on, or photographed closed), and never while it is held.
     const HELD = pending.held;
     if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
-    if (!pending.closureId) throw new GlosError('BAG_NOT_CLOSED', `Close bag ${code} first: put a coded seal on it and photograph it, or photograph it closed`);
+    // Round 39 — nothing new onto a rider whose security declaration (or whose fleet's) is not in force: said before the bag's
+    // own state, because no closing of the bag makes it signed.
     const fleet = this.fleet.resolveBadge(driverBadgeId);
+    if (fleet) this.declarations?.assertMayCarry(fleet.driverDid, Date.now(), true);
+    if (!pending.closureId) throw new GlosError('BAG_NOT_CLOSED', `Close bag ${code} first: put a coded seal on it and photograph it, or photograph it closed`);
     // Round 38 — a new independent rider carries no more than their company's cap: the bag counts every parcel in it.
     if (fleet) this.parcels.assertRiderWithinCap(fleet.driverDid, pending.parcels.length);
     // A claimed bag may only be loaded by the driver who claimed it.

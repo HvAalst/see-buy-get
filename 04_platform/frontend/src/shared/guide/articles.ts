@@ -83,6 +83,27 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "security-declaration",
+    apps: [
+      "agent",
+      "mdp",
+      "fleet",
+      "driver",
+      "console"
+    ],
+    title: "The security declaration: signed at joining and every year",
+    summary: "Every shop, hub, fleet and rider in no fleet signs a short security declaration: how they keep what is in their care. It is signed when they join and again every year. Without one in force, nothing new is taken on — what is already in their hands is finished as usual.",
+    steps: [
+      "Shop app, Hub app, Fleet app or Driver app: on the home screen, the declaration — a handful of promises. Read them and press “I declare this — sign”. It is signed in your name, today, for a year.",
+      "A month before the year is up, the home screen says it runs out, and on what day. Sign it again then; nothing stops in the meantime.",
+      "Not signed, or a year gone, or a new wording SeeBuyGet has written: a shop takes no parcel in, a hub opens no new tote, and a fleet’s drivers or a rider in no fleet take no new load, parcel or bag. Each refusal says where to sign.",
+      "Operator console: Papers, “Security declarations” — who has none in force, then who is due within the month. Staff read it; nobody signs for anybody else."
+    ],
+    notes: [
+      "A fleet’s drivers sign nothing of their own: the fleet signs, and answers for them. At a shop, the owner signs — not the people at the counter."
+    ]
+  },
+  {
     id: "new-partner-limit",
     apps: [
       "agent",

@@ -10,10 +10,14 @@ import type { AgentActions, AgentState, Screen } from '../useAgentApp';
 import type { GeoPoint } from '../../../shared/geo';
 import type { Weekday, WeeklyHours } from '../types';
 import { useConnectivity } from '../../../shared/connectivity';
+import { DeclarationCard } from '../../../shared/DeclarationCard';
+import type { SbgClient } from '../../../lib/sbg';
 
 export interface HomeScreenProps {
   state: AgentState;
   actions: AgentActions;
+  /** Round 39 — for the security declaration, which the owner signs (never somebody at the counter). */
+  sbg?: SbgClient | null;
 }
 
 /** The counter jobs, in field-frequency order. Each is one row — one task per screen. */
@@ -51,7 +55,7 @@ type SheetKind = 'topup' | 'price' | 'close' | 'photo' | 'location' | 'hours' | 
  * each edited in its own slide-up sheet. Backed entirely by what the shop already exposes; the heavier
  * dashboard sections (staff, payouts, forecasts) are deliberately out of scope.
  */
-export function HomeScreen({ state, actions }: HomeScreenProps) {
+export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
   const t = useT();
   const [sheet, setSheet] = useState<SheetKind>(null);
   const agent = state.agent;
@@ -80,6 +84,8 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
+      {state.staff ? null : <DeclarationCard sbg={sbg ?? null} />}
 
       {/* Shop identity — photo + name + status. The photo taps through to its own sheet. */}
       <Card>

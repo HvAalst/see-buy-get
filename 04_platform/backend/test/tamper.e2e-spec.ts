@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
+import { declared } from './declared';
 
 /**
  * THE TAMPER PROTOCOL, over the wire (round 35; the user, answering the ISO 28000/28001 check: "The tamper protocol" — a
@@ -178,6 +179,7 @@ describe('the tamper protocol, over the wire', () => {
     const shopPhoto = async (kind: string) => (await http().post('/v1/sbg/media').set(token).send({ kind, dataUrl: CONTENTS_PNG }).expect(201)).body.mediaId as string;
     await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(token).send({ idCopyRef: await shopPhoto('kyc_id'), tradingLicenceRef: await shopPhoto('kyc_licence'), shopPhotoRefs: [await shopPhoto('shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+    declared(app, 'shop', did); // the shop signs its security declaration, as at joining
     const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(operator).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 50 }).expect(201);
     return { did, token };
@@ -193,6 +195,7 @@ describe('the tamper protocol, over the wire', () => {
     const P = `63${String(Math.floor(Math.random() * 90_000) + 10_000)}`;
     await http().put(`/v1/sbg/vendors/${made.vendorId}/gs1`).set(storeToken).send({ companyPrefix: P, extensionDigit: 4 }).expect(200);
     const hub = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Tamper Hub ${tag}`, zones: [`TmpSouth${tag}`], location: { lat: -1.25, lng: 36.9 } }).expect(201)).body;
+    declared(app, 'hub', hub.did); // the hub signs its security declaration, as at joining
     const hubToken = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token);
     const parcels: Array<{ parcelId: string; sscc: string }> = [];
     for (let i = 0; i < 2; i += 1) {

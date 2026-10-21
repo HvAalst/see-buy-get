@@ -937,6 +937,8 @@ export function createOperatorApi(sbg: SbgClient) {
      * vetted"). Until approved a hub works for nobody. A refusal says why: the hub is shown it.
      */
     hubPapersQueue: () => sbg.request((c) => c.GET('/v1/sbg/hub-papers', {})),
+    /** Round 39 — every partner's yearly security declaration, and where it stands. */
+    declarations: () => sbg.request((c) => c.GET('/v1/sbg/declarations', {})),
     /** Round 39 — light couriers whose ID photo waits to be seen; and the decision: seen, or not, with the reason. */
     idPhotoQueue: () => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/id-photos', {})),
     decideIdPhoto: (did: string, body: { seen: boolean; reason?: string; by?: string }) =>

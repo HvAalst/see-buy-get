@@ -3876,6 +3876,69 @@
         }
       }
     },
+    "/v1/sbg/declarations/mine": {
+      "get": {
+        "operationId": "SecurityDeclaration.mine",
+        "summary": "",
+        "description": "The caller's own declaration — or, for a fleet's driver, whose covers them.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeclarationView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/declarations/mine/sign": {
+      "post": {
+        "operationId": "SecurityDeclaration.sign",
+        "summary": "",
+        "description": "Signed — the wording in force, which must be the one they were shown — for a year from now.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignDeclarationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeclarationView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/declarations": {
+      "get": {
+        "operationId": "SecurityDeclaration.report",
+        "summary": "",
+        "description": "Every partner and where they stand, for staff: the shops, the hubs, the fleets and the riders in no fleet.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/network/plan-vs-actual": {
       "get": {
         "operationId": "Sbg.planVersusActual",
@@ -31151,6 +31214,77 @@
         "required": [
           "glosShipmentId",
           "action"
+        ]
+      },
+      "DeclarationView": {
+        "type": "object",
+        "properties": {
+          "required": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "shop",
+              "hub",
+              "fleet",
+              "driver"
+            ]
+          },
+          "version": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "signed",
+              "due",
+              "missing",
+              "lapsed",
+              "outdated"
+            ]
+          },
+          "signedAt": {
+            "type": "string"
+          },
+          "signedBy": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string"
+          },
+          "daysLeft": {
+            "type": "number"
+          },
+          "coveredBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "required"
+        ]
+      },
+      "SignDeclarationDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
         ]
       },
       "PhoneRequestDto": {

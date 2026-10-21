@@ -3,6 +3,7 @@ import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect } from 'preact/hooks';
 import { Button, Card, ErrorNote, ExplainerReset, Icon, Note, PhotoField, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
+import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient, SbgError } from '../../../lib/sbg';
 import { systemApi, systemSummary, type SystemView } from '../system';
 import { StandstillCard } from './StandstillCard';
@@ -37,6 +38,8 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
+      <DeclarationCard sbg={sbg ?? null} />
 
       <div class="tiles tiles--5">
         <Tile value={`${d?.vehicles.active ?? 0}/${d?.vehicles.total ?? 0}`} label={t('fleet.dash.tileVehicles')} />

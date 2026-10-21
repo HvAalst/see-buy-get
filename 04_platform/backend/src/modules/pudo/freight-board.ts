@@ -92,6 +92,8 @@ export function blockersFor(
     ratingBelowFloor: boolean;
     /** FP8 — over the shift's hours limit: the vehicle is fine, the day is not. */
     overHours?: boolean;
+    /** Round 39 — the security declaration of whoever answers for the driver is not in force: the take's own words. */
+    declaration?: string;
     indicativeCharge?: number;
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
@@ -115,6 +117,8 @@ export function blockersFor(
      * licence is a wasted trip, which is the opposite of what this board is for.
      */
     out.push(...(ctx.routeBlockers ?? []).filter((b) => b.code === 'NO_TRANSIT_AUTHORITY'));
+    // Round 39 — and the security declaration: no lorry makes it signed.
+    if (ctx.declaration) out.push({ kind: 'resolvable', code: 'DECLARATION_REQUIRED', message: ctx.declaration });
     out.push({ kind: 'resolvable', code: 'NO_VEHICLE', message: 'Couple to a vehicle to see whether you can take this' });
     return out;
   }
@@ -122,6 +126,8 @@ export function blockersFor(
   if (ctx.ratingBelowFloor) {
     out.push({ kind: 'resolvable', code: 'RATING_BELOW_FLOOR', message: 'Your rating is below the network minimum — freight is paused until it recovers' });
   }
+  // Round 39 — every take refuses it until it is signed; the board says so first, in the take's own words.
+  if (ctx.declaration) out.push({ kind: 'resolvable', code: 'DECLARATION_REQUIRED', message: ctx.declaration });
   if (ctx.overHours) {
     out.push({ kind: 'resolvable', code: 'HOURS_EXCEEDED', message: 'Over the shift hours limit — deliver what is aboard, end the shift and rest before taking more' });
   }

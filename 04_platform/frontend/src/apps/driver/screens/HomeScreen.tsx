@@ -33,6 +33,8 @@ import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
 import { IdPhotoCard } from './IdPhotoCard';
+import { DeclarationCard } from '../../../shared/DeclarationCard';
+import type { SbgClient } from '../../../lib/sbg';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
 export interface HomeScreenProps {
@@ -40,10 +42,12 @@ export interface HomeScreenProps {
   actions: DriverActions;
   /** Open "Your fleet" — where a fleet's offer is answered. The sheet belongs to the shell, beside the account menu. */
   onOpenFleet?: () => void;
+  /** Round 39 — for the security declaration: a rider in no fleet signs their own; a fleet's driver is covered by the fleet. */
+  sbg?: SbgClient | null;
 }
 
-export function HomeScreen({ state, actions, onOpenFleet }: HomeScreenProps) {
-  return state.session.active && state.vehicle ? <OnShift state={state} actions={actions} onOpenFleet={onOpenFleet} /> : <OffShift state={state} actions={actions} onOpenFleet={onOpenFleet} />;
+export function HomeScreen({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
+  return state.session.active && state.vehicle ? <OnShift state={state} actions={actions} onOpenFleet={onOpenFleet} sbg={sbg} /> : <OffShift state={state} actions={actions} onOpenFleet={onOpenFleet} sbg={sbg} />;
 }
 
 /**
@@ -101,7 +105,7 @@ function PushAsk({ actions }: { actions: DriverActions }) {
 
 /* ============================================================== off shift == */
 
-function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
+function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   const t = useT();
   const notice = driverStatusNotice(state.driver?.status, t, Boolean(state.driver?.managerDid));
   // FP4 — a lapsed licence stops the shift before the walk to the yard, in the server's own words (the same
@@ -178,6 +182,8 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
       ) : null}
       {reader ? <LicenceRenewal state={state} actions={actions} reader={reader} needed={offRoad.length > 0 || Boolean(licenceDue)} /> : null}
       {/* Round 39 — a light courier whose ID nobody has seen: here, where they are on shift or not, a photo of it to send. */}
+      {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
+      {state.driver && !state.driver.managerDid ? <DeclarationCard sbg={sbg ?? null} /> : null}
       {state.custodyCap?.idUnseen ? <IdPhotoCard state={state} actions={actions} /> : null}
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
@@ -766,7 +772,7 @@ function WorkCard({ state, actions }: HomeScreenProps) {
 
 /* =============================================================== on shift == */
 
-function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
+function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   const t = useT();
   const [confirm, setConfirm] = useState<'end' | 'rate' | null>(null);
   const [endOdo, setEndOdo] = useState('');
@@ -781,6 +787,8 @@ function OnShift({ state, actions, onOpenFleet }: HomeScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {/* Round 39 — on shift too: a load is refused without it, and the refusal says it is signed here. */}
+      {state.driver && !state.driver.managerDid ? <DeclarationCard sbg={sbg ?? null} /> : null}
       <FleetOfferNote state={state} onOpenFleet={onOpenFleet} />
       <DarkSpellNote />
       {/* FP8 — over the shift limit: said once, at the top, with what still happens (deliveries) and what does not

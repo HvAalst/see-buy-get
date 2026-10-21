@@ -127,6 +127,14 @@ describe('blockersFor (FB1)', () => {
     expect(bs[0].kind).toBe('resolvable');
   });
 
+  it('says a load is not takeable while the security declaration is not in force — with or without a lorry (round 39)', () => {
+    const words = 'Your fleet has not signed its security declaration: nothing new is taken on until it has.';
+    const coupled = blockersFor(load(), truck(), { ...ok, declaration: words });
+    expect(coupled).toEqual([{ kind: 'resolvable', code: 'DECLARATION_REQUIRED', message: words }]);
+    expect(takeable(coupled)).toBe(false);
+    expect(codes(blockersFor(load(), null, { ...ok, declaration: words }))).toEqual(['DECLARATION_REQUIRED', 'NO_VEHICLE']);
+  });
+
   it('every kind it can emit is one the screen knows how to describe', () => {
     for (const kind of BLOCKER_KINDS) expect(BLOCKER_KIND_MEANING[kind]).toBeTruthy();
   });

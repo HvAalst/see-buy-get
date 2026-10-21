@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { NotificationService } from '../src/modules/pudo/notification.service';
 import { HandleDirectory } from '../src/modules/pudo/handle-directory.service';
 import { HandleService } from '../src/foundation/handle/handle.service';
+import { declared } from './declared';
 
 /**
  * A HUB IS VETTED BEFORE IT WORKS (the ISO 28000 check: "hubs are not vetted at all") — through the booted application.
@@ -62,6 +63,7 @@ describe('a hub is vetted before it works, over the wire', () => {
     // Another hub — one staff registered, so approved by them — is not shown it, and is shown itself.
     const other = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Sort ${u}`, zones: [`HO${u}`], location: { lat: -1.25, lng: 36.9 } }).expect(201)).body;
     expect(other.vetting).toMatchObject({ state: 'approved', approvedBy: expect.any(String) });
+    declared(app, 'hub', other.did);
     const otherHub = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: other.did }).expect(201)).body.access_token);
     const seen = (await http().get('/v1/sbg/mdps').set(otherHub).expect(200)).body as Array<{ did: string }>;
     expect([seen.some((m) => m.did === signed.did), seen.some((m) => m.did === other.did)]).toEqual([false, true]);
@@ -116,6 +118,9 @@ describe('a hub is vetted before it works, over the wire', () => {
     const again = { idCopyRef: await photo(hub, 'kyc_id', `${u}b`), licenceRef: await photo(hub, 'kyc_licence', `${u}b`), photoRefs: [await photo(hub, 'shop', `${u}b`)] };
     await send(hub, again).expect(201);
     expect((await decide({ approve: true }).expect(201)).body.vetting).toMatchObject({ state: 'approved', approvedBy: expect.any(String), papers: again });
+    // Approved, it signs its security declaration from its own sign-in, as a hub does before it opens a bag (round 39).
+    const declaration = (await http().get('/v1/sbg/declarations/mine').set(hub).expect(200)).body;
+    await http().post('/v1/sbg/declarations/mine/sign').set(hub).send({ version: declaration.version }).expect(201);
     await new Promise((r) => setImmediate(r));
     expect(app.get(NotificationService).inboxFor(signed.did)[0]).toMatchObject({ kind: 'papers_checked', title: `${name} is approved` });
     await decide({ approve: true }).expect(400);

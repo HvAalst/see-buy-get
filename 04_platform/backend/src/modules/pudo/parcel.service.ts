@@ -19,6 +19,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
 import { capWords, standingOf, unseenStanding, type CustodyStanding } from './custody-cap';
 import { DriverService, idUnseen } from './driver.service';
+import { SecurityDeclarationService } from './security-declaration.service';
 import { Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
@@ -711,6 +712,8 @@ export class ParcelService implements OnApplicationBootstrap {
     @Optional() private readonly codes?: ShipperCodesService,
     // Round 38 — who a rider is, for the custody cap: independent or a fleet's, and in which country. Optional for the specs.
     @Optional() private readonly drivers?: DriverService,
+    // Round 39 — the security declarations: no new work without one in force. Optional for the specs.
+    @Optional() private readonly declarations?: SecurityDeclarationService,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -1235,6 +1238,8 @@ export class ParcelService implements OnApplicationBootstrap {
     this.agents.assertMayTakeIn(input.agentDid);
     // Round 38 — a new shop holds no more than its company's cap for it: asked before anything is written.
     this.assertShopWithinCap(input.agentDid);
+    // Round 39 — and takes nothing new in without its security declaration in force.
+    this.assertShopDeclared(input.agentDid);
     this.agents.assertNamedAtMint(input.destPudoDid);
 
     const mode: PaymentMode = input.paymentMode ?? 'cash';
@@ -1411,6 +1416,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // S30: the natures already ON this vehicle, so each new parcel can be checked against the whole manifest
     // (the platform's first pairwise cargo awareness — before this, a manifest accumulated blind).
     const loadedNatures: CargoNature[] = [];
+    // Round 39 — a rider whose security declaration (or whose fleet's) is not in force takes nothing new on: refused whole,
+    // before anything is written, in words for the counter.
+    if (fleet) this.declarations?.assertMayCarry(fleet.driverDid, Date.now(), true);
     // Round 38 — a new independent rider carries no more than their company's cap: the rest stay at the counter, said why.
     const riderNow = fleet ? this.riderStanding(fleet.driverDid) : undefined;
     const riderRoom = riderNow ? Math.max(0, riderNow.cap - riderNow.holds) : Number.POSITIVE_INFINITY;
@@ -2094,6 +2102,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (!dropoffPhotoRef) throw new GlosError('PHOTO_REQUIRED', 'A drop-off photo is mandatory (fraud defence)');
     this.media.requireHeld(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoffPhotoRef'); // round 31 — before the cash is counted
     this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before the cash is counted
+    this.assertShopDeclared(agentDid); // round 39 — its security declaration in force
     this.admitBooked(parcel, agentDid);
     const due = parcel.shipmentCost ?? 0;
     const gate = this.gate.canTransact(agentDid);
@@ -2124,6 +2133,7 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.paidStatus !== 'ParcelPaid') throw new GlosError('SHIPMENT_NOT_PAID', 'Shipment is not paid — the vendor must prepay before the PUDO accepts it');
     if (parcel.originAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Intake only at the vendor-selected origin PUDO');
     this.assertShopWithinCap(agentDid); // round 38 — a new shop's cap, before anything is written
+    this.assertShopDeclared(agentDid); // round 39 — its security declaration in force
     // ROUND 13 — A PARCEL CROSSING A BORDER GOES WITH ITS PAPERS: the store prints the commercial invoice with the label, and
     // the shop looks for the copies in the pouch before it takes the parcel in. Without them it is held at the border.
     if (parcel.customs && !papersInPouch) {
@@ -3011,6 +3021,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // Round 39 — a light courier whose ID nobody has seen stays at the starting number until somebody has.
     if (idUnseen(driver)) return unseenStanding(rule, holds + loads.carrying, completed + loads.delivered);
     return standingOf('rider', rule, holds + loads.carrying, completed + loads.delivered);
+  }
+
+  /** Round 39 — a shop takes nothing new in without its security declaration in force. Asked before anything is written. */
+  private assertShopDeclared(agentDid: string): void {
+    if (!this.declarations) return;
+    this.declarations.assertShopMayTakeIn(agentDid, this.agents.get(agentDid).shopName);
   }
 
   /** Refused when taking `adding` more would put this shop over its cap: asked before anything is written. */

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { MediaService } from '../src/modules/pudo/media.service';
 import { CONTENTS_PNG } from './content-photo';
+import { declared } from './declared';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleCareService } from '../src/modules/pudo/vehicle-care.service';
@@ -113,6 +114,7 @@ describe('a vehicle’s upkeep, over the wire', () => {
     managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
     managers.decideKyc(m.did, true);
     managers.recordBond(m.did);
+    declared(app, 'fleet', m.did); // the fleet's office signs its security declaration, as at joining
     const office = (await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
     const phone = `+2547${digits()}2`;
     const onboarded = await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Baraka', fullName: 'Baraka Driver', nationalId: `ID-CHK-${n}`, mobile: phone, licenceClasses: ['truck'], licenceNumber: `L-CHK-${n}`, licenceExpiresAt: new Date(Date.now() + 400 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: m.did }).expect(201);

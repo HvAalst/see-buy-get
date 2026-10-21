@@ -1,3 +1,4 @@
+import type { SbgClient } from '../../lib/sbg';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { useMemo, useState } from 'preact/hooks';
 import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, TopBar, type NavItem } from '../../shared/ui';
@@ -108,7 +109,7 @@ export function App() {
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} onOpenFleet={() => setFleetOpen(true)} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} onOpenFleet={() => setFleetOpen(true)} sbg={sbg} />
       </main>
 
       <BottomNav<Tab>
@@ -126,12 +127,12 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions, onOpenFleet }: { screen: Screen; state: DriverState; actions: DriverActions; onOpenFleet: () => void }) {
+function ScreenRouter({ screen, state, actions, onOpenFleet, sbg }: { screen: Screen; state: DriverState; actions: DriverActions; onOpenFleet: () => void; sbg: SbgClient | null }) {
   // A stale tab (or a restored PWA) can be pointing at an on-shift screen after the shift
   // ended — the legacy page rendered those against a null vehicle. Re-check every time.
   // Earnings is exempt: a driver reviews their jobs + pay whether or not they're on shift. So is the market
   // board — shopping for work, and deciding what to buy next, is exactly what happens off shift.
-  if (!state.session.active && screen !== 'home' && screen !== 'earnings' && screen !== 'board') return <HomeScreen state={state} actions={actions} onOpenFleet={onOpenFleet} />;
+  if (!state.session.active && screen !== 'home' && screen !== 'earnings' && screen !== 'board') return <HomeScreen state={state} actions={actions} onOpenFleet={onOpenFleet} sbg={sbg} />;
 
   switch (screen) {
     case 'route':
@@ -145,7 +146,7 @@ function ScreenRouter({ screen, state, actions, onOpenFleet }: { screen: Screen;
     case 'earnings':
       return <EarningsScreen state={state} actions={actions} />;
     default:
-      return <HomeScreen state={state} actions={actions} onOpenFleet={onOpenFleet} />;
+      return <HomeScreen state={state} actions={actions} onOpenFleet={onOpenFleet} sbg={sbg} />;
   }
 }
 

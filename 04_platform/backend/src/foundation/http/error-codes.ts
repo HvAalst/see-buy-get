@@ -102,6 +102,8 @@ export const ERROR_CODES = {
   HUB_NOT_APPROVED: { status: 409, title: 'The hub is not approved yet' },
   SEAL_REQUIRED: { status: 409, title: 'A seal is required on this load' },
   CUSTODY_CAP_REACHED: { status: 409, title: 'The most a new partner holds here for now' },
+  // Round 39 — a shop, hub, fleet or rider without its yearly security declaration in force takes on nothing new.
+  DECLARATION_REQUIRED: { status: 409, title: 'The security declaration is not signed' },
   // Round 18 — a GS1 company prefix another business prints under with that extension digit, or one staff decided is another's.
   GS1_PREFIX_TAKEN: { status: 409, title: 'Another business uses this GS1 prefix' },
   COMMERCIAL_INVOICE_REQUIRED: { status: 409, title: 'The commercial invoice is not signed' },

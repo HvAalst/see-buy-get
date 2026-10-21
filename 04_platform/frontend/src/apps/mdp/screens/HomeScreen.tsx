@@ -6,10 +6,14 @@ import { bagLine, fillPercent, fillingBags, floorOpen, freeBags, homeSummary, hu
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { PeopleSheet } from '../../agent/screens/PeopleSheet';
 import { HUB_PEOPLE_WORDS } from '../staffWords';
+import { DeclarationCard } from '../../../shared/DeclarationCard';
+import type { SbgClient } from '../../../lib/sbg';
 
 export interface HomeScreenProps {
   state: MdpState;
   actions: MdpActions;
+  /** Round 39 — for the security declaration, which the hub's owner signs. */
+  sbg?: SbgClient | null;
 }
 
 /**
@@ -74,7 +78,7 @@ function HubPapers({ state, actions }: HomeScreenProps) {
  * when non-zero), the loose inbound pile, the outbound destination bags with their fill
  * bars, and the hub's open-data sort fee.
  */
-export function HomeScreen({ state, actions }: HomeScreenProps) {
+export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
   const t = useT();
   const [priceOpen, setPriceOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
@@ -88,6 +92,8 @@ export function HomeScreen({ state, actions }: HomeScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
+      {state.staff ? null : <DeclarationCard sbg={sbg ?? null} />}
 
       {hub && !open ? <HubPapers state={state} actions={actions} /> : null}
 

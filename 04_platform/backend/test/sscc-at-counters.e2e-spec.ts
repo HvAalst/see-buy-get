@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { ssccOf } from '../src/foundation/gs1/gs1';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
+import { declared } from './declared';
 
 /**
  * A STORE PARCEL'S SSCC FINDS ITS PARCEL, over the wire (round 32, the user: "A store parcel's SSCC at our counters";
@@ -56,6 +57,7 @@ describe('a store parcel’s SSCC finds its parcel, over the wire', () => {
     const photo = async (kind: string) => (await http().post('/v1/sbg/media').set(token).send({ kind, dataUrl: CONTENTS_PNG }).expect(201)).body.mediaId as string;
     await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(token).send({ idCopyRef: await photo('kyc_id'), tradingLicenceRef: await photo('kyc_licence'), shopPhotoRefs: [await photo('shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+    declared(app, 'shop', did); // the shop signs its security declaration, as at joining
     await fund(`/v1/sbg/agents/${did}/top-up`, operator, 50);
     return { did, token };
   }

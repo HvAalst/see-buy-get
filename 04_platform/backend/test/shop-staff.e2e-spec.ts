@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { shopPhotoOver } from './content-photo';
 import { AT_THE_COUNTER_KEY } from '../src/foundation/auth/at-the-counter';
 import { COUNTER_ACTS } from '../src/modules/pudo/shop-staff.service';
+import { declared } from './declared';
 
 /**
  * THE PEOPLE AT A SHOP'S COUNTER, over the wire (the user, 2026-10-18: "who is at the counter" → staff sign in with their
@@ -50,6 +51,7 @@ describe('the people at a shop’s counter, over the wire', () => {
     const photo = async (kind: string) => (await http().post('/v1/sbg/media').set(owner).send({ kind, dataUrl: `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`${kind}:${did}`)]).toString('base64')}` }).expect(201)).body.mediaId as string;
     await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(owner).send({ idCopyRef: await photo('kyc_id'), tradingLicenceRef: await photo('kyc_licence'), shopPhotoRefs: [await photo('shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+    declared(app, 'shop', did); // the shop's owner signs its security declaration, as at joining
     const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(owner).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 50 }).expect(201);
     return { did, owner };
@@ -136,6 +138,7 @@ describe('the people at a shop’s counter, over the wire', () => {
 
   it('a hub’s people work its floor the same way — added by the hub, in under their own name, never at the owner’s doors', async () => {
     const hub = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Sort Hub ${digits()}`, zones: [`ZH${digits()}`], location: { lat: -1.25, lng: 36.9 } }).expect(201)).body;
+    declared(app, 'hub', hub.did); // the hub's owner signs its security declaration, as at joining
     const owner = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token);
     const phone = `+2547${digits()}3`;
     const added = (await http().post('/v1/sbg/hub/staff').set(owner).send({ phone, name: 'Otieno' }).expect(201)).body;

@@ -58,6 +58,7 @@ import { LoadPassageService, viewOf as passageView } from './load-passage.servic
 import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
 import { LoadSealService, sealCheck } from './load-seal.service';
 import { ContactCardService } from './contact-card.service';
+import { SecurityDeclarationService } from './security-declaration.service';
 import { BagClosureService } from './bag-closure.service';
 import type { HeldByAuthority } from './load-detention.types';
 import { LedgerService } from '../../foundation/ledger/ledger.service';
@@ -432,6 +433,8 @@ export class DispatchService {
     @Optional() private readonly parcels?: ParcelService,
     // Round 39 — each country's desk number, from its company's own card. Optional for the specs; without it a load names none.
     @Optional() private readonly contacts?: ContactCardService,
+    // Round 39 — the security declarations: no load is taken on without one in force. Optional for the specs.
+    @Optional() private readonly declarations?: SecurityDeclarationService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
@@ -1172,6 +1175,8 @@ export class DispatchService {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability or equipment this load requires — re-couple to a suitable vehicle');
     }
     this.requireBorderAllows(vehicle, offer.driverDid, offer.kind, offer.ref);
+    // Round 39 — a bag claimed is a bag reserved: new work, so not without the declaration of whoever answers for the driver.
+    this.declarations?.assertMayCarry(offer.driverDid, now);
 
     if (offer.kind === 'tote') {
       this.totes.markClaimed(offer.ref, offer.driverDid);
@@ -1254,6 +1259,9 @@ export class DispatchService {
       const h = this.fleet.hoursFor(driverDid, now);
       throw new GlosError('HOURS_EXCEEDED', `On duty ${h.onDuty} h — over the ${h.limit} h limit. End the shift and rest before taking another load`);
     }
+    // Round 39 — no load is taken on without the security declaration of whoever answers for the driver: their fleet's,
+    // or their own when they ride for themselves. Every door onto a load comes through here.
+    this.declarations?.assertMayCarry(driverDid, now);
     // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
     // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
     // given, which is the invisible exclusion the whole board exists to remove; enforcing it here, where the
@@ -1357,6 +1365,8 @@ export class DispatchService {
     const remainingKg = input.driverDid ? this.remainingCapacity(input.driverDid) : 0;
     const ratingBelowFloor = input.driverDid ? belowFloor(this.ratings.driverRating(input.driverDid)) : false;
     const overHours = input.driverDid ? this.fleet.overHours(input.driverDid, now) : false; // FP8
+    // Round 39 — the take refuses a load without the declaration of whoever answers for this driver: the board says so too.
+    const declaration = input.driverDid ? this.declarations?.carryRefusal(input.driverDid, now) : undefined;
     // A radius is the operator narrowing the market. Absent, or non-positive, means they have not narrowed it.
     const radius = input.radiusKm != null && Number.isFinite(input.radiusKm) && input.radiusKm > 0 ? input.radiusKm : undefined;
 
@@ -1399,6 +1409,7 @@ export class DispatchService {
           remainingKg,
           ratingBelowFloor,
           overHours,
+          declaration,
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //

@@ -96,6 +96,17 @@ const need = (r, what) => {
   return r.data;
 };
 
+/**
+ * Round 39 — A PARTNER SIGNS ITS SECURITY DECLARATION, from its own sign-in, as at joining: a shop, a hub and a fleet take
+ * on nothing new without one in force. Signed here only when it asks for it — missing, lapsed, a new wording, or due.
+ */
+async function declare(token, label) {
+  const mine = need(await req('GET', '/v1/sbg/declarations/mine', { token }), `declaration ${label}`);
+  if (!mine.required || mine.state === 'signed') return;
+  need(await req('POST', '/v1/sbg/declarations/mine/sign', { token, body: { version: mine.version, by: label } }), `sign ${label}`);
+  say(`security declaration signed: ${label}`);
+}
+
 async function verifiedPhone() {
   const phone = `+2547${Math.floor(10000000 + Math.random() * 89999999)}`;
   const r1 = await req('POST', '/v1/sbg/auth/phone/request', { body: { phone } });
@@ -213,6 +224,7 @@ const run = async () => {
       need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/deposit`, { token: op }), `deposit ${label}`);
       say(`activated: ${label}`);
     }
+    await declare(tok, label);
     const gate = need(await req('GET', `/v1/sbg/agents/${encodeURIComponent(did)}/can-transact`, { token: tok }), 'gate');
     if ((gate.balance ?? 0) < 20) {
       await fundVia(`/v1/sbg/agents/${encodeURIComponent(did)}/top-up`, 60, tok, op);
@@ -238,6 +250,7 @@ const run = async () => {
     say('hub   Central Sort      papers seen and approved');
   }
 
+  await declare(tokHub, 'Central Sort');
   const hubTotes = need(await req('GET', `/v1/sbg/totes?location=${encodeURIComponent(hubRow.mdpId)}&status=`, { token: tokHub }), 'totes');
   for (let i = hubTotes.filter((t) => t.status === 'free').length; i < 2; i++) {
     need(await req('POST', `/v1/sbg/mdps/${encodeURIComponent(hubRow.mdpId)}/totes`, { token: tokHub }), 'hub tote');
@@ -283,6 +296,8 @@ const run = async () => {
     await req('POST', '/v1/auth/token', { body: { role: 'fleet_manager', did: mgr.did, tenant: mgr.did, type: 'client_credentials' } }),
     'fleet mint',
   ).access_token;
+  // The fleet signs for its drivers: Amos, Grace and Peter sign nothing of their own.
+  await declare(fm, 'Kilima Logistics');
   // The manager as a PERSON, with a PIN. The company code names the fleet; the PIN is what actually
   // signs somebody in, so a seeded fleet with no person behind it is a console nobody can open.
   const MGR_PIN = '24689';

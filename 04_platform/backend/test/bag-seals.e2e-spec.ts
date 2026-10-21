@@ -4,6 +4,7 @@ import request from 'supertest';
 import { createHash } from 'crypto';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
+import { declared } from './declared';
 
 /**
  * A BAG CLOSED ON OUR OWN SEAL, AND RECEIVED BY IT, over the wire (round 36; the user: "Receiving on our own seals"; "we
@@ -59,6 +60,7 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     const shopPhoto = async (kind: string) => (await http().post('/v1/sbg/media').set(token).send({ kind, dataUrl: CONTENTS_PNG }).expect(201)).body.mediaId as string;
     await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(token).send({ idCopyRef: await shopPhoto('kyc_id'), tradingLicenceRef: await shopPhoto('kyc_licence'), shopPhotoRefs: [await shopPhoto('shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+    declared(app, 'shop', did);
     const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(operator).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 50 }).expect(201);
     return { did, token };
@@ -193,6 +195,7 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
       seq += 1;
       const u = `${tag}${seq}`;
       const d = (await http().post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: name, fullName: `${name} Rider`, nationalId: `DRV-TK-${u}`, mobile: `+2547${digits().slice(-6)}${seq}`, licenceClasses: ['motorcycle'] }).expect(201)).body;
+      declared(app, 'driver', d.did);
       const moto = (await http().post('/v1/sbg/vehicles').set(operator).send({ plate: `TK-${u}`, vehicleClass: 'motorcycle', ownerName: name }).expect(201)).body;
       await http().post(`/v1/sbg/fleet/drivers/${d.did}/start-session`).set(operator).send({ vehicleId: moto.vehicleId }).expect(201);
       return { did: d.did as string, token: bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: d.did, type: 'client_credentials' }).expect(201)).body.access_token) };

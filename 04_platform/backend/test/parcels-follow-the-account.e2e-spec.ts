@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver, shopPhotoOver, photoOver } from './content-photo';
+import { declared } from './declared';
 import { AccountRecoveryService } from '../src/modules/pudo/account-recovery.service';
 import { OtpService } from '../src/modules/pudo/otp.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
@@ -62,6 +63,7 @@ describe('a parcel is kept by the account, over the wire', () => {
     };
     await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(shop).send({ idCopyRef: await photograph('kyc_id'), tradingLicenceRef: await photograph('kyc_licence'), shopPhotoRefs: [await photograph('shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+    declared(app, 'shop', did);
     const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(operator).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${u}`, amount: 50 }).expect(201);
     return did;

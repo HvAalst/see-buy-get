@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver, hubPhotoOver, photoOver, shopPhotoOver } from './content-photo';
+import { declared } from './declared';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 
 describe('GLOS backend (e2e)', () => {
@@ -689,6 +690,7 @@ describe('GLOS backend (e2e)', () => {
       const did = reg.body.did as string;
       await sendShopPapers(did);
       await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      declared(app, 'shop', did);
       await fund(`/v1/sbg/agents/${did}/top-up`, 50, auth);
       return did;
     }
@@ -742,6 +744,7 @@ describe('GLOS backend (e2e)', () => {
       const did = reg.body.did as string;
       await sendShopPapers(did);
       await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      declared(app, 'shop', did);
       await fund(`/v1/sbg/agents/${did}/top-up`, 20, auth);
       return did;
     }
@@ -848,6 +851,7 @@ describe('GLOS backend (e2e)', () => {
       const did = reg.body.did as string;
       await sendShopPapers(did);
       await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      declared(app, 'shop', did);
       await fund(`/v1/sbg/agents/${did}/top-up`, 20, auth);
       return did;
     }
@@ -859,6 +863,7 @@ describe('GLOS backend (e2e)', () => {
 
     // An MDP hub that last-mile-serves the destination zone.
     const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'East Sort Hub', zones: ['EastTown'], location: { lat: -1.25, lng: 36.95 } }).expect(201);
+    declared(app, 'hub', hub.body.did);
     const hubId = hub.body.mdpId as string;
 
     // Two inbound parcels, intaken at the origin.
@@ -914,6 +919,7 @@ describe('GLOS backend (e2e)', () => {
     const origin = reg.body.did as string;
     await sendShopPapers(origin);
     await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+    declared(app, 'shop', origin);
     await fund(`/v1/sbg/agents/${origin}/top-up`, 50, auth);
     const corridor = await request(http).post('/v1/sbg/corridors').set(auth).send({ name: 'feeder', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
 
@@ -943,6 +949,10 @@ describe('GLOS backend (e2e)', () => {
     const pass = (await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/session`).set(asRider).expect(200)).body.handoverPass as string;
     expect(pass).toMatch(new RegExp(`^${driver.body.badgeId}-\\d{6}$`));
     expect((await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/session`).set(auth).expect(200)).body).not.toHaveProperty('handoverPass');
+    // Round 39 — and not while the courier's security declaration is not in force: refused whole, in words for the counter.
+    const unsigned = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: pass, parcelIds }).expect(409);
+    expect(unsigned.body.detail).toMatch(/^This rider has not signed their security declaration: nothing new is taken on until they have/);
+    declared(app, 'driver', driver.body.did);
     const h = await request(http).post('/v1/sbg/parcels/handover').set(auth).send({ agentDid: origin, driverBadgeId: pass, parcelIds }).expect(201);
     expect(h.body.handed).toEqual([`OK-${u}`]);
     expect(h.body.driverBadgeId).toBe(driver.body.badgeId);
@@ -961,6 +971,7 @@ describe('GLOS backend (e2e)', () => {
     const origin = reg.body.did as string;
     await sendShopPapers(origin);
     await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+    declared(app, 'shop', origin);
     await fund(`/v1/sbg/agents/${origin}/top-up`, 50, auth);
     const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }).expect(201);
 
@@ -988,6 +999,9 @@ describe('GLOS backend (e2e)', () => {
     expect(sug.body.offers).toHaveLength(1);
     expect(sug.body.offers[0].weightKg).toBe(10);
 
+    // Round 39 — not while the courier's security declaration is not in force: a bag claimed is a bag reserved.
+    expect((await request(http).post(`/v1/sbg/dispatch/offers/${sug.body.offers[0].offerId}/claim`).set(auth).expect(409)).body.detail).toMatch(/^You have not signed your security declaration/);
+    declared(app, 'driver', driver.body.did);
     // Claim it → reserves 10 kg; then load the bag (claimer only).
     await request(http).post(`/v1/sbg/dispatch/offers/${sug.body.offers[0].offerId}/claim`).set(auth).expect(201);
     const claims = await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/claims`).set(auth).expect(200);

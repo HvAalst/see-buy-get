@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver } from './content-photo';
+import { declared } from './declared';
 
 /**
  * A STORE PARCEL'S PAPERS ABROAD, over the wire (the user, round 13: per item "As shippers do"; the buyer "Address entered
@@ -53,6 +54,7 @@ describe('a store parcel’s papers abroad, over the wire', () => {
     };
     await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(token).send({ idCopyRef: await photograph('kyc_id'), tradingLicenceRef: await photograph('kyc_licence'), shopPhotoRefs: [await photograph('shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(operator).send({ approve: true }).expect(201);
+    declared(app, 'shop', did); // the shop signs its security declaration, as at joining
     const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(operator).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${u}`, amount: 50 }).expect(201);
     return { did, token };

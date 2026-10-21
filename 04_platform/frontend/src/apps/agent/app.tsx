@@ -1,3 +1,4 @@
+import type { SbgClient } from '../../lib/sbg';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
 import { useMemo, useState } from 'preact/hooks';
@@ -133,7 +134,7 @@ export function App() {
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} fiscal={fiscal} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} fiscal={fiscal} sbg={sbg} />
       </main>
 
       <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} />
@@ -152,9 +153,9 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions, archive, destination, fiscal }: { screen: Screen; state: AgentState; actions: AgentActions; archive: ArchiveApiState; destination: DestinationApiState; fiscal: FiscalApi | null }) {
+function ScreenRouter({ screen, state, actions, archive, destination, fiscal, sbg }: { screen: Screen; state: AgentState; actions: AgentActions; archive: ArchiveApiState; destination: DestinationApiState; fiscal: FiscalApi | null; sbg: SbgClient | null }) {
   // A notification or an old link can point one of the shop's people at an owner's screen: the counter is shown instead.
-  if (state.staff && ownerOnlyScreen(screen)) return <HomeScreen state={state} actions={actions} />;
+  if (state.staff && ownerOnlyScreen(screen)) return <HomeScreen state={state} actions={actions} sbg={sbg} />;
   switch (screen) {
     case 'accept':
       return <AcceptScreen state={state} actions={actions} />;
@@ -184,7 +185,7 @@ function ScreenRouter({ screen, state, actions, archive, destination, fiscal }: 
     case 'freight':
       return <FreightScreen state={state} actions={actions} />;
     default:
-      return <HomeScreen state={state} actions={actions} />;
+      return <HomeScreen state={state} actions={actions} sbg={sbg} />;
   }
 }
 

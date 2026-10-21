@@ -314,6 +314,10 @@ describe('the first day of a new installation, as it would be live', () => {
       // A shop cannot approve itself.
       await must(http().post(`${own}/kyc-decision`).set(bearer(shop.token)).send({ approve: true }), 403);
       await must(http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true }));
+      // Approved, it reads its security declaration and signs it from its own sign-in: nothing is taken in until it has.
+      const declaration = await must(http().get('/v1/sbg/declarations/mine').set(bearer(shop.token)), 200);
+      expect(declaration).toMatchObject({ required: true, kind: 'shop', state: 'missing' });
+      await must(http().post('/v1/sbg/declarations/mine/sign').set(bearer(shop.token)).send({ version: declaration.version }));
       await must(http().post(`${own}/deposit`).set(bearer(amina)));
       // Approved, and still not able to take a parcel in: there is no money in its float.
       expect(await must(http().get(`${own}/can-transact`).set(bearer(shop.token)), 200)).toMatchObject({ canTransact: false, code: 'AGENT_LOCKED', balance: 0 });
@@ -452,6 +456,10 @@ describe('the first day of a new installation, as it would be live', () => {
     const session = await must(http().post('/v1/sbg/fleet/managers/session').send({ code, phone, pin: '24689', device }));
     office = session.token.access_token as string;
     expect((await must(http().get('/v1/sbg/fleet/dashboard').set(bearer(office)), 200)).managerDid).toBe(fleetDid);
+    // Its office signs the fleet's security declaration, from its own sign-in: it answers for every driver it puts on a load.
+    const declaration = await must(http().get('/v1/sbg/declarations/mine').set(bearer(office)), 200);
+    expect(declaration).toMatchObject({ required: true, kind: 'fleet', state: 'missing' });
+    await must(http().post('/v1/sbg/declarations/mine/sign').set(bearer(office)).send({ version: declaration.version }));
   });
 
   it('7 · a vehicle, a driver who signs in for themselves and starts their own shift, and the corridor they run', async () => {
@@ -464,6 +472,8 @@ describe('the first day of a new installation, as it would be live', () => {
     const device = await enrol(phone, 'amos@drivers.sbg-rehearsal.org', '13570');
     const session = await must(http().post('/v1/sbg/drivers/session').send({ phone, pin: '13570', device }));
     amos = { did: driver.did, token: session.token.access_token, badgeId: driver.badgeId };
+    // A fleet's driver signs no security declaration of their own: Kilima's covers him.
+    expect(await must(http().get('/v1/sbg/declarations/mine').set(bearer(amos.token)), 200)).toEqual({ required: false, coveredBy: 'Kilima Logistics' });
     const own = `/v1/sbg/fleet/drivers/${encodeURIComponent(amos.did)}`;
     // The office says which vehicle; it cannot start the shift. The driver does, with their PIN.
     await must(http().post(`${own}/start-session`).set(bearer(office)).send({ vehicleId }), 403);

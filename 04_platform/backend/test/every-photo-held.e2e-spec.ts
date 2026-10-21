@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { CONTENTS_PNG } from './content-photo';
+import { declared } from './declared';
 
 /**
  * EVERY PHOTO IS ONE WE HOLD, over the wire (round 31, the user: "Every photo is one we hold"; "Every party's evidence").
@@ -37,6 +38,7 @@ describe('every evidence photo is one we hold, over the wire', () => {
     const shop = await asShop(did);
     await http().post(`/v1/sbg/agents/${did}/submit-kyc`).set(shop).send({ idCopyRef: await upload(shop, 'kyc_id'), tradingLicenceRef: await upload(shop, 'kyc_licence'), shopPhotoRefs: [await upload(shop, 'shop')] }).expect(201);
     await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true }).expect(201);
+    declared(app, 'shop', did);
     const asked = await http().post(`/v1/sbg/agents/${did}/top-up`).set(staff).send({ amount: 50 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(staff).send({ providerRef: `MPX${u}`, amount: 50 }).expect(201);
     return did;

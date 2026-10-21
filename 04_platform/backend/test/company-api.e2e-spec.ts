@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
+import { declared } from './declared';
 
 /**
  * THE API FOR A COMPANY'S OWN SYSTEMS, over the wire (the user, round 12: "An API for businesses and fleets"; "Post, send
@@ -149,6 +150,7 @@ describe('a company’s own system, with its key, over the wire', () => {
     managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
     managers.decideKyc(m.did, true);
     managers.recordBond(m.did);
+    declared(app, 'fleet', m.did);
     const office = (await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
     const phone = `+2547${digits()}7`;
     const onboarded = await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Achieng', fullName: 'Achieng Driver', nationalId: `ID-API-${n}`, mobile: phone, licenceClasses: ['truck'], licenceNumber: `L-API-${n}`, licenceExpiresAt: new Date(Date.now() + 400 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: m.did }).expect(201);

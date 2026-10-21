@@ -10,6 +10,7 @@ import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { FleetHookService } from '../src/modules/pudo/fleet-hooks.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
+import { declared } from './declared';
 
 /**
  * A FLEET'S OWN SYSTEM, TOLD OF ITS WORK, over the wire (the user, round 11: the events recommended; the money on each load
@@ -71,6 +72,7 @@ describe('a fleet’s own system, told of its work, over the wire', () => {
     managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
     managers.decideKyc(m.did, true);
     managers.recordBond(m.did);
+    declared(app, 'fleet', m.did);
     const office = (await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
     return { did: m.did, office, name: m.companyName, email };
   }

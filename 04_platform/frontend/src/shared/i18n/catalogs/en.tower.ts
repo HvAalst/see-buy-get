@@ -137,6 +137,23 @@ export const enTower = {
   'tower.staff.revokeConfirm': 'Yes, sign them out',
 
   // ---- round 38: the roles a member of staff holds -------------------------------------------------------
+  'tower.declarations.title': 'Security declarations',
+  'tower.declarations.counts': '{stopped} not in force · {due} due · {signed} signed',
+  'tower.declarations.lede': 'Every shop, hub, fleet and rider in no fleet signs a short security declaration at joining and again each year. Without one in force they take on nothing new. They sign it themselves, in their own app; nobody here signs for them.',
+  'tower.declarations.allSigned': 'Every partner has a security declaration in force.',
+  'tower.declarations.col.who': 'Who',
+  'tower.declarations.col.state': 'Declaration',
+  'tower.declarations.col.until': 'Holds until',
+  'tower.declarations.kind.shop': 'Shop',
+  'tower.declarations.kind.hub': 'Hub',
+  'tower.declarations.kind.fleet': 'Fleet',
+  'tower.declarations.kind.driver': 'Rider in no fleet',
+  'tower.declarations.state.missing': 'Not signed',
+  'tower.declarations.state.lapsed': 'Lapsed',
+  'tower.declarations.state.outdated': 'Old wording',
+  'tower.declarations.state.due': 'Due',
+  'tower.declarations.state.signed': 'Signed',
+
   'tower.riderIds.title': 'Riders’ ID photos',
   'tower.riderIds.count': '{n, plural, one {# waiting} other {# waiting}}',
   'tower.riderIds.lede': 'A bicycle or motorcycle rider in no fleet rides at once. Until one of us has seen a photo of their ID, how many parcels they may carry at once stays where their country’s cap starts. Look that it is an ID card, readable, and theirs.',

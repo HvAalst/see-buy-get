@@ -8,6 +8,7 @@ import { initials } from '../ConsoleMenu';
 import { DocumentStrip } from './DocumentStrip';
 import { TransitPanel } from './TransitPanel';
 import { OperatorPapersPanel } from './OperatorPapers';
+import { DeclarationsPanel } from './DeclarationsPanel';
 import { useCountryAtlas } from './CountrySelect';
 import { paperDay, paperLine, papersToShow, renewalBlocker } from '../../../shared/papers';
 import { isStuck, type CourierContact, type CourierPaperRow, type LooseVehicleRow } from '../papers';
@@ -73,6 +74,9 @@ export function PapersScreen({ state, actions }: { state: TowerState; actions: T
         onRecord={(carrier, body) => actions.recordTransitAuthority(carrier.did, body, carrier.name)}
         onWithdraw={(carrierDid, authorityId, reason) => actions.withdrawTransitAuthority(carrierDid, authorityId, reason)}
       />
+
+      {/* Round 39 — the yearly security declarations: who takes on nothing new because theirs is not in force. */}
+      <DeclarationsPanel actions={actions} />
 
       {/* The check itself — when it last looked, and a way to make it look now. */}
       <section class="cons__panel">

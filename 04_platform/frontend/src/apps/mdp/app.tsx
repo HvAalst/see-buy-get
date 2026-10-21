@@ -1,3 +1,4 @@
+import type { SbgClient } from '../../lib/sbg';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
 import type { StaffAtCounter } from '../agent/staff';
@@ -96,7 +97,7 @@ export function App() {
       <main class="app__scroll">
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} />
+        <ScreenRouter screen={state.screen} state={state} actions={actions} sbg={sbg} />
       </main>
 
       {floorOpen(state.hub) ? <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} /> : null}
@@ -109,9 +110,9 @@ export function App() {
   );
 }
 
-function ScreenRouter({ screen, state, actions }: { screen: Screen; state: MdpState; actions: MdpActions }) {
+function ScreenRouter({ screen, state, actions, sbg }: { screen: Screen; state: MdpState; actions: MdpActions; sbg: SbgClient | null }) {
   // A hub not yet approved has no floor to work (the server refuses it): its papers, on the home screen, instead.
-  if (screen !== 'rates' && !floorOpen(state.hub)) return <HomeScreen state={state} actions={actions} />;
+  if (screen !== 'rates' && !floorOpen(state.hub)) return <HomeScreen state={state} actions={actions} sbg={sbg} />;
   switch (screen) {
     case 'drop':
       return <DropScreen state={state} actions={actions} />;
@@ -123,9 +124,9 @@ function ScreenRouter({ screen, state, actions }: { screen: Screen; state: MdpSt
       return <NewToteScreen state={state} actions={actions} />;
     case 'rates':
       // The fee is the owner's: one of the hub's people is shown the floor instead (the server refuses them the door).
-      return state.staff ? <HomeScreen state={state} actions={actions} /> : <RatesScreen state={state} actions={actions} />;
+      return state.staff ? <HomeScreen state={state} actions={actions} sbg={sbg} /> : <RatesScreen state={state} actions={actions} />;
     default:
-      return <HomeScreen state={state} actions={actions} />;
+      return <HomeScreen state={state} actions={actions} sbg={sbg} />;
   }
 }
 
