@@ -979,8 +979,11 @@ export function createOperatorApi(sbg: SbgClient) {
     staff: () => sbg.request((c) => c.GET('/v1/sbg/operators')),
     /** The setup key's way: made at once. Refused to anybody with an account of their own — they ask. */
     createStaff: (body: { email: string; name: string }) => sbg.request((c) => c.POST('/v1/sbg/operators', { body })),
-    /** A member of staff asks for an account; a second approves it (and is shown the first password) or declines it. */
-    askStaff: (body: { email: string; name: string }) => sbg.request((c) => c.POST('/v1/sbg/operators/proposals', { body })),
+    /** A member of staff asks for an account, with the roles it holds; a second approves it or declines it. */
+    askStaff: (body: { email: string; name: string; roles: Array<'support' | 'vetting' | 'money' | 'admin'> }) => sbg.request((c) => c.POST('/v1/sbg/operators/proposals', { body })),
+    /** Round 38 — ask that a member of staff hold other roles; a second approves it, and they are signed out. */
+    proposeStaffRoles: (operatorId: string, roles: Array<'support' | 'vetting' | 'money' | 'admin'>) =>
+      sbg.request((c) => c.POST('/v1/sbg/operators/{operatorId}/roles', { params: { path: { operatorId } }, body: { roles } })),
     approveStaff: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/operators/proposals/{proposalId}/approve', { params: { path: { proposalId } } })),
     declineStaff: (proposalId: string, reason?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/operators/proposals/{proposalId}/decline', { params: { path: { proposalId } }, body: reason ? { reason } : {} })),

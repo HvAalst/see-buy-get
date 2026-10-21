@@ -110,7 +110,7 @@ describe('the first day of a new installation, as it would be live', () => {
     return (await must(login(totpCode(authenticator.get(email)!, totpStep())))).token.access_token as string;
   };
   const AMINA = { email: 'amina@staff.sbg-rehearsal.org', name: 'Amina Otieno' };
-  const BRIAN = { email: 'brian@staff.sbg-rehearsal.org', name: 'Brian Kamau' };
+  const BRIAN = { email: 'brian@staff.sbg-rehearsal.org', name: 'Brian Kamau', roles: ['support', 'vetting', 'money', 'admin'] };
   let amina = '';
   let brian = '';
 

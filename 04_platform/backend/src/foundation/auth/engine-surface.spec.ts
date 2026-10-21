@@ -9,6 +9,11 @@ import { Roles, SignedIn } from './scopes.decorator';
 import { StaffOnlyOutsideSandbox } from './engine-surface';
 import { isStaffAccount } from './setup-key';
 
+// Round 38 — staff pass only the doors the role table names for their roles. The made-up doors below are named for every role.
+jest.mock('./staff-areas.table', () => ({
+  STAFF_AREAS: { 'POST engine/credit': 'any', 'GET engine/shipments': 'any', 'POST engine/position': 'any', 'POST product/track': 'any', 'GET product/rules': 'any', 'GET product/rates': 'any' },
+}));
+
 /**
  * THE ENGINE UNDERNEATH IS NOT A DOOR. Its own routes were written before anybody was told apart: any valid token
  * opens most of them, and the wallet's — a credit, a cash-out — ask for no sign-in at all, "for the prototype". On a
@@ -54,7 +59,7 @@ describe('the engine’s own routes, outside a sandbox', () => {
     rates() {}
   }
 
-  const staff = { active: true, role: 'operator', scopes: ['*'], actorName: 'Amina Otieno', revocationKey: 'operator:opr_amina' } as unknown as IntrospectionResult;
+  const staff = { active: true, role: 'operator', scopes: ['*'], actorName: 'Amina Otieno', revocationKey: 'operator:opr_amina', staffRoles: ['support'] } as unknown as IntrospectionResult;
   const key = { active: true, role: 'operator', sub: 'glos-operator', scopes: ['*'] } as unknown as IntrospectionResult;
   const driver = { active: true, role: 'driver', did: 'did:glos:driver-1', scopes: [] } as unknown as IntrospectionResult;
   const nobody = { active: true, sub: 'a-script', scopes: [] } as unknown as IntrospectionResult;

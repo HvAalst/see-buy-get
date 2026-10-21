@@ -8,6 +8,7 @@ import { hasScope } from './actor-scopes';
 import { staffNetworkAllows } from './staff-network';
 import { SETUP_KEY_KEY, isStaffAccount, setupKeyOutsideSandbox } from './setup-key';
 import { STAFF_OUTSIDE_SANDBOX_KEY } from './engine-surface';
+import { staffAreaOf, staffMay, staffRefusal } from './staff-roles';
 import { AT_THE_COUNTER_KEY, OWNER_ONLY, isShopStaff } from './at-the-counter';
 import { isSandbox } from '../runtime/sandbox';
 import { ActorRole, IntrospectionResult } from './auth.types';
@@ -62,16 +63,26 @@ export class AuthGuard implements CanActivate {
     // "Anybody signed in" is a policy too, when it is written down (@SignedIn): the route was looked at.
     const signedIn = this.reflector.getAllAndOverride<boolean>(SIGNED_IN_KEY, targets) === true;
     const labelled = Boolean(requiredRoles?.length || requiredScopes?.length || minTier || signedIn);
+    const engineMarked = this.reflector.getAllAndOverride<boolean>(STAFF_OUTSIDE_SANDBOX_KEY, targets) === true;
 
-    if (!labelled) {
-      // THE DOOR, TURNED ROUND. A route with nothing written on it used to be let in with any valid sign-in and
-      // trusted to decide inside; a setting could refuse it instead and was never switched on. Every route of the
-      // product now says who it is for (modules/pudo/who-is-calling.spec.ts reads all of them), so one that says
-      // nothing is one nobody looked at, and it is refused — to staff too. The engine underneath is the one exception,
-      // and its own mark makes it: staff-only outside a sandbox (above), and on a laptop the demo it always was.
-      if (this.reflector.getAllAndOverride<boolean>(STAFF_OUTSIDE_SANDBOX_KEY, targets) === true) return true;
-      throw new ForbiddenException(`${NOBODY_SAID}. It needs @Public, @Roles, @Scopes or @SignedIn.`);
+    // THE DOOR, TURNED ROUND. A route with nothing written on it used to be let in with any valid sign-in and
+    // trusted to decide inside; a setting could refuse it instead and was never switched on. Every route of the
+    // product now says who it is for (modules/pudo/who-is-calling.spec.ts reads all of them), so one that says
+    // nothing is one nobody looked at, and it is refused — to staff too. The engine underneath is the one exception,
+    // and its own mark makes it: staff-only outside a sandbox (above), and on a laptop the demo it always was.
+    if (!labelled && !engineMarked) throw new ForbiddenException(`${NOBODY_SAID}. It needs @Public, @Roles, @Scopes or @SignedIn.`);
+
+    // Round 38 — A MEMBER OF STAFF HOLDS ROLES (staff-roles.ts; the user: "Four roles"): each door staff pass is for
+    // support, vetting, money or administration — or any of them — and a named member of staff passes only theirs. Asked
+    // before any other label lets them through, the engine's unwritten routes included; a door the table does not name is
+    // nobody's.
+    if (isStaffAccount(auth)) {
+      const area = staffAreaOf(context);
+      if (!staffMay(auth.staffRoles, area)) throw new ForbiddenException(staffRefusal(area));
     }
+
+    // The engine's unwritten routes: past the marks above, open — to staff anywhere else, to a sign-in on a laptop.
+    if (!labelled) return true;
 
     // THE PEOPLE AT A SHOP'S COUNTER (at-the-counter.ts) sign in as the shop: let through only a door marked for them.
     // Read off the handler alone — a mark on a whole controller would open a route added to it later without anybody deciding.

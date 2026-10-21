@@ -15,6 +15,7 @@ import {
   type ConstraintView,
 } from '../logic';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { offered } from '../staffRoles';
 
 /**
  * The disputed-hazard queue — the one screen that can take a warning off every driver's map.
@@ -125,9 +126,14 @@ function HazardRow({ row, now, state, actions }: { row: ConstraintView; now: num
           {row.kind === 'BORDER_CLOSED' ? (
             <>
               <span class="ctag ctag--warn">{t('tower.hazards.borderDecide')}</span>
-              <button type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-top:6px" onClick={() => actions.go('presence')}>
-                {t('tower.hazards.borderPresence')}
-              </button>
+              {/* Round 38 — where the network reaches is administration's: the way there is offered to whoever holds it. */}
+              {offered('presence', state.who?.roles) ? (
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-top:6px" onClick={() => actions.go('presence')}>
+                  {t('tower.hazards.borderPresence')}
+                </button>
+              ) : (
+                <div class="chint">{t('tower.hazards.borderAdmin')}</div>
+              )}
             </>
           ) : null}
         </td>

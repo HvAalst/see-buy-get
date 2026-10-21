@@ -1630,6 +1630,19 @@ export class RefuseCarrierPaperDto {
  * unsettable here. `@ApiProperty` is spelled out because `@IsIn(..., { each: true })` publishes a SCALAR
  * enum into the schema, not an array of one — a trap this codebase has been caught by twice.
  */
+/** Round 38 — the roles a member of staff is to hold: at least one of support, vetting, money, admin. */
+export class StaffRolesDto {
+  @IsArray() @ArrayMinSize(1) @IsIn(['support', 'vetting', 'money', 'admin'], { each: true })
+  @ApiProperty({ type: [String], enum: ['support', 'vetting', 'money', 'admin'], isArray: true })
+  roles!: string[];
+}
+
+/** Round 38 — a staff account asked for: who, and the roles they are to hold. */
+export class StaffProposalDto extends StaffRolesDto {
+  @IsString() email!: string;
+  @IsString() name!: string;
+}
+
 /** Round 38 — one kind of partner's custody cap: what a new one holds or carries at once, and after how many hand-overs it lifts. */
 export class CustodyCapDto {
   @IsInt() @Min(1) start!: number;

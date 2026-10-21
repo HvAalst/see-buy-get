@@ -26,7 +26,7 @@ describe('a new installation’s first days', () => {
   let setupKey = '';
   const tag = Math.random().toString(36).slice(2, 8);
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
-  const person = (name: string) => ({ email: `${name}-${tag}@sbg.test`, name: `${name} ${tag}` });
+  const person = (name: string) => ({ email: `${name}-${tag}@sbg.test`, name: `${name} ${tag}`, roles: ['support', 'vetting', 'money', 'admin'] });
   const signIn = async (email: string, password: string) => (await http().post('/v1/sbg/operators/login').send({ email, password }).expect(201)).body.token.access_token as string;
   const listed = async (token: string) => (await http().get('/v1/sbg/operators').set(bearer(token)).expect(200)).body as { items: Array<{ operatorId: string; email: string; passwordLinkUntil?: string }>; waiting: Array<{ proposalId: string; email: string; mine: boolean; forSetupKey: boolean }> };
   const tokenOf = (link: string) => link.split('#welcome=')[1];

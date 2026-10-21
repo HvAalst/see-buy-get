@@ -47,6 +47,8 @@ export interface IssueTokenInput {
    * operator console has to ask somebody to type theirs.
    */
   actorName?: string;
+  /** Round 38 — a member of staff's roles, as they were at sign-in (staff-roles.ts). */
+  staffRoles?: string[];
   /** Assurance level; gates which scopes may be granted (@MinTier). */
   tier?: Tier;
   /**
@@ -100,6 +102,8 @@ export interface IntrospectionResult {
   tenant?: string;
   /** The named human behind this token, when there is one. See IssueTokenInput.actorName. */
   actorName?: string;
+  /** Round 38 — a named member of staff's roles: the doors of theirs (staff-roles.ts). */
+  staffRoles?: string[];
   tier?: Tier;
   /** The person who signed in, when a person did. See IssueTokenInput.personDid. */
   personDid?: string;
@@ -120,6 +124,7 @@ export interface TokenClaims {
   scopes?: string[];
   tenant?: string;
   actorName?: string;
+  staffRoles?: string[];
   tier?: Tier;
   /** The person who signed in. See IssueTokenInput.personDid. */
   personDid?: string;

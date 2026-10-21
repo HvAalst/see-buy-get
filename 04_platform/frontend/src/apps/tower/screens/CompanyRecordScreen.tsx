@@ -43,6 +43,7 @@ import {
 } from '../company';
 import { CAPABILITY_LABEL, type PresenceCapability } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { holds } from '../staffRoles';
 import { LapsingPapers } from './LapsingPapers';
 import { CATEGORY_LABEL, REPORT_CATEGORIES, lastDecidedOf, mayReport, openCaseOf, reportBlocker, type PaperCase, type ReportCategory } from '../paperReports';
 
@@ -65,7 +66,11 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
   // screen read to a company's administrator before, and how it would now read to staff.
   const reader = state.who?.mode === 'operator' ? ('operator' as const) : ('company' as const);
   const [view, setView] = useState<CompanyRecordView | null>(null);
-  const hands = recordHands(view, reader);
+  // Round 38 — among staff, the record's fields are administration's to keep and its papers vetting's to judge. Somebody
+  // holding only the other reads it all and is offered neither. A company is not held to roles.
+  const keeps = holds(state.who?.roles, 'admin');
+  const papers = holds(state.who?.roles, 'vetting');
+  const hands = { ...recordHands(view, reader), ...(keeps ? {} : { mine: false }) };
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -169,8 +174,9 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
             view={view}
             who={who}
             named={Boolean(state.who?.named)}
-            canVerify={reader === 'operator'}
-            canUpload={reader === 'company' || hands.keeper === 'staff'}
+            canVerify={reader === 'operator' && papers}
+            canUpload={reader === 'company' || (hands.keeper === 'staff' && papers)}
+            papers={papers}
             reader={reader}
             onReport={(documentId, body) => (client && entityId ? run(`report:${documentId}`, () => client.api.reportCompanyPaper(entityId, documentId, { ...body, ...(who ? { by: who } : {}) }), t('tower.paperReport.sent')) : Promise.resolve(false))}
             onAnswer={(caseId, body) => (client ? run(`answer:${caseId}`, () => client.api.answerPaperReport(caseId, body), t('tower.paperReport.answerSent')) : Promise.resolve(false))}
@@ -639,6 +645,7 @@ function Documents({
   named,
   canVerify,
   canUpload,
+  papers,
   reader,
   busy,
   onUpload,
@@ -656,6 +663,8 @@ function Documents({
   canVerify: boolean;
   /** A company's administrator always; staff only while the record is still theirs to enter. */
   canUpload: boolean;
+  /** Round 38 — opening a paper and reporting one: a company's own, and among staff vetting's. */
+  papers: boolean;
   reader: 'operator' | 'company';
   /** Say a paper that counts is not right, with what shows it. Anybody who can read this record may. */
   onReport: (documentId: string, body: { category: string; note: string; evidenceDataUrl: string }) => Promise<boolean>;
@@ -688,7 +697,8 @@ function Documents({
                 named={named}
                 canVerify={canVerify}
                 reader={reader}
-                reportable={mayReport(d, view.keeper)}
+                reportable={papers && mayReport(d, view.keeper)}
+                opens={papers}
                 asked={openCaseOf(view.reports, d.documentId)}
                 decided={lastDecidedOf(view.reports, d.documentId)}
                 busy={busy === d.documentId || busy === `report:${d.documentId}`}
@@ -791,6 +801,7 @@ function DocumentRow({
   canVerify,
   reader,
   reportable,
+  opens,
   asked,
   decided,
   busy,
@@ -807,6 +818,8 @@ function DocumentRow({
   reader: 'operator' | 'company';
   /** It counts, on a record the company keeps itself: anybody reading it may say it is not right. */
   reportable: boolean;
+  /** Round 38 — the paper itself may be opened: a company's own, and among staff vetting's. */
+  opens: boolean;
   /** The open question about this paper, if somebody has reported it. */
   asked?: PaperCase;
   /** The last thing decided about it. */
@@ -875,9 +888,11 @@ function DocumentRow({
       </td>
       <td class="ctbl__num">
         <span class="twr-panelend">
-          <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void onOpen(d)}>
-            {t('tower.company.doc.open')}
-          </button>
+          {opens ? (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void onOpen(d)}>
+              {t('tower.company.doc.open')}
+            </button>
+          ) : null}
           {asked && reader === 'company' ? (
             <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => setPanel(panel === 'answer' ? null : 'answer')}>
               {t(asked.answer ? 'tower.paperReport.answerAgainCta' : 'tower.paperReport.answerCta')}

@@ -27,8 +27,10 @@ export interface ConsoleNavProps {
  * The sidebar (≥1100px).
  *
  * A group of several screens gets a heading with its screens beneath it; a group holding ONE screen is
- * drawn as a plain item wearing the group's own name, because a heading over a single row is a label
- * for a list that is not a list.
+ * drawn as a plain item, because a heading over a single row is a label for a list that is not a list.
+ * The item wears its SCREEN's name: since staff hold roles (round 38) a group can be cut down to any one
+ * of its screens, and "Setup" over a vetting member's only screen there would not say it is the company
+ * record. Where group and screen share a name (Money) nothing changes.
  */
 export function ConsoleRail({ groups, screen, counts, onGo }: ConsoleNavProps) {
   const t = useT();
@@ -46,8 +48,8 @@ export function ConsoleRail({ groups, screen, counts, onGo }: ConsoleNavProps) {
           <div class="cons__railgroup" key={g.key}>
             <RailItem
               screen={firstScreen(g)}
-              label={t(g.labelKey)}
-              icon={g.icon}
+              label={t(SCREEN_META[firstScreen(g)].labelKey)}
+              icon={SCREEN_META[firstScreen(g)].icon}
               count={counts[firstScreen(g)] ?? null}
               on={screen === firstScreen(g)}
               onGo={onGo}

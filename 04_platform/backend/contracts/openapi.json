@@ -7157,7 +7157,46 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/EntityAdminDto"
+                "$ref": "#/components/schemas/StaffProposalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffProposalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/operators/{operatorId}/roles": {
+      "post": {
+        "operationId": "Sbg.proposeOperatorRoles",
+        "summary": "",
+        "description": "Round 38 — ASK that a member of staff hold other roles (the user: \"Four roles\"). Nothing changes until a second member\nof staff approves it, on the same list as an account asked for; the person is then signed out, and signs in to the new.",
+        "parameters": [
+          {
+            "name": "operatorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffRolesDto"
               }
             }
           }
@@ -36497,6 +36536,19 @@
       "OperatorAccountView": {
         "type": "object",
         "properties": {
+          "roles": {
+            "type": "array",
+            "description": "Round 38 — the roles this person holds: support, vetting, money, admin.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "support",
+                "vetting",
+                "money",
+                "admin"
+              ]
+            }
+          },
           "lastSeenAt": {
             "type": "string"
           },
@@ -36536,6 +36588,7 @@
           }
         },
         "required": [
+          "roles",
           "operatorId",
           "email",
           "name",
@@ -36546,6 +36599,47 @@
       "StaffProposalView": {
         "type": "object",
         "properties": {
+          "roles": {
+            "type": "array",
+            "description": "Round 38 — the roles asked for.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "support",
+                "vetting",
+                "money",
+                "admin"
+              ]
+            }
+          },
+          "kind": {
+            "type": "string",
+            "description": "Round 38 — 'roles': a change of an existing member of staff's roles, not a new account.",
+            "enum": [
+              "roles"
+            ]
+          },
+          "rolesNow": {
+            "type": "array",
+            "description": "Round 38 — a change of an existing member of staff's roles; their roles now, to read beside the ones asked for.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "support",
+                "vetting",
+                "money",
+                "admin"
+              ]
+            }
+          },
+          "operatorId": {
+            "type": "string",
+            "description": "Round 38 — a change of roles: whose."
+          },
+          "aboutYou": {
+            "type": "boolean",
+            "description": "Round 38 — a change of the reader's OWN roles: theirs to read, never to approve or decline."
+          },
           "proposalId": {
             "type": "string"
           },
@@ -36575,6 +36669,7 @@
           }
         },
         "required": [
+          "roles",
           "proposalId",
           "email",
           "name",
@@ -36610,9 +36705,70 @@
           "waiting"
         ]
       },
+      "StaffProposalDto": {
+        "type": "object",
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "support",
+                "vetting",
+                "money",
+                "admin"
+              ]
+            }
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "roles",
+          "email",
+          "name"
+        ]
+      },
+      "StaffRolesDto": {
+        "type": "object",
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "support",
+                "vetting",
+                "money",
+                "admin"
+              ]
+            }
+          }
+        },
+        "required": [
+          "roles"
+        ]
+      },
       "StaffInvited": {
         "type": "object",
         "properties": {
+          "roles": {
+            "type": "array",
+            "description": "Round 38 — the roles this person holds: support, vetting, money, admin.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "support",
+                "vetting",
+                "money",
+                "admin"
+              ]
+            }
+          },
           "lastSeenAt": {
             "type": "string"
           },
@@ -36660,6 +36816,7 @@
           }
         },
         "required": [
+          "roles",
           "sent",
           "operatorId",
           "email",

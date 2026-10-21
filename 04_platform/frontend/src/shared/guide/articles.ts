@@ -435,6 +435,24 @@ export const ARTICLES: GuideArticle[] = [
     ]
   },
   {
+    id: "staff-roles",
+    apps: [
+      "console"
+    ],
+    title: "Staff roles: what each member of staff can open",
+    summary: "Every member of staff holds one or more of four roles, and the console shows each person only the screens of theirs: support for parcels, loads and cases; vetting for joining and papers; money for payouts and books; administration for staff and settings.",
+    steps: [
+      "To see who holds what: At a glance, then Network staff. The Roles column lists what each person holds. Only staff who hold administration see this panel.",
+      "To ask for a new account: press Add a person, type their name and email, and tick the roles they will hold, at least one. A second member of staff approves the account and its roles together.",
+      "To change somebody’s roles: press Change roles beside them, tick the roles they should hold, and press Ask for this change. Nothing changes until a second member of staff approves it in the list of what waits for a second member of staff.",
+      "Once it is approved, that person is signed out. When they sign in again, the console shows the screens of their new roles."
+    ],
+    notes: [
+      "A change of your own roles is decided by others: whoever asked for it, and a second member of staff. You see it waiting, and you can neither approve nor decline it.",
+      "A screen that is not for your roles is not in your menu, and the server refuses what it would read. The first account the setup key makes holds every role, because that person sets the network up."
+    ]
+  },
+  {
     id: "console-staff",
     apps: [
       "console"

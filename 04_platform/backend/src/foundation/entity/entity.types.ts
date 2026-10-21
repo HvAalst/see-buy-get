@@ -337,6 +337,8 @@ export interface OperatorAccount {
   totpLockedUntil?: string;
   /** A reset one member of staff asked for; a second, different one completes it. */
   totpReset?: { by: string; byId: string; at: string };
+  /** Round 38 — the roles this person holds (staff-roles.ts). Absent on an account from before roles: all four. */
+  roles?: string[];
 }
 
 /** A staff account as the console reads it — no salt, no hash, ever. */
@@ -347,6 +349,8 @@ export class OperatorAccountView {
   createdAt: string;
   /** Whether this account signs in with a code from an authenticator app as well as its password. */
   twoStep: boolean;
+  /** Round 38 — the roles this person holds: support, vetting, money, admin. */
+  @ApiProperty({ type: [String], enum: ['support', 'vetting', 'money', 'admin'] }) roles: string[];
   @ApiPropertyOptional()
   lastSeenAt?: string;
   @ApiPropertyOptional()
@@ -392,8 +396,12 @@ export interface StaffProposal {
   decidedAt?: string;
   /** Why it was declined. */
   reason?: string;
-  /** The account it became. */
+  /** The account it became — or, for a change of roles, the account whose roles change. */
   operatorId?: string;
+  /** Round 38 — the roles asked for: the new account's, or the ones an existing account is to hold instead. */
+  roles?: string[];
+  /** Round 38 — `roles`: a change of an existing account's roles, not a new account. */
+  kind?: 'roles';
 }
 
 /** A staff account that was asked for and waits for a second member of staff, as the console reads it. */
@@ -409,6 +417,16 @@ export class StaffProposalView {
   mine: boolean;
   /** The one who asked is the only one able to sign in, so there is no second member of staff: the setup key approves. */
   forSetupKey: boolean;
+  /** Round 38 — the roles asked for. */
+  @ApiProperty({ type: [String], enum: ['support', 'vetting', 'money', 'admin'] }) roles: string[];
+  /** Round 38 — 'roles': a change of an existing member of staff's roles, not a new account. */
+  @ApiPropertyOptional({ enum: ['roles'] }) kind?: 'roles';
+  /** Round 38 — a change of an existing member of staff's roles; their roles now, to read beside the ones asked for. */
+  @ApiPropertyOptional({ type: [String], enum: ['support', 'vetting', 'money', 'admin'] }) rolesNow?: string[];
+  /** Round 38 — a change of roles: whose. */
+  @ApiPropertyOptional() operatorId?: string;
+  /** Round 38 — a change of the reader's OWN roles: theirs to read, never to approve or decline. */
+  @ApiPropertyOptional() aboutYou?: boolean;
 }
 
 /** Who can sign in as network staff, and who has been asked for. */

@@ -1,4 +1,5 @@
 import type { MessageKey, Translate } from '../../shared/i18n';
+import { rolesOf, rolesWords } from './staffRoles';
 
 /**
  * WHO IS ON STAFF, AND HOW SOMEBODY IS ADDED — as the console says it.
@@ -33,6 +34,16 @@ export interface StaffWaiting {
   mine: boolean;
   /** The one who asked is the only one able to sign in: there is no colleague to be their second, so the setup key is. */
   forSetupKey?: boolean;
+  /** Round 38 — the roles asked for. */
+  roles?: string[];
+  /** Round 38 — `roles`: a change of an existing member of staff's roles, not a new account. */
+  kind?: 'roles';
+  /** Round 38 — for a change of roles: the roles they hold now. */
+  rolesNow?: string[];
+  /** Round 38 — for a change of roles: whose. */
+  operatorId?: string;
+  /** Round 38 — a change of the reader's own roles: theirs to read, never to approve or decline. */
+  aboutYou?: boolean;
 }
 
 /**
@@ -52,9 +63,18 @@ export function staffAddWay(named: boolean): StaffAddWay {
  * their own. The setup key is the second person only where there is no colleague to be it — and it only says yes:
  * saying no is the asker's own to do, by taking it back.
  */
-export function waitingActions(p: Pick<StaffWaiting, 'mine' | 'forSetupKey'>, named: boolean): Array<'approve' | 'decline' | 'takeBack'> {
+export function waitingActions(p: Pick<StaffWaiting, 'mine' | 'forSetupKey' | 'aboutYou'>, named: boolean): Array<'approve' | 'decline' | 'takeBack'> {
   if (!named) return p.forSetupKey ? ['approve'] : [];
-  return p.mine ? ['takeBack'] : ['approve', 'decline'];
+  if (p.mine) return ['takeBack'];
+  // Round 38 — a change of your own roles is decided by others: you may neither wave it through nor stop it.
+  return p.aboutYou ? [] : ['approve', 'decline'];
+}
+
+/** Round 38 — what a waiting request asks for, in roles: a new account's, or a change from the roles held now. */
+export function waitingRoles(p: Pick<StaffWaiting, 'kind' | 'roles' | 'rolesNow'>, t: Translate): string | null {
+  if (!p.roles?.length) return null;
+  const words = (roles: readonly string[]) => rolesWords(rolesOf(roles), t);
+  return p.kind === 'roles' ? t('tower.roles.waitingChange', { from: words(p.rolesNow ?? []), to: words(p.roles) }) : t('tower.roles.waitingNew', { roles: words(p.roles) });
 }
 
 /**
@@ -70,6 +90,8 @@ export function waitingLine(p: StaffWaiting, named: boolean, t: Translate, day: 
   const said = { who: p.askedBy, when: day(p.askedAt), until: day(p.until) };
   if (!named) return t(p.forSetupKey ? 'tower.staff.waiting.keyApproves' : 'tower.staff.waiting.key', said);
   if (p.mine) return t(p.forSetupKey ? 'tower.staff.waiting.mineKey' : 'tower.staff.waiting.mine', said);
+  // Round 38 — a change of roles: about the person reading it, or a question of whether they should hold them.
+  if (p.kind === 'roles') return t(p.aboutYou ? 'tower.roles.waitingAboutYou' : 'tower.roles.waitingTheirs', said);
   return t('tower.staff.waiting.theirs', said);
 }
 

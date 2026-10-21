@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
 import { PlanVsActualFold } from './PlanVsActualFold';
-import { useT } from '../../../shared/i18n';
+import { useT, type MessageKey } from '../../../shared/i18n';
 import {
   AGENT_OFFLINE_H,
   agentState,
@@ -22,7 +22,8 @@ import {
 } from '../network';
 import { money } from '../queues';
 import { fleetSystemWords, type FleetSystemCounts } from '../fleets';
-import { linkWords, opensItself, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, type StaffWaiting } from '../staff';
+import { linkWords, opensItself, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, waitingRoles, type StaffWaiting } from '../staff';
+import { holds, ROLE_WORDS, rolesOf, STAFF_ROLES, type StaffRole } from '../staffRoles';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -240,8 +241,9 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
         )}
       </ConsoleFold>
 
-      {state.who?.mode === 'operator' ? <FleetsPanel actions={actions} /> : null}
-      {state.who?.mode === 'operator' ? <StaffPanel actions={actions} named={Boolean(state.who.named)} /> : null}
+      {state.who?.mode === 'operator' ? <FleetsPanel actions={actions} rotates={holds(state.who.roles, 'vetting')} /> : null}
+      {/* Round 38 — who is on staff, and what they hold, is administration's. */}
+      {state.who?.mode === 'operator' && holds(state.who.roles, 'admin') ? <StaffPanel actions={actions} named={Boolean(state.who.named)} /> : null}
 
       <ConsoleFold
         title={t('tower.network.hubsTitle')}
@@ -394,7 +396,7 @@ function Kpi({ label, value, risk }: { label: string; value: string; risk?: bool
  * lost or leaked its code is issued a new one here; the old one stops naming the fleet at once, and nobody is signed
  * out, because the code names the company and each manager signs in as themselves.
  */
-function FleetsPanel({ actions }: { actions: TowerActions }) {
+function FleetsPanel({ actions, rotates }: { actions: TowerActions; /** Round 38 — a fleet's sign-in code is vetting's to change. */ rotates: boolean }) {
   const t = useT();
   const client = actions.client();
   const [rows, setRows] = useState<Array<{ did: string; companyName: string; status: string; loginCode?: string; codeRotatedAt?: string; createdAt?: string; system?: FleetSystemCounts }> | null>(null);
@@ -450,7 +452,7 @@ function FleetsPanel({ actions }: { actions: TowerActions }) {
                   {credentialAge(f.codeRotatedAt ?? f.createdAt)?.due ? <span class="ctag ctag--warn">{t('tower.network.fleets.due')}</span> : null}
                 </td>
                 <td>
-                  {f.status !== 'ACTIVE' ? null : confirm === f.did ? (
+                  {f.status !== 'ACTIVE' || !rotates ? null : confirm === f.did ? (
                     <span class="twr-panelend">
                       <button
                         type="button"
@@ -506,6 +508,35 @@ export function StaffSetupScreen({ actions }: { actions: TowerActions }) {
 }
 
 /**
+ * Round 38 — THE ROLES SOMEBODY IS TO HOLD, each with what it covers (the user: "Four roles"). Several may be ticked; at
+ * least one is, or the button beside it stays off. What each opens is the server's to enforce — this only asks.
+ */
+function RolePicker({ value, onChange, hint }: { value: StaffRole[]; onChange: (roles: StaffRole[]) => void; /** A new account's, or a change's. */ hint: MessageKey }) {
+  const t = useT();
+  return (
+    <div class="cfield">
+      <span class="cfield__label">{t('tower.roles.pick')}</span>
+      {STAFF_ROLES.map((r) => (
+        <label class="cfield cfield--check" key={r}>
+          <input
+            type="checkbox"
+            checked={value.includes(r)}
+            onChange={(e) => {
+              const on = (e.target as HTMLInputElement).checked;
+              onChange(STAFF_ROLES.filter((x) => (x === r ? on : value.includes(x))));
+            }}
+          />
+          <span>
+            <b>{t(ROLE_WORDS[r].name)}</b> — {t(ROLE_WORDS[r].covers)}
+          </span>
+        </label>
+      ))}
+      <span class="chint">{t(hint)}</span>
+    </div>
+  );
+}
+
+/**
  * Who works for the network — one sign-in each. The panel exists so that "a different person must approve this" can
  * be true: until the first account is made, everybody holds the one setup key and every name is typed.
  *
@@ -535,6 +566,12 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
   const [made, setMade] = useState<{ name: string; email: string; temporaryPassword: string } | null>(null);
   // Approved, or sent a new link: whether the email went. Never a password — there is none.
   const [invited, setInvited] = useState<StaffInvited | null>(null);
+  // Round 38 — the roles a new account is asked with: none ticked until somebody chooses.
+  const [pick, setPick] = useState<StaffRole[]>([]);
+  // Round 38 — whose roles are being changed here, and to what.
+  const [changing, setChanging] = useState<{ operatorId: string; roles: StaffRole[] } | null>(null);
+  // Round 38 — a change of roles asked for, or approved: said until the next thing is done here.
+  const [said, setSaid] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -558,9 +595,10 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
     setBusy('create');
     setError(null);
     setAsked(null);
+    setSaid(null);
     const body = { email: email.trim(), name: name.trim() };
     if (way === 'ask') {
-      const r = await client.api.askStaff(body);
+      const r = await client.api.askStaff({ ...body, roles: pick });
       setBusy(null);
       if (r.error) return setError(r.error.detail || r.error.title);
       setAsked(body.name);
@@ -572,6 +610,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
     }
     setName('');
     setEmail('');
+    setPick([]);
     setOpen(false);
     await load();
   };
@@ -582,12 +621,30 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
     setBusy(p.proposalId);
     setError(null);
     setAsked(null);
+    setSaid(null);
     const r = yes ? await client.api.approveStaff(p.proposalId) : await client.api.declineStaff(p.proposalId, why);
     setBusy(null);
     setDeclining(null);
     setReason('');
     if (r.error) setError(r.error.detail || r.error.title);
+    // A change of roles sends no email: the person was signed out, and their next sign-in carries the new roles.
+    else if (yes && p.kind === 'roles') setSaid(t('tower.roles.approved', { name: p.name }));
     else if (yes) setInvited(r.data as unknown as StaffInvited);
+    await load();
+  };
+
+  /** Round 38 — ask that somebody hold other roles. Nothing changes until a second member of staff approves. */
+  const askRoles = async (a: StaffRow, roles: StaffRole[]) => {
+    if (!client) return;
+    setBusy(`roles:${a.operatorId}`);
+    setError(null);
+    setAsked(null);
+    setSaid(null);
+    const r = await client.api.proposeStaffRoles(a.operatorId, roles);
+    setBusy(null);
+    if (r.error) return setError(r.error.detail || r.error.title);
+    setChanging(null);
+    setSaid(t('tower.roles.asked', { name: a.name }));
     await load();
   };
 
@@ -638,6 +695,12 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
           {t('tower.staff.asked', { name: asked })}
         </p>
       ) : null}
+      {said ? (
+        <p class="twr-done">
+          <Icon name="check" size={16} />
+          {said}
+        </p>
+      ) : null}
 
       {made ? (
         <div class="twr-reveal">
@@ -686,7 +749,10 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
                 <span class="cfield__label">{t('tower.staff.email')}</span>
                 <input class="cinput" type="email" value={email} onInput={(e) => setEmail((e.target as HTMLInputElement).value)} />
               </label>
-              <button type="button" class="cbtn cbtn--primary" disabled={busy === 'create' || !email.trim() || !name.trim()} onClick={() => void add()}>
+              {/* Round 38 — what they will hold is said when they are asked for, and approved with them. The setup key's
+                  own first account holds every role: it is the one setting the network up. */}
+              {way === 'ask' ? <RolePicker value={pick} onChange={setPick} hint="tower.roles.pickHint" /> : <p class="chint">{t('tower.roles.keyMakesAll')}</p>}
+              <button type="button" class="cbtn cbtn--primary" disabled={busy === 'create' || !email.trim() || !name.trim() || (way === 'ask' && !pick.length)} onClick={() => void add()}>
                 {t(way === 'ask' ? 'tower.staff.ask' : 'tower.staff.create')}
               </button>
             </div>
@@ -706,13 +772,17 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
             <tbody>
               {waiting.map((p) => {
                 const may = waitingActions(p, named);
+                const roles = waitingRoles(p, t);
                 return (
                   <tr key={p.proposalId}>
                     <td>
                       <div class="ctbl__strong">{p.name}</div>
                       <div class="ctbl__mono">{p.email}</div>
                     </td>
-                    <td class="ctbl__sub">{waitingLine(p, named, t, day)}</td>
+                    <td class="ctbl__sub">
+                      {roles ? <div>{roles}</div> : null}
+                      {waitingLine(p, named, t, day)}
+                    </td>
                     <td>
                       {declining === p.proposalId ? (
                         <span class="twr-panelend">
@@ -776,6 +846,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
             <tr>
               <th>{t('tower.staff.col.who')}</th>
               <th>{t('tower.staff.col.email')}</th>
+              <th>{t('tower.roles.col')}</th>
               <th>{t('tower.staff.col.lastSeen')}</th>
               <th>{t('tower.staff.col.password')}</th>
               <th>{t('tower.staff.col.twoStep')}</th>
@@ -802,6 +873,41 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
                 <td class="ctbl__mono">
                   <span class="ctbl__lbl">{t('tower.staff.col.email')}</span>
                   {a.email}
+                </td>
+                {/* Round 38 — what they hold, and the way to ask that they hold something else: one change waiting at a time. */}
+                <td>
+                  <span class="ctbl__lbl">{t('tower.roles.col')}</span>
+                  <span class="twr-caps">
+                    {rolesOf(a.roles).map((r) => (
+                      <span key={r} class="ctag ctag--quiet">
+                        {t(ROLE_WORDS[r].name)}
+                      </span>
+                    ))}
+                  </span>
+                  {waiting.some((p) => p.kind === 'roles' && p.operatorId === a.operatorId) ? (
+                    <div class="chint">{t('tower.roles.changeWaiting')}</div>
+                  ) : !named ? null : changing?.operatorId === a.operatorId ? (
+                    <>
+                      <RolePicker value={changing.roles} onChange={(roles) => setChanging({ operatorId: a.operatorId, roles })} hint="tower.roles.changeHint" />
+                      <span class="twr-panelend">
+                        <button
+                          type="button"
+                          class="cbtn cbtn--primary cbtn--sm"
+                          disabled={busy === `roles:${a.operatorId}` || !changing.roles.length || changing.roles.join() === rolesOf(a.roles).join()}
+                          onClick={() => void askRoles(a, changing.roles)}
+                        >
+                          {t('tower.roles.askChange')}
+                        </button>
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging(null)}>
+                          {t('tower.presence.cancel')}
+                        </button>
+                      </span>
+                    </>
+                  ) : (
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-top:6px;display:block" onClick={() => setChanging({ operatorId: a.operatorId, roles: rolesOf(a.roles) })}>
+                      {t('tower.roles.change')}
+                    </button>
+                  )}
                 </td>
                 <td class="ctbl__sub">
                   <span class="ctbl__lbl">{t('tower.staff.col.lastSeen')}</span>

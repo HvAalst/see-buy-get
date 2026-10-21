@@ -16,6 +16,11 @@ import { InMemoryLedgerAdapter } from '../ledger/in-memory-ledger.adapter';
 import { LEDGER_ADAPTER } from '../ledger/ledger.types';
 import { EventBus } from '../events/event-bus.service';
 
+// Round 38 — staff pass only the doors the role table names for their roles. The made-up doors below are named for every role.
+jest.mock('./staff-areas.table', () => ({
+  STAFF_AREAS: { 'GET walk/staff': 'any', 'POST walk/decide': 'any', 'GET walk/runs': 'any', 'GET walk/unlabelled': 'any', 'GET walk/open': 'any' },
+}));
+
 /**
  * OUTSIDE A SANDBOX THE CLIENT SECRET ACTS FOR NOBODY (the user, 2026-10-11: "client secret should not act as
  * participant outside sandbox").
@@ -38,7 +43,7 @@ describe('the setup key, outside a sandbox', () => {
   };
 
   const key = { active: true, role: 'operator', sub: 'glos-operator', scopes: ['*'] } as IntrospectionResult;
-  const staff = { active: true, role: 'operator', sub: 'operator:opr_amina', scopes: ['*'], actorName: 'Amina Otieno', revocationKey: 'operator:opr_amina' } as IntrospectionResult;
+  const staff = { active: true, role: 'operator', sub: 'operator:opr_amina', scopes: ['*'], actorName: 'Amina Otieno', revocationKey: 'operator:opr_amina', staffRoles: ['support'] } as IntrospectionResult;
   const driver = { active: true, role: 'driver', did: 'did:glos:driver-1', scopes: ['pudo.driver'], revocationKey: 'did:glos:person-1' } as unknown as IntrospectionResult;
   const admin = { active: true, role: 'entity_admin', did: 'did:glos:entity-1', scopes: [], actorName: 'Wanjiru', revocationKey: 'entity-admin:adm_1' } as unknown as IntrospectionResult;
 

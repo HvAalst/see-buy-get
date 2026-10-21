@@ -109,6 +109,7 @@ export class AuthService {
       scopes: input.scopes,
       tenant: input.tenant,
       actorName: input.actorName,
+      ...(input.staffRoles ? { staffRoles: input.staffRoles } : {}),
       tier: input.tier,
       personDid: input.personDid,
       tokenVersion: input.tokenVersion,
@@ -133,13 +134,14 @@ export class AuthService {
    * two things that token can never have: the name the account was created with, and a key that signs out this
    * person's sessions alone.
    */
-  mintOperatorSession(input: { name: string; revocationKey: string }): AccessToken {
+  mintOperatorSession(input: { name: string; revocationKey: string; staffRoles: string[] }): AccessToken {
     return this.issueToken({
       sub: input.revocationKey,
       type: 'client_credentials',
       role: 'operator',
       scopes: ['*'],
       actorName: input.name,
+      staffRoles: input.staffRoles,
       revocationKey: input.revocationKey,
       revocationVersion: this.revocations.get(input.revocationKey) ?? 0,
       ttlSeconds: SHIFT_TTL_SECONDS,
@@ -241,6 +243,7 @@ export class AuthService {
       scopes: claims.scopes,
       tenant: claims.tenant,
       actorName: claims.actorName,
+      ...(claims.staffRoles ? { staffRoles: claims.staffRoles } : {}),
       tier: claims.tier,
       personDid: claims.personDid,
       // Which sign-out key this token answers to — for a staff session, which staff ACCOUNT it is (`operator:<id>`).

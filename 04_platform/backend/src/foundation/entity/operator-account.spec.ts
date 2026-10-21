@@ -14,6 +14,8 @@ import { MAIL_SENDER, type OutgoingMail } from '../mail/mail.types';
 import { TOTP_STEP_SECONDS, totpCode, totpStep } from '../auth/totp';
 import { staffNetworkAllows } from '../auth/staff-network';
 
+/** Round 38 — every account is asked for with the roles it is to hold. */
+const ALL_ROLES = ['support', 'vetting', 'money', 'admin'];
 const tokenOf = (r: StaffLoginResult) => {
   if (!('token' in r)) throw new Error('expected a token, got a set-up');
   return r.token;
@@ -127,7 +129,7 @@ describe('network staff accounts', () => {
     });
     /** Asked by one, approved by the other, and the new person has chosen their password: somebody who can sign in. */
     const joined = async (name: string, by: { operatorId: string }, second: { operatorId: string }, at: number) => {
-      const made = await staff.approve(staff.propose({ email: email(name.toLowerCase()), name }, by, at).proposalId, second, at);
+      const made = await staff.approve(staff.propose({ email: email(name.toLowerCase()), name, roles: ALL_ROLES }, by, at).proposalId, second, at);
       staff.choosePassword(tokenIn(made.link), `${name}-chose-this-one`, at);
       return made;
     };
@@ -135,8 +137,8 @@ describe('network staff accounts', () => {
     it('one asks and a different one approves: no password is made, and the new person chooses their own by the link emailed to them', async () => {
       const { amina, brian } = two();
       const chloe = email('chloe');
-      const asked = staff.propose({ email: ` ${chloe.toUpperCase()} `, name: ' Chloe Wanjiru ' }, amina, t0);
-      expect(asked).toEqual({ proposalId: expect.stringMatching(/^spr_[0-9a-f]{16}$/), email: chloe, name: 'Chloe Wanjiru', askedBy: 'Amina Otieno', askedAt: iso(t0), until: iso(t0 + STAFF_PROPOSAL_DAYS * DAY), mine: true, forSetupKey: false });
+      const asked = staff.propose({ email: ` ${chloe.toUpperCase()} `, name: ' Chloe Wanjiru ', roles: ALL_ROLES }, amina, t0);
+      expect(asked).toEqual({ proposalId: expect.stringMatching(/^spr_[0-9a-f]{16}$/), email: chloe, name: 'Chloe Wanjiru', askedBy: 'Amina Otieno', askedAt: iso(t0), until: iso(t0 + STAFF_PROPOSAL_DAYS * DAY), mine: true, forSetupKey: false, roles: ALL_ROLES });
       // Asked for is not made: no account, and nothing to sign in with.
       expect(staff.list(t0).map((a) => a.email)).toEqual([amina.email, brian.email]);
       expect(() => staff.login(chloe, 'anything-at-all', undefined, t0)).toThrow('Wrong email or password');
@@ -194,7 +196,7 @@ describe('network staff accounts', () => {
     it('the link works for two days and only the newest one works; a new one is sent to the same address, whoever asks', async () => {
       const { amina, brian } = two();
       const dan = email('dan');
-      const made = await staff.approve(staff.propose({ email: dan, name: 'Dan Mutua' }, amina, t0).proposalId, brian, t0);
+      const made = await staff.approve(staff.propose({ email: dan, name: 'Dan Mutua', roles: ALL_ROLES }, amina, t0).proposalId, brian, t0);
       const first = tokenIn(made.link);
       const lapses = t0 + STAFF_WELCOME_HOURS * HOUR;
       expect(staff.welcomeFor(first, lapses - 1).email).toBe(dan);
@@ -222,7 +224,7 @@ describe('network staff accounts', () => {
       await expect(staff.sendWelcome(amina.operatorId, lapses + 4 * HOUR)).rejects.toThrow('Amina Otieno has already chosen a password');
 
       // A sign-in taken away before its holder ever came: the link dies with it.
-      const eve = await staff.approve(staff.propose({ email: email('eve'), name: 'Eve Njeri' }, amina, t0).proposalId, brian, t0);
+      const eve = await staff.approve(staff.propose({ email: email('eve'), name: 'Eve Njeri', roles: ALL_ROLES }, amina, t0).proposalId, brian, t0);
       staff.revoke(eve.operatorId, 'Brian Kamau', t0 + HOUR);
       expect(() => staff.choosePassword(tokenIn(eve.link), 'a-long-chosen-password', t0 + 2 * HOUR)).toThrow('This link has been used, or it has lapsed');
       await expect(staff.sendWelcome(eve.operatorId, t0 + 2 * HOUR)).rejects.toThrow('No such staff account');
@@ -235,11 +237,11 @@ describe('network staff accounts', () => {
       const before = { amina: news(amina.email).length, brian: news(brian.email).length, dan: news(dan.email).length };
 
       const chloe = email('chloe');
-      const asked = staff.propose({ email: chloe, name: 'Chloe Wanjiru' }, amina, t0);
+      const asked = staff.propose({ email: chloe, name: 'Chloe Wanjiru', roles: ALL_ROLES }, amina, t0);
       await settled();
       for (const other of [brian, dan]) {
         const said = news(other.email)[0];
-        expect(said.text).toContain(`Amina Otieno asked for a network staff account for Chloe Wanjiru (${chloe}).`);
+        expect(said.text).toContain(`Amina Otieno asked for a network staff account for Chloe Wanjiru (${chloe}), to hold support, vetting, money and administration.`);
         expect(said.text).toContain('Approve it only if you know this person and this is their address');
       }
       expect([news(brian.email).length, news(dan.email).length]).toEqual([before.brian + 1, before.dan + 1]);
@@ -257,7 +259,7 @@ describe('network staff accounts', () => {
     it('is declined with a reason the one who asked is told, or taken back by them without one', async () => {
       const { amina, brian } = two();
       const eve = email('eve');
-      const asked = staff.propose({ email: eve, name: 'Eve Njeri' }, amina, t0);
+      const asked = staff.propose({ email: eve, name: 'Eve Njeri', roles: ALL_ROLES }, amina, t0);
       expect(() => staff.decline(asked.proposalId, brian, '   ', t0)).toThrow('Say why — the member of staff who asked is told');
       expect(staff.waitingFor(brian.operatorId, t0)).toHaveLength(1);
       await settled();
@@ -274,7 +276,7 @@ describe('network staff accounts', () => {
       expect(invitations(eve)).toEqual([]);
 
       // Taking back your own needs no reason, and tells nobody.
-      const again = staff.propose({ email: eve, name: 'Eve Njeri' }, amina, t0 + 3000);
+      const again = staff.propose({ email: eve, name: 'Eve Njeri', roles: ALL_ROLES }, amina, t0 + 3000);
       await settled();
       const quiet = { amina: news(amina.email).length, brian: news(brian.email).length };
       expect(staff.decline(again.proposalId, amina, undefined, t0 + 4000)).toEqual({ ok: true });
@@ -286,12 +288,12 @@ describe('network staff accounts', () => {
     it('keeps the address taken while it waits, and frees it when it is declined or a week has passed', async () => {
       const { amina, brian } = two();
       const fay = email('fay');
-      const asked = staff.propose({ email: fay, name: 'Fay Achieng' }, amina, t0);
-      expect(() => staff.propose({ email: fay.toUpperCase(), name: 'Fay again' }, brian, t0 + 1000)).toThrow(`Amina Otieno already asked for a staff account for ${fay}`);
+      const asked = staff.propose({ email: fay, name: 'Fay Achieng', roles: ALL_ROLES }, amina, t0);
+      expect(() => staff.propose({ email: fay.toUpperCase(), name: 'Fay again', roles: ALL_ROLES }, brian, t0 + 1000)).toThrow(`Amina Otieno already asked for a staff account for ${fay}`);
       expect(() => staff.create({ email: fay, name: 'Fay by key' }, 'setup key', t0 + 1000)).toThrow(`Amina Otieno already asked for a staff account for ${fay}`);
-      expect(() => staff.propose({ email: brian.email, name: 'Brian twice' }, amina, t0 + 1000)).toThrow('already has a staff account');
-      expect(() => staff.propose({ email: 'no-at-sign', name: 'Nobody' }, amina, t0)).toThrow('real email address');
-      expect(() => staff.propose({ email: email('blank'), name: '  ' }, amina, t0)).toThrow('Say who this is');
+      expect(() => staff.propose({ email: brian.email, name: 'Brian twice', roles: ALL_ROLES }, amina, t0 + 1000)).toThrow('already has a staff account');
+      expect(() => staff.propose({ email: 'no-at-sign', name: 'Nobody', roles: ALL_ROLES }, amina, t0)).toThrow('real email address');
+      expect(() => staff.propose({ email: email('blank'), name: '  ', roles: ALL_ROLES }, amina, t0)).toThrow('Say who this is');
       await expect(staff.approve('spr_0000000000000000', brian, t0)).rejects.toThrow('Nobody asked for that staff account');
 
       // The last moment of the week it still waits; the next, it has lapsed and the address can be asked for again.
@@ -301,16 +303,16 @@ describe('network staff accounts', () => {
       await expect(staff.approve(asked.proposalId, brian, week)).rejects.toThrow('This waited 7 days for a second member of staff and has lapsed. Ask for the account again');
       expect(() => staff.decline(asked.proposalId, brian, 'too late', week)).toThrow('has lapsed');
       expect(staff.list(week).length).toBe(2);
-      const again = staff.propose({ email: fay, name: 'Fay Achieng' }, amina, week);
+      const again = staff.propose({ email: fay, name: 'Fay Achieng', roles: ALL_ROLES }, amina, week);
       expect((await staff.approve(again.proposalId, brian, week + 1000)).email).toBe(fay);
       // Made, it holds the address — even before its holder has chosen a password.
-      expect(() => staff.propose({ email: fay, name: 'Fay a third time' }, amina, week + 2000)).toThrow('already has a staff account');
+      expect(() => staff.propose({ email: fay, name: 'Fay a third time', roles: ALL_ROLES }, amina, week + 2000)).toThrow('already has a staff account');
     });
 
     it('somebody who is the only one able to sign in asks, and the setup key is their second — for them, and for nobody else', async () => {
       const alone = staff.create({ email: email('alone'), name: 'Alone Otieno' }, 'setup key', t0);
       const second = email('second');
-      const asked = staff.propose({ email: second, name: 'Second Kamau' }, alone, t0);
+      const asked = staff.propose({ email: second, name: 'Second Kamau', roles: ALL_ROLES }, alone, t0);
       expect(asked).toMatchObject({ mine: true, forSetupKey: true });
       // Still never their own second.
       await expect(staff.approve(asked.proposalId, alone, t0)).rejects.toThrow('A second member of staff has to approve — not the one who asked');
@@ -321,7 +323,7 @@ describe('network staff accounts', () => {
       expect(news(alone.email)[0].text).toContain(`The setup key approved the network staff account you asked for, for Second Kamau (${second}).`);
 
       // Somebody asked for who has not chosen a password yet cannot sign in: they are nobody's second, so the key still is.
-      const third = staff.propose({ email: email('third'), name: 'Third Mutua' }, alone, t0 + 2000);
+      const third = staff.propose({ email: email('third'), name: 'Third Mutua', roles: ALL_ROLES }, alone, t0 + 2000);
       expect(third.forSetupKey).toBe(true);
       staff.choosePassword(tokenIn(made.link), 'second-chose-this-one', t0 + 3000);
       // Now two people can sign in: the setup key is nobody's second any more, and the colleague is.
@@ -334,14 +336,14 @@ describe('network staff accounts', () => {
     it('lets what somebody asked for go with their sign-in, and gives nothing to a sign-in that was taken away', async () => {
       const { amina, brian } = two();
       const dan = staff.create({ email: email('dan'), name: 'Dan Mutua' }, 'setup key', t0);
-      const hers = staff.propose({ email: email('ghost'), name: 'A Ghost' }, amina, t0);
-      const his = staff.propose({ email: email('real'), name: 'A Real Colleague' }, dan, t0);
+      const hers = staff.propose({ email: email('ghost'), name: 'A Ghost', roles: ALL_ROLES }, amina, t0);
+      const his = staff.propose({ email: email('real'), name: 'A Real Colleague', roles: ALL_ROLES }, dan, t0);
       staff.revoke(amina.operatorId, 'Brian Kamau', t0 + 1000);
       expect(staff.waitingFor(brian.operatorId, t0 + 1000).map((p) => p.proposalId)).toEqual([his.proposalId]);
       await expect(staff.approve(hers.proposalId, brian, t0 + 2000)).rejects.toThrow('This was already declined by Brian Kamau');
       // Gone accounts neither ask nor approve.
       await expect(staff.approve(his.proposalId, amina, t0 + 2000)).rejects.toThrow('No such staff account');
-      expect(() => staff.propose({ email: email('fourth'), name: 'Fourth' }, amina, t0 + 2000)).toThrow('No such staff account');
+      expect(() => staff.propose({ email: email('fourth'), name: 'Fourth', roles: ALL_ROLES }, amina, t0 + 2000)).toThrow('No such staff account');
       expect((await staff.approve(his.proposalId, brian, t0 + 2000)).name).toBe('A Real Colleague');
     });
 
@@ -350,7 +352,7 @@ describe('network staff accounts', () => {
       const dan = staff.create({ email: email('dan'), name: 'Dan Mutua' }, 'setup key', t0);
       staff.revoke(dan.operatorId, 'Amina Otieno', t0 + 1000);
       // Locked out and let back in, or gone and returned: the same address, a new account, a password of their own choosing.
-      const back = await staff.approve(staff.propose({ email: dan.email, name: 'Dan Mutua' }, amina, t0 + 2000).proposalId, brian, t0 + 3000);
+      const back = await staff.approve(staff.propose({ email: dan.email, name: 'Dan Mutua', roles: ALL_ROLES }, amina, t0 + 2000).proposalId, brian, t0 + 3000);
       expect(back.email).toBe(dan.email);
       expect(back.operatorId).not.toBe(dan.operatorId);
       expect(() => staff.login(dan.email, dan.temporaryPassword, undefined, t0 + 4000)).toThrow('Wrong email or password');
@@ -404,7 +406,7 @@ describe('network staff accounts', () => {
         expect(s.staff.list(t0 + 1000).length).toBe(1);
 
         // One person on staff: they ask, and the setup key is the second. The link goes by email and is in no answer.
-        const asked = s.staff.propose({ email: second, name: 'Second Kamau' }, first, t0 + 2000);
+        const asked = s.staff.propose({ email: second, name: 'Second Kamau', roles: ALL_ROLES }, first, t0 + 2000);
         expect(asked.forSetupKey).toBe(true);
         const made = await s.staff.approve(asked.proposalId, { setupKey: true }, t0 + 3000);
         expect(made).toMatchObject({ email: second, sent: true });
@@ -419,7 +421,7 @@ describe('network staff accounts', () => {
         // Two can sign in: the setup key adds nobody, alone or as a second.
         const third = real('third');
         expect(() => s.staff.create({ email: third, name: 'Third Mutua' }, 'setup key', t0 + 6000)).toThrow('only while nobody can sign in');
-        const wanted = s.staff.propose({ email: third, name: 'Third Mutua' }, first, t0 + 6000);
+        const wanted = s.staff.propose({ email: third, name: 'Third Mutua', roles: ALL_ROLES }, first, t0 + 6000);
         await expect(s.staff.approve(wanted.proposalId, { setupKey: true }, t0 + 7000)).rejects.toThrow('The setup key approves only for somebody who is the only one able to sign in');
         expect(s.staff.list(t0 + 7000).length).toBe(2);
         expect((await s.staff.approve(wanted.proposalId, { operatorId: made.operatorId }, t0 + 8000)).email).toBe(third);
@@ -427,9 +429,9 @@ describe('network staff accounts', () => {
 
       it('with no email leaving the server, a staff account is not asked for at all: the link could not travel', async () => {
         const first = staff.create({ email: real('first'), name: 'First Otieno' }, 'setup key', t0);
-        const waiting = staff.propose({ email: real('early'), name: 'Asked On A Laptop' }, first, t0);
+        const waiting = staff.propose({ email: real('early'), name: 'Asked On A Laptop', roles: ALL_ROLES }, first, t0);
         process.env.GLOS_ENV = 'production';
-        expect(() => staff.propose({ email: real('second'), name: 'Second Kamau' }, first, t0 + 1000)).toThrow('No email leaves this server yet');
+        expect(() => staff.propose({ email: real('second'), name: 'Second Kamau', roles: ALL_ROLES }, first, t0 + 1000)).toThrow('No email leaves this server yet');
         await expect(staff.approve(waiting.proposalId, { setupKey: true }, t0 + 1000)).rejects.toThrow('No email leaves this server yet');
         expect(staff.list(t0 + 1000).length).toBe(1);
         expect(staff.waitingFor(first.operatorId, t0 + 1000).map((p) => p.proposalId)).toEqual([waiting.proposalId]);
@@ -440,7 +442,7 @@ describe('network staff accounts', () => {
         const first = s.staff.create({ email: real('first'), name: 'First Otieno' }, 'setup key', t0);
         process.env.GLOS_ENV = 'production';
         const nowhere = email('nowhere');
-        const made = await s.staff.approve(s.staff.propose({ email: nowhere, name: 'No Where' }, first, t0).proposalId, { setupKey: true }, t0 + 1000);
+        const made = await s.staff.approve(s.staff.propose({ email: nowhere, name: 'No Where', roles: ALL_ROLES }, first, t0).proposalId, { setupKey: true }, t0 + 1000);
         expect(made).toMatchObject({ email: nowhere, sent: false });
         expect(s.to(nowhere, 'staff-account-welcome')).toEqual([]);
       });

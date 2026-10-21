@@ -74,6 +74,8 @@ export interface StaffLogin {
   name: string;
   /** Whether this account signs in with an authenticator code as well. */
   twoStep: boolean;
+  /** Round 38 — the roles they hold: support, vetting, money, admin. What the console offers follows them. */
+  roles: string[];
   token: { access_token: string; expires_in?: number };
 }
 
@@ -101,6 +103,8 @@ export interface StaffRow {
   passwordChangedAt?: string;
   /** Signs in with an authenticator code as well as the password. */
   twoStep?: boolean;
+  /** Round 38 — the roles they hold: support, vetting, money, admin. */
+  roles?: string[];
   /** A reset of their two-step sign-in, asked for by this member of staff, waiting for a second. */
   twoStepResetAskedBy?: string;
   /** They have not chosen a password yet: until when the link in their email works (it may be past). */

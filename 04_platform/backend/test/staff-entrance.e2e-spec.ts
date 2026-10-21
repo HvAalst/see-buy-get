@@ -90,7 +90,7 @@ describe('the staff entrance', () => {
       const amina = await make('amina2');
       const brian = await make('brian2');
       const [aminaToken, brianToken] = [await signIn(amina), await signIn(brian)];
-      const eve = { email: `eve-${tag}@sbg.test`, name: `Eve ${tag}` };
+      const eve = { email: `eve-${tag}@sbg.test`, name: `Eve ${tag}`, roles: ['support', 'vetting', 'money', 'admin'] };
 
       // The old way, with a staff sign-in: refused, and nothing is made.
       const alone = await http().post('/v1/sbg/operators').set(bearer(aminaToken)).send(eve).expect(403);
@@ -149,7 +149,7 @@ describe('the staff entrance', () => {
       const amina = await make('amina4');
       const brian = await make('brian4');
       const [aminaToken, brianToken] = [await signIn(amina), await signIn(brian)];
-      const hal = { email: `hal-${tag}@sbg.test`, name: `Hal ${tag}` };
+      const hal = { email: `hal-${tag}@sbg.test`, name: `Hal ${tag}`, roles: ['support', 'vetting', 'money', 'admin'] };
       const id = (await http().post('/v1/sbg/operators/proposals').set(bearer(aminaToken)).send(hal).expect(201)).body.proposalId;
       const made = (await http().post(`/v1/sbg/operators/proposals/${id}/approve`).set(bearer(brianToken)).expect(201)).body;
       const row = async () => ((await listed(aminaToken)).items as Array<{ email: string; passwordLinkUntil?: string }>).find((a) => a.email === hal.email);
@@ -171,7 +171,7 @@ describe('the staff entrance', () => {
       const amina = await make('amina3');
       const brian = await make('brian3');
       const [aminaToken, brianToken] = [await signIn(amina), await signIn(brian)];
-      const fay = { email: `fay-${tag}@sbg.test`, name: `Fay ${tag}` };
+      const fay = { email: `fay-${tag}@sbg.test`, name: `Fay ${tag}`, roles: ['support', 'vetting', 'money', 'admin'] };
       const ask = async () => (await http().post('/v1/sbg/operators/proposals').set(bearer(aminaToken)).send(fay).expect(201)).body.proposalId as string;
       const decline = (id: string, token: string, body: object) => http().post(`/v1/sbg/operators/proposals/${id}/decline`).set(bearer(token)).send(body);
 
@@ -218,7 +218,7 @@ describe('the staff entrance', () => {
       const witness = await signIn(await make('witness'));
       const before = (await listed(setupKey)).items.length;
       expect(before).toBeGreaterThanOrEqual(2);
-      const gus = { email: `gus-${tag}@sbg.test`, name: `Gus ${tag}` };
+      const gus = { email: `gus-${tag}@sbg.test`, name: `Gus ${tag}`, roles: ['support', 'vetting', 'money', 'admin'] };
       const env = process.env.GLOS_ENV;
       process.env.GLOS_ENV = 'production';
       const remove = () => http().delete(`/v1/sbg/operators/${victim.operatorId}`).set(bearer(setupKey));

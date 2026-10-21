@@ -47,6 +47,7 @@ import { PilotScreen } from './screens/PilotScreen';
 import { waitingLine } from './queues';
 import { useWideScreen } from '../../shared/useWideScreen';
 import { useTowerApp, type Screen } from './useTowerApp';
+import { holds, offered } from './staffRoles';
 import '../../shared/console.css';
 import './tower.css';
 
@@ -150,7 +151,9 @@ export function App() {
    */
   const isOperator = state.who?.mode === 'operator';
   const manyCompanies = (state.entities?.length ?? 0) > 1;
-  const available: Screen[] = [
+  // Round 38 — a member of staff is offered the screens of the roles they hold (staffRoles.ts); the setup key, all.
+  const staffRoles = isOperator ? state.who?.roles : undefined;
+  const available: Screen[] = ([
     // `movers` belongs in THIS list and not below it: the route behind it is operator-only, because it
     // carries hand-back reasons and names drivers. Offered to a company administrator it was a section
     // whose every read answers 403 — the same defect already tracked against the finance endpoint, and
@@ -175,7 +178,7 @@ export function App() {
     // Y4 — offered to BOTH: a yard reads its own register here, and network staff read the directory.
     // The routes behind it answer either way, which is what the movers defect taught.
     'depots',
-  ];
+  ] as Screen[]).filter((s) => offered(s, staffRoles));
   const groups = groupsFor(available);
 
   /**
@@ -219,7 +222,7 @@ export function App() {
               belongs to whoever HAS that work: the hazard queue is network staff's, so for a company
               administrator this slot stays empty rather than reporting forever that it is loading a
               queue nobody is going to fetch for them. */}
-          {isOperator ? (
+          {isOperator && (holds(staffRoles, 'support') || holds(staffRoles, 'vetting')) ? (
             <span class="cons__mastwork">
               ·{' '}
               {waitingLine(
@@ -275,6 +278,9 @@ export function App() {
           ) : null}
           {state.screen === 'settings' ? (
             <SettingsScreen state={state} actions={actions} />
+          ) : !offered(state.screen, staffRoles) ? (
+            // Round 38 — never a screen of refusals: a member of staff who lands outside their roles is told whose it is.
+            <p class="cons__empty">{t('tower.roles.notYours')}</p>
           ) : state.screen === 'presence' ? (
             <PresenceScreen state={state} actions={actions} />
           ) : state.screen === 'connections' ? (

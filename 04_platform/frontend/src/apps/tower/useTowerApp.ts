@@ -27,6 +27,7 @@ import { runSummary, type FundingAction, type FundingRow, type PayoutAction, typ
 import type { HelpOption } from './pictures';
 import { approvedSays } from './connections';
 import { staffListOf } from './staff';
+import { holds, rolesOf, type StaffRole } from './staffRoles';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
@@ -38,7 +39,7 @@ export interface TowerState {
   creds: TowerCreds | null;
   /** WHO the network says this is, once a token exists. Drives the rail: an operator sees the whole
    *  network, a company administrator sees their own company and whatever sits under it. */
-  who: { mode: 'operator' | 'company'; name: string; entityId?: string; /** The name came from an account, not from a field beside the shared key. */ named?: boolean; /** The setup key, on a server where it only sets staff up: the console shows that one screen. */ setupOnly?: boolean } | null;
+  who: { mode: 'operator' | 'company'; name: string; entityId?: string; /** The name came from an account, not from a field beside the shared key. */ named?: boolean; /** The setup key, on a server where it only sets staff up: the console shows that one screen. */ setupOnly?: boolean; /** Round 38 — the roles a named member of staff holds. Absent for the setup key and a company, which are not held to roles. */ roles?: StaffRole[] } | null;
   /** The disputed queue, longest wait first — the server's order, kept as it arrives. */
   hazards: ConstraintView[] | null;
   /** The automatic flags as cases, the most pressing first; how many nobody has taken. Null while unread. */
@@ -373,6 +374,12 @@ export interface TowerActions {
   refuseCarrierPaper(did: string, kind: 'operator_licence' | 'carrier_insurance', reason: string): Promise<boolean>;
 }
 
+/** Round 38 — a read not made, because it is not for this person's roles: kept as unread, never as empty. */
+const NOT_ASKED: { data: undefined; error: SbgError } = {
+  data: undefined,
+  error: { code: 'NOT_ASKED', status: 0, title: 'Not asked', detail: 'Not read: it is for another role.', retryable: false },
+};
+
 const INITIAL: TowerState = {
   phase: 'boot',
   // Network staff open on the overview: the first question an operator has is "is anything wrong",
@@ -474,7 +481,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  const loadHazards = useCallback(async (client: TowerClient) => {
+  /*
+   * Round 38 — EVERY READ BELOW ASKS ONLY WHAT THE ROLES REACH. A member of staff holds some of support, vetting, money
+   * and administration, and the server refuses the rest; a screen asking for what it knows it may not have would show a
+   * refusal on a screen that is not even offered. `roles` defaults to who is signed in; a sign-in passes its own, because
+   * the state it is about to set is not there yet.
+   */
+  const loadHazards = useCallback(async (client: TowerClient, roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
+    if (!holds(roles, 'support')) return;
     setState((s) => ({ ...s, loading: true }));
     const { data, error } = await client.api.disputedConstraints();
     if (error) {
@@ -493,6 +507,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
 
   /** The flags as cases: read fresh, because a case escalates whether or not anybody is looking. */
   const loadCases = useCallback(async (client: TowerClient, which?: CaseListName, kind?: string | null) => {
+    if (!holds(stateRef.current.who?.roles, 'support')) return;
     const w = which ?? stateRef.current.caseWhich;
     const k = kind === undefined ? stateRef.current.caseKind : kind;
     const { data, error } = await client.api.flagCases(w, k ?? undefined);
@@ -526,7 +541,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     setState((s) => ({ ...s, error: null, movers: narrow<MoversView>(data), readAt: Date.now() }));
   }, []);
 
-  const loadPapers = useCallback(async (client: TowerClient) => {
+  const loadPapers = useCallback(async (client: TowerClient, roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
+    if (!holds(roles, 'vetting')) return;
     const { data, error } = await client.api.papersReport();
     if (error) {
       if (error.code === 'CLIENT_OUTDATED') setState((s) => ({ ...s, phase: 'outdated' }));
@@ -543,9 +559,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * are configuration and always exist, while the impact is history and a young sister has none. A screen
    * that lost its knobs because there were no shipments yet would be unusable on the day it was needed.
    */
-  const loadPricing = useCallback(async (client: TowerClient, entityId: string) => {
+  const loadPricing = useCallback(async (client: TowerClient, entityId: string, roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
     setState((s) => ({ ...s, loading: true, entityId }));
-    void loadMoney(client, entityId);
+    void loadMoney(client, entityId, roles);
+    // What a company charges, and who administers it, is administration's: anybody else chose the company for its money.
+    if (!holds(roles, 'admin')) {
+      setState((s) => ({ ...s, loading: false }));
+      return;
+    }
     const [pricing, impact, admins] = await Promise.all([client.api.pricing(entityId), client.api.rateImpact(entityId), client.api.admins(entityId)]);
     if (pricing.error) {
       setState((s) => ({ ...s, loading: false, error: pricing.error }));
@@ -570,10 +591,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * money away, not the whole table. What it must never do is silently drop a company — a comparison
    * with a row missing is worse than one with a hole in it, because nothing on screen says it is short.
    */
-  const loadCompanies = useCallback(async (client: TowerClient, rows: EntityRow[]) => {
+  const loadCompanies = useCallback(async (client: TowerClient, rows: EntityRow[], roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
+    // The side-by-side view is administration's; its books column is there only for somebody who also holds the money.
+    if (!holds(roles, 'admin')) return;
+    const money = holds(roles, 'money');
     const results = await Promise.all(
       rows.map(async (entity) => {
-        const [pricing, books] = await Promise.all([client.api.pricing(entity.entityId), client.api.books(entity.entityId)]);
+        const [pricing, books] = await Promise.all([client.api.pricing(entity.entityId), money ? client.api.books(entity.entityId) : Promise.resolve(NOT_ASKED as never)]);
         return {
           entity,
           pricing: pricing.error ? null : narrow<EntityPricing>(pricing.data),
@@ -598,13 +622,15 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * for somebody who has the side-by-side view: an administrator of one company never sees that view, and is shown
    * how many of their papers need them beside their Company record.
    */
-  const loadExpiring = useCallback(async (client: TowerClient) => {
+  const loadExpiring = useCallback(async (client: TowerClient, roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
+    if (!holds(roles, 'vetting')) return;
     const expiring = await client.api.expiringCompanyPapers();
     setState((s) => ({ ...s, expiring: expiring.error ? null : (narrow<{ items: ExpiringItem[] }>(expiring.data)?.items ?? []) }));
   }, []);
 
   /** The papers somebody has reported — read by itself after a report, so the number beside the queue is true at once. A failed read keeps what was known. */
   const loadPaperReports = useCallback(async (client: TowerClient) => {
+    if (!holds(stateRef.current.who?.roles, 'vetting')) return;
     const reports = await client.api.paperReports();
     setState((s) => ({ ...s, paperReports: reports.error ? s.paperReports : (narrow<{ items: PaperCase[] }>(reports.data)?.items ?? []) }));
   }, []);
@@ -617,7 +643,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * with it and is network-wide — it belongs to no single company, which is why it is read once here
    * rather than per selection.
    */
-  const loadMoney = useCallback(async (client: TowerClient, entityId: string) => {
+  const loadMoney = useCallback(async (client: TowerClient, entityId: string, roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
+    if (!holds(roles, 'money')) return;
     const staff = stateRef.current.who?.mode === 'operator';
     /*
      * THE NETWORK LEDGER IS ASKED FOR ONLY BY NETWORK STAFF.
@@ -656,7 +683,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
 
   /** The sister list, then the first sister that can actually transact — the group has no rates to show. */
   const loadEntities = useCallback(
-    async (client: TowerClient) => {
+    async (client: TowerClient, roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
       const { data, error } = await client.api.entities();
       if (error) {
         setState((s) => ({ ...s, error }));
@@ -665,11 +692,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       const rows = narrow<EntityRow[]>(data) ?? [];
       setState((s) => ({ ...s, entities: rows }));
       const first = rows.find((e) => e.kind === 'sister') ?? rows[0];
-      if (first) await loadPricing(client, first.entityId);
+      if (first) await loadPricing(client, first.entityId, roles);
       // The side-by-side view only means anything with more than one company in it, and only somebody
       // who reaches more than one ever sees it. Reading it for a lone sister would be a table of one row.
-      if (rows.length > 1) await loadCompanies(client, rows);
-      await loadExpiring(client);
+      if (rows.length > 1) await loadCompanies(client, rows, roles);
+      await loadExpiring(client, roles);
     },
     [loadPricing, loadCompanies, loadExpiring],
   );
@@ -691,6 +718,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       client.api.totes(),
       client.api.heatmap(),
     ]);
+    // The version handshake, here too: the hazard queue that used to be the first read is support's, and this one is everybody's.
+    if (dashboard.error?.code === 'CLIENT_OUTDATED') {
+      setState((s) => ({ ...s, phase: 'outdated', loading: false }));
+      return;
+    }
     setState((s) => ({
       ...s,
       loading: false,
@@ -724,33 +756,39 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
    * screens render as "reading…" rather than as an empty queue, because "nothing is waiting" and "we
    * could not look" are opposite answers and must not share a rendering.
    */
-  const loadQueues = useCallback(async (client: TowerClient) => {
+  const loadQueues = useCallback(async (client: TowerClient, roles: readonly string[] | undefined = stateRef.current.who?.roles) => {
+    // Round 38 — support works the claims and the disposal; vetting the joining and the papers. A queue that is not this
+    // person's stays unread (null), and its screen is not offered to them.
+    const support = holds(roles, 'support');
+    const vetting = holds(roles, 'vetting');
+    if (!support && !vetting) return;
+    const ask = <T,>(mine: boolean, read: () => Promise<T>): Promise<T> => (mine ? read() : Promise.resolve(NOT_ASKED as T));
     setState((s) => ({ ...s, loading: true }));
     const [claims, freightClaims, disposal, approvals, stalled, driverApplications, businesses, accountMoves, idDisputes, paperReports, fleets, damageReports, gs1Disputes, hubApplications] = await Promise.all([
-      client.api.disputes(),
-      client.api.freightClaims(),
-      client.api.disposalQueue(),
-      client.api.kycQueue(),
+      ask(support, () => client.api.disputes()),
+      ask(support, () => client.api.freightClaims()),
+      ask(support, () => client.api.disposalQueue()),
+      ask(vetting, () => client.api.kycQueue()),
       // Read with the queues and kept apart from them everywhere after: it shares a screen with the
       // applications and shares neither their count nor their badge.
-      client.api.unfinishedSignups(),
+      ask(vetting, () => client.api.unfinishedSignups()),
       // The queue that had no screen: read here because it IS a decision we owe, unlike the chase list.
-      client.api.driverKycQueue(),
+      ask(vetting, () => client.api.driverKycQueue()),
       // B1 — a business asking to be checked is a decision we owe, and it takes two of us.
-      client.api.businesses(),
+      ask(vetting, () => client.api.businesses()),
       // Somebody locked out of their account is waiting on two of us — and so, perhaps, is somebody after another's.
-      client.api.accountMoves(),
-      client.api.idDisputes(),
+      ask(vetting, () => client.api.accountMoves()),
+      ask(vetting, () => client.api.idDisputes()),
       // The one time staff step into the record of a company that keeps its own: somebody said a paper is not right.
-      client.api.paperReports(),
+      ask(vetting, () => client.api.paperReports()),
       // A fleet is set up by staff, and two of its four steps are somebody waiting on us.
-      client.api.fleetsSettingUp(),
+      ask(vetting, () => client.api.fleetsSettingUp()),
       // Not a queue — nobody waits on us for these — but read beside the claims, because it is where a reported problem now goes.
-      client.api.damageReports(),
+      ask(support, () => client.api.damageReports()),
       // Two businesses say one GS1 prefix is theirs: two of us decide, on the Businesses screen.
-      client.api.gs1Disputes(),
+      ask(vetting, () => client.api.gs1Disputes()),
       // A hub that signed itself up works for nobody until one of us has looked at its papers.
-      client.api.hubPapersQueue(),
+      ask(vetting, () => client.api.hubPapersQueue()),
     ]);
     setState((s) => ({
       ...s,
@@ -842,6 +880,22 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     }));
   }, []);
 
+  /**
+   * What network staff's console reads on opening, whichever way they came in — only what their roles reach. `roles` is
+   * the sign-in's own: the state it sets has not landed when these start. Undefined (the setup key) reads everything.
+   */
+  const loadStart = useCallback(
+    async (client: TowerClient, roles: readonly string[] | undefined) => {
+      await loadHazards(client, roles);
+      if (holds(roles, 'support')) void loadCases(client);
+      await loadQueues(client, roles);
+      await loadPapers(client, roles);
+      await loadNetwork(client);
+      await loadEntities(client, roles);
+    },
+    [loadHazards, loadCases, loadQueues, loadPapers, loadNetwork, loadEntities],
+  );
+
   // Boot: a credential in this tab means the console picks up where it left off; nothing means sign-in.
   useEffect(() => {
     const creds = readCreds();
@@ -858,12 +912,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         const setupOnly = staffListOf(data).setupOnly;
         setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name, setupOnly } }));
         if (setupOnly) return;
-        void loadHazards(client);
-        void loadCases(client);
-        void loadQueues(client);
-        void loadPapers(client);
-        void loadNetwork(client);
-        void loadEntities(client);
+        void loadStart(client, undefined);
       });
       return;
     }
@@ -875,13 +924,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           setState((s) => ({ ...s, phase: 'signin', signInNote: t('tower.signIn.ended') }));
           return;
         }
-        setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true }, staffTwoStep: Boolean(data.twoStep) }));
-        void loadHazards(client);
-        void loadCases(client);
-        void loadQueues(client);
-        void loadPapers(client);
-        void loadNetwork(client);
-        void loadEntities(client);
+        const roles = rolesOf(data.roles);
+        setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true, roles }, staffTwoStep: Boolean(data.twoStep) }));
+        void loadStart(client, roles);
       });
       return;
     }
@@ -897,7 +942,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'company', name: data.name, entityId: data.entityId }, companyId: data.entityId ?? null, screen: 'imports' }));
       void loadEntities(client);
     });
-  }, [loadHazards, loadQueues, loadNetwork, loadEntities, loadPapers]);
+  }, [loadStart, loadEntities]);
 
   const signIn = useCallback(
     async (name: string, key: string) => {
@@ -921,13 +966,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, loading: false }));
         return;
       }
-      await loadHazards(client);
-      await loadQueues(client);
-      await loadPapers(client);
-      await loadNetwork(client);
-      await loadEntities(client);
+      await loadStart(client, undefined);
     },
-    [loadHazards, loadQueues, loadNetwork, loadEntities, loadPapers],
+    [loadStart],
   );
 
   /**
@@ -999,14 +1040,11 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       await client.seed?.(data.token);
       clientRef.current = client;
       saveCreds(creds);
-      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true }, screen: 'network', signInError: null, signInNote: null, staffStep: null, staffTwoStep: data.twoStep, loading: false }));
-      await loadHazards(client);
-      await loadQueues(client);
-      await loadPapers(client);
-      await loadNetwork(client);
-      await loadEntities(client);
+      const roles = rolesOf(data.roles);
+      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true, roles }, screen: 'network', signInError: null, signInNote: null, staffStep: null, staffTwoStep: data.twoStep, loading: false }));
+      await loadStart(client, roles);
     },
-    [loadHazards, loadQueues, loadNetwork, loadEntities, loadPapers],
+    [loadStart],
   );
 
   const signOut = useCallback(() => {
