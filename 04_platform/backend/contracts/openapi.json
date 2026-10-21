@@ -14522,6 +14522,19 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/id-photos": {
+      "get": {
+        "operationId": "Sbg.idPhotoQueue",
+        "summary": "",
+        "description": "Round 39 — the light couriers whose ID photo waits for a member of staff to look at it, oldest first. Before `fleet/drivers/:did`, which would read \"id-photos\" as a driver.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/papers": {
       "get": {
         "operationId": "Sbg.papersReport",
@@ -15865,6 +15878,70 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/id-photo": {
+      "post": {
+        "operationId": "Sbg.sendIdPhoto",
+        "summary": "",
+        "description": "Round 39 — A LIGHT COURIER SENDS A PHOTO OF THEIR ID (the user: \"Ride at once, smaller cap\"): from their own sign-in.\nUntil a member of staff has seen it their custody cap stays at its starting number; then it grows as anybody's does.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdPhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/id-photo-decision": {
+      "post": {
+        "operationId": "Sbg.decideIdPhoto",
+        "summary": "",
+        "description": "Round 39 — seen: it is this rider's ID, and their cap grows from now — or not, with the reason they are shown.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdPhotoDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
           }
         }
       }
@@ -37183,6 +37260,10 @@
           },
           "liftedAfter": {
             "type": "number"
+          },
+          "idUnseen": {
+            "type": "boolean",
+            "description": "Round 39 — a light courier whose ID nobody has seen yet: held at the starting number until somebody has."
           }
         },
         "required": [
@@ -43134,6 +43215,44 @@
               }
             }
           },
+          "idCheck": {
+            "type": "object",
+            "properties": {
+              "photoRef": {
+                "required": true,
+                "type": "string"
+              },
+              "sentAt": {
+                "required": true,
+                "type": "string"
+              },
+              "seenAt": {
+                "required": false,
+                "type": "string"
+              },
+              "seenBy": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "idCheckRefusal": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "idHold": {
             "type": "object",
             "properties": {
@@ -43255,6 +43374,8 @@
           "driverId",
           "did",
           "courierAskRefusal",
+          "idCheck",
+          "idCheckRefusal",
           "idHold",
           "vaultRef",
           "displayName",
@@ -44798,6 +44919,36 @@
         "required": [
           "idCopyRef",
           "licenceCopyRef"
+        ]
+      },
+      "IdPhotoDto": {
+        "type": "object",
+        "properties": {
+          "photoRef": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "photoRef"
+        ]
+      },
+      "IdPhotoDecisionDto": {
+        "type": "object",
+        "properties": {
+          "seen": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "seen"
         ]
       },
       "DriverKycDecisionDto": {

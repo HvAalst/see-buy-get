@@ -17,8 +17,8 @@ import type { Amounts } from './amounts';
 import { DEFAULT_TAX_LABEL, LABEL_TZ_OFFSET_MIN, LABOUR_FEE, NETWORK_CURRENCY, NOT_SEEN_H, OTP_MAX_ATTEMPTS, PARCEL_LATE_GRACE_H, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, UNCOLLECTED_H, VOID_WINDOW_MS, WHOLESALE, classifySize, coverFor, holdingFeeFor, taxOn, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import type { ResolvedTax } from '../../foundation/entity/entity.types';
-import { capWords, standingOf, type CustodyStanding } from './custody-cap';
-import { DriverService } from './driver.service';
+import { capWords, standingOf, unseenStanding, type CustodyStanding } from './custody-cap';
+import { DriverService, idUnseen } from './driver.service';
 import { Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
@@ -3008,6 +3008,8 @@ export class ParcelService implements OnApplicationBootstrap {
       else if (!UNFINISHED_CUSTODY.includes(p.status)) completed += 1; // scanned off them since: handed on
     }
     const loads = this.riderLoads?.(driverDid) ?? { carrying: 0, delivered: 0 };
+    // Round 39 — a light courier whose ID nobody has seen stays at the starting number until somebody has.
+    if (idUnseen(driver)) return unseenStanding(rule, holds + loads.carrying, completed + loads.delivered);
     return standingOf('rider', rule, holds + loads.carrying, completed + loads.delivered);
   }
 

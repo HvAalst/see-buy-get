@@ -194,7 +194,7 @@ export function App() {
     hazards: state.hazards?.length ?? null,
     claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
     disposal: state.disposal?.length ?? null,
-    approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets, state.hubApplications),
+    approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets, state.hubApplications, state.riderIds),
     // A business waiting for its check, and — round 18 — a GS1 prefix two businesses say is theirs, waiting to be decided.
     businesses: businessesWaiting(waitingOnStaff(state.businesses), state.gs1Disputes),
     // Every one that is still open waits on one of us: a first look, or a second person's approval.
@@ -230,7 +230,7 @@ export function App() {
                   hazards: state.hazards?.length ?? null,
                   claims: state.claims == null && state.freightClaims == null ? null : (state.claims?.length ?? 0) + (state.freightClaims?.length ?? 0),
                   disposal: state.disposal?.length ?? null,
-                  approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets, state.hubApplications),
+                  approvals: joiningWaiting(state.approvals, state.driverApplications, state.fleets, state.hubApplications, state.riderIds),
                 },
                 t,
               )}

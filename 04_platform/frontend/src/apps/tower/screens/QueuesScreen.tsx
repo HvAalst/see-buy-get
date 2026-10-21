@@ -24,6 +24,7 @@ import {
   needsRecordTick,
   hubPapersOf,
   type HubApplication,
+  type RiderIdRow,
   type ApprovalRow,
   type DamageReportRow,
   type ClaimCap,
@@ -569,6 +570,8 @@ export function ApprovalsScreen({ state, actions }: { state: TowerState; actions
 
       <HubApplicationsPanel state={state} actions={actions} />
 
+      <RiderIdsPanel state={state} actions={actions} />
+
       <FleetsPanel state={state} actions={actions} />
 
       <StalledPanel rows={state.stalled} />
@@ -723,6 +726,90 @@ function DriverApplicationRow({ row, state, actions }: { row: DriverApplication;
  * and is routed nothing until one of us has looked at its papers — the licence, the ID of the person who answers for it,
  * the premises — which are open on the row, as a driver's licence is above: a decision without looking is a rubber stamp.
  */
+/**
+ * Round 39 — A LIGHT COURIER'S ID, TO BE SEEN (the user: "Ride at once, smaller cap"). They ride already; until one of us
+ * has seen a photo of their ID, how many they may carry at once stays at the start. Seen: it grows from now. Not: the
+ * reason is what they are shown, and they send another.
+ */
+function RiderIdsPanel({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const rows = state.riderIds;
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.riderIds.title')}</span>
+        {rows === null ? null : <span class="ctbl__sub">{t('tower.riderIds.count', { n: rows.length })}</span>}
+      </div>
+      <p class="cons__lede">{t('tower.riderIds.lede')}</p>
+      {rows === null ? (
+        <p class="cons__empty">{t('tower.queues.loading')}</p>
+      ) : rows.length === 0 ? (
+        <p class="cons__empty">{t('tower.riderIds.none')}</p>
+      ) : (
+        <table class="ctbl ctbl--stack">
+          <thead>
+            <tr>
+              <th>{t('tower.riderIds.col.rider')}</th>
+              <th>{t('tower.riderIds.col.sent')}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <RiderIdRowView key={row.did} row={row} state={state} actions={actions} />
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function RiderIdRowView({ row, state, actions }: { row: RiderIdRow; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const busy = state.busyId === row.did;
+  const [why, setWhy] = useState<string | null>(null);
+  return (
+    <>
+      <tr>
+        <td>
+          <div class="ctbl__strong">{row.displayName}</div>
+          <div class="ctbl__sub">{row.country ? countryNameOf(row.country, state.catalogue) : ''}</div>
+        </td>
+        <td class="ctbl__sub"><span class="ctbl__lbl">{t('tower.riderIds.col.sent')}</span>{row.idCheck.sentAt.slice(0, 10)}</td>
+        <td>
+          <span class="twr-clear__act">
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideRiderId(row.did, true)}>
+              {t('tower.riderIds.seeIt')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} aria-expanded={why != null} onClick={() => setWhy(why == null ? '' : null)}>
+              {t('tower.riderIds.notIt')}
+            </button>
+          </span>
+        </td>
+      </tr>
+      <tr class="ctbl__editor">
+        <td colSpan={3}>
+          <DocumentStrip refs={[row.idCheck.photoRef]} state={state} actions={actions} emptyKey="tower.riderIds.nothingToSee" titleKey="tower.riderIds.whatTheySent" />
+          {why != null ? (
+            <>
+              <label class="cfield">
+                <span class="cfield__label">{t('tower.riderIds.whyLabel')}</span>
+                <textarea class="ctextarea" rows={2} value={why} disabled={busy} onInput={(e) => setWhy((e.target as HTMLTextAreaElement).value)} />
+              </label>
+              <span class="twr-clear__act">
+                <button type="button" class="cbtn cbtn--danger cbtn--sm" disabled={busy || !why.trim()} onClick={() => void actions.decideRiderId(row.did, false, why.trim())}>
+                  {t('tower.riderIds.sendBack')}
+                </button>
+              </span>
+            </>
+          ) : null}
+        </td>
+      </tr>
+    </>
+  );
+}
+
 function HubApplicationsPanel({ state, actions }: { state: TowerState; actions: TowerActions }) {
   const t = useT();
   const rows = state.hubApplications;

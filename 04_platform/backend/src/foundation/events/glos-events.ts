@@ -69,6 +69,8 @@ export const GlosEvent = {
     HubPapersDecided: 'pudo.hub_papers_decided',
     // A driver in no fleet asked to ride for themselves on something heavy, and staff decided: told to the driver.
     DriverRideAloneDecided: 'pudo.driver_ride_alone_decided',
+    // Round 39 — a light courier's ID photo seen by staff, or sent back with the reason: told to the rider.
+    DriverIdPhotoDecided: 'pudo.driver_id_photo_decided',
     // A fleet office put a driver on a day's roster, or took them off a day they had been told they drive.
     DriverRostered: 'pudo.driver_rostered',
     // A defect reported on a vehicle (its office is told), and the office's word on it (the driver who reported it is told).

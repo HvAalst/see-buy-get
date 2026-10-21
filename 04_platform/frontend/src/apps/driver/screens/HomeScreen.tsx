@@ -32,6 +32,7 @@ import {
 import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
+import { IdPhotoCard } from './IdPhotoCard';
 import type { DriverActions, DriverState } from '../useDriverApp';
 
 export interface HomeScreenProps {
@@ -176,6 +177,8 @@ function OffShift({ state, actions, onOpenFleet }: HomeScreenProps) {
         />
       ) : null}
       {reader ? <LicenceRenewal state={state} actions={actions} reader={reader} needed={offRoad.length > 0 || Boolean(licenceDue)} /> : null}
+      {/* Round 39 — a light courier whose ID nobody has seen: here, where they are on shift or not, a photo of it to send. */}
+      {state.custodyCap?.idUnseen ? <IdPhotoCard state={state} actions={actions} /> : null}
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}

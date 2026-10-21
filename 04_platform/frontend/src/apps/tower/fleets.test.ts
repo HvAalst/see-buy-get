@@ -121,6 +121,11 @@ describe('joiningWaiting — the number beside the screen', () => {
     expect(joiningWaiting(null, null, null, [{}])).toBe(1);
     expect(joiningWaiting(null, null, null, null)).toBeNull();
   });
+  it('a rider’s ID photo waiting to be seen is counted too (round 39)', () => {
+    expect(joiningWaiting(null, null, null, null, [{}, {}])).toBe(2);
+    expect(joiningWaiting([{}], null, null, null, [{}])).toBe(2);
+    expect(joiningWaiting(null, null, null, null, null)).toBeNull();
+  });
   it('a fleet alone is enough to be counted: the screen held nothing but shops once', () => {
     expect(joiningWaiting([], [], [fleet('DRAFT')], [])).toBe(1);
     expect(joiningWaiting([], [], [fleet('APPROVED')], [])).toBe(1);

@@ -59,6 +59,8 @@ export function createDriverApi(sbg: SbgClient) {
     rideAloneTerms: (did: string) => sbg.request((c) => c.GET('/v1/sbg/drivers/{did}/ride-alone', { params: { path: { did } } })),
 
     /** A driver who is in no fleet becomes a courier, at once: where they live, and the vehicle of their own. */
+    /** Round 39 — a light courier sends a photo of their ID; until it is seen their custody cap stays at its start. */
+    sendIdPhoto: (did: string, photoRef: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/id-photo', { params: { path: { did } }, body: { photoRef } })),
     rideAlone: (did: string, body: { country: string; vehicleClass: string; plate: string; truckSubtype?: string; idCopyRef?: string; licenceCopyRef?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/ride-alone', { params: { path: { did } }, body })),
 

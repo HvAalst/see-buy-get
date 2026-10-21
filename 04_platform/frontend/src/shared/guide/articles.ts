@@ -86,14 +86,16 @@ export const ARTICLES: GuideArticle[] = [
     id: "new-partner-limit",
     apps: [
       "agent",
-      "driver"
+      "driver",
+      "console"
     ],
     title: "The limit for a new shop or rider",
     summary: "Where your country’s company has set one, a new shop holds at most so many parcels at once, and a new rider in no fleet carries at most so many. The limit grows with every parcel you hand on, and goes once you have handed on enough.",
     steps: [
       "Shop app: the home screen says how many parcels you hold, your limit now, and how it grows. At your limit a parcel is refused at take-in, and the screen says why.",
       "Driver app: My loads says how many parcels you carry and your limit now. At your limit a shop keeps the rest of the parcels for the next rider, and a load is not taken over until you have handed one on.",
-      "Each parcel you hand on — to a driver, to the person who collects it, or delivered — raises your limit by one. After the number your company set, there is no limit at all."
+      "Each parcel you hand on — to a driver, to the person who collects it, or delivered — raises your limit by one. After the number your company set, there is no limit at all.",
+      "A bicycle or motorcycle rider in no fleet: until SeeBuyGet has seen a photo of your ID, your limit stays where it starts. Driver app, home screen: “Send a photo of your ID”. You are told when it has been seen — from then it grows as above — or why not, and you send another. Operator console: Joining the network, Riders’ ID photos."
     ],
     notes: [
       "A fleet’s drivers have no such limit: their fleet answers for them. Whether there is a limit, and its numbers, are your country’s company’s to set."

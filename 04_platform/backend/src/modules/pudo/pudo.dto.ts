@@ -110,6 +110,18 @@ export class KycDecisionDto {
   @IsOptional() @IsString() reason?: string;
 }
 
+/** Round 39 — a light courier sends a photo of their ID: the media id of a photograph they uploaded as kyc_id. */
+export class IdPhotoDto {
+  @IsString() @MaxLength(80) photoRef!: string;
+}
+
+/** Round 39 — a member of staff looked at a light courier's ID photo: it is theirs, or it is not, with the reason they are shown. */
+export class IdPhotoDecisionDto {
+  @IsBoolean() seen!: boolean;
+  @IsOptional() @IsString() by?: string;
+  @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
 export class AvailabilityDto {
   @IsBoolean() open!: boolean;
 }

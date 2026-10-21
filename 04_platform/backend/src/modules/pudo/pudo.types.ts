@@ -399,6 +399,8 @@ export class CustodyCapView {
   cap?: number;
   completed?: number;
   liftedAfter?: number;
+  /** Round 39 — a light courier whose ID nobody has seen yet: held at the starting number until somebody has. */
+  idUnseen?: boolean;
 }
 
 /** A hub's papers, as a shop's: a copy of the responsible person's ID, the trading licence, a photograph of the premises. */

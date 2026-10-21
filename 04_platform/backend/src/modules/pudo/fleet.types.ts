@@ -386,6 +386,14 @@ export class FleetDriver {
   /** Why the last ask to ride for themselves was refused, in staff’s words. Shown to them; cleared when they ask again. */
   courierAskRefusal?: { reason: string; at: string; by?: string };
   /**
+   * Round 39 — A LIGHT COURIER'S ID, SEEN (the user: "Ride at once, smaller cap"). A bicycle or motorcycle rider in no fleet
+   * rides at once, under the custody cap's starting number until a photo of their ID has been seen by network staff;
+   * then the cap grows as anybody's does. The photo they sent, and when it was seen and by whom.
+   */
+  idCheck?: { photoRef: string; sentAt: string; seenAt?: string; seenBy?: string };
+  /** Why the last photo of their ID was not accepted, in staff's words. Shown to them; cleared when they send another. */
+  idCheckRefusal?: { reason: string; at: string; by?: string };
+  /**
    * THE NATIONAL ID THEY REGISTERED WITH WENT TO SOMEBODY ELSE, by a decision of two members of staff
    * (id-dispute.service.ts). They finish what they carry and start nothing new until an ID of their own is on
    * record — which they put there themselves, from Settings. `reference` is theirs to quote to staff.

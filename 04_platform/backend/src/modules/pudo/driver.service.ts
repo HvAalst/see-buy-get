@@ -55,6 +55,15 @@ export function betweenFleets(driver: Pick<FleetDriver, 'managerDid' | 'removedF
   return !driver.managerDid && Boolean(driver.removedFrom);
 }
 
+/**
+ * Round 39 — NOBODY HAS SEEN THIS RIDER'S ID: a bicycle or motorcycle rider in no fleet who rode at once, whose photo of
+ * their ID no member of staff has looked at yet. A heavier vehicle's driver was vetted before they rode, and a courier
+ * whose ask to ride alone was approved had their ID read then — both have `kyc`.
+ */
+export function idUnseen(driver: Pick<FleetDriver, 'registry' | 'managerDid' | 'kyc' | 'idCheck'>): boolean {
+  return driver.registry === 'light' && !driver.managerDid && !driver.kyc && !driver.idCheck?.seenAt;
+}
+
 /** Why a driver whose ID went to somebody else cannot start a shift — and the one thing that ends it. */
 export const idHoldLine = (reference: string): string =>
   `the national ID on your registration went to somebody else (reference ${reference}) — put the number of your own ID card on record, in Settings, and you can drive again`;
@@ -760,6 +769,49 @@ export class DriverService {
     driver.courierAsk = { ...ask, askedAt: new Date(now).toISOString() };
     delete driver.courierAskRefusal;
     this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /**
+   * Round 39 — A LIGHT COURIER SENDS A PHOTO OF THEIR ID (the user: "Ride at once, smaller cap"). They ride already; until
+   * it has been seen, their custody cap stays at its starting number. Only a bicycle or motorcycle rider in no fleet, whose
+   * ID nobody has seen yet. The photo is adopted as theirs and nobody else's before anything is written.
+   */
+  sendIdPhoto(did: string, photoRef: string, now: number = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    if (driver.registry !== 'light' || driver.managerDid) throw new GlosError('INVALID_STATE', 'A photo of your ID is asked of a bicycle or motorcycle rider in no fleet: your papers were seen when you joined');
+    if (!idUnseen(driver)) throw new GlosError('INVALID_STATE', 'Your ID has been seen already');
+    if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so an ID photo cannot be sent');
+    if (!photoRef || !this.media.adopt(photoRef, did, { type: 'driver', id: did }, 'kyc_id')) throw new GlosError('PHOTO_REQUIRED', 'The photograph could not be attached — take it again');
+    driver.idCheck = { photoRef, sentAt: new Date(now).toISOString() };
+    delete driver.idCheckRefusal;
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /** Round 39 — the light couriers whose ID photo waits for a member of staff to look at it, oldest first. */
+  idPhotoQueue(): FleetDriver[] {
+    return [...this.drivers.values()].filter((d) => d.idCheck && !d.idCheck.seenAt && idUnseen(d)).sort((a, b) => a.idCheck!.sentAt.localeCompare(b.idCheck!.sentAt));
+  }
+
+  /**
+   * Round 39 — A MEMBER OF STAFF LOOKS AT THE PHOTO: it is this rider's ID — seen, and from now their cap grows as anybody's
+   * does — or it is not, with the reason they are shown, and they send another. Either way the rider is told.
+   */
+  decideIdPhoto(did: string, seen: boolean, by?: string, reason?: string, now: number = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    if (!driver.idCheck || driver.idCheck.seenAt) throw new GlosError('INVALID_STATE', 'There is no photo of their ID waiting to be seen');
+    const at = new Date(now).toISOString();
+    if (seen) {
+      driver.idCheck = { ...driver.idCheck, seenAt: at, ...(by ? { seenBy: by } : {}) };
+    } else {
+      const why = reason?.trim();
+      if (!why) throw new GlosError('REASON_REQUIRED', 'Say why it is not their ID: they are shown it, and send another');
+      delete driver.idCheck;
+      driver.idCheckRefusal = { reason: why, at, ...(by ? { by } : {}) };
+    }
+    this.drivers.set(did, driver);
+    void this.events.publish(GlosEvent.Pudo.DriverIdPhotoDecided, { did, seen, ...(seen ? {} : { reason: driver.idCheckRefusal?.reason }) }, { source: 'pudo' }).catch(() => undefined);
     return driver;
   }
 

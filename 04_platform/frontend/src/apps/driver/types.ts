@@ -48,6 +48,10 @@ export interface DriverRecord {
   licenceRenewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
   /** Why the last card they sent was not accepted, so they can send a better one. */
   licenceRenewalRefusal?: { reason: string; at: string };
+  /** Round 39 — a light courier's photo of their ID: sent, and when a member of staff saw it. */
+  idCheck?: { photoRef: string; sentAt: string; seenAt?: string };
+  /** Round 39 — why the last photo of their ID was not accepted, so they can send a better one. */
+  idCheckRefusal?: { reason: string; at: string };
 }
 
 /** R5 — one row of the driver jobs + earnings register (a claimed freight haul). No buyer identity. */

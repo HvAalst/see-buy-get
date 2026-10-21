@@ -460,6 +460,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     });
     this.events.subscribe<{ did: string; approved: boolean; reason?: string; companyName?: string }>(GlosEvent.Pudo.DriverRideAloneDecided, (e) => this.onRideAloneDecided(e.payload));
+    // Round 39 — a light courier's ID photo looked at: seen, and their cap grows from now; or sent back, with the reason.
+    this.events.subscribe<{ did: string; seen: boolean; reason?: string }>(GlosEvent.Pudo.DriverIdPhotoDecided, (e) => {
+      const p = e.payload;
+      void this.tell(p.did, {
+        kind: 'papers_checked',
+        title: p.seen ? 'SeeBuyGet has seen your ID' : 'Your ID photo was not accepted',
+        body: p.seen ? 'From now, how many parcels you may carry at once grows with each one you hand on.' : `${p.reason ?? 'Something was wrong with it.'} Send another from the Driver app’s home screen.`,
+        tag: `id-photo:${p.did}`,
+        data: { seen: p.seen },
+      });
+    });
     this.events.subscribe<DriverRostered>(GlosEvent.Pudo.DriverRostered, (e) => this.onDriverRostered(e.payload));
     this.events.subscribe<VehicleDefectReported>(GlosEvent.Pudo.VehicleDefectReported, (e) => this.onDefectReported(e.payload));
     this.events.subscribe<VehicleDefectDecided>(GlosEvent.Pudo.VehicleDefectDecided, (e) => this.onDefectDecided(e.payload));

@@ -4596,11 +4596,19 @@ describe('PUDO Light', () => {
     expect(r.handed).toEqual(['CAP-1', 'CAP-2']);
     expect(r.rejected).toEqual([{ parcelId: 'CAP-3', reason: 'custody_cap' }]);
     expect(parcels.riderStanding(d.did)).toMatchObject({ holds: 2, cap: 2 });
-    expect(() => parcels.assertRiderWithinCap(d.did)).toThrow(/This rider carries 2 parcels?; a new independent rider carries at most 2 here for now/);
-    // Handed on at the other end: the parcel is off them, and the limit grew by one.
+    // Round 39 — a motorcycle rider whose ID nobody has seen: told how to have it seen, and held at the start.
+    expect(() => parcels.assertRiderWithinCap(d.did)).toThrow(/This rider carries 2 parcels?; a rider whose ID has not been seen yet carries at most 2 here\. Send a photo of your ID card/);
     Object.assign(parcels.get('CAP-1'), { status: 'Ready_For_Pickup' });
     parcels.get('CAP-1').scans.push({ at: new Date().toISOString(), status: 'Ready_For_Pickup', by: 'did:shop:far', note: 'arrived' } as never);
+    // Handed on at the other end: off them — and, their ID unseen, the limit stays where it started.
+    expect(parcels.riderStanding(d.did)).toMatchObject({ holds: 1, cap: 2, completed: 1, idUnseen: true });
+    // A member of staff sees a photo of their ID: from now the limit grows by one for each parcel handed on.
+    Object.assign(drivers.get(d.did), { idCheck: { photoRef: 'med_id_cap', sentAt: new Date().toISOString() } });
+    expect(() => drivers.decideIdPhoto(d.did, false, 'Vetting')).toThrow(/Say why it is not their ID/);
+    drivers.decideIdPhoto(d.did, true, 'Vetting');
     expect(parcels.riderStanding(d.did)).toMatchObject({ holds: 1, cap: 3, completed: 1 });
+    expect(parcels.riderStanding(d.did)?.idUnseen).toBeUndefined();
+    expect(() => drivers.decideIdPhoto(d.did, true, 'Vetting')).toThrow(/no photo of their ID waiting/);
     // A fleet's driver is never capped here; nor anybody once the company caps nobody.
     entities.setCustodyCaps(entity.entityId, {}, 'test');
     expect(parcels.riderStanding(d.did)).toBeUndefined();
@@ -4672,7 +4680,8 @@ describe('PUDO Light', () => {
     closeForTest(bag.code);
     const entity = entities.forJurisdiction(drivers.get(d.did).jurisdiction)!;
     entities.setCustodyCaps(entity.entityId, { rider: { start: 1, liftedAfter: 10 } }, 'test');
-    expect(() => mdps.loadBag(bag.code, drivers.get(d.did).badgeId!)).toThrow(/This rider carries 0 parcels?; a new independent rider carries at most 1/);
+    // A motorcycle rider whose ID nobody has seen yet (round 39): held at the start, and told how to have it seen.
+    expect(() => mdps.loadBag(bag.code, drivers.get(d.did).badgeId!)).toThrow(/This rider carries 0 parcels?; a rider whose ID has not been seen yet carries at most 1/);
     expect(parcels.get('CB-1').status).toBe('At_PUDO'); // nothing moved
     entities.setCustodyCaps(entity.entityId, { rider: { start: 2, liftedAfter: 10 } }, 'test');
     mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);

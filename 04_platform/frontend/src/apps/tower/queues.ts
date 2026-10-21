@@ -257,6 +257,21 @@ export function hubPapersOf(row: Pick<HubApplication, 'papers'>): string[] {
   return [row.papers.licenceRef, row.papers.idCopyRef, ...row.papers.photoRefs].filter((x): x is string => Boolean(x));
 }
 
+/* ------------------------------------------------------------ riders' ID photos -- */
+
+/**
+ * Round 39 — A LIGHT COURIER'S ID, TO BE SEEN (the user: "Ride at once, smaller cap"). A bicycle or motorcycle rider in no
+ * fleet rides at once; until one of us has seen a photo of their ID, how many they may carry stays at the start. What is
+ * judged: that it is an ID card, and theirs.
+ */
+export interface RiderIdRow {
+  did: string;
+  displayName: string;
+  country?: string;
+  createdAt: string;
+  idCheck: { photoRef: string; sentAt: string };
+}
+
 /* ----------------------------------------------------------- driver applications -- */
 
 /**

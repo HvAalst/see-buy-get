@@ -13,6 +13,8 @@ export interface CustodyCapView {
   cap?: number;
   completed?: number;
   liftedAfter?: number;
+  /** Round 39 — a light courier whose ID nobody has seen yet: held at the start until somebody has. */
+  idUnseen?: boolean;
 }
 
 /** The line a capped shop or rider reads — what they hold, the most they may now, how it grows. Null when nothing caps them. */
@@ -20,7 +22,8 @@ export function capLine(v: CustodyCapView | null | undefined, t: Translate): { t
   if (!v?.capped || v.cap == null || v.holds == null) return null;
   const full = v.holds >= v.cap;
   const rider = v.kind === 'rider';
-  const grows = t('common.cap.grows', { completed: v.completed ?? 0, lifted: v.liftedAfter ?? 0 });
+  // Round 39 — a rider whose ID nobody has seen: it does not grow yet, and what makes it grow is said instead.
+  const grows = v.idUnseen ? t('common.cap.unseen') : t('common.cap.grows', { completed: v.completed ?? 0, lifted: v.liftedAfter ?? 0 });
   return {
     full,
     title: t(rider ? 'common.cap.riderTitle' : 'common.cap.shopTitle', { holds: v.holds, cap: v.cap }),

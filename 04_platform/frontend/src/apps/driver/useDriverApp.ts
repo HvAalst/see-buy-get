@@ -1019,6 +1019,24 @@ export function useDriverApp() {
     [client, did, pushToast, refresh],
   );
 
+  /**
+   * Round 39 — A LIGHT COURIER SENDS A PHOTO OF THEIR ID. Resolves to the refusal, shown where they are looking; null when
+   * it is with SeeBuyGet. Until a member of staff has seen it, how many they may carry stays at its start.
+   */
+  const sendIdPhoto = useCallback(
+    async (photoRef: string): Promise<SbgError | null> => {
+      if (!client || !did) return null;
+      setState((s) => ({ ...s, busy: 'id-photo' }));
+      const r = await client.api.sendIdPhoto(did, photoRef);
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) return r.error;
+      pushToast({ tone: 'ok', icon: 'check', title: t('driver.idPhoto.sentToast'), detail: t('driver.idPhoto.sentDetail') });
+      await refresh();
+      return null;
+    },
+    [client, did, pushToast, refresh],
+  );
+
   /** No to a fleet's offer. The fleet is told; nothing else changes. */
   const declineFleetOffer = useCallback(
     async (offerId: string): Promise<SbgError | null> => {
@@ -2120,6 +2138,7 @@ export function useDriverApp() {
       declineFleetOffer,
       leaveFleet,
       rideAlone,
+      sendIdPhoto,
       sendClearance,
       countries,
       loadRoad,

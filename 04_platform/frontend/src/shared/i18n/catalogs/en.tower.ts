@@ -137,6 +137,21 @@ export const enTower = {
   'tower.staff.revokeConfirm': 'Yes, sign them out',
 
   // ---- round 38: the roles a member of staff holds -------------------------------------------------------
+  'tower.riderIds.title': 'Riders’ ID photos',
+  'tower.riderIds.count': '{n, plural, one {# waiting} other {# waiting}}',
+  'tower.riderIds.lede': 'A bicycle or motorcycle rider in no fleet rides at once. Until one of us has seen a photo of their ID, how many parcels they may carry at once stays where their country’s cap starts. Look that it is an ID card, readable, and theirs.',
+  'tower.riderIds.none': 'No rider’s ID photo is waiting.',
+  'tower.riderIds.col.rider': 'Rider',
+  'tower.riderIds.col.sent': 'Sent',
+  'tower.riderIds.seeIt': 'It is their ID',
+  'tower.riderIds.notIt': 'Not their ID',
+  'tower.riderIds.whyLabel': 'Why not: the rider is shown this, and sends another',
+  'tower.riderIds.sendBack': 'Send it back',
+  'tower.riderIds.nothingToSee': 'The photo cannot be opened.',
+  'tower.riderIds.whatTheySent': 'The photo they sent',
+  'tower.riderIds.seen': 'Seen. Their cap grows from now, and they have been told.',
+  'tower.riderIds.sentBack': 'Sent back. They have been told why, and send another.',
+
   'tower.roles.support': 'Support',
   'tower.roles.supportCovers': 'parcels, loads and cases',
   'tower.roles.vetting': 'Vetting',

@@ -21,6 +21,8 @@ export interface CustodyStanding {
   cap: number;
   completed: number;
   liftedAfter: number;
+  /** Round 39 — a light courier whose ID nobody has seen yet: held at the starting number, growing only once it is. */
+  idUnseen?: boolean;
 }
 
 /** The most they may hold now: the start, one more for each hand-over completed — none at all once the cap is lifted. */
@@ -36,9 +38,21 @@ export function standingOf(kind: CustodyStanding['kind'], rule: CustodyCapRule |
   return cap === undefined ? undefined : { kind, holds, cap, completed, liftedAfter: rule.liftedAfter };
 }
 
+/**
+ * Round 39 — WHERE A RIDER STANDS WHOSE ID NOBODY HAS SEEN (the user: "Ride at once, smaller cap"): at the starting
+ * number, whatever they have handed on — it neither grows nor lifts until a member of staff has seen a photo of their ID.
+ */
+export function unseenStanding(rule: CustodyCapRule | undefined, holds: number, completed: number): CustodyStanding | undefined {
+  if (!rule) return undefined;
+  return { kind: 'rider', holds, cap: rule.start, completed, liftedAfter: rule.liftedAfter, idUnseen: true };
+}
+
 /** The words of a refusal: how many they hold, the limit, and how it grows — so the person knows what to do. */
 export function capWords(s: CustodyStanding, who: string): string {
   const verb = s.kind === 'shop' ? 'holds' : 'carries';
   const noun = s.kind === 'shop' ? 'shop' : 'independent rider';
+  if (s.idUnseen) {
+    return `${who} ${verb} ${s.holds} ${s.holds === 1 ? 'parcel' : 'parcels'}; a rider whose ID has not been seen yet carries at most ${s.cap} here. Send a photo of your ID card from the Driver app’s home screen: once SeeBuyGet has seen it, the limit grows with each parcel handed on.`;
+  }
   return `${who} ${verb} ${s.holds} ${s.holds === 1 ? 'parcel' : 'parcels'}; a new ${noun} ${verb} at most ${s.cap} here for now. It grows by one with each parcel handed on (${s.completed} so far) and lifts after ${s.liftedAfter}.`;
 }

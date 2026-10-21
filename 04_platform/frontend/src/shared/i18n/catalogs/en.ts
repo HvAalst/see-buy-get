@@ -342,6 +342,7 @@ export const en = {
   'common.cap.grows': 'It grows by one with each parcel you hand on — {completed} so far — and lifts after {lifted}.',
   'common.cap.shopFull': 'Take nothing more in until one is handed on or collected.',
   'common.cap.riderFull': 'Take nothing more on until you hand one on.',
+  'common.cap.unseen': 'It stays there until SeeBuyGet has seen a photo of your ID; from then it grows with each parcel you hand on.',
   'common.seal.overPackage': 'over the package {sscc}',
   'common.seal.overPackages': 'over the {n} packages labelled for this load',
   'common.seal.matched': 'Found on the door at pickup — {when}',
