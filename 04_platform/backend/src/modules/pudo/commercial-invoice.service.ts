@@ -63,6 +63,15 @@ export class CommercialInvoiceService {
     };
   }
 
+  /**
+   * Round 38 — the invoice as a reader it is not for is told it: whether one travels with the goods, and whether they may
+   * be taken over. Nothing it says — not its lines, its values, its parties or its number.
+   */
+  withheldView(f: Freight, postedByBusiness = true): CommercialInvoiceView {
+    const travels = Boolean(this.current(f.freightId) || this.ownPapers.get(f.freightId));
+    return { freightId: f.freightId, crossesBorder: crossesBorder(f), collectable: !this.pickupRefusal(f, postedByBusiness), earlier: [], mayWrite: false, withheld: true, travels };
+  }
+
   /** May this business write the load's invoice: it posted the load. */
   isShipper(f: Freight, entity: Entity): boolean {
     return f.postedByDid === entity.did;
@@ -264,6 +273,16 @@ tfoot td { font-weight: 600; }
 </style></head><body>
 ${Array.from({ length: i.copies }, (_, n) => copy(n + 1)).join('\n')}
 </body></html>`;
+}
+
+/**
+ * Round 38 — WHO ON THE CARRIER'S SIDE READS A LOAD'S INVOICE (the user: "Carrier from pickup, cross-border only"): the
+ * driver carrying it, on a load that crosses a border, once the goods are taken over — it is the paper they show at the
+ * border. Never the fleet office, never before pickup, never on a load in one country: there the invoice stays with the
+ * shipper. The shipper and staff read it always (ShippingPapersController).
+ */
+export function carrierReadsInvoice(f: Pick<Freight, 'claimedBy' | 'pickedUpAt' | 'pickupCountry' | 'destCountry'>, did: string | undefined): boolean {
+  return Boolean(did) && f.claimedBy === did && Boolean(f.pickedUpAt) && crossesBorder(f);
 }
 
 /** The load crosses a border: both countries known, and different. */

@@ -11,7 +11,7 @@ import { PassageSheet, PassageStrip } from './PassageStrip';
 import { HeldSheet, HeldStrip } from './HeldStrip';
 import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, TamperSheet, type SealRead, type TamperTarget } from './SealSteps';
 import { heldLine } from '../../../shared/tamper';
-import { keepPaper, keptPaper } from '../../../shared/keptPapers';
+import { invoicePaperRef, keepPaper, keptPaper } from '../../../shared/keptPapers';
 import { BagReportSheet } from '../../../shared/BagSealFields';
 import { receiptBody } from '../../../shared/bagSeal';
 import { BagTakeFields, BagTakeSheet, useBagTake } from './BagTake';
@@ -167,6 +167,10 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {/* FP2 — the consignment note travels with the load; the driver can show it at any gate. */}
                   <div class="load__nav">
                     <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(c.ref)} kept={state.driver?.did ? { get: () => keptPaper(state.driver!.did, c.ref), put: (html) => keepPaper(state.driver!.did, c.ref, html, c.status) } : undefined} />
+                    {/* Round 38 — across a border, from pickup on: the invoice the officer asks for, kept on the phone with the note. */}
+                    {c.invoiceToShow ? (
+                      <DocumentButton label={t('driver.invoice.open')} title={t('driver.invoice.title')} fetch={() => actions.freightInvoice(c.ref)} kept={state.driver?.did ? { get: () => keptPaper(state.driver!.did, invoicePaperRef(c.ref)), put: (html) => keepPaper(state.driver!.did, invoicePaperRef(c.ref), html, c.status) } : undefined} />
+                    ) : null}
                   </div>
                   {/* Round 35 — the wrap cut, the load opened: held where it is, operations told. */}
                   {!c.held ? (

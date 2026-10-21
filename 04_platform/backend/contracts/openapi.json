@@ -51239,6 +51239,14 @@
           "mayWrite": {
             "type": "boolean",
             "description": "Whether the reader may write a new one: the business that posted the load, a member who may act."
+          },
+          "withheld": {
+            "type": "boolean",
+            "description": "Round 38 — NOT THIS READER'S TO READ (the user: \"Carrier from pickup, cross-border only\"): the fleet office, a driver\nbefore the goods are taken over, a carrier on a load in one country. Told whether an invoice travels and whether the\ngoods may be taken over — nothing of what it says, whom it names or what the goods are worth."
+          },
+          "travels": {
+            "type": "boolean",
+            "description": "An invoice travels with the goods: one written here, or the shipper's own paper. Said where the invoice is withheld."
           }
         },
         "required": [

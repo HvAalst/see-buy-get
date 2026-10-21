@@ -98,7 +98,11 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
               <span class="crow__name">{t('business.papers.invoiceTitle')}</span>
             </span>
             {current ? (
-              <span class="crow__sub">{t('business.papers.invoiceLine', { number: current.number, total: money(current.currency, current.totalValue), name: current.signed.name, day: current.signed.at.slice(0, 10) })}</span>
+              <>
+                <span class="crow__sub">{t('business.papers.invoiceLine', { number: current.number, total: money(current.currency, current.totalValue), name: current.signed.name, day: current.signed.at.slice(0, 10) })}</span>
+                {/* Round 38 — who reads it: the shipper is told, so the values it writes are written knowing who sees them. */}
+                <span class="crow__sub">{t(invoice?.crossesBorder ? 'business.papers.invoiceWhoReads' : 'business.papers.invoiceStaysWithYou')}</span>
+              </>
             ) : invoice?.ownPaper ? (
               <span class="crow__sub">{t('business.papers.ownPaperSaid', { name: invoice.ownPaper.by, day: invoice.ownPaper.at.slice(0, 10) })}</span>
             ) : invoice ? (

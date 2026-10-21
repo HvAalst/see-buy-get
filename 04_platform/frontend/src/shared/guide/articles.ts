@@ -1081,7 +1081,7 @@ export const ARTICLES: GuideArticle[] = [
       "Your collection code stays on your phone once the parcel has appeared in My parcels — open the app once while you have signal.",
       "Signing in, paying, handing a parcel over at the counter and sending a message need a connection. The app says so plainly when it cannot do them.",
       "Drivers: ending your shift is recorded on the phone too. Starting one and taking an offer need a connection; an offer you could not see lapses after ten minutes and is not held against you. The fleet app shows when each vehicle was last heard from.",
-      "Drivers: the consignment note of each load that is yours is kept on your phone while there is signal, so it opens at a checkpoint with none — it says it is the copy kept, and when. Notes of loads no longer yours, and all of them when you sign out, are removed."
+      "Drivers: the consignment note of each load that is yours is kept on your phone while there is signal, so it opens at a checkpoint with none — it says it is the copy kept, and when. Notes of loads no longer yours, and all of them when you sign out, are removed. Across a border the load’s commercial invoice is kept beside its note, from pickup on, and removed with it."
     ],
     notes: [
       "Do not clear the app’s data while something is still to send: the record of what you moved is on the phone until it has gone.",
@@ -1100,6 +1100,7 @@ export const ARTICLES: GuideArticle[] = [
     steps: [
       "Shop app: Freight, open the load, then “Consignment note”. Print or save it for your books.",
       "Driver app: Loads, then “Consignment note” under the load — show it at a weighbridge, a border or the receiver’s gate.",
+      "Driver app, across a border: once you have taken the goods over, “Commercial invoice” is under the load beside the note — the paper the officer asks for. It is not shown before pickup, nor on a load in one country, nor to your fleet’s office: it is the shipper’s paper.",
       "Fleet app: Earnings, then “Consignment note” on any haul."
     ],
     notes: [

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { forgetPapers, KEEP_AGAIN_MS, keepPaper, keptPaper, needsKeeping } from './keptPapers';
+import { forgetPapers, invoicePaperRef, KEEP_AGAIN_MS, keepPaper, keptPaper, needsKeeping } from './keptPapers';
 
 /** A phone's storage, as the browser gives it. */
 function fakeStore() {
@@ -49,5 +49,18 @@ describe('the papers kept on the phone', () => {
     const blocked = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('full'); }, removeItem: () => undefined, key: () => null, length: 0 };
     expect(() => keepPaper('did:d1', 'frt_1', 'x', 'claimed', Date.now(), blocked)).not.toThrow();
     expect(keptPaper('did:d1', 'frt_1', blocked)).toBeNull();
+  });
+});
+
+describe('the invoice kept beside the note (round 38: carrier from pickup, cross-border only)', () => {
+  it('keeps it under a name of its own, apart from the note, and forgets it with the load', () => {
+    const s = fakeStore();
+    keepPaper('did:d1', 'frt_1', '<html>note</html>', 'in_transit', Date.now(), s);
+    keepPaper('did:d1', invoicePaperRef('frt_1'), '<html>invoice</html>', 'in_transit', Date.now(), s);
+    expect([keptPaper('did:d1', 'frt_1', s)?.html, keptPaper('did:d1', invoicePaperRef('frt_1'), s)?.html]).toEqual(['<html>note</html>', '<html>invoice</html>']);
+    // Still theirs, but the invoice no longer theirs to show (a load in one country, say): the note stays, the invoice goes.
+    expect(forgetPapers('did:d1', ['frt_1'], s)).toBe(1);
+    expect(keptPaper('did:d1', invoicePaperRef('frt_1'), s)).toBeNull();
+    expect(invoicePaperRef('frt_1')).not.toBe('frt_1');
   });
 });

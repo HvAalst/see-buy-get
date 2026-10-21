@@ -125,6 +125,39 @@ describe('a shipper’s papers, over the wire', () => {
     expect((await http().get(url).set(bearer(jenga.token)).expect(200)).body).toMatchObject({ crossesBorder: true, mayWrite: true, current: { invoiceId: signed.invoiceId } });
     expect((await http().get(url).set(bearer(operator)).expect(200)).body).toMatchObject({ mayWrite: false, current: { invoiceId: signed.invoiceId } });
 
+    // NEED-TO-KNOW (round 38, the user: "Carrier from pickup, cross-border only"). The carrier's office is told that an
+    // invoice travels and nothing it says; the driver too, until the goods are taken over; from then on the driver reads it,
+    // the paper to show at the border. On a load in one country it stays with the shipper.
+    const managers = app.get(FleetManagerService);
+    const n = digits();
+    const office = managers.register({
+      companyName: `Carrier ${n}`, contactPhone: `+2548${n}2`, ownerFullName: 'C C', ownerNationalId: `MGR-CAR-${n}`, location: { lat: -1.2, lng: 36.8 },
+      requirements: { businessRegistrationNo: `BRN-CAR-${n}`, transportOperatorLicence: `TOL-CAR-${n}`, taxId: `TAX-CAR-${n}` },
+    });
+    const officeToken = (await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: office.did, tenant: office.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
+    const d = (await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Opiyo', fullName: 'Opiyo Border', nationalId: `DRV-PAP-${n}`, mobile: `+2547${n}8`, licenceClasses: ['truck'], licenceNumber: `DL-PAP-${n}`, licenceExpiresAt: '2030-01-01' }).expect(201)).body;
+    const driverToken = (await http().post('/v1/auth/token').send({ role: 'driver', did: d.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
+    Object.assign(dispatch.requireFreightPublic(id), { carrierDid: office.did, claimedBy: d.did });
+    for (const reader of [officeToken, driverToken]) {
+      expect((await http().get(url).set(bearer(reader)).expect(200)).body).toEqual({ freightId: id, crossesBorder: true, collectable: true, earlier: [], mayWrite: false, withheld: true, travels: true });
+      expect((await http().get(`${url}.html`).set(bearer(reader)).expect(403)).text).toMatch(/reads it from pickup on/);
+    }
+    const claimOf = () => dispatch.claimsFor(d.did).find((c) => c.ref === id);
+    expect(claimOf()?.invoiceToShow).toBeUndefined();
+    // Taken over: the driver reads it, and it is theirs to show at the border. The office still does not.
+    Object.assign(dispatch.requireFreightPublic(id), { status: 'in_transit', pickedUpAt: new Date().toISOString() });
+    expect((await http().get(url).set(bearer(driverToken)).expect(200)).body).toMatchObject({ current: { invoiceId: signed.invoiceId, totalValue: 360 } });
+    expect((await http().get(`${url}.html`).set(bearer(driverToken)).expect(200)).text).toContain('6904.10');
+    expect(claimOf()?.invoiceToShow).toBe(true);
+    expect((await http().get(url).set(bearer(officeToken)).expect(200)).body.withheld).toBe(true);
+    await http().get(`${url}.html`).set(bearer(officeToken)).expect(403);
+    // In one country it stays with the shipper, even from the driver carrying it.
+    Object.assign(dispatch.requireFreightPublic(id), { destCountry: 'KE' });
+    expect((await http().get(url).set(bearer(driverToken)).expect(200)).body.withheld).toBe(true);
+    expect(claimOf()?.invoiceToShow).toBeUndefined();
+    expect((await http().get(url).set(bearer(jenga.token)).expect(200)).body.current.invoiceId).toBe(signed.invoiceId);
+    Object.assign(dispatch.requireFreightPublic(id), { destCountry: 'UG', status: 'claimed', pickedUpAt: undefined, claimedBy: 'did:glos:papers-driver', carrierDid: undefined });
+
     // Printed: three copies; the labels name the papers in the pouch and carry each SSCC in its GS1-128 form.
     const copies = (await http().get(`${url}.html`).set(bearer(jenga.token)).expect(200)).text;
     expect((copies.match(/<section class="copy">/g) ?? []).length).toBe(3);

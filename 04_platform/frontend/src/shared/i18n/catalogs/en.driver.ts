@@ -898,6 +898,9 @@ export const enDriver = {
   'driver.tamper.send': 'Report it — hold the load',
   'driver.tamper.heldHint': 'Held: wait for SeeBuyGet operations to release it.',
   'driver.loads.heldShort': 'Held — operations has been told',
+  // Round 38 — the load's commercial invoice, shown at the border (screens/LoadsScreen.tsx).
+  'driver.invoice.open': 'Commercial invoice',
+  'driver.invoice.title': 'Commercial invoice — for the border',
   // Held by the police or customs on the road, and let go (screens/HeldStrip.tsx).
   'driver.held.open': 'Held by police or customs?',
   'driver.held.title': 'Held on the road',

@@ -7,7 +7,7 @@ import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
-import { CommercialInvoiceService } from './commercial-invoice.service';
+import { carrierReadsInvoice, CommercialInvoiceService } from './commercial-invoice.service';
 import { CommercialInvoice, CommercialInvoiceView, OwnInvoicePaper } from './commercial-invoice.types';
 import { DispatchService } from './dispatch.service';
 import { ConsignmentNoteService } from './consignment-note.service';
@@ -21,6 +21,8 @@ import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
 /** What staff, a carrier or anybody but the shipper is told at the door that writes an invoice. */
 const SHIPPER_ONLY = 'A commercial invoice is the shipper’s own paper: the business that posted the load writes it, and staff and carriers read it';
+/** Round 38 — what a party to the load the invoice is not for is told at its page. */
+const NOT_YOURS_TO_READ = 'The commercial invoice is the shipper’s paper. The driver carrying a load across a border reads it from pickup on, to show at the border; nobody else on the carrier’s side reads it.';
 
 /**
  * THE PAPERS A SHIPPER PUTS ON ITS GOODS: the package labels — our code and, under its GS1 company prefix, the global
@@ -106,6 +108,7 @@ export class ShippingPapersController {
   @AtTheCounter()
   invoice(@Param('id') id: string, @Actor() actor: IntrospectionResult): CommercialInvoiceView {
     const f = this.notes.requireReader(id, actor);
+    if (!this.readsInvoice(f, actor)) return this.invoices.withheldView(f, this.dispatch.postedByBusiness(f));
     return this.invoices.view(f, this.mayWrite(f, actor), this.dispatch.postedByBusiness(f));
   }
 
@@ -146,9 +149,21 @@ export class ShippingPapersController {
   @AtTheCounter()
   invoiceHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
     const f = this.notes.requireReader(id, actor);
+    if (!this.readsInvoice(f, actor)) throw new GlosError('FORBIDDEN', NOT_YOURS_TO_READ);
     const current = this.invoices.current(f.freightId);
     if (!current) throw new GlosError('NOT_FOUND', 'This load has no commercial invoice yet');
     return this.invoices.htmlFor(current);
+  }
+
+  /**
+   * Round 38 — WHO READS THE INVOICE ITSELF (the user: "Carrier from pickup, cross-border only"): the shipper and staff,
+   * always; on the carrier's side only the driver carrying a load across a border, from pickup on. Every other party to the
+   * load is told whether an invoice travels, and no more.
+   */
+  private readsInvoice(f: Freight, actor: IntrospectionResult | undefined): boolean {
+    if (actor?.role === 'operator') return true;
+    if (actor?.did && this.notes.isShipper(f, actor.did)) return true;
+    return carrierReadsInvoice(f, actor?.did);
   }
 
   private mayWrite(f: Freight, actor: IntrospectionResult | undefined): boolean {

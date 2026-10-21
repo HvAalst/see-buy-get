@@ -32,6 +32,14 @@ function local(): Store | null {
 
 const keyOf = (owner: string, ref: string) => `${PREFIX}${owner}:${ref}`;
 
+/**
+ * Round 38 — the load's commercial invoice, kept beside its note under a name of its own: the driver carrying a load across
+ * a border shows it there, from pickup on, where the signal is worst. Forgotten with the note.
+ */
+export function invoicePaperRef(freightId: string): string {
+  return `${freightId}~invoice`;
+}
+
 export function keepPaper(owner: string, ref: string, html: string, status?: string, now: number = Date.now(), store: Store | null = local()): void {
   if (!store || !owner || !ref || !html) return;
   try {

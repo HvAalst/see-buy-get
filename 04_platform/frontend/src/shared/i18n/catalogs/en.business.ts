@@ -611,6 +611,8 @@ export const enBusiness = {
   'business.papers.invoiceNeeded': 'This load crosses a border: the carrier cannot take the goods over until you sign its commercial invoice here, or say your own invoice travels with them.',
   'business.papers.invoiceDomestic': 'Needed when goods cross a border. This load stays in one country.',
   'business.papers.invoiceLine': '{number} · {total} · signed by {name} on {day}',
+  'business.papers.invoiceWhoReads': 'The driver carrying the goods reads it from pickup on, to show at the border. Nobody else on the carrier’s side reads it — not their office.',
+  'business.papers.invoiceStaysWithYou': 'It stays with you: on a load in one country no carrier reads it.',
   'business.papers.printCopies': 'Print 3 copies',
   'business.papers.write': 'Write the commercial invoice',
   'business.papers.writeAgain': 'Write a new one in its place',

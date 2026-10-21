@@ -128,4 +128,12 @@ export class CommercialInvoiceView {
   collectable: boolean;
   /** Whether the reader may write a new one: the business that posted the load, a member who may act. */
   mayWrite: boolean;
+  /**
+   * Round 38 — NOT THIS READER'S TO READ (the user: "Carrier from pickup, cross-border only"): the fleet office, a driver
+   * before the goods are taken over, a carrier on a load in one country. Told whether an invoice travels and whether the
+   * goods may be taken over — nothing of what it says, whom it names or what the goods are worth.
+   */
+  withheld?: boolean;
+  /** An invoice travels with the goods: one written here, or the shipper's own paper. Said where the invoice is withheld. */
+  travels?: boolean;
 }

@@ -99,6 +99,8 @@ export function createDriverApi(sbg: SbgClient) {
     claims: (did: string) => sbg.request((c) => c.GET('/v1/sbg/fleet/drivers/{did}/claims', { params: { path: { did } } })),
     /** FP2 — the consignment note of a load this driver carries. */
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
+    /** Round 38 — the load's commercial invoice, to show at the border: the driver carrying it across one, from pickup on. */
+    freightInvoice: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/commercial-invoice.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
 
     /** Nearby open-data transport rates (the driver sets their own per-km price against the market). */
     vehicleRates: () => sbg.request((c) => c.GET('/v1/sbg/pricing/near', { params: { query: { type: 'vehicle' } } })),

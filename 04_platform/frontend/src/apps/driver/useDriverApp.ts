@@ -7,7 +7,7 @@ import type { CheckResultView, CheckSheetView } from './screens/VehicleCheck';
 import type { BreakdownView, TakeOverView, TakenOverView } from './screens/Breakdown';
 import type { IconName } from '../../shared/ui/Icon';
 import type { HeldByAuthorityView } from '../../shared/heldByAuthority';
-import { forgetPapers, keepPaper, keptPaper, needsKeeping } from '../../shared/keptPapers';
+import { forgetPapers, invoicePaperRef, keepPaper, keptPaper, needsKeeping } from '../../shared/keptPapers';
 import { choosePin, createDriverClient, driverConfig, driverSession, isMintSourced, isSignInRequired, narrow, purgeDriverTokens, requestPhoneCode, verifyPhoneCode } from './api';
 import { adoptDidFromUrl, clearDid, saveDid, saveRadius, saveRoute, savedRadius, savedRoute } from './storage';
 import type {
@@ -379,13 +379,23 @@ export function useDriverApp() {
     async (claims: ClaimsView['claims']) => {
       if (!client || !did) return;
       const mine = claims.filter((c) => c.kind === 'freight' && (c.status === 'claimed' || c.status === 'in_transit'));
-      forgetPapers(did, mine.map((c) => c.ref));
+      // Round 38 — the invoice of a load carried across a border, kept beside its note; every other copy forgotten.
+      const invoices = mine.filter((c) => c.invoiceToShow);
+      forgetPapers(did, [...mine.map((c) => c.ref), ...invoices.map((c) => invoicePaperRef(c.ref))]);
       for (const c of mine) {
         if (!needsKeeping(keptPaper(did, c.ref), c.status)) continue;
         const r = await client.api.freightNote(c.ref);
         if (r.error) return; // no signal now: the copies there are stay as they are
         const doc = (r as { data?: unknown }).data;
         keepPaper(did, c.ref, typeof doc === 'string' ? doc : String(doc ?? ''), c.status);
+      }
+      for (const c of invoices) {
+        const ref = invoicePaperRef(c.ref);
+        if (!needsKeeping(keptPaper(did, ref), c.status)) continue;
+        const r = await client.api.freightInvoice(c.ref);
+        if (r.error) return;
+        const doc = (r as { data?: unknown }).data;
+        keepPaper(did, ref, typeof doc === 'string' ? doc : String(doc ?? ''), c.status);
       }
     },
     [client, did],
@@ -2125,6 +2135,7 @@ export function useDriverApp() {
       tellWhenRested,
       /** FP2 — the consignment note of a load this driver carries. */
       freightNote: (freightId: string) => client!.api.freightNote(freightId),
+      freightInvoice: (freightId: string) => client!.api.freightInvoice(freightId),
       matchRate,
       submitRoute,
       repeatRoute,

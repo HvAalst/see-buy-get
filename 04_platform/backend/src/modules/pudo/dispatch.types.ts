@@ -1334,6 +1334,8 @@ export class Claimable {
   kind: ClaimableKind;
   /** Freight crossing a border whose shipper has not yet signed its commercial invoice: it cannot be taken over yet. */
   invoiceMissing?: boolean;
+  /** Round 38 — the load's commercial invoice is this driver's to show at the border: across one, from pickup on. */
+  invoiceToShow?: boolean;
   /** Round 14 — a load on the road: what the driver needs to say it is at a border, has cleared it, or is at a hub. */
   @ApiPropertyOptional({ type: LoadPassageForDriver }) passage?: LoadPassageForDriver;
   /** Round 15 — the seals to read off the door at pickup (and look at with the receiver): what each is, never its number. */
