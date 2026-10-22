@@ -6,11 +6,12 @@ import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto } from './pudo.dto';
+import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto } from './pudo.dto';
 import { AccountService } from './account.service';
 import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
 import { AccountRecoveryService } from './account-recovery.service';
+import { AccountClosingService } from './account-closing.service';
 
 /**
  * THE ACCOUNT — one surface, every app.
@@ -47,6 +48,7 @@ export class AccountController {
     private readonly moves: AccountMoveService,
     private readonly idDisputes: IdDisputeService,
     private readonly accounts: AccountService,
+    private readonly closing: AccountClosingService,
   ) {}
 
   /**
@@ -96,6 +98,26 @@ export class AccountController {
   @Post('unmute')
   unmute(@Actor() actor: IntrospectionResult) {
     return this.persons.view(this.persons.unmute(actingPerson(actor)));
+  }
+
+  /**
+   * CAN MY ACCOUNT BE CLOSED, AND WHAT IS STILL OPEN (the user, 2026-10-22). Only once its owner was told — after four
+   * years without a sign-in; then what keeps it from closing, thing by thing, for Settings to say before the PIN.
+   */
+  @SignedIn()
+  @Get('closing')
+  closingStanding(@Actor() actor: IntrospectionResult) {
+    return this.closing.standing(actingPerson(actor));
+  }
+
+  /**
+   * CLOSE MY ACCOUNT — with the PIN, once told it can be, with nothing open. Personal details go; what other people's
+   * records point at stays, as "closed account". Every session ends, this one included.
+   */
+  @SignedIn()
+  @Post('close')
+  close(@Body() dto: AccountCloseDto, @Actor() actor: IntrospectionResult) {
+    return this.closing.close(actingPerson(actor), dto.pin);
   }
 
   /** Set the person's own name, photo or address. Each field independent; an empty address clears it. */

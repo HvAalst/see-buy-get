@@ -86,7 +86,7 @@ describe('your data, and cookies', () => {
     }
   });
 
-  it('claims nothing the system does not do: signing out does not clear a phone, not everything is encrypted, no account can be deleted from an app', () => {
+  it('claims nothing the system does not do: signing out does not clear a phone, not everything is encrypted, an account closes only as the system closes it', () => {
     const all = NOTICE_KINDS.flatMap(words).join('\n');
     expect(all).not.toMatch(/sign(ing)? out (removes|clears|deletes|wipes|erases)/i);
     expect(all).not.toMatch(/(all|every(thing)?)( of)?( your| personal)? data is encrypted|everything is encrypted/i);
@@ -94,7 +94,9 @@ describe('your data, and cookies', () => {
     expect(all).not.toMatch(/download (all )?your (personal )?data/i);
     expect(all).not.toMatch(/never (stored|kept)|we never keep/i);
     // And the things it must say, because the system does them.
-    expect(all).toMatch(/no button yet to close a SeeBuyGet account/);
+    // Closing is offered only after four years without a sign-in, and removes personal details only (2026-10-22).
+    expect(all).toMatch(/four years without a sign-in can be closed by its owner/);
+    expect(all).not.toMatch(/close (it|your account) (at )?any ?time|delete everything/i);
     expect(all).toMatch(/Some things stay after signing out/);
     expect(all).toMatch(/without that extra encryption/);
   });

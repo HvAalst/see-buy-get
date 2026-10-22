@@ -594,6 +594,29 @@ export class AgentService {
     this.prints.releaseKey(key, did);
   }
 
+  /**
+   * ITS OWNER CLOSED THEIR ACCOUNT (2026-10-22): their name, national ID and phone leave the vault, the numbers leave
+   * the register so somebody else may use them, the ID and licence photographs go, and the shop is locked. The shop's
+   * record stays — parcels and hand-overs point at it — under its own name, which is the shop's and not a person's.
+   */
+  forgetOwner(did: string): void {
+    const agent = this.agents.get(did);
+    if (!agent) return;
+    if (agent.vaultRef && this.vault.exists(agent.vaultRef)) {
+      const pii = this.vault.reveal(agent.vaultRef, { purpose: 'account-closed', requesterDid: did });
+      this.prints.release('nationalId', typeof pii.governmentId === 'string' ? pii.governmentId : undefined, did);
+      this.prints.release('phone', typeof pii.phone === 'string' ? pii.phone : undefined, did);
+      this.vault.forget(agent.vaultRef, { purpose: 'account-closed', requesterDid: did });
+    }
+    for (const ref of [agent.kyc?.idCopyRef, agent.kyc?.tradingLicenceRef, agent.licence?.copyRef, agent.licenceRenewal?.copyRef]) this.media.purgeByOwner(ref, did);
+    // The tablet it was bound to is free for another shop, as its numbers are.
+    this.prints.release('device', agent.deviceImei, did);
+    agent.deviceImei = '';
+    agent.status = 'LOCKED';
+    this.agents.set(did, agent);
+    this.dids.forgetController(did);
+  }
+
   /** Whether this registration was made with that national ID number — the question an email recovery has to answer. */
   holdsNationalId(did: string, nationalId: string | undefined): boolean {
     return Boolean(nationalId?.trim()) && this.prints.holder('nationalId', nationalId) === did;

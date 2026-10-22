@@ -61,6 +61,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // A person mutes or wakes their own account (2026-10-22): theirs alone, never staff's.
   'POST sbg/account/mute': 'none',
   'POST sbg/account/unmute': 'none',
+  // …and closes it, once it can be closed: theirs alone.
+  'GET sbg/account/closing': 'none',
+  'POST sbg/account/close': 'none',
   // A company administrator's own sign-in, asked by the console when a tab comes back — not a staff door.
   'GET sbg/entities/admins/me': 'none',
   'GET sbg/agents': 'any',

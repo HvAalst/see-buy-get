@@ -451,6 +451,23 @@ export class FleetManagerService {
     if (blocks.length) throw new GlosError('CARRIER_NOT_TRADING', `This carrier is not taking new work: ${blocks.join('; ')}`);
   }
 
+  /**
+   * THE OWNER CLOSED THEIR ACCOUNT (2026-10-22): their name, national ID and phone leave the vault, the contact phone
+   * and email go, the owner's ID and proof-of-address photographs go, and the fleet is suspended. The company's own
+   * papers (registration, operator licence) stay with the loads it carried: they are the company's, not a person's.
+   */
+  forgetOwner(did: string): void {
+    const m = this.managers.get(did);
+    if (!m) return;
+    if (m.vaultRef && this.vault.exists(m.vaultRef)) this.vault.forget(m.vaultRef, { purpose: 'account-closed', requesterDid: did });
+    for (const ref of [m.kyc?.ownerIdRef, m.kyc?.proofOfAddressRef]) this.media?.purgeByOwner(ref, did);
+    m.contactPhone = '';
+    delete m.contactEmail;
+    m.status = 'SUSPENDED';
+    this.managers.set(did, m);
+    this.dids.forgetController(did);
+  }
+
   suspend(did: string): FleetManager {
     return this.transition(this.require(did), 'SUSPENDED');
   }

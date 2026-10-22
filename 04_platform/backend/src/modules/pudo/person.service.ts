@@ -909,6 +909,47 @@ export class PersonService {
     return person;
   }
 
+  /** Every person, for a sweep that has to look at each (the 48-month notice). Never for a request. */
+  everyone(): Person[] {
+    return [...this.persons.values()];
+  }
+
+  /** They were told it can be closed: keep that, from the first time, and when it was last said. */
+  markClosable(personDid: string, now: number = Date.now()): Person {
+    const person = this.requireByDid(personDid);
+    const at = new Date(now).toISOString();
+    person.closableSince ??= at;
+    person.closableNoticeAt = at;
+    this.save(person);
+    return person;
+  }
+
+  /**
+   * THE OWNER CLOSES THEIR ACCOUNT (the user, 2026-10-22: personal details only). Their name, address and email leave
+   * the vault, the photo goes, the PIN and every device it worked on go, and the phone number is let go: the record is
+   * kept under a key that is nobody's number, so the same phone can sign up again as somebody new and finds nothing
+   * of this account. Every session ends. Its roles are suspended; each role's own record is forgotten by its service
+   * (AccountClosingService does the whole, in order). Closing twice changes nothing.
+   */
+  close(personDid: string, now: number = Date.now()): Person {
+    const person = this.requireByDid(personDid);
+    if (person.closedAt) return person;
+    if (person.vaultRef && this.vault.exists(person.vaultRef)) this.vault.forget(person.vaultRef, { purpose: 'account-closed', requesterDid: personDid });
+    delete person.vaultRef;
+    this.media.purgeByOwner(person.avatarMediaId, personDid);
+    delete person.avatarMediaId;
+    this.devices.forgetAll(personDid);
+    if (person.emailHash) this.byEmail.delete(person.emailHash);
+    for (const field of ['emailHash', 'emailMasked', 'emailVerifiedAt', 'pinHash', 'pinSalt', 'pinAttempts', 'pinLockedAt', 'pinLockedUntil', 'pinUsedAt', 'pinChangedAt', 'phoneChange', 'oldNumber', 'mutedAt', 'closableNoticeAt'] as const) delete person[field];
+    person.roles = person.roles.map((r) => ({ ...r, status: 'suspended' }));
+    person.closedAt = new Date(now).toISOString();
+    this.persons.delete(person.phoneHash);
+    person.phoneHash = `closed:${personDid}`;
+    this.save(person);
+    this.auth.revokeAll(personDid);
+    return person;
+  }
+
   /** Is this DID — a person, or a shop, driver, fleet or store a person owns — at rest? */
   isResting(did: string | undefined): boolean {
     return Boolean(did) && this.resting.has(did as string);
@@ -928,7 +969,8 @@ export class PersonService {
   private indexRest(person: Person): void {
     for (const did of this.restingOf.get(person.personDid) ?? []) this.resting.delete(did);
     this.restingOf.delete(person.personDid);
-    if (!person.mutedAt) return;
+    // A closed account rests for good: nothing new reaches it, and no finder offers what it owned.
+    if (!person.mutedAt && !person.closedAt) return;
     const dids = [person.personDid, ...person.roles.filter((r) => r.role !== 'consumer' && r.entityDid).map((r) => r.entityDid)];
     for (const did of dids) this.resting.add(did);
     this.restingOf.set(person.personDid, dids);

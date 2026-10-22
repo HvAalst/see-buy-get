@@ -59,6 +59,11 @@ export class PayoutNumberService implements OnModuleInit {
   }
 
   /** What this payee's Settings shows: how its country pays, and the number, masked — or why it has none of its own. */
+  /** ITS OWNER CLOSED THEIR ACCOUNT (2026-10-22): the number payouts went to was theirs, and goes, with its history. */
+  forget(payeeId: string): void {
+    this.numbers.delete(payeeId);
+  }
+
   view(actor: IntrospectionResult | undefined, now: number = Date.now()): PayoutNumberView {
     const who = this.payeeOf(actor);
     if ('notPayee' in who) return { way: payoutWayOf(who.country), country: who.country, notPayee: who.notPayee };

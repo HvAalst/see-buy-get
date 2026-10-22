@@ -77,6 +77,26 @@ export class BusinessService {
     this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
   }
 
+  /**
+   * A MEMBER CLOSED THEIR ACCOUNT (2026-10-22): they leave every business they were in or invited to, and their name
+   * and number go from it. The membership is kept, as removed members are, named "Closed account": "who booked this
+   * in March" stays answerable, by whom no longer.
+   */
+  forgetPerson(personDid: string, phoneHash: string, now: number = Date.now()): number {
+    let touched = 0;
+    for (const m of this.members.values()) {
+      if (m.personDid !== personDid && m.forPersonDid !== personDid && m.phoneHash !== phoneHash) continue;
+      m.removedAt ??= new Date(now).toISOString();
+      m.removedBy ??= 'Closed by its owner';
+      m.name = 'Closed account';
+      m.phoneHash = `closed:${personDid}`;
+      m.phoneEnds = '';
+      this.members.set(m.memberId, m);
+      touched += 1;
+    }
+    return touched;
+  }
+
   /** An account is moving off a number: every open invitation still addressed to that number and to no account is theirs. */
   keepWith(personDid: string, fromHash: string): number {
     let kept = 0;

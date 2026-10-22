@@ -66,6 +66,18 @@ export class DidService {
     return this.registry.has(did);
   }
 
+  /**
+   * THE OWNER CLOSED THEIR ACCOUNT (2026-10-22): a registration's controller named them — for a shop, a driver or a
+   * fleet, their phone number — and it names nobody now. The DID stays resolvable, because parcels, hand-overs and
+   * notes point at it; it can no longer be proved to belong to anyone. The ledger holds only a hash of the original.
+   */
+  forgetController(did: string): void {
+    const doc = this.registry.get(did);
+    if (!doc) return;
+    const closed = `closed:${did}`;
+    this.registry.set(did, { ...doc, controller: closed, verificationMethod: doc.verificationMethod.map((m) => ({ ...m, controller: closed })), metadata: { ...(doc.metadata ?? {}), closedAt: new Date().toISOString() } });
+  }
+
   isController(did: string, controller: string): boolean {
     const doc = this.registry.get(did);
     return Boolean(doc && doc.controller === controller);

@@ -645,6 +645,29 @@ export class DriverService {
     return this.prints.keyOf('phone', pii.phone);
   }
 
+  /**
+   * THE DRIVER CLOSED THEIR ACCOUNT (2026-10-22): name, national ID and phone leave the vault, the numbers (and the
+   * licence's) leave the register, every photograph of them or their papers goes, and the registration is suspended.
+   * The record stays for the loads it carried, named "Closed account" — a note already signed keeps what it said then.
+   */
+  forgetOwner(did: string): void {
+    const driver = this.drivers.get(did);
+    if (!driver) return;
+    if (driver.vaultRef && this.vault.exists(driver.vaultRef)) {
+      const pii = this.vault.reveal(driver.vaultRef, { purpose: 'account-closed', requesterDid: did });
+      this.prints.release('nationalId', typeof pii.governmentId === 'string' ? pii.governmentId : undefined, did);
+      this.prints.release('phone', typeof pii.phone === 'string' ? pii.phone : undefined, did);
+      this.vault.forget(driver.vaultRef, { purpose: 'account-closed', requesterDid: did });
+    }
+    if (driver.licence?.number && driver.licence.number !== 'n/a') this.prints.release('licence', driver.licence.number, did);
+    for (const ref of [driver.portrait?.photoRef, driver.kyc?.idCopyRef, driver.kyc?.licenceCopyRef]) this.media?.purgeByOwner(ref, did);
+    this.media?.dropIdentityCheck(driver.idCheck?.photoRef);
+    driver.displayName = 'Closed account';
+    driver.status = 'SUSPENDED';
+    this.drivers.set(did, driver);
+    this.dids.forgetController(did);
+  }
+
   /** The change was undone: the new number is let go, and the vault says the old one again. */
   undoMobile(did: string): void {
     const driver = this.require(did);

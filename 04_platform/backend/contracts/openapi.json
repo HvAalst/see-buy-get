@@ -19858,6 +19858,49 @@
         }
       }
     },
+    "/v1/sbg/account/closing": {
+      "get": {
+        "operationId": "Account.closingStanding",
+        "summary": "",
+        "description": "CAN MY ACCOUNT BE CLOSED, AND WHAT IS STILL OPEN (the user, 2026-10-22). Only once its owner was told — after four\nyears without a sign-in; then what keeps it from closing, thing by thing, for Settings to say before the PIN.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/close": {
+      "post": {
+        "operationId": "Account.close",
+        "summary": "",
+        "description": "CLOSE MY ACCOUNT — with the PIN, once told it can be, with nothing open. Personal details go; what other people's\nrecords point at stays, as \"closed account\". Every session ends, this one included.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountCloseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/account/profile": {
       "patch": {
         "operationId": "Account.setProfile",
@@ -49381,6 +49424,17 @@
             }
           }
         }
+      },
+      "AccountCloseDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ]
       },
       "AccountProfileDto": {
         "type": "object",

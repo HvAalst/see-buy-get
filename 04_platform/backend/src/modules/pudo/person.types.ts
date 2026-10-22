@@ -85,6 +85,18 @@ export interface Person {
    * record from before it was kept: such an account counts from when it was made.
    */
   lastSignInAt?: string;
+  /**
+   * TOLD THAT IT CAN BE CLOSED — after 48 months without a sign-in — and since when. It stays offered after they sign in
+   * to act on it: being told is what opened it, and reading the notice must not shut it again.
+   */
+  closableSince?: string;
+  /** When that was last said, so it is said once for each four years without a sign-in, never every day. */
+  closableNoticeAt?: string;
+  /**
+   * CLOSED BY ITS OWNER. Their name, ID numbers, phone, email and ID photographs are gone; the record stays, under a
+   * key that is nobody's number, so the parcels, hand-overs and notes that point at it still read "closed account".
+   */
+  closedAt?: string;
 }
 
 /**
@@ -160,6 +172,8 @@ export interface PersonView {
   numberChange?: { at: string; undoUntil: string };
   /** Self-view only: muted by its owner, since when. Absent: not muted. */
   mutedAt?: string;
+  /** Self-view only: told it can be closed (48 months without a sign-in), since when. Absent: it cannot be closed yet. */
+  closableSince?: string;
   /**
    * Self-view only: the number this account moved off is still its own until then — what is sent to it arrives here.
    * `canBlock` once the move can no longer be undone: the holder lets the old number go themselves.
@@ -193,5 +207,6 @@ export function toView(person: Person): PersonView {
     ...(person.emailMasked && person.emailVerifiedAt ? { email: person.emailMasked } : {}),
     ...(person.phoneChange ? { numberChange: { at: person.phoneChange.at, undoUntil: person.phoneChange.undoUntil } } : {}),
     ...(person.mutedAt ? { mutedAt: person.mutedAt } : {}),
+    ...(person.closableSince && !person.closedAt ? { closableSince: person.closableSince } : {}),
   };
 }

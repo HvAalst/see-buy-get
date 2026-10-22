@@ -112,6 +112,22 @@ export class IdentityVault {
     return this.crypto.decryptObject<PiiRecord>(entry.ciphertext);
   }
 
+  /**
+   * FORGET A RECORD — its owner closed their account (2026-10-22). The ciphertext goes; a receipt says who asked and
+   * why, as every reveal does, so the trail shows a record was forgotten and never what it held.
+   */
+  forget(vaultRef: string, access: VaultAccess): void {
+    if (!this.records.has(vaultRef)) return;
+    const record: VaultAccessRecord = { ...access, vaultRef, at: new Date().toISOString() };
+    if (this.receiptFile) {
+      mkdirSync(DATA_DIR, { recursive: true });
+      appendFileSync(this.receiptFile, JSON.stringify(record) + '\n');
+    }
+    this.accessLog.push(record);
+    if (this.accessLog.length > IdentityVault.ACCESS_LOG_CAP) this.accessLog.splice(0, this.accessLog.length - IdentityVault.ACCESS_LOG_CAP);
+    this.records.delete(vaultRef);
+  }
+
   exists(vaultRef: string): boolean {
     return this.records.has(vaultRef);
   }

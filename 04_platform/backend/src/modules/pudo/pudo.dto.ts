@@ -2210,6 +2210,11 @@ export class AccountEmailDto {
 }
 
 /** Changing your own PIN. No phone: the account being changed is the one the token signed in as. */
+/** Close my account: the PIN, as for every change that cannot be undone. */
+export class AccountCloseDto {
+  @IsString() pin!: string;
+}
+
 export class AccountPinDto {
   @IsString() currentPin!: string;
   @IsString() newPin!: string;

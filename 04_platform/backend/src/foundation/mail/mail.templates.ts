@@ -131,6 +131,8 @@ export interface MailParams {
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
   /** Something happened to the way somebody signs in. Always sent; cannot be turned off. */
   'account-safety': { headline: string; what: string; next: string; when: string; until?: string };
+  /** Four years without a sign-in: the account can be closed, if its owner wants (the user, 2026-10-22). */
+  'account-may-close': { lastSignInAt: string };
   /**
    * The day before somebody is expected in person: when, where, and what to bring. `yours` — they made the
    * appointment; false, the other person did and this one may come too. `fits` false: the office has since changed
@@ -986,6 +988,29 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     }),
   },
 
+  'account-may-close': {
+    stillToRest: true,
+    title: 'Your account can be closed',
+    sentWhen: 'An account has gone four years without a sign-in. Once for each four years; nothing closes by itself.',
+    wired: true,
+    // Late is still worth knowing: it changes nothing until the owner acts.
+    sendLater: 72,
+    sample: { lastSignInAt: '2026-10-22T08:15:00Z' },
+    build: (p) => ({
+      subject: 'SeeBuyGet: your account can be closed',
+      preheader: 'It has not been signed in to for four years. Nothing happens unless you close it.',
+      blocks: [
+        { kind: 'heading', text: 'Your SeeBuyGet account can be closed' },
+        { kind: 'paragraph', text: 'Your SeeBuyGet account has not been signed in to for four years. If you no longer need it, you can close it.' },
+        { kind: 'facts', rows: [['Last signed in', formatWhen(p.lastSignInAt)]] },
+        { kind: 'paragraph', text: 'Closing removes your name, ID number, phone number, email and ID photos. Parcels, hand-overs and consignment notes stay, showing “closed account” where you were: they are other people’s records too.' },
+        { kind: 'paragraph', text: 'To close it, open any SeeBuyGet app, tap your picture, then “Settings › Close my account”. It can be closed once nothing is open: no parcel or load on its way, no claim or dispute, and no money owed either way.' },
+        { kind: 'warning', title: 'Nothing happens unless you do it', text: 'If you want to keep your account, do nothing. It stays as it is.' },
+        { kind: 'button', label: 'How closing works', href: helpUrl('close-account') },
+      ],
+      reason: 'You are getting this email because it is the recovery address on a SeeBuyGet account that has not been signed in to for four years.',
+    }),
+  },
   'support-answer': {
     stillToRest: true,
     title: 'An answer to a message written from the help',

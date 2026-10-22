@@ -737,6 +737,47 @@ export class ParcelService implements OnApplicationBootstrap {
     return { hash: p.senderPhoneHash, owner: this.keptBy.get(p.parcelId)?.sender };
   }
 
+  /** Parcels this account sent or is to receive that are not finished — what stops it being closed. */
+  openFor(personDid: string): number {
+    let open = 0;
+    for (const p of this.parcels.values()) {
+      const kept = this.keptBy.get(p.parcelId);
+      if ((kept?.receiver === personDid || kept?.sender === personDid) && !['Delivered', 'Voided', 'Returned', 'Lost'].includes(p.status)) open += 1;
+    }
+    return open;
+  }
+
+  /**
+   * ITS OWNER CLOSED THEIR ACCOUNT (2026-10-22): their number leaves every parcel they sent or received, and the key
+   * it was found by is replaced with one that is nobody's — so whoever holds that number next is never shown these.
+   * The parcels stay, with every step and photograph: they are the other party's record too.
+   */
+  forgetPerson(phoneHash: string, personDid: string, email?: string): number {
+    const closed = `closed:${personDid}`;
+    let touched = 0;
+    for (const p of this.parcels.values()) {
+      let changed = false;
+      if (p.senderPhoneHash === phoneHash) {
+        p.senderPhoneHash = closed;
+        p.senderMobile = '';
+        changed = true;
+      }
+      if (p.receiverPhoneHash === phoneHash) {
+        p.receiverPhoneHash = closed;
+        p.receiverMobile = '';
+        changed = true;
+      }
+      if (email && p.buyerEmail && p.buyerEmail.trim().toLowerCase() === email.trim().toLowerCase()) {
+        delete p.buyerEmail;
+        changed = true;
+      }
+      if (!changed) continue;
+      this.parcels.set(p.parcelId, p);
+      touched += 1;
+    }
+    return touched;
+  }
+
   /** How many parcels this account has waiting to be collected — said in the notice that its number was changed. */
   waitingFor(personDid: string): number {
     let waiting = 0;

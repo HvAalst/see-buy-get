@@ -2,9 +2,10 @@
  * YOUR DATA, AND COOKIES (the user, 2026-10-22: "add a use of cookies link in the footer and how we deal with privacy as
  * how the system does it") — /privacy/ and /cookies/. Every sentence is what the SeeBuyGet system does today, read from
  * its code: what it keeps, how, who sees it, which other companies handle it, how long, and what a person can do. Not
- * what it ought to do. So these pages do NOT say that signing out clears a phone, that every number is hashed, that
- * everything is encrypted, or that an account can be deleted — the system does none of those yet. When the system
- * changes, these words change with it.
+ * what it ought to do. So these pages do NOT say that signing out clears a phone, that every number is hashed, or that
+ * everything is encrypted — the system does none of those — and they say an account can be closed only as the system
+ * closes it: by its owner, once told, after four years without a sign-in (2026-10-22). When the system changes, these
+ * words change with it.
  *
  * A section's items are numbered (pages.privacy.keeps.1 …); how many each has is in pages.ts (NOTICES).
  */
@@ -72,7 +73,7 @@ export const enPrivacy = {
   'pages.privacy.howLong.7': 'A message to SeeBuyGet is deleted, with its email address, 180 days after it is closed.',
   'pages.privacy.howLong.8': 'A SeeBuyGet sign-in code lasts 10 minutes by text and 15 minutes by email; a password-reset link lasts 30 minutes.',
   'pages.privacy.howLong.9': 'A phone or browser not used for 90 days stops being one your SeeBuyGet PIN works on.',
-  'pages.privacy.howLong.10': 'Parcels, accounts and conversations have no deletion date yet: SeeBuyGet keeps them.',
+  'pages.privacy.howLong.10': 'Parcels and conversations have no deletion date: SeeBuyGet keeps them, as other people’s records too. An account is kept until its owner closes it, which they can once it has gone four years without a sign-in; its personal details are then removed, and parcels and hand-overs keep “closed account” where the person was.',
   'pages.privacy.howLong.11': 'A deleted record can remain in a backup of the SeeBuyGet database until that backup is replaced by a newer one.',
 
   'pages.privacy.you.title': 'What you can do',
@@ -82,7 +83,7 @@ export const enPrivacy = {
   'pages.privacy.you.4': 'SeeBuyGet notifications can be turned off on each phone.',
   'pages.privacy.you.5': 'A shop, online store or business can download its own SeeBuyGet records, and have a copy sent to storage of its own.',
   'pages.privacy.you.6': 'Under “Settings › Mute my account” you can rest your SeeBuyGet account: nothing new reaches it — no notification on your phone, no email beyond codes and your account’s safety, no new work — until you unmute it. Nothing is deleted.',
-  'pages.privacy.you.7': 'There is no button yet to close a SeeBuyGet account. To ask for that, or to ask what SeeBuyGet holds about you, or to have it corrected, write to us and choose “My data, or closing my account”.',
+  'pages.privacy.you.7': 'A SeeBuyGet account that has gone four years without a sign-in can be closed by its owner, under “Settings › Close my account”, once nothing is open: SeeBuyGet tells them when it can be. Closing removes their name, ID number, phone number, email and ID photos. To ask what SeeBuyGet holds about you, or to have it corrected, write to us and choose “My data, or closing my account”.',
 
   // Cookies (/cookies/).
   'pages.cookies.metaTitle': 'Cookies at SeeBuyGet — none set, and what is kept on your phone',

@@ -292,6 +292,23 @@ export class AccountService implements OnApplicationBootstrap {
     return account;
   }
 
+  /**
+   * ITS OWNER CLOSED THEIR ACCOUNT (2026-10-22): every email-and-password sign-in made with their number goes — the
+   * email it is kept under is theirs — with the phones and browsers it was confirmed on. Its sessions are ended by
+   * the caller, with the person's.
+   */
+  forgetForPhone(phoneHash: string): number {
+    let gone = 0;
+    for (const account of [...this.accounts.values()]) {
+      if (account.phoneHash !== phoneHash) continue;
+      this.devices.forgetAll(account.accountId);
+      this.accounts.delete(account.email);
+      this.auth.revokeAll(account.did);
+      gone += 1;
+    }
+    return gone;
+  }
+
   private isBound(account: Account): boolean {
     return DEVICE_BOUND_ROLES.includes(account.role);
   }

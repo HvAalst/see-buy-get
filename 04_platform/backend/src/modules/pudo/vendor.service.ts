@@ -670,6 +670,15 @@ export class VendorService {
     return handoff;
   }
 
+  /** THE OWNER CLOSED THEIR ACCOUNT (2026-10-22): the store's contact number was theirs, and goes. The store stays at rest. */
+  forgetOwner(vendorDid: string): void {
+    const vendor = this.byDid(vendorDid);
+    if (!vendor) return;
+    delete vendor.contactMobile;
+    this.vendors.set(vendor.vendorId, vendor);
+    this.dids.forgetController(vendorDid);
+  }
+
   /** Open (not-yet-shipped) checkout handoffs for a vendor — the console's incoming-orders inbox. */
   checkoutsFor(vendorId: string, includeConsumed = false): CheckoutHandoff[] {
     return [...this.checkouts.values()].filter((c) => c.vendorId === vendorId && (includeConsumed || !c.consumed)).sort((x, y) => y.at.localeCompare(x.at));

@@ -16,9 +16,9 @@ import { pinChangeBlocker } from './password';
 import { PIN_LENGTH } from './pin';
 import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, type PayoutNumberSaved } from './payoutNumber';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
-import type { AccountApi } from './useAccount';
+import type { AccountApi, ClosingStanding } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'payout' | 'mute';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'payout' | 'mute' | 'close' | 'closed';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -90,8 +90,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
 
   const me = api.account;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
-  const close = view === 'phone-done' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const close = view === 'phone-done' || view === 'closed' ? () => { onClose(); onSignOut(); } : onClose;
+  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -156,6 +156,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {hasContract(api.contract) ? <Row icon="badge" label={t('account.contract.title')} sub={api.contract?.company?.name} onClick={() => setView('contract')} /> : null}
             {/* TO REST IT (the user, 2026-10-22: "an account can be muted by the user") — and to wake it again. */}
             {me ? <Row icon="moon" label={t(me.mutedAt ? 'account.mute.unmuteTitle' : 'account.mute.title')} sub={me.mutedAt ? t('account.mute.since', { when: when(me.mutedAt) }) : t('account.mute.sub')} onClick={() => setView('mute')} /> : null}
+            {/* ONLY ONCE ITS OWNER WAS TOLD: four years without a sign-in (the user, 2026-10-22). Never offered before. */}
+            {me?.closableSince ? <Row icon="warning" label={t('account.close.title')} sub={t('account.close.sub')} onClick={() => setView('close')} /> : null}
           </div>
           {me?.numberChange ? <Note tone="info" icon="info" title={t('account.settings.changed', { when: when(me.numberChange.at), until: when(me.numberChange.undoUntil) })} /> : null}
           {/* THE NUMBER THEY MOVED OFF IS STILL THEIRS FOR A WEEK — the user, 2026-10-08: "the user blocks their own old
@@ -195,6 +197,15 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'mute' ? <MuteForm api={api} onDone={() => setView('list')} /> : null}
+      {view === 'close' ? <CloseForm api={api} onClosed={() => setView('closed')} /> : null}
+      {view === 'closed' ? (
+        <>
+          <Note tone="ok" icon="check" title={t('account.close.doneTitle')} detail={t('account.close.doneBody')} />
+          <Button chevron={false} onClick={close}>
+            {t('account.close.ok')}
+          </Button>
+        </>
+      ) : null}
       {view === 'id' && idRef ? <IdDisputeCase api={api.idDispute} reference={idRef} ownId={api.ownId} onChanged={() => void api.reload()} /> : null}
       {view === 'phone-done' ? (
         <>
@@ -205,7 +216,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
         </>
       ) : null}
 
-      {view === 'phone-done' ? null : (
+      {view === 'phone-done' || view === 'closed' ? null : (
         <Button variant="link" onClick={view === 'list' ? onClose : () => setView('list')}>
           {t(view === 'list' ? 'account.trouble.close' : 'common.back')}
         </Button>
@@ -505,6 +516,67 @@ function MuteForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
       <Button variant={muted ? 'primary' : 'outline'} chevron={false} busy={busy} onClick={() => void go()}>
         {t(muted ? 'account.mute.unmute' : 'account.mute.go')}
       </Button>
+    </>
+  );
+}
+
+/**
+ * CLOSE MY ACCOUNT — what it removes and what stays, said first; then, if anything is still open, each thing in the
+ * reader's words and no PIN asked; when nothing is, the PIN and the button. It cannot be undone, so it says so.
+ */
+function CloseForm({ api, onClosed }: { api: AccountApi; onClosed: () => void }) {
+  const t = useT();
+  const [standing, setStanding] = useState<ClosingStanding | null>(null);
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+
+  useEffect(() => {
+    void api.closing().then((r) => {
+      if (r.error) setError(r.error);
+      else setStanding(r.data ?? { open: [] });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const go = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await api.closeAccount(pin);
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    onClosed();
+  };
+
+  const open = standing?.open ?? [];
+  return (
+    <>
+      <p class="t-body">{t('account.close.lede')}</p>
+      {!standing && !error ? <p class="hint">{t('account.close.reading')}</p> : null}
+      {standing && open.length ? (
+        <>
+          <Note tone="warn" icon="warning" title={t('account.close.openTitle')} detail={t('account.close.openLede')} />
+          {open.map((o) => (
+            <p key={o.kind} class="t-body">
+              {t(`account.close.open.${o.kind}` as never, { n: o.count ?? 1 })}
+            </p>
+          ))}
+        </>
+      ) : null}
+      {standing && !open.length ? (
+        <>
+          <div class="field">
+            <span class="field__label">{t('account.close.pin')}</span>
+            <CodeBoxes id="acct-close-pin" label={t('account.close.pin')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
+          </div>
+          <Refused error={error} />
+          <Button chevron={false} busy={busy} disabled={pin.length !== PIN_LENGTH} onClick={() => void go()}>
+            {t('account.close.go')}
+          </Button>
+        </>
+      ) : (
+        <Refused error={error} />
+      )}
     </>
   );
 }
