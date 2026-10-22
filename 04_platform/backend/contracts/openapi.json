@@ -38652,7 +38652,8 @@
               "seal_not_as_written",
               "seal_not_as_on_the_note",
               "seal_broken",
-              "wrap_cut"
+              "wrap_cut",
+              "inspection_failed"
             ]
           },
           "stage": {
@@ -42387,6 +42388,59 @@
           "at"
         ]
       },
+      "InspectedPoint": {
+        "type": "object",
+        "properties": {
+          "point": {
+            "type": "string",
+            "enum": [
+              "front_wall",
+              "left_side",
+              "right_side",
+              "floor",
+              "roof",
+              "doors",
+              "undercarriage"
+            ]
+          },
+          "photoRef": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "point",
+          "photoRef"
+        ]
+      },
+      "LoadInspection": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "container",
+              "closed"
+            ]
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InspectedPoint"
+            }
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "points",
+          "at"
+        ]
+      },
       "FreightInstructions": {
         "type": "object",
         "properties": {
@@ -42991,6 +43045,9 @@
                 "type": "string"
               }
             }
+          },
+          "inspection": {
+            "$ref": "#/components/schemas/LoadInspection"
           },
           "commitMode": {
             "type": "string",
@@ -47997,6 +48054,23 @@
           "photoRef"
         ]
       },
+      "InspectionPointDto": {
+        "type": "object",
+        "properties": {
+          "point": {
+            "type": "string",
+            "maxLength": 32
+          },
+          "photoRef": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "point",
+          "photoRef"
+        ]
+      },
       "FreightActionDto": {
         "type": "object",
         "properties": {
@@ -48047,6 +48121,13 @@
           "observedAt": {
             "type": "string",
             "description": "Round 22 — when the driver did it, by the phone's clock: a pickup or delivery kept on the phone with no signal."
+          },
+          "inspection": {
+            "description": "Round 40 — at pickup of a container or closed body leaving for a border: the seven points, each with its photograph.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InspectionPointDto"
+            }
           }
         }
       },
@@ -50798,6 +50879,7 @@
               "shop",
               "avatar",
               "securement",
+              "inspection",
               "seal",
               "hazard",
               "interchange",
@@ -55395,7 +55477,8 @@
             "enum": [
               "seal_not_as_written",
               "seal_not_as_on_the_note",
-              "wrap_cut"
+              "wrap_cut",
+              "inspection_failed"
             ]
           },
           "sealId": {
@@ -55470,7 +55553,8 @@
               "seal_not_as_written",
               "seal_not_as_on_the_note",
               "seal_broken",
-              "wrap_cut"
+              "wrap_cut",
+              "inspection_failed"
             ]
           },
           "stage": {

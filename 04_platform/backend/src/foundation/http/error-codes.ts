@@ -109,6 +109,8 @@ export const ERROR_CODES = {
   RISK_NIGHT: { status: 409, title: 'Nothing moves here at night' },
   // Round 40 — a shop whose trading licence lapsed more than fourteen days ago starts no new parcel until it is renewed.
   LICENCE_LAPSED: { status: 409, title: 'The trading licence has lapsed' },
+  // Round 40 — a container or closed body leaving for a border is inspected at seven points, each photographed, before it is loaded.
+  INSPECTION_INCOMPLETE: { status: 400, title: 'The 7-point inspection is not done' },
   // Round 18 — a GS1 company prefix another business prints under with that extension digit, or one staff decided is another's.
   GS1_PREFIX_TAKEN: { status: 409, title: 'Another business uses this GS1 prefix' },
   COMMERCIAL_INVOICE_REQUIRED: { status: 409, title: 'The commercial invoice is not signed' },

@@ -11,6 +11,8 @@ import { RunSection } from './RunSection';
 import { PassageSheet, PassageStrip } from './PassageStrip';
 import { HeldSheet, HeldStrip } from './HeldStrip';
 import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, TamperSheet, type SealRead, type TamperTarget } from './SealSteps';
+import { InspectionSection } from './Inspection';
+import { inspectionBody, inspectionReady, type InspectionLook } from '../inspection';
 import { heldLine } from '../../../shared/tamper';
 import { invoicePaperRef, keepPaper, keptPaper } from '../../../shared/keptPapers';
 import { BagReportSheet } from '../../../shared/BagSealFields';
@@ -398,8 +400,11 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   // Round 15 — the seals: each read off the door at pickup; looked at with the receiver at delivery.
   const [sealReads, setSealReads] = useState<Record<string, SealRead>>({});
   const [sealsAtDoor, setSealsAtDoor] = useState<SealsAtDelivery | null>(null);
+  // Round 40 — the 7-point inspection at pickup: each point ticked, with its photograph.
+  const [looks, setLooks] = useState<Record<string, InspectionLook>>({});
   useEffect(() => {
     setSealReads({});
+    setLooks({});
     setSealsAtDoor(null);
     setHanding(false);
     setHandReason('');
@@ -423,6 +428,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   // Round 35 — not as the note says: reported first (operations told before the receiver takes the goods).
   const doorOk = sealsAtDoor !== 'not_as_on_the_note' || Boolean(claim?.doorReported);
   const sealsOk = !claim ? true : isPickup ? pickupSealsReady(claim, sealReads) : !claim.seals?.length || (sealsAtDoor !== null && doorOk);
+  const inspectionOk = !isPickup || inspectionReady(claim, looks);
   const held = claim?.held;
   const busy = claim ? state.busy === `freight:${claim.ref}` : false;
 
@@ -459,6 +465,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   disabled={busy}
                 />
               </div>
+              <InspectionSection claim={claim} looks={looks} setLooks={setLooks} actions={actions} busy={busy} onReport={() => onTamper({ claim, finding: 'inspection_failed' })} />
               <PickupSeals claim={claim} actions={actions} busy={busy} reads={sealReads} setReads={setSealReads} onReport={(s, numberRead) => onTamper({ claim, finding: 'seal_not_as_written', seal: { sealId: s.sealId, no: s.no, numberRead } })} />
               {/* FP3 — the carrier's reservations (CMR box 18). Optional, and the driver's protection: a sack torn
                   BEFORE taking over is on the note as such, not as damage in transit. */}
@@ -506,13 +513,14 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
             <Button
               chevron={false}
               busy={busy}
-              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk}
+              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk}
               onClick={() => {
                 const ref = claim.ref;
                 if (isPickup) {
                   // Each seal as read off the door: only at pickup — at the door the receiver looks, nothing is read again.
                   const seals = (claim.seals ?? []).filter((s) => s.state === 'on').map((s) => ({ sealId: s.sealId, number: sealReads[s.sealId]?.number.trim() ?? '', photoRef: sealReads[s.sealId]?.photoRef ?? '' }));
-                  void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}) });
+                  const inspection = inspectionBody(claim, looks);
+                  void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}), ...(inspection ? { inspection } : {}) });
                 } else
                   void actions.deliverFreight(ref, { confirmed: checked, receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}) });
                 onClose();
@@ -532,6 +540,8 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               <p class="hint" style="margin-top:8px">{t('driver.loads.addPodPhoto')}</p>
             ) : !sealsOk ? (
               <p class="hint" style="margin-top:8px">{t(isPickup ? 'driver.seal.readAll' : doorOk ? 'driver.seal.doorAsk' : 'driver.tamper.doorFirst')}</p>
+            ) : !inspectionOk ? (
+              <p class="hint" style="margin-top:8px">{t('driver.inspection.doAll')}</p>
             ) : null}
           </div>
           {/* Round 35 — the wrap cut, the load opened, at the gate or at the door: held where it is, operations told. */}

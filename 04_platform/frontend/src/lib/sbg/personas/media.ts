@@ -15,6 +15,7 @@ export type MediaKind =
   | 'shop'
   | 'avatar'
   | 'securement' // S33 — a driver's photo of a secured dedicated-freight load at pickup
+  | 'inspection' // round 40 — one point of the 7-point inspection of a container or closed body, before a border
   | 'seal' // round 15 — a seal on a load: the shipper's three, the driver's close-up at pickup, a re-seal, a break
   | 'hazard' // a driver's photo of a road constraint — the bridge, the washout, or the road now clear
   | 'defect' // a defect on a vehicle, found at the daily check or later — the vehicle's record

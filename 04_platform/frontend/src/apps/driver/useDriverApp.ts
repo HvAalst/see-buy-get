@@ -1800,7 +1800,7 @@ export function useDriverApp() {
   /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit), through the load-safety gate:
    *  the confirmed checklist keys + the securement photo mediaId. */
   const pickupFreight = useCallback(
-    async (ref: string, check: { confirmed: string[]; securementPhotoId: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }> }) => {
+    async (ref: string, check: { confirmed: string[]; securementPhotoId: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; inspection?: Array<{ point: string; photoRef: string }> }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
@@ -2014,7 +2014,7 @@ export function useDriverApp() {
    * With no signal it waits on this phone, photograph and all, dated now.
    */
   const reportTamper = useCallback(
-    async (ref: string, input: { finding: 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut'; sealId?: string; numberRead?: string; photoRefs: string[]; note?: string; atDelivery?: boolean }) => {
+    async (ref: string, input: { finding: 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut' | 'inspection_failed'; sealId?: string; numberRead?: string; photoRefs: string[]; note?: string; atDelivery?: boolean }) => {
       if (!client) return;
       await run(`tamper:${ref}`, async () => {
         const location = await currentPosition(5_000);

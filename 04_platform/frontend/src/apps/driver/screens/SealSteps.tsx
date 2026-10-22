@@ -187,7 +187,7 @@ export function ClearedSeals({ claim, actions, value, onChange, busy }: { claim:
 }
 
 /** Round 35 — what the driver reports under the tamper protocol, from where it was found. */
-export type TamperByDriver = 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut';
+export type TamperByDriver = 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut' | 'inspection_failed';
 export interface TamperTarget {
   claim: Claimable;
   finding: TamperByDriver;
@@ -229,6 +229,7 @@ export function TamperSheet({ target, state, actions, onClose }: { target: Tampe
         <>
           <p class="t-body">{t('driver.tamper.body', { ref: claim.code ?? claim.ref })}</p>
           {target.finding === 'wrap_cut' ? <p class="field__label">{t('driver.tamper.wrapCut')}</p> : null}
+          {target.finding === 'inspection_failed' ? <p class="field__label">{t('driver.tamper.inspectionFailed')}</p> : null}
           {target.finding === 'seal_not_as_written' ? (
             <div class="field">
               <label class="field__label" for="tamper-number">

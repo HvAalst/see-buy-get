@@ -7,7 +7,7 @@ import type { MessageKey, Translate } from './i18n';
  * told; staff read every exception and release the hold.
  */
 
-export type TamperFinding = 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'seal_broken' | 'wrap_cut';
+export type TamperFinding = 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'seal_broken' | 'wrap_cut' | 'inspection_failed';
 export type TamperStage = 'pickup' | 'road' | 'delivery' | 'counter' | 'hub';
 
 /** Kept on the load or the parcel while it is held. */
@@ -58,6 +58,7 @@ const FINDING_KEY: Record<TamperFinding, MessageKey> = {
   seal_not_as_on_the_note: 'common.tamper.finding.seal_not_as_on_the_note',
   seal_broken: 'common.tamper.finding.seal_broken',
   wrap_cut: 'common.tamper.finding.wrap_cut',
+  inspection_failed: 'common.tamper.finding.inspection_failed',
 };
 
 /** What was found, in words; a finding this build has never heard of is said as it came. */

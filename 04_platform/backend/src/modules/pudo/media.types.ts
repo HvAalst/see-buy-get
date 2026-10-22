@@ -26,6 +26,7 @@ export const MEDIA_KINDS = [
   'shop', // a shop's or a hub's premises photo
   'avatar', // a person's profile picture (S29)
   'securement', // S33 — a driver's photo of a secured dedicated-freight load at pickup
+  'inspection', // round 40 — one of the seven points of a container or closed body, photographed at pickup before a border
   'seal', // round 15 — a seal on a load: the shipper's three when it seals it, the driver's at pickup, a re-seal, a break
   'hazard', // a driver's photo of a road constraint — the bridge, the washout, or the road now clear
   /**
@@ -164,6 +165,7 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   avatar: 'account-doc', // kept while the account is active (linked to the person → never orphan-reaped)
   hazard: 'road-report',
   securement: 'shipment-proof', // S33 — proof of a secured load, kept 90d after the freight is delivered
+  inspection: 'shipment-proof', // round 40 — kept with the load's other proof; onto the dispute clock with them if a claim is made
   seal: 'shipment-proof', // round 15 — kept with the load's other proof; onto the dispute clock with them if a claim is made
   // An argument about who put the hole in somebody else's container is a dispute about money, and its
   // evidence is kept on the dispute clock rather than the shipment one.

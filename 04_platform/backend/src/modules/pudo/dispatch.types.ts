@@ -305,6 +305,20 @@ export class CustodyAnchor {
   txId!: string;
 }
 
+/** Round 40 — one point of the 7-point inspection at pickup, and the photograph of it. */
+export class InspectedPoint {
+  @ApiProperty({ enum: ['front_wall', 'left_side', 'right_side', 'floor', 'roof', 'doors', 'undercarriage'] }) point!: string;
+  photoRef!: string;
+}
+
+/** Round 40 — the 7-point inspection of a container or closed body, done at pickup of a load that crosses a border. */
+export class LoadInspection {
+  @ApiProperty({ enum: ['container', 'closed'] }) kind!: 'container' | 'closed';
+  @ApiProperty({ type: [InspectedPoint] }) points!: InspectedPoint[];
+  at!: string;
+  by?: string;
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -587,6 +601,8 @@ export class Freight {
   // S33 — the heavy-cargo safety gate. loadSafety is stamped at pickup (the confirmed checklist keys + the
   // securement photo mediaId); unloadReport at delivery. Absent until the driver passes each gate.
   loadSafety?: { confirmed: string[]; securementPhotoRef: string; at: string; by?: string };
+  // Round 40 — the 7-point inspection at pickup of a container or closed body leaving for a border: each point with its photograph.
+  @ApiPropertyOptional({ type: LoadInspection }) inspection?: LoadInspection;
   unloadReport?: { confirmed: string[]; at: string; by?: string };
   // S33b — cold-chain temperature monitoring. A reading log (each stamped with its own breach verdict) + a
   // STICKY tempBreached flag: once the chain is broken the cargo is suspect even if the temperature recovers.
@@ -1347,6 +1363,8 @@ export class Claimable {
   invoiceToShow?: boolean;
   /** Round 38 — a seal the pickup country's company requires on this load, and none written: why, in words. Not to be taken over yet. */
   sealMissing?: string;
+  /** Round 40 — this load's container or closed body is inspected at seven points, each photographed, before it is taken over. */
+  inspection?: { kind: 'container' | 'closed'; points: string[] };
   /** Round 39 — the operations desks a driver held at a checkpoint rings: the pickup country's company's, and the destination's when it is another. */
   @ApiPropertyOptional({ type: [DeskNumber] }) desks?: DeskNumber[];
   /** Round 14 — a load on the road: what the driver needs to say it is at a border, has cleared it, or is at a hub. */

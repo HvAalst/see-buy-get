@@ -363,7 +363,7 @@ export function createDriverApi(sbg: SbgClient) {
     /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID
      *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the
      *  securement photo mediaId. */
-    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }> }) =>
+    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; inspection?: Array<{ point: string; photoRef: string }> }) =>
       // Round 22 — dated NOW, when the driver taps: a pickup kept on the phone with no signal keeps the moment it was done.
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 
@@ -411,7 +411,7 @@ export function createDriverApi(sbg: SbgClient) {
     /** Round 35 — tampering found on the load in the driver's hands (the tamper protocol): it is held, operations is told. */
     reportTamper: (
       freightId: string,
-      body: { finding: 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut'; sealId?: string; numberRead?: string; photoRefs: string[]; note?: string; atDelivery?: boolean; location?: { lat: number; lng: number }; observedAt?: string },
+      body: { finding: 'seal_not_as_written' | 'seal_not_as_on_the_note' | 'wrap_cut' | 'inspection_failed'; sealId?: string; numberRead?: string; photoRefs: string[]; note?: string; atDelivery?: boolean; location?: { lat: number; lng: number }; observedAt?: string },
     ) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/tamper', { params: { path: { id: freightId } }, body })),
   };
 }

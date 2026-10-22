@@ -372,6 +372,7 @@ export const en = {
   'common.tamper.finding.seal_not_as_on_the_note': 'the seals are not as the note says',
   'common.tamper.finding.seal_broken': 'a seal was found broken',
   'common.tamper.finding.wrap_cut': 'the wrap or packaging is cut or opened',
+  'common.tamper.finding.inspection_failed': 'the 7-point inspection found something — a false wall, floor or roof, a hidden space, or signs of tampering',
   'common.tamper.heldTitle': 'Held: SeeBuyGet operations has been told',
   'common.tamper.heldShort': 'Held',
   // A load held by the police or customs on the road, as its driver said (shared/heldByAuthority.ts).

@@ -39,7 +39,7 @@ import {
 } from './tamper.types';
 
 /** What a driver may report on a load. A broken seal has its own report, with its cause and the official's paper. */
-const LOAD_FINDINGS: ReadonlyArray<TamperFinding> = ['seal_not_as_written', 'seal_not_as_on_the_note', 'wrap_cut'];
+const LOAD_FINDINGS: ReadonlyArray<TamperFinding> = ['seal_not_as_written', 'seal_not_as_on_the_note', 'wrap_cut', 'inspection_failed'];
 
 const STAGE_WORDS: Record<'pickup' | 'road' | 'delivery', string> = { pickup: 'at pickup', road: 'on the road', delivery: 'at delivery' };
 
@@ -119,12 +119,16 @@ export class TamperService implements OnModuleInit {
     if (!driverDid || f.claimedBy !== driverDid) throw new GlosError('NOT_FOUND', 'No such load of yours');
     if (f.status !== 'claimed' && f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `This load is ${f.status}: it is reported while you take it over or carry it`);
     const finding = input.finding;
-    if (!LOAD_FINDINGS.includes(finding)) throw new GlosError('FIELD_REQUIRED', 'Say what you found: a seal that is not the one written, the seals not as the note says, or the wrap cut', { field: 'finding' });
+    if (!LOAD_FINDINGS.includes(finding)) throw new GlosError('FIELD_REQUIRED', 'Say what you found: a seal that is not the one written, the seals not as the note says, the wrap cut, or something found at the 7-point inspection', { field: 'finding' });
     const stage: 'pickup' | 'road' | 'delivery' = f.status === 'claimed' ? 'pickup' : finding === 'seal_not_as_on_the_note' || input.atDelivery ? 'delivery' : 'road';
     let seal: TamperException['seal'];
     if (finding === 'seal_not_as_written') {
       if (stage !== 'pickup') throw new GlosError('INVALID_STATE', 'A seal is read against what was written at pickup. On the road, report it broken; at the door, say the seals are not as the note says', { field: 'finding' });
       seal = this.seals.notAsWritten(f, input.sealId, input.numberRead);
+    }
+    // Round 40 — the 7-point inspection is done before the goods are taken over; on the road, what is found is a cut wrap or a broken seal.
+    if (finding === 'inspection_failed' && stage !== 'pickup') {
+      throw new GlosError('INVALID_STATE', 'The 7-point inspection is done at pickup. On the road, report the wrap cut or a seal broken', { field: 'finding' });
     }
     if (finding === 'seal_not_as_on_the_note' && !this.seals.of(f.freightId).length) {
       throw new GlosError('INVALID_STATE', 'This load has no seals. If the wrap or packaging is cut, report that', { field: 'finding' });

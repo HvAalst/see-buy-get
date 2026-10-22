@@ -53,6 +53,7 @@ import { Vehicle } from './fleet.types';
 import { BoardRow, Claimable, ClaimableKind, DeskNumber, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { carrierReadsInvoice, CommercialInvoiceService, crossesBorder } from './commercial-invoice.service';
+import { inspectionAsked, INSPECTION_POINTS, requireInspection, type CarryingBody, type InspectionInput } from './seven-point';
 import { ParcelService } from './parcel.service';
 import { LoadPassageService, viewOf as passageView } from './load-passage.service';
 import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
@@ -353,7 +354,7 @@ export interface TamperHooks {
 /** What is anchored of a load changing hands, worked out from the load as kept: a field changed later no longer matches. */
 export function custodyAnchorOf(f: Freight, step: 'picked_up' | 'delivered'): Record<string, unknown> {
   return step === 'picked_up'
-    ? { f: f.freightId, st: step, at: f.pickedUpAt, by: f.loadSafety?.by, photo: f.loadSafety?.securementPhotoRef }
+    ? { f: f.freightId, st: step, at: f.pickedUpAt, by: f.loadSafety?.by, photo: f.loadSafety?.securementPhotoRef, ...(f.inspection ? { insp: f.inspection.points.map((p) => p.photoRef) } : {}) }
     : { f: f.freightId, st: step, at: f.deliveredAt, by: f.proofOfDelivery?.by, receiver: f.proofOfDelivery?.receiverName, photo: f.proofOfDelivery?.photoRef };
 }
 
@@ -2945,7 +2946,7 @@ export class DispatchService {
   /** Freight is picked up (claimed → in_transit) then delivered (→ delivered, capacity released). S32b: when
    *  a driver DID is given (the authenticated driver-app path), only the driver who CLAIMED it may advance it —
    *  a claimed freight is that driver's obligation, not a free-for-all. */
-  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; observedAt?: string }, now: number = Date.now()): Freight {
+  pickupFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; observedAt?: string; inspection?: InspectionInput[] }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
@@ -2977,6 +2978,16 @@ export class DispatchService {
     // Round 15 — each seal the shipper wrote, read off the door: a number that is not the one written and the load does
     // not leave. Asked before anything changes; kept once the goods are taken over.
     const keepSeals = this.seals?.checkAtPickup(f, driverDid ?? '', check?.seals);
+    // Round 40 — the 7-point inspection ("Cross-border closed loads"): a container or a closed body leaving for a border is
+    // looked over at seven points, each with its own photograph, before the goods are taken over. Asked before anything changes.
+    const asked = inspectionAsked(f, this.bodyAtPickup(f, driverDid));
+    const inspection = asked ? requireInspection(asked, check?.inspection, [securementPhotoId]) : undefined;
+    for (const p of inspection ?? []) this.media.requireHeld(p.photoRef, driverDid, { type: 'freight', id: f.freightId }, 'inspection');
+    // Seven looks, not one picture sent seven times: each upload has its own id, so the pictures themselves are compared.
+    if (inspection) {
+      const prints = [securementPhotoId, ...inspection.map((p) => p.photoRef)].map((ref) => this.media.get(ref)?.sha256 ?? ref);
+      if (new Set(prints).size !== prints.length) throw new GlosError('INSPECTION_INCOMPLETE', 'Each point is photographed on its own: the same picture was sent twice.', { field: 'inspection' });
+    }
     // Round 22 — dated when the driver took the goods over, by the phone, within limits — never before the claim; when
     // it reached us is kept beside it where the two differ (a pickup kept on the phone with no signal).
     const taken = handedAt(check?.observedAt, now, [f.claimedAt]);
@@ -2986,6 +2997,8 @@ export class DispatchService {
     else delete f.pickupReceivedAt;
     keepSeals?.(f.pickedUpAt);
     f.loadSafety = { confirmed: [...new Set(check?.confirmed ?? [])], securementPhotoRef: securementPhotoId, at: f.pickedUpAt, by: driverDid };
+    if (asked && inspection) f.inspection = { kind: asked, points: inspection, at: f.pickedUpAt, ...(driverDid ? { by: driverDid } : {}) };
+    else delete f.inspection;
     // FP3 — box 18: what the carrier saw when the goods were handed over. Optional, and only ever the driver's words.
     const reservations = check?.reservations?.trim();
     f.reservations = reservations ? { note: reservations.slice(0, 500), at: f.pickedUpAt, by: driverDid } : undefined;
@@ -2995,6 +3008,7 @@ export class DispatchService {
     // DRIVER owns and that isn't attached elsewhere, so a passed id can never launder another actor's media
     // (S29). Anchored at delivery (the terminal state).
     this.media.adopt(securementPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'securement');
+    for (const p of inspection ?? []) this.media.adopt(p.photoRef, driverDid ?? '', { type: 'freight', id: f.freightId }, 'inspection');
     // FP2 — the consignment note names the vehicle that took the goods over. Fixed now, from the driver's shift.
     if (driverDid) {
       const session = this.fleet.sessionFor(driverDid);
@@ -3229,7 +3243,7 @@ export class DispatchService {
       // No cover stated is no award at all: the queue shows the stated cover, or that there is nothing to award.
       awardCap: cover,
       capBasis: cover > 0 ? 'free-limit' : 'none',
-      evidence: [f.loadSafety?.securementPhotoRef, f.proofOfDelivery?.photoRef, c.photoRef].filter((x): x is string => Boolean(x)),
+      evidence: [f.loadSafety?.securementPhotoRef, ...(f.inspection?.points.map((p) => p.photoRef) ?? []), f.proofOfDelivery?.photoRef, c.photoRef].filter((x): x is string => Boolean(x)),
       attempts: f.deliveryAttempts?.length ?? 0,
       ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
     };
@@ -3779,6 +3793,22 @@ export class DispatchService {
   }
 
   /** Why this load may not be taken over unsealed: a seal is required on it and none is on. Asked before anything is written. */
+  /**
+   * Round 40 — WHAT CARRIES THE LOAD AT PICKUP: the vehicle on the driver's shift, which is the one being loaded; or, with no
+   * shift to read, the body frozen when the load was claimed.
+   */
+  private bodyAtPickup(f: Freight, driverDid?: string): CarryingBody | undefined {
+    if (driverDid) {
+      try {
+        const session = this.fleet.sessionFor(driverDid);
+        if (session.active) return { vehicleClass: session.vehicle.vehicleClass, truckSubtype: session.vehicle.truckSubtype };
+      } catch {
+        /* no shift to read */
+      }
+    }
+    return f.carriedBy;
+  }
+
   sealRefusal(f: Freight): string | undefined {
     const required = this.sealRequiredBy(f);
     if (!required || (this.seals?.on(f.freightId).length ?? 0) > 0) return undefined;
@@ -3801,7 +3831,10 @@ export class DispatchService {
     const heldByAuthority = this.heldByAuthority(f);
     // Round 39 — while it is this driver's on the way: who to ring if it is held. Carried on the card, so it is on the phone without signal.
     const desks = f.status === 'claimed' || f.status === 'in_transit' ? this.desksFor(f) : [];
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
+    const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
+    const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

@@ -2722,6 +2722,12 @@ export class WithdrawProposalDto {
   @IsOptional() @IsString() driverDid?: string; // operator-override only
 }
 
+/** Round 40 — one point of the 7-point inspection, looked at and photographed: the photo a driver uploaded as `inspection`. */
+export class InspectionPointDto {
+  @IsString() @MaxLength(32) point!: string;
+  @IsString() @MaxLength(80) photoRef!: string;
+}
+
 export class FreightActionDto {
   @IsOptional() @IsString() driverDid?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) confirmed?: string[];
@@ -2738,6 +2744,8 @@ export class FreightActionDto {
   @IsOptional() @IsIn(SEALS_AT_DELIVERY) sealsAtDelivery?: SealsAtDelivery;
   /** Round 22 — when the driver did it, by the phone's clock: a pickup or delivery kept on the phone with no signal. */
   @IsOptional() @IsDateString() observedAt?: string;
+  /** Round 40 — at pickup of a container or closed body leaving for a border: the seven points, each with its photograph. */
+  @IsOptional() @IsArray() @ArrayMaxSize(7) @ValidateNested({ each: true }) @Type(() => InspectionPointDto) inspection?: InspectionPointDto[];
 }
 
 /** FP3b — the driver stood at the door and could not hand over. */

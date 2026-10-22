@@ -21,9 +21,10 @@ export const HELD_PREFIX = 'local:';
  * survive conditions like East Africa's): the securement photo at pickup and the proof at delivery — acts the outbox
  * always carried, which stopped at the photo with no signal — and a seal's, read at pickup, replaced at a border post,
  * found broken on the road, where the signal is worst.
- * Round 35 adds what was found under the tamper protocol: the outbox carries those reports too.
+ * Round 35 adds what was found under the tamper protocol: the outbox carries those reports too. Round 40 adds the seven
+ * points of the inspection at pickup, done at a depot before a border where the signal is no better.
  */
-export const HELD_KINDS = ['dropoff', 'defect', 'hazard', 'securement', 'pod', 'seal', 'tamper'] as const;
+export const HELD_KINDS = ['dropoff', 'defect', 'hazard', 'securement', 'pod', 'seal', 'tamper', 'inspection'] as const;
 export type HeldKind = (typeof HELD_KINDS)[number];
 
 export interface HeldPhoto {

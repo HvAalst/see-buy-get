@@ -17,7 +17,7 @@ import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsNumber, IsOptio
  * What happens to the goods — a claim, a return, a new seal — is decided by the people whose goods they are.
  */
 
-export const TAMPER_FINDINGS = ['seal_not_as_written', 'seal_not_as_on_the_note', 'seal_broken', 'wrap_cut'] as const;
+export const TAMPER_FINDINGS = ['seal_not_as_written', 'seal_not_as_on_the_note', 'seal_broken', 'wrap_cut', 'inspection_failed'] as const;
 export type TamperFinding = (typeof TAMPER_FINDINGS)[number];
 
 /** Where it was found: at a load's pickup, on the road, at its delivery; at a shop's counter, or at a hub. */
@@ -136,6 +136,8 @@ export const FINDING_WORDS: Record<TamperFinding, string> = {
   seal_not_as_on_the_note: 'the seals are not as the note says',
   seal_broken: 'a seal was found broken',
   wrap_cut: 'the wrap or packaging is cut or opened',
+  // Round 40 — the 7-point inspection at pickup found a false wall, floor or roof, a hidden space, or signs of tampering.
+  inspection_failed: 'the 7-point inspection found something — a false wall, floor or roof, a hidden space, or signs of tampering',
 };
 
 /* ------------------------------------------------------------------------ the doors' bodies -- */
@@ -147,8 +149,8 @@ export class TamperPointDto {
 
 /** The driver, about the load being taken over or carried. A broken seal has its own report (ReportBrokenSealDto). */
 export class ReportLoadTamperDto {
-  @ApiProperty({ enum: ['seal_not_as_written', 'seal_not_as_on_the_note', 'wrap_cut'] })
-  @IsIn(['seal_not_as_written', 'seal_not_as_on_the_note', 'wrap_cut'])
+  @ApiProperty({ enum: ['seal_not_as_written', 'seal_not_as_on_the_note', 'wrap_cut', 'inspection_failed'] })
+  @IsIn(['seal_not_as_written', 'seal_not_as_on_the_note', 'wrap_cut', 'inspection_failed'])
   finding!: TamperFinding;
   /** Which seal, where one is not the one written. */
   @IsOptional() @IsString() sealId?: string;
