@@ -12,8 +12,10 @@ Nothing has to be built for this: the repository already releases every push to 
 (`.github/workflows/deploy.yml` and `04_platform/scripts/deploy.sh`). If a test fails, nothing is released; if a new
 release does not start, the one before comes back by itself. The full manual is `04_platform/DEPLOY.md`.
 
-**Where you are (2026-10-21):** step 2 is nearly done — the domain is added in Cloudflare and its records are there.
-Next: the `_dmarc` fix in step 2, then step 3.
+**Where you are (2026-10-22):** the first release runs on the Droplet (`63eac5a`, all three parts healthy, set up for
+Cloudflare with the token). Left: step 5, the nameservers at MijnDomein — the certificate waits on it (checked from
+outside: no DNSSEC, no mail records, so nothing to do first) — then the "straight after" items of step 9, and step 10.
+The release's last step, "Ask the site, from outside", was red: expected until the certificate is there.
 
 ---
 
@@ -109,6 +111,16 @@ Also:
 - [ ] Optional, once active: Cloudflare → DNS → Settings → enable DNSSEC, and paste the DS record it gives you at
   MijnDomein.
 - Until the first release (step 9) the site shows a Cloudflare error (52x). That is expected.
+- **The certificate.** The Droplet's web server proves the domain by writing a record at Cloudflare, and that only
+  counts once the nameservers point there. It tries again by itself, but only every few hours; once Cloudflare says
+  **Active**, make it try at once (it restarts only the web server, not the app or the database):
+
+  ```powershell
+  ssh -i $HOME\.ssh\seebuyget-deploy deploy@138.68.77.250 "cd /opt/seebuyget && docker compose restart web"
+  ```
+
+  Then https://seebuyget.com/v1/health answers within a few minutes. If it still fails, the world's DNS caches may
+  hold MijnDomein's nameservers for up to a day: wait, and restart it again.
 
 ## 6. Your PC — a deploy key, and preparing the Droplet (once) ☐
 
