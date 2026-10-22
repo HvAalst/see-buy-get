@@ -1,0 +1,1164 @@
+/*
+ * THE PUBLIC SITE'S LOOK — the front page and the pages written to be quoted (the user, 2026-10-22: the public site and
+ * the help in paper and orange, the working apps in blue: "we agree on the split").
+ *
+ * Paper, ink and orange, from the brand: Bright Orange #FB6200, Deep Navy #000963 as the ink, Sand #FFB98C as the paper's
+ * second colour. ORANGE is where to act — with NAVY words on it (about 6:1), never white (under 3:1 at body size).
+ *
+ * Three faces, each with one job: Source Sans 3 for reading; Bricolage for headings, and its narrow width for a shop's
+ * painted sign; IBM Plex Mono ONLY for what a machine printed — a tracking key, a seal number, a time, a label, the boxes
+ * of a consignment note. What you tap is never in monospace. All self-hosted: nothing is fetched from another site.
+ */
+@import '@fontsource/source-sans-3/latin-400.css';
+@import '@fontsource/source-sans-3/latin-600.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
+
+/* Bricolage's width axis: the condensed sign, from a face already loaded. */
+@font-face {
+  font-family: 'Bricolage Grotesque Width';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  font-stretch: 75% 100%;
+  src: url('@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wdth-normal.woff2') format('woff2-variations');
+}
+
+.pub {
+  --p-bg: #fbfaf7;
+  --p-paper: #ffffff;
+  --p-ink: var(--navy);
+  --p-muted: #4b5170;
+  --p-rule: #d9d5ca;
+  --p-orange: var(--org);
+  --p-sand: var(--sand);
+  --p-stamp: #c8371f;
+  --p-board: #1f2419;
+  --p-body: 'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --p-display: var(--font-display);
+  --p-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  min-height: 100dvh;
+  background: var(--p-bg);
+  color: var(--p-ink);
+  font-family: var(--p-body);
+  font-size: 17px;
+  line-height: 1.5;
+  overflow-x: clip;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+@media (min-width: 900px) {
+  .pub {
+    font-size: 18px;
+  }
+}
+
+.pub a {
+  color: inherit;
+}
+
+.pub a:focus-visible,
+.pub button:focus-visible,
+.pub input:focus-visible,
+.pub summary:focus-visible {
+  outline: 2px solid var(--p-orange);
+  outline-offset: 2px;
+}
+
+.pub__in {
+  max-width: 74rem;
+  margin: 0 auto;
+  padding-left: max(16px, var(--sa-l));
+  padding-right: max(16px, var(--sa-r));
+}
+
+/* -------------------------------------------------------------- the top -- */
+
+.pub__top {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  background: var(--p-bg);
+  border-bottom: 2px solid var(--p-ink);
+  padding-top: var(--sa-t);
+}
+
+.pub__topin {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding-block: 0.6rem;
+}
+
+.pub__logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  font-family: var(--p-display);
+  font-weight: 800;
+  font-size: 1.15rem;
+}
+
+.pub__logo img {
+  border-radius: 7px;
+}
+
+.pub__nav {
+  display: flex;
+  gap: 1.4rem;
+  margin-inline-start: auto;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.pub__nav a {
+  text-decoration: none;
+  color: var(--p-muted);
+  padding-block: 0.6rem;
+}
+
+.pub__nav a:hover {
+  color: var(--p-ink);
+}
+
+.pub__signin {
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: none;
+  border: 2px solid var(--p-ink);
+  padding: 0.45rem 0.9rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pub__update {
+  background: none;
+  border: 0;
+  color: var(--p-ink);
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+@media (max-width: 760px) {
+  .pub__topin {
+    gap: 0.75rem;
+  }
+
+  .pub__logo span {
+    display: none;
+  }
+
+  .pub__nav {
+    gap: 1rem;
+  }
+
+  .pub__nav .pub__wide {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------- buttons -- */
+
+.pbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  font: 600 1rem var(--p-body);
+  padding: 0.75rem 1.3rem;
+  border-radius: 4px;
+  text-decoration: none;
+  min-height: 48px;
+  border: 2px solid var(--p-ink);
+  cursor: pointer;
+  background: var(--p-paper);
+  color: var(--p-ink);
+}
+
+.pbtn--primary {
+  background: var(--p-orange);
+  border-color: var(--p-orange);
+  color: var(--p-ink) !important;
+}
+
+.pbtn--primary:hover {
+  filter: brightness(1.05);
+}
+
+/* -------------------------------------------------------- the front -- */
+
+.fr__back {
+  border-bottom: 1px solid var(--p-rule);
+  background: var(--p-paper);
+}
+
+.fr__backin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding-block: 0.75rem;
+}
+
+.fr__backt {
+  font-weight: 600;
+  color: var(--p-muted);
+}
+
+.fr__backapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 40px;
+  padding: 0 0.8rem;
+  border: 2px solid var(--p-ink);
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.fr__hero {
+  padding-block: 3rem 3.5rem;
+}
+
+.fr__heroin {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 25rem);
+  gap: 3rem;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .fr__heroin {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
+  }
+
+  .fr__hero {
+    padding-block: 2rem 2.5rem;
+  }
+}
+
+.fr__where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin: 0 0 1.4rem;
+  font-weight: 600;
+  color: var(--p-muted);
+}
+
+.fr__where b {
+  color: var(--p-ink);
+}
+
+.fr__where a {
+  color: #b54600;
+}
+
+.fr__title {
+  font-family: var(--p-display);
+  font-weight: 800;
+  font-size: clamp(2.3rem, 7vw, 4.3rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 0;
+}
+
+.fr__title em {
+  font-style: normal;
+  color: var(--p-orange);
+}
+
+.fr__lede {
+  font-size: 1.22rem;
+  color: var(--p-muted);
+  max-width: 31rem;
+  margin: 1.3rem 0 1.9rem;
+}
+
+.fr__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.fr__acts--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  max-width: 40rem;
+}
+
+.fr__track {
+  margin-top: 2.1rem;
+  max-width: 31rem;
+}
+
+.fr__track label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--p-muted);
+  margin-bottom: 0.4rem;
+}
+
+.fr__trackrow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.fr__trackrow input {
+  flex: 1;
+  min-width: 0;
+  font: 600 1.05rem var(--p-mono);
+  letter-spacing: 0.06em;
+  padding: 0.6rem 0.85rem;
+  border: 2px solid var(--p-ink);
+  background: var(--p-paper);
+  color: var(--p-ink);
+  border-radius: 4px;
+  min-height: 48px;
+  text-transform: uppercase;
+}
+
+/* The label: printed, so in monospace; a little askew, as one is on a parcel. */
+.fr__labelwrap {
+  margin: 0;
+  justify-self: center;
+  width: min(100%, 25rem);
+}
+
+.fr__label {
+  position: relative;
+  background: var(--p-paper);
+  color: #000;
+  border: 1.5px solid #000;
+  padding: 1rem;
+  font-family: var(--p-mono);
+  transform: rotate(-1.5deg);
+  box-shadow: 8px 10px 0 var(--p-sand);
+}
+
+.fr__labelhd {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1.5px solid #000;
+  padding-bottom: 0.5rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fr__labelhd b {
+  font-family: var(--p-display);
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+.fr__labelgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1.5px solid #000;
+}
+
+.fr__labelgrid > div {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.6rem 0.2rem 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.fr__labelgrid > div + div {
+  border-inline-start: 1.5px solid #000;
+  padding-inline-start: 0.7rem;
+}
+
+.fr__labelgrid small,
+.fr__labelkey small {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #555;
+}
+
+.fr__labelgrid b {
+  font-size: 0.92rem;
+}
+
+.fr__labelkey {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: center;
+  padding: 0.8rem 0;
+  border-bottom: 1.5px dashed #000;
+}
+
+.fr__qr {
+  width: 64px;
+  height: 64px;
+  display: block;
+  color: #000;
+}
+
+.fr__labelk {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+
+.fr__labelpay {
+  padding-top: 0.7rem;
+  font-size: 0.78rem;
+}
+
+/* The stamp sits on the label's foot, where it covers nothing a reader needs. */
+.fr__stamp {
+  position: absolute;
+  right: 0.8rem;
+  bottom: 0.6rem;
+  transform: rotate(-6deg);
+  border: 3px solid var(--p-stamp);
+  color: var(--p-stamp);
+  font: 600 0.68rem var(--p-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.45rem;
+  border-radius: 3px;
+  background: var(--p-paper);
+}
+
+.fr__tear {
+  margin-top: 1rem;
+  background: var(--p-sand);
+  border: 1.5px solid #000;
+  padding: 0.75rem 1rem;
+  transform: rotate(1deg);
+  font-family: var(--p-mono);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  color: #000;
+}
+
+.fr__tear small {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.35;
+  max-width: 14rem;
+}
+
+.fr__tear b {
+  font-family: var(--p-display);
+  font-size: 1.8rem;
+  letter-spacing: 0.32em;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------- sections -- */
+
+.fr__sec {
+  padding-block: 3rem;
+  border-top: 2px solid var(--p-ink);
+}
+
+.fr__h2 {
+  font-family: var(--p-display);
+  font-weight: 800;
+  font-size: clamp(1.6rem, 4vw, 2.5rem);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 0 0 0.6rem;
+}
+
+.fr__h3 {
+  font-family: var(--p-display);
+  font-weight: 800;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.fr__p {
+  margin: 0;
+  color: var(--p-muted);
+  max-width: 38rem;
+}
+
+.fr__fine {
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+  color: var(--p-muted);
+}
+
+.fr__eyebrow {
+  display: block;
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--p-muted);
+  margin-bottom: 0.6rem;
+}
+
+/* The steps: a rail across on a wide screen, down the side on a phone. Every step on the same rows. */
+.fr__rail {
+  list-style: none;
+  margin: 2.2rem 0 0;
+  padding: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: auto auto auto auto;
+  gap: 0.5rem 1rem;
+}
+
+.fr__rail::before {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  top: 0.9rem;
+  height: 3px;
+  background: var(--p-ink);
+}
+
+.fr__rung {
+  display: grid;
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  position: relative;
+  min-width: 0;
+}
+
+.fr__dot {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--p-bg);
+  border: 3px solid var(--p-ink);
+  display: grid;
+  place-items: center;
+  font: 600 0.75rem var(--p-mono);
+}
+
+.fr__rung--done .fr__dot {
+  background: var(--p-ink);
+  color: var(--p-paper);
+}
+
+.fr__rung--now .fr__dot {
+  background: var(--p-orange);
+  border-color: var(--p-orange);
+  color: var(--p-ink);
+}
+
+.fr__when {
+  font: 600 0.72rem var(--p-mono);
+  color: var(--p-muted);
+  letter-spacing: 0.02em;
+}
+
+.fr__rung .fr__p {
+  font-size: 0.92rem;
+}
+
+@media (max-width: 900px) {
+  .fr__rail {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    gap: 1.4rem;
+    padding-inline-start: 2.7rem;
+  }
+
+  .fr__rail::before {
+    left: 0.9rem;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    height: auto;
+  }
+
+  .fr__rung {
+    grid-row: auto;
+    grid-template-rows: none;
+    gap: 0.2rem;
+  }
+
+  .fr__dot {
+    position: absolute;
+    inset-inline-start: -2.7rem;
+    top: 0;
+  }
+}
+
+/* The shop's painted sign: earning. Navy words on orange. */
+.fr__sign {
+  background: var(--p-orange);
+  color: var(--p-ink);
+  padding-block: 3rem;
+  border-top: 6px solid var(--p-ink);
+  border-bottom: 6px solid var(--p-ink);
+}
+
+.fr__signin {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 3rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .fr__signin {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+  }
+}
+
+.fr__big {
+  margin: 0;
+  font-family: 'Bricolage Grotesque Width', var(--p-display);
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: clamp(2.6rem, 8vw, 5rem);
+  line-height: 0.95;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+
+.fr__signlede {
+  margin: 1.2rem 0 0;
+  font-size: 1.1rem;
+  max-width: 31rem;
+}
+
+.fr__joins {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.6rem;
+  margin-top: 1.6rem;
+}
+
+.fr__join {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 52px;
+  padding: 0.4rem 0.8rem;
+  background: var(--p-paper);
+  border: 2px solid var(--p-ink);
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.fr__join img {
+  flex: none;
+}
+
+.fr__join--talk {
+  background: transparent;
+  border-style: dashed;
+}
+
+.fr__board {
+  background: var(--p-board);
+  color: #f3efe3;
+  padding: 1.4rem 1.5rem;
+  border: 4px solid var(--p-ink);
+  box-shadow: 8px 8px 0 var(--p-ink);
+}
+
+.fr__boardt {
+  margin: 0 0 1rem;
+  font-family: 'Bricolage Grotesque Width', var(--p-display);
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 1.9rem;
+  text-transform: uppercase;
+  line-height: 1;
+  color: #fff;
+}
+
+.fr__board dl {
+  margin: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.fr__line {
+  display: grid;
+  gap: 0.1rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 2px dotted #6f7560;
+}
+
+.fr__line dt {
+  font-weight: 600;
+  color: #ffd0b0;
+}
+
+.fr__line dd {
+  margin: 0;
+}
+
+.fr__boardfoot {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+  color: #d4d8c4;
+}
+
+.fr__boardfoot a {
+  color: #ffd0b0;
+  font-weight: 600;
+}
+
+/* Freight: the boxes of a consignment note, printed. */
+.fr__freightin {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 3rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .fr__freightin {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.fr__freight .fr__p {
+  margin-bottom: 1.4rem;
+}
+
+.fr__boxes {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.6rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.fr__boxes li {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr);
+  gap: 0.6rem;
+  align-items: baseline;
+}
+
+.fr__boxes b {
+  display: block;
+}
+
+.fr__boxes span span {
+  color: var(--p-muted);
+  font-size: 0.95rem;
+}
+
+.fr__boxn {
+  font: 600 0.8rem var(--p-mono);
+  color: #b54600;
+  letter-spacing: 0.04em;
+}
+
+.fr__cmr {
+  border-top: 2px solid var(--p-ink);
+  border-inline-start: 2px solid var(--p-ink);
+  background: var(--p-paper);
+  font-family: var(--p-mono);
+  font-size: 0.8rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.fr__cmrbox {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  padding: 0.55rem 0.7rem 0.75rem;
+  min-height: 5rem;
+  min-width: 0;
+  border-bottom: 2px solid var(--p-ink);
+  border-inline-end: 2px solid var(--p-ink);
+  line-height: 1.4;
+}
+
+.fr__cmrbox--wide {
+  grid-column: 1 / -1;
+}
+
+.fr__cmrn {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--p-muted);
+}
+
+.fr__cmrn b {
+  color: var(--p-ink);
+  font-size: 0.85rem;
+  margin-inline-end: 0.4rem;
+}
+
+.fr__hand {
+  font-family: var(--p-body);
+  font-style: italic;
+  font-size: 0.95rem;
+}
+
+.fr__photo {
+  display: inline-block;
+  width: 46px;
+  height: 34px;
+  background: var(--p-sand);
+  border: 1.5px solid var(--p-ink);
+  vertical-align: middle;
+  margin-inline-end: 0.5rem;
+}
+
+/* Why it is safe: four tiles in a printed strip. */
+.fr__trust {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 2px solid var(--p-ink);
+  background: var(--p-paper);
+}
+
+.fr__trust li {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  padding: 1.2rem 1rem;
+  border-inline-end: 2px solid var(--p-ink);
+  min-width: 0;
+}
+
+.fr__trust li:last-child {
+  border-inline-end: 0;
+}
+
+.fr__trust .fr__eyebrow {
+  margin: 0;
+}
+
+.fr__trust .fr__p {
+  font-size: 0.95rem;
+}
+
+@media (max-width: 760px) {
+  .fr__trust {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fr__trust li:nth-child(2) {
+    border-inline-end: 0;
+  }
+
+  .fr__trust li:nth-child(-n + 2) {
+    border-bottom: 2px solid var(--p-ink);
+  }
+}
+
+/* How it works for everyone who helps it grow: where a company of ours runs, and where we only match. */
+.fr__growlede {
+  max-width: 44rem;
+}
+
+.fr__ways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  gap: 0.8rem;
+  margin: 1.4rem 0 1.6rem;
+}
+
+.fr__way {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  padding: 1.2rem 1.1rem;
+  background: var(--p-paper);
+  border: 2px solid var(--p-ink);
+  border-radius: 4px;
+}
+
+.fr__way--match {
+  border-style: dashed;
+}
+
+.fr__way .fr__h3,
+.fr__way .fr__p {
+  margin: 0;
+}
+
+/* The figures, measured. */
+.fr__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0;
+  margin: 1.4rem 0 0;
+  border-top: 2px solid var(--p-ink);
+  border-inline-start: 2px solid var(--p-ink);
+}
+
+.fr__stat {
+  padding: 1rem;
+  background: var(--p-paper);
+  border-inline-end: 2px solid var(--p-ink);
+  border-bottom: 2px solid var(--p-ink);
+}
+
+.fr__stat dt {
+  font-family: var(--p-display);
+  font-weight: 800;
+  font-size: 2rem;
+}
+
+.fr__stat dd {
+  margin: 0;
+  color: var(--p-muted);
+}
+
+.fr__stat dd span {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.fr__journey {
+  margin: 1.4rem 0 0;
+}
+
+.fr__journey ol {
+  margin: 0.6rem 0 0;
+  padding-inline-start: 1.3rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+/* The questions. */
+.fr__faq {
+  background: var(--p-paper);
+}
+
+.fr__faqgroup {
+  margin-top: 1.8rem;
+  max-width: 46rem;
+}
+
+.fr__qs {
+  margin-top: 0.6rem;
+}
+
+.fr__qs details {
+  border-top: 1px solid var(--p-rule);
+}
+
+.fr__qs details:last-child {
+  border-bottom: 1px solid var(--p-rule);
+}
+
+.fr__qs summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.85rem 0;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 48px;
+  align-items: center;
+}
+
+.fr__qs summary::-webkit-details-marker {
+  display: none;
+}
+
+.fr__qs summary::after {
+  content: '+';
+  color: var(--p-orange);
+  font: 600 1.3rem var(--p-mono);
+  flex: none;
+}
+
+.fr__qs details[open] summary::after {
+  content: '−';
+}
+
+.fr__qs details p {
+  margin: 0;
+  padding: 0 0 1rem;
+  color: var(--p-muted);
+  max-width: 40rem;
+}
+
+.fr__more {
+  display: inline-block;
+  margin-top: 0.8rem;
+  font-weight: 600;
+  color: #b54600 !important;
+}
+
+/* -------------------------------------------------------------- the foot -- */
+
+.pub__foot {
+  border-top: 2px solid var(--p-ink);
+  padding-block: 2rem calc(2rem + var(--sa-b));
+}
+
+.pub__footin {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.pub__footnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.4rem;
+  font-weight: 600;
+}
+
+.pub__footnav a {
+  text-decoration: none;
+  color: var(--p-muted);
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pub__footnav a:hover {
+  color: var(--p-ink);
+}
+
+.pub__footend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  color: var(--p-muted);
+  font-size: 0.9rem;
+}
+
+/* ----------------------------------------- the pages written to be quoted -- */
+
+.pub .pg {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2.5rem max(16px, var(--sa-r)) 3rem max(16px, var(--sa-l));
+}
+
+.pub .pg .land__title {
+  font-family: var(--p-display);
+  font-weight: 800;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--p-ink);
+  margin: 0 0 0.8rem;
+}
+
+.pub .pg .land__lede {
+  font-size: 1.15rem;
+  color: var(--p-muted);
+  margin: 0 0 1.5rem;
+}
+
+.pub .pg .land__sec {
+  padding: 2rem 0 0;
+  border-top: 2px solid var(--p-ink);
+  margin-top: 2rem;
+}
+
+.pub .pg .land__h2 {
+  font-family: var(--p-display);
+  font-weight: 800;
+  font-size: clamp(1.4rem, 3.5vw, 1.9rem);
+  color: var(--p-ink);
+  margin: 0 0 0.8rem;
+}
+
+.pub .pg .land__p,
+.pub .pg li {
+  color: var(--p-muted);
+}
+
+/* A list of plain sentences (what you need; your data): each on a small orange square, so a long list scans. */
+.pub .pg .pg__list {
+  list-style: none;
+  padding-inline-start: 0;
+}
+
+.pub .pg .pg__list li {
+  position: relative;
+  padding-inline-start: 1.2rem;
+}
+
+.pub .pg .pg__list li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.62em;
+  width: 0.42rem;
+  height: 0.42rem;
+  background: var(--p-orange);
+}
+
+.pub .pg .pg__foot {
+  margin-top: 2.2rem;
+}
+
+.pub .pg .btn--primary {
+  background: var(--p-orange);
+  border-color: var(--p-orange);
+  color: var(--p-ink);
+  border-radius: 4px;
+}
+
+.pub .pg .pg__steps li::before {
+  background: var(--p-orange);
+  color: var(--p-ink);
+  border-radius: 6px;
+}
+
+.pub .pg .land__link {
+  color: #b54600;
+}
+
+.pub .pg .pg__who a {
+  background: var(--p-paper);
+  border: 2px solid var(--p-ink);
+  border-radius: 4px;
+}
+
+.pub .pg .pg__whot {
+  color: var(--p-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pub * {
+    transition: none !important;
+  }
+}

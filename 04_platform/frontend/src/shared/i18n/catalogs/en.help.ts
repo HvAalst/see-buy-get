@@ -18,6 +18,7 @@ export const enHelp = {
   'help.app.business': 'Business app',
   // The help centre (/help/ on the front door).
   'help.ui.title': 'Help',
+  'help.ui.home': 'SeeBuyGet front page',
   'help.ui.lede': 'How each SeeBuyGet app works, and what to do when something goes wrong.',
   'help.ui.searchLabel': 'Search the help',
   'help.ui.searchPlaceholder': 'For example: PIN, code, tracking',

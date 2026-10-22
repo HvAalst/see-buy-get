@@ -89,12 +89,15 @@ writeFileSync(
     `- [Send or track a parcel](${abs('/send/')}): prices, booking and tracking by tracking code`,
     `- [SeeBuyGet at a glance](${abs('/about/')}): what it is, how a parcel travels, where it runs, how prices are set, how parcels are kept safe`,
     `- [For shops](${abs('/for/shops/')}), [for drivers](${abs('/for/drivers/')}), [for sort hubs](${abs('/for/hubs/')}), [for online stores](${abs('/for/stores/')}), [for businesses](${abs('/for/business/')}): how each works, what is needed, questions and answers`,
+    `- [Your data at SeeBuyGet](${abs('/privacy/')}): what is kept, how it is protected, who sees it, which other companies handle it, how long it is kept and what you can do`,
+    `- [Cookies](${abs('/cookies/')}): SeeBuyGet sets none; what its apps keep in your browser instead`,
     `- [Help](${abs('/help/')}): how each app works, signing in, codes and PINs — one page per article — and how to write to us`,
     `- [Everything above as plain text](${abs('/llms-full.txt')}): these pages and every help article`,
     ...(towns.length ? ['', '## Towns with parcel shops', ...towns.map((p) => `- [${townName(p)}](${abs(p)})`)] : []),
     '',
     '## Earning with the network',
-    '- Shops earn a fee on every parcel they take in or hand out; drivers and riders per load; sort hubs per parcel sorted; online stores ship to shops for click-and-collect.',
+    '- Where a SeeBuyGet company runs in the country, shops earn a fee on every parcel they take in or hand out; drivers and riders per load; sort hubs per parcel sorted; online stores ship to shops for click-and-collect.',
+    '- Where SeeBuyGet has no company in the country yet, it only matches: shops, riders, sort hubs and fleets join, find loads and move goods on the same records, and agree and settle the price with whoever they carry for directly.',
     '',
   ].join('\n'),
 );
@@ -137,6 +140,8 @@ const HELP_ARTICLE = /<main class="hc__article"[^>]*>([\s\S]*?)<\/main>/;
 const wanted = [
   ['/about/', ARTICLE],
   ...['shops', 'drivers', 'hubs', 'stores', 'business'].map((w) => [`/for/${w}/`, ARTICLE]),
+  ['/privacy/', ARTICLE],
+  ['/cookies/', ARTICLE],
   ...found.filter((p) => /^\/help\/[a-z0-9-]+\/$/.test(p) && p !== '/help/contact/').map((p) => [p, HELP_ARTICLE]),
 ];
 for (const [p, pick] of wanted) {

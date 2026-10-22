@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Icon, ReadAloud } from '../../../shared/ui';
+import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { fetchPulse, type NetworkPulse } from '../api';
-import { prerenderedTowns } from '../prerendered';
-import { appsOnThisDevice, formatDuration, roleMeta, ROLES, welcomeSpoken, type DeviceApp, type RoleSpec } from '../logic';
+import { appsOnThisDevice, formatDuration, roleMeta, ROLES, type DeviceApp, type RoleSpec } from '../logic';
 import type { HomeActions } from '../useHomeApp';
+import { Marked } from './PublicShell';
 
 export interface WelcomeScreenProps {
   actions: HomeActions;
@@ -14,25 +14,23 @@ export interface WelcomeScreenProps {
 const IMG = '/img/landing/';
 
 /**
- * THE FRONT PAGE — for the person deciding, and for the person coming back.
+ * THE FRONT PAGE — built from the objects a parcel passes through (the user, 2026-10-22: "Build the keep and change";
+ * the public site in paper and orange). Top to bottom:
  *
- * The user, 2026-10-03: imagery above a lot of text; prove that it works for the people it is for; optimise for
- * conversion, and give returning users quick access inside. So, top to bottom:
+ *  - A RETURNING VISITOR sees their own apps first (whatever this device last signed in to).
+ *  - The promise in one line, the price first, tracking as a plain form that works before any script has run — and
+ *    beside it a parcel's LABEL: its tracking key public, the receiver's code on a tear-off that is never on the parcel.
+ *  - Where it is live, and the network's own figures, ONLY from the server (`/network/pulse`) — never typed. Nothing
+ *    shows while there is nothing to show (the user: "the homepage can only reveal the reality as it is").
+ *  - The steps a tracking key shows, exactly the parcel's own (Booked → At the shop → On the bus → At the hub → On
+ *    the shelf → Collected).
+ *  - A shop's painted sign for earning, who earns what in words — no figures, as each country sets its own — and the
+ *    way to join each role.
+ *  - Freight: the consignment note's boxes, filled from what happened.
+ *  - Why it is safe; how it works for everyone who helps it grow — where a SeeBuyGet company runs, and where SeeBuyGet
+ *    only matches — never a list of towns (the user: "we should be truthful"); and the questions people ask.
  *
- *  - A RETURNING VISITOR sees their own apps first (whatever this device last signed in to), and "Sign in" sits in
- *    the top bar on every visit. Neither costs a new visitor anything.
- *  - ONE ACTION in the hero — send a parcel — with tracking beside it as a plain form that works before any script
- *    has run, because "where is my parcel" is the other half of everybody who lands here.
- *  - PROOF, MEASURED: the network's own figures and one real recent journey between two public shops, counted by
- *    the server (`/network/pulse`) and shown only where there are enough cases to mean something. No testimonials:
- *    there are none we may print, and an invented one is a lie.
- *  - THEN pictures: how it works in three, who it is for in six, why it is safe in four — each a drawing in the
- *    brand's own illustration style and a sentence, never a paragraph.
- *  - Where it works, and the questions people actually ask — real text, because a search engine and an AI
- *    assistant read words, not pictures. The answers are in the page's HTML from the build (see prerender.tsx).
- *
- * Every card is a real address (`/?join=driver`, `/send/`), so it can be shared, opened in a new tab and followed by
- * a crawler; a tap stays inside the app.
+ * Every example is an example: every place in one country, every name invented ("mfano" is "example" in Swahili).
  */
 export function WelcomeScreen({ actions }: WelcomeScreenProps) {
   const t = useT();
@@ -53,20 +51,16 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
     go();
   };
 
-  // The same trading shops the figures count, so the list of towns and the number of towns always agree.
-  // Before the live figures arrive, the towns the build knew — so the links to every town page are in the HTML a
-  // crawler reads, and the browser's first frame matches it.
-  const [built] = useState(() => prerenderedTowns().map((p) => ({ town: p.town, slug: p.slug, shops: p.shops.length })));
-  const towns = pulse?.townList ?? built;
+  const live = pulse ? countryList(pulse.countries) : [];
 
   return (
-    <div class="land">
+    <div class="fr">
       {mine.length ? (
-        <section class="land__back" aria-label={t('home.landing.backTitle')}>
-          <span class="land__backt">{t('home.landing.backTitle')}</span>
-          <div class="land__backapps">
+        <section class="fr__back" aria-label={t('home.landing.backTitle')}>
+          <div class="pub__in fr__backin">
+            <span class="fr__backt">{t('home.landing.backTitle')}</span>
             {mine.map((a) => (
-              <a key={a.id} class="land__backapp" href={a.href}>
+              <a key={a.id} class="fr__backapp" href={a.href}>
                 <Icon name={a.icon} size={18} />
                 {t(`home.landing.back.${a.id}` as MessageKey)}
               </a>
@@ -75,171 +69,335 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
         </section>
       ) : null}
 
-      <section class="land__hero">
-        <div class="land__herotext">
-          <h1 class="land__title">{t('home.welcome.title')}</h1>
-          <p class="land__lede">{t('home.welcome.lede')}</p>
-          <div class="land__cta">
-            <a class="btn btn--primary land__primary" href="/send/">
-              {t('home.landing.send')}
-              <Icon name="chevronRight" size={20} class="btn__chev" />
-            </a>
-          </div>
-          {/* A plain GET form: it works before the script has run, and on a phone that never runs it. */}
-          <form class="land__track" action="/send/" method="get">
-            <label class="land__tracklabel" for="land-track">
-              {t('home.landing.trackLabel')}
-            </label>
-            <div class="land__trackrow">
-              <input id="land-track" class="input" name="track" autocomplete="off" autocapitalize="characters" spellcheck={false} placeholder={t('home.landing.trackPh')} required />
-              <button type="submit" class="btn btn--outline land__trackgo">
-                {t('home.landing.trackGo')}
-              </button>
+      <section class="fr__hero" id="send">
+        <div class="pub__in fr__heroin">
+          <div>
+            {live.length ? (
+              <p class="fr__where">
+                <span>{t('front.live')}</span>
+                {live.map((name, i) => (
+                  <span key={name}>
+                    {i > 0 ? <span aria-hidden="true"> · </span> : null}
+                    <b>{name}</b>
+                  </span>
+                ))}
+                <a href="/?go=roles">{t('front.notHere')}</a>
+              </p>
+            ) : null}
+            <h1 class="fr__title">
+              <Marked text={t('front.title')} />
+            </h1>
+            <p class="fr__lede">{t('front.lede')}</p>
+            <div class="fr__acts">
+              <a class="pbtn pbtn--primary" href="/send/">
+                {t('front.seePrice')}
+              </a>
+              <a class="pbtn" href="#earn">
+                {t('front.iRun')}
+              </a>
             </div>
-          </form>
-          <a class="land__earn" href="/?go=roles" onClick={inApp(() => actions.go('roles'))}>
-            {t('home.welcome.earn')}
-            <Icon name="chevronRight" size={18} />
-          </a>
+            {/* A plain GET form: it works before the script has run, and on a phone that never runs it. */}
+            <form class="fr__track" id="track" action="/send/" method="get">
+              <label for="land-track">{t('front.trackLabel')}</label>
+              <div class="fr__trackrow">
+                <input id="land-track" name="track" autocomplete="off" autocapitalize="characters" spellcheck={false} placeholder="PUD-7F3A9C21B4" required />
+                <button type="submit" class="pbtn">
+                  {t('front.trackGo')}
+                </button>
+              </div>
+            </form>
+          </div>
+          <ExampleLabel />
         </div>
-        <img class="land__heroimg" src={`${IMG}hero.svg`} width={320} height={200} alt={t('home.landing.heroAlt')} fetchpriority="high" />
       </section>
 
       {pulse && pulse.shops > 0 ? <Proof pulse={pulse} /> : null}
 
-      <section class="land__sec" aria-labelledby="land-how">
-        <h2 class="land__h2" id="land-how">
-          {t('home.landing.howTitle')}
-        </h2>
-        <ol class="land__steps">
-          {(
-            [
-              ['step-price', 'home.landing.step1', 'home.welcome.how1', 'home.landing.step1Alt'],
-              ['step-shop', 'home.landing.step2', 'home.welcome.how2', 'home.landing.step2Alt'],
-              ['step-collect', 'home.landing.step3', 'home.welcome.how3', 'home.landing.step3Alt'],
-            ] as const
-          ).map(([img, title, body, alt], i) => (
-            <li key={img} class="land__step">
-              <img src={`${IMG}${img}.svg`} width={160} height={120} alt={t(alt)} loading="lazy" />
-              <span class="land__stepn">{i + 1}</span>
-              <h3 class="land__h3">{t(title)}</h3>
-              <p class="land__p">{t(body)}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <Ladder />
 
-      <section class="land__sec" aria-labelledby="land-for">
-        <h2 class="land__h2" id="land-for">
-          {t('home.landing.forTitle')}
-        </h2>
-        <div class="land__cards">
-          <a class="land__card" href="/send/">
-            <img src={`${IMG}for-sender.svg`} width={160} height={120} alt={t('home.landing.alt.sender')} loading="lazy" />
-            <span class="land__cardt">{t('home.landing.forSender')}</span>
-            <span class="land__p">{t('home.landing.forSenderPromise')}</span>
-            <span class="land__cardgo">
-              {t('home.landing.send')}
-              <Icon name="chevronRight" size={16} />
-            </span>
-          </a>
-          {ROLES.map((r) => (
-            <RoleCard key={r.id} role={r} onGo={inApp(() => actions.startJoin(r.id))} />
-          ))}
+      <section class="fr__sign" id="earn">
+        <div class="pub__in fr__signin">
+          <div>
+            <p class="fr__big">{t('front.earn.sign')}</p>
+            <p class="fr__signlede">{t('front.earn.lede')}</p>
+            <div class="fr__joins">
+              {ROLES.map((r) => (
+                <JoinLink key={r.id} role={r} onGo={inApp(() => actions.startJoin(r.id))} />
+              ))}
+            </div>
+          </div>
+          <div class="fr__board" aria-labelledby="fr-board">
+            <p class="fr__boardt" id="fr-board">
+              {t('front.board.title')}
+            </p>
+            <dl>
+              {(['shop', 'driver', 'hub', 'store'] as const).map((k) => (
+                <div key={k} class="fr__line">
+                  <dt>{t(`front.board.${k}`)}</dt>
+                  <dd>{t(`front.board.${k}How`)}</dd>
+                </div>
+              ))}
+            </dl>
+            <p class="fr__boardfoot">
+              {t('front.board.foot')}{' '}
+              <a href="/help/shop-papers/">{t('front.board.approved')} →</a>
+            </p>
+          </div>
         </div>
       </section>
 
-      <section class="land__sec" aria-labelledby="land-trust">
-        <h2 class="land__h2" id="land-trust">
-          {t('home.landing.trustTitle')}
-        </h2>
-        <ul class="land__trust">
-          {(['id', 'code', 'photo', 'note'] as const).map((k) => (
-            <li key={k} class="land__trustitem">
-              <img src={`${IMG}trust-${k}.svg`} width={96} height={72} alt="" loading="lazy" />
-              <span>
-                <h3 class="land__h3">{t(`home.landing.trust.${k}` as MessageKey)}</h3>
-                <p class="land__p">{t(`home.landing.trust.${k}Body` as MessageKey)}</p>
-                {k === 'note' ? (
-                  <a class="land__link" href="/?go=verify" onClick={inApp(() => actions.go('verify'))}>
-                    {t('home.landing.trust.noteCta')}
-                  </a>
-                ) : null}
-              </span>
-            </li>
-          ))}
-        </ul>
+      <section class="fr__sec fr__freight" id="freight">
+        <div class="pub__in fr__freightin">
+          <div>
+            <p class="fr__eyebrow">{t('front.freight.eyebrow')}</p>
+            <h2 class="fr__h2">{t('front.freight.title')}</h2>
+            <p class="fr__p">{t('front.freight.lede')}</p>
+            <ul class="fr__boxes">
+              {(
+                [
+                  ['13', 'front.freight.box13', 'front.freight.box13Body'],
+                  ['S', 'front.freight.seals', 'front.freight.sealsBody'],
+                  ['24', 'front.freight.box24', 'front.freight.box24Body'],
+                ] as const
+              ).map(([n, title, body]) => (
+                <li key={n}>
+                  <span class="fr__boxn">{n}</span>
+                  <span>
+                    <b>{t(title)}</b>
+                    <span>{t(body)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div class="fr__acts fr__acts--grid">
+              <a class="pbtn pbtn--primary" href="/business/">
+                {t('front.freight.open')}
+              </a>
+              <a class="pbtn" href="/?go=verify" onClick={inApp(() => actions.go('verify'))}>
+                {t('front.freight.check')}
+              </a>
+              <a class="pbtn" href="/?go=agents" onClick={inApp(() => actions.go('agents'))}>
+                {t('front.freight.agents')}
+              </a>
+            </div>
+          </div>
+          <ExampleNote />
+        </div>
       </section>
 
-      {towns.length ? (
-        <section class="land__sec" aria-labelledby="land-where">
-          <h2 class="land__h2" id="land-where">
-            {t('home.landing.whereTitle')}
-          </h2>
-          <p class="land__p">{t('home.landing.whereLede')}</p>
-          <ul class="land__towns">
-            {towns.slice(0, 24).map((w) => (
-              <li key={w.town}>
-                <a class="land__town" href={`/towns/${w.slug}/`}>
-                  <span class="land__townname">{w.town}</span>
-                  <span class="land__townn">{w.shops === 1 ? t('home.landing.whereShop') : t('home.landing.whereShops', { n: w.shops })}</span>
-                </a>
+      <section class="fr__sec">
+        <div class="pub__in">
+          <ul class="fr__trust">
+            {(['id', 'code', 'photo', 'note'] as const).map((k) => (
+              <li key={k}>
+                <span class="fr__eyebrow">{t(`front.trust.${k}When`)}</span>
+                <h3 class="fr__h3">{t(`home.landing.trust.${k}` as MessageKey)}</h3>
+                <p class="fr__p">{t(`home.landing.trust.${k}Body` as MessageKey)}</p>
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
-
-      <section class="land__sec" aria-labelledby="land-faq">
-        <h2 class="land__h2" id="land-faq">
-          {t('home.landing.faqTitle')}
-        </h2>
-        {FAQ_GROUPS.map((g) => (
-          <div key={g.key} class="land__faqgroup">
-            <h3 class="land__h3">{t(g.title)}</h3>
-            <div class="land__faq">
-              {g.items.map(([q, a]) => (
-                <details key={q} class="land__qa">
-                  <summary class="land__q">{t(q)}</summary>
-                  <p class="land__a">{t(a)}</p>
-                </details>
-              ))}
-            </div>
-            <a class="land__link" href={g.more}>
-              {t(g.moreLabel)}
-              <Icon name="chevronRight" size={18} />
-            </a>
-          </div>
-        ))}
+        </div>
       </section>
 
-      <footer class="land__foot">
-        <nav class="land__footnav" aria-label={t('home.landing.footNav')}>
-          <a href="/send/">{t('home.landing.footSend')}</a>
-          <a href="/?go=roles" onClick={inApp(() => actions.go('roles'))}>
-            {t('home.landing.footEarn')}
-          </a>
-          <a href="/?go=market" onClick={inApp(() => actions.go('market'))}>
-            {t('home.landing.footMarket')}
-          </a>
-          <a href="/?go=agents" onClick={inApp(() => actions.go('agents'))}>
-            {t('home.landing.footAgents')}
-          </a>
-          <a href="/?go=verify" onClick={inApp(() => actions.go('verify'))}>
-            {t('home.landing.footVerify')}
-          </a>
-          <a href="/help/">{t('home.landing.footHelp')}</a>
-          <a href="/about/">{t('pages.about')}</a>
-          <a href="/?go=signin" onClick={inApp(() => actions.go('signin'))}>
-            {t('home.landing.footSignIn')}
-          </a>
-        </nav>
-        <div class="land__footend">
-          <span class="land__mark">SeeBuyGet</span>
-          {/* Help once, in the links above: a second Help here opened a sheet with less in it than the page. */}
-          <ReadAloud text={() => welcomeSpoken(t)} label={t('home.readAloud')} />
+      <section class="fr__sec fr__grow" aria-labelledby="fr-grow">
+        <div class="pub__in">
+          <h2 class="fr__h2" id="fr-grow">
+            {t('front.grow.title')}
+          </h2>
+          <p class="fr__p fr__growlede">{t('front.grow.lede')}</p>
+          <div class="fr__ways">
+            <div class="fr__way">
+              <h3 class="fr__h3">{t('front.grow.settles')}</h3>
+              <p class="fr__p">{t('front.grow.settlesBody')}</p>
+            </div>
+            <div class="fr__way fr__way--match">
+              <h3 class="fr__h3">{t('front.grow.matches')}</h3>
+              <p class="fr__p">{t('front.grow.matchesBody')}</p>
+            </div>
+          </div>
+          <div class="fr__acts">
+            <a class="pbtn pbtn--primary" href="#earn">
+              {t('front.grow.join')}
+            </a>
+          </div>
         </div>
-      </footer>
+      </section>
+
+      <section class="fr__sec fr__faq" aria-labelledby="land-faq" id="help">
+        <div class="pub__in">
+          <h2 class="fr__h2" id="land-faq">
+            {t('front.faq.title')}
+          </h2>
+          {FAQ_GROUPS.map((g) => (
+            <div key={g.key} class="fr__faqgroup">
+              <h3 class="fr__h3">{t(g.title)}</h3>
+              <div class="fr__qs">
+                {g.items.map(([q, a]) => (
+                  <details key={q}>
+                    <summary>{t(q)}</summary>
+                    <p>{t(a)}</p>
+                  </details>
+                ))}
+              </div>
+              <a class="fr__more" href={g.more}>
+                {t(g.moreLabel)} →
+              </a>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** The label a parcel wears: who sends and who collects, its public tracking key, and the receiver's code torn off. */
+function ExampleLabel() {
+  const t = useT();
+  return (
+    <figure class="fr__labelwrap" aria-label={t('front.label.aria')}>
+      <div class="fr__label">
+        <div class="fr__labelhd">
+          <b>SeeBuyGet</b>
+          <span>{t('front.label.kind')}</span>
+        </div>
+        <div class="fr__labelgrid">
+          <div>
+            <small>{t('front.label.from')}</small>
+            <b>{t('front.label.fromShop')}</b>
+            <span>{t('front.label.fromPlace')}</span>
+          </div>
+          <div>
+            <small>{t('front.label.to')}</small>
+            <b>{t('front.label.toShop')}</b>
+            <span>{t('front.label.toPlace')}</span>
+          </div>
+        </div>
+        <div class="fr__labelkey">
+          <QrMark />
+          <div>
+            <span class="fr__labelk">PUD-7F3A9C21B4</span>
+            <small>{t('front.label.key')}</small>
+          </div>
+        </div>
+        <div class="fr__labelpay">{t('front.label.paid')}</div>
+        <span class="fr__stamp">{t('front.label.stamp')}</span>
+      </div>
+      <div class="fr__tear">
+        <small>{t('front.label.tear')}</small>
+        <b aria-label="4821">4821</b>
+      </div>
+    </figure>
+  );
+}
+
+/** A small square pattern standing for the label's QR code — a picture of one, not one that opens anything. */
+function QrMark() {
+  return (
+    <svg class="fr__qr" viewBox="0 0 21 21" shape-rendering="crispEdges" aria-hidden="true">
+      <rect width="21" height="21" fill="#fff" />
+      <path
+        fill="currentColor"
+        d="M0 0h7v7H0zM1 1v5h5V1zM2 2h3v3H2zM14 0h7v7h-7zM15 1v5h5v-5zM16 2h3v3h-3zM0 14h7v7H0zM1 15v5h5v-5zM2 16h3v3H2zM9 0h1v2H9zM11 1h2v1h-2zM8 3h2v1H8zM11 3h1v2h-1zM9 5h3v1H9zM0 9h2v1H0zM3 8h1v3H3zM5 9h3v1H5zM9 8h1v1H9zM11 8h2v2h-2zM14 9h2v1h-2zM17 8h1v2h-1zM19 9h2v1h-2zM1 11h1v2H1zM4 12h2v1H4zM8 11h2v1H8zM12 11h1v3h-1zM15 12h2v1h-2zM18 11h3v1h-3zM9 14h1v2H9zM11 15h2v1h-2zM14 14h2v2h-2zM17 14h1v1h-1zM19 15h2v1h-2zM8 17h3v1H8zM13 17h1v2h-1zM15 18h3v1h-3zM19 17h2v1h-2zM9 19h2v2H9zM12 20h2v1h-2zM16 20h1v1h-1zM18 19h3v2h-3z"
+      />
+    </svg>
+  );
+}
+
+/** The steps a tracking key shows — the parcel's own, in order — on one example parcel, three of them done. */
+function Ladder() {
+  const t = useT();
+  const steps = [
+    ['booked', 'front.ladder.bookedWhen', 'done'],
+    ['atShop', 'front.ladder.atShopWhen', 'done'],
+    ['onBus', 'front.ladder.onBusWhen', 'done'],
+    ['atHub', 'front.ladder.atHubWhen', 'now'],
+    ['onShelf', 'front.ladder.onShelfWhen', ''],
+    ['collected', '', ''],
+  ] as const;
+  return (
+    <section class="fr__sec fr__ladder" aria-labelledby="fr-ladder">
+      <div class="pub__in">
+        <h2 class="fr__h2" id="fr-ladder">
+          {t('front.ladder.title')}
+        </h2>
+        <p class="fr__p">{t('front.ladder.sub')}</p>
+        <ol class="fr__rail" aria-label={t('front.ladder.example')}>
+          {steps.map(([k, when, state], i) => (
+            <li key={k} class={`fr__rung${state ? ` fr__rung--${state}` : ''}`}>
+              <span class="fr__dot" aria-hidden="true">
+                {state === 'done' ? '✓' : i + 1}
+              </span>
+              <span class="fr__when">{when ? t(when as MessageKey) : '—'}</span>
+              <h3 class="fr__h3">{t(`front.ladder.${k}` as MessageKey)}</h3>
+              <p class="fr__p">{t(`front.ladder.${k}Body` as MessageKey)}</p>
+            </li>
+          ))}
+        </ol>
+        <p class="fr__fine">{t('front.ladder.example')}</p>
+      </div>
+    </section>
+  );
+}
+
+/** One way in for each kind of reader, with its picture: the front door's join, or — a fleet office — writing to us. */
+function JoinLink({ role, onGo }: { role: RoleSpec; onGo: (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => void }) {
+  const t = useT();
+  const meta = roleMeta(role, t);
+  const label = role.kind === 'invite' ? t('front.earn.fleet') : role.id === 'vendor' ? t('front.earn.store') : t('home.landing.joinAs', { role: meta.labelLower });
+  const href = role.kind === 'invite' ? '/help/contact/?topic=joining&from=home' : `/?join=${role.id}`;
+  return (
+    <a class={`fr__join${role.kind === 'invite' ? ' fr__join--talk' : ''}`} href={href} onClick={role.kind === 'invite' ? undefined : onGo}>
+      <img src={`${IMG}for-${ROLE_IMG[role.id]}.svg`} width={44} height={33} alt="" loading="lazy" />
+      <span>{label}</span>
+    </a>
+  );
+}
+
+const ROLE_IMG: Record<RoleSpec['id'], string> = { pudo: 'shop', driver: 'rider', mdp: 'hub', vendor: 'store', fleet: 'fleet' };
+
+/** Part of a consignment note, filled in: two parties in one country, the sender's instructions, a seal, the receipt. */
+function ExampleNote() {
+  const t = useT();
+  return (
+    <div class="fr__cmr" role="group" aria-label={t('front.cmr.aria')}>
+      <div class="fr__cmrbox">
+        <span class="fr__cmrn">
+          <b>1</b>
+          {t('front.cmr.sender')}
+        </span>
+        <span>{t('front.cmr.senderValue')}</span>
+      </div>
+      <div class="fr__cmrbox">
+        <span class="fr__cmrn">
+          <b>2</b>
+          {t('front.cmr.consignee')}
+        </span>
+        <span>{t('front.cmr.consigneeValue')}</span>
+      </div>
+      <div class="fr__cmrbox fr__cmrbox--wide">
+        <span class="fr__cmrn">
+          <b>13</b>
+          {t('front.cmr.instructions')}
+        </span>
+        <span class="fr__hand">{t('front.cmr.instructionsValue')}</span>
+      </div>
+      <div class="fr__cmrbox">
+        <span class="fr__cmrn">
+          <b>S</b>
+          {t('front.cmr.seals')}
+        </span>
+        <span>{t('front.cmr.sealsValue')}</span>
+      </div>
+      <div class="fr__cmrbox">
+        <span class="fr__cmrn">
+          <b>24</b>
+          {t('front.cmr.received')}
+        </span>
+        <span>
+          <span class="fr__photo" aria-hidden="true" />
+          {t('front.cmr.receivedValue')}
+        </span>
+      </div>
     </div>
   );
 }
@@ -274,103 +432,80 @@ export const FAQ_GROUPS: ReadonlyArray<{ key: string; title: MessageKey; more: s
     ],
   },
   { key: 'stores', title: 'home.landing.faqGroup.stores', more: '/help/?for=store', moreLabel: 'home.landing.faqMore.stores', items: [['home.landing.faq10q', 'home.landing.faq10a']] },
-  { key: 'safe', title: 'home.landing.faqGroup.safe', more: '/help/', moreLabel: 'home.landing.faqMore.safe', items: [['home.landing.faq8q', 'home.landing.faq8a']] },
+  {
+    key: 'safe',
+    title: 'home.landing.faqGroup.safe',
+    more: '/help/',
+    moreLabel: 'home.landing.faqMore.safe',
+    items: [
+      ['home.landing.faq8q', 'home.landing.faq8a'],
+      ['home.landing.faq11q', 'home.landing.faq11a'],
+    ],
+  },
 ];
 
 /** Every question, in that order — what the page's FAQ structured data carries. */
 export const FAQ: ReadonlyArray<readonly [MessageKey, MessageKey]> = FAQ_GROUPS.flatMap((g) => g.items);
 
-/** One way to work with the network: its picture, its promise, and the door. */
-function RoleCard({ role, onGo }: { role: RoleSpec; onGo: (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => void }) {
-  const t = useT();
-  const meta = roleMeta(role, t);
-  return (
-    <a class="land__card" href={`/?join=${role.id}`} onClick={onGo}>
-      <img src={`${IMG}for-${ROLE_IMG[role.id]}.svg`} width={160} height={120} alt={t(`home.landing.alt.${role.id}` as MessageKey)} loading="lazy" />
-      <span class="land__cardt">{meta.label}</span>
-      <span class="land__p">{meta.promise}</span>
-      <span class="land__cardgo">
-        {role.kind === 'invite' ? t('home.landing.joinFleet') : t('home.landing.joinAs', { role: meta.labelLower })}
-        <Icon name="chevronRight" size={16} />
-      </span>
-    </a>
-  );
-}
-
-const ROLE_IMG: Record<RoleSpec['id'], string> = { pudo: 'shop', driver: 'rider', mdp: 'hub', vendor: 'store', fleet: 'fleet' };
-
 /** The network's own figures, and one real journey. Each tile is there only when the server sent its figure. */
 function Proof({ pulse }: { pulse: NetworkPulse }) {
   const t = useT();
-  const countries = countryNames(pulse.countries);
+  const countries = countryList(pulse.countries).join(', ');
   const when = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
   const j = pulse.journey;
   return (
-    <section class="land__proof" aria-labelledby="land-proof">
-      <h2 class="land__h2" id="land-proof">
-        {t('home.landing.proofTitle')}
-      </h2>
-      <p class="land__p">{t('home.landing.proofLede')}</p>
-      <dl class="land__stats">
-        <Stat value={String(pulse.shops)} label={t('home.landing.stat.shops')} sub={t('home.landing.stat.shopsOpen', { n: pulse.shopsOpen })} />
-        <Stat value={String(pulse.towns)} label={t('home.landing.stat.towns')} sub={countries ? t('home.landing.stat.countries', { list: countries }) : undefined} />
-        {pulse.collected30d > 0 ? <Stat value={pulse.collected30d.toLocaleString()} label={t('home.landing.stat.collected')} /> : null}
-        {pulse.medianHoursToReady !== undefined ? <Stat value={formatDuration(pulse.medianHoursToReady * 60, t)} label={t('home.landing.stat.hours')} /> : null}
-        {pulse.shopRating ? <Stat value={`${pulse.shopRating.average}★`} label={t('home.landing.stat.rating', { n: pulse.shopRating.count })} /> : null}
-      </dl>
-      {j ? (
-        <figure class="land__journey">
-          <figcaption class="land__h3">{t('home.landing.journeyTitle')}</figcaption>
-          <ol class="land__legs">
-            <li class="land__leg">
-              <span class="land__legdot" />
-              <span>
-                <b>{j.fromShop}</b>, {j.fromTown}
-                <small>{t('home.landing.journeyHanded')}</small>
-              </span>
-            </li>
-            <li class="land__leg">
-              <span class="land__legdot" />
-              <span>
-                <b>{j.toShop}</b>, {j.toTown}
-                <small>{t('home.landing.journeyReady', { time: formatDuration(j.toReadyMinutes, t) })}</small>
-              </span>
-            </li>
-            <li class="land__leg land__leg--done">
-              <span class="land__legdot" />
-              <span>
-                <Icon name="check" size={16} />
-                <small>{t('home.landing.journeyCollected', { time: formatDuration(j.toCollectedMinutes, t) })}</small>
-              </span>
-            </li>
-          </ol>
-          <p class="land__fine">{t('home.landing.journeyWhen', { date: when(j.collectedAt) })}</p>
-        </figure>
-      ) : null}
-      <p class="land__fine">{t('home.landing.proofAsOf', { time: new Date(pulse.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) })}</p>
+    <section class="fr__sec fr__proof" aria-labelledby="land-proof">
+      <div class="pub__in">
+        <h2 class="fr__h2" id="land-proof">
+          {t('home.landing.proofTitle')}
+        </h2>
+        <p class="fr__p">{t('home.landing.proofLede')}</p>
+        <dl class="fr__stats">
+          <Stat value={String(pulse.shops)} label={t('home.landing.stat.shops')} sub={t('home.landing.stat.shopsOpen', { n: pulse.shopsOpen })} />
+          <Stat value={String(pulse.towns)} label={t('home.landing.stat.towns')} sub={countries ? t('home.landing.stat.countries', { list: countries }) : undefined} />
+          {pulse.collected30d > 0 ? <Stat value={pulse.collected30d.toLocaleString()} label={t('home.landing.stat.collected')} /> : null}
+          {pulse.medianHoursToReady !== undefined ? <Stat value={formatDuration(pulse.medianHoursToReady * 60, t)} label={t('home.landing.stat.hours')} /> : null}
+          {pulse.shopRating ? <Stat value={`${pulse.shopRating.average}★`} label={t('home.landing.stat.rating', { n: pulse.shopRating.count })} /> : null}
+        </dl>
+        {j ? (
+          <figure class="fr__journey">
+            <figcaption class="fr__h3">{t('home.landing.journeyTitle')}</figcaption>
+            <ol>
+              <li>
+                <b>{j.fromShop}</b>, {j.fromTown} — {t('home.landing.journeyHanded')}
+              </li>
+              <li>
+                <b>{j.toShop}</b>, {j.toTown} — {t('home.landing.journeyReady', { time: formatDuration(j.toReadyMinutes, t) })}
+              </li>
+              <li>{t('home.landing.journeyCollected', { time: formatDuration(j.toCollectedMinutes, t) })}</li>
+            </ol>
+            <p class="fr__fine">{t('home.landing.journeyWhen', { date: when(j.collectedAt) })}</p>
+          </figure>
+        ) : null}
+        <p class="fr__fine">{t('home.landing.proofAsOf', { time: new Date(pulse.at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) })}</p>
+      </div>
     </section>
   );
 }
 
 function Stat({ value, label, sub }: { value: string; label: string; sub?: string }) {
   return (
-    <div class="land__stat">
-      <dt class="land__statv">{value}</dt>
-      <dd class="land__statl">
+    <div class="fr__stat">
+      <dt>{value}</dt>
+      <dd>
         {label}
-        {sub ? <span class="land__stats2">{sub}</span> : null}
+        {sub ? <span>{sub}</span> : null}
       </dd>
     </div>
   );
 }
 
-/** "Kenya, Uganda" from ["KE", "UG"], in the visitor's own language where the browser knows it. */
-function countryNames(codes: string[]): string {
-  if (!codes.length) return '';
+/** ["Kenya", "Uganda"] from ["KE", "UG"], in the visitor's own language where the browser knows it. */
+function countryList(codes: string[]): string[] {
   try {
     const names = new Intl.DisplayNames(undefined, { type: 'region' });
-    return codes.map((c) => names.of(c) ?? c).join(', ');
+    return codes.map((c) => names.of(c) ?? c);
   } catch {
-    return codes.join(', ');
+    return codes;
   }
 }

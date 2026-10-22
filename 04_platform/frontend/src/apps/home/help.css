@@ -154,17 +154,24 @@ html[data-help-theme='dark']:has(.hc) {
   white-space: nowrap;
 }
 
+.hc__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: none;
+}
+
+.hc__sep {
+  color: var(--hc-muted, currentColor);
+  font-weight: 700;
+}
+
+/* The brand tile itself (brand/svg/tile.svg): flat, its own colours and corners, never redrawn. */
 .hc__tile {
+  display: block;
   width: 30px;
   height: 30px;
-  border-radius: 7px;
-  background: var(--hc-orange);
-  color: var(--hc-orange-ink);
-  display: grid;
-  place-items: center;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  flex: none;
 }
 
 .hc__search {
@@ -798,7 +805,8 @@ html[data-help-theme='dark']:has(.hc) {
     display: block;
   }
 
-  .hc__logo span:last-child {
+  .hc__logo span:last-child,
+  .hc__sep {
     display: none;
   }
 

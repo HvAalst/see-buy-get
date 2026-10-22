@@ -2,7 +2,7 @@ import { Icon } from '../../../shared/ui';
 import { useLocale, useT } from '../../../shared/i18n';
 import { prerenderedTowns } from '../prerendered';
 import { CONTACT_PATH, HELP_PATH } from '../help';
-import { AUDIENCES, countriesOf, forPath, pageKey, range, type Audience, type InfoPage } from '../pages';
+import { AUDIENCES, NOTICES, countriesOf, forPath, noticeKey, pageKey, range, type Audience, type InfoPage, type Notice } from '../pages';
 import '../pages.css';
 
 /**
@@ -12,7 +12,50 @@ import '../pages.css';
  * with a FAQPage a machine can read for the questions.
  */
 export function InfoScreen({ page }: { page: InfoPage }) {
-  return page.kind === 'about' ? <About /> : <ForPage who={page.who} />;
+  return page.kind === 'about' ? <About /> : page.kind === 'notice' ? <NoticePage which={page.which} /> : <ForPage who={page.who} />;
+}
+
+/**
+ * YOUR DATA, OR COOKIES — what the system does, section by section, every sentence standing on its own. The way to
+ * write to us about it chooses that topic; the other page is one tap away.
+ */
+function NoticePage({ which }: { which: Notice }) {
+  const t = useT();
+  const spec = NOTICES[which];
+  const k = (part: string) => t(noticeKey(which, part));
+  return (
+    <article class="land pg">
+      <header class="pg__head">
+        <h1 class="land__title">{k('title')}</h1>
+        <p class="land__lede">{k('lede')}</p>
+        <p class="pg__asof">{t('pages.notice.asOf')}</p>
+      </header>
+
+      {spec.sections.map((s) => (
+        <section key={s.id} class="land__sec">
+          <h2 class="land__h2">{k(`${s.id}.title`)}</h2>
+          <ul class="pg__list">
+            {range(s.items).map((i) => (
+              <li key={i}>{k(`${s.id}.${i}`)}</li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      <footer class="pg__foot">
+        <p class="pg__links">
+          <a class="land__link" href={`${CONTACT_PATH}?topic=privacy`}>
+            {t('pages.notice.write')}
+            <Icon name="chevronRight" size={18} />
+          </a>
+          <a class="land__link" href={NOTICES[spec.other].path}>
+            {k('other')}
+            <Icon name="chevronRight" size={18} />
+          </a>
+        </p>
+      </footer>
+    </article>
+  );
 }
 
 function About() {
@@ -54,18 +97,8 @@ function About() {
 
       <section class="land__sec">
         <h2 class="land__h2">{t('pages.about.whereTitle')}</h2>
+        {/* A count from the build, never a list of towns (the user: "we should be truthful"). */}
         <p class="land__p">{towns.length && countries ? t('pages.about.where', { n: towns.length, countries }) : t('pages.about.whereNone')}</p>
-        {towns.length ? (
-          <ul class="land__towns">
-            {towns.slice(0, 24).map((w) => (
-              <li key={w.slug}>
-                <a class="land__town" href={`/towns/${w.slug}/`}>
-                  <span class="land__townname">{w.town}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        ) : null}
       </section>
 
       <section class="land__sec">
@@ -85,6 +118,7 @@ function About() {
       <section class="land__sec">
         <h2 class="land__h2">{t('pages.about.companyTitle')}</h2>
         <p class="land__p">{t('pages.about.company')}</p>
+        <p class="land__p">{t('pages.about.matchOnly')}</p>
       </section>
 
       <section class="land__sec">

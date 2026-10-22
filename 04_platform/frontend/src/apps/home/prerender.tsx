@@ -5,7 +5,7 @@ import { FAQ } from './screens/WelcomeScreen';
 import type { TownPage } from './api';
 import { townSlugFromPath } from './prerendered';
 import { CONTACT_PATH, HELP_PATH, articlePath, helpPageOf } from './help';
-import { ABOUT_PATH, AUDIENCES, forPath, infoPageOf, pageKey, range, type InfoPage } from './pages';
+import { ABOUT_PATH, AUDIENCES, NOTICES, forPath, infoPageOf, noticeKey, pageKey, range, type InfoPage } from './pages';
 import { GUIDE_APPS, articleById, articles, type PublicApp } from '../../shared/guide/articles';
 
 type HeadElement = { type: string; props: Record<string, string> };
@@ -63,7 +63,7 @@ export async function prerender(data: { url: string }): Promise<{
     html,
     // From the front page, every town page and the help — and from the help, every article and writing to us. The
     // plugin renders each of them in turn.
-    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, ...AUDIENCES.map((a) => forPath(a.who))]) } : {}),
+    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, ...AUDIENCES.map((a) => forPath(a.who)), NOTICES.privacy.path, NOTICES.cookies.path]) } : {}),
     ...(help?.kind === 'index' ? { links: new Set([...articles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
     data: { towns },
     head: { lang: 'en', ...head },
@@ -138,6 +138,14 @@ function infoHead(page: InfoPage): { title: string; elements: Set<HeadElement> }
       crumb(t('pages.about.title'), ABOUT_PATH),
     ];
     return { title, elements: new Set([...common(title, description, ABOUT_PATH), ldScript(ld)]) };
+  }
+  if (page.kind === 'notice') {
+    const k = (part: string) => t(noticeKey(page.which, part));
+    const path = NOTICES[page.which].path;
+    const title = k('metaTitle');
+    const description = k('metaDescription');
+    const ld = [{ '@context': 'https://schema.org', '@type': 'WebPage', name: k('title'), description, about: { '@type': 'Organization', name: 'SeeBuyGet' } }, crumb(k('title'), path)];
+    return { title, elements: new Set([...common(title, description, path), ldScript(ld)]) };
   }
   const spec = AUDIENCES.find((a) => a.who === page.who)!;
   const k = (part: string) => t(pageKey(page.who, part));

@@ -22,6 +22,8 @@ import type { enTowerAll } from './en.tower';
 import { enTowerShared } from './en.tower-shared';
 import { enHelp } from './en.help';
 import { enPages } from './en.pages';
+import { enFront } from './en.front';
+import { enPrivacy } from './en.privacy';
 
 /* HOW A SHIPPER PAYS A CARRIER DIRECTLY. Shared, because the fleet declaring it, the shop reading it
    before booking, and the shop reading it back afterwards must all say the same thing. */
@@ -120,6 +122,10 @@ export const en = {
   ...enHelp,
   // The pages written to be quoted: /about/ and /for/<who>/ (en.pages.ts).
   ...enPages,
+  // The front page, restyled (en.front.ts).
+  ...enFront,
+  // Your data, and cookies: what the system does with personal data today (en.privacy.ts).
+  ...enPrivacy,
 
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',

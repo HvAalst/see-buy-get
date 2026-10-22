@@ -12,6 +12,8 @@ import { WelcomeScreen } from './screens/WelcomeScreen';
 import { TownScreen } from './screens/TownScreen';
 import { HelpScreen } from './screens/HelpScreen';
 import { InfoScreen } from './screens/InfoScreen';
+import { PublicShell } from './screens/PublicShell';
+import { welcomeSpoken } from './logic';
 import { NoteCheck } from '../../shared/archive/NoteCheck';
 import { lookAtDocumentLink, lookAtReportLink, takeDocumentLink, takeReportLink, verifyNote } from './api';
 import { DamageReportLinkPage } from '../../shared/damage/DamageReportLinkPage';
@@ -56,13 +58,29 @@ export function App() {
 
   // The help is a reading page of its own (help.css): its own top bar, its own look — not inside the app's.
   if (state.screen === 'help' && state.helpPage) return <HelpScreen page={state.helpPage} />;
+  // The public site — the front page and the pages written to be quoted — in its own frame and look (public.css).
+  const update = needRefresh ? () => void sw.updateServiceWorker(true) : undefined;
+  if (state.screen === 'welcome') {
+    return (
+      <PublicShell update={update} readAloud={() => welcomeSpoken(t)}>
+        <WelcomeScreen actions={actions} />
+      </PublicShell>
+    );
+  }
+  if (state.screen === 'info' && state.infoPage) {
+    return (
+      <PublicShell update={update}>
+        <InfoScreen page={state.infoPage} />
+      </PublicShell>
+    );
+  }
 
   return (
     <div class="app">
       <TopBar
         title={t('home.appTitle')}
         subtitle={subtitle}
-        onBack={state.screen === 'welcome' ? undefined : () => (state.screen === 'join' ? actions.back() : state.screen === 'town' ? location.assign('/') : state.screen === 'help' ? location.assign(state.helpPage?.kind === 'index' ? '/' : '/help/') : state.screen === 'info' ? location.assign(state.infoPage?.kind === 'about' ? '/' : '/about/') : actions.go('welcome'))}
+        onBack={() => (state.screen === 'join' ? actions.back() : state.screen === 'town' ? location.assign('/') : state.screen === 'help' ? location.assign(state.helpPage?.kind === 'index' ? '/' : '/help/') : state.screen === 'info' ? location.assign(state.infoPage?.kind === 'about' ? '/' : '/about/') : actions.go('welcome'))}
         backLabel={t('home.back')}
         end={
           <>
@@ -77,24 +95,11 @@ export function App() {
                 <Icon name="refresh" size={24} />
               </button>
             ) : null}
-            {/* The returning visitor's door, on every visit and in the same place: the top right. */}
-            {state.screen === 'welcome' ? (
-              <a
-                class="topbar__signin"
-                href="/?go=signin"
-                onClick={(e) => {
-                  e.preventDefault();
-                  actions.go('signin');
-                }}
-              >
-                {t('home.landing.signIn')}
-              </a>
-            ) : null}
           </>
         }
       />
 
-      <main class={`app__scroll app__scroll--nonav${state.screen === 'welcome' || state.screen === 'info' ? ' app__scroll--land' : ''}`}>
+      <main class={`app__scroll app__scroll--nonav${state.screen === 'info' ? ' app__scroll--land' : ''}`}>
         {state.screen === 'market' ? <MarketScreen state={state} actions={actions} /> : null}
         {state.screen === 'store' ? <StoreScreen state={state} actions={actions} /> : null}
         {state.screen === 'profile' ? <ProfileScreen state={state} actions={actions} /> : null}
@@ -118,7 +123,6 @@ export function App() {
           <DocumentLinkPage linkKey={state.docKey} look={lookAtDocumentLink} take={takeDocumentLink} onVerify={() => actions.go('verify')} />
         ) : null}
         {state.screen === 'report' && state.reportKey !== undefined ? <DamageReportLinkPage linkKey={state.reportKey} look={lookAtReportLink} take={takeReportLink} /> : null}
-        {state.screen === 'welcome' ? <WelcomeScreen actions={actions} /> : null}
         {state.screen === 'town' && state.townSlug ? <TownScreen slug={state.townSlug} /> : null}
         {state.screen === 'info' && state.infoPage ? <InfoScreen page={state.infoPage} /> : null}
       </main>

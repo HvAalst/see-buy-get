@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { renderToString } from 'preact-render-to-string';
 import { articles } from '../../shared/guide/articles';
 import { HELP_ROLES, MOST_ASKED, alphabetical, articlePath, forRole, helpPageOf, relatedOf, roleOf, searchArticles } from './help';
@@ -119,5 +121,23 @@ describe('the help centre', () => {
 
   it('says an address it does not know is not here, rather than showing an empty page', () => {
     expect(renderToString(<HelpScreen page={{ kind: 'article', id: 'no-such-article' }} />)).toContain('That help page is not here');
+  });
+
+  it('leads home from every help page: the mark to the front page, the word to the help’s start', () => {
+    for (const page of [{ kind: 'index' } as const, { kind: 'article', id: all[0].id } as const, { kind: 'contact' } as const]) {
+      const html = renderToString(<HelpScreen page={page} />);
+      expect(html, page.kind).toMatch(/<a class="hc__logo" href="\/" aria-label="SeeBuyGet front page"/);
+      expect(html, page.kind).toMatch(/<a class="hc__logo hc__logo--help" href="\/help\/"/);
+      // The brand tile itself, never letters typed on a square.
+      expect(html, page.kind).toContain('<img class="hc__tile" src="/img/brand-tile.svg"');
+    }
+  });
+
+  it('names its favicon from the site’s root, so a page below it (/help/<id>/) finds it too', () => {
+    const index = readFileSync(join('src', 'apps', 'home', 'index.html'), 'utf8');
+    const icons = [...index.matchAll(/<link rel="(?:icon|apple-touch-icon)"[^>]*href="([^"]+)"/g)].map((m) => m[1]);
+    expect(icons.length).toBeGreaterThan(2);
+    for (const href of icons) expect(href, href).toMatch(/^\/icons\//);
+    expect(icons).toContain('/icons/favicon.svg');
   });
 });

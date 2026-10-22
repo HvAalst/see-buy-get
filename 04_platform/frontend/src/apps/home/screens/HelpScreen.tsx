@@ -68,12 +68,19 @@ function HelpTop({ dark, onDark, contents }: { dark: boolean; onDark: (dark: boo
   return (
     <header class="hc__top">
       <div class="hc__topin">
-        <a class="hc__logo" href={HELP_PATH}>
-          <span class="hc__tile" aria-hidden="true">
-            sBG
+        {/* The mark goes home, to the front page; the word goes to the help's own start. */}
+        <nav class="hc__brand" aria-label={t('help.ui.crumbsLabel')}>
+          <a class="hc__logo" href="/" aria-label={t('help.ui.home')} title={t('help.ui.home')}>
+            <img class="hc__tile" src="/img/brand-tile.svg" width={30} height={30} alt="" />
+            <span aria-hidden="true">SeeBuyGet</span>
+          </a>
+          <span class="hc__sep" aria-hidden="true">
+            ›
           </span>
-          <span>{t('help.ui.title')}</span>
-        </a>
+          <a class="hc__logo hc__logo--help" href={HELP_PATH}>
+            {t('help.ui.title')}
+          </a>
+        </nav>
         <form
           class="hc__search"
           role="search"

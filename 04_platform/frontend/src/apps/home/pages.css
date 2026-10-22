@@ -42,6 +42,12 @@
   font-weight: 800;
 }
 
+.pg__asof {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted, #555);
+}
+
 .pg__list {
   margin: 12px 0 0;
   padding-inline-start: 22px;

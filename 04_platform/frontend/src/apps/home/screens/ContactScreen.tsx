@@ -55,6 +55,9 @@ export function ContactScreen() {
       const match = TOPICS.find((x) => x.answers.includes(a));
       if (match) setTopic(match.category);
     }
+    // A topic named in the address ("Fleet office? Talk to us" names joining) is chosen for them.
+    const named = q.get('topic');
+    if (named && TOPICS.some((x) => x.category === named)) setTopic(named as SupportCategory);
     const f = q.get('from');
     if (f && FROM.includes(f)) setFrom(f);
     // eslint-disable-next-line react-hooks/exhaustive-deps
