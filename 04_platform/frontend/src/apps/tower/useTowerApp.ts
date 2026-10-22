@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../../shared/media';
 import { t } from '../../shared/i18n'; // plain t(): these strings are built at action time
-import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, myStaffAccount, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds, type TwoStepSetup } from './api';
+import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, mintOperatorToken, myCompanyAccount, myStaffAccount, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds, type TwoStepSetup } from './api';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, HubApplication, RiderIdRow, StalledRow } from './queues';
@@ -950,12 +950,19 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       setState((s) => ({ ...s, phase: 'signin' }));
       return;
     }
-    const client = createTowerClient(creds);
+    const client = createTowerClient();
     clientRef.current = client;
+    // The token this tab holds is the session, whichever way it was signed in; one that has ended means sign in again.
+    const ended = () => {
+      clearCreds();
+      clientRef.current = null;
+      setState((s) => ({ ...s, phase: 'signin', signInNote: t('tower.signIn.ended') }));
+    };
     if (creds.mode === 'operator') {
       // The staff list is the one read the setup key is allowed everywhere, and it says when that list is ALL the key
       // reaches (outside a sandbox). Asked first, so the console does not open on a screen of refusals.
-      void client.api.staff().then(({ data }) => {
+      void client.api.staff().then(({ data, error }) => {
+        if (error) return ended();
         const setupOnly = staffListOf(data).setupOnly;
         setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: creds.name, setupOnly } }));
         if (setupOnly) return;
@@ -966,26 +973,18 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     if (creds.mode === 'staff') {
       // The token this tab already holds is the session. Asked who it belongs to: a dead token means sign in again.
       void myStaffAccount(client).then(({ data, error }) => {
-        if (error || !data) {
-          clearCreds();
-          setState((s) => ({ ...s, phase: 'signin', signInNote: t('tower.signIn.ended') }));
-          return;
-        }
+        if (error || !data) return ended();
         const roles = rolesOf(data.roles);
         setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true, roles }, staffTwoStep: Boolean(data.twoStep) }));
         void loadStart(client, roles);
       });
       return;
     }
-    // A company login has to ask the server who it is again — the stored credential says how to sign in,
-    // never what it may reach, and a console that assumed the second would be guessing at somebody's
-    // authority from a value in their own browser.
-    void companyLogin(creds.email, creds.password).then(({ data, error }) => {
-      if (error || !data) {
-        clearCreds();
-        setState((s) => ({ ...s, phase: 'signin', signInError: error?.detail ?? null }));
-        return;
-      }
+    // A company sign-in asks the server whose this token is — the browser only says how it signed in, never what it
+    // may reach, and a console that assumed the second would be guessing at somebody's authority from a value in
+    // their own browser.
+    void myCompanyAccount(client).then(({ data, error }) => {
+      if (error || !data) return ended();
       setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'company', name: data.name, entityId: data.entityId }, companyId: data.entityId ?? null, screen: 'imports' }));
       void loadEntities(client);
     });
@@ -993,9 +992,16 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
 
   const signIn = useCallback(
     async (name: string, key: string) => {
-      const creds: TowerCreds = { mode: 'operator', name: name.trim(), key };
-      const client = createTowerClient(creds);
+      const creds: TowerCreds = { mode: 'operator', name: name.trim() };
       setState((s) => ({ ...s, loading: true, signInError: null }));
+      // The key mints a session and is gone: it is not kept here (the browser may keep it, if the person says so).
+      const minted = await mintOperatorToken(key);
+      if (minted.error || !minted.data) {
+        setState((s) => ({ ...s, loading: false, signInError: minted.error?.detail || t('tower.signIn.rejected') }));
+        return;
+      }
+      const client = createTowerClient();
+      await client.seed(minted.data);
       // The staff list is the sign-in test: it needs a token AND the operator role, so a key the server rejects fails
       // here rather than after the shell has already claimed the person is signed in. It is also the one read the
       // setup key is allowed everywhere, and its answer says when that is all the key reaches (outside a sandbox).
@@ -1033,8 +1039,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         setState((s) => ({ ...s, loading: false, signInError: error?.detail || t('tower.signIn.rejected') }));
         return;
       }
-      const creds: TowerCreds = { mode: 'company', email: email.trim(), password };
-      const client = createTowerClient(creds);
+      const creds: TowerCreds = { mode: 'company', email: email.trim() };
+      const client = createTowerClient();
+      await client.seed(data.token);
       clientRef.current = client;
       saveCreds(creds);
       setState((s) => ({
@@ -1083,8 +1090,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         return;
       }
       const creds: TowerCreds = { mode: 'staff', email: email.trim() };
-      const client = createTowerClient(creds);
-      await client.seed?.(data.token);
+      const client = createTowerClient();
+      await client.seed(data.token);
       clientRef.current = client;
       saveCreds(creds);
       const roles = rolesOf(data.roles);
@@ -1736,19 +1743,12 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (!creds || creds.mode === 'operator') return t('tower.password.onlyCompany');
         const { error } = await (creds.mode === 'staff' ? changeStaffPassword : changeCompanyPassword)(creds.email, current, next);
         if (error) return error.detail || error.title;
-        // A staff password change ends every staff session, this one included — and there is no password kept to sign
-        // back in with. So it says so, on the sign-in screen, rather than failing at the next click.
-        if (creds.mode === 'staff') {
-          clearCreds();
-          clientRef.current = null;
-          setState({ ...INITIAL, phase: 'signin', signInNote: t('tower.password.signInAgain') });
-          return null;
-        }
-        // The console re-signs itself in with what it keeps, so it must keep the NEW password, not the old one.
-        const fresh: TowerCreds = { mode: 'company', email: creds.email, password: next };
-        saveCreds(fresh);
-        clientRef.current = createTowerClient(fresh);
-        setState((s) => ({ ...s, creds: fresh }));
+        // A password change ends that person's sessions, this one included — and no password is kept to sign back in
+        // with. So it says so, on the sign-in screen, rather than failing at the next click; the browser offers to
+        // keep the new one when it is typed there.
+        clearCreds();
+        clientRef.current = null;
+        setState({ ...INITIAL, phase: 'signin', signInNote: t(creds.mode === 'staff' ? 'tower.password.signInAgain' : 'tower.password.signInAgainCompany') });
         return null;
       },
       revokeAdmin: async (entityId: string, adminId: string) => {

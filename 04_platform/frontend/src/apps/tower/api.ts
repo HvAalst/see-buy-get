@@ -1,5 +1,4 @@
 import {
-  createCredentialedClient,
   createSeededClient,
   createOperatorApi,
   makeConfig,
@@ -15,11 +14,10 @@ const APP_VERSION = '1.0.0';
 /**
  * The console's session lives in sessionStorage, and that is the whole security model of this screen.
  *
- * The operator credential is a PASSWORD typed by a person, not a device identity like the driver's DID
- * or the vendor's store secret — so it never goes near localStorage, where it would outlive the person
- * who typed it, on a machine other people sit at. Close the tab and this console is signed out. The
- * cost is re-typing the key after a browser restart, which is the correct price for a credential that
- * can take a hazard off every driver's map.
+ * What is kept is the SESSION, never the secret behind it. A password or the setup key is typed by a person, and
+ * offered to the browser's own password manager to keep (the user, 2026-10-22) — the console keeps neither: it signs
+ * in once, holds the token that sign-in returned (a working shift, this tab only), and when that ends it asks again.
+ * Close the tab and this console is signed out.
  */
 const CREDS_KEY = 'sbg:tower:creds';
 const TOKEN_KEY = 'sbg:tower:token';
@@ -39,16 +37,14 @@ export type TowerMode = 'operator' | 'company' | 'staff';
 
 export interface OperatorCreds {
   mode: 'operator';
-  /** Who is at the keyboard. Recorded beside every decision; NOT verified — see the sign-in screen. */
+  /** Who is at the keyboard. Recorded beside every decision; NOT verified — see the sign-in screen. The key itself is never kept. */
   name: string;
-  /** The shared operator credential (GLOS_CLIENT_SECRET). */
-  key: string;
 }
 
+/** A company's administrator. Their password is never kept: the token is the session. */
 export interface CompanyCreds {
   mode: 'company';
   email: string;
-  password: string;
 }
 
 /**
@@ -164,6 +160,11 @@ export function myStaffAccount(client: TowerClient): Promise<Result<StaffRow>> {
   return client.client.sbg.request((raw) => raw.GET('/v1/sbg/operators/me' as never, {} as never) as never) as Promise<Result<StaffRow>>;
 }
 
+/** Who a company sign-in is, read off the token: asked when a tab comes back, instead of signing in again. */
+export function myCompanyAccount(client: TowerClient): Promise<Result<{ name: string; entityId: string }>> {
+  return client.client.sbg.request((raw) => raw.GET('/v1/sbg/entities/admins/me' as never, {} as never) as never) as Promise<Result<{ name: string; entityId: string }>>;
+}
+
 /** Set up two-step sign-in from Settings: a secret to scan. */
 export function startTwoStep(client: TowerClient): Promise<Result<TwoStepSetup>> {
   return client.client.sbg.request((raw) => raw.POST('/v1/sbg/operators/me/two-step' as never, {} as never) as never) as Promise<Result<TwoStepSetup>>;
@@ -193,27 +194,19 @@ export function companyLogin(email: string, password: string): Promise<Result<En
 export interface TowerClient {
   api: OperatorApi;
   client: AppClient;
-  /** Staff only: hand the session the token a sign-in returned. */
-  seed?: (token: { access_token: string; expires_in?: number }) => Promise<void>;
+  /** Hand the session the token a sign-in returned. */
+  seed: (token: { access_token: string; expires_in?: number }) => Promise<void>;
 }
 
 /**
- * The credential is on this device (for as long as the tab is open), so the session re-mints by itself
- * rather than bouncing an operator to sign-in mid-decision. A rejected key surfaces as a mint-sourced
- * failure, which the shell reports as "that key was not accepted" instead of "no signal".
+ * One kind of session for every way in: the token a sign-in returned (a working shift), held for this tab. No mode
+ * keeps what it signed in with — a staff code lasts half a minute anyway, and a password or the setup key is the
+ * browser's password manager's to keep, not this page's. When the token ends, every call says "sign in again" and the
+ * shell goes back to the sign-in screen.
  */
-export function createTowerClient(creds: TowerCreds): TowerClient {
-  // Staff keep no credential to sign back in with (a code lasts half a minute): the token a sign-in returned is the
-  // session, and when it ends every call says "sign in again" and the shell goes back to the sign-in screen.
-  if (creds.mode === 'staff') {
-    const seeded = createSeededClient(towerConfig(), TOKEN_KEY);
-    return { api: createOperatorApi(seeded.sbg), client: seeded, seed: (token) => seeded.seed({ access_token: token.access_token, expires_in: token.expires_in ?? 3600 }) };
-  }
-  // The other two hold their credential for as long as the tab lives, so they re-mint by themselves rather than
-  // bouncing somebody to sign-in mid-decision. What differs is only what the credential IS.
-  const login = creds.mode === 'operator' ? () => mintOperatorToken(creds.key) : () => companyLogin(creds.email, creds.password);
-  const client = createCredentialedClient(towerConfig(), TOKEN_KEY, login);
-  return { api: createOperatorApi(client.sbg), client };
+export function createTowerClient(): TowerClient {
+  const seeded = createSeededClient(towerConfig(), TOKEN_KEY);
+  return { api: createOperatorApi(seeded.sbg), client: seeded, seed: (token) => seeded.seed({ access_token: token.access_token, expires_in: token.expires_in ?? 3600 }) };
 }
 
 /* ------------------------------------------------------------------- creds -- */
@@ -225,11 +218,16 @@ export function readCreds(): TowerCreds | null {
     // Read as a loose shape rather than a union: what came out of storage is whatever was put there,
     // possibly by an older build, and narrowing happens below where the fields are actually checked.
     const parsed = JSON.parse(raw) as { mode?: string; name?: string; key?: string; email?: string; password?: string };
-    // A stored shape from before there were two modes reads as the operator one, which is what it was.
-    if (parsed?.mode === 'company') return parsed.email && parsed.password ? { mode: 'company', email: parsed.email, password: parsed.password } : null;
-    // A staff entry from before two-step sign-in carried a password; only the email is read, never the rest.
-    if (parsed?.mode === 'staff') return parsed.email ? { mode: 'staff', email: parsed.email } : null;
-    return parsed?.name && parsed?.key ? { mode: 'operator', name: parsed.name, key: parsed.key } : null;
+    // Who, never how: an entry an older build wrote with a password or the key in it is read for the email or the name
+    // only, and written back without the secret, so it does not sit in this tab a moment longer.
+    const creds: TowerCreds | null =
+      parsed?.mode === 'company' ? (parsed.email ? { mode: 'company', email: parsed.email } : null)
+      : parsed?.mode === 'staff' ? (parsed.email ? { mode: 'staff', email: parsed.email } : null)
+      // A stored shape from before there were modes reads as the operator one, which is what it was.
+      : parsed?.name ? { mode: 'operator', name: parsed.name }
+      : null;
+    if (creds && (parsed.password !== undefined || parsed.key !== undefined)) saveCreds(creds);
+    return creds;
   } catch {
     return null;
   }

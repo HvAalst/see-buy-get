@@ -2288,6 +2288,19 @@ export class SbgController {
   }
 
   /**
+   * Who this company sign-in is: its name and its company, read off the token itself. The console asks it when a tab
+   * comes back, instead of signing in again with a password it kept (the user, 2026-10-22: the browser's password
+   * manager keeps the password, not the console). A dead or revoked token answers 401, and the console asks to sign in.
+   */
+  @Roles('entity_admin')
+  @Get('entities/admins/me')
+  entityAdminMe(@Actor() actor: IntrospectionResult) {
+    // Said here, not left to @Roles: a staff token passes every labelled route, and staff are not a company's administrator.
+    if (actor?.role !== 'entity_admin' || !actor.tenant) throw new GlosError('FORBIDDEN', 'Only a company’s own administrator is signed in as one');
+    return { name: actor.actorName ?? '', entityId: actor.tenant };
+  }
+
+  /**
    * Change your own password — @Public because it proves itself with the CURRENT one.
    *
    * The other half of handing somebody a generated password: without it, "have them change it" is advice

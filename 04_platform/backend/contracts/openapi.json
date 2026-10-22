@@ -7858,6 +7858,19 @@
         }
       }
     },
+    "/v1/sbg/entities/admins/me": {
+      "get": {
+        "operationId": "Sbg.entityAdminMe",
+        "summary": "",
+        "description": "Who this company sign-in is: its name and its company, read off the token itself. The console asks it when a tab\ncomes back, instead of signing in again with a password it kept (the user, 2026-10-22: the browser's password\nmanager keeps the password, not the console). A dead or revoked token answers 401, and the console asks to sign in.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/entities/admins/password": {
       "post": {
         "operationId": "Sbg.changeEntityAdminPassword",

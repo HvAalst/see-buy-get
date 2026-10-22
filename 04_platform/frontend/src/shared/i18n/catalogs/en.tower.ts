@@ -56,6 +56,7 @@ export const enTower = {
   'tower.signIn.ended': 'Your session ended. Sign in again.',
   'tower.signIn.setupLink': 'Setting up a new installation?',
   'tower.signIn.backToAccounts': 'Back to sign-in',
+  'tower.password.signInAgainCompany': 'Password changed. You were signed out here and everywhere else — sign in again with the new password.',
   'tower.password.signInAgain': 'Password changed. Every staff session was signed out — sign in again with the new password.',
   'tower.twoStep.title': 'Two-step sign-in',
   'tower.twoStep.on': 'On',
