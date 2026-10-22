@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Sheet } from '../ui';
 import { useT } from '../i18n';
 import { articlesFor, type GuideApp, type GuideArticle } from './articles';
+import { frontDoorUrl } from '../ui/AllAppsLink';
 import './guide.css';
 
 /**
@@ -66,6 +67,18 @@ export function HelpLink({
             </details>
           ))}
         </div>
+        {/* The same help on the front door, an article to a page — and when it did not answer it, writing to us. Not the
+            console's: staff have each other. */}
+        {app === 'console' ? null : (
+          <p class="guide__more">
+            <a class="btn btn--link" href={`${frontDoorUrl()}help/`} target="_blank" rel="noopener">
+              {t('help.ui.allHelp')}
+            </a>
+            <a class="btn btn--link" href={`${frontDoorUrl()}help/contact/?from=${app}`} target="_blank" rel="noopener">
+              {t('help.ui.stuckCta')}
+            </a>
+          </p>
+        )}
       </Sheet>
     </>
   );

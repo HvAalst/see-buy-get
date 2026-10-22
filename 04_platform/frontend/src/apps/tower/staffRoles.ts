@@ -48,6 +48,8 @@ export const SCREEN_ROLES: Partial<Record<Screen, readonly StaffRole[]>> = {
   accountmoves: ['vetting'],
   iddisputes: ['vetting'],
   paperreports: ['vetting'],
+  // What people wrote from the help: support answers it.
+  messages: ['support'],
   papers: ['vetting'],
   // money — payouts and books
   money: ['money'],

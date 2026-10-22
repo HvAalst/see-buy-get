@@ -29,12 +29,13 @@ import {
   type VendorRegisteredView,
 } from './api';
 import { currentPath, townSlugFromPath } from './prerendered';
+import { helpPageOf, type HelpPage } from './help';
 import { readLinkKey } from '../../shared/archive/documentLink';
 import { readReportKey } from '../../shared/damage/damageReport';
 import { EMPTY_JOIN, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -98,11 +99,14 @@ export interface HomeState {
   seriesState: 'idle' | 'loading' | 'ready' | 'error';
   /** The town page being shown, by its address (`/towns/<slug>`). */
   townSlug: string | null;
+  /** The help page being shown, by its address (`/help/`, `/help/<article>/`, `/help/contact/`). */
+  helpPage: HelpPage | null;
 }
 
 const INITIAL: HomeState = {
   screen: 'welcome',
   townSlug: null,
+  helpPage: null,
   agents: null,
   agentsBasis: null,
   agentsState: 'idle',
@@ -147,8 +151,12 @@ export function useHomeApp() {
   // A town page is an ADDRESS (`/towns/<slug>`), known before the first render — in the build and in the browser
   // alike — so the first frame is the town page and a prerendered one hydrates without a flash of the front door.
   const [state, setState] = useState<HomeState>(() => {
-    const slug = townSlugFromPath(currentPath());
-    return slug ? { ...INITIAL, screen: 'town', townSlug: slug } : INITIAL;
+    const path = currentPath();
+    const slug = townSlugFromPath(path);
+    if (slug) return { ...INITIAL, screen: 'town', townSlug: slug };
+    // The help is an address too: its pages are built into HTML, and the first frame must be that page.
+    const helpPage = helpPageOf(path);
+    return helpPage ? { ...INITIAL, screen: 'help', helpPage } : INITIAL;
   });
   /** FB3b — which look owns the screen. A slow answer for "Nairobi" must not overwrite a fast one for
    *  "Kaapstad" typed after it; the market is read by someone trying several places in a row. */

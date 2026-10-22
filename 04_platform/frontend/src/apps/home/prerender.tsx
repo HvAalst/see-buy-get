@@ -4,6 +4,8 @@ import { t } from '../../shared/i18n';
 import { FAQ } from './screens/WelcomeScreen';
 import type { TownPage } from './api';
 import { townSlugFromPath } from './prerendered';
+import { CONTACT_PATH, HELP_PATH, articlePath, helpPageOf } from './help';
+import { GUIDE_APPS, articleById, articles, type PublicApp } from '../../shared/guide/articles';
 
 type HeadElement = { type: string; props: Record<string, string> };
 
@@ -53,11 +55,14 @@ export async function prerender(data: { url: string }): Promise<{
 
   const slug = townSlugFromPath(url);
   const town = slug ? towns.find((p) => p.slug === slug) : undefined;
-  const head = town ? townHead(town) : frontHead();
+  const help = helpPageOf(url);
+  const head = town ? townHead(town) : help ? helpHead(help) : frontHead();
   return {
     html,
-    // From the front page, every town page — the plugin renders each of them in turn.
-    ...(url === '/' ? { links: new Set(towns.map((p) => `/towns/${p.slug}`)) } : {}),
+    // From the front page, every town page and the help — and from the help, every article and writing to us. The
+    // plugin renders each of them in turn.
+    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH]) } : {}),
+    ...(help?.kind === 'index' ? { links: new Set([...articles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
     data: { towns },
     head: { lang: 'en', ...head },
   };
@@ -111,6 +116,36 @@ function frontHead(): { title: string; elements: Set<HeadElement> } {
     },
   ];
   return { title, elements: new Set([...common(title, description, '/'), ldScript(ld)]) };
+}
+
+/** A help page: the index, one article (its steps as a HowTo a machine can read), or writing to us. */
+function helpHead(page: NonNullable<ReturnType<typeof helpPageOf>>): { title: string; elements: Set<HeadElement> } {
+  const crumbs = (last?: { name: string; path: string }) => ({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'SeeBuyGet', ...(SITE ? { item: `${SITE}/` } : {}) },
+      { '@type': 'ListItem', position: 2, name: t('help.ui.title'), ...(SITE ? { item: `${SITE}${HELP_PATH}` } : {}) },
+      ...(last ? [{ '@type': 'ListItem', position: 3, name: last.name, ...(SITE ? { item: `${SITE}${last.path}` } : {}) }] : []),
+    ],
+  });
+  if (page.kind === 'contact') {
+    const title = t('help.ui.contactMetaTitle');
+    return { title, elements: new Set([...common(title, t('help.ui.contactMetaDescription'), CONTACT_PATH), ldScript([crumbs({ name: t('help.contact.title'), path: CONTACT_PATH })])]) };
+  }
+  if (page.kind === 'article') {
+    const a = articleById(page.id);
+    if (!a) return frontHead();
+    const path = articlePath(a.id);
+    const title = t('help.ui.articleMetaTitle', { title: a.title });
+    const apps = a.apps.filter((x): x is PublicApp => x !== 'console').map((x) => t(GUIDE_APPS[x]));
+    const ld = a.steps?.length
+      ? { '@context': 'https://schema.org', '@type': 'HowTo', name: a.title, description: a.summary, inLanguage: 'en', ...(apps.length ? { tool: apps.map((name) => ({ '@type': 'HowToTool', name })) } : {}), step: a.steps.map((text, i) => ({ '@type': 'HowToStep', position: i + 1, text })) }
+      : { '@context': 'https://schema.org', '@type': 'Article', headline: a.title, description: a.summary, inLanguage: 'en' };
+    return { title, elements: new Set([...common(title, a.summary, path), ldScript([ld, crumbs({ name: a.title, path })])]) };
+  }
+  const title = t('help.ui.metaTitle');
+  return { title, elements: new Set([...common(title, t('help.ui.metaDescription'), HELP_PATH), ldScript([crumbs()])]) };
 }
 
 /** A town page: its shops as an ItemList of stores, each with its map position and public page where it has one. */

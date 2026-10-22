@@ -1,4 +1,4 @@
-import { ARTICLES, type GuideArticle } from './articles';
+import { articles, type GuideArticle } from './articles';
 
 /**
  * THE STAFF'S OWN HELP — imported by the operator console and by nothing else, so no other app's code carries it (the
@@ -332,7 +332,7 @@ export const STAFF_LINES: Record<string, { steps?: string[]; notes?: string[] }>
 
 /** The console's help: every article it shows, the staff's lines back in their place, then the staff's own. */
 export function consoleArticles(): GuideArticle[] {
-  const shared = ARTICLES.filter((a) => a.apps.includes('console')).map((a) => {
+  const shared = articles().filter((a) => a.apps.includes('console')).map((a) => {
     const more = STAFF_LINES[a.id];
     if (!more) return a;
     return { ...a, ...(more.steps ? { steps: [...(a.steps ?? []), ...more.steps] } : {}), ...(more.notes ? { notes: [...(a.notes ?? []), ...more.notes] } : {}) };

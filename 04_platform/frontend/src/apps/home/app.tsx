@@ -10,6 +10,7 @@ import { ProfileScreen } from './screens/ProfileScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { TownScreen } from './screens/TownScreen';
+import { HelpScreen } from './screens/HelpScreen';
 import { NoteCheck } from '../../shared/archive/NoteCheck';
 import { lookAtDocumentLink, lookAtReportLink, takeDocumentLink, takeReportLink, verifyNote } from './api';
 import { DamageReportLinkPage } from '../../shared/damage/DamageReportLinkPage';
@@ -48,14 +49,16 @@ export function App() {
           ? t('home.subtitle.roles')
           : state.screen === 'signin'
             ? t('home.subtitle.signin')
-            : undefined;
+            : state.screen === 'help'
+              ? t('help.ui.title')
+              : undefined;
 
   return (
     <div class="app">
       <TopBar
         title={t('home.appTitle')}
         subtitle={subtitle}
-        onBack={state.screen === 'welcome' ? undefined : () => (state.screen === 'join' ? actions.back() : state.screen === 'town' ? location.assign('/') : actions.go('welcome'))}
+        onBack={state.screen === 'welcome' ? undefined : () => (state.screen === 'join' ? actions.back() : state.screen === 'town' ? location.assign('/') : state.screen === 'help' ? location.assign(state.helpPage?.kind === 'index' ? '/' : '/help/') : actions.go('welcome'))}
         backLabel={t('home.back')}
         end={
           <>
@@ -113,6 +116,7 @@ export function App() {
         {state.screen === 'report' && state.reportKey !== undefined ? <DamageReportLinkPage linkKey={state.reportKey} look={lookAtReportLink} take={takeReportLink} /> : null}
         {state.screen === 'welcome' ? <WelcomeScreen actions={actions} /> : null}
         {state.screen === 'town' && state.townSlug ? <TownScreen slug={state.townSlug} /> : null}
+        {state.screen === 'help' && state.helpPage ? <HelpScreen page={state.helpPage} /> : null}
       </main>
     </div>
   );

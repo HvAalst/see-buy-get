@@ -87,7 +87,7 @@ writeFileSync(
     '## Pages',
     `- [Front page](${abs('/')}): how it works, the network's live figures, who it is for, questions and answers`,
     `- [Send or track a parcel](${abs('/send/')}): prices, booking and tracking by tracking code`,
-    `- [Help](${abs('/help.html')}): signing in, codes and PINs, and how each app works`,
+    `- [Help](${abs('/help/')}): how each app works, signing in, codes and PINs — one page per article — and how to write to us`,
     ...(towns.length ? ['', '## Towns with parcel shops', ...towns.map((p) => `- [${townName(p)}](${abs(p)})`)] : []),
     '',
     '## Earning with the network',

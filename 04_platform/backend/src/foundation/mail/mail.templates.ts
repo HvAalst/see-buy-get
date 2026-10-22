@@ -48,11 +48,24 @@ export function appUrl(app: MailApp): string {
   return base ? `${base}${path}` : `http://localhost:${port}${path}`;
 }
 
-/** The help page (help.html). `SBG_HELP_URL`, else beside the public site. */
-export function helpUrl(anchor?: string): string {
-  const base = process.env.SBG_HELP_URL?.trim() || (process.env.SBG_PUBLIC_URL ? `${process.env.SBG_PUBLIC_URL.trim().replace(/\/+$/, '')}/help.html` : 'http://localhost:5180/help.html');
-  return anchor ? `${base}#${anchor}` : base;
+/** The help (the front door's /help/, an article at /help/<id>/). `SBG_HELP_URL`, else on the public site. */
+export function helpUrl(article?: string): string {
+  const base = (process.env.SBG_HELP_URL?.trim() || (process.env.SBG_PUBLIC_URL ? `${process.env.SBG_PUBLIC_URL.trim().replace(/\/+$/, '')}/help/` : 'http://localhost:5180/help/')).replace(/\/*$/, '/');
+  return article ? `${base}${article}/` : base;
 }
+
+/** What a message to us was about, in the words the help offered (support.types.ts). */
+const SUPPORT_TOPIC: Record<string, string> = {
+  'sign-in': 'Signing in, a PIN, a password or a code',
+  parcel: 'A parcel: sending, collecting or tracking it',
+  damage: 'Something broken, opened or missing',
+  money: 'Money: a fee, a payout or a top-up',
+  joining: 'Joining SeeBuyGet, or getting approved',
+  business: 'A business account, freight or the API',
+  safety: 'Safety, or something that looks wrong',
+  privacy: 'My data, or closing my account',
+  other: 'Something else',
+};
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -93,6 +106,10 @@ export interface MailParams {
   'trail-auditor-named': { to: string; proposedBy: string; approvedBy: string; at: string; nextAt: string };
   /** Round 40 — the daily head now goes to another address: told to the one it went to. */
   'trail-auditor-changed': { from: string; to: string; proposedBy: string; approvedBy: string; at: string; nextAt: string };
+  /** Somebody wrote to us from the help (support.service.ts): thanked, with the reference to quote. */
+  'support-received': { reference: string; category: string; message: string };
+  /** A member of staff answered a message written from the help. */
+  'support-answer': { reference: string; asked: string; answer: string; by: string };
   /** A country was lowered: what stops there for this participant, what does not, and which app they use. */
   'country-changed': { country: string; lost: string[]; kept: string[]; app: MailApp };
   /**
@@ -936,6 +953,46 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'warning', title: 'Not expected?', text: 'Tell SeeBuyGet straight away: the auditor’s address is the one thing somebody hiding a change to its records would want to move.' },
       ],
       reason: 'You are getting this email because this address received the SeeBuyGet trail’s daily fingerprint until now.',
+    }),
+  },
+
+  'support-received': {
+    title: 'We have your message (written from the help)',
+    sentWhen: 'Somebody writes to SeeBuyGet from “Write to us” in the help.',
+    wired: true,
+    sendLater: 24,
+    sample: { reference: 'SBG-7KQ2MX', category: 'parcel', message: 'My parcel has said “on its way” for three days. The tracking code is ABC123.' },
+    build: (p) => ({
+      subject: `We have your message — ${p.reference}`,
+      preheader: 'A member of SeeBuyGet staff answers it by email.',
+      blocks: [
+        { kind: 'heading', text: 'We have your message' },
+        { kind: 'paragraph', text: 'A member of SeeBuyGet staff reads it and answers you at this address. If you write again about the same thing, give this reference.' },
+        { kind: 'facts', rows: [['Reference', p.reference], ['About', SUPPORT_TOPIC[p.category] ?? 'Something else']] },
+        { kind: 'paragraph', text: `You wrote: “${p.message.length > 400 ? `${p.message.slice(0, 400)}…` : p.message}”` },
+        { kind: 'warning', title: 'Never share a code or a PIN', text: 'SeeBuyGet staff never ask for your PIN, a code sent to your phone, or your password — in an email, a message or on the phone.' },
+      ],
+      reason: 'You are getting this email because this address was given with a message to SeeBuyGet.',
+    }),
+  },
+
+  'support-answer': {
+    title: 'An answer to a message written from the help',
+    sentWhen: 'A member of SeeBuyGet staff answers a message on the console’s Messages.',
+    wired: true,
+    sendLater: 48,
+    sample: { reference: 'SBG-7KQ2MX', asked: 'My parcel has said “on its way” for three days.', answer: 'It reached the shop this morning: you can collect it with your code.', by: 'Amina Otieno' },
+    build: (p) => ({
+      subject: `An answer to your message — ${p.reference}`,
+      preheader: p.answer.length > 90 ? `${p.answer.slice(0, 90)}…` : p.answer,
+      blocks: [
+        { kind: 'heading', text: 'An answer from SeeBuyGet' },
+        { kind: 'paragraph', text: p.answer },
+        { kind: 'facts', rows: [['From', `${p.by}, SeeBuyGet`], ['Reference', p.reference]] },
+        { kind: 'paragraph', text: `You wrote: “${p.asked.length > 300 ? `${p.asked.slice(0, 300)}…` : p.asked}”` },
+        { kind: 'warning', title: 'Never share a code or a PIN', text: 'SeeBuyGet staff never ask for your PIN, a code sent to your phone, or your password.' },
+      ],
+      reason: 'You are getting this email because you wrote to SeeBuyGet from this address.',
     }),
   },
 

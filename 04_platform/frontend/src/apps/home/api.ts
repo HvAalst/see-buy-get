@@ -546,3 +546,12 @@ export function deviceMarker(): string {
     return `web-${Math.round(performance.now())}`;
   }
 }
+
+/**
+ * WRITING TO US (the help's "Write to us"): what it is about, the address to answer, the words. No sign-in. Answered
+ * with the reference the person is thanked with.
+ */
+export type SupportCategory = 'sign-in' | 'parcel' | 'damage' | 'money' | 'joining' | 'business' | 'safety' | 'privacy' | 'other';
+export function writeToUs(body: { category: SupportCategory; email: string; message: string; about?: string; from?: string; locale?: string; website?: string }): Promise<Result<{ reference: string }>> {
+  return publicRequest<{ reference: string }>(homeConfig(), '/v1/sbg/support/messages', { body });
+}

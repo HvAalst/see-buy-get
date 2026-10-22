@@ -3476,5 +3476,44 @@ export const enTowerBusinesses = {
   'tower.cases.act.cleared': 'Closed by itself',
 };
 
+/** Messages: what people wrote from the help's "Write to us" (2026-10-22). */
+export const enTowerMessages = {
+  'tower.nav.messages': 'Messages',
+  'tower.messages.title': 'Messages',
+  'tower.messages.lede': 'What people wrote from the help’s “Write to us”, sorted by what it is about. Safety comes first, then whoever has waited longest. An answer goes by email to the address they gave.',
+  'tower.messages.statusLabel': 'Which messages',
+  'tower.messages.status.open': 'Waiting for an answer',
+  'tower.messages.status.answered': 'Answered',
+  'tower.messages.status.closed': 'Closed',
+  'tower.messages.categoryLabel': 'What it is about',
+  'tower.messages.all': 'All · {n}',
+  'tower.messages.count': '{n, plural, one {# message} other {# messages}}',
+  'tower.messages.noneOpen': 'Nobody is waiting for an answer.',
+  'tower.messages.none': 'None.',
+  'tower.messages.urgent': 'Read first',
+  'tower.messages.others': '{n, plural, one {# more from them is open} other {# more from them are open}}',
+  'tower.messages.waited.minutes': '{n, plural, one {# minute ago} other {# minutes ago}}',
+  'tower.messages.waited.hours': '{n, plural, one {# hour ago} other {# hours ago}}',
+  'tower.messages.waited.days': '{n, plural, one {# day ago} other {# days ago}}',
+  'tower.messages.kept': 'A closed message, and the address with it, is deleted {days, plural, one {# day} other {# days}} after it was closed.',
+  'tower.messages.gone': 'This message is no longer in this list. It may have been answered or closed by somebody else.',
+  'tower.messages.wroteTitle': 'What they wrote',
+  'tower.messages.fact.from': 'Answer to',
+  'tower.messages.fact.at': 'Written',
+  'tower.messages.fact.app': 'Written from',
+  'tower.messages.fact.about': 'From the help article',
+  'tower.messages.fact.locale': 'Language',
+  'tower.messages.answersTitle': 'Answered',
+  'tower.messages.answeredBy': '{by}, {at}',
+  'tower.messages.inOutbox': 'Kept in the outbox: no email leaves this server until a mail provider is connected.',
+  'tower.messages.answerLabel': 'Your answer, by email to {email}',
+  'tower.messages.answerHint': 'Plain words. It goes under your name. Never ask for a PIN, a code or a password.',
+  'tower.messages.send': 'Send the answer',
+  'tower.messages.close': 'Close it',
+  'tower.messages.closedBy': 'Closed by {by}, {at}.',
+  'tower.messages.answered': 'Answered. It went by email, and is kept with the message.',
+  'tower.messages.closed': 'Closed.',
+};
+
 /** Every one of the console's own words — registered by the console when it starts (apps/tower/english.ts), and by the tests. */
-export const enTowerAll = { ...enTower, ...enTowerCompanies, ...enTowerQueues, ...enTowerNetwork, ...enTowerMoney, ...enTowerSupport, ...enTowerBusinesses };
+export const enTowerAll = { ...enTower, ...enTowerCompanies, ...enTowerQueues, ...enTowerNetwork, ...enTowerMoney, ...enTowerSupport, ...enTowerBusinesses, ...enTowerMessages };

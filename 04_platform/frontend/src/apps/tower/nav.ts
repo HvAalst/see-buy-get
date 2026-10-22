@@ -43,7 +43,8 @@ export const NAV_GROUPS: NavGroup[] = [
     icon: 'clock',
     // `support` belongs here rather than in a group of its own: somebody looking a parcel up is doing it
     // because a person is waiting on the other end of a phone.
-    screens: ['cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'risks', 'imports', 'reports', 'support'],
+    // Messages first: a person wrote to us, and is waiting for an answer.
+    screens: ['messages', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'risks', 'imports', 'reports', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
   { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures', 'connections', 'staffreads'] },
@@ -77,6 +78,8 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   movers: { labelKey: 'tower.nav.movers', icon: 'truck' },
   reports: { labelKey: 'tower.nav.reports', icon: 'send' },
   support: { labelKey: 'tower.nav.support', icon: 'search' },
+  // What people wrote from the help's "Write to us" (2026-10-22).
+  messages: { labelKey: 'tower.nav.messages', icon: 'mail' },
   money: { labelKey: 'tower.nav.money', icon: 'wallet' },
   companies: { labelKey: 'tower.nav.companies', icon: 'grid' },
   company: { labelKey: 'tower.nav.company', icon: 'badge' },

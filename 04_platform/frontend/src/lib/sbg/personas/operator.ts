@@ -50,6 +50,10 @@ export function createOperatorApi(sbg: SbgClient) {
     staffReads: (query: { by?: string; record?: string }) => sbg.request((c) => c.GET('/v1/sbg/staff-reads', { params: { query } })),
     /** Round 40 — the trail anchored outside our database: the auditor, a change waiting, the days kept; and an auditor's copy checked. */
     trailAnchors: () => sbg.request((c) => c.GET('/v1/sbg/ops/anchors', {})),
+    /** What people wrote from the help's "Write to us": open (sorted), answered or closed; an answer by email; closing one. */
+    supportInbox: (status: 'open' | 'answered' | 'closed') => sbg.request((c) => c.GET('/v1/sbg/ops/support', { params: { query: { status } } })),
+    answerSupport: (reference: string, text: string) => sbg.request((c) => c.POST('/v1/sbg/ops/support/{reference}/answer', { params: { path: { reference } }, body: { text } })),
+    closeSupport: (reference: string) => sbg.request((c) => c.POST('/v1/sbg/ops/support/{reference}/close', { params: { path: { reference } } })),
     proposeAuditor: (body: { address: string }) => sbg.request((c) => c.POST('/v1/sbg/ops/anchors/auditor', { body })),
     decideAuditor: (body: { approve: boolean; reason?: string }) => sbg.request((c) => c.POST('/v1/sbg/ops/anchors/auditor/decide', { body })),
     checkAnchorCopy: (body: { height: number; txId: string }) => sbg.request((c) => c.POST('/v1/sbg/ops/anchors/check', { body })),

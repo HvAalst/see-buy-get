@@ -10,6 +10,8 @@ import { CorridorsScreen } from './screens/CorridorsScreen';
 import { PresenceScreen } from './screens/PresenceScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { StaffReadsScreen } from './screens/StaffReadsScreen';
+import { MessagesScreen } from './screens/MessagesScreen';
+import { messagesWaiting } from './messages';
 import { HazardsScreen } from './screens/HazardsScreen';
 import { CasesScreen } from './screens/CasesScreen';
 import { PapersScreen } from './screens/PapersScreen';
@@ -169,7 +171,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections', 'staffreads', 'risks'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections', 'staffreads', 'risks', 'messages'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -212,6 +214,8 @@ export function App() {
     reports: state.reports?.length ?? null,
     // Round 39 — what incidents proposed, and ratings past their quarter.
     risks: riskWaiting(state.risk),
+    // Every open message waits on one of us: a person wrote, and is waiting for an answer.
+    messages: messagesWaiting(state.supportStatus === 'open' ? state.support : null),
     // A company's own record is not a queue — except when a licence or a policy of theirs has lapsed or is in its last
     // two weeks: that waits on them and on nobody else, and their console opens on another screen.
     ...(isOperator ? {} : { company: papersWaiting(state.expiring) }),
@@ -344,6 +348,8 @@ export function App() {
             <CasesScreen state={state} actions={actions} />
           ) : state.screen === 'risks' ? (
             <RisksScreen state={state} actions={actions} />
+          ) : state.screen === 'messages' ? (
+            <MessagesScreen state={state} actions={actions} />
           ) : (
             <HazardsScreen state={state} actions={actions} />
           )}

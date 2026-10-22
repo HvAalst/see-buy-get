@@ -426,6 +426,11 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/ops/anchors/auditor': 'admin',
   'POST sbg/ops/anchors/auditor/decide': 'admin',
   'POST sbg/ops/anchors/check': 'admin',
+  // Writing to us: the messages are support's to read, answer and close; anybody may write one.
+  'GET sbg/ops/support': 'support',
+  'POST sbg/ops/support/:reference/answer': 'support',
+  'POST sbg/ops/support/:reference/close': 'support',
+  'POST sbg/support/messages': 'none',
   'POST sbg/agents/:did/licence': 'vetting',
   'POST sbg/agents/:did/licence-renewal': 'none',
   'POST sbg/agents/:did/licence-renewal/refuse': 'vetting',

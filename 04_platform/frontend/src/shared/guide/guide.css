@@ -6,3 +6,10 @@
 .guide__steps { margin: 6px 0; padding-inline-start: 20px; list-style: decimal; }
 .guide__steps li { margin-bottom: 4px; }
 .guide__p { margin: 6px 0 0; opacity: 0.85; }
+
+.guide__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 16px 0 0;
+}

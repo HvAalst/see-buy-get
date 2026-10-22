@@ -1103,3 +1103,11 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* A row of buttons that choose what a list shows (Messages: open, answered, closed; then a category). */
+.twr-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}

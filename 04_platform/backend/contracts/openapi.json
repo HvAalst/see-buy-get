@@ -29739,6 +29739,131 @@
         }
       }
     },
+    "/v1/sbg/support/messages": {
+      "post": {
+        "operationId": "Support.write",
+        "summary": "",
+        "description": "A message to SeeBuyGet, from the help's \"Write to us\". No sign-in: the person who most needs to write is often the one\nwho cannot get in. Ten from one caller in a quarter of an hour, and five open from one address, are what a person needs.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportReceivedView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/ops/support": {
+      "get": {
+        "operationId": "Support.inbox",
+        "summary": "",
+        "description": "The messages, sorted: open ones by default — urgent first, then whoever has waited longest.",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportInboxView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/ops/support/{reference}/answer": {
+      "post": {
+        "operationId": "Support.answer",
+        "summary": "",
+        "description": "An answer, by email to the address the person gave, kept with the message under the name of who wrote it.",
+        "parameters": [
+          {
+            "name": "reference",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportMessageView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/ops/support/{reference}/close": {
+      "post": {
+        "operationId": "Support.close",
+        "parameters": [
+          {
+            "name": "reference",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportMessageView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -61299,6 +61424,270 @@
         },
         "required": [
           "approve"
+        ]
+      },
+      "SupportMessageDto": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "sign-in",
+              "parcel",
+              "damage",
+              "money",
+              "joining",
+              "business",
+              "safety",
+              "privacy",
+              "other"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "enum": [
+              "home",
+              "send",
+              "agent",
+              "driver",
+              "mdp",
+              "vendor",
+              "fleet",
+              "business"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "description": "The address the answer goes to. Required: it is the only way back to them.",
+            "maxLength": 254
+          },
+          "message": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 2000
+          },
+          "about": {
+            "type": "string",
+            "description": "The help article it was written from, when it was.",
+            "maxLength": 80,
+            "pattern": "/^[a-z0-9-]+$/"
+          },
+          "locale": {
+            "type": "string",
+            "description": "The language the page was in, so an answer can be written in it.",
+            "maxLength": 12
+          },
+          "website": {
+            "type": "string",
+            "description": "Left empty by people. A form-filling machine fills every field it finds: what it sends is thanked for and dropped.",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "category",
+          "email",
+          "message"
+        ]
+      },
+      "SupportReceivedView": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference"
+        ]
+      },
+      "SupportCategoryCount": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "sign-in",
+              "parcel",
+              "damage",
+              "money",
+              "joining",
+              "business",
+              "safety",
+              "privacy",
+              "other"
+            ]
+          },
+          "open": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "category",
+          "open"
+        ]
+      },
+      "SupportAnswerView": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "mailed": {
+            "type": "boolean",
+            "description": "It left by email. False: it waits in the outbox (no mail provider wired yet), or could not be handed over."
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "text",
+          "mailed"
+        ]
+      },
+      "SupportMessageView": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "sign-in",
+              "parcel",
+              "damage",
+              "money",
+              "joining",
+              "business",
+              "safety",
+              "privacy",
+              "other"
+            ]
+          },
+          "about": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "enum": [
+              "home",
+              "send",
+              "agent",
+              "driver",
+              "mdp",
+              "vendor",
+              "fleet",
+              "business"
+            ]
+          },
+          "locale": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "answered",
+              "closed"
+            ]
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportAnswerView"
+            }
+          },
+          "closedAt": {
+            "type": "string"
+          },
+          "closedBy": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "urgent": {
+            "type": "boolean",
+            "description": "Somebody may be at risk: read first."
+          },
+          "others": {
+            "type": "number",
+            "description": "How many other messages from the same address are open: one person writing three times is one person."
+          }
+        },
+        "required": [
+          "category",
+          "status",
+          "answers",
+          "reference",
+          "email",
+          "message",
+          "at",
+          "urgent",
+          "others"
+        ]
+      },
+      "SupportInboxView": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "The status read: open (the default), answered or closed.",
+            "enum": [
+              "open",
+              "answered",
+              "closed"
+            ]
+          },
+          "counts": {
+            "description": "Open messages per category — every category, nought included, so the sorting is always there to read.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportCategoryCount"
+            }
+          },
+          "items": {
+            "description": "Urgent first, then oldest first: whoever has waited longest is answered next.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportMessageView"
+            }
+          },
+          "keptDays": {
+            "type": "number",
+            "description": "A closed message and the person's address are kept this many days after closing, then deleted."
+          }
+        },
+        "required": [
+          "status",
+          "counts",
+          "items",
+          "keptDays"
+        ]
+      },
+      "SupportAnswerDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "text"
         ]
       },
       "MilestoneTermDto": {

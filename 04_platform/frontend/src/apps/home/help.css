@@ -1,0 +1,200 @@
+/* The help centre on the front door (/help/, /help/<article>/, /help/contact/). Built from the shared screen pieces —
+   .scr, .rows/.row, .field, .btn — so it reads as the rest of the site; only what the help alone has is here. */
+
+.help {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.help .search {
+  margin-top: 16px;
+}
+
+.help__roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.help__sec {
+  margin-top: 28px;
+}
+
+.help__h2 {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+}
+
+/* Rows in the help are links (or, for a topic, a button that reads as one). */
+.help__rows .row {
+  text-decoration: none;
+  color: inherit;
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+
+.help__rows .row__t {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.help__crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: var(--tx3);
+}
+
+.help__crumbs a {
+  color: var(--blue);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.help__crumbs a:hover,
+.help__crumbs a:focus-visible {
+  text-decoration: underline;
+}
+
+.help__in {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--tx3);
+}
+
+.help__steps {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.help__steps > li {
+  counter-increment: step;
+  position: relative;
+  padding: 14px 16px 14px 56px;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--tx);
+}
+
+.help__steps > li::before {
+  content: counter(step);
+  position: absolute;
+  inset-inline-start: 16px;
+  top: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--blue-light);
+  color: var(--blue);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.help__note {
+  margin: 14px 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--tx2, var(--tx));
+}
+
+.help__stuck {
+  margin-top: 32px;
+  padding: 20px;
+  background: var(--blue-soft);
+  border: 1px solid var(--blue-light);
+  border-radius: var(--r-card);
+}
+
+.help__stuckp {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Writing to us. */
+.help__chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+}
+
+.help__chosenk {
+  flex-basis: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+.help__chosenv {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.help__form {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.help__text {
+  min-height: 140px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.help__ref {
+  margin: 20px 0;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+}
+
+.help__refk {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+.help__refv {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--navy);
+}

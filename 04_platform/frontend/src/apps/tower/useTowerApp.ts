@@ -18,6 +18,7 @@ import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, HubApplication, RiderIdRow, StalledRow } from './queues';
 import type { RiskLevel, RiskRegisterView, RiskSubject, RiskThreat } from './risks';
+import type { SupportInbox, SupportStatus } from './messages';
 import { triggerDownloadBlob } from '../../shared/download';
 import { EMPTY_CORRIDOR_FORM, corridorName, type CorridorForm, type CorridorRow, type CouplingRow } from './corridors';
 import type { DisputeReportRow, ReportRow } from './reports';
@@ -32,7 +33,7 @@ import { holds, rolesOf, type StaffRole } from './staffRoles';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'pilot' | 'stores' | 'cases' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections' | 'staffreads' | 'risks';
+export type Screen = 'network' | 'pilot' | 'stores' | 'cases' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections' | 'staffreads' | 'risks' | 'messages';
 
 export interface TowerState {
   phase: Phase;
@@ -130,6 +131,9 @@ export interface TowerState {
   riderIds: RiderIdRow[] | null;
   /** Round 39 — the risk register: every corridor and hub rated per threat, and what incidents proposed. Null while unread. */
   risk: RiskRegisterView | null;
+  /** What people wrote from the help: the messages in `supportStatus`, sorted, with every category's open count. Null while unread. */
+  support: SupportInbox | null;
+  supportStatus: SupportStatus;
   /** Every fleet and where it stands in being set up — a fleet is set up by staff, here. Null while unread. */
   fleets: FleetSetupRow[] | null;
   /** What the last act on a fleet came to, said in the fleets panel itself and not at the top of the screen. */
@@ -350,6 +354,11 @@ export interface TowerActions {
   rateRisk(subject: RiskSubject, id: string, threat: RiskThreat, level: RiskLevel, why?: string): Promise<void>;
   /** Round 39 — what an incident proposed: raised, or kept as it is with the reason. */
   decideRisk(proposalId: string, accept: boolean, reason?: string): Promise<void>;
+  /** The messages in one state: open (the default), answered or closed. */
+  readSupport(status: SupportStatus): Promise<void>;
+  /** An answer, by email to the address given. True once it is recorded. */
+  answerSupport(reference: string, text: string): Promise<boolean>;
+  closeSupport(reference: string): Promise<void>;
   /** A fleet is set up by staff: register it, put its four papers on record, approve or send back, record its bond. */
   registerFleet(form: FleetForm): Promise<boolean>;
   putFleetPapers(did: string, pictures: Record<FleetPaperKey, string>): Promise<boolean>;
@@ -451,6 +460,8 @@ const INITIAL: TowerState = {
   hubApplications: null,
   riderIds: null,
   risk: null,
+  support: null,
+  supportStatus: 'open',
   fleets: null,
   fleetNote: null,
   presence: null,
@@ -907,6 +918,13 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     setState((s) => ({ ...s, risk: error ? s.risk : (narrow<RiskRegisterView>(data) ?? null) }));
   }, []);
 
+  /** What people wrote from the help — support's to read. Sorted by the server: urgent first, then whoever waited longest. */
+  const loadSupport = useCallback(async (client: TowerClient, roles: readonly string[] | undefined = stateRef.current.who?.roles, status: SupportStatus = stateRef.current.supportStatus) => {
+    if (!holds(roles, 'support')) return;
+    const { data, error } = await client.api.supportInbox(status);
+    setState((s) => ({ ...s, supportStatus: status, support: error ? s.support : (narrow<SupportInbox>(data) ?? null), queueError: error ? error.detail || error.title : s.queueError }));
+  }, []);
+
   /**
    * What network staff's console reads on opening, whichever way they came in — only what their roles reach. `roles` is
    * the sign-in's own: the state it sets has not landed when these start. Undefined (the setup key) reads everything.
@@ -920,8 +938,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       await loadNetwork(client);
       await loadEntities(client, roles);
       await loadRisks(client, roles);
+      await loadSupport(client, roles, 'open');
     },
-    [loadHazards, loadCases, loadQueues, loadPapers, loadNetwork, loadEntities, loadRisks],
+    [loadHazards, loadCases, loadQueues, loadPapers, loadNetwork, loadEntities, loadRisks, loadSupport],
   );
 
   // Boot: a credential in this tab means the console picks up where it left off; nothing means sign-in.
@@ -1139,6 +1158,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     else if (state.screen === 'movers') await loadMovers(client);
     else if (state.screen === 'cases') await loadCases(client);
     else if (state.screen === 'risks') await loadRisks(client);
+    else if (state.screen === 'messages') await loadSupport(client);
     else if (state.screen === 'support') {
       // Refreshing the support screen means re-reading the parcel somebody is on the phone about, not
       // reloading a list — there is no list here.
@@ -1235,6 +1255,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (screen === 'cases' && client) void loadCases(client);
         // Round 39 — fresh: an incident may have proposed a raise since.
         if (screen === 'risks' && client) void loadRisks(client);
+        // Fresh: somebody may have written since.
+        if (screen === 'messages' && client) void loadSupport(client);
       },
       refresh,
       caseAct: async (caseId, act, body) => {
@@ -1587,6 +1609,33 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         }
         setState((s) => ({ ...s, busyId: null, queueError: null, done: t(accept ? 'tower.risks.raised' : 'tower.risks.kept') }));
         await loadRisks(client);
+      },
+      readSupport: async (status: SupportStatus) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, supportStatus: status, support: s.supportStatus === status ? s.support : null }));
+        await loadSupport(client, undefined, status);
+      },
+      answerSupport: async (reference: string, text: string) => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, busyId: reference, queueError: null }));
+        const { error } = await client.api.answerSupport(reference, text);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return false;
+        }
+        setState((s) => ({ ...s, busyId: null, queueError: null, done: t('tower.messages.answered') }));
+        await loadSupport(client);
+        return true;
+      },
+      closeSupport: async (reference: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: reference, queueError: null }));
+        const { error } = await client.api.closeSupport(reference);
+        setState((s) => ({ ...s, busyId: null, queueError: error ? error.detail || error.title : null, ...(error ? {} : { done: t('tower.messages.closed') }) }));
+        await loadSupport(client);
       },
       decideRiderId: async (did: string, seen: boolean, reason?: string) => {
         const client = clientRef.current;

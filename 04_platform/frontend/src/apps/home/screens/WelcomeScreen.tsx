@@ -219,7 +219,7 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
           <a href="/?go=verify" onClick={inApp(() => actions.go('verify'))}>
             {t('home.landing.footVerify')}
           </a>
-          <a href="/help.html">{t('home.landing.footHelp')}</a>
+          <a href="/help/">{t('home.landing.footHelp')}</a>
           <a href="/?go=signin" onClick={inApp(() => actions.go('signin'))}>
             {t('home.landing.footSignIn')}
           </a>
