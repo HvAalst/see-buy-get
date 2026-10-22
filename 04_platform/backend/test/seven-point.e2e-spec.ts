@@ -71,7 +71,12 @@ describe('the 7-point inspection — over the wire', () => {
   };
   const pickup = (freightId: string, body: Record<string, unknown>) => http().post(`/v1/sbg/dispatch/freight/${freightId}/pickup`).set(bearer(driver.token)).send(body);
   const gate = async (claim: { loadChecklist: Array<{ key: string }> }) => ({ confirmed: claim.loadChecklist.map((x) => x.key), securementPhotoId: await photo('securement') });
-  const seven = async () => Promise.all(POINTS.map(async (point) => ({ point, photoRef: await photo('inspection') })));
+  // One after another: requests sent at once through the test client are reset on Linux (CI), though not on Windows.
+  const seven = async () => {
+    const done: Array<{ point: string; photoRef: string }> = [];
+    for (const point of POINTS) done.push({ point, photoRef: await photo('inspection') });
+    return done;
+  };
 
   it('a closed body leaving for a border is not taken over until its seven points are done, each photographed', async () => {
     const l = await aLoad('UG', { vehicleClass: 'truck', truckSubtype: 'box' });
@@ -87,7 +92,8 @@ describe('the 7-point inspection — over the wire', () => {
     await pickup(l.freightId, { ...(await gate(l.claim)), inspection: POINTS.map((point) => ({ point, photoRef: one })) }).expect(400);
     // Nor is one picture uploaded twice: two ids, the same photograph.
     const twice = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`same:${tag}`)]).toString('base64')}`;
-    const again = await Promise.all([0, 1].map(async () => (await http().post('/v1/sbg/media').set(bearer(driver.token)).send({ kind: 'inspection', dataUrl: twice }).expect(201)).body.mediaId as string));
+    const again: string[] = [];
+    for (let i = 0; i < 2; i++) again.push((await http().post('/v1/sbg/media').set(bearer(driver.token)).send({ kind: 'inspection', dataUrl: twice }).expect(201)).body.mediaId as string);
     expect(again[0]).not.toBe(again[1]);
     const copied = (await seven()).map((p) => (p.point === 'roof' ? { ...p, photoRef: again[0] } : p.point === 'floor' ? { ...p, photoRef: again[1] } : p));
     expect((await pickup(l.freightId, { ...(await gate(l.claim)), inspection: copied }).expect(400)).body.detail).toMatch(/the same picture was sent twice/);
