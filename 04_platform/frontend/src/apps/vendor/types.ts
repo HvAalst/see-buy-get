@@ -88,6 +88,8 @@ export interface VendorLoginView extends VendorView {
   token: { access_token: string; expires_in?: number };
   /** The account's address, where the sign-in was by account. */
   email?: string;
+  /** Round 40 — this browser's key, when it was just confirmed as one of the store's. */
+  device?: string;
 }
 
 /** vendors/register → shown ONCE: the record still carrying the signing secret. */
@@ -96,6 +98,8 @@ export interface VendorRegisteredView extends VendorView {
   /** The account made with the store, and a sign-in for this device. */
   email?: string;
   token?: { access_token: string; expires_in?: number };
+  /** Round 40 — the browser it was made on is the store's first. */
+  device?: string;
 }
 
 export interface OrderRow {

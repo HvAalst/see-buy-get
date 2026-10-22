@@ -1338,10 +1338,16 @@ describe('GLOS backend (e2e)', () => {
     const OWNER = `+25471${u}99`;
     const email = `desk.${u}@store.example`;
     // Registered the way a store registers itself: with its own account, its owner's number, and where its systems are told.
-    const made = (await request(http).post('/v1/sbg/vendors').send({ name: `Desk Store ${u}`, ownerPhone: OWNER, callbackUrl: 'https://desk.example/hook', address: 'Biashara St 12', email, password: 'vitenge-vya-pwani-8' }).expect(201)).body;
+    // Round 40 — a store's number is verified by its code: a new phone or browser of the store's is confirmed by a code to it.
+    const verified = async (phone: string) => {
+      const asked = await request(http).post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
+      await request(http).post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+      return phone;
+    };
+    const made = (await request(http).post('/v1/sbg/vendors').send({ name: `Desk Store ${u}`, ownerPhone: await verified(OWNER), callbackUrl: 'https://desk.example/hook', address: 'Biashara St 12', email, password: 'vitenge-vya-pwani-8' }).expect(201)).body;
     const store = { Authorization: `Bearer ${made.token.access_token}` };
     // Another store, signed in as itself: no more staff than the first.
-    const rival = (await request(http).post('/v1/sbg/vendors').send({ name: `Rival Store ${u}`, email: `rival.${u}@store.example`, password: 'vitenge-vya-bara-9' }).expect(201)).body;
+    const rival = (await request(http).post('/v1/sbg/vendors').send({ name: `Rival Store ${u}`, email: `rival.${u}@store.example`, password: 'vitenge-vya-bara-9', ownerPhone: await verified(`+25472${u}88`) }).expect(201)).body;
     const shop = { Authorization: `Bearer ${rival.token.access_token}` };
 
     // THE LIST: staff's, and nobody else's.

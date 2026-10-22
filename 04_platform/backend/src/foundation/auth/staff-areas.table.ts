@@ -417,6 +417,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/account/shop-devices/forget-others': 'none',
   'POST sbg/account/shop-devices/forget-this': 'none',
   'POST sbg/agents': 'vetting',
+  'POST sbg/auth/device/phone': 'none',
   'POST sbg/agents/:did/availability': 'support',
   'POST sbg/agents/:did/bag-bays': 'support',
   'POST sbg/agents/:did/deposit': 'vetting',

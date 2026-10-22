@@ -87,9 +87,11 @@ describe('phone + code', () => {
 });
 
 describe('wizard steps', () => {
-  it('a vendor skips the phone gate the backend never asks for — and still says how it signs in', () => {
-    // A store is registered WITH its email and password: a signing secret is never its way in.
-    expect(stepsFor('vendor')).toEqual(['about', 'login', 'done']);
+  it('a vendor checks its number first (round 40), skips the where step, and still says how it signs in', () => {
+    // A store is registered WITH its email and password: a signing secret is never its way in. Its sign-in works only on
+    // its own phones and browsers, each confirmed by a code to its number, so the number is checked first.
+    expect(stepsFor('vendor')).toEqual(['phone', 'code', 'about', 'login', 'done']);
+    expect(nextStep('vendor', 'code')).toBe('about');
     expect(nextStep('vendor', 'about')).toBe('login');
     expect(stepsFor('signup')[0]).toBe('phone');
   });

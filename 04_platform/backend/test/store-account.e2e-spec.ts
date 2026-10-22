@@ -36,7 +36,15 @@ describe('a store has an account of its own, over the wire', () => {
   });
 
   const stores = async () => ((await http().get('/v1/sbg/vendors').set(bearer(operator)).expect(200)).body as unknown[]).length;
-  const session = (email: string, password: string) => http().post('/v1/sbg/vendors/session').send({ email, password });
+  // Round 40 — a store's sign-in works only on its own phones and browsers: the key a confirmed one was given goes with it.
+  const session = (email: string, password: string, device?: string) => http().post('/v1/sbg/vendors/session').send({ email, password, ...(device ? { device } : {}) });
+  /** Round 40 — a store gives a number at sign-up, verified by its code: a new phone or browser's code goes to it. */
+  const verifiedPhone = async () => {
+    const phone = `+2547${digits()}`.slice(0, 13);
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    return phone;
+  };
   const bySecret = (vendorId: string, secret: string) => http().post('/v1/sbg/vendors/login').send({ vendorId, secret });
 
   it('a store is registered with an email and a password and signs in with them — and from then its secret signs nobody in', async () => {
@@ -54,10 +62,15 @@ describe('a store has an account of its own, over the wire', () => {
     // A password that is easy to guess, and a signing secret of its own choosing that is short, are refused the same way.
     expect((await http().post('/v1/sbg/vendors').send({ name: `Duka Bora ${u}`, email, password: 'DukaBora2026' })).body.code).toBe('PASSWORD_GUESSABLE');
     expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password, secret: '1234' })).body).toMatchObject({ code: 'VALIDATION_FAILED', params: { field: 'secret' } });
+    // Round 40 — and a number, verified by its code: none, or one never verified, makes no store either.
+    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password })).body).toMatchObject({ code: 'PHONE_REQUIRED', params: { field: 'ownerPhone' } });
+    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password, ownerPhone: '+254711000999' })).body.code).toBe('PHONE_NOT_VERIFIED');
     expect(await stores()).toBe(before);
 
-    const made = (await http().post('/v1/sbg/vendors').send({ name: `Duka Bora ${u}`, email: `  ${email.toUpperCase()} `, password }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').send({ name: `Duka Bora ${u}`, email: `  ${email.toUpperCase()} `, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
     expect(made).toMatchObject({ name: `Duka Bora ${u}`, email });
+    // The phone or browser that signed the store up is its first.
+    expect(made.device).toBeTruthy();
     expect(made.secret).toMatch(/^whsec_/);
     expect(await stores()).toBe(before + 1);
     // The answer carries a sign-in for the device that registered: the store's own, which its routes answer.
@@ -74,7 +87,16 @@ describe('a store has an account of its own, over the wire', () => {
     /* ---- signing in ---- */
     expect((await session(email, 'not-the-password')).body.code).toBe('AUTH_FAILED');
     expect((await session(`nobody.${u}@example.com`, password)).body.code).toBe('AUTH_FAILED');
-    const signedIn = (await session(email, password).expect(201)).body;
+    // Round 40 — the right password on a phone or browser the store never confirmed: a code to the store's number first.
+    const elsewhere = await session(email, password).expect(403);
+    expect(elsewhere.body).toMatchObject({ code: 'DEVICE_NOT_KNOWN', params: { challenge: expect.any(String), sentTo: expect.stringMatching(/^•••\d{3}$/), code: expect.any(String) } });
+    expect(elsewhere.body.detail).toMatch(/has not signed in to this store before\. A code went to the store’s number/);
+    expect((await http().post('/v1/sbg/auth/device').send({ challenge: elsewhere.body.params.challenge, code: '000000' })).body.code).toBe('OTP_INVALID');
+    const confirmed = (await http().post('/v1/sbg/auth/device').send({ challenge: elsewhere.body.params.challenge, code: elsewhere.body.params.code }).expect(201)).body;
+    // Typed, that one is the store's too, and it opens on the store as its own door does.
+    expect(confirmed).toMatchObject({ vendorId: made.vendorId, email, hasAccount: true, device: expect.any(String) });
+    await session(email, password, confirmed.device).expect(201);
+    const signedIn = (await session(email, password, made.device).expect(201)).body;
     expect(signedIn).toMatchObject({ vendorId: made.vendorId, name: `Duka Bora ${u}`, email, hasAccount: true });
     expect(signedIn.secret).toBeUndefined();
     // It is the store's own token: the store's routes answer it, and it is tied to the company it contracts with.
@@ -92,8 +114,9 @@ describe('a store has an account of its own, over the wire', () => {
     const u = digits();
     const email = `owner.${u}@kiosk.example`;
     const password = 'chai-na-mandazi-7';
-    const made = (await http().post('/v1/sbg/vendors').send({ name: `Kiosk ${u}`, email, password }).expect(201)).body;
-    const token = (await session(email, password).expect(201)).body.token.access_token as string;
+    const made = (await http().post('/v1/sbg/vendors').send({ name: `Kiosk ${u}`, email, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
+    const device = made.device as string;
+    const token = (await session(email, password, device).expect(201)).body.token.access_token as string;
     const rotate = (body: Record<string, unknown>, as = token) => http().post(`/v1/sbg/vendors/${made.vendorId}/secret/rotate`).set(bearer(as)).send(body);
 
     // A console left open is not enough: the second proof is the PASSWORD — not the old secret, which is what was lost.
@@ -126,21 +149,23 @@ describe('a store has an account of its own, over the wire', () => {
 
     /* ---- the password itself ---- */
     const next = 'ugali-sukuma-2027';
-    expect((await http().post('/v1/sbg/auth/password').send({ email, password: 'not-the-password', newPassword: next })).body.code).toBe('AUTH_FAILED');
-    const changed = (await http().post('/v1/sbg/auth/password').send({ email, password, newPassword: next }).expect(201)).body;
+    expect((await http().post('/v1/sbg/auth/password').send({ email, password: 'not-the-password', newPassword: next, device })).body.code).toBe('AUTH_FAILED');
+    // Round 40 — from one of the store's own phones or browsers, as every door that hands back a sign-in.
+    expect((await http().post('/v1/sbg/auth/password').send({ email, password, newPassword: next })).body.code).toBe('DEVICE_NOT_KNOWN');
+    const changed = (await http().post('/v1/sbg/auth/password').send({ email, password, newPassword: next, device }).expect(201)).body;
     // Every device is signed out but the one it was changed on, which is handed a sign-in that is the STORE's.
     await http().get(`/v1/sbg/vendors/${made.vendorId}/orders/stats`).set(bearer(rotated.token.access_token)).expect(401);
     await http().get(`/v1/sbg/vendors/${made.vendorId}/orders/stats`).set(bearer(changed.token.access_token)).expect(200);
-    expect((await session(email, password)).body.code).toBe('AUTH_FAILED');
-    await session(email, next).expect(201);
+    expect((await session(email, password, device)).body.code).toBe('AUTH_FAILED');
+    await session(email, next, device).expect(201);
     // Forgotten: a code goes to the address (handed back here only because this is a sandbox), and opens it again.
     const forgot = (await http().post('/v1/sbg/auth/forgot').send({ email }).expect(201)).body;
     expect(forgot.resetToken).toMatch(/^RST-/);
     // Eight or more here too — and a refusal does not use the code up.
     expect((await http().post('/v1/sbg/auth/reset').send({ token: forgot.resetToken, password: 'pilau-7' })).body.code).toBe('PASSWORD_TOO_SHORT');
     await http().post('/v1/sbg/auth/reset').send({ token: forgot.resetToken, password: 'pilau-kuku-2028' }).expect(201);
-    expect((await session(email, next)).body.code).toBe('AUTH_FAILED');
-    expect((await session(email, 'pilau-kuku-2028').expect(201)).body.vendorId).toBe(made.vendorId);
+    expect((await session(email, next, device)).body.code).toBe('AUTH_FAILED');
+    expect((await session(email, 'pilau-kuku-2028', device).expect(201)).body.vendorId).toBe(made.vendorId);
     const told = app.get(OutboxMailSender).recent(email).map((m) => m.template);
     expect(told).toEqual(expect.arrayContaining(['welcome', 'password-changed', 'password-reset']));
   });
@@ -192,7 +217,20 @@ describe('a store has an account of its own, over the wire', () => {
     expect(done).toMatchObject({ vendorId: old.vendorId, email, hasAccount: true });
     expect(done.token.access_token).toBeTruthy();
     // From now: the email and the password, and not the secret.
-    expect((await session(email, password).expect(201)).body.vendorId).toBe(old.vendorId);
+    // Round 40 — a store set up the old way has no number yet: its first sign-in gives one, proven by a code to it.
+    const first = await session(email, password).expect(403);
+    expect(first.body).toMatchObject({ code: 'DEVICE_NOT_KNOWN', params: { challenge: expect.any(String), needsPhone: true } });
+    expect(first.body.detail).toMatch(/This store has no phone number yet/);
+    // A code is not taken before a number was given, and a number that is not one is refused.
+    expect((await http().post('/v1/sbg/auth/device').send({ challenge: first.body.params.challenge, code: '123456' })).body.code).toBe('OTP_INVALID');
+    expect((await http().post('/v1/sbg/auth/device/phone').send({ challenge: first.body.params.challenge, phone: 'call me' })).body.code).toBe('VALIDATION_FAILED');
+    const given = (await http().post('/v1/sbg/auth/device/phone').send({ challenge: first.body.params.challenge, phone: `+2547${u}8`.slice(0, 13) }).expect(201)).body;
+    expect(given).toMatchObject({ challenge: first.body.params.challenge, sentTo: expect.stringMatching(/^•••\d{3}$/), code: expect.any(String) });
+    const confirmed = (await http().post('/v1/sbg/auth/device').send({ challenge: given.challenge, code: given.code }).expect(201)).body;
+    expect(confirmed).toMatchObject({ vendorId: old.vendorId, device: expect.any(String) });
+    expect((await session(email, password, confirmed.device).expect(201)).body.vendorId).toBe(old.vendorId);
+    // Kept: a second phone or browser is now asked for a code to that number, and not for a number again.
+    expect((await session(email, password).expect(403)).body.params).toMatchObject({ sentTo: given.sentTo, code: expect.any(String) });
     await bySecret(old.vendorId, old.secret).expect(403);
     // One account per store, and one store per address.
     expect((await setUp({ email: `second.${u}@store.example`, password }, done.token.access_token)).body.code).toBe('CONFLICT');
@@ -227,7 +265,7 @@ describe('a store has an account of its own, over the wire', () => {
     const u = digits();
     const email = `guess.${u}@target.example`;
     const password = 'samaki-wa-kupaka-9';
-    const made = (await http().post('/v1/sbg/vendors').send({ name: `Target ${u}`, email, password }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').send({ name: `Target ${u}`, email, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
     const token = made.token.access_token as string;
 
     /* ---- the sign-in door: one wrong try each at twenty-one stores, never enough to lock any one of them ---- */

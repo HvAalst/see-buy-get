@@ -116,6 +116,10 @@ describe('how it is said', () => {
     expect(devicesLede(seen({ count: 1, devices: [seen().devices[0]] }), t as never)).toMatch(/^Your PIN works on one phone or browser\. Each was confirmed once/);
     // A shop's own phones say whose they are: the shop's sign-in, confirmed by a code to the shop's number.
     expect(devicesLede(seen(), t as never, 'shop')).toBe('The shop’s sign-in works on 2 phones and browsers. Each was confirmed once, by a code sent to the shop’s number and typed on it. One that is not used for 90 days stops working until it is confirmed again.');
+    // Round 40 — a hub's and a store's say theirs, in every sentence; none of them says "shop".
+    expect(devicesLede(seen(), t as never, 'hub')).toBe('The hub’s sign-in works on 2 phones and browsers. Each was confirmed once, by a code sent to the hub’s number and typed on it. One that is not used for 90 days stops working until it is confirmed again.');
+    expect(devicesLede(seen({ count: 0, here: false, devices: [] }), t as never, 'store')).toBe('The store’s sign-in works on no phone at the moment. The next sign-in asks for a code to the store’s number first.');
+    expect(devicesLede(seen({ count: 1, devices: [seen().devices[0]] }), t as never, 'store')).not.toContain('shop');
     // None: said as what happens next, and nothing about how "each" was confirmed.
     expect(devicesLede(seen({ count: 0, here: false, devices: [] }), t as never)).toBe('Your PIN does not work on any phone or browser at the moment. The next sign-in asks for a code to your number first.');
     // The number of days is the server's, not a word in the app.

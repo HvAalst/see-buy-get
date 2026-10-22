@@ -95,7 +95,7 @@ export function App() {
               </Pill>
             )}
             {/* Last in the bar: live state first, the place you visit last. */}
-            <AccountMenu api={account} app="vendor" onSignOut={actions.signOut} onChangePassword={changePassword} />
+            <AccountMenu api={account} app="vendor" onSignOut={actions.signOut} onChangePassword={changePassword} devices={actions.storeDevices} />
             {noPerson ? (
               <button type="button" class="topbar__lead" onClick={() => setSettingsOpen(true)} aria-label={t('account.settings.title')} title={t('account.settings.title')}>
                 <Icon name="settings" size={24} />
@@ -115,7 +115,7 @@ export function App() {
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} labels={false} />
 
       <Toasts state={state} actions={actions} />
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} api={account} onSignOut={actions.signOut} onChangePassword={changePassword} />
+      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} api={account} onSignOut={actions.signOut} onChangePassword={changePassword} devices={actions.storeDevices} />
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={vendorConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
     </div>
   );

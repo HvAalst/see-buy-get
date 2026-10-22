@@ -243,13 +243,15 @@ export const EMPTY_JOIN: JoinForm = {
 };
 
 /**
- * The wizard's steps, per role. `vendor` skips the phone gate the backend does not ask for — and, like everybody
+ * The wizard's steps, per role. `vendor` checks its number too (round 40) but has no 'where' — and, like everybody
  * else, says how it signs in: a store is registered WITH its email and password, never with a secret as its way in.
  */
 export type JoinStep = 'phone' | 'code' | 'about' | 'where' | 'login' | 'done';
 
 export function stepsFor(kind: JoinKind): JoinStep[] {
-  if (kind === 'vendor') return ['about', 'login', 'done'];
+  // Round 40 — a store's sign-in works only on its own phones and browsers, each confirmed by a code to its number:
+  // the number is checked first, as a shop's and a hub's are. It has no 'where' (its country is asked in 'about').
+  if (kind === 'vendor') return ['phone', 'code', 'about', 'login', 'done'];
   return ['phone', 'code', 'about', 'where', 'login', 'done'];
 }
 

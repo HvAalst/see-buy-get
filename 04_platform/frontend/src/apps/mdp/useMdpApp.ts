@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { isSignInRequired, narrow, sbgForgot, sbgLogin, sbgReset, type SbgError } from '../../lib/sbg';
+import { isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, sbgForgot, sbgLogin, sbgReset, type SbgError } from '../../lib/sbg';
+import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import type { IconName } from '../../shared/ui/Icon';
 import { signal } from '../../shared/feedback';
 import { t } from '../../shared/i18n';
@@ -44,6 +45,8 @@ export interface MdpState {
   error: SbgError | null;
   toasts: Toast[];
   busy: string | null;
+  /** Round 40 — the password was right on a phone or browser new to the hub: a code went to its number (or it gives one first). */
+  deviceAsk: (DeviceAsk & { email: string }) | null;
   refreshing: boolean;
   stale: boolean;
   form: { dropCode: string; sortId: string; loadCode: string; badge: string };
@@ -71,6 +74,7 @@ const INITIAL: MdpState = {
   error: null,
   toasts: [],
   busy: null,
+  deviceAsk: null,
   refreshing: false,
   stale: false,
   form: { ...EMPTY_FORM },
@@ -259,12 +263,44 @@ export function useMdpApp() {
     const mail = email.trim().toLowerCase();
     if (!mail || !password) return;
     setState((s) => ({ ...s, busy: 'signin', error: null }));
-    const r = await sbgLogin(mdpConfig(), mail, password);
+    // Round 40 — a hub's sign-in works only on its own phones: this one's key goes with it, when it has one.
+    const r = await sbgLogin(mdpConfig(), mail, password, undefined, shopDeviceKey(mail));
     if (r.error) {
+      const ask = deviceAskOf(r.error);
+      if (ask) return setState((s) => ({ ...s, busy: null, error: null, deviceAsk: { ...ask, email: mail } }));
       setState((s) => ({ ...s, busy: null, error: r.error }));
       return;
     }
-    const login = r.data!;
+    await enter(r.data!, mail);
+  }, []);
+
+  /** Round 40 — the code from the hub's number, typed on this phone: it is one of the hub's from now, and signed in. */
+  const confirmDevice = useCallback(async (code: string) => {
+    const ask = stateRef.current.deviceAsk;
+    if (!ask) return;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    const r = await sbgConfirmDevice(mdpConfig(), ask.challenge, code.trim());
+    if (r.error || !r.data) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
+    saveShopDeviceKey(ask.email, r.data.device);
+    await enter(r.data, ask.email);
+  }, []);
+
+  /** Round 40 — a hub with no number yet gives one: the code goes to it. */
+  const giveDevicePhone = useCallback(async (phone: string) => {
+    const ask = stateRef.current.deviceAsk;
+    if (!ask) return;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    const r = await sbgDevicePhone(mdpConfig(), ask.challenge, phone);
+    if (r.error || !r.data) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
+    const sent = r.data;
+    setState((s) => ({ ...s, busy: null, deviceAsk: s.deviceAsk ? { ...s.deviceAsk, challenge: sent.challenge, sentTo: sent.sentTo, needsPhone: false, ...(sent.code ? { code: sent.code } : {}) } : null }));
+  }, []);
+
+  /** Back to the email and password: another hub, or another try. */
+  const cancelDeviceAsk = useCallback(() => setState((s) => ({ ...s, deviceAsk: null, error: null })), []);
+
+  /** Signed in: the hub's role checked, everything of another hub's purged, this one's token seeded. */
+  const enter = useCallback(async (login: { role: string; did: string; token: { access_token: string; expires_in?: number } }, mail: string) => {
     if (login.role !== 'mdp') {
       setState((s) => ({
         ...s,
@@ -656,6 +692,12 @@ export function useMdpApp() {
     [client, run, fail, pushToast, refresh, loadRates],
   );
 
+  /** Round 40 — the hub's own phones and browsers, in Settings: read and forgotten as the shop's are. */
+  const hubDevices = useMemo(
+    () => (client ? shopDevicesApi((path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'hub') : undefined),
+    [client],
+  );
+
   return {
     state,
     // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
@@ -664,6 +706,10 @@ export function useMdpApp() {
     actions: {
       refresh,
       signIn,
+      confirmDevice,
+      giveDevicePhone,
+      cancelDeviceAsk,
+      hubDevices,
       signOut,
       enterAsStaff,
       people,

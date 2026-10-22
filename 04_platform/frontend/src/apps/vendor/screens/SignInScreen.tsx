@@ -3,10 +3,12 @@ import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { fetchCountries, type OperatingCountry } from '../api';
 import { accountBlocker } from '../logic';
 import type { SbgError } from '../../../lib/sbg';
 import type { VendorState, VendorActions } from '../useVendorApp';
+import { ConfirmDevice } from '../../../shared/account/ConfirmDevice';
+import { PhoneVerify } from '../../../shared/account/PhoneVerify';
+import { fetchCountries, vendorConfig, type OperatingCountry } from '../api';
 
 export interface SignInScreenProps {
   state: VendorState;
@@ -41,6 +43,9 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
     if (bySecret) void actions.signInWithSecret(vendorId, secret);
     else void actions.signIn(email, password);
   };
+
+  // Round 40 — a browser new to the store: the code to its number, or first a number to send it to.
+  if (state.deviceAsk) return <ConfirmDevice ask={state.deviceAsk} party="store" busy={state.busy === 'signin'} error={error} onConfirm={(code) => void actions.confirmDevice(code)} onGivePhone={(phone) => void actions.giveDevicePhone(phone)} onBack={actions.cancelDeviceAsk} />;
 
   if (reg) {
     return (
@@ -140,6 +145,8 @@ function CreateSheet({ open, onClose, state, actions, error }: { open: boolean; 
   const [address, setAddress] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Round 40 — the store's number, verified by its code before the store is made: new browsers are confirmed by a code to it.
+  const [ownerPhone, setOwnerPhone] = useState('');
   // Where the network can actually take a store on. Loaded when the sheet opens rather than on mount — a
   // merchant signing IN never needs it, and it is the one thing this form cannot sensibly guess.
   const [countries, setCountries] = useState<OperatingCountry[] | null>(null);
@@ -199,7 +206,8 @@ function CreateSheet({ open, onClose, state, actions, error }: { open: boolean; 
         <input id="spass" class="input" type="password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} autocomplete="new-password" />
         <p class="card__note">{t(account && (email || password) ? account : 'vendor.account.passwordNote')}</p>
       </div>
-      <Button chevron={false} busy={state.busy === 'register'} disabled={!name.trim() || (choices.length > 1 && !country) || account !== null} onClick={() => void actions.register(name, country, address, email, password)}>
+      <PhoneVerify config={vendorConfig()} verified={ownerPhone} onVerified={setOwnerPhone} label={t('account.bound.phone', { party: t('account.bound.party.store') })} />
+      <Button chevron={false} busy={state.busy === 'register'} disabled={!name.trim() || (choices.length > 1 && !country) || account !== null || !ownerPhone} onClick={() => void actions.register(name, country, address, email, password, ownerPhone)}>
         {t('vendor.signin.createCta')}
       </Button>
       <Button variant="link" onClick={onClose}>

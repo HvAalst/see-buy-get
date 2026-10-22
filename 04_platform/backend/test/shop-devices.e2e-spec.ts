@@ -70,7 +70,7 @@ describe('a shop’s own phones, over the wire', () => {
     const listed = (await http().post('/v1/sbg/account/shop-devices').set(bearer(onSecond)).send({ device: second }).expect(201)).body;
     expect(listed).toMatchObject({ count: 2, here: true, unusedDays: 90 });
     expect(listed.devices.filter((d: { here: boolean }) => d.here)).toHaveLength(1);
-    expect((await http().post('/v1/sbg/account/shop-devices').set(bearer(operator)).send({ device: second }).expect(403)).body.detail).toMatch(/the shop’s own/);
+    expect((await http().post('/v1/sbg/account/shop-devices').set(bearer(operator)).send({ device: second }).expect(403)).body.detail).toMatch(/phones are its own to see and forget, signed in as itself. Staff change none/);
 
     // Every other phone forgotten, with the password: the first asks for a code again, and its sign-in has ended.
     await http().post('/v1/sbg/account/shop-devices/forget-others').set(bearer(onSecond)).send({ password: 'wrong-one-here', device: second }).expect(401);

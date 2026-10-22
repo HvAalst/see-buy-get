@@ -380,7 +380,7 @@ export function useHomeApp() {
         ...s,
         screen: 'join',
         role,
-        step: role.kind === 'vendor' ? 'about' : 'phone',
+        step: 'phone',
         form: { ...EMPTY_JOIN },
         issuedCode: null,
         account: null,
@@ -407,7 +407,7 @@ export function useHomeApp() {
   const back = useCallback(() => {
     setState((s) => {
       if (!s.role) return { ...s, screen: 'roles' };
-      if (s.step === 'phone' || (s.role.kind === 'vendor' && s.step === 'about')) return { ...s, screen: 'roles', error: null };
+      if (s.step === 'phone') return { ...s, screen: 'roles', error: null };
       return { ...s, step: prevStep(s.role.kind, s.step), error: null };
     });
   }, []);
@@ -482,13 +482,18 @@ export function useHomeApp() {
       if (stepBlocker(role, 'about', form, t) || stepBlocker(role, 'login', form, t)) return;
       await run('submit', async () => {
         const email = form.email.trim().toLowerCase();
-        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined, email, password: form.password });
+        // Round 40 — with the number checked in the first steps: new phones and browsers are confirmed by a code to it.
+        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined, email, password: form.password, ownerPhone: normalizePhone(form.phone) });
         if (r.error) {
-          setState((s) => ({ ...s, error: r.error }));
+          // The check of the number is spent or gone: back to it, rather than a button that can only say no.
+          const reverify = r.error.code === 'PHONE_NOT_VERIFIED';
+          setState((s) => ({ ...s, error: r.error, ...(reverify ? { step: 'phone' as JoinStep } : {}) }));
           return;
         }
-        // The Store app finds the address already filled in: the store signs in with it and the password just chosen.
+        // The Store app finds the address already filled in: the store signs in with it and the password just chosen —
+        // and this browser, the one it was made on, is already the store's.
         handOffStore(email);
+        saveShopDeviceKey(email, r.data?.device);
         setState((s) => ({ ...s, store: r.data, step: 'done' }));
       });
       return;

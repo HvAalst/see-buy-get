@@ -115,14 +115,29 @@ async function verifiedPhone() {
   return phone;
 }
 
+/**
+ * A SHOP'S, A HUB'S OR A STORE'S SIGN-IN WORKS ONLY ON ITS OWN PHONES (2026-10-18; hubs and stores round 40): this machine is
+ * confirmed by the code the sandbox hands back. One made before it had a number (an older sandbox's hub or store) gives one
+ * first, as its holder would. Null when the answer was not that.
+ */
+async function confirmHere(answer, email) {
+  if (answer.status !== 403 || answer.data?.code !== 'DEVICE_NOT_KNOWN') return null;
+  let { challenge, code } = answer.data.params ?? {};
+  if (answer.data.params?.needsPhone) {
+    const given = need(await req('POST', '/v1/sbg/auth/device/phone', { body: { challenge, phone: await verifiedPhone() } }), `a number for ${email}`);
+    ({ challenge, code } = given);
+    say(`  (${email} had no phone number: it has one now)`);
+  }
+  if (!code) return null;
+  return need(await req('POST', '/v1/sbg/auth/device', { body: { challenge, code } }), `confirm this machine for ${email}`);
+}
+
 /** Login with the fixed demo credentials, else sign the account up. */
 async function ensureAccount(email, role, profile) {
   const login = await req('POST', '/v1/sbg/auth/login', { body: { email, password: PASSWORD } });
   if (login.ok) return login.data;
-  // A shop's sign-in works only on its own phones (2026-10-18): this machine is confirmed by the code the sandbox hands back.
-  if (login.status === 403 && login.data?.code === 'DEVICE_NOT_KNOWN' && login.data?.params?.code) {
-    return need(await req('POST', '/v1/sbg/auth/device', { body: { challenge: login.data.params.challenge, code: login.data.params.code } }), `confirm this machine for ${email}`);
-  }
+  const confirmed = await confirmHere(login, email);
+  if (confirmed) return confirmed;
   // An account an earlier run made with the old demo password: it changes it, as its holder would.
   const moved = await req('POST', '/v1/sbg/auth/password', { body: { email, password: OLD_PASSWORD, newPassword: PASSWORD } });
   if (moved.ok) {
@@ -649,12 +664,19 @@ const run = async () => {
           secret: VENDOR_SECRET,
           email: STORE_EMAIL,
           password: PASSWORD,
+          // Round 40 — a store's number is verified by its code, as a shop's and a hub's are.
+          ownerPhone: await verifiedPhone(),
         },
       }),
       'vendor register',
     );
   }
-  const storeSession = () => req('POST', '/v1/sbg/vendors/session', { body: { email: STORE_EMAIL, password: PASSWORD } });
+  // Round 40 — the store's sign-in works only on its own phones: this machine is confirmed by the sandbox's code.
+  const storeSession = async () => {
+    const answer = await req('POST', '/v1/sbg/vendors/session', { body: { email: STORE_EMAIL, password: PASSWORD } });
+    const confirmed = await confirmHere(answer, STORE_EMAIL);
+    return confirmed ? { ok: true, status: 201, data: confirmed } : answer;
+  };
   let storeIn = await storeSession();
   if (!storeIn.ok) {
     // A demo store from before stores had accounts: in by its secret one last time, and it sets its account up.

@@ -33,6 +33,7 @@ export {
   sbgLogin,
   sbgChangePassword,
   sbgConfirmDevice,
+  sbgDevicePhone,
   sbgReset,
   tokenKeyFor,
   type AppClient,

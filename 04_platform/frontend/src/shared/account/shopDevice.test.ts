@@ -35,6 +35,19 @@ describe('a shop’s own phones', () => {
     expect(deviceAskOf({ code: 'AUTH_FAILED', status: 401, title: '', detail: '', retryable: false, params: { challenge: 'dc_1' } })).toBeNull();
   });
 
+  it('round 40 — a hub or a store with no number yet is asked for one first, and only when the server says so', () => {
+    expect(deviceAskOf({ code: 'DEVICE_NOT_KNOWN', status: 403, title: '', detail: '', retryable: false, params: { challenge: 'dp_1', needsPhone: true } })).toEqual({ challenge: 'dp_1', sentTo: '', needsPhone: true });
+    // Anything but a plain true is no ask for a number: the code went to the number the account has.
+    expect(deviceAskOf({ code: 'DEVICE_NOT_KNOWN', status: 403, title: '', detail: '', retryable: false, params: { challenge: 'dc_2', sentTo: '•••678', needsPhone: 'yes' } })).toEqual({ challenge: 'dc_2', sentTo: '•••678' });
+  });
+
+  it('round 40 — the list says whose phones they are: a shop’s unless told a hub’s or a store’s', () => {
+    const post = (async () => ({ data: null, error: null })) as never;
+    expect(shopDevicesApi(post, () => null).party).toBe('shop');
+    expect(shopDevicesApi(post, () => null, 'hub').party).toBe('hub');
+    expect(shopDevicesApi(post, () => null, 'store').party).toBe('store');
+  });
+
   it('asks the server with this phone’s key, by password, and forgets this phone’s key once the server has', async () => {
     saveShopDeviceKey('kona@shop.example', 'dvc_here');
     const sent: Array<[string, unknown]> = [];

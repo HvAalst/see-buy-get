@@ -136,7 +136,7 @@ function PhoneStep({ state, actions }: JoinScreenProps) {
   return (
     <>
       <h1 class="scr__title">{t('home.join.joinAs', { role: roleMeta(role, t).labelLower })}</h1>
-      <p class="scr__lede">{t('home.join.phone.lede')}</p>
+      <p class="scr__lede">{t(role.kind === 'vendor' ? 'home.join.phone.ledeStore' : 'home.join.phone.lede')}</p>
 
       <Card>
         <div class="field">

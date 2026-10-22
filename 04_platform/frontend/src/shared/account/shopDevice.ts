@@ -37,18 +37,22 @@ export function dropShopDeviceKey(email: string | null | undefined): void {
   }
 }
 
-/** The sign-in's "this phone is new to the shop": where the code went, and — in a sandbox — the code itself. */
+/**
+ * The sign-in's "this phone is new to the shop": where the code went, and — in a sandbox — the code itself. Round 40: a hub
+ * or a store with no number yet is asked for one first (`needsPhone`), and the code goes to it.
+ */
 export interface DeviceAsk {
   challenge: string;
   sentTo: string;
   code?: string;
+  needsPhone?: boolean;
 }
 
 export function deviceAskOf(error: SbgError | null | undefined): DeviceAsk | null {
   if (error?.code !== 'DEVICE_NOT_KNOWN') return null;
   const p = error.params ?? {};
   if (typeof p.challenge !== 'string') return null;
-  return { challenge: p.challenge, sentTo: typeof p.sentTo === 'string' ? p.sentTo : '', ...(typeof p.code === 'string' ? { code: p.code } : {}) };
+  return { challenge: p.challenge, sentTo: typeof p.sentTo === 'string' ? p.sentTo : '', ...(typeof p.code === 'string' ? { code: p.code } : {}), ...(p.needsPhone === true ? { needsPhone: true } : {}) };
 }
 
 type Post = <T>(path: string, body: unknown) => Promise<Result<T>>;
@@ -57,10 +61,11 @@ type Post = <T>(path: string, body: unknown) => Promise<Result<T>>;
  * The shop's phones in Settings, in the shape the PIN's list has — and asked with the PASSWORD where the PIN's are asked
  * with the PIN. Forgetting this phone drops its key here too.
  */
-export function shopDevicesApi(post: Post, email: () => string | null): PinDevicesApi {
+export function shopDevicesApi(post: Post, email: () => string | null, party: 'shop' | 'hub' | 'store' = 'shop'): PinDevicesApi {
   const key = () => shopDeviceKey(email());
   return {
     secret: 'password',
+    party,
     read: () => post<PinDevices>('/v1/sbg/account/shop-devices', { device: key() }),
     forgetOthers: (password) => post<{ forgotten: number; kept: boolean }>('/v1/sbg/account/shop-devices/forget-others', { password, device: key() }),
     forgetThis: async () => {

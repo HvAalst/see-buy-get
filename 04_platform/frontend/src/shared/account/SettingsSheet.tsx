@@ -8,6 +8,7 @@ import { ContractCompany } from './ContractCompany';
 import { hasContract } from './contract';
 import { CredentialAge } from './CredentialAge';
 import { canForgetOthers, deviceLine, devicesLede, type PinDevices, type PinDevicesApi } from './devices';
+import { PARTY_WORD } from './ConfirmDevice';
 import { EmailStep } from './EmailStep';
 import { IdDisputeCase } from './IdDisputeCase';
 import { settingsIdSays } from './idDispute';
@@ -146,7 +147,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {me?.hasPin ? <Row icon="mail" label={t('account.settings.email')} sub={recoveryEmailSays(me, t as never).sub} onClick={() => setView('email')} /> : null}
             {me?.hasPin ? <Row icon="phone" label={t('account.settings.phone')} sub={t('account.settings.phoneSub')} onClick={() => setView('phone')} /> : null}
             {/* WHERE THE PIN WORKS: every phone and browser a code to the number was typed on. Seen, and forgotten, here. */}
-            {devices ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.shopDevices.sub')} onClick={() => setView('devices')} /> : me?.hasPin ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.devices.sub')} onClick={() => setView('devices')} /> : null}
+            {devices ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.shopDevices.sub', { party: t(PARTY_WORD[devices.party ?? 'shop']) })} onClick={() => setView('devices')} /> : me?.hasPin ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.devices.sub')} onClick={() => setView('devices')} /> : null}
             {/* WHERE THEY ARE PAID, where their country pays to a number of their own (the user, 2026-10-18). */}
             {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t('account.payout.title')} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
@@ -279,6 +280,8 @@ function PinForm({ api, own, onDone }: { api: AccountApi; own?: SettingsSheetPro
 function DevicesForm({ devices, onSignedOut }: { devices: PinDevicesApi; onSignedOut: () => void }) {
   const t = useT();
   const byPassword = devices.secret === 'password';
+  // Whose phones: the shop's, the hub's or the store's — said in every sentence about them.
+  const party = t(PARTY_WORD[devices.party ?? 'shop']);
   const [seen, setSeen] = useState<PinDevices | null>(null);
   const [step, setStep] = useState<'list' | 'others' | 'this'>('list');
   const [pin, setPin] = useState('');
@@ -310,11 +313,11 @@ function DevicesForm({ devices, onSignedOut }: { devices: PinDevicesApi; onSigne
   if (step === 'others') {
     return (
       <>
-        <p class="t-body">{t(byPassword ? 'account.shopDevices.forgetOthersBody' : 'account.devices.forgetOthersBody')}</p>
+        <p class="t-body">{t(byPassword ? 'account.shopDevices.forgetOthersBody' : 'account.devices.forgetOthersBody', { party })}</p>
         {byPassword ? (
           <div class="field">
             <label class="field__label" for="acct-devices-password">
-              {t('account.shopDevices.passwordToConfirm')}
+              {t('account.shopDevices.passwordToConfirm', { party })}
             </label>
             <input id="acct-devices-password" class="input" type="password" autocomplete="current-password" value={pin} disabled={busy} onInput={(e) => { setPin(e.currentTarget.value); setError(null); }} />
           </div>
@@ -338,7 +341,7 @@ function DevicesForm({ devices, onSignedOut }: { devices: PinDevicesApi; onSigne
   if (step === 'this') {
     return (
       <>
-        <p class="t-body">{t(byPassword ? 'account.shopDevices.forgetThisBody' : 'account.devices.forgetThisBody')}</p>
+        <p class="t-body">{t(byPassword ? 'account.shopDevices.forgetThisBody' : 'account.devices.forgetThisBody', { party })}</p>
         <Refused error={error} />
         <Button chevron={false} busy={busy} onClick={() => void done(devices.forgetThis())}>
           {t('account.devices.forgetThisSave')}
@@ -352,7 +355,7 @@ function DevicesForm({ devices, onSignedOut }: { devices: PinDevicesApi; onSigne
 
   return (
     <>
-      <p class="t-body">{devicesLede(seen, t as never, byPassword ? 'shop' : 'pin')}</p>
+      <p class="t-body">{devicesLede(seen, t as never, byPassword ? (devices.party ?? 'shop') : 'pin')}</p>
       {seen.devices.length ? (
         <div class="rows" role="list">
           {seen.devices.map((d, i) => {

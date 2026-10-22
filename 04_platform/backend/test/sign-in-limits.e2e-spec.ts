@@ -164,14 +164,14 @@ describe('every password door counts its tries, over the wire', () => {
     const email = `soko.${u}@store.example`;
     const password = 'vitenge-vya-pwani-8';
     expect((await http().post('/v1/sbg/vendors').send({ name: `Soko Letu ${u}`, email, password: 'SokoLetu2026' })).body.code).toBe('PASSWORD_GUESSABLE');
-    const made = (await http().post('/v1/sbg/vendors').send({ name: `Soko Letu ${u}`, email, password }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').send({ name: `Soko Letu ${u}`, email, password, ownerPhone: await aVerifiedNumber(digits()) }).expect(201)).body;
     const token = made.token.access_token as string;
     const rotate = (pw: string) => http().post(`/v1/sbg/vendors/${made.vendorId}/secret/rotate`).set(bearer(token)).send({ password: pw });
     // Two wrong at the sign-in and three from inside are five at one account.
     expect(await guess((pw) => http().post('/v1/sbg/vendors/session').send({ email, password: pw }), 2)).toEqual(['401 AUTH_FAILED', '401 AUTH_FAILED']);
     expect(await guess(rotate, 3)).toEqual(['403 PASSWORD_WRONG', '403 PASSWORD_WRONG', '403 PASSWORD_LOCKED']);
     expect((await rotate(password)).body.code).toBe('PASSWORD_LOCKED');
-    expect((await http().post('/v1/sbg/vendors/session').send({ email, password })).body.code).toBe('PASSWORD_LOCKED');
+    expect((await http().post('/v1/sbg/vendors/session').send({ email, password, device: made.device })).body.code).toBe('PASSWORD_LOCKED');
     // The store is not signed out by any of it, and its secret was not replaced.
     const still = (await http().get(`/v1/sbg/vendors/${made.vendorId}`).set(bearer(token)).expect(200)).body;
     expect(still.secretRotatedAt).toBeUndefined();
@@ -246,7 +246,7 @@ describe('every password door counts its tries, over the wire', () => {
     const phone = await aVerifiedNumber(u);
     await http().post('/v1/sbg/auth/signup').send(shopBody(u, shop, 'mahindi-ya-kuchoma-3', phone)).expect(201);
     const store = `kazi.${u}@store.example`;
-    await http().post('/v1/sbg/vendors').send({ name: `Kazi Store ${u}`, email: store, password: 'mahindi-ya-kuchoma-3' }).expect(201);
+    await http().post('/v1/sbg/vendors').send({ name: `Kazi Store ${u}`, email: store, password: 'mahindi-ya-kuchoma-3', ownerPhone: await aVerifiedNumber(digits()) }).expect(201);
     const staff = `kazi-${u}@sbg.test`;
     await http().post('/v1/sbg/operators').set(bearer(operator)).send({ email: staff, name: `Kazi ${u}` }).expect(201);
     const admin = `kazi.${u}@sbg-ke.example`;

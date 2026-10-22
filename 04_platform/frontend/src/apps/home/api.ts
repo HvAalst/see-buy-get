@@ -99,10 +99,12 @@ export interface VendorRegisteredView {
   country: string;
   /** The account made with the store: how it signs in. */
   email?: string;
+  /** Round 40 — the browser it was made on is the store's first. */
+  device?: string;
 }
 
 /** A store is registered WITH its account: the email and password its people sign in to the Store app with. */
-export function registerStore(body: { name: string; country?: string; email: string; password: string }): Promise<Result<VendorRegisteredView>> {
+export function registerStore(body: { name: string; country?: string; email: string; password: string; ownerPhone: string }): Promise<Result<VendorRegisteredView>> {
   return publicRequest<VendorRegisteredView>(homeConfig(), '/v1/sbg/vendors', { body });
 }
 

@@ -6741,15 +6741,19 @@ describe('PUDO Light', () => {
       const old = hub.token.access_token;
       expect(auth.introspect(old).active).toBe(true);
 
-      expect(() => controller.changeAccountPassword({ email, password: 'wrong-pass', newPassword: 'second-pass-1' })).toThrow(/Wrong email or password/);
-      expect(() => controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'short' })).toThrow(/at least 8/);
-      expect(() => controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'first-pass' })).toThrow(/different from the current one/);
+      // Round 40 — a hub is bound to its own phones: the one it signed up on is its first, and the change is made from it.
+      const device = hub.device;
+      expect(device).toBeTruthy();
+      expect(() => controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'second-pass-1' })).toThrow(/from a phone or browser the hub has signed in on/);
+      expect(() => controller.changeAccountPassword({ email, password: 'wrong-pass', newPassword: 'second-pass-1', device })).toThrow(/Wrong email or password/);
+      expect(() => controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'short', device })).toThrow(/at least 8/);
+      expect(() => controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'first-pass', device })).toThrow(/different from the current one/);
 
-      const changed = controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'second-pass-1' });
+      const changed = controller.changeAccountPassword({ email, password: 'first-pass', newPassword: 'second-pass-1', device });
       expect(auth.introspect(old).active).toBe(false); // every other device holding the old sign-in is out
       expect(auth.introspect(changed.token.access_token).active).toBe(true); // the one that changed it stays in
       await expect(accounts.login(email, 'first-pass')).rejects.toThrow(/Wrong email or password/);
-      expect((await accounts.login(email, 'second-pass-1')).did).toBe(hub.did);
+      expect((await accounts.login(email, 'second-pass-1', device)).did).toBe(hub.did);
     });
 
     it('changes a PIN only with the current one, and a wrong current PIN counts toward the lockout', () => {

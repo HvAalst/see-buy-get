@@ -30,6 +30,8 @@ type Post = <T>(path: string, body: unknown) => Promise<Result<T>>;
 export interface PinDevicesApi {
   /** What forgetting the others is asked with: the PIN (a person's), or the password (a shop's own phones). */
   secret?: 'pin' | 'password';
+  /** Round 40 — whose phones they are, where it is an account's own (a shop's, a hub's or a store's), not a person's PIN. */
+  party?: 'shop' | 'hub' | 'store';
   read: () => Promise<Result<PinDevices>>;
   /** The PIN (or the password) again. On success EVERY session is over, this one included: the caller signs out. */
   forgetOthers: (secret: string) => Promise<Result<{ forgotten: number; kept: boolean }>>;
@@ -60,12 +62,13 @@ export function pinDevicesApi(post: Post): PinDevicesApi {
 type Say = (key: string, vars?: Record<string, string | number>) => string;
 
 /** The sentence above the list: how many, how each came to be one, and when one stops being one. */
-export function devicesLede(v: PinDevices, t: (key: never, vars?: Record<string, string | number>) => string, whose: 'pin' | 'shop' = 'pin'): string {
+export function devicesLede(v: PinDevices, t: (key: never, vars?: Record<string, string | number>) => string, whose: 'pin' | 'shop' | 'hub' | 'store' = 'pin'): string {
   const say = t as Say;
-  // A shop's own phones are its sign-in's, confirmed by a code to the shop's number — not a person's PIN.
-  const k = whose === 'shop' ? 'account.shopDevices' : 'account.devices';
-  const head = v.count === 0 ? say(`${k}.none`) : v.count === 1 ? say(`${k}.one`) : say(`${k}.many`, { n: v.count });
-  return v.count === 0 ? head : `${head} ${say(`${k}.how`, { days: v.unusedDays })}`;
+  // A shop's (a hub's, a store's) own phones are its sign-in's, confirmed by a code to its number — not a person's PIN.
+  const k = whose === 'pin' ? 'account.devices' : 'account.shopDevices';
+  const party = whose === 'pin' ? '' : say(`account.bound.party.${whose}`);
+  const head = v.count === 0 ? say(`${k}.none`, { party }) : v.count === 1 ? say(`${k}.one`, { party }) : say(`${k}.many`, { n: v.count, party });
+  return v.count === 0 ? head : `${head} ${say(`${k}.how`, { days: v.unusedDays, party })}`;
 }
 
 /** One device as a line: which it is, when it was confirmed, when it was last used. */

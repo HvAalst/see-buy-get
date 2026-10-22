@@ -375,6 +375,7 @@ export const enHome = {
 
   // Join wizard — step: phone.
   'home.join.phone.lede': 'Your phone number is your key to the network. We send a code to check it works.',
+  'home.join.phone.ledeStore': 'The store’s phone number. The store’s sign-in works only on its own phones and browsers, and each new one is confirmed by a code to this number. We send a code now to check it works.',
   'home.join.phone.label': 'Phone number',
   'home.join.phone.cta': 'Send me the code',
 

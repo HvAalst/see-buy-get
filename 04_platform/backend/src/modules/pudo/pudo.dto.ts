@@ -2066,6 +2066,12 @@ export class AccountDeviceDto {
   @IsString() @MaxLength(10) code!: string;
 }
 
+/** Round 40 — an account with no number gives one: the challenge its sign-in was answered with, and the number. */
+export class AccountDevicePhoneDto {
+  @IsString() @MaxLength(40) challenge!: string;
+  @IsString() @MaxLength(24) phone!: string;
+}
+
 /** This phone or browser's key, for the shop's own list of its phones. */
 export class ShopDevicesDto {
   @IsOptional() @IsString() @MaxLength(80) device?: string;

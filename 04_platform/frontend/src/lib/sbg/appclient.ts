@@ -244,6 +244,11 @@ export function sbgConfirmDevice(config: SbgConfig, challenge: string, code: str
   return publicRequest<LoginView>(config, '/v1/sbg/auth/device', { body: { challenge, code }, fetch: f });
 }
 
+/** Round 40 — a hub or a store with no number yet gives one: a code goes to it, and is typed with sbgConfirmDevice. */
+export function sbgDevicePhone(config: SbgConfig, challenge: string, phone: string, f?: typeof fetch): Promise<Result<{ challenge: string; sentTo: string; code?: string }>> {
+  return publicRequest(config, '/v1/sbg/auth/device/phone', { body: { challenge, phone }, fetch: f });
+}
+
 /**
  * Change your own password, proven with the CURRENT one. Every other session holding the old password is signed
  * out; the answer carries a fresh sign-in for this device, which the caller seeds so it stays in.

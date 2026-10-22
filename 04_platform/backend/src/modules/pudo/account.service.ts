@@ -13,6 +13,7 @@ import { assertPassword, newResetCode, readResetCode } from '../../foundation/au
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { DidService } from '../../foundation/did/did.service';
 import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
+import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
 import { AgentService } from './agent.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
@@ -37,6 +38,11 @@ interface Account {
   did: string; // the linked domain entity's real DID (agent / driver / MDP)
   tenant?: string; // for a fleet driver: the owning manager's DID (the token's tenant boundary)
   phoneHash?: string; // S20: the person join key captured at signup, so this login resolves to a person
+  /**
+   * Round 40 — the number a new phone or browser's code goes to, ENCRYPTED, for an account whose DID does not carry one
+   * (a hub's is its name, a store's too). Kept from the verified number at sign-up, or given once by an account that had none.
+   */
+  codePhone?: string;
   createdAt: string;
   resetToken?: string;
   resetExpires?: number;
@@ -50,9 +56,14 @@ const RESET_TTL_MS = 30 * 60 * 1000;
  * THE ACCOUNTS WHOSE SIGN-IN WORKS ONLY ON A PHONE OR BROWSER THEY CONFIRMED (the user, 2026-10-18: "who is at the
  * counter"). A shop's email and password, typed on a browser it has never used, open nothing until a code texted to the
  * shop's registered number is typed on it — so a password passed round, or read off a note, does not take parcels in
- * from somewhere else. The hub and the store are not bound yet: said here, not assumed.
+ * from somewhere else. Round 40 (the user: "Hubs and stores now"): a hub's and a store's are bound the same way, to the
+ * number each verified at sign-up.
  */
-export const DEVICE_BOUND_ROLES: readonly AccountRole[] = ['pudo'];
+export const DEVICE_BOUND_ROLES: readonly AccountRole[] = ['pudo', 'mdp', 'vendor'];
+/** The DID controllers made from a phone number (agent, driver and fleet-manager registration). */
+const PHONE_DIDS: readonly string[] = ['pudo', 'pudo-driver', 'pudo-fleet'];
+/** What a bound account is called in what it is told. */
+const PARTY: Record<AccountRole, string> = { pudo: 'shop', mdp: 'hub', vendor: 'store', driver: 'account' };
 const DEVICE_CODE_TTL_MS = 10 * 60 * 1000;
 const DEVICE_CODE_TRIES = 5;
 const DEVICE_CODE_COOLDOWN_MS = 60 * 1000;
@@ -89,7 +100,7 @@ export class AccountService implements OnApplicationBootstrap {
   /** The phones and browsers each bound account confirmed, by the hash of their key. Durable, as a person's are. */
   private readonly devices = new DeviceBook(new PersistentMap<string, KnownDevice>('account-devices'));
   /** A code texted for a browser asking to be confirmed: ten minutes, five tries. In memory, like every code here. */
-  private readonly deviceCodes = new Map<string, { email: string; code: string; sentAt: number; expires: number; attempts: number }>();
+  private readonly deviceCodes = new Map<string, { email: string; code: string; sentAt: number; expires: number; attempts: number; needsPhone?: boolean; phone?: string }>();
 
   constructor(
     private readonly agents: AgentService,
@@ -103,6 +114,8 @@ export class AccountService implements OnApplicationBootstrap {
     private readonly dids: DidService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly sms?: SmsService,
+    // Round 40 — the number a hub's or a store's codes go to is kept encrypted. Optional for the specs that build this by hand.
+    @Optional() private readonly crypto?: FieldEncryption,
   ) {}
 
   /**
@@ -136,8 +149,37 @@ export class AccountService implements OnApplicationBootstrap {
     return this.phoneForDid(account.did);
   }
 
+  /** Round 40 — where a new phone or browser's code goes: the number in the account's DID (a shop's), or the one kept with it. */
+  private codePhoneOf(account: Account): string | undefined {
+    const inDid = this.phoneForDid(account.did);
+    if (inDid) return inDid;
+    if (!account.codePhone || !this.crypto) return undefined;
+    try {
+      return this.crypto.decrypt(account.codePhone);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Round 40 — keep the number codes go to, encrypted; only where the DID does not already carry one. */
+  private keepCodePhone(account: Account, phone: string): void {
+    if (!this.crypto || this.phoneForDid(account.did)) return;
+    account.codePhone = this.crypto.encrypt(phone.trim());
+  }
+
+  /** Round 40 — a phone verified by its code moments ago: what a store gives at sign-up, before the store is made. */
+  assertVerifiedPhone(phone: string | undefined): string {
+    if (!phone?.trim()) throw new GlosError('PHONE_REQUIRED', 'A phone number is required: a new phone or browser is confirmed by a code to it', { field: 'ownerPhone' });
+    if (!this.otp.isVerified(phone)) throw new GlosError('PHONE_NOT_VERIFIED', 'Verify your phone number first', { field: 'ownerPhone' });
+    return phone.trim();
+  }
+
   private phoneForDid(did: string): string | undefined {
     const controller = this.dids.resolve(did)?.controller ?? '';
+    // Only the DIDs made FROM a number carry one: a shop's, a driver's, a fleet's. A hub's and a store's are made from their
+    // NAME — and a name with seven digits in it reads as a number once a country code is added (found round 40).
+    const prefix = controller.slice(0, controller.indexOf(':'));
+    if (!PHONE_DIDS.includes(prefix)) return undefined;
     const raw = controller.slice(controller.indexOf(':') + 1); // 'pudo-driver:+254…' → '+254…'
     return isPlausiblePhone(raw) ? raw : undefined;
   }
@@ -174,6 +216,8 @@ export class AccountService implements OnApplicationBootstrap {
     this.otp.consume(input.phone); // one verification → one account
     const salt = randomBytes(16).toString('hex');
     const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, tenant, phoneHash: hashPhone(input.phone), createdAt: new Date().toISOString() };
+    // Round 40 — a hub's codes go to the number it verified here: its DID carries its name, not a number.
+    if (this.isBound(account)) this.keepCodePhone(account, input.phone);
     this.accounts.set(email, account);
     void this.mail?.send('welcome', { address: email }, { name: welcomeName(input.role, input.profile), email, role: WELCOME_ROLE[input.role] });
     // The phone that signs up is the first one the account works on: the number was proven by a code on it moments ago.
@@ -221,6 +265,7 @@ export class AccountService implements OnApplicationBootstrap {
   /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
   async login(email: string, password: string, device?: string, now: number = Date.now()): Promise<AccountSignIn> {
     const account = this.passwordRight(email, password);
+    // A store signs in at its own door (storeLogin): one answer there for every account that is not a store's, and here the same.
     // The password was right, and is not enough on a phone or browser this shop never confirmed: a code goes to its number.
     if (this.isBound(account) && !this.devices.knows(account.accountId, device, now)) throw await this.deviceUnknown(account, now);
     if (device) this.devices.used(account.accountId, device, now);
@@ -248,16 +293,25 @@ export class AccountService implements OnApplicationBootstrap {
    * sandbox code does; nothing is texted there.
    */
   private async deviceUnknown(account: Account, now: number): Promise<GlosError> {
-    const phone = this.phoneForDid(account.did);
-    if (!phone) return new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser has not signed in to this account before, and the account has no number to send a code to. SeeBuyGet staff can help.');
+    const party = PARTY[account.role];
+    const phone = this.codePhoneOf(account);
+    if (!phone) {
+      /*
+       * Round 40 — AN ACCOUNT WITH NO NUMBER YET (a hub or a store made before they were bound): the password was right, and
+       * the number it gives now is the one its codes go to from now on — proven by a code to it before anything is kept.
+       */
+      const challenge = `dp_${randomBytes(12).toString('hex')}`;
+      this.deviceCodes.set(challenge, { email: account.email, code: '', sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0, needsPhone: true });
+      return new GlosError('DEVICE_NOT_KNOWN', `This ${party} has no phone number yet. Give it one: a code goes to it now, and from then on a new phone or browser is confirmed by a code to that number.`, { challenge, needsPhone: true });
+    }
     const ending = phone.replace(/\D/g, '').slice(-3);
     const waiting = [...this.deviceCodes.entries()].find(([, c]) => c.email === account.email && c.expires > now && now - c.sentAt < DEVICE_CODE_COOLDOWN_MS);
     let challenge = waiting?.[0];
     let code = waiting?.[1].code;
     if (!challenge || !code) {
       const texts = this.sms?.sends() ?? false;
-      if (!texts && !isSandbox()) return new GlosError('SMS_NOT_SENT', 'This phone or browser has to be confirmed by a code to the shop’s number, and codes cannot be texted from this server yet.');
-      if (texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to the shop’s number in that country.');
+      if (!texts && !isSandbox()) return new GlosError('SMS_NOT_SENT', `This phone or browser has to be confirmed by a code to the ${party}’s number, and codes cannot be texted from this server yet.`);
+      if (texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', `Codes are not texted to the ${party}’s number in that country.`);
       challenge = `dc_${randomBytes(12).toString('hex')}`;
       code = String(randomInt(0, 1_000_000)).padStart(6, '0');
       this.deviceCodes.set(challenge, { email: account.email, code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
@@ -265,23 +319,49 @@ export class AccountService implements OnApplicationBootstrap {
         await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
       } catch {
         this.deviceCodes.delete(challenge);
-        return new GlosError('SMS_NOT_SENT', 'The code to the shop’s number could not be texted. Try again in a minute.');
+        return new GlosError('SMS_NOT_SENT', `The code to the ${party}’s number could not be texted. Try again in a minute.`);
       }
     }
-    return new GlosError('DEVICE_NOT_KNOWN', `This phone or browser has not signed in to this shop before. A code went to the shop’s number ending ${ending}: type it here.`, {
+    return new GlosError('DEVICE_NOT_KNOWN', `This phone or browser has not signed in to this ${party} before. A code went to the ${party}’s number ending ${ending}: type it here.`, {
       challenge,
       sentTo: `•••${ending}`,
       ...(isSandbox() ? { code } : {}),
     });
   }
 
-  /** The code from the shop's number, typed on the new phone or browser: it is one of the shop's now, and signed in. */
+  /**
+   * Round 40 — AN ACCOUNT WITH NO NUMBER GIVES ONE: the challenge its sign-in was answered with, and the number. A code goes
+   * to that number; typed on this phone or browser (confirmDevice), the number is kept and this one is the account's first.
+   */
+  async addDevicePhone(challenge: string, phone: string, now: number = Date.now()): Promise<{ challenge: string; sentTo: string; code?: string }> {
+    const asked = this.deviceCodes.get(challenge);
+    if (!asked || !asked.needsPhone || asked.expires < now) throw new GlosError('OTP_INVALID', 'That sign-in has expired: sign in again');
+    const number = phone?.trim() ?? '';
+    if (!isPlausiblePhone(number)) throw new GlosError('VALIDATION_FAILED', 'A phone number, with its country code: +254 712 345678', { field: 'phone' });
+    if (asked.code && now - asked.sentAt < DEVICE_CODE_COOLDOWN_MS) throw new GlosError('RATE_LIMITED', 'A code was sent a moment ago: wait a minute before asking again');
+    const texts = this.sms?.sends() ?? false;
+    if (!texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be texted from this server yet.');
+    if (texts && !this.sms?.mayGoTo(number)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to numbers in that country.');
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    try {
+      await this.sms?.sendCode(number, code, DEVICE_CODE_TTL_MS / 60_000);
+    } catch {
+      throw new GlosError('SMS_NOT_SENT', 'The code could not be texted. Try again in a minute.');
+    }
+    Object.assign(asked, { code, phone: number, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
+    const ending = number.replace(/\D/g, '').slice(-3);
+    return { challenge, sentTo: `•••${ending}`, ...(isSandbox() ? { code } : {}) };
+  }
+
+  /** The code from the account's number, typed on the new phone or browser: it is one of the account's now, and signed in. */
   confirmDevice(challenge: string, code: string, now: number = Date.now()): AccountSignIn {
     const asked = this.deviceCodes.get(challenge);
     if (!asked || asked.expires < now) {
       this.deviceCodes.delete(challenge);
       throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     }
+    // No number given yet, so no code was sent: nothing to check, and the sign-in still waits for its number.
+    if (asked.needsPhone && !asked.phone) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     if (!safeEqualText(asked.code, String(code ?? '').trim())) {
       asked.attempts += 1;
       if (asked.attempts >= DEVICE_CODE_TRIES) {
@@ -293,6 +373,11 @@ export class AccountService implements OnApplicationBootstrap {
     this.deviceCodes.delete(challenge);
     const account = this.accounts.get(asked.email);
     if (!account) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    // Round 40 — the number an account without one gave, proven by this code: its codes go there from now on.
+    if (asked.needsPhone && asked.phone && !this.codePhoneOf(account)) {
+      this.keepCodePhone(account, asked.phone);
+      this.accounts.set(account.email, account);
+    }
     const device = this.devices.add(account.accountId, now);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), device };
   }
@@ -311,7 +396,7 @@ export class AccountService implements OnApplicationBootstrap {
   forgetOtherDevices(did: string, password: string, device: string, now: number = Date.now()): AccountSignIn & { forgotten: number; kept: boolean } {
     const account = this.boundAccountOf(did);
     this.passwordRight(account.email, password);
-    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser is not one of the shop’s: sign in on it first.');
+    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `This phone or browser is not one of the ${PARTY[account.role]}’s: sign in on it first.`);
     const forgotten = this.devices.forgetAll(account.accountId, device);
     this.auth.revokeAll(account.did);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), forgotten, kept: true };
@@ -390,7 +475,7 @@ export class AccountService implements OnApplicationBootstrap {
    * No phone is asked for: a store is a business with an inbox. Where its operator gave their number, the account
    * carries it, and the same person is one person across the apps.
    */
-  setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
+  setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken; device?: string } {
     const email = this.checkNewAccount(input.email, input.password, input.name);
     if (this.emailForDid(input.did)) throw new GlosError('CONFLICT', 'This store already has an account: sign in with its email and password');
     const salt = randomBytes(16).toString('hex');
@@ -404,16 +489,23 @@ export class AccountService implements OnApplicationBootstrap {
       ...(input.phone?.trim() ? { phoneHash: hashPhone(input.phone) } : {}),
       createdAt: new Date().toISOString(),
     };
+    // Round 40 — a number verified at sign-up is where this store's codes go, and the phone or browser that signed up is its first.
+    const verified = Boolean(input.phone?.trim() && this.otp.isVerified(input.phone));
+    if (verified) {
+      this.keepCodePhone(account, input.phone!);
+      this.otp.consume(input.phone!);
+    }
     this.accounts.set(email, account);
     void this.mail?.send('welcome', { address: email }, { name: input.name, email, role: 'store' });
-    return { accountId: account.accountId, role: account.role, did: account.did, email, token: this.mint(account) };
+    const device = verified ? this.devices.add(account.accountId) : undefined;
+    return { accountId: account.accountId, role: account.role, did: account.did, email, token: this.mint(account), ...(device ? { device } : {}) };
   }
 
   /**
    * SIGN A STORE IN by its account. One answer for a wrong password, an email nobody holds, and an email that is a
    * shop's or a courier's: this door tells nobody which accounts exist, or what kind they are.
    */
-  storeLogin(email: string, password: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
+  async storeLogin(email: string, password: string, device?: string, now: number = Date.now()): Promise<{ accountId: string; role: AccountRole; did: string; email: string; token: AccessToken }> {
     const key = (email || '').trim().toLowerCase();
     this.tries.check(key);
     const account = this.accounts.get(key);
@@ -422,6 +514,9 @@ export class AccountService implements OnApplicationBootstrap {
     const right = account ? this.verify(password, account) : false;
     if (!account || !right || account.role !== 'vendor') throw this.wrongPassword(key, account, password);
     this.tries.forget(key);
+    // Round 40 — the password was right, and is not enough on a phone or browser this store never confirmed.
+    if (!this.devices.knows(account.accountId, device, now)) throw await this.deviceUnknown(account, now);
+    if (device) this.devices.used(account.accountId, device, now);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
   }
 
@@ -472,7 +567,7 @@ export class AccountService implements OnApplicationBootstrap {
     // It hands back a sign-in, so for a bound account it is a door like any other: only on a phone the shop confirmed.
     // Asked AFTER the password, as the sign-in asks it — before, a shop's address answered differently from anybody's.
     if (this.isBound(account) && !this.devices.knows(account.accountId, device)) {
-      throw new GlosError('DEVICE_NOT_KNOWN', 'Change the password from a phone or browser the shop has signed in on.');
+      throw new GlosError('DEVICE_NOT_KNOWN', `Change the password from a phone or browser the ${PARTY[account.role]} has signed in on.`);
     }
     assertPassword(next, [account.email]);
     if (this.verify(next, account)) throw new GlosError('VALIDATION_FAILED', 'Choose a password different from the current one');

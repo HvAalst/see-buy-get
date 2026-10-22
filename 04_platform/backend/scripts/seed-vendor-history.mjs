@@ -102,6 +102,10 @@ const run = async () => {
   if (known) {
     // The demo store signs in with its account; one that has none yet (an older sandbox) still opens by its secret.
     let li = await req('POST', '/v1/sbg/vendors/session', { body: { email: STORE_EMAIL, password: PASSWORD } });
+    // Round 40 — a store's sign-in works only on its own phones: this machine is confirmed by the code the sandbox hands back.
+    if (li.status === 403 && li.data?.code === 'DEVICE_NOT_KNOWN' && li.data?.params?.code) {
+      li = await req('POST', '/v1/sbg/auth/device', { body: { challenge: li.data.params.challenge, code: li.data.params.code } });
+    }
     if (!li.ok || li.data.vendorId !== known.vendorId) li = await req('POST', '/v1/sbg/vendors/login', { body: { vendorId: known.vendorId, secret: VENDOR_SECRET } });
     if (li.ok) {
       vendorId = known.vendorId;

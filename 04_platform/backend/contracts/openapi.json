@@ -4180,6 +4180,29 @@
         }
       }
     },
+    "/v1/sbg/auth/device/phone": {
+      "post": {
+        "operationId": "Sbg.addAccountDevicePhone",
+        "summary": "",
+        "description": "Round 40 — A HUB OR A STORE WITH NO NUMBER YET GIVES ONE (one made before they were bound): its sign-in was answered with a\nchallenge, the password having been right; a code goes to the number given, and typed (auth/device) that number is kept.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDevicePhoneDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/forgot": {
       "post": {
         "operationId": "Sbg.authForgot",
@@ -31899,6 +31922,23 @@
         "required": [
           "challenge",
           "code"
+        ]
+      },
+      "AccountDevicePhoneDto": {
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 24
+          }
+        },
+        "required": [
+          "challenge",
+          "phone"
         ]
       },
       "ForgotDto": {

@@ -135,21 +135,21 @@ export class AccountController {
    * counter"). Read and forgotten by the shop itself, signed in as the shop; staff pass every role check and are refused
    * by name. A POST for the same reason as the PIN's: the key travels in the body.
    */
-  @Roles('agent')
+  @Roles('agent', 'mdp', 'genesis')
   @Post('shop-devices')
   shopDevices(@Body() dto: ShopDevicesDto, @Actor() actor: IntrospectionResult) {
     return this.accounts.devicesOf(shopOf(actor), dto.device);
   }
 
   /** Every other phone forgotten, with the password: each needs the code to the shop's number again, its sign-in ended. */
-  @Roles('agent')
+  @Roles('agent', 'mdp', 'genesis')
   @Post('shop-devices/forget-others')
   forgetOtherShopDevices(@Body() dto: ShopForgetOthersDto, @Actor() actor: IntrospectionResult) {
     return { ...this.accounts.forgetOtherDevices(shopOf(actor), dto.password, dto.device), signedOutEverywhere: true };
   }
 
   /** This phone forgotten — a phone the shop lent, or sold. Signing in on it asks for the code again. */
-  @Roles('agent')
+  @Roles('agent', 'mdp', 'genesis')
   @Post('shop-devices/forget-this')
   forgetThisShopDevice(@Body() dto: ShopDevicesDto, @Actor() actor: IntrospectionResult) {
     if (!dto.device) throw new GlosError('FIELD_REQUIRED', 'Which phone: this one’s key', { field: 'device' });
@@ -210,7 +210,8 @@ export class AccountController {
 }
 
 /** The shop a sign-in speaks for — the shop's own, never staff's, who pass every role check. A shop's own people never reach here: the guard lets them through counter doors only (at-the-counter.ts). */
+/** Round 40 — a shop's, a hub's or a store's own phones and browsers: the account's own to see and forget, signed in as itself. */
 function shopOf(actor: IntrospectionResult | undefined): string {
-  if (actor?.role !== 'agent' || !actor.did) throw new GlosError('FORBIDDEN', 'A shop’s phones are the shop’s own to see and forget, signed in as the shop. Staff change none.');
+  if (!actor?.did || !['agent', 'mdp', 'genesis'].includes(actor.role ?? '')) throw new GlosError('FORBIDDEN', 'A shop’s, a hub’s or a store’s phones are its own to see and forget, signed in as itself. Staff change none.');
   return actor.did;
 }

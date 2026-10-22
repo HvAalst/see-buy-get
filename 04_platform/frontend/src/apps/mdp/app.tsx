@@ -45,7 +45,7 @@ export function App() {
       <div class="app">
         <TopBar title={t('mdp.appTitle')} subtitle={t('mdp.appSubtitleSignin')} />
         <main class="app__scroll app__scroll--nonav">
-          <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} />
+          <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} deviceAsk={state.deviceAsk} />
         </main>
         <Toasts state={state} actions={actions} noNav />
       </div>
@@ -89,7 +89,7 @@ export function App() {
               {state.hub ? (state.hub.zones.length === 1 ? t('mdp.zoneOne', { count: state.hub.zones.length }) : t('mdp.zoneMany', { count: state.hub.zones.length })) : '…'}
             </Pill>
             {/* Last in the bar: live state first, the place you visit last. */}
-            {state.staff ? <StaffChip who={state.staff} onSignOut={actions.signOut} /> : <AccountMenu api={account} app="mdp" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} />}
+            {state.staff ? <StaffChip who={state.staff} onSignOut={actions.signOut} /> : <AccountMenu api={account} app="mdp" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} devices={actions.hubDevices} />}
           </>
         }
       />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { isMintSourced, isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
+import { isMintSourced, isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, type SbgError } from '../../lib/sbg';
+import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { openPage } from '../../shared/openPage';
 import { papersBody } from './papers';
@@ -24,6 +25,7 @@ import {
   vendorRegister,
   vendorReset,
   vendorSession,
+  vendorConfig,
 } from './api';
 import { EMPTY_MINT, dimsComplete, fromHandoff, measureOf, type MintForm } from './logic';
 import type {
@@ -43,6 +45,7 @@ import type {
   QuoteView, ReturnOfferView,
   SettlementRow,
   VendorFundingView,
+  VendorLoginView,
   VendorRegisteredView,
   VendorView,
 } from './types';
@@ -173,6 +176,8 @@ export interface VendorState {
   error: SbgError | null;
   toasts: Toast[];
   busy: string | null;
+  /** Round 40 — the password was right on a phone or browser new to the store: a code went to its number (or it gives one first). */
+  deviceAsk: (DeviceAsk & { email: string }) | null;
   refreshing: boolean;
   stale: boolean;
 }
@@ -219,6 +224,7 @@ const INITIAL: VendorState = {
   error: null,
   toasts: [],
   busy: null,
+  deviceAsk: null,
   refreshing: false,
   stale: false,
 };
@@ -512,8 +518,11 @@ export function useVendorApp() {
       const mail = email.trim().toLowerCase();
       if (!mail || !password) return;
       setState((s) => ({ ...s, busy: 'signin', error: null }));
-      const r = await vendorSession(mail, password);
+      const r = await vendorSession(mail, password, shopDeviceKey(mail));
       if (r.error || !r.data) {
+        // Round 40 — the store's sign-in works only on its own phones and browsers: a new one is confirmed by a code.
+        const ask = r.error ? deviceAskOf(r.error) : null;
+        if (ask) return setState((s) => ({ ...s, busy: null, error: null, deviceAsk: { ...ask, email: mail } }));
         setState((s) => ({ ...s, busy: null, error: r.error }));
         return;
       }
@@ -521,6 +530,35 @@ export function useVendorApp() {
     },
     [enter],
   );
+
+  /** Round 40 — the code from the store's number, typed on this browser: it is one of the store's from now, and signed in. */
+  const confirmDevice = useCallback(
+    async (code: string) => {
+      const ask = stateRef.current.deviceAsk;
+      if (!ask) return;
+      setState((s) => ({ ...s, busy: 'signin', error: null }));
+      const r = await sbgConfirmDevice(vendorConfig(), ask.challenge, code.trim());
+      const data = r.data as unknown as VendorLoginView | undefined;
+      if (r.error || !data?.vendorId) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
+      saveShopDeviceKey(ask.email, data.device);
+      await enter(data.vendorId, data.token, ask.email);
+    },
+    [enter],
+  );
+
+  /** Round 40 — a store with no number yet gives one: the code goes to it. */
+  const giveDevicePhone = useCallback(async (phone: string) => {
+    const ask = stateRef.current.deviceAsk;
+    if (!ask) return;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    const r = await sbgDevicePhone(vendorConfig(), ask.challenge, phone);
+    if (r.error || !r.data) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
+    const sent = r.data;
+    setState((s) => ({ ...s, busy: null, deviceAsk: s.deviceAsk ? { ...s.deviceAsk, challenge: sent.challenge, sentTo: sent.sentTo, needsPhone: false, ...(sent.code ? { code: sent.code } : {}) } : null }));
+  }, []);
+
+  /** Back to the email and password: another store, or another try. */
+  const cancelDeviceAsk = useCallback(() => setState((s) => ({ ...s, deviceAsk: null, error: null })), []);
 
   /**
    * THE OLD DOOR, for a store that has set no account up yet: its store ID and signing secret, one last time. The
@@ -542,13 +580,16 @@ export function useVendorApp() {
     [enter],
   );
 
-  const register = useCallback(async (name: string, country: string, address: string, email: string, password: string) => {
+  const register = useCallback(async (name: string, country: string, address: string, email: string, password: string, ownerPhone: string) => {
     setState((s) => ({ ...s, busy: 'register', error: null }));
-    const r = await vendorRegister({ name: name.trim(), country: country.trim() || undefined, address: address.trim() || undefined, email: email.trim().toLowerCase(), password });
+    const mail = email.trim().toLowerCase();
+    // Round 40 — with its number, verified by its code: the browser it is made on is the store's first.
+    const r = await vendorRegister({ name: name.trim(), country: country.trim() || undefined, address: address.trim() || undefined, email: mail, password, ownerPhone });
     if (r.error) {
       setState((s) => ({ ...s, busy: null, error: r.error }));
       return;
     }
+    saveShopDeviceKey(mail, r.data?.device);
     // The secret is on screen ONCE, for the store's own systems. It is not how anybody signs in, and it is not kept here.
     setState((s) => ({ ...s, busy: null, registered: r.data }));
   }, []);
@@ -1299,6 +1340,12 @@ export function useVendorApp() {
     };
   }, [client, creds, refresh]);
 
+  /** Round 40 — the store's own phones and browsers, in Settings: read and forgotten as a shop's are. */
+  const storeDevices = useMemo(
+    () => (client ? shopDevicesApi((path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'store') : undefined),
+    [client],
+  );
+
   return {
     state,
     // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
@@ -1321,6 +1368,10 @@ export function useVendorApp() {
       queryLedger,
       exportLedger,
       signIn,
+      confirmDevice,
+      giveDevicePhone,
+      cancelDeviceAsk,
+      storeDevices,
       signInWithSecret,
       register,
       adoptRegistration,

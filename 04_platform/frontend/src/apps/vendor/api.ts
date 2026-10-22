@@ -30,8 +30,9 @@ export function vendorConfig(): SbgConfig {
 /* ------------------------------------------------------------- public auth -- */
 
 /** @Public vendors/session — the store's ACCOUNT: an email and a password. How a store signs in. */
-export function vendorSession(email: string, password: string): Promise<Result<VendorLoginView>> {
-  return publicRequest<VendorLoginView>(vendorConfig(), '/v1/sbg/vendors/session', { body: { email, password } });
+export function vendorSession(email: string, password: string, device?: string): Promise<Result<VendorLoginView>> {
+  // Round 40 — a store's sign-in works only on its own phones and browsers: this one's key goes with it, when it has one.
+  return publicRequest<VendorLoginView>(vendorConfig(), '/v1/sbg/vendors/session', { body: { email, password, ...(device ? { device } : {}) } });
 }
 
 /**
@@ -58,6 +59,8 @@ export function vendorRegister(body: {
   callbackUrl?: string;
   email: string;
   password: string;
+  /** Round 40 — the store's number, verified by its code: new phones and browsers are confirmed by a code to it. */
+  ownerPhone?: string;
 }): Promise<Result<VendorRegisteredView>> {
   return publicRequest<VendorRegisteredView>(vendorConfig(), '/v1/sbg/vendors', { body });
 }
