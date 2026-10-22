@@ -5,6 +5,8 @@ import { HELP_ROLES, MOST_ASKED, alphabetical, articlePath, forRole, helpPageOf,
 import { HelpScreen } from './screens/HelpScreen';
 import { pieces } from './helpText';
 import { HELP_GROUPS } from '../../shared/guide/articles';
+import { FAQ, FAQ_GROUPS } from './screens/WelcomeScreen';
+import { t } from '../../shared/i18n';
 import { TOPICS } from './screens/ContactScreen';
 
 /*
@@ -89,6 +91,17 @@ describe('the help centre', () => {
     }
     // Every heading is used: a reader's help is never under one heading alone.
     for (const g of HELP_GROUPS) expect(all.some((a) => a.group === g), g).toBe(true);
+  });
+
+  it('answers every front-page question on its own, and never promises a text about a parcel', () => {
+    expect(FAQ.length).toBe(FAQ_GROUPS.reduce((n, g) => n + g.items.length, 0));
+    for (const [, a] of FAQ) {
+      // Quoted alone — by an AI assistant, or a friend — an answer must not lean on the page around it.
+      expect(t(a), a).not.toMatch(/this page|above|below/i);
+      // The user, 2026-10-11: a receiver is not texted.
+      expect(t(a), a).not.toMatch(/code by (message|text|SMS)|we text you/i);
+    }
+    for (const g of FAQ_GROUPS) expect(g.more.startsWith('/help/'), g.key).toBe(true);
   });
 
   it('marks what the reader must find: a quoted button as a chip, a quoted route as a path', () => {

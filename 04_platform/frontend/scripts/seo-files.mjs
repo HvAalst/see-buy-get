@@ -81,7 +81,7 @@ writeFileSync(
     '## How it works',
     '- See the price first: choose the shop to send from and the shop to collect at; no account is needed.',
     '- Drop the parcel at the sending shop and pay there. It is photographed at drop-off.',
-    '- The receiver gets a code by message and collects the parcel at the chosen shop with it. Nobody without the code can collect it.',
+    '- The receiver finds the parcel and its collection code in the Send app, on the phone number it was sent to (SeeBuyGet sends no text about a parcel), and collects it at the chosen shop with the code. Nobody without the code can collect it.',
     '- Shops and drivers are ID-checked. A consignment note can be checked for authenticity on the front page.',
     '',
     '## Pages',

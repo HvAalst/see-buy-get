@@ -194,14 +194,23 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
         <h2 class="land__h2" id="land-faq">
           {t('home.landing.faqTitle')}
         </h2>
-        <div class="land__faq">
-          {FAQ.map(([q, a]) => (
-            <details key={q} class="land__qa">
-              <summary class="land__q">{t(q)}</summary>
-              <p class="land__a">{t(a)}</p>
-            </details>
-          ))}
-        </div>
+        {FAQ_GROUPS.map((g) => (
+          <div key={g.key} class="land__faqgroup">
+            <h3 class="land__h3">{t(g.title)}</h3>
+            <div class="land__faq">
+              {g.items.map(([q, a]) => (
+                <details key={q} class="land__qa">
+                  <summary class="land__q">{t(q)}</summary>
+                  <p class="land__a">{t(a)}</p>
+                </details>
+              ))}
+            </div>
+            <a class="land__link" href={g.more}>
+              {t(g.moreLabel)}
+              <Icon name="chevronRight" size={18} />
+            </a>
+          </div>
+        ))}
       </section>
 
       <footer class="land__foot">
@@ -234,17 +243,41 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
   );
 }
 
-/** The questions, in the order people ask them. The same pairs go into the page's FAQ structured data. */
-export const FAQ: ReadonlyArray<readonly [MessageKey, MessageKey]> = [
-  ['home.landing.faq1q', 'home.landing.faq1a'],
-  ['home.landing.faq2q', 'home.landing.faq2a'],
-  ['home.landing.faq3q', 'home.landing.faq3a'],
-  ['home.landing.faq4q', 'home.landing.faq4a'],
-  ['home.landing.faq5q', 'home.landing.faq5a'],
-  ['home.landing.faq6q', 'home.landing.faq6a'],
-  ['home.landing.faq7q', 'home.landing.faq7a'],
-  ['home.landing.faq8q', 'home.landing.faq8a'],
+/**
+ * The questions, grouped by who asks them (2026-10-22: the FAQ tidied) and in the order they ask. Every answer stands
+ * alone — an AI assistant quotes one answer, not the page around it — and each group leads on to that reader's help.
+ */
+export const FAQ_GROUPS: ReadonlyArray<{ key: string; title: MessageKey; more: string; moreLabel: MessageKey; items: ReadonlyArray<readonly [MessageKey, MessageKey]> }> = [
+  {
+    key: 'send',
+    title: 'home.landing.faqGroup.send',
+    more: '/help/?for=send',
+    moreLabel: 'home.landing.faqMore.send',
+    items: [
+      ['home.landing.faq1q', 'home.landing.faq1a'],
+      ['home.landing.faq2q', 'home.landing.faq2a'],
+      ['home.landing.faq3q', 'home.landing.faq3a'],
+      ['home.landing.faq4q', 'home.landing.faq4a'],
+      ['home.landing.faq5q', 'home.landing.faq5a'],
+      ['home.landing.faq6q', 'home.landing.faq6a'],
+    ],
+  },
+  {
+    key: 'earn',
+    title: 'home.landing.faqGroup.earn',
+    more: '/help/?for=shop',
+    moreLabel: 'home.landing.faqMore.earn',
+    items: [
+      ['home.landing.faq7q', 'home.landing.faq7a'],
+      ['home.landing.faq9q', 'home.landing.faq9a'],
+    ],
+  },
+  { key: 'stores', title: 'home.landing.faqGroup.stores', more: '/help/?for=store', moreLabel: 'home.landing.faqMore.stores', items: [['home.landing.faq10q', 'home.landing.faq10a']] },
+  { key: 'safe', title: 'home.landing.faqGroup.safe', more: '/help/', moreLabel: 'home.landing.faqMore.safe', items: [['home.landing.faq8q', 'home.landing.faq8a']] },
 ];
+
+/** Every question, in that order — what the page's FAQ structured data carries. */
+export const FAQ: ReadonlyArray<readonly [MessageKey, MessageKey]> = FAQ_GROUPS.flatMap((g) => g.items);
 
 /** One way to work with the network: its picture, its promise, and the door. */
 function RoleCard({ role, onGo }: { role: RoleSpec; onGo: (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => void }) {

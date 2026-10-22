@@ -437,6 +437,14 @@
 
 /* -------------------------------------------------------------------- faq -- */
 
+.land__faqgroup {
+  margin-top: 24px;
+}
+
+.land__faqgroup .land__h3 {
+  margin: 0;
+}
+
 .land__faq {
   margin-top: 12px;
   border-top: 1px solid var(--bd-soft);
