@@ -13,23 +13,38 @@ export type GuideApp = 'agent' | 'mdp' | 'fleet' | 'driver' | 'vendor' | 'send' 
 /** The apps a reader outside SeeBuyGet's staff is in. */
 export type PublicApp = Exclude<GuideApp, 'console'>;
 
+/** The task heading an article sits under for its reader (the review, 2026-10-22: "split by audience, then by task"). */
+export type HelpGroup = 'start' | 'daily' | 'freight' | 'wrong' | 'account';
+export const HELP_GROUPS: readonly HelpGroup[] = ['start', 'daily', 'freight', 'wrong', 'account'];
+
+/**
+ * What a note is, and so how it is drawn: worth reading in full (`note`), a warning (`careful`, a red edge), the reason
+ * behind it (`why`, folded away), or for few readers (`rare`, folded away).
+ */
+export type NoteKind = 'note' | 'careful' | 'why' | 'rare';
+
 export interface GuideArticle {
   /** Stable: it is the address, /help/<id>/. */
   id: string;
   /** The apps that show it. */
   apps: GuideApp[];
+  /** Its task heading. Every public article has one; the staff's own (staff-articles.ts) do not need one. */
+  group?: HelpGroup;
   title: string;
   summary: string;
   steps?: string[];
   notes?: string[];
+  /** What each note is, in order: as many as there are notes. */
+  noteKinds?: NoteKind[];
 }
 
-/** An article's shape: its words are help.<id>.* in the catalog. */
+/** An article's shape: its words are help.<id>.* in the catalog; `notes` says what each of its notes is, in order. */
 interface ArticleSpec {
   id: string;
   apps: GuideApp[];
+  group: HelpGroup;
   steps?: number;
-  notes?: number;
+  notes?: NoteKind[];
 }
 
 /** What readers call each app — the help's own names for them. */
@@ -45,63 +60,63 @@ export const GUIDE_APPS: Record<PublicApp, MessageKey> = {
 };
 
 export const ARTICLE_SPECS: ArticleSpec[] = [
-  { id: 'which-sign-in', apps: ['home'], steps: 6 },
-  { id: 'shop-sign-in', apps: ['agent', 'mdp'], steps: 7 },
-  { id: 'people-at-work', apps: ['agent', 'mdp'], steps: 4, notes: 1 },
-  { id: 'risk-register', apps: ['agent', 'mdp', 'console'], steps: 3, notes: 1 },
-  { id: 'security-declaration', apps: ['agent', 'mdp', 'fleet', 'driver', 'console'], steps: 3, notes: 1 },
-  { id: 'new-partner-limit', apps: ['agent', 'driver', 'console'], steps: 4, notes: 1 },
-  { id: 'shop-papers', apps: ['agent'], steps: 5, notes: 2 },
-  { id: 'hub-papers', apps: ['mdp'], steps: 5, notes: 2 },
-  { id: 'change-password', apps: ['agent', 'mdp'], steps: 2, notes: 2 },
-  { id: 'fleet-sign-in', apps: ['fleet'], steps: 5, notes: 2 },
-  { id: 'fleet-code', apps: ['fleet', 'console'], steps: 3, notes: 1 },
-  { id: 'fleet-roster', apps: ['fleet'], steps: 4, notes: 6 },
-  { id: 'driver-sign-in', apps: ['driver'], steps: 4, notes: 6 },
-  { id: 'driver-fleet', apps: ['driver'], steps: 3, notes: 6 },
-  { id: 'change-pin', apps: ['fleet', 'driver', 'send'], steps: 3, notes: 7 },
-  { id: 'who-you-contract-with', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'business'], steps: 4, notes: 3 },
-  { id: 'account-recovery', apps: ['fleet', 'driver', 'send'], steps: 5, notes: 23 },
-  { id: 'store-sign-in', apps: ['vendor'], steps: 10 },
-  { id: 'store-secret', apps: ['vendor'], steps: 4, notes: 3 },
-  { id: 'api-keys', apps: ['vendor'], steps: 3, notes: 1 },
-  { id: 'send-sign-in', apps: ['send', 'home'], steps: 5 },
-  { id: 'follow-shop-order', apps: ['send', 'vendor'], steps: 3, notes: 3 },
-  { id: 'business-sign-in', apps: ['business', 'home'], steps: 5 },
-  { id: 'business-people', apps: ['business'], steps: 4 },
-  { id: 'business-check', apps: ['business', 'console'], steps: 2, notes: 1 },
-  { id: 'business-bell', apps: ['business'], steps: 3, notes: 3 },
-  { id: 'business-loads', apps: ['business'], steps: 4, notes: 3 },
-  { id: 'business-note', apps: ['business'], steps: 4, notes: 7 },
-  { id: 'business-runs', apps: ['business'], steps: 4 },
-  { id: 'business-contracts', apps: ['business'], steps: 3, notes: 9 },
-  { id: 'business-clients', apps: ['business'], steps: 4, notes: 1 },
-  { id: 'quotations', apps: ['business', 'console'], steps: 4, notes: 1 },
-  { id: 'shop-shelves', apps: ['agent'], steps: 5, notes: 5 },
-  { id: 'message-shop', apps: ['send', 'agent'], steps: 3, notes: 1 },
-  { id: 'parcel-problem', apps: ['send', 'agent', 'vendor', 'console'], steps: 5, notes: 8 },
-  { id: 'thermal-labels', apps: ['agent', 'vendor', 'business'], steps: 4, notes: 2 },
-  { id: 'bag-seals', apps: ['agent', 'mdp', 'driver', 'vendor', 'console'], steps: 8, notes: 1 },
-  { id: 'held-on-the-road', apps: ['driver', 'business', 'console'], steps: 4, notes: 1 },
-  { id: 'load-seals', apps: ['business'], steps: 5, notes: 2 },
-  { id: 'tampering', apps: ['driver', 'agent', 'mdp', 'console'], steps: 5, notes: 2 },
-  { id: 'scan-a-parcel', apps: ['agent', 'mdp'], steps: 4, notes: 1 },
-  { id: 'gs1-codes', apps: ['vendor', 'business'], steps: 4, notes: 2 },
-  { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], steps: 6, notes: 2 },
-  { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], steps: 4, notes: 7 },
-  { id: 'freight-delivery', apps: ['agent', 'driver'], steps: 5, notes: 3 },
-  { id: 'sender-instructions', apps: ['agent', 'driver', 'fleet'], steps: 4, notes: 1 },
-  { id: 'freight-tracking', apps: ['agent', 'send'], steps: 3, notes: 3 },
-  { id: 'manager-dispatch', apps: ['fleet', 'driver'], steps: 3, notes: 1 },
-  { id: 'fleet-orders', apps: ['fleet'], steps: 4, notes: 2 },
-  { id: 'fleet-order-sheet', apps: ['fleet'], steps: 5, notes: 3 },
-  { id: 'fleet-plan', apps: ['fleet'], steps: 8, notes: 10 },
-  { id: 'fleet-plan-adviser', apps: ['fleet'], steps: 6, notes: 5 },
-  { id: 'fleet-partners', apps: ['fleet'], steps: 8, notes: 4 },
-  { id: 'papers-that-expire', apps: ['fleet', 'driver', 'console'], steps: 6, notes: 3 },
-  { id: 'hand-back', apps: ['driver', 'agent', 'fleet'], steps: 4, notes: 1 },
-  { id: 'hours-of-service', apps: ['driver', 'fleet'], steps: 6, notes: 1 },
-  { id: 'when-to-change', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'home', 'console'], steps: 2, notes: 1 },
+  { id: 'which-sign-in', apps: ['home'], group: 'start', steps: 6 },
+  { id: 'shop-sign-in', apps: ['agent', 'mdp'], group: 'start', steps: 7 },
+  { id: 'people-at-work', apps: ['agent', 'mdp'], group: 'start', steps: 4, notes: ['careful'] },
+  { id: 'risk-register', apps: ['agent', 'mdp', 'console'], group: 'daily', steps: 3, notes: ['note'] },
+  { id: 'security-declaration', apps: ['agent', 'mdp', 'fleet', 'driver', 'console'], group: 'start', steps: 3, notes: ['note'] },
+  { id: 'new-partner-limit', apps: ['agent', 'driver', 'console'], group: 'daily', steps: 4, notes: ['why'] },
+  { id: 'shop-papers', apps: ['agent'], group: 'start', steps: 5, notes: ['note', 'note'] },
+  { id: 'hub-papers', apps: ['mdp'], group: 'start', steps: 5, notes: ['note', 'note'] },
+  { id: 'change-password', apps: ['agent', 'mdp'], group: 'account', steps: 2, notes: ['careful', 'careful'] },
+  { id: 'fleet-sign-in', apps: ['fleet'], group: 'start', steps: 5, notes: ['careful', 'why'] },
+  { id: 'fleet-code', apps: ['fleet', 'console'], group: 'start', steps: 3, notes: ['note'] },
+  { id: 'fleet-roster', apps: ['fleet'], group: 'start', steps: 4, notes: ['note', 'note', 'why', 'note', 'note', 'note'] },
+  { id: 'driver-sign-in', apps: ['driver'], group: 'start', steps: 4, notes: ['careful', 'careful', 'why', 'why', 'rare', 'rare'] },
+  { id: 'driver-fleet', apps: ['driver'], group: 'start', steps: 3, notes: ['note', 'why', 'note', 'note', 'note', 'note'] },
+  { id: 'change-pin', apps: ['fleet', 'driver', 'send'], group: 'account', steps: 3, notes: ['careful', 'note', 'careful', 'note', 'rare', 'careful', 'note'] },
+  { id: 'who-you-contract-with', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'business'], group: 'account', steps: 4, notes: ['note', 'why', 'rare'] },
+  { id: 'account-recovery', apps: ['fleet', 'driver', 'send'], group: 'account', steps: 5, notes: ['note', 'why', 'note', 'note', 'careful', 'rare', 'rare', 'rare', 'careful', 'rare', 'rare', 'rare', 'rare', 'rare', 'note', 'why', 'note', 'rare', 'why', 'note', 'careful', 'rare', 'note'] },
+  { id: 'store-sign-in', apps: ['vendor'], group: 'start', steps: 10 },
+  { id: 'store-secret', apps: ['vendor'], group: 'account', steps: 4, notes: ['note', 'note', 'careful'] },
+  { id: 'api-keys', apps: ['vendor'], group: 'account', steps: 3, notes: ['note'] },
+  { id: 'send-sign-in', apps: ['send', 'home'], group: 'start', steps: 5 },
+  { id: 'follow-shop-order', apps: ['send', 'vendor'], group: 'start', steps: 3, notes: ['note', 'note', 'why'] },
+  { id: 'business-sign-in', apps: ['business', 'home'], group: 'start', steps: 5 },
+  { id: 'business-people', apps: ['business'], group: 'start', steps: 4 },
+  { id: 'business-check', apps: ['business', 'console'], group: 'start', steps: 2, notes: ['note'] },
+  { id: 'business-bell', apps: ['business'], group: 'daily', steps: 3, notes: ['note', 'rare', 'note'] },
+  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note'] },
+  { id: 'business-note', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'note', 'note', 'note', 'why', 'rare', 'rare'] },
+  { id: 'business-runs', apps: ['business'], group: 'freight', steps: 4 },
+  { id: 'business-contracts', apps: ['business'], group: 'freight', steps: 3, notes: ['why', 'note', 'rare', 'note', 'note', 'why', 'note', 'note', 'rare'] },
+  { id: 'business-clients', apps: ['business'], group: 'freight', steps: 4, notes: ['note'] },
+  { id: 'quotations', apps: ['business', 'console'], group: 'freight', steps: 4, notes: ['why'] },
+  { id: 'shop-shelves', apps: ['agent'], group: 'start', steps: 5, notes: ['note', 'note', 'why', 'note', 'note'] },
+  { id: 'message-shop', apps: ['send', 'agent'], group: 'daily', steps: 3, notes: ['careful'] },
+  { id: 'parcel-problem', apps: ['send', 'agent', 'vendor', 'console'], group: 'wrong', steps: 5, notes: ['why', 'why', 'why', 'note', 'note', 'note', 'why', 'note'] },
+  { id: 'thermal-labels', apps: ['agent', 'vendor', 'business'], group: 'daily', steps: 4, notes: ['note', 'why'] },
+  { id: 'bag-seals', apps: ['agent', 'mdp', 'driver', 'vendor', 'console'], group: 'daily', steps: 8, notes: ['note'] },
+  { id: 'held-on-the-road', apps: ['driver', 'business', 'console'], group: 'wrong', steps: 4, notes: ['note'] },
+  { id: 'load-seals', apps: ['business'], group: 'freight', steps: 5, notes: ['why', 'note'] },
+  { id: 'tampering', apps: ['driver', 'agent', 'mdp', 'console'], group: 'wrong', steps: 5, notes: ['note', 'why'] },
+  { id: 'scan-a-parcel', apps: ['agent', 'mdp'], group: 'daily', steps: 4, notes: ['why'] },
+  { id: 'gs1-codes', apps: ['vendor', 'business'], group: 'start', steps: 4, notes: ['why', 'note'] },
+  { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 6, notes: ['careful', 'why'] },
+  { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['why', 'careful', 'note', 'note', 'note', 'note', 'rare'] },
+  { id: 'freight-delivery', apps: ['agent', 'driver'], group: 'freight', steps: 5, notes: ['note', 'why', 'note'] },
+  { id: 'sender-instructions', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['note'] },
+  { id: 'freight-tracking', apps: ['agent', 'send'], group: 'freight', steps: 3, notes: ['why', 'note', 'note'] },
+  { id: 'manager-dispatch', apps: ['fleet', 'driver'], group: 'freight', steps: 3, notes: ['why'] },
+  { id: 'fleet-orders', apps: ['fleet'], group: 'freight', steps: 4, notes: ['note', 'note'] },
+  { id: 'fleet-order-sheet', apps: ['fleet'], group: 'freight', steps: 5, notes: ['note', 'note', 'note'] },
+  { id: 'fleet-plan', apps: ['fleet'], group: 'freight', steps: 8, notes: ['why', 'note', 'note', 'why', 'note', 'note', 'why', 'why', 'note', 'note'] },
+  { id: 'fleet-plan-adviser', apps: ['fleet'], group: 'freight', steps: 6, notes: ['note', 'note', 'note', 'note', 'why'] },
+  { id: 'fleet-partners', apps: ['fleet'], group: 'freight', steps: 8, notes: ['note', 'note', 'note', 'rare'] },
+  { id: 'papers-that-expire', apps: ['fleet', 'driver', 'console'], group: 'account', steps: 6, notes: ['why', 'why', 'rare'] },
+  { id: 'hand-back', apps: ['driver', 'agent', 'fleet'], group: 'freight', steps: 4, notes: ['note'] },
+  { id: 'hours-of-service', apps: ['driver', 'fleet'], group: 'freight', steps: 6, notes: ['why'] },
+  { id: 'when-to-change', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'home', 'console'], group: 'account', steps: 2, notes: ['careful'] },
 ];
 
 const key = (id: string, part: string) => `help.${id}.${part}` as MessageKey;
@@ -110,8 +125,8 @@ const count = (n: number | undefined, id: string, part: 'step' | 'note', t: Tran
 /** One article, in the reader's language. */
 export function articleOf(spec: ArticleSpec, t: Translate = translate): GuideArticle {
   const steps = count(spec.steps, spec.id, 'step', t);
-  const notes = count(spec.notes, spec.id, 'note', t);
-  return { id: spec.id, apps: spec.apps, title: t(key(spec.id, 'title')), summary: t(key(spec.id, 'summary')), ...(steps ? { steps } : {}), ...(notes ? { notes } : {}) };
+  const notes = count(spec.notes?.length, spec.id, 'note', t);
+  return { id: spec.id, apps: spec.apps, group: spec.group, title: t(key(spec.id, 'title')), summary: t(key(spec.id, 'summary')), ...(steps ? { steps } : {}), ...(notes ? { notes, noteKinds: spec.notes } : {}) };
 }
 
 /** Every public article, in the reader's language. */

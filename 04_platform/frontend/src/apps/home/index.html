@@ -7,8 +7,15 @@
          build time, from the same catalogue the page uses — one source, so they cannot drift apart. -->
     <title>SeeBuyGet — send, collect and earn without an address</title>
 
-    <!-- Light only: this app never renders a dark variant. -->
+    <!-- Light only: this app never renders a dark variant — except the help (/help/), whose reader may switch it to dark
+         (help.css). Their choice is set here, before the page paints, so a dark page never flashes white first. -->
     <meta name="color-scheme" content="light" />
+    <script>
+      try {
+        var p = location.pathname;
+        if ((p === '/help' || p.indexOf('/help/') === 0) && localStorage.getItem('sbg-help-theme') === 'dark') document.documentElement.dataset.helpTheme = 'dark';
+      } catch (e) {}
+    </script>
     <!-- The app's OWN top surface, not a brand colour. In standalone this paints the status bar
          directly above a white TopBar: a band of orange or indigo there would read as chrome, and would
          make orange mean "chrome" in a system where orange means "this one is chosen". The identity

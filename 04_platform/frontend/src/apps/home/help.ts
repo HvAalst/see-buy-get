@@ -1,5 +1,5 @@
 import type { MessageKey } from '../../shared/i18n';
-import type { GuideApp, GuideArticle } from '../../shared/guide/articles';
+import { HELP_GROUPS, type GuideApp, type GuideArticle, type HelpGroup } from '../../shared/guide/articles';
 
 /**
  * THE HELP CENTRE'S LOGIC — /help/, /help/<article>/ and /help/contact/ on the front door (the user, 2026-10-22: help in
@@ -86,6 +86,23 @@ export function relatedOf(article: GuideArticle, list: GuideArticle[], n = 4): G
     .sort((x, y) => x.d - y.d)
     .slice(0, n)
     .map((x) => x.a);
+}
+
+/**
+ * A reader's articles under their task headings, in the help's order of headings and by title within each (the review,
+ * 2026-10-22: "split by audience, then by task"). A heading with nothing under it is left out.
+ */
+export function byGroup(list: GuideArticle[], locale: string): Array<[HelpGroup, GuideArticle[]]> {
+  return HELP_GROUPS.map((g) => [g, alphabetical(list.filter((a) => (a.group ?? 'daily') === g), locale)] as [HelpGroup, GuideArticle[]]).filter(([, l]) => l.length > 0);
+}
+
+/** Whose help an article is first: the reader of the first app it is shown in. A side list needs one. */
+export function roleOfArticle(a: GuideArticle): HelpRole {
+  for (const app of a.apps) {
+    const r = HELP_ROLES.find((x) => x.apps.includes(app));
+    if (r) return r.role;
+  }
+  return 'send';
 }
 
 /** Every article, by title in the reader's language — the index's full list, which also lets a crawler find each page. */

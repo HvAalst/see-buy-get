@@ -53,6 +53,9 @@ export function App() {
               ? t('help.ui.title')
               : undefined;
 
+  // The help is a reading page of its own (help.css): its own top bar, its own look — not inside the app's.
+  if (state.screen === 'help' && state.helpPage) return <HelpScreen page={state.helpPage} />;
+
   return (
     <div class="app">
       <TopBar
@@ -116,7 +119,6 @@ export function App() {
         {state.screen === 'report' && state.reportKey !== undefined ? <DamageReportLinkPage linkKey={state.reportKey} look={lookAtReportLink} take={takeReportLink} /> : null}
         {state.screen === 'welcome' ? <WelcomeScreen actions={actions} /> : null}
         {state.screen === 'town' && state.townSlug ? <TownScreen slug={state.townSlug} /> : null}
-        {state.screen === 'help' && state.helpPage ? <HelpScreen page={state.helpPage} /> : null}
       </main>
     </div>
   );

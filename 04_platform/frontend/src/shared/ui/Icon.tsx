@@ -47,7 +47,10 @@ export type IconName =
   | 'settings'
   | 'mail'
   | 'phone'
-  | 'info';
+  | 'info'
+  // The help's light-or-dark switch (2026-10-22).
+  | 'moon'
+  | 'sun';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chevronRight: <path d="m9 5 7 7-7 7" />,
@@ -160,6 +163,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   filter: <path d="M4 7h11m3 0h2M4 17h2m3 0h11M14 4.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8ZM7 14.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8Z" />,
+  moon: <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
+    </>
+  ),
 
   /* --- symbols an error presentation can ask for (ErrorIconName) ----------- */
 

@@ -26,7 +26,7 @@ describe('help, in the apps and at /help/', () => {
   it('has every word of every article in the catalog, and no word in the catalog no article has', () => {
     const wanted = new Set<string>();
     for (const s of ARTICLE_SPECS) {
-      for (const part of ['title', 'summary', ...Array.from({ length: s.steps ?? 0 }, (_, i) => `step${i + 1}`), ...Array.from({ length: s.notes ?? 0 }, (_, i) => `note${i + 1}`)]) wanted.add(`help.${s.id}.${part}`);
+      for (const part of ['title', 'summary', ...Array.from({ length: s.steps ?? 0 }, (_, i) => `step${i + 1}`), ...Array.from({ length: s.notes?.length ?? 0 }, (_, i) => `note${i + 1}`)]) wanted.add(`help.${s.id}.${part}`);
     }
     for (const k of wanted) expect(k in en, k).toBe(true);
     const articleKeys = Object.keys(enHelp).filter((k) => !/^help\.(ui|app|contact)\./.test(k));

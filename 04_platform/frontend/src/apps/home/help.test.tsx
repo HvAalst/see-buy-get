@@ -3,6 +3,8 @@ import { renderToString } from 'preact-render-to-string';
 import { articles } from '../../shared/guide/articles';
 import { HELP_ROLES, MOST_ASKED, alphabetical, articlePath, forRole, helpPageOf, relatedOf, roleOf, searchArticles } from './help';
 import { HelpScreen } from './screens/HelpScreen';
+import { pieces } from './helpText';
+import { HELP_GROUPS } from '../../shared/guide/articles';
 import { TOPICS } from './screens/ContactScreen';
 
 /*
@@ -61,9 +63,40 @@ describe('the help centre', () => {
   it('builds an article’s page with its own words, a way back, and a way to write to us about it', () => {
     const html = renderToString(<HelpScreen page={{ kind: 'article', id: 'change-pin' }} />);
     const a = all.find((x) => x.id === 'change-pin')!;
-    for (const step of a.steps ?? []) expect(html).toContain(step.replace(/&/g, '&amp;').replace(/"/g, '&quot;').slice(0, 40));
+    const text = html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    // Every step and note is on the page, in its words — chips and paths drawn without their quotation marks.
+    for (const s of [...(a.steps ?? []), ...(a.notes ?? [])]) expect(text, s).toContain(s.replace(/[“”]/g, '').replace(/ › /g, '›').slice(0, 30).replace(/›/g, '›'.normalize()).split('›')[0].trim().slice(0, 20));
+    expect((html.match(/<li><p>/g) ?? []).length).toBe(a.steps?.length ?? 0);
     expect(html).toContain('href="/help/"');
     expect(html).toContain('/help/contact/?about=change-pin');
+    // The reader's other articles, under their task headings, beside it; the steps' numbers are the page's own.
+    expect(html).toContain('class="hc__side');
+    expect(html).toContain('aria-current="page"');
+  });
+
+  it('draws a careful note as a warning, and folds the why and the rare cases away', () => {
+    const a = all.find((x) => (x.noteKinds ?? []).includes('careful') && (x.noteKinds ?? []).includes('why'))!;
+    expect(a).toBeDefined();
+    const html = renderToString(<HelpScreen page={{ kind: 'article', id: a.id }} />);
+    expect(html).toContain('hc__call--careful');
+    expect(html).toMatch(/<details class="hc__fold" id="why">/);
+  });
+
+  it('gives every public article a task heading and a kind for every note', () => {
+    for (const a of all) {
+      expect(HELP_GROUPS, a.id).toContain(a.group);
+      expect((a.noteKinds ?? []).length, a.id).toBe((a.notes ?? []).length);
+    }
+    // Every heading is used: a reader's help is never under one heading alone.
+    for (const g of HELP_GROUPS) expect(all.some((a) => a.group === g), g).toBe(true);
+  });
+
+  it('marks what the reader must find: a quoted button as a chip, a quoted route as a path', () => {
+    expect(pieces('Tap “Sign in” now.')).toEqual([{ kind: 'text', text: 'Tap ' }, { kind: 'ui', text: 'Sign in' }, { kind: 'text', text: ' now.' }]);
+    expect(pieces('Open “Home › Shop settings › Password”, then type it.')).toEqual([{ kind: 'text', text: 'Open ' }, { kind: 'path', steps: ['Home', 'Shop settings', 'Password'] }, { kind: 'text', text: ', then type it.' }]);
+    // Other languages' quotation marks are read the same way.
+    expect(pieces('Gusa «Ingia».')[1]).toEqual({ kind: 'ui', text: 'Ingia' });
+    expect(pieces('Nothing to mark here.')).toEqual([{ kind: 'text', text: 'Nothing to mark here.' }]);
   });
 
   it('builds the index with every article linked, so a crawler finds each page from it', () => {
