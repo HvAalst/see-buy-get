@@ -1,4 +1,5 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
+import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
 import { SettingsSheet } from '../../../shared/account/SettingsSheet';
 import type { AccountApi } from '../../../shared/account/useAccount';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -129,6 +130,7 @@ export function AccountScreen({ state, actions, account }: AccountScreenProps) {
 
       <div class="scr__foot">
         <HelpLink app="send" />
+        <AllAppsLink />
       </div>
 
       <Card>

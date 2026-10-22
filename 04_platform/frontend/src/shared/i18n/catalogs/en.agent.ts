@@ -8,7 +8,7 @@
  */
 export const enAgent = {
   // Shared within the shop app (reused across screens).
-  'agent.appTitle': 'Agent',
+  'agent.appTitle': 'Shop',
   // The top bar's LIVE line — the two piles a counter has to clear. Closed stands alone.
   'agent.bar.closed': 'Closed — not taking parcels',
   'agent.bar.handOver': '{count} to hand over',

@@ -1,4 +1,5 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
+import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
@@ -95,6 +96,7 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
           {t('mdp.signin.forgot')}
         </Button>
         <HelpLink app="mdp" label="signin" />
+        <AllAppsLink />
         <Button variant="link" full={false} onClick={() => setAsStaff(true)}>
           {t('mdp.staff.entry')}
         </Button>

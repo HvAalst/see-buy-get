@@ -278,6 +278,7 @@ export const en = {
   'companyKeys.revoked': 'Taken away by {name}, {when}. It no longer works.',
   'common.close': 'Close',
   'common.back': 'Back',
+  'common.allApps': 'All SeeBuyGet apps',
   'common.done': 'Done',
   'common.save': 'Save',
   'common.skip': 'Skip',

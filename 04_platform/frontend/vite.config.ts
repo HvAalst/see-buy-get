@@ -36,7 +36,12 @@ declare const process: { env: Record<string, string | undefined> };
 type AppSpec = {
   /** Deploy path. Baked into manifest scope/start_url and the SW registration URL. */
   base: string;
-  /** Full manifest name; `short_name` is this minus the "SeeBuyGet " prefix. */
+  /**
+   * Full manifest name — the install dialog and the app switcher, where there is room. `short` is the label under the
+   * icon on a home screen, which phones cut at about twelve characters: "SBG Send", never "SeeBuyGet Send", or every app
+   * would read "SeeBuyGet…" and look the same (the user, 2026-10-22: "we need a distinction ... the text under has to
+   * change"). The icon's glyph says which app; the label adds whose it is.
+   */
   name: string;
   short: string;
   description: string;
@@ -82,15 +87,16 @@ const APPS = {
   driver: {
     base: '/driver/',
     name: 'SeeBuyGet Driver',
-    short: 'Driver',
+    short: 'SBG Driver',
     description: 'Claim, load and deliver work on the SeeBuyGet network.',
     devPort: 5173,
     previewPort: 5174,
   },
   agent: {
     base: '/agent/',
-    name: 'SeeBuyGet Agent',
-    short: 'Agent',
+    // The Shop app: what the front door and the app itself call it (its folder keeps the older name, agent).
+    name: 'SeeBuyGet Shop',
+    short: 'SBG Shop',
     description: 'Run a SeeBuyGet pickup and drop-off point.',
     devPort: 5175,
     previewPort: 5185,
@@ -98,7 +104,7 @@ const APPS = {
   genesis: {
     base: '/send/',
     name: 'SeeBuyGet Send',
-    short: 'Send',
+    short: 'SBG Send',
     description: 'Send a parcel on the SeeBuyGet network.',
     devPort: 5176,
     previewPort: 5186,
@@ -106,7 +112,7 @@ const APPS = {
   fleet: {
     base: '/fleet/',
     name: 'SeeBuyGet Fleet',
-    short: 'Fleet',
+    short: 'SBG Fleet',
     description: 'Dispatch and follow a fleet on the SeeBuyGet network.',
     devPort: 5177,
     previewPort: 5187,
@@ -114,15 +120,16 @@ const APPS = {
   mdp: {
     base: '/mdp/',
     name: 'SeeBuyGet Hub',
-    short: 'Hub',
+    short: 'SBG Hub',
     description: 'Run a SeeBuyGet merchant distribution hub.',
     devPort: 5178,
     previewPort: 5188,
   },
   vendor: {
     base: '/vendor/',
-    name: 'SeeBuyGet Vendor',
-    short: 'Vendor',
+    // The Store app: what the front door and the app itself call it (its folder keeps the older name, vendor).
+    name: 'SeeBuyGet Store',
+    short: 'SBG Store',
     description: 'Mint and follow your store orders on the SeeBuyGet network.',
     devPort: 5179,
     previewPort: 5189,

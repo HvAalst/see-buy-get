@@ -1,4 +1,5 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
+import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
@@ -129,6 +130,7 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
         <Button variant="link" full={false} onClick={() => setBySecret(!bySecret)}>
           {t(bySecret ? 'vendor.signin.byEmail' : 'vendor.signin.bySecret')}
         </Button>
+        <AllAppsLink />
         <ReadAloud text={() => t('vendor.signin.spoken')} label={t('vendor.readAloud')} />
       </div>
 

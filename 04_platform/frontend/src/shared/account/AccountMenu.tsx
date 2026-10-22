@@ -7,6 +7,7 @@ import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { ExplainerReset } from '../ui/Explainer';
 import { HelpLink } from '../guide/HelpLink';
+import { AllAppsLink } from '../ui/AllAppsLink';
 import type { GuideApp } from '../guide/articles';
 import { SettingsSheet, hasSettings } from './SettingsSheet';
 import type { PinDevicesApi } from './devices';
@@ -173,6 +174,8 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
 
           <div class="acct__foot">
             <HelpLink app={app} />
+            {/* An installed app has no address bar: this is its way to the front door and the other apps. */}
+            <AllAppsLink />
             {/* Restoring dismissed teaching belongs to the person, not to a screen — and it renders
                 nothing at all when they have not put anything away. */}
             <ExplainerReset who={me?.personId} />
