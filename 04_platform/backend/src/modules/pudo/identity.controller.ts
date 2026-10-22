@@ -128,7 +128,9 @@ export class IdentityController {
   @RateLimit(20, 15 * 60)
   @Post('email/request')
   emailRequest(@Body() dto: EmailCodeDto) {
-    const { code } = this.recovery.sendConfirmCode(dto.email);
+    const { code, review } = this.recovery.sendConfirmCode(dto.email);
+    // The review code is shown: everybody knows it, and nothing was mailed (foundation/runtime/review-code.ts).
+    if (review) return { sent: false, review, code };
     return isSandbox() ? { sent: true, code } : { sent: true };
   }
 

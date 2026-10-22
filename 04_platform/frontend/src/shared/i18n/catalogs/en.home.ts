@@ -384,7 +384,7 @@ export const enHome = {
   'home.join.code.lede': 'We sent it to {phone}.',
   'home.join.code.label': 'Your code',
   'home.join.code.boxLabel': 'The code sent to your phone',
-  'home.join.code.sandbox': 'Sandbox: your code is {code}',
+  'home.join.code.sandbox': 'Test mode — your code is {code}',
   'home.join.code.cta': 'Check the code',
 
   // Join wizard — step: about.

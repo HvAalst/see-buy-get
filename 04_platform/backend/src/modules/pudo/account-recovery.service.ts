@@ -5,6 +5,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { hashPhone } from '../../foundation/identity/phone';
 import { MailService } from '../../foundation/mail/mail.service';
+import { reviewCodeOn } from '../../foundation/runtime/review-code';
 import type { MailParams } from '../../foundation/mail/mail.templates';
 import { AccountService } from './account.service';
 import { AgentService } from './agent.service';
@@ -127,7 +128,11 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
    * Send a code to an address somebody says is theirs — to CONFIRM it. Returns the code so a sandbox can show it;
    * the controller decides whether anybody but the inbox sees it.
    */
-  sendConfirmCode(email: string): { code: string } {
+  sendConfirmCode(email: string): { code: string; review?: true } {
+    // The review code: mail cannot leave, the address belongs to nobody yet — 000000, mailed nowhere, shown by the caller.
+    if (reviewCodeOn() && !this.mail?.connection().sends && !this.persons.findByEmail(email)) {
+      return { code: this.emailCodes.request(email, Date.now(), { review: true }).code, review: true };
+    }
     const { code, minutes } = this.emailCodes.request(email);
     void this.mail?.send('email-code', { address: normalizeEmail(email) }, { code, minutes, why: 'confirm' });
     return { code };

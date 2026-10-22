@@ -475,7 +475,7 @@ export class AccountService implements OnApplicationBootstrap {
    * No phone is asked for: a store is a business with an inbox. Where its operator gave their number, the account
    * carries it, and the same person is one person across the apps.
    */
-  setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken; device?: string } {
+  setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string; phoneVerified?: boolean }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken; device?: string } {
     const email = this.checkNewAccount(input.email, input.password, input.name);
     if (this.emailForDid(input.did)) throw new GlosError('CONFLICT', 'This store already has an account: sign in with its email and password');
     const salt = randomBytes(16).toString('hex');
@@ -490,7 +490,8 @@ export class AccountService implements OnApplicationBootstrap {
       createdAt: new Date().toISOString(),
     };
     // Round 40 — a number verified at sign-up is where this store's codes go, and the phone or browser that signed up is its first.
-    const verified = Boolean(input.phone?.trim() && this.otp.isVerified(input.phone));
+    // `phoneVerified`: the caller read it before the store's person was made (pudo.controller registerVendor).
+    const verified = Boolean(input.phone?.trim() && (input.phoneVerified ?? this.otp.isVerified(input.phone)));
     if (verified) {
       this.keepCodePhone(account, input.phone!);
       this.otp.consume(input.phone!);

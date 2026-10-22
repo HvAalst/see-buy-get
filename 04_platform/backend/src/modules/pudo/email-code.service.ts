@@ -1,7 +1,9 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Optional } from '@nestjs/common';
 import { randomInt, timingSafeEqual } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MailService } from '../../foundation/mail/mail.service';
+import { REVIEW_CODE } from '../../foundation/runtime/review-code';
+import { PersonService } from './person.service';
 
 const CODE_TTL_MS = 15 * 60 * 1000;
 /** A confirmed address does not stay confirmed for ever — what it was confirmed FOR has to follow promptly. */
@@ -25,6 +27,8 @@ interface CodeEntry {
   code: string;
   expires: number;
   attempts: number;
+  /** The review code (000000), not one that was mailed: it may confirm a new address, never open an account. */
+  review?: boolean;
 }
 
 /**
@@ -45,24 +49,37 @@ export class EmailCodeService {
   private readonly verified = new Map<string, number>(); // address -> expiry
   private readonly rates = new Map<string, { lastAt: number; windowStart: number; count: number }>();
 
-  // Optional so the specs that build this with nothing keep compiling.
-  constructor(@Optional() private readonly mail?: MailService) {}
+  /** Addresses confirmed with the review code, not a mailed one. */
+  private readonly byReview = new Set<string>();
 
-  /** Make a code for this address. The caller mails it. */
-  request(email: string, now: number = Date.now()): { code: string; minutes: number } {
+  // Optional so the specs that build this with nothing keep compiling.
+  constructor(
+    @Optional() private readonly mail?: MailService,
+    // The review code's last guard reads it: an address somebody holds is never confirmed by 000000. A forward reference:
+    // person.service.ts imports this file (normalizeEmail), and without it this would be injected as nothing.
+    @Optional() @Inject(forwardRef(() => PersonService)) private readonly persons?: PersonService,
+  ) {}
+
+  /** Make a code for this address. The caller mails it — or, `review`, it is 000000 and mailed nowhere (the caller decides). */
+  request(email: string, now: number = Date.now(), opts: { review?: boolean } = {}): { code: string; minutes: number } {
     const e = normalizeEmail(email);
     if (!isPlausibleEmail(e)) throw new GlosError('VALIDATION_FAILED', 'Enter a valid email address', { field: 'email' });
     this.assertWithinRate(e, now);
-    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-    this.codes.set(e, { code, expires: now + CODE_TTL_MS, attempts: 0 });
+    const code = opts.review ? REVIEW_CODE : String(randomInt(0, 1_000_000)).padStart(6, '0');
+    this.codes.set(e, { code, expires: now + CODE_TTL_MS, attempts: 0, ...(opts.review ? { review: true } : {}) });
     return { code, minutes: CODE_TTL_MS / 60_000 };
+  }
+
+  /** An address held by somebody now, confirmed by the review code: proves nothing about them, so counts for nothing. */
+  private reviewVoid(e: string, review: boolean | undefined): boolean {
+    return Boolean(review) && (!this.persons || Boolean(this.persons.findByEmail(e)));
   }
 
   /** Check a code. Right: the address counts as confirmed for the next half hour. Five wrong: the code is burned. */
   verify(email: string, code: string, now: number = Date.now()): { verified: true } {
     const e = normalizeEmail(email);
     const entry = this.codes.get(e);
-    if (!entry || entry.expires < now) {
+    if (!entry || entry.expires < now || this.reviewVoid(e, entry.review)) {
       this.codes.delete(e);
       throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     }
@@ -76,6 +93,8 @@ export class EmailCodeService {
     }
     this.codes.delete(e);
     this.verified.set(e, now + VERIFIED_TTL_MS);
+    if (entry.review) this.byReview.add(e);
+    else this.byReview.delete(e);
     // Somebody read what we sent there: whatever came back from this address before, it works now.
     this.mail?.addressWorks(e);
     return { verified: true };
@@ -89,12 +108,14 @@ export class EmailCodeService {
       this.verified.delete(e);
       return false;
     }
+    if (this.byReview.has(e) && this.reviewVoid(e, true)) return false;
     return true;
   }
 
   /** One confirmation, one use. */
   consume(email: string): void {
     this.verified.delete(normalizeEmail(email));
+    this.byReview.delete(normalizeEmail(email));
   }
 
   private assertWithinRate(e: string, now: number): void {

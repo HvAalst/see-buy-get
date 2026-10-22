@@ -2398,11 +2398,14 @@ export const enTowerQueues = {
   'tower.conn.push.where':
     'The keys are set on the server as GLOS_VAPID_PUBLIC and GLOS_VAPID_PRIVATE; the private one is never shown, here or anywhere. Changing them ends every enrolment: each phone has to turn notifications on again.',
   'tower.conn.tag.noCodes': 'No code can be sent',
+  'tower.conn.tag.reviewCode': 'Review code 000000',
   'tower.conn.tag.smsLimit': 'Asked to slow down',
   'tower.conn.tag.smsRejected': 'One number turned down',
   'tower.conn.sms.title': 'Text messages',
   'tower.conn.sms.kept':
     'No text leaves this server. A code is handed back to the app that asked for it and shown on its screen; the text that would have carried it is kept here — {n} since it started. That is how a sandbox is meant to run.',
+  'tower.conn.sms.reviewLive':
+    'No text leaves this server, and the review code is on until the end of {until} (UTC): a NEW account’s number — and the recovery email a PIN asks for — is confirmed with 000000, shown on the screen. It never signs in to an account that exists: a new phone or browser, a new PIN or a payout number still wait for a real text. Not for real people: set Twilio, and remove GLOS_REVIEW_CODE_UNTIL.',
   'tower.conn.sms.keptLive':
     'No text leaves this server, and this is not a sandbox: a code has no other way to a phone. Nobody can sign up, confirm a new phone or browser, or replace a PIN — each is told the code could not be sent. Twilio’s account, a credential and what texts are sent from have to be set before this server is relied on.',
   'tower.conn.sms.problem.no_account': 'Something of Twilio’s is set and the account is not. Set TWILIO_ACCOUNT_SID, and restart the server.',

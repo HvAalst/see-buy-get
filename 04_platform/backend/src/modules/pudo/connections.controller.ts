@@ -3,6 +3,7 @@ import { Roles } from '../../foundation/auth/scopes.decorator';
 import { MailService } from '../../foundation/mail/mail.service';
 import { SmsService } from '../../foundation/sms/sms.service';
 import { isSandbox } from '../../foundation/runtime/sandbox';
+import { reviewCodeState } from '../../foundation/runtime/review-code';
 import { ConnectionsView, RouterCheck } from './connections.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { NotificationService } from './notification.service';
@@ -42,7 +43,7 @@ export class ConnectionsController {
   @Roles('operator')
   @Get()
   view(): ConnectionsView {
-    return { router: this.roads.status(), adviser: this.adviser.connection(), mail: this.mail.connection(), push: this.notifications.connection(), sms: this.sms.connection(), sandbox: isSandbox(), since: SINCE };
+    return { router: this.roads.status(), adviser: this.adviser.connection(), mail: this.mail.connection(), push: this.notifications.connection(), sms: this.sms.connection(), sandbox: isSandbox(), reviewCode: reviewCodeState(), since: SINCE };
   }
 
   /**

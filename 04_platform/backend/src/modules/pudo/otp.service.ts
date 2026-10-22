@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomInt, timingSafeEqual } from 'crypto';
 import { normalizePhone } from '../../foundation/identity/phone';
+import { REVIEW_CODE } from '../../foundation/runtime/review-code';
+import { PersonService } from './person.service';
 
 /** 429 — a retryable rate-limit rejection (RATE_LIMITED carries status 429 + retryable in the registry). */
 const tooManyRequests = (message: string) => new GlosError('RATE_LIMITED', message);
@@ -28,6 +30,8 @@ interface CodeEntry {
   code: string;
   expires: number;
   attempts: number;
+  /** The review code (000000), not one that was texted: it may make an account, never open one. */
+  review?: boolean;
 }
 
 interface RateEntry {
@@ -55,6 +59,11 @@ export class OtpService {
   private readonly verified = new Map<string, number>(); // phone -> expiry
   private readonly rates = new Map<string, RateEntry>();
   private readonly refusals = new Map<string, number>(); // phone -> sign-ups refused on this verification
+  /** Numbers verified with the review code, not a texted one. */
+  private readonly byReview = new Set<string>();
+
+  // Optional so the specs that build this by hand keep compiling; the review code's last guard reads it.
+  constructor(@Optional() private readonly persons?: PersonService) {}
 
   /**
    * Normalize to E.164 via the shared normalizer (foundation/identity/phone). Without this, rate limits
@@ -73,13 +82,16 @@ export class OtpService {
     return p;
   }
 
-  /** Issue a 6-digit code for a phone (returned here; the door that asked texts it). */
-  request(phone: string): { sent: boolean; code: string } {
+  /**
+   * Issue a 6-digit code for a phone (returned here; the door that asked texts it). `review`: the review code, 000000,
+   * for a number with no account while codes cannot be texted (foundation/runtime/review-code.ts) — the door decides.
+   */
+  request(phone: string, opts: { review?: boolean } = {}): { sent: boolean; code: string } {
     const p = this.phoneFor(phone);
     this.assertWithinRate(p);
 
-    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
-    this.codes.set(p, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0 });
+    const code = opts.review ? REVIEW_CODE : String(randomInt(0, 1_000_000)).padStart(6, '0');
+    this.codes.set(p, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0, ...(opts.review ? { review: true } : {}) });
     return { sent: true, code };
   }
 
@@ -120,6 +132,8 @@ export class OtpService {
     this.codes.delete(p);
     this.verified.set(p, Date.now() + VERIFIED_TTL_MS);
     this.refusals.delete(p); // a fresh verification, a fresh allowance
+    if (entry.review) this.byReview.add(p);
+    else this.byReview.delete(p);
     return { verified: true };
   }
 
@@ -131,6 +145,12 @@ export class OtpService {
       this.verified.delete(p);
       return false;
     }
+    /*
+     * THE REVIEW CODE NEVER OPENS AN ACCOUNT. It is given only to a number nobody holds; if somebody signed up with that
+     * number in the half hour since, this verification would now open THEIR account (a code to a number is how a person
+     * signs in): it proves nothing, so it counts for nothing. Read at every door, here, rather than at each of them.
+     */
+    if (this.byReview.has(p) && (!this.persons || this.persons.findByPhone(p))) return false;
     return true;
   }
 
@@ -139,6 +159,7 @@ export class OtpService {
     const p = this.norm(phone);
     this.verified.delete(p);
     this.refusals.delete(p);
+    this.byReview.delete(p);
   }
 
   /**

@@ -101,6 +101,8 @@ export interface Connections {
   push: PushConnection;
   sms: SmsConnection;
   sandbox: boolean;
+  /** The review code (GLOS_REVIEW_CODE_UNTIL): a new account's code is 000000 until the end of this day, UTC. */
+  reviewCode?: { until: string } | null;
   since: string;
 }
 export interface RouterCheck {
@@ -294,9 +296,11 @@ export function pushSays(c: PushConnection, sandbox: boolean, since: string, t: 
  * Where texts do leave, a failure is said by WHOSE IT IS. A refusal is the account's, and red. A number Twilio cannot
  * text is that number's — the person was told to check it — and is not a fault of the connection at all.
  */
-export function smsSays(c: SmsConnection, sandbox: boolean, since: string, t: Translate): ConnectionSays {
+export function smsSays(c: SmsConnection, sandbox: boolean, since: string, t: Translate, reviewCode?: { until: string } | null): ConnectionSays {
   if (!c.sends) {
     const why = c.problem ? t(`tower.conn.sms.problem.${c.problem}`) : '';
+    // The review code: new accounts get in with 000000 until the day it names — said in amber, with the day, and why it is not live.
+    if (!sandbox && reviewCode) return { tone: 'warn', tag: t('tower.conn.tag.reviewCode'), line: [t('tower.conn.sms.reviewLive', { until: reviewCode.until }), why].filter(Boolean).join(' ') };
     if (!sandbox) return { tone: 'danger', tag: t('tower.conn.tag.noCodes'), line: [t('tower.conn.sms.keptLive'), why].filter(Boolean).join(' ') };
     // On a sandbox, kept is how it should be — with a whole account set too, which a sandbox does not use. Half an
     // account is somebody's unfinished set-up, and is said as that.

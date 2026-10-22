@@ -28,6 +28,7 @@ import { ParcelInvoiceService } from './parcel-invoice.service';
 import { VehicleStandstillService } from './vehicle-standstill.service';
 import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
+import { REVIEW_CODE_HELD, reviewCodeOn } from '../../foundation/runtime/review-code';
 import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
@@ -364,7 +365,17 @@ export class SbgController {
   async phoneRequest(@Body() dto: PhoneRequestDto) {
     const to = this.otp.phoneFor(dto.phone);
     const texts = this.sms?.sends() ?? false;
-    if (!texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', CODE_NOT_SENT);
+    if (!texts && !isSandbox()) {
+      if (!reviewCodeOn()) throw new GlosError('SMS_NOT_SENT', CODE_NOT_SENT);
+      /*
+       * THE REVIEW CODE (foundation/runtime/review-code.ts): nothing can be texted, so a number nobody holds is confirmed
+       * with 000000, shown on the screen that asked. A number that already has an account gets none: a code to a number
+       * is how its person signs in, and a code everybody knows would sign anybody in as them.
+       */
+      if (this.persons.findByPhone(to)) throw new GlosError('SMS_NOT_SENT', REVIEW_CODE_HELD);
+      const issued = this.otp.request(dto.phone, { review: true });
+      return { sent: false, review: true, code: issued.code };
+    }
     if (texts && !this.sms?.mayGoTo(to)) throw new GlosError('PHONE_NOT_SERVED', 'We cannot send a code to a number in that country yet.', { field: 'phone' });
     const issued = this.otp.request(dto.phone);
     try {
@@ -3142,13 +3153,15 @@ export class SbgController {
     // The account is checked BEFORE the store is made: an email somebody already holds must not leave a store behind it.
     if (withAccount) this.accounts.checkNewAccount(email, password, dto.name);
     // Round 40 — and its number, verified by a code: a new phone or browser of the store's is confirmed by a code to it.
-    if (withAccount) this.accounts.assertVerifiedPhone(dto.ownerPhone);
+    // Read ONCE, here, before the store's person is made: the review code's verification counts for nothing once its
+    // number has an account (otp.service.ts) — and making the store gives it one.
+    const phoneVerified = withAccount ? Boolean(this.accounts.assertVerifiedPhone(dto.ownerPhone)) : false;
     const vendor = this.vendors.register(store);
     // S20: if the operator gave a phone, link this store to their person identity — same human, one account.
     if (dto.ownerPhone) this.persons.tryAttachRole(dto.ownerPhone, 'vendor', vendor.did);
     if (!withAccount) return vendor;
     // ITS OWN ACCOUNT, in the same act: the store signs in with these from now on, and never with its secret.
-    const account = this.accounts.setUpStore({ did: vendor.did, name: vendor.name, email: email ?? '', password: password ?? '', phone: dto.ownerPhone });
+    const account = this.accounts.setUpStore({ did: vendor.did, name: vendor.name, email: email ?? '', password: password ?? '', phone: dto.ownerPhone, phoneVerified });
     return { ...vendor, email: account.email, token: account.token, ...(account.device ? { device: account.device } : {}) };
   }
 

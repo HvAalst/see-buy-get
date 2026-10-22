@@ -310,6 +310,16 @@ describe('what this server is connected to', () => {
       expect(s.line).toBe('No text leaves this server. A code is handed back to the app that asked for it and shown on its screen; the text that would have carried it is kept here — 4 since it started. That is how a sandbox is meant to run.');
     });
 
+    it('off a sandbox with the review code on, it says new accounts get in with 000000, until when, and that it opens no account', () => {
+      const s = smsSays(sms(noSms), false, since, t, { until: '2026-11-30' });
+      expect([s.tone, s.tag]).toEqual(['warn', 'Review code 000000']);
+      expect(s.line).toMatch(/^No text leaves this server, and the review code is on until the end of 2026-11-30 \(UTC\): a NEW account’s number/);
+      expect(s.line).toContain('It never signs in to an account that exists');
+      // Off (null), and on a sandbox, it is not said at all.
+      expect(smsSays(sms(noSms), false, since, t, null).tag).toBe('No code can be sent');
+      expect(smsSays(sms(noSms), true, since, t, { until: '2026-11-30' }).tag).not.toBe('Review code 000000');
+    });
+
     it('off a sandbox, kept is nobody getting in — said in red, and not as "kept"', () => {
       const s = smsSays(sms(noSms), false, since, t);
       expect([s.tone, s.tag]).toEqual(['danger', 'No code can be sent']);

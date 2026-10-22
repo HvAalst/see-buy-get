@@ -3,6 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { json } from 'express';
 import { AppModule } from './app.module';
 import { isSandbox } from './foundation/runtime/sandbox';
+import { reviewCodeState } from './foundation/runtime/review-code';
 import { applyEdge } from './edge';
 import { readProviderEventsRaw } from './foundation/mail/provider-events.raw';
 import { flushPersistentMaps } from './foundation/store/persistent-map';
@@ -32,6 +33,9 @@ async function bootstrap() {
     // one caller may try a sign-in count by address, and behind a proxy there is one address.
     Logger.warn('GLOS_TRUST_PROXY is not set. If this server is behind a proxy or a load balancer, every caller looks like one address: the per-caller limits on sign-in will count everybody together, and the staff network fence will see only the proxy.', 'Bootstrap');
   }
+  // The review code is said at boot: a live server confirming new accounts with 000000 is not to be found out by accident.
+  const review = reviewCodeState();
+  if (review) Logger.warn(`The review code is ON until the end of ${review.until} (UTC): where no text or mail can leave, a NEW account's phone code and recovery-email code are 000000. It never signs in to an account that exists. Remove GLOS_REVIEW_CODE_UNTIL to turn it off.`, 'Bootstrap');
   if (trustProxy) {
     (app.getHttpAdapter().getInstance() as { set: (k: string, v: unknown) => void }).set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === 'true' ? true : trustProxy);
   }

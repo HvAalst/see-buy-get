@@ -60161,6 +60161,17 @@
           "fenced"
         ]
       },
+      "ReviewCodeState": {
+        "type": "object",
+        "properties": {
+          "until": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "until"
+        ]
+      },
       "ConnectionsView": {
         "type": "object",
         "properties": {
@@ -60178,6 +60189,15 @@
           },
           "sms": {
             "$ref": "#/components/schemas/SmsConnection"
+          },
+          "reviewCode": {
+            "nullable": true,
+            "description": "The review code (GLOS_REVIEW_CODE_UNTIL): while it is on, a NEW account's phone code — and a new recovery email's —\nis 000000 where no text or mail can leave. The day it ends; null when it is off.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReviewCodeState"
+              }
+            ]
           },
           "sandbox": {
             "type": "boolean",

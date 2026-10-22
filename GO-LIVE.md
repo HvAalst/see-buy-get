@@ -196,7 +196,17 @@ The repository → Settings → Secrets and variables → Actions:
   ssh root@138.68.77.250 "cd /opt/seebuyget && docker compose up -d"
   ```
 
-  Until Twilio is in, **nobody can sign up**.
+  Until Twilio is in, **nobody can sign up** — unless the review code is on (below).
+- [ ] *(Optional, for a review before Twilio)* **The review code:** new accounts sign up with the code `000000`, shown on
+  the screen. It never signs in to an account that already exists, and it stops by itself at the end of the day you
+  give it (UTC), or as soon as texts really go out. On:
+
+  ```powershell
+  ssh root@138.68.77.250 "cd /opt/seebuyget && echo GLOS_REVIEW_CODE_UNTIL=2026-11-30 >> .env && docker compose up -d"
+  ```
+
+  Off: delete that line from `/opt/seebuyget/.env`, then `docker compose up -d`. The console's Connections page says
+  whether it is on, and until when. Not for real people: anyone can sign up with any number while it is on.
 
 ## 10. Lock it down (recommended, about 10 minutes) ☐
 
@@ -213,7 +223,7 @@ The repository → Settings → Secrets and variables → Actions:
 
 ## Worth knowing
 
-- The server runs **as live**, not as the sandbox: no demo data, no sign-in codes on screen, every secret required.
+- The server runs **as live**, not as the sandbox: no demo data, no sign-in codes on screen (but the review code, while it is on), every secret required.
 - Cloudflare decrypts the traffic in the middle (ID photos pass through it): the price of its proxy.
 - On the server: `ssh root@138.68.77.250`, then `cd /opt/seebuyget` and
   - `./deploy.sh --status` — which release runs, and which ran before;
