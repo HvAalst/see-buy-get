@@ -1,6 +1,8 @@
 import type { ComponentChildren } from 'preact';
 import { BrandMark } from './BrandMark';
 import { Icon } from './Icon';
+import { frontDoorLink } from './AllAppsLink';
+import { useT } from '../i18n';
 
 export interface TopBarProps {
   /** App/brand name, or the screen name once you are inside one. */
@@ -37,8 +39,12 @@ export interface TopBarProps {
  * They are never both right at once, which is why this is one slot and not two — and why the mark
  * needs no per-app opt-in: every app is at its own root on its first screen, sign-in included, and
  * that is exactly where identity is worth spending space on.
+ *
+ * THE MARK GOES HOME (the user, 2026-10-22: "can't return to homepage when I am in the browser except through the
+ * chrome back arrow"): the front page, in the same tab in a browser, in a tab of its own from an installed app.
  */
 export function TopBar({ title, subtitle, subtitleHint, onBack, backLabel = 'Back', end, mark = true }: TopBarProps) {
+  const t = useT();
   return (
     <header class="topbar">
       {onBack ? (
@@ -46,9 +52,9 @@ export function TopBar({ title, subtitle, subtitleHint, onBack, backLabel = 'Bac
           <Icon name="arrowLeft" size={24} />
         </button>
       ) : mark ? (
-        <span class="topbar__mark">
+        <a class="topbar__mark" {...frontDoorLink()} aria-label={t('common.frontDoor')} title={t('common.frontDoor')}>
           <BrandMark />
-        </span>
+        </a>
       ) : null}
       {/* Both lines are nowrap + ellipsis, so on a narrow screen either can be cut. `title` makes the
           cut RECOVERABLE: a pointer reveals the whole string. Truncating is acceptable, losing is not —

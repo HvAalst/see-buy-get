@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { BrandMark, CodeBoxes } from '../../../shared/ui';
+import { frontDoorLink } from '../../../shared/ui/AllAppsLink';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { TroubleSheet } from '../../../shared/account/TroubleSheet';
@@ -79,7 +80,10 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
     <div class="twr-signin">
       <div class="twr-signin__card biz-signin">
         <div class="twr-signin__brand">
-          <BrandMark size={34} />
+          {/* The mark goes home: the front page, in this tab (the user, 2026-10-22). */}
+          <a {...frontDoorLink()} aria-label={t('common.frontDoor')} title={t('common.frontDoor')}>
+            <BrandMark size={34} />
+          </a>
           <span class="cons__brandname">{t('business.appTitle')}</span>
         </div>
 

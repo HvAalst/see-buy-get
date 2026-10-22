@@ -556,6 +556,9 @@
   height: var(--tap);
   margin-left: -1px;
   flex: none;
+  /* A link to the front page: nothing of a link's look, the mark is the sign. */
+  text-decoration: none;
+  border-radius: 8px;
 }
 
 .topbar__id {
