@@ -1,4 +1,5 @@
 import { HelpLink } from '../../shared/guide/HelpLink';
+import { consoleArticles } from '../../shared/guide/staff-articles';
 import { useState } from 'preact/hooks';
 import { BrandMark } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
@@ -132,7 +133,7 @@ export function App() {
               { key: 'out', icon: 'lock' as const, label: t('tower.signOut'), danger: true, onGo: actions.signOut },
             ]}
           />
-          <HelpLink app="console" open={helpOpen} onOpenChange={setHelpOpen} />
+          <HelpLink app="console" open={helpOpen} onOpenChange={setHelpOpen} articles={consoleArticles()} />
         </header>
         <main class="cons__main twr-setup">
           <StaffSetupScreen actions={actions} />
@@ -264,7 +265,7 @@ export function App() {
             { key: 'out', icon: 'lock' as const, label: t('tower.signOut'), danger: true, onGo: actions.signOut },
           ]}
         />
-        <HelpLink app="console" open={helpOpen} onOpenChange={setHelpOpen} />
+        <HelpLink app="console" open={helpOpen} onOpenChange={setHelpOpen} articles={consoleArticles()} />
       </header>
 
       <div class="cons__body">

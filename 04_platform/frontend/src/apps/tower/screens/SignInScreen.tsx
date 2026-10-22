@@ -1,4 +1,5 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
+import { consoleArticles } from '../../../shared/guide/staff-articles';
 import { useState } from 'preact/hooks';
 import { BrandMark } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -67,7 +68,7 @@ export function SignInScreen({
         )}
 
         <p class="twr-signin__foot">
-          <HelpLink app="console" label="signin" buttonClass="cbtn cbtn--ghost cbtn--sm" />
+          <HelpLink app="console" label="signin" buttonClass="cbtn cbtn--ghost cbtn--sm" articles={consoleArticles()} />
           {mode === 'operator' ? (
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setMode('staff')}>
               {t('tower.signIn.backToAccounts')}

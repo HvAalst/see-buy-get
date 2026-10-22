@@ -1,4 +1,3 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Icon, ReadAloud } from '../../../shared/ui';
@@ -227,7 +226,7 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
         </nav>
         <div class="land__footend">
           <span class="land__mark">SeeBuyGet</span>
-          <HelpLink app="home" />
+          {/* Help once, in the links above: a second Help here opened a sheet with less in it than the page. */}
           <ReadAloud text={() => welcomeSpoken(t)} label={t('home.readAloud')} />
         </div>
       </footer>

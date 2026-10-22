@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Sheet } from '../ui';
 import { useT } from '../i18n';
-import { articlesFor, type GuideApp } from './articles';
+import { articlesFor, type GuideApp, type GuideArticle } from './articles';
 import './guide.css';
 
 /**
@@ -21,8 +21,11 @@ export function HelpLink({
   buttonClass = 'btn btn--link',
   open: openFromParent,
   onOpenChange,
+  articles,
 }: {
   app: GuideApp;
+  /** The articles to show instead of the app's own list — the console passes its own (staff-articles.ts), which no other app imports. */
+  articles?: GuideArticle[];
   label?: 'link' | 'signin';
   buttonClass?: string;
   open?: boolean;
@@ -44,7 +47,7 @@ export function HelpLink({
       <Sheet open={open} onClose={() => setOpen(false)} title={t('guide.title')}>
         <p class="card__note">{t('guide.lede')}</p>
         <div class="guide">
-          {articlesFor(app).map((a) => (
+          {(articles ?? articlesFor(app)).map((a) => (
             <details key={a.id} class="guide__item">
               <summary class="guide__t">{a.title}</summary>
               <p class="guide__s">{a.summary}</p>
