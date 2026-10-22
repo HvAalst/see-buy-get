@@ -58,6 +58,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/account-moves': 'vetting',
   'GET sbg/account-moves/:moveId': 'vetting',
   'GET sbg/account/me': 'none',
+  // A company administrator's own sign-in, asked by the console when a tab comes back — not a staff door.
+  'GET sbg/entities/admins/me': 'none',
   'GET sbg/agents': 'any',
   'GET sbg/agents/:did': 'any',
   'GET sbg/agents/:did/bag-plan': 'support',
