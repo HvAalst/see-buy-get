@@ -45,6 +45,20 @@ export interface LedgerAdapter {
   networkInfo?(): NetworkInfo;
   /** Optional: walk every anchor and say whether the chain is whole (an adapter that keeps its anchors). */
   check?(): LedgerCheck;
+  /** Optional: the newest anchor — the chain's head as it stands. Nothing while the chain is empty. */
+  head?(): ChainPoint | undefined;
+  /**
+   * Optional: the id at `height` WORKED OUT AGAIN from every hash up to it, ignoring the ids kept beside them — what a copy
+   * held outside (an auditor's) is checked against. Anything changed at or below that height gives another id.
+   */
+  recomputedAt?(height: number): ChainPoint | undefined;
+}
+
+/** One place in the chain: its height, its id, and when it was anchored. */
+export interface ChainPoint {
+  height: number;
+  txId: string;
+  at: string;
 }
 
 export const LEDGER_ADAPTER = 'LEDGER_ADAPTER';

@@ -2722,6 +2722,23 @@ export class WithdrawProposalDto {
   @IsOptional() @IsString() driverDid?: string; // operator-override only
 }
 
+/** Round 40 — the auditor's address, as one member of staff asks for it. */
+export class AnchorAuditorDto {
+  @IsString() @MaxLength(200) address!: string;
+}
+
+/** Round 40 — a second member of staff approves the change, or declines it with the reason. */
+export class AnchorAuditorDecisionDto {
+  @IsBoolean() approve!: boolean;
+  @IsOptional() @IsString() @MaxLength(500) reason?: string;
+}
+
+/** Round 40 — an auditor's copy read out: the link number and its fingerprint. */
+export class AnchorCopyCheckDto {
+  @IsNumber() height!: number;
+  @IsString() @MaxLength(80) txId!: string;
+}
+
 /** Round 40 — one point of the 7-point inspection, looked at and photographed: the photo a driver uploaded as `inspection`. */
 export class InspectionPointDto {
   @IsString() @MaxLength(32) point!: string;

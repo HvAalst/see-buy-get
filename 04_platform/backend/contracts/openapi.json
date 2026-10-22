@@ -29505,6 +29505,116 @@
         }
       }
     },
+    "/v1/sbg/ops/anchors": {
+      "get": {
+        "operationId": "Trail.view",
+        "summary": "",
+        "description": "Round 40 — THE TRAIL ANCHORED OUTSIDE OUR DATABASE (the user: \"Daily to an auditor\"): who receives the daily head, a change\nwaiting for a second member of staff, and the days kept — each checked against the chain as it stands now.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/ops/anchors/auditor": {
+      "post": {
+        "operationId": "Trail.propose",
+        "summary": "",
+        "description": "Round 40 — one member of staff asks for the auditor's address to change. It counts once ANOTHER approves.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnchorAuditorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/ops/anchors/auditor/decide": {
+      "post": {
+        "operationId": "Trail.decide",
+        "summary": "",
+        "description": "Round 40 — a second member of staff approves the change, or declines it with the reason the one who asked reads.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnchorAuditorDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/ops/anchors/check": {
+      "post": {
+        "operationId": "Trail.check",
+        "summary": "",
+        "description": "Round 40 — an auditor's copy read out: is it still what the chain gives at that height?",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnchorCopyCheckDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/papers": {
       "post": {
         "operationId": "HubVetting.send",
@@ -60997,6 +61107,49 @@
           "kind",
           "steps",
           "ref"
+        ]
+      },
+      "AnchorAuditorDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "address"
+        ]
+      },
+      "AnchorAuditorDecisionDto": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "approve"
+        ]
+      },
+      "AnchorCopyCheckDto": {
+        "type": "object",
+        "properties": {
+          "height": {
+            "type": "number"
+          },
+          "txId": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "height",
+          "txId"
         ]
       },
       "HubPapersDto": {

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PersistentMap } from '../store/persistent-map';
-import { LedgerAdapter, LedgerAppendResult, LedgerCheck, NetworkInfo } from './ledger.types';
+import { ChainPoint, LedgerAdapter, LedgerAppendResult, LedgerCheck, NetworkInfo } from './ledger.types';
 
 /** One anchor as it is kept: the hash's place in the chain, and the id of the one before it. */
 interface LedgerEntry extends LedgerAppendResult {
@@ -78,6 +78,27 @@ export class FabricLedgerAdapter implements LedgerAdapter {
       prev = e.txId;
     }
     return { anchors: entries.length, whole: true, ...(entries.length ? { first: entries[0].at, last: entries[entries.length - 1].at } : {}) };
+  }
+
+  /** The newest anchor: the chain's head as it stands. */
+  head(): ChainPoint | undefined {
+    if (!this.height) return undefined;
+    const e = [...this.store.values()].find((x) => x.blockHeight === this.height);
+    return e ? { height: e.blockHeight, txId: e.txId, at: e.at } : undefined;
+  }
+
+  /** The id at `height` worked out again from every hash up to it — not read from the ids kept. Nothing where a height is missing. */
+  recomputedAt(height: number): ChainPoint | undefined {
+    if (!Number.isInteger(height) || height < 1) return undefined;
+    const byHeight = new Map([...this.store.values()].map((e) => [e.blockHeight, e]));
+    let prev = '';
+    for (let h = 1; h <= height; h++) {
+      const e = byHeight.get(h);
+      if (!e) return undefined;
+      prev = this.idOf(h, e.hash, prev);
+      if (h === height) return { height, txId: prev, at: e.at };
+    }
+    return undefined;
   }
 
   private idOf(height: number, hash: string, prev: string): string {

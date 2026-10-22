@@ -87,6 +87,12 @@ export interface MailParams {
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
   'fleet-code-due': { company: string; days: number };
   'papers-due': { company: string; lapsed: string[]; due: string[] };
+  /** Round 40 — the trail's head, once a day, to the auditor SeeBuyGet staff named. */
+  'trail-head': { date: string; height: number; txId: string; whole: boolean; brokenAt?: number };
+  /** Round 40 — this address now receives the daily head. */
+  'trail-auditor-named': { to: string; proposedBy: string; approvedBy: string; at: string; nextAt: string };
+  /** Round 40 — the daily head now goes to another address: told to the one it went to. */
+  'trail-auditor-changed': { from: string; to: string; proposedBy: string; approvedBy: string; at: string; nextAt: string };
   /** A country was lowered: what stops there for this participant, what does not, and which app they use. */
   'country-changed': { country: string; lost: string[]; kept: string[]; app: MailApp };
   /**
@@ -868,6 +874,69 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         reason: `You are getting this email because you administer ${p.company}, or the company above it, on SeeBuyGet. It is about a paper that company trades on, so it cannot be turned off.`,
       };
     },
+  },
+
+  /*
+   * Round 40 — THE TRAIL'S HEAD, TO AN AUDITOR (the user: "Daily to an auditor"). The one thing this email is for is being
+   * kept somewhere SeeBuyGet cannot reach: the height and the id, exactly as the chain had them that day. Plain text, no
+   * link to follow and nothing to do — the auditor's copy is read out later and checked against the chain.
+   */
+  'trail-head': {
+    title: 'The trail’s daily fingerprint (to the auditor)',
+    sentWhen: 'Once a day, a few minutes after midnight UTC, to the auditor’s address two members of staff named.',
+    wired: true,
+    // A day's fingerprint is still the day's fingerprint two days on; a later one does not replace it.
+    sendLater: 48,
+    sample: { date: '2026-10-22', height: 18342, txId: '4b8e0f6c2d1a9e7b3c5f8a0d6e2b4c9f1a7d3e5b8c0f2a4d6e8b1c3f5a7d9e0b', whole: true },
+    build: (p) => ({
+      subject: `SeeBuyGet trail, ${p.date}: link ${p.height}`,
+      preheader: 'Keep this email. It is checked against our records later; nothing needs doing now.',
+      blocks: [
+        { kind: 'heading', text: `The trail on ${p.date}` },
+        { kind: 'paragraph', text: 'Every pickup, delivery, seal, scan and damage report on SeeBuyGet is fingerprinted into one chain, each link taken over the one before. This is the chain’s newest link today. Keep this email where SeeBuyGet cannot change it.' },
+        { kind: 'facts', rows: [['Day (UTC)', p.date], ['Links in the chain', String(p.height)], ['Newest link', p.txId || 'none yet'], ['Chain whole when read', p.whole ? 'yes' : `no — it breaks at link ${p.brokenAt}`]] },
+        { kind: 'note', text: 'To check SeeBuyGet’s records later, read the link number and the fingerprint out to their staff: if anything up to that link was changed since today, the chain no longer gives this fingerprint.' },
+      ],
+      reason: 'You are getting this email because two members of SeeBuyGet staff named this address as the trail’s auditor.',
+    }),
+  },
+
+  'trail-auditor-named': {
+    title: 'An address is named the trail’s auditor',
+    sentWhen: 'A second member of staff approves this address for the trail’s daily fingerprint.',
+    wired: true,
+    sendLater: 48,
+    sample: { to: 'audit@example.com', proposedBy: 'Amina Otieno', approvedBy: 'Brian Kamau', at: '2026-10-22T15:40:00.000Z', nextAt: '2026-10-23T00:05:00.000Z' },
+    build: (p) => ({
+      subject: 'You will receive the SeeBuyGet trail’s daily fingerprint',
+      preheader: `From ${formatWhen(p.nextAt)}, once a day.`,
+      blocks: [
+        { kind: 'heading', text: 'You are the trail’s auditor' },
+        { kind: 'paragraph', text: `Once a day, from ${formatWhen(p.nextAt)}, this address receives the newest link of SeeBuyGet’s trail: the chain every pickup, delivery, seal, scan and damage report is fingerprinted into. Keep those emails: they are what SeeBuyGet’s records are checked against later.` },
+        { kind: 'facts', rows: [['Asked for by', p.proposedBy], ['Approved by', p.approvedBy], ['When', formatWhen(p.at)]] },
+        { kind: 'warning', title: 'Not expecting this?', text: 'Tell SeeBuyGet: an address is named the auditor only by two members of its staff.' },
+      ],
+      reason: 'You are getting this email because two members of SeeBuyGet staff named this address as the trail’s auditor.',
+    }),
+  },
+
+  'trail-auditor-changed': {
+    title: 'The trail’s daily fingerprint goes elsewhere (to the address it went to)',
+    sentWhen: 'A second member of staff approves another address for the trail’s daily fingerprint.',
+    wired: true,
+    sendLater: 48,
+    sample: { from: 'audit@example.com', to: 'audit@another.example', proposedBy: 'Amina Otieno', approvedBy: 'Brian Kamau', at: '2026-10-22T15:40:00.000Z', nextAt: '2026-10-23T00:05:00.000Z' },
+    build: (p) => ({
+      subject: 'The SeeBuyGet trail’s daily fingerprint no longer comes here',
+      preheader: `It goes to ${p.to} from ${formatWhen(p.nextAt)}.`,
+      blocks: [
+        { kind: 'heading', text: 'The auditor’s address was changed' },
+        { kind: 'paragraph', text: `From ${formatWhen(p.nextAt)}, the trail’s daily fingerprint goes to ${p.to} instead of this address. The emails you already have still count: keep them.` },
+        { kind: 'facts', rows: [['Now goes to', p.to], ['Asked for by', p.proposedBy], ['Approved by', p.approvedBy], ['When', formatWhen(p.at)]] },
+        { kind: 'warning', title: 'Not expected?', text: 'Tell SeeBuyGet straight away: the auditor’s address is the one thing somebody hiding a change to its records would want to move.' },
+      ],
+      reason: 'You are getting this email because this address received the SeeBuyGet trail’s daily fingerprint until now.',
+    }),
   },
 
   'papers-due': {

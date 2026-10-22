@@ -231,6 +231,11 @@ export class MailService implements OnModuleDestroy {
   }
 
   /** The outbox keeps; anything in its place sends. Read off the sender, never off a setting. */
+  /** Round 40 — whether email leaves the building here, or waits in the outbox (no provider is wired). Said on screens that send it. */
+  delivers(): boolean {
+    return this.sends();
+  }
+
   private sends(): boolean {
     return !(this.sender instanceof OutboxMailSender);
   }

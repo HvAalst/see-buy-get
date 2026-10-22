@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { AnchorReceipt, LedgerAdapter, LedgerCheck, LEDGER_ADAPTER, NetworkInfo } from './ledger.types';
+import { AnchorReceipt, ChainPoint, LedgerAdapter, LedgerCheck, LEDGER_ADAPTER, NetworkInfo } from './ledger.types';
 
 /**
  * LedgerService — the shared anchoring primitive (T-004).
@@ -32,6 +32,16 @@ export class LedgerService {
   /** Every anchor walked: whole, or where the chain breaks. An adapter that keeps nothing has nothing to say. */
   check(): LedgerCheck | undefined {
     return this.adapter.check?.();
+  }
+
+  /** Round 40 — the chain's head as it stands, where the adapter keeps a chain. */
+  head(): ChainPoint | undefined {
+    return this.adapter.head?.();
+  }
+
+  /** Round 40 — the id at a height, worked out again from the hashes: what an auditor's copy is checked against. */
+  recomputedAt(height: number): ChainPoint | undefined {
+    return this.adapter.recomputedAt?.(height);
   }
 
   /** Verify a payload is anchored; if a txId is supplied it must match. */

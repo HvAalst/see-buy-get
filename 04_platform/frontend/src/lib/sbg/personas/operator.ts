@@ -48,6 +48,11 @@ export function createOperatorApi(sbg: SbgClient) {
     trail: (ref: string) => sbg.request((c) => c.GET('/v1/sbg/ops/trail/{ref}', { params: { path: { ref } } })),
     /** What staff opened: each record a member of staff read by its name or number, who, when, how many times. */
     staffReads: (query: { by?: string; record?: string }) => sbg.request((c) => c.GET('/v1/sbg/staff-reads', { params: { query } })),
+    /** Round 40 — the trail anchored outside our database: the auditor, a change waiting, the days kept; and an auditor's copy checked. */
+    trailAnchors: () => sbg.request((c) => c.GET('/v1/sbg/ops/anchors', {})),
+    proposeAuditor: (body: { address: string }) => sbg.request((c) => c.POST('/v1/sbg/ops/anchors/auditor', { body })),
+    decideAuditor: (body: { approve: boolean; reason?: string }) => sbg.request((c) => c.POST('/v1/sbg/ops/anchors/auditor/decide', { body })),
+    checkAnchorCopy: (body: { height: number; txId: string }) => sbg.request((c) => c.POST('/v1/sbg/ops/anchors/check', { body })),
     /** Round 35 — a unit held under the tamper protocol, by its code or number: every exception, who found it, the photographs. */
     tamperUnit: (ref: string) => sbg.request((c) => c.GET('/v1/sbg/ops/tamper/{ref}' as never, { params: { path: { ref } } } as never) as never),
     /** Release it, with what was found and done: the case closes under the same words. */

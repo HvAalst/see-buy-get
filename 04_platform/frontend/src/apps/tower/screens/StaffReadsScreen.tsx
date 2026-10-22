@@ -3,6 +3,7 @@ import { useT } from '../../../shared/i18n';
 import { narrow, type SbgError } from '../../../lib/sbg';
 import { ErrorNote } from '../../../shared/ui';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { TrailAnchorPanel } from './TrailAnchorPanel';
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -51,6 +52,8 @@ export function StaffReadsScreen({ actions }: { state: TowerState; actions: Towe
         <h1 class="cons__title">{t('tower.staffReads.title')}</h1>
         <p class="cons__lede">{t('tower.staffReads.lede')}</p>
       </header>
+      {/* Round 40 — the trail anchored outside our database: the auditor's daily copy, and checking one read out. */}
+      <TrailAnchorPanel actions={actions} />
       <section class="cons__panel">
         <form
           class="cons__filters"
