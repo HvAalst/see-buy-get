@@ -158,11 +158,11 @@ describe('the chaos shelf', () => {
     let dir: string;
 
     beforeEach(() => {
-      /* eslint-disable @typescript-eslint/no-require-imports */
+      /* eslint-disable @typescript-eslint/no-var-requires */
       const { mkdtempSync } = require('fs') as typeof import('fs');
       const { tmpdir } = require('os') as typeof import('os');
       const { join } = require('path') as typeof import('path');
-      /* eslint-enable @typescript-eslint/no-require-imports */
+      /* eslint-enable @typescript-eslint/no-var-requires */
       dir = mkdtempSync(join(tmpdir(), 'glos-shelf-'));
       process.env.GLOS_DATA_DIR = dir;
       delete process.env.JEST_WORKER_ID;
@@ -171,13 +171,13 @@ describe('the chaos shelf', () => {
       if (origWorker !== undefined) process.env.JEST_WORKER_ID = origWorker;
       if (origDir === undefined) delete process.env.GLOS_DATA_DIR;
       else process.env.GLOS_DATA_DIR = origDir;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       (require('fs') as typeof import('fs')).rmSync(dir, { recursive: true, force: true });
     });
 
     it('still knows which slots are taken: the next parcel is not sent to a slot that is full, and the shop is not read as empty', () => {
       jest.isolateModules(() => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { ShelfService: Shelf } = require('./shelf.service') as typeof import('./shelf.service');
         const { agents } = shopWith({ rows: 3, cols: 2, consolidationSlots: ['Orange-3'] });
         const before = new Shelf(agents);

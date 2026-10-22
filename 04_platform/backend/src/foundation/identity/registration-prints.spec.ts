@@ -85,11 +85,11 @@ describe('the registration prints', () => {
     let dir: string;
 
     beforeEach(() => {
-      /* eslint-disable @typescript-eslint/no-require-imports */
+      /* eslint-disable @typescript-eslint/no-var-requires */
       const { mkdtempSync } = require('fs') as typeof import('fs');
       const { tmpdir } = require('os') as typeof import('os');
       const { join } = require('path') as typeof import('path');
-      /* eslint-enable @typescript-eslint/no-require-imports */
+      /* eslint-enable @typescript-eslint/no-var-requires */
       dir = mkdtempSync(join(tmpdir(), 'glos-prints-'));
       process.env.GLOS_DATA_DIR = dir;
       delete process.env.JEST_WORKER_ID;
@@ -98,17 +98,17 @@ describe('the registration prints', () => {
       if (origWorker !== undefined) process.env.JEST_WORKER_ID = origWorker;
       if (origDir === undefined) delete process.env.GLOS_DATA_DIR;
       else process.env.GLOS_DATA_DIR = origDir;
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       (require('fs') as typeof import('fs')).rmSync(dir, { recursive: true, force: true });
     });
 
     it('still knows who is registered — and the file holds no ID, no number and no bare hash of either', () => {
       jest.isolateModules(() => {
-        /* eslint-disable @typescript-eslint/no-require-imports */
+        /* eslint-disable @typescript-eslint/no-var-requires */
         const { RegistrationPrints: Prints } = require('./registration-prints') as typeof import('./registration-prints');
         const { readFileSync } = require('fs') as typeof import('fs');
         const { join } = require('path') as typeof import('path');
-        /* eslint-enable @typescript-eslint/no-require-imports */
+        /* eslint-enable @typescript-eslint/no-var-requires */
         new Prints('driver').claim([['nationalId', '27781234'], ['phone', '0712345678']], 'did:glos:peer');
 
         // A new process: nothing carried over in memory.
@@ -126,9 +126,9 @@ describe('the registration prints', () => {
 
     it('is what the driver service itself asks — a courier registered before a restart is refused after it', () => {
       jest.isolateModules(() => {
-        /* eslint-disable @typescript-eslint/no-require-imports */
+        /* eslint-disable @typescript-eslint/no-var-requires */
         const { DriverService: Drivers } = require('../../modules/pudo/driver.service') as typeof import('../../modules/pudo/driver.service');
-        /* eslint-enable @typescript-eslint/no-require-imports */
+        /* eslint-enable @typescript-eslint/no-var-requires */
         let n = 0;
         const build = () =>
           new Drivers(

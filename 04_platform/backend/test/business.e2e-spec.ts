@@ -499,7 +499,7 @@ describe('a customer’s business, over the wire', () => {
     expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/contracts`).set(bearer(setupKey)).expect(200)).body.items[0].pickup).toMatchObject({ label: 'Jenga yard' });
     expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders/template`).set(bearer(setupKey)).expect(200)).body.csv).toContain('Order number,Goods');
     // An Excel workbook is read as it is: the file Excel saved, base64 in the same call. Its first sheet is named.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const workbook = (require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'src', 'modules', 'pudo', 'fixtures', 'orders-from-excel.xlsx')) as Buffer).toString('base64');
     const importAt = `/v1/sbg/fleet/managers/${fleet.did}/contracts/${contract.contractId}/orders/import`;
     const wbCheck = await http().post(importAt).set(bearer(setupKey)).send({ workbook, pickupLabel: 'Jenga yard', pickupLat: -1.3, pickupLng: 36.85 }).expect(201);

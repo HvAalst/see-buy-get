@@ -325,7 +325,7 @@ describe('a standing contract of carriage', () => {
       };
 
       it('reads the workbook itself — Excel’s own file: the first sheet, named; each bad line by the number Excel shows', () => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const workbook: Buffer = require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures', 'orders-from-excel.xlsx'));
         const { kilima, contract, imports } = setUp();
         const fleetRef = { did: kilima.did, name: kilima.companyName };

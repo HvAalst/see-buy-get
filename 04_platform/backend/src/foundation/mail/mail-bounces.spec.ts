@@ -91,6 +91,7 @@ describe('an email that came back', () => {
       }
       // The key as the bytes it stands for, where it is written as base64.
       const b64 = Buffer.from('sixteen-bytes-or-more-of-key').toString('base64');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const signedWithBytes = `ts=${T0};s=${encodeURIComponent(require('crypto').createHmac('sha256', Buffer.from(b64, 'base64')).update(json, 'utf8').digest('base64'))};s-algorithm=HmacSHA256`;
       expect(readSignedEvent(Buffer.from(json), signedWithBytes, b64, T0).ok).toBe(true);
     });

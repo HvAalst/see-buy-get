@@ -2440,6 +2440,7 @@ describe('PUDO Light', () => {
       const driver = corridors.addDriver({ driverDid: 'did:glos:dsame', name: 'D', corridorId: corridor.corridorId });
 
       // releaseOtp() reads two bytes; everything else that wants randomness still gets the real thing.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const crypto = require('crypto') as { randomBytes: (n: number) => Buffer };
       const real = crypto.randomBytes;
       const draws = [0, 0, 65535]; // → '1000' at arrival, '1000' again (the collision), then '9999'

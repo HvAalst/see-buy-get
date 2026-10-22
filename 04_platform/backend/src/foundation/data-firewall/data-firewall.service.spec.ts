@@ -90,11 +90,11 @@ describe('IdentityVault on disk', () => {
   let dir: string;
 
   beforeEach(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { mkdtempSync } = require('fs') as typeof import('fs');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { tmpdir } = require('os') as typeof import('os');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { join } = require('path') as typeof import('path');
     dir = mkdtempSync(join(tmpdir(), 'glos-vault-'));
     process.env.GLOS_DATA_DIR = dir;
@@ -104,19 +104,19 @@ describe('IdentityVault on disk', () => {
     if (origWorker !== undefined) process.env.JEST_WORKER_ID = origWorker;
     if (origDir === undefined) delete process.env.GLOS_DATA_DIR;
     else process.env.GLOS_DATA_DIR = origDir;
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     (require('fs') as typeof import('fs')).rmSync(dir, { recursive: true, force: true });
   });
 
   it('reads a record back in a second vault, and keeps no plaintext in the file', () => {
     jest.isolateModules(() => {
-      /* eslint-disable @typescript-eslint/no-require-imports */
+      /* eslint-disable @typescript-eslint/no-var-requires */
       const { IdentityVault: Vault } = require('./identity-vault.service') as typeof import('./identity-vault.service');
       const { FieldEncryption: Crypto } = require('./field-encryption.service') as typeof import('./field-encryption.service');
       const { EventBus: Bus } = require('../events/event-bus.service') as typeof import('../events/event-bus.service');
       const { readFileSync, existsSync } = require('fs') as typeof import('fs');
       const { join } = require('path') as typeof import('path');
-      /* eslint-enable @typescript-eslint/no-require-imports */
+      /* eslint-enable @typescript-eslint/no-var-requires */
       const first = new Vault(new Crypto(), new Bus());
       const { vaultRef } = first.store({ fullName: 'Wanjiru Njeri', phone: '+254700123456' });
 
@@ -135,13 +135,13 @@ describe('IdentityVault on disk', () => {
 
   it('keeps the receipt of every look across a restart — who, why, when — and no personal data in it', () => {
     jest.isolateModules(() => {
-      /* eslint-disable @typescript-eslint/no-require-imports */
+      /* eslint-disable @typescript-eslint/no-var-requires */
       const { IdentityVault: Vault } = require('./identity-vault.service') as typeof import('./identity-vault.service');
       const { FieldEncryption: Crypto } = require('./field-encryption.service') as typeof import('./field-encryption.service');
       const { EventBus: Bus } = require('../events/event-bus.service') as typeof import('../events/event-bus.service');
       const { readFileSync } = require('fs') as typeof import('fs');
       const { join } = require('path') as typeof import('path');
-      /* eslint-enable @typescript-eslint/no-require-imports */
+      /* eslint-enable @typescript-eslint/no-var-requires */
       const first = new Vault(new Crypto(), new Bus());
       const { vaultRef } = first.store({ fullName: 'Grace Wambui', phone: '+254711223344' });
       first.reveal(vaultRef, { purpose: 'papers-renewal', requesterDid: 'operator:opr_y' });
