@@ -12,10 +12,11 @@ Nothing has to be built for this: the repository already releases every push to 
 (`.github/workflows/deploy.yml` and `04_platform/scripts/deploy.sh`). If a test fails, nothing is released; if a new
 release does not start, the one before comes back by itself. The full manual is `04_platform/DEPLOY.md`.
 
-**Where you are (2026-10-22):** the first release runs on the Droplet (`63eac5a`, all three parts healthy, set up for
-Cloudflare with the token). Left: step 5, the nameservers at MijnDomein — the certificate waits on it (checked from
-outside: no DNSSEC, no mail records, so nothing to do first) — then the "straight after" items of step 9, and step 10.
-The release's last step, "Ask the site, from outside", was red: expected until the certificate is there.
+**Where you are (2026-10-22, 16:08 UTC): LIVE.** https://seebuyget.com and https://ops.seebuyget.com answer through
+Cloudflare, and every push to `main` now goes live (`84bce73`, the first release green to its last step). Steps 1–8
+are done. Left: the "straight after" items of step 9 (save the server's settings, the first staff account, the Twilio
+and ZeptoMail keys), and step 10. The certificate is checked through Cloudflare's resolvers (`56dd044`):
+DigitalOcean's kept MijnDomein's old nameservers for hours after the switch.
 
 ---
 
