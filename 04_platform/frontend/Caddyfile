@@ -33,9 +33,13 @@
 (tls_direct) {
 }
 
+# The record Caddy writes at Cloudflare is checked through Cloudflare's own resolvers, not the server's: a provider's
+# resolver can keep a domain's old nameservers for a day or more after they change (found on the first release behind
+# Cloudflare, 2026-10-22), and no certificate is issued until the check sees the record.
 (tls_cloudflare) {
 	tls {
 		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+		resolvers 1.1.1.1 1.0.0.1
 	}
 }
 
