@@ -18,7 +18,8 @@ import { enMdp } from './en.mdp';
 import { enVendor } from './en.vendor';
 import { enHome } from './en.home';
 import { enBusiness } from './en.business';
-import { enTower, enTowerBusinesses, enTowerCompanies, enTowerMoney, enTowerNetwork, enTowerQueues, enTowerSupport } from './en.tower';
+import type { enTowerAll } from './en.tower';
+import { enTowerShared } from './en.tower-shared';
 
 /* HOW A SHIPPER PAYS A CARRIER DIRECTLY. Shared, because the fleet declaring it, the shop reading it
    before booking, and the shop reading it back afterwards must all say the same thing. */
@@ -110,13 +111,9 @@ export const en = {
   ...enVendor,
   ...enHome,
   ...enBusiness,
-  ...enTower,
-  ...enTowerBusinesses,
-  ...enTowerCompanies,
-  ...enTowerQueues,
-  ...enTowerNetwork,
-  ...enTowerMoney,
-  ...enTowerSupport,
+  // The console's own words are NOT here: en.tower.ts is loaded by the console alone (apps/tower/english.ts), so no
+  // other app's code carries them. Only those other apps show too are (en.tower-shared.ts).
+  ...enTowerShared,
 
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',
@@ -1735,5 +1732,6 @@ export const en = {
   'fiscal.gone': 'The invoice could not be opened. Try again.',
 };
 
-export type Messages = typeof en;
+/** Every key there is — the console's included, which only the console loads at run time. */
+export type Messages = typeof en & typeof enTowerAll;
 export type MessageKey = keyof Messages;

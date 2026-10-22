@@ -458,8 +458,6 @@ export const enTower = {
   'tower.papers.licenceNumber': 'Licence number',
   'tower.papers.licenceExpires': 'New expiry date',
   'tower.papers.saveLicence': 'Record the licence',
-  'tower.papers.needDate': 'A new expiry date is needed.',
-  'tower.papers.datePast': 'That date has already passed — a renewed licence runs into the future.',
   'tower.papers.licenceDone': 'Licence recorded for {name} — the new date counts from now.',
   'tower.papers.vehicleTitle': 'Papers for {plate}',
   'tower.papers.vehicleBody': 'The reference and the expiry date on each paper. The day after a date passes the vehicle is off the road until the renewal is recorded here; a paper with no date switches nothing off, and nothing watches it either.',
@@ -692,12 +690,7 @@ export const enTower = {
   'tower.settings.title': 'Settings',
   'tower.settings.lede': 'What you publish about yourself, the places you use, and how you sign in.',
   'tower.settings.companyOnly': 'Network staff act for no company, so there is nothing here to set.',
-  'tower.settings.placesTitle': 'Your places',
-  'tower.settings.placesCount': '{n} saved',
   'tower.settings.placesLede': 'Ports you collect from and addresses you deliver to. Add one while minting a road leg.',
-  'tower.settings.placesNone': 'None yet. You will be offered one the next time you mint a road leg.',
-  'tower.settings.kindPort': 'Port',
-  'tower.settings.kindDelivery': 'Delivery',
   'tower.settings.elsewhereTitle': 'Elsewhere',
   'tower.settings.recordSub': 'What we hold and have verified about you.',
   'tower.settings.pageSub': 'The page anybody can read about you.',
@@ -1143,8 +1136,6 @@ export const enTower = {
   'tower.sites.address': 'Address',
   'tower.sites.addressPh': 'Industrial Area, Nairobi',
   'tower.sites.addressHint': 'Resolved to the middle of a place we know. A pin is more exact.',
-  'tower.sites.fromPin': 'A pin somebody dropped.',
-  'tower.sites.fromAddress': 'From “{address}” — the middle of that place, not a gate.',
   'tower.sites.save': 'Save the place',
   'tower.sites.failed': 'That did not save.',
   'tower.imports.f.collectedFrom': 'Collected from',
@@ -3484,3 +3475,6 @@ export const enTowerBusinesses = {
   'tower.cases.act.done': '{by} closed it',
   'tower.cases.act.cleared': 'Closed by itself',
 };
+
+/** Every one of the console's own words — registered by the console when it starts (apps/tower/english.ts), and by the tests. */
+export const enTowerAll = { ...enTower, ...enTowerCompanies, ...enTowerQueues, ...enTowerNetwork, ...enTowerMoney, ...enTowerSupport, ...enTowerBusinesses };

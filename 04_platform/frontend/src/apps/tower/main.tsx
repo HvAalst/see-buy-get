@@ -1,3 +1,5 @@
+// First: the console's own words, which no other app carries — before any module that may read one is evaluated.
+import './english';
 import { render } from 'preact';
 import '../../shared/tokens.css';
 import { App } from './app';

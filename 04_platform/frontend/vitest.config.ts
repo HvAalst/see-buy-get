@@ -17,5 +17,7 @@ export default defineConfig({
     // Component tests that need a DOM should opt in per file with
     // `// @vitest-environment jsdom` (and jsdom must be installed first).
     environment: 'node',
+    // The console's words, which a running app other than the console never loads (src/apps/tower/english.ts).
+    setupFiles: ['src/test-setup.ts'],
   },
 });

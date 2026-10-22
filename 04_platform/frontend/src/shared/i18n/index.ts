@@ -9,7 +9,18 @@ import { ar } from './catalogs/ar';
 export * from './locales';
 export type { MessageKey, Messages } from './catalogs/en';
 
-const CATALOGS: Record<Locale, Partial<Messages>> = { en, sw, am, fr, ar };
+/**
+ * English, the fallback: the catalog every app carries, and what an app adds of its own before it renders — the console
+ * its own words (apps/tower/english.ts), which no other app's code carries.
+ */
+const english: Partial<Messages> = { ...en };
+
+/** Add an app's own English words. The console calls it before anything renders; so do the tests, for every app. */
+export function addEnglish(more: Partial<Messages>): void {
+  Object.assign(english, more);
+}
+
+const CATALOGS: Record<Locale, Partial<Messages>> = { en: english, sw, am, fr, ar };
 
 const STORAGE_KEY = 'glos-locale';
 let current: Locale = DEFAULT_LOCALE;
@@ -120,7 +131,7 @@ export function interpolate(msg: string, params: Record<string, string | number>
  *  by the rule of the language the words came from: English words keep English plurals in a language not yet written. */
 export function t(key: MessageKey, params?: Record<string, string | number>): string {
   const own = CATALOGS[current]?.[key];
-  const msg = own ?? en[key] ?? (key as string);
+  const msg = own ?? english[key] ?? (key as string);
   return params ? interpolate(msg, params, own !== undefined ? current : 'en') : msg;
 }
 
