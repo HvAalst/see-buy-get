@@ -636,7 +636,7 @@ describe('two people say one national ID is theirs', () => {
     it('a shop starts no new parcel and is named by none — said as what it is, not as an empty float — until then', () => {
       const s = aShop();
       agents.submitKyc(s.did, { idCopyRef: 'med_idcopy', tradingLicenceRef: 'med_licence', shopPhotoRefs: ['med_front'] });
-      agents.decideKyc(s.did, true);
+      agents.decideKyc(s.did, true, undefined, undefined, '2099-12-31');
       const o = open(s.nationalId, 'shop');
       sendAll(o.reference);
       const late = T0 + DISPUTE_ANSWER_DAYS * DAY + 1000;
@@ -666,7 +666,7 @@ describe('two people say one national ID is theirs', () => {
       expect(mint([s.did])).not.toMatch(/national|reference|held/i);
       const other = aShop();
       agents.submitKyc(other.did, { idCopyRef: 'med_idcopy', tradingLicenceRef: 'med_licence', shopPhotoRefs: ['med_front'] });
-      agents.decideKyc(other.did, true);
+      agents.decideKyc(other.did, true, undefined, undefined, '2099-12-31');
       // A walk-up at ANOTHER counter, to be collected at the held shop: made nowhere.
       expect(failure(() => parcels.accept({ parcelId: 'PUD-IDH-' + (seq += 1), agentDid: other.did, destPudoDid: s.did, destZone: 'NorthTown', size: 'M', paymentMode: 'credit', senderMobile: '+254700111', receiverMobile: '+254700222', dropoffPhotoRef: photoBy(other.did) } as never))).toMatch(refusal);
       expect(agents.takesNew(agents.get(s.did))).toBe(false);
@@ -690,7 +690,7 @@ describe('two people say one national ID is theirs', () => {
     it('a held shop is offered to nobody choosing where a new parcel starts — and to everybody again afterwards', () => {
       const s = aShop();
       agents.submitKyc(s.did, { idCopyRef: 'med_idcopy', tradingLicenceRef: 'med_licence', shopPhotoRefs: ['med_front'] });
-      agents.decideKyc(s.did, true);
+      agents.decideKyc(s.did, true, undefined, undefined, '2099-12-31');
       gate.topUp(s.did, 50);
       expect(agents.get(s.did).status).toBe('ACTIVE');
       expect(agents.takesNew(agents.get(s.did))).toBe(true);

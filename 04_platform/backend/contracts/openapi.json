@@ -4390,6 +4390,102 @@
         }
       }
     },
+    "/v1/sbg/agents/{did}/licence-renewal": {
+      "post": {
+        "operationId": "Sbg.sendShopLicence",
+        "summary": "",
+        "description": "Round 40 — A SHOP SENDS ITS RENEWED TRADING LICENCE (the user: \"Expiry, notice, grace\"): a photograph it took, and the\ndate the licence runs to as it reads it. From the shop's own sign-in and nobody else's — staff or somebody at the counter\nsending one \"for it\" would be the checker supplying the thing checked. Waits for staff to read it.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopLicenceRenewalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/{did}/licence": {
+      "post": {
+        "operationId": "Sbg.recordShopLicence",
+        "summary": "",
+        "description": "Round 40 — staff record the date a shop's trading licence runs to, read off the renewed licence it sent (or the licence\non record). The date is the whole of a renewal: a shop whose new parcels had stopped starts them again at once.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopLicenceRecordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/{did}/licence-renewal/refuse": {
+      "post": {
+        "operationId": "Sbg.refuseShopLicence",
+        "summary": "",
+        "description": "Round 40 — the licence a shop sent is not accepted, with the reason it is shown; it sends another.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefuseLicenceRenewalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/deposit": {
       "post": {
         "operationId": "Sbg.deposit",
@@ -32070,6 +32166,61 @@
               }
             }
           },
+          "licence": {
+            "type": "object",
+            "properties": {
+              "expiresAt": {
+                "required": true,
+                "type": "string"
+              },
+              "copyRef": {
+                "required": false,
+                "type": "string"
+              },
+              "recordedBy": {
+                "required": false,
+                "type": "string"
+              },
+              "recordedAt": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "licenceRenewal": {
+            "type": "object",
+            "properties": {
+              "copyRef": {
+                "required": true,
+                "type": "string"
+              },
+              "expiresAt": {
+                "required": true,
+                "type": "string"
+              },
+              "sentAt": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "licenceRenewalRefusal": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "signupNudgedFor": {
             "type": "string",
             "description": "What the last onboarding nudge was ABOUT — the missing set it named, e.g. \"id,licence,photos\" or\n \"rejected\" or \"unfunded\". Said once per distinct gap: progress starts a new clock, and an ignored\n nudge is never repeated. Follows CredentialReminderService's stamp-against-the-state rule."
@@ -32104,6 +32255,9 @@
           "deviceImei",
           "requirements",
           "kycRejection",
+          "licence",
+          "licenceRenewal",
+          "licenceRenewalRefusal",
           "equipmentDepositPaid",
           "status",
           "lastPingAt",
@@ -32144,10 +32298,65 @@
           "reason": {
             "type": "string",
             "description": "Required when refusing: the applicant is SHOWN this, and a refusal they cannot act on leaves them\n exactly where a silent one did. Validated in the service, where the approve flag is known."
+          },
+          "licenceExpiresAt": {
+            "type": "string",
+            "description": "Round 40 — REQUIRED when approving: the last day the shop's trading licence is valid (YYYY-MM-DD), read off the licence\nit sent. Checked in the service, which answers in words the console shows.",
+            "maxLength": 20
           }
         },
         "required": [
           "approve"
+        ]
+      },
+      "ShopLicenceRenewalDto": {
+        "type": "object",
+        "properties": {
+          "copyRef": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "expiresAt": {
+            "type": "string",
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "copyRef",
+          "expiresAt"
+        ]
+      },
+      "ShopLicenceRecordDto": {
+        "type": "object",
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "by": {
+            "type": "string",
+            "description": "Who is recording it, for a console on the shared key; a named sign-in's own name wins.",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "expiresAt"
+        ]
+      },
+      "RefuseLicenceRenewalDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "InterestDto": {
@@ -44188,22 +44397,6 @@
         "required": [
           "copyRef",
           "expiresAt"
-        ]
-      },
-      "RefuseLicenceRenewalDto": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "maxLength": 500
-          },
-          "by": {
-            "type": "string",
-            "maxLength": 120
-          }
-        },
-        "required": [
-          "reason"
         ]
       },
       "HandBackDto": {

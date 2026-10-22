@@ -965,8 +965,15 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Let a shop in, or refuse it. */
     /** `reason` is REQUIRED by the server when refusing: the applicant is shown it, and a refusal they
      *  cannot act on leaves them exactly where saying nothing did. */
-    decideKyc: (did: string, body: { approve: boolean; by?: string; reason?: string }) =>
+    decideKyc: (did: string, body: { approve: boolean; by?: string; reason?: string; licenceExpiresAt?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/kyc-decision', { params: { path: { did } }, body: body as never })),
+
+    /** Round 40 — the date a shop's trading licence runs to, read off it (the renewed one it sent, or the one on record). */
+    recordShopLicence: (did: string, body: { expiresAt: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/licence', { params: { path: { did } }, body })),
+    /** Round 40 — the renewed licence a shop sent is not accepted: the reason is the shop's to read. */
+    refuseShopLicence: (did: string, body: { reason: string; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/licence-renewal/refuse', { params: { path: { did } }, body })),
 
     /** A company's books: the trial balance, whether it balances, and what it holds against what it owes. */
     books: (entityId: string) => sbg.request((c) => c.GET('/v1/sbg/entities/{entityId}/books', { params: { path: { entityId } } })),

@@ -689,7 +689,7 @@ describe('GLOS backend (e2e)', () => {
         .send({ shopName, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'by the market', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: `${shopName} owner`, nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
       const did = reg.body.did as string;
       await sendShopPapers(did);
-      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
       declared(app, 'shop', did);
       await fund(`/v1/sbg/agents/${did}/top-up`, 50, auth);
       return did;
@@ -743,7 +743,7 @@ describe('GLOS backend (e2e)', () => {
       const reg = await request(http).post('/v1/sbg/agents').set(auth).send({ shopName: shop, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: `${shop} o`, nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
       const did = reg.body.did as string;
       await sendShopPapers(did);
-      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
       declared(app, 'shop', did);
       await fund(`/v1/sbg/agents/${did}/top-up`, 20, auth);
       return did;
@@ -850,7 +850,7 @@ describe('GLOS backend (e2e)', () => {
       const reg = await request(http).post('/v1/sbg/agents').set(auth).send({ shopName: shop, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: `${shop} o`, nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
       const did = reg.body.did as string;
       await sendShopPapers(did);
-      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+      await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(auth).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
       declared(app, 'shop', did);
       await fund(`/v1/sbg/agents/${did}/top-up`, 20, auth);
       return did;
@@ -918,7 +918,7 @@ describe('GLOS backend (e2e)', () => {
     const reg = await request(http).post('/v1/sbg/agents').set(auth).send({ shopName: 'Fleet Origin', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: 'Fleet o', nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
     const origin = reg.body.did as string;
     await sendShopPapers(origin);
-    await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
     declared(app, 'shop', origin);
     await fund(`/v1/sbg/agents/${origin}/top-up`, 50, auth);
     const corridor = await request(http).post('/v1/sbg/corridors').set(auth).send({ name: 'feeder', originZone: 'NorthTown', destZone: 'SouthTown' }).expect(201);
@@ -977,7 +977,7 @@ describe('GLOS backend (e2e)', () => {
     const reg = await request(http).post('/v1/sbg/agents').set(auth).send({ shopName: 'Dispatch PUDO', zone: 'NorthTown', location: loc, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: { open: '08:00', close: '18:00' }, tue: { open: '08:00', close: '18:00' }, wed: { open: '08:00', close: '18:00' }, thu: { open: '08:00', close: '18:00' }, fri: { open: '08:00', close: '18:00' }, sat: { open: '08:00', close: '18:00' }, sun: null }, fullName: 'D o', nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
     const origin = reg.body.did as string;
     await sendShopPapers(origin);
-    await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${origin}/kyc-decision`).set(auth).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
     declared(app, 'shop', origin);
     await fund(`/v1/sbg/agents/${origin}/top-up`, 50, auth);
     const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }).expect(201);
@@ -1412,7 +1412,7 @@ describe('GLOS backend (e2e)', () => {
     const reg = await request(http).post('/v1/sbg/agents').set(staff).send({ shopName: 'Amounts Shop', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: hours, tue: hours, wed: hours, thu: hours, fri: hours, sat: hours, sun: null }, fullName: 'Amounts owner', nationalId: `ID-${u}`, mobile: `+254${u}`, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } }).expect(201);
     const did = reg.body.did as string;
     await sendShopPapers(did);
-    await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true }).expect(201);
+    await request(http).post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
     await fund(`/v1/sbg/agents/${did}/top-up`, 20, staff);
     const shop = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'agent', did }).expect(201)).body.access_token}` };
     const gate = async () => (await request(http).get(`/v1/sbg/agents/${did}/can-transact`).set(shop).expect(200)).body;

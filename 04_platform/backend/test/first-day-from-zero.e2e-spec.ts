@@ -313,7 +313,11 @@ describe('the first day of a new installation, as it would be live', () => {
       }
       // A shop cannot approve itself.
       await must(http().post(`${own}/kyc-decision`).set(bearer(shop.token)).send({ approve: true }), 403);
-      await must(http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true }));
+      // Round 40 — staff note the date its trading licence runs to, read off the licence: without it, no approval.
+      const undated = await http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true });
+      expect([undated.status, undated.body.code, undated.body.params?.field]).toEqual([400, 'FIELD_REQUIRED', 'licenceExpiresAt']);
+      await must(http().post(`${own}/kyc-decision`).set(bearer(amina)).send({ approve: true, licenceExpiresAt: '2099-12-31' }));
+      expect((await must(http().get(own).set(bearer(shop.token)), 200)).licence).toMatchObject({ expiresAt: '2099-12-31', copyRef: tradingLicenceRef });
       // Approved, it reads its security declaration and signs it from its own sign-in: nothing is taken in until it has.
       const declaration = await must(http().get('/v1/sbg/declarations/mine').set(bearer(shop.token)), 200);
       expect(declaration).toMatchObject({ required: true, kind: 'shop', state: 'missing' });

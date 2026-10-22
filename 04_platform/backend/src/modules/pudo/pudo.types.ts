@@ -115,6 +115,16 @@ export class Agent {
   /** Why the last KYC decision went against them, and when. Cleared the moment they are approved.
    *  Present on a DRAFT shop = "we looked and said no", which is a different state from "never sent". */
   kycRejection?: { reason: string; at: string; by?: string };
+  /**
+   * Round 40 — THE DATE ITS TRADING LICENCE RUNS TO, noted by staff when they approved the shop and again at each renewal,
+   * read off the licence in `copyRef`. Its number is `requirements.tradingLicence`. Absent on a shop approved before it was
+   * asked, which stops nothing (shop-licence.ts).
+   */
+  licence?: { expiresAt: string; copyRef?: string; recordedBy?: string; recordedAt: string };
+  /** A renewed licence the shop sent, waiting for staff to read it: the photograph, and the date the shop read off it. */
+  licenceRenewal?: { copyRef: string; expiresAt: string; sentAt: string };
+  /** Why the last licence the shop sent was not accepted — shown to the shop, which sends another. */
+  licenceRenewalRefusal?: { reason: string; at: string; by?: string };
   /** What the last onboarding nudge was ABOUT — the missing set it named, e.g. "id,licence,photos" or
    *  "rejected" or "unfunded". Said once per distinct gap: progress starts a new clock, and an ignored
    *  nudge is never repeated. Follows CredentialReminderService's stamp-against-the-state rule. */

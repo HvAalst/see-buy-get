@@ -71,6 +71,8 @@ export const GlosEvent = {
     DriverRideAloneDecided: 'pudo.driver_ride_alone_decided',
     // Round 39 — a light courier's ID photo seen by staff, or sent back with the reason: told to the rider.
     DriverIdPhotoDecided: 'pudo.driver_id_photo_decided',
+    // Round 40 — staff recorded a shop's trading licence to a new date, or sent back the one it sent with the reason: told to the shop.
+    ShopLicenceChecked: 'pudo.shop_licence_checked',
     // Round 39 — a corridor or hub rated for a threat (the risk register): told to whoever works under it.
     RiskRated: 'pudo.risk_rated',
     // A fleet office put a driver on a day's roster, or took them off a day they had been told they drive.

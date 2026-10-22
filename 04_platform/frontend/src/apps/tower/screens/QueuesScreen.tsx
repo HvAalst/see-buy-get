@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { DocumentStrip } from './DocumentStrip';
+import { renewalBlocker } from '../../../shared/papers';
 import { FleetsPanel } from './FleetsPanel';
 import { useT } from '../../../shared/i18n';
 import {
@@ -985,9 +986,11 @@ function ApprovalRowView({ row, state, actions }: { row: ApprovalRow; state: Tow
   const busy = state.busyId === row.did;
   const docs = documentsOf(row);
   // Refusing asks WHY before it will go through — the applicant is shown this sentence, and it is the only
-  // thing that tells them what to fix. Approving needs no form: nothing about a yes needs explaining to
-  // somebody who just got in.
+  // thing that tells them what to fix. Approving asks one thing (round 40): the date the trading licence runs to,
+  // read off the licence they sent — without it the licence could never lapse.
   const [why, setWhy] = useState<string | null>(null);
+  const [until, setUntil] = useState<string | null>(null);
+  const blocker = until == null ? null : renewalBlocker(until);
 
   return (
     <>
@@ -1008,15 +1011,44 @@ function ApprovalRowView({ row, state, actions }: { row: ApprovalRow; state: Tow
       </td>
       <td>
         <span class="twr-clear__act">
-          <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void actions.decideApproval(row.did, true)}>
+          <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} aria-expanded={until != null} onClick={() => { setWhy(null); setUntil(until == null ? '' : null); }}>
             {t('tower.approvals.approve')}
           </button>
-          <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} aria-expanded={why != null} onClick={() => setWhy(why == null ? '' : null)}>
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} aria-expanded={why != null} onClick={() => { setUntil(null); setWhy(why == null ? '' : null); }}>
             {t('tower.approvals.refuse')}
           </button>
         </span>
       </td>
     </tr>
+    {until != null ? (
+      <tr class="is-open ctbl__editor">
+        <td colSpan={5}>
+          <DocumentStrip refs={row.kyc?.tradingLicenceRef ? [row.kyc.tradingLicenceRef] : []} state={state} actions={actions} titleKey="tower.approvals.licencePhoto" emptyKey="tower.approvals.noLicencePhoto" />
+          <label class="cfield">
+            <span class="cfield__label">{t('tower.approvals.licenceUntil')}</span>
+            <input class="cinput" type="date" value={until} disabled={busy} onInput={(e) => setUntil((e.target as HTMLInputElement).value)} />
+          </label>
+          <p class="chint">{t('tower.approvals.licenceHint')}</p>
+          <span class="twr-clear__act">
+            <button
+              type="button"
+              class="cbtn cbtn--primary cbtn--sm"
+              disabled={busy || blocker !== null}
+              onClick={() => {
+                void actions.decideApproval(row.did, true, undefined, until);
+                setUntil(null);
+              }}
+            >
+              {t('tower.approvals.approveConfirm')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setUntil(null)}>
+              {t('common.close')}
+            </button>
+            {blocker && until ? <span class="chint">{t(blocker)}</span> : null}
+          </span>
+        </td>
+      </tr>
+    ) : null}
     {why != null ? (
       <tr class="is-open ctbl__editor">
         <td colSpan={5}>

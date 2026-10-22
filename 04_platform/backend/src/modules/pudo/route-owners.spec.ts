@@ -32,6 +32,7 @@ const GUARDS = [
   'this.isFleetOffice(',
   'this.assertAgentOwner(',
   'this.assertAgentActs(',
+  'this.assertAgentSelf(', // round 40 — the shop ONLY: its renewed licence is never sent by the staff who read it
   'this.assertFleetSelf(',
   'actingDid(actor',
 ];

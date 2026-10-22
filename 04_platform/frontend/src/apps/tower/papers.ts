@@ -136,6 +136,33 @@ export interface PapersNetworkView {
   carriers?: CarrierOption[];
   /** The operators' own papers. Absent from a server that predates it — read as empty. */
   carrierPapers?: CarrierPaperRow[];
+  /** Round 40 — every approved shop's trading licence. Absent from a server that predates it — read as empty. */
+  shops?: ShopLicenceRow[];
+}
+
+/**
+ * Round 40 — ONE SHOP'S TRADING LICENCE, as staff read it (papers-watch.service.ts). Only staff record its date: at approval,
+ * and at each renewal, read off the licence.
+ */
+export interface ShopLicenceRow {
+  did: string;
+  shopName: string;
+  zone: string;
+  country: string;
+  status: string;
+  number?: string;
+  licence?: { expiresAt: string; copyRef?: string; recordedBy?: string; recordedAt: string };
+  /** The licence it sent at joining — what an undated licence can still be read from. */
+  joiningCopyRef?: string;
+  /** A renewed licence it sent, waiting to be read. Its date is the shop's reading. */
+  renewal?: { copyRef: string; expiresAt: string; sentAt: string };
+  renewalRefusal?: { reason: string; at: string; by?: string };
+  standing: { state: 'none' | 'ok' | 'due' | 'grace' | 'stopped'; expiresAt?: string; daysLeft?: number; stopsOn?: string; graceDaysLeft?: number; renewalSent: boolean };
+}
+
+/** Worth a look: a renewal waiting, stopped, in grace, running out, or never dated. One in date and quiet is counted, not listed. */
+export function shopLicenceNeedsLook(row: ShopLicenceRow): boolean {
+  return Boolean(row.renewal) || row.standing.state !== 'ok';
 }
 
 /** The ones that need somebody: lapsed first, then running out. Withdrawn is a decision, not a job. */
@@ -162,7 +189,8 @@ export function waitingCount(report: PapersNetworkView | null): number | null {
   if (!report) return null;
   // A fleet that SENT its renewed licence or policy has done its part exactly as a courier with a card has,
   // and is counted once however many papers it sent — the badge counts who is waiting, not pages.
-  return report.couriers.filter(isWaiting).length + report.vehicles.filter(isStuck).length + (report.carrierPapers ?? []).filter(operatorWaiting).length;
+  // Round 40 — and a shop that has sent its renewed licence: it has done its part, and waits on us.
+  return report.couriers.filter(isWaiting).length + report.vehicles.filter(isStuck).length + (report.carrierPapers ?? []).filter(operatorWaiting).length + (report.shops ?? []).filter((s) => s.renewal).length;
 }
 
 /** How to reach one courier, as the vault answered. `held: false` is an answer the screen says, not an error. */

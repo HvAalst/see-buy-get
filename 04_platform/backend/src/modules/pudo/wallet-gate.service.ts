@@ -198,10 +198,12 @@ export class WalletGateService {
     const funded = float === null || spendable >= threshold;
     // Held over its national ID: said first, because topping up would not open the counter.
     const held = Boolean(this.agents.idHoldOf(did));
+    // Round 40 — its trading licence lapsed and the grace is over: said before money too, for the same reason.
+    const lapsed = !held && this.agents.licenceStoppedFor(did);
     // The money side alone: what a parcel booked BEFORE the hold is judged by when it is handed in.
     const moneyOk = this.agents.canScan(did) && funded;
-    const ok = !held && moneyOk;
-    const code = ok ? null : held ? 'ID_HELD' : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
+    const ok = !held && !lapsed && moneyOk;
+    const code = ok ? null : held ? 'ID_HELD' : lapsed ? 'LICENCE_LAPSED' : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
     const shortfall = funded ? 0 : Math.round((threshold - spendable) * 100) / 100;
     const used = this.agents.creditOwed(did);
     return {

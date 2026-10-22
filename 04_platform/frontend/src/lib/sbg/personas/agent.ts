@@ -49,6 +49,10 @@ export function createAgentApi(sbg: SbgClient) {
     submitKyc: (did: string, body: { idCopyRef: string; tradingLicenceRef: string; shopPhotoRefs: string[] }) =>
       sbg.request((c) => c.POST('/v1/sbg/agents/{did}/submit-kyc', { params: { path: { did } }, body })),
 
+    /** Round 40 — the renewed trading licence: a photo this shop uploaded as kyc_licence, and the date it runs to. Staff read it. */
+    sendLicenceRenewal: (did: string, body: { copyRef: string; expiresAt: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/agents/{did}/licence-renewal', { params: { path: { did } }, body })),
+
     /** The 'no money, no scan' gate — { ok, code, balance, shortfall } as readable state. */
     /** Round 38 — where this shop stands under its company's custody cap; `capped` false when none applies now. */
     custodyCap: () => sbg.request((c) => c.GET('/v1/sbg/custody-cap', {})),

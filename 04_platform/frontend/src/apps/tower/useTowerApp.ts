@@ -271,6 +271,9 @@ export interface TowerActions {
   recordCourierLicence(did: string, body: { number?: string; expiresAt: string }, name: string): Promise<void>;
   /** FP4 — the card a courier sent is not accepted, with the reason they are shown. */
   refuseLicenceRenewal(did: string, reason: string, name: string): Promise<void>;
+  /** Round 40 — the date a shop's trading licence runs to, read off it; and a renewed one sent back with the reason it is shown. */
+  recordShopLicence(did: string, expiresAt: string, name: string): Promise<void>;
+  refuseShopLicence(did: string, reason: string, name: string): Promise<void>;
   /** FP4 — how to reach ONE courier: a receipted look in the vault, asked when their sheet opens. */
   courierContact(did: string): Promise<{ contact: CourierContact | null; error: string | null }>;
   recordVehiclePapers(vehicleId: string, documents: { insuranceRef?: string; insuranceExpiresAt?: string; inspectionRef?: string; inspectionExpiresAt?: string }, plate: string): Promise<void>;
@@ -333,7 +336,8 @@ export interface TowerActions {
   resolveFreightClaim(freightId: string, decision: ClaimDecision, award: number | undefined, note: string): Promise<void>;
   closeDisposal(parcelId: string, reason: string): Promise<void>;
   /** `reason` is required by the server when refusing — the applicant is shown it. */
-  decideApproval(did: string, approve: boolean, reason?: string): Promise<void>;
+  /** Round 40 — a yes carries the date the shop's trading licence runs to, read off it. */
+  decideApproval(did: string, approve: boolean, reason?: string, licenceExpiresAt?: string): Promise<void>;
   /** Vet a heavy-registry driver. A refusal carries the reason the driver is shown. */
   /** `criminalRecordClear` is the vetting staff member's own tick — never the applicant's. */
   /** `asked`: the row was a driver in no fleet asking to ride for themselves — said so in what the screen confirms. */
@@ -1516,11 +1520,12 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         await loadQueues(client);
       },
       /** Let a shop in, or refuse it — and a refusal carries the reason the applicant is shown. */
-      decideApproval: async (did: string, approve: boolean, reason?: string) => {
+      decideApproval: async (did: string, approve: boolean, reason?: string, licenceExpiresAt?: string) => {
         const client = clientRef.current;
         if (!client) return;
         setState((s) => ({ ...s, busyId: did, queueError: null }));
-        const { error } = await client.api.decideKyc(did, { approve, by: stateRef.current.who?.name, ...(reason ? { reason } : {}) });
+        // Round 40 — a yes notes the date the trading licence runs to, read off it; the server refuses one without.
+        const { error } = await client.api.decideKyc(did, { approve, by: stateRef.current.who?.name, ...(reason ? { reason } : {}), ...(licenceExpiresAt ? { licenceExpiresAt } : {}) });
         if (error) {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;
@@ -1857,6 +1862,32 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.papers.licenceDone', { name }) }));
+        await loadPapers(client);
+      },
+      /** Round 40 — the date a shop's trading licence runs to, read off it. New parcels start again at once where they had stopped. */
+      recordShopLicence: async (did: string, expiresAt: string, name: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, queueError: null, done: null }));
+        const { error } = await client.api.recordShopLicence(did, { expiresAt, by: stateRef.current.who?.name });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.shopLicences.done', { name }) }));
+        await loadPapers(client);
+      },
+      /** Round 40 — the renewed licence a shop sent is not accepted, with the reason it is shown. */
+      refuseShopLicence: async (did: string, reason: string, name: string) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, queueError: null, done: null }));
+        const { error } = await client.api.refuseShopLicence(did, { reason, by: stateRef.current.who?.name });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.shopLicences.refusedDone', { name }) }));
         await loadPapers(client);
       },
       /** FP4 — the card is not accepted. The reason is the courier's to read, so the server insists on one. */

@@ -21,6 +21,7 @@ import { MediaService } from './media.service';
 import { averageOpenHours } from './hours';
 import { Agent, AgentRequirements, AgentStatus, KycDocuments, ShelfConfig, WeeklyHours } from './pudo.types';
 import { Equipment } from './cargo.types';
+import { licenceDay, licenceStopped, requireLicenceDate, shopLicenceStanding, LICENCE_GRACE_DAYS, type ShopLicenceStanding } from './shop-licence';
 
 /**
  * WHAT THIS SHOP IS STUCK ON, as one short key — and the single definition of it.
@@ -63,6 +64,14 @@ interface RegisterAgentInput {
   deviceImei: string;
   requirements: AgentRequirements;
   equipment?: Equipment[]; // S32c — declared load/unload equipment on hand (beyond manual)
+}
+
+/** A shop past joining: its licence is its own to renew, and staff's to record. */
+const APPROVED: readonly AgentStatus[] = ['APPROVED_UNFUNDED', 'ACTIVE', 'LOCKED'];
+
+/** Round 40 — what the counter is told when no new parcel can start here, and the one thing that ends it. */
+export function licenceStopWords(l: ShopLicenceStanding): string {
+  return `No new parcel can be started at this shop: its trading licence ran to ${l.expiresAt ? licenceDay(l.expiresAt) : 'a day that has passed'} and the ${LICENCE_GRACE_DAYS} days' grace are over. Parcels already booked to be handed in here, and everything on the shelf, go on as usual. Send the renewed licence from the home screen: new parcels start again once it is recorded.`;
 }
 
 /** The same sentences as before, with the field they name carried beside them for the app to act on. */
@@ -256,8 +265,12 @@ export class AgentService {
    * what is missing, so refs left behind on a rejected record made the chase list report nothing missing
    * for a shop that could not proceed — and the shop would have had no way to replace a rejected licence,
    * because `submitKyc` only accepts a full set and only from DRAFT.
+   *
+   * Round 40 — AN APPROVAL NOTES THE DATE THE TRADING LICENCE RUNS TO (the user: "Expiry, notice, grace"), read off the
+   * licence the shop sent. Without it the shop is not approved: a licence with no date cannot lapse, and the rule that
+   * stops a shop trading on a lapsed one would apply to nobody.
    */
-  decideKyc(did: string, approve: boolean, by?: string, reason?: string): Agent {
+  decideKyc(did: string, approve: boolean, by?: string, reason?: string, licenceExpiresAt?: string, now: number = Date.now()): Agent {
     const agent = this.require(did);
     if (agent.status !== 'KYC_PENDING') throw new GlosError('INVALID_STATE', `Agent is ${agent.status}, expected KYC_PENDING`);
     if (!approve) {
@@ -271,12 +284,15 @@ export class AgentService {
         .catch(() => undefined);
       return rejected;
     }
+    // Round 40 — the licence's date, asked before anything about the shop is written.
+    const expiresAt = requireLicenceDate(licenceExpiresAt, now);
     // Approved: the old refusal stops being the news. Kept nowhere, because a shop that got in does not
     // carry a note saying it once did not.
     agent.kycRejection = undefined;
     if (!agent.kyc) throw new GlosError('KYC_INCOMPLETE', 'Cannot approve: KYC documents missing');
     const unmet = this.unmetRequirements(agent);
     if (unmet.length) throw new GlosError('APPROVAL_BLOCKED', `Cannot approve: ${unmet.join('; ')}`);
+    agent.licence = { expiresAt, ...(agent.kyc.tradingLicenceRef ? { copyRef: agent.kyc.tradingLicenceRef } : {}), ...(by ? { recordedBy: by } : {}), recordedAt: new Date(now).toISOString() };
     this.wallet.provision(did, { jurisdiction: 'US' });
     this.core.upsert({ did, vaultRef: agent.vaultRef, tier: 2, status: 'active', capabilities: ['pudo-agent'], metadata: { zone: agent.zone, by } });
     this.transition(agent, 'APPROVED_UNFUNDED');
@@ -650,8 +666,9 @@ export class AgentService {
    * over its national ID. Every place a shop is OFFERED for a new parcel asks this, so a held shop is never
    * chosen; what it already holds, and what was already booked to it, goes on.
    */
-  takesNew(agent: Pick<Agent, 'status' | 'idHold'>): boolean {
-    return agent.status === 'ACTIVE' && !agent.idHold;
+  takesNew(agent: Pick<Agent, 'status' | 'idHold' | 'licence'>, now: number = Date.now()): boolean {
+    // Round 40 — nor is a shop whose trading licence lapsed and whose fourteen days' grace are over.
+    return agent.status === 'ACTIVE' && !agent.idHold && !licenceStopped(agent, now);
   }
 
   /**
@@ -659,9 +676,10 @@ export class AgentService {
    * name a held shop, at either end. Said to the sender as what they can act on — which shop, and to choose
    * another — and never why: that is the shopkeeper's own business.
    */
-  assertNamedAtMint(did: string | undefined): void {
+  assertNamedAtMint(did: string | undefined, now: number = Date.now()): void {
     const agent = did ? this.agents.get(did) : undefined;
-    if (agent?.idHold) throw new GlosError('FORBIDDEN', `${agent.shopName} is not taking new parcels for now. Choose another shop.`, { reason: 'shop_held', shop: agent.did });
+    // A lapsed licence (round 40) is said in the same words: why is the shopkeeper's own business.
+    if (agent?.idHold || (agent && licenceStopped(agent, now))) throw new GlosError('FORBIDDEN', `${agent.shopName} is not taking new parcels for now. Choose another shop.`, { reason: 'shop_held', shop: agent.did });
   }
 
   /**
@@ -669,11 +687,95 @@ export class AgentService {
    * the one thing that ends it. (A parcel booked to be handed in here was made BEFORE the hold — none can be made
    * after it — and is still taken in: a hold stops new work, never the finishing of old.)
    */
-  assertMayTakeIn(did: string): void {
-    const hold = this.agents.get(did)?.idHold;
+  assertMayTakeIn(did: string, now: number = Date.now()): void {
+    const agent = this.agents.get(did);
+    const hold = agent?.idHold;
     if (hold) {
       throw new GlosError('FORBIDDEN', `No new parcel can be started at this shop for now: the national ID it registered with went to somebody else (reference ${hold.reference}). Parcels already booked to be handed in here, and everything on the shelf, go on as usual. Put the number of your own ID card on record, in Settings, to start new ones again.`, { reason: 'id_held', reference: hold.reference });
     }
+    // Round 40 — the trading licence lapsed and the grace is over.
+    const licence = agent ? shopLicenceStanding(agent, now) : undefined;
+    if (licence?.state === 'stopped') throw new GlosError('LICENCE_LAPSED', licenceStopWords(licence), { reason: 'licence_lapsed', expiresAt: licence.expiresAt, stopsOn: licence.stopsOn });
+  }
+
+  /* --- Round 40: the trading licence, its date, and its renewal --- */
+
+  /** Where this shop's trading licence stands now. */
+  licenceStandingOf(did: string, now: number = Date.now()): ShopLicenceStanding {
+    return shopLicenceStanding(this.require(did), now);
+  }
+
+  /** No new parcel starts here, or names it: the licence lapsed and the grace is over. */
+  licenceStoppedFor(did: string, now: number = Date.now()): boolean {
+    const agent = this.agents.get(did);
+    return Boolean(agent && licenceStopped(agent, now));
+  }
+
+  /**
+   * THE SHOP SENDS ITS RENEWED LICENCE: a photograph of it, and the date it runs to as the shop reads it. The date switches
+   * nothing on: it waits beside the photograph until a member of staff reads the same licence and records it
+   * (recordLicence). A shop that is not yet approved sends its licence with its other papers.
+   */
+  sendLicenceRenewal(did: string, input: { copyRef: string; expiresAt: string }, now: number = Date.now()): Agent {
+    const agent = this.require(did);
+    if (!APPROVED.includes(agent.status)) throw new GlosError('INVALID_STATE', 'A shop that is not approved yet sends its licence with its other papers');
+    const expiresAt = requireLicenceDate(input.expiresAt, now, 'expiresAt');
+    // The licence already on record is not a renewed one — and refusing it would delete the record's own photograph.
+    if (input.copyRef && (input.copyRef === agent.licence?.copyRef || input.copyRef === agent.kyc?.tradingLicenceRef)) {
+      throw new GlosError('PHOTO_REQUIRED', 'That is the licence already on record — take a photograph of the renewed one', { field: 'copyRef' });
+    }
+    // Only the shop's OWN fresh photograph: adopt() refuses another's media and anything attached elsewhere.
+    if (!this.media.adopt(input.copyRef, did, { type: 'agent', id: did }, 'kyc_licence')) {
+      throw new GlosError('PHOTO_REQUIRED', 'That photograph could not be attached — take it again', { field: 'copyRef' });
+    }
+    // A second send replaces the first: nothing rests on a photograph nobody accepted.
+    const earlier = agent.licenceRenewal?.copyRef;
+    if (earlier && earlier !== input.copyRef) this.media.purgeByOwner(earlier, did);
+    agent.licenceRenewal = { copyRef: input.copyRef, expiresAt, sentAt: new Date(now).toISOString() };
+    delete agent.licenceRenewalRefusal;
+    this.agents.set(did, agent);
+    return agent;
+  }
+
+  /**
+   * A MEMBER OF STAFF RECORDS THE DATE THE LICENCE RUNS TO, typed while looking at it: the renewed licence the shop sent,
+   * which becomes the licence on record — or, with nothing sent, the licence already on record, to put a date on a shop
+   * approved before one was asked, or to correct one. The date is the whole of a renewal: a stopped shop starts new
+   * parcels again the moment it is recorded. The shop is told.
+   */
+  recordLicence(did: string, expiresAt: string, by?: string, now: number = Date.now()): Agent {
+    const agent = this.require(did);
+    if (!APPROVED.includes(agent.status)) throw new GlosError('INVALID_STATE', 'The licence of a shop not yet approved is noted when it is approved');
+    const day = requireLicenceDate(expiresAt, now, 'expiresAt');
+    const sent = agent.licenceRenewal;
+    const previous = agent.licence?.copyRef ?? agent.kyc?.tradingLicenceRef;
+    const copyRef = sent?.copyRef ?? previous;
+    // The licence it replaces starts its clock; for a while it still answers "what was on record before".
+    if (sent && previous && previous !== sent.copyRef) this.media.retireAccountDoc(previous, new Date(now));
+    agent.licence = { expiresAt: day, ...(copyRef ? { copyRef } : {}), ...(by ? { recordedBy: by } : {}), recordedAt: new Date(now).toISOString() };
+    delete agent.licenceRenewal;
+    delete agent.licenceRenewalRefusal;
+    this.agents.set(did, agent);
+    void this.events.publish(GlosEvent.Pudo.ShopLicenceChecked, { did, accepted: true, expiresAt: day }, { source: 'pudo' }).catch(() => undefined);
+    return agent;
+  }
+
+  /**
+   * The licence the shop sent is not accepted — unreadable, not its licence, a date that is not on it. A refusal carries
+   * the reason the shop is shown, and the photograph is deleted: nothing was recorded from it.
+   */
+  refuseLicenceRenewal(did: string, reason: string, by?: string, now: number = Date.now()): Agent {
+    const agent = this.require(did);
+    const sent = agent.licenceRenewal;
+    if (!sent) throw new GlosError('INVALID_STATE', 'No renewed licence has been sent to refuse');
+    const why = reason?.trim();
+    if (!why) throw new GlosError('REASON_REQUIRED', 'Say why: the shop is shown it, and sends another');
+    this.media.purgeByOwner(sent.copyRef, did);
+    delete agent.licenceRenewal;
+    agent.licenceRenewalRefusal = { reason: why, at: new Date(now).toISOString(), ...(by ? { by } : {}) };
+    this.agents.set(did, agent);
+    void this.events.publish(GlosEvent.Pudo.ShopLicenceChecked, { did, accepted: false, reason: why }, { source: 'pudo' }).catch(() => undefined);
+    return agent;
   }
 
   private require(did: string): Agent {

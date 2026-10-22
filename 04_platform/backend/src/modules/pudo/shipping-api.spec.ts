@@ -128,7 +128,7 @@ describe('the public shipping quote', () => {
     });
     if (!active) return agents.get(a.did);
     agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'l.pdf', shopPhotoRefs: ['s.jpg'] });
-    agents.decideKyc(a.did, true);
+    agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
     gate.topUp(a.did, 50);
     return agents.get(a.did);
   }

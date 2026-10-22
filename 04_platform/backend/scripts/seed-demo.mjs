@@ -199,6 +199,10 @@ const run = async () => {
   say(`shop  Riverside Corner  ${a2.did}`);
   say(`shop  Downtown Kiosk    ${a3.did}`);
 
+  // Round 40 — the date each shop's trading licence runs to: a year ahead, and Riverside Corner's in twenty days, so its
+  // home screen shows the notice a shop gets thirty days before.
+  const licenceRunsTo = (label) => new Date(Date.now() + (label === 'Riverside Corner' ? 20 : 365) * 86_400_000).toISOString().slice(0, 10);
+
   // DRAFT → KYC_PENDING → APPROVED_UNFUNDED (wallet minted) → deposit → ACTIVE with money.
   for (const [did, tok, label] of [
     [a1.did, tokA1, 'Mama Sarah Shop'],
@@ -219,10 +223,14 @@ const run = async () => {
           `kyc ${label}`,
         );
       }
-      need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/kyc-decision`, { token: op, body: { approve: true, by: 'seed' } }), `approve ${label}`);
+      need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/kyc-decision`, { token: op, body: { approve: true, by: 'seed', licenceExpiresAt: licenceRunsTo(label) } }), `approve ${label}`);
       // The starter-kit deposit is recorded by the staff who hand over the kit, not by the shop.
       need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/deposit`, { token: op }), `deposit ${label}`);
       say(`activated: ${label}`);
+    }
+    // Round 40 — a shop approved before its licence's date was asked gets one, as staff would note it.
+    if (!need(await req('GET', `/v1/sbg/agents/${encodeURIComponent(did)}`, { token: tok }), 'agent read').licence) {
+      need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/licence`, { token: op, body: { expiresAt: licenceRunsTo(label), by: 'seed' } }), `licence ${label}`);
     }
     await declare(tok, label);
     const gate = need(await req('GET', `/v1/sbg/agents/${encodeURIComponent(did)}/can-transact`, { token: tok }), 'gate');

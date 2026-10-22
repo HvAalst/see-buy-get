@@ -237,7 +237,7 @@ describe('tax', () => {
       const { from, to } = route();
       for (const s of [from, to]) {
         agents.submitKyc(s.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.pdf', shopPhotoRefs: ['shop-1.jpg'] });
-        agents.decideKyc(s.did, true);
+        agents.decideKyc(s.did, true, undefined, undefined, '2099-12-31');
       }
       gate.topUp(from.did, 500, 'bank-send');
       chargeVat();
@@ -268,7 +268,7 @@ describe('tax', () => {
       // remit that tax out of its own pocket, and nothing in the books would say why.
       const a = shop('Void Test', 'Nairobi', NAIROBI);
       agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.pdf', shopPhotoRefs: ['shop-1.jpg'] });
-      agents.decideKyc(a.did, true); // a shop can only hold a balance once it is approved
+      agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31'); // a shop can only hold a balance once it is approved
       chargeVat();
       const bill = taxOn(WHOLESALE, 0.16);
       gate.topUp(a.did, 500, 'bank-1');
@@ -387,7 +387,7 @@ describe('tax', () => {
     it('releases the cover when the sale is undone — a shipment nobody makes carries no risk', () => {
       const a = shop('Provision Void', 'Nairobi', NAIROBI);
       agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'l.pdf', shopPhotoRefs: ['s.jpg'] });
-      agents.decideKyc(a.did, true);
+      agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
       gate.topUp(a.did, 500, 'bank-1');
       gate.chargeShipping(a.did, 10, 'PUD-P1', 0, 2);
       expect(provision()).toBe(2);
@@ -439,7 +439,7 @@ describe('tax', () => {
       // between our own accounts, so an absurd provision is capped by what is actually left.
       const a = shop('Clamp', 'Nairobi', NAIROBI);
       agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'l.pdf', shopPhotoRefs: ['s.jpg'] });
-      agents.decideKyc(a.did, true);
+      agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
       gate.topUp(a.did, 500, 'bank-1');
       gate.chargeShipping(a.did, 10, 'PUD-P2', 4, 999);
       expect(provision()).toBe(6); // everything after the tax, and not a cent more

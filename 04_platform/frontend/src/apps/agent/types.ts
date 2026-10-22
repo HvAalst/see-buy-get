@@ -91,6 +91,28 @@ export interface AgentView {
   /** What one parcel costs this shop's float, in that money. */
   parcelPrice?: number;
   rating?: { count: number; average: number; isNew?: boolean } | null;
+  /** Round 40 — the date its trading licence runs to, as staff recorded it. */
+  licence?: { expiresAt: string; copyRef?: string };
+  /** Round 40 — where that licence stands now. Merged in by the controller; absent from a server that predates it. */
+  licenceStanding?: LicenceStanding;
+  /** A renewed licence the shop sent, waiting for staff. */
+  licenceRenewal?: { copyRef: string; expiresAt: string; sentAt: string };
+  /** Why the last licence it sent was not accepted. */
+  licenceRenewalRefusal?: { reason: string; at: string };
+}
+
+/**
+ * Round 40 — WHERE THE SHOP'S TRADING LICENCE STANDS (shop-licence.ts on the server): in date, running out within thirty
+ * days, lapsed and in its fourteen days' grace, or stopped — no new parcel starts here until the renewed one is recorded.
+ */
+export interface LicenceStanding {
+  state: 'none' | 'ok' | 'due' | 'grace' | 'stopped';
+  expiresAt?: string;
+  daysLeft?: number;
+  /** The first day no new parcel can start here. */
+  stopsOn?: string;
+  graceDaysLeft?: number;
+  renewalSent: boolean;
 }
 
 /** One pickup-shelf slot: a colour column + numbered row (e.g. "Green-3"). A normal slot holds one parcel; a
@@ -117,7 +139,7 @@ export interface ShelfGrid {
 export interface GateView {
   ok: boolean;
   canTransact?: boolean;
-  code?: 'WALLET_INSUFFICIENT' | 'AGENT_LOCKED' | 'ID_HELD' | string;
+  code?: 'WALLET_INSUFFICIENT' | 'AGENT_LOCKED' | 'ID_HELD' | 'LICENCE_LAPSED' | string;
   balance: number;
   shortfall?: number;
   /** The money the balance and the shortfall are in. */

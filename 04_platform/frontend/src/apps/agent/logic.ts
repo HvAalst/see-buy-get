@@ -93,6 +93,8 @@ export function gateNotice(agent: Pick<AgentView, 'status' | 'kycRejection'> | n
   if (!agent || !gate || gate.ok) return null;
   // Held over its national ID: said as what it is. Topping up would not open the counter, so it must not be asked for.
   if (gate.code === 'ID_HELD') return { tone: 'danger', title: t('agent.logic.gateIdHeldTitle'), detail: t('agent.logic.gateIdHeldDetail') };
+  // Round 40 — the trading licence lapsed and the grace is over: the same, and what ends it is the renewed licence.
+  if (gate.code === 'LICENCE_LAPSED') return { tone: 'danger', title: t('agent.logic.gateLicenceTitle'), detail: t('agent.logic.gateLicenceDetail') };
   // NOT YET THROUGH THE DOOR IS NOT "LOCKED". A new shop was shown "Account locked — top up your wallet to start
   // accepting parcels AGAIN" under the request for its papers: money asked for before anybody had agreed to anything,
   // in words for a shop that had been open. What it is waiting on is said once, by papersStep.
@@ -112,6 +114,41 @@ export function gateNotice(agent: Pick<AgentView, 'status' | 'kycRejection'> | n
         ? t('agent.logic.gateLowShortfall', { amount: money(gate.shortfall, gate.currency) })
         : t('agent.logic.gateLowDetail'),
   };
+}
+
+/**
+ * Round 40 — WHAT THE HOME SCREEN SAYS ABOUT THE SHOP'S TRADING LICENCE, and whether it offers to send the renewed one. Nothing
+ * while it is in date and nothing was sent back; from thirty days before it runs out, the day and what follows; once sent, that
+ * it is with SeeBuyGet (sending twice is not an action). The day new parcels stop is said whatever was sent: it is a fact.
+ */
+export interface LicenceNotice {
+  tone: 'info' | 'warn' | 'danger';
+  title: string;
+  detail: string;
+  /** Offer to send the renewed licence. */
+  send: boolean;
+}
+
+export function licenceNotice(agent: Pick<AgentView, 'licenceStanding' | 'licenceRenewal' | 'licenceRenewalRefusal'> | null, t: Translate, day: (iso: string) => string): LicenceNotice | null {
+  const l = agent?.licenceStanding;
+  if (!l) return null;
+  const runs = l.expiresAt ? day(l.expiresAt) : '';
+  const stops = l.stopsOn ? day(l.stopsOn) : '';
+  const sent = agent?.licenceRenewal;
+  const refused = agent?.licenceRenewalRefusal;
+  if (l.state === 'stopped') {
+    return { tone: 'danger', title: t('agent.licence.stoppedTitle'), detail: sent ? t('agent.licence.stoppedSent', { day: runs }) : t('agent.licence.stoppedBody', { day: runs }), send: !sent };
+  }
+  if (sent) return { tone: 'info', title: t('agent.licence.sentTitle'), detail: t('agent.licence.sentBody', { day: day(sent.expiresAt) }), send: false };
+  if (refused) return { tone: 'danger', title: t('agent.licence.refusedTitle'), detail: t('agent.licence.refusedBody', { reason: refused.reason }), send: true };
+  if (l.state === 'grace') return { tone: 'danger', title: t('agent.licence.graceTitle'), detail: t('agent.licence.graceBody', { day: runs, stops, n: l.graceDaysLeft ?? 0 }), send: true };
+  if (l.state === 'due') return { tone: 'warn', title: t('agent.licence.dueTitle', { n: l.daysLeft ?? 1 }), detail: t('agent.licence.dueBody', { day: runs }), send: true };
+  return null;
+}
+
+/** The renewed licence can go: a photo taken, and a whole date typed. */
+export function licenceReady(v: { photo: string; expiresAt: string }): boolean {
+  return Boolean(v.photo) && /^\d{4}-\d{2}-\d{2}$/.test(v.expiresAt);
 }
 
 /** Accepting is possible only when the gate says so — every accept costs wallet money. */

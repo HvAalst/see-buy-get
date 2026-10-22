@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, NeedsSignalNote, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
 import { capLine, type CustodyCapView } from '../../../shared/custodyCap';
-import { useT, type MessageKey } from '../../../shared/i18n';
+import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
-import { canAccept, gateNotice, homeSummary, money, papersReady, papersStep } from '../logic';
+import { canAccept, gateNotice, homeSummary, licenceNotice, licenceReady, money, papersReady, papersStep } from '../logic';
 import { PhotoField } from './PhotoField';
 import { PeopleSheet } from './PeopleSheet';
 import type { AgentActions, AgentState, Screen } from '../useAgentApp';
@@ -86,6 +86,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
       {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
       {state.staff ? null : <DeclarationCard sbg={sbg ?? null} />}
+      {/* Round 40 — the trading licence, from thirty days before it runs out: the owner's to renew, never the counter's. */}
+      {state.staff ? null : <Licence state={state} actions={actions} />}
 
       {/* Shop identity — photo + name + status. The photo taps through to its own sheet. */}
       <Card>
@@ -562,6 +564,60 @@ function CapNote({ view }: { view: CustodyCapView | null }) {
   const t = useT();
   const line = capLine(view, t);
   return line ? <Note tone={line.full ? 'warn' : 'info'} icon="info" title={line.title} detail={line.detail} /> : null;
+}
+
+/**
+ * Round 40 — THE TRADING LICENCE (the user: "Expiry, notice, grace"): what the shop is told from thirty days before it runs out,
+ * and the way to send the renewed one — a photo of it, and the date it runs to as written on it. Staff read it; until then the
+ * date on record is the one that counts, and the card says the licence is with SeeBuyGet.
+ */
+function Licence({ state, actions }: HomeScreenProps) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [photo, setPhoto] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const notice = licenceNotice(state.agent, t, (iso) => formatDate(`${iso}T12:00:00Z`));
+  if (!notice) return null;
+  return (
+    <>
+      <Note tone={notice.tone} icon={notice.tone === 'info' ? 'check' : 'badge'} title={notice.title} detail={notice.detail} />
+      {notice.send ? (
+        <Button variant="outline" onClick={() => setOpen(true)}>
+          {t('agent.licence.send')}
+        </Button>
+      ) : null}
+      {open ? (
+        <Sheet open onClose={() => setOpen(false)} title={t('agent.licence.send')}>
+          <p class="t-body">{t('agent.licence.sheetBody')}</p>
+          <PhotoField id="licence-renewed" value={photo} label={t('agent.licence.photo')} upload={(file) => actions.uploadPhoto('kyc_licence', file)} onCapture={setPhoto} />
+          <div class="field">
+            <label class="field__label" for="licence-until">
+              {t('agent.licence.dateLabel')}
+            </label>
+            <input id="licence-until" class="input" type="date" value={expiresAt} onInput={(e) => setExpiresAt(e.currentTarget.value)} />
+            <p class="hint" style="margin-top:8px">{t('agent.licence.dateHint')}</p>
+          </div>
+          <Button
+            chevron={false}
+            disabled={!licenceReady({ photo, expiresAt })}
+            busy={state.busy === 'licence'}
+            onClick={async () => {
+              const sent = await actions.sendLicenceRenewal({ copyRef: photo, expiresAt });
+              if (!sent) return;
+              setOpen(false);
+              setPhoto('');
+              setExpiresAt('');
+            }}
+          >
+            {t('agent.papers.submit')}
+          </Button>
+          <Button variant="link" onClick={() => setOpen(false)}>
+            {t('agent.papers.notNow')}
+          </Button>
+        </Sheet>
+      ) : null}
+    </>
+  );
 }
 
 /**

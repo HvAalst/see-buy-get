@@ -108,6 +108,24 @@ export class KycDecisionDto {
   /** Required when refusing: the applicant is SHOWN this, and a refusal they cannot act on leaves them
    *  exactly where a silent one did. Validated in the service, where the approve flag is known. */
   @IsOptional() @IsString() reason?: string;
+  /**
+   * Round 40 — REQUIRED when approving: the last day the shop's trading licence is valid (YYYY-MM-DD), read off the licence
+   * it sent. Checked in the service, which answers in words the console shows.
+   */
+  @IsOptional() @IsString() @MaxLength(20) licenceExpiresAt?: string;
+}
+
+/** Round 40 — a shop sends its renewed trading licence: a photograph it uploaded as kyc_licence, and the date it runs to as the shop reads it. */
+export class ShopLicenceRenewalDto {
+  @IsString() @MaxLength(80) copyRef!: string;
+  @IsString() @MaxLength(20) expiresAt!: string;
+}
+
+/** Round 40 — staff record the date a shop's trading licence runs to, read off the licence. */
+export class ShopLicenceRecordDto {
+  @IsString() @MaxLength(20) expiresAt!: string;
+  /** Who is recording it, for a console on the shared key; a named sign-in's own name wins. */
+  @IsOptional() @IsString() @MaxLength(120) by?: string;
 }
 
 /** Round 39 — a light courier sends a photo of their ID: the media id of a photograph they uploaded as kyc_id. */

@@ -207,13 +207,13 @@ describe('crossing a border', () => {
       const tz = shop('Dar Duka Active', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ');
       const docs = { idCopyRef: 'id.jpg', tradingLicenceRef: 'tl.jpg', shopPhotoRefs: ['front.jpg'] };
       agents.submitKyc(tz.did, docs);
-      expect(agents.decideKyc(tz.did, true).status).toBe('ACTIVE');
+      expect(agents.decideKyc(tz.did, true, undefined, undefined, '2099-12-31').status).toBe('ACTIVE');
       expect(agents.canScan(tz.did)).toBe(true);
 
       // …and a shop with a float still waits for its first top-up, exactly as before.
       const ke = shop('Mama Sarah Unfunded', 'Nairobi', NAIROBI);
       agents.submitKyc(ke.did, docs);
-      expect(agents.decideKyc(ke.did, true).status).toBe('APPROVED_UNFUNDED');
+      expect(agents.decideKyc(ke.did, true, undefined, undefined, '2099-12-31').status).toBe('APPROVED_UNFUNDED');
     });
 
     it('refuses CASH at a counter whose promise is the carrier’s', () => {
@@ -834,7 +834,7 @@ describe('crossing a border', () => {
     function activeShop(shopName: string, zone: string, location: { lat: number; lng: number }, country?: string) {
       const a = shop(shopName, zone, location, country);
       agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.pdf', shopPhotoRefs: ['shop.jpg'] });
-      agents.decideKyc(a.did, true);
+      agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
       return agents.get(a.did);
     }
 

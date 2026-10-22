@@ -171,7 +171,7 @@ describe('a parcel is kept by the account, not by the number', () => {
       requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-100', criminalRecordClear: true },
     } as never);
     agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.pdf', shopPhotoRefs: ['shop-1.jpg'] } as never);
-    agents.decideKyc(a.did, true);
+    agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
     gate.topUp(a.did, 500);
     return agents.get(a.did);
   }

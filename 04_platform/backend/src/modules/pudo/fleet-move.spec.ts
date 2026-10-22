@@ -864,7 +864,7 @@ describe('a driver changing fleet', () => {
         requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true },
       } as never);
       agents.submitKyc(shop.did, { idCopyRef: 'i.jpg', tradingLicenceRef: 'l.jpg', shopPhotoRefs: ['s.jpg'] } as never);
-      agents.decideKyc(shop.did, true);
+      agents.decideKyc(shop.did, true, undefined, undefined, '2099-12-31');
       gate.topUp(shop.did, 50);
       const parcelId = `QR-LV-${seq}`;
       parcels.accept({ agentDid: shop.did, parcelId, size: 'M', destZone: 'Z', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) } as never);

@@ -8,6 +8,9 @@ import { FleetService } from './fleet.service';
 import { NotificationService } from './notification.service';
 import { driverPapers, fleetPapers, lapsedOf, offRoadLine, paperDay, paperLabel, PaperStatus, vehiclePapers } from './papers';
 import { VehicleService } from './vehicle.service';
+import { AgentService } from './agent.service';
+import { LICENCE_GRACE_DAYS, licenceDay, shopLicenceStanding, type ShopLicenceStanding } from './shop-licence';
+import type { Agent } from './pudo.types';
 
 const SWEEP_MS = 6 * 60 * 60 * 1000;
 
@@ -111,6 +114,30 @@ export interface SentPaperView {
   sentBy?: string;
 }
 
+/**
+ * Round 40 — A SHOP'S TRADING LICENCE, as staff read it: where it stands, what it was read from, and a renewed one the shop
+ * sent and nobody has read yet. Only network staff record a shop's licence: a shop does not type the date on the paper
+ * that says whether it may trade.
+ */
+export interface ShopLicenceRow {
+  did: string;
+  shopName: string;
+  zone: string;
+  country: string;
+  status: string;
+  /** The licence number it registered with. */
+  number?: string;
+  /** The date on record, the photograph it was read from, and who read it. */
+  licence?: { expiresAt: string; copyRef?: string; recordedBy?: string; recordedAt: string };
+  /** The licence it sent at joining — what an undated licence can still be read from. */
+  joiningCopyRef?: string;
+  /** A renewed licence it sent, waiting to be read: the work. Its date is the shop's reading. */
+  renewal?: { copyRef: string; expiresAt: string; sentAt: string };
+  /** Why the last licence it sent was not accepted. */
+  renewalRefusal?: { reason: string; at: string; by?: string };
+  standing: ShopLicenceStanding;
+}
+
 /** A vehicle no fleet owns — registered by a courier, so only an operator can touch its papers. */
 export interface LooseVehicleRow {
   vehicleId: string;
@@ -161,9 +188,33 @@ export interface PapersNetworkReport {
   transit: TransitAuthorityRow[];
   /** Who one can be recorded against, by NAME. Fleets, and drivers who are their own carrier. */
   carriers: CarrierOption[];
+  /** Round 40 — every approved shop's trading licence: a renewal waiting first, then stopped, in grace, running out, undated. */
+  shops: ShopLicenceRow[];
 }
 
 const RANK: Record<PaperStatus['state'], number> = { lapsed: 0, due: 1, none: 2, ok: 3 };
+
+/** A shop past joining: approved, open or locked for money. Its licence is the one it trades on. */
+function approvedShop(a: Agent): boolean {
+  return a.status === 'APPROVED_UNFUNDED' || a.status === 'ACTIVE' || a.status === 'LOCKED';
+}
+
+/**
+ * Round 40 — what a shop is told about its licence, short because a notification is read on a lock screen. Running out:
+ * the day, and the day new parcels stop. Lapsed: the grace, and how long. Stopped: what has stopped, and what goes on.
+ */
+export function shopLicenceNotice(l: ShopLicenceStanding): { title: string; body: string } {
+  const runs = l.expiresAt ? licenceDay(l.expiresAt) : '';
+  const stops = l.stopsOn ? licenceDay(l.stopsOn) : '';
+  const send = l.renewalSent ? 'The licence you sent has not been read yet' : 'Send a photo of the renewed one from the home screen';
+  if (l.state === 'stopped') return { title: 'New parcels have stopped at your shop', body: `Your trading licence ran to ${runs}. No new parcel can start at your shop until the renewed one is recorded; booked parcels and your shelf go on. ${send}.` };
+  if (l.state === 'grace') {
+    const left = l.graceDaysLeft ?? LICENCE_GRACE_DAYS;
+    return { title: 'Your trading licence has lapsed', body: `It ran to ${runs}. In ${left} day${left === 1 ? '' : 's'}, from ${stops}, no new parcel can start at your shop until the renewed one is recorded. ${send}.` };
+  }
+  const left = l.daysLeft ?? 1;
+  return { title: `Your trading licence runs out in ${left} day${left === 1 ? '' : 's'}`, body: `It runs to ${runs}. ${send}: ${LICENCE_GRACE_DAYS} days after it lapses no new parcel can start at your shop.` };
+}
 const worst = (papers: PaperStatus[]): number => Math.min(...papers.map((p) => RANK[p.state]), RANK.ok);
 
 /**
@@ -194,6 +245,8 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     // BL1 — optional for the same reason as the two above: the specs that build this by hand keep
     // working, and app.boot.spec is what catches it missing from the module.
     @Optional() private readonly transit?: TransitAuthorityService,
+    // Round 40 — the shops' trading licences. Optional for the same reason.
+    @Optional() private readonly agents?: AgentService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -360,7 +413,28 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
     const byDid = new Map(carriers.map((c) => [c.did, c.name]));
     const transit = this.transit?.register((did) => byDid.get(did), now) ?? [];
 
-    return { couriers, vehicles, fleets, carrierPapers, transit, carriers, sweep: this.lastRun, sweepEveryHours: SWEEP_MS / 3_600_000 };
+    return { couriers, vehicles, fleets, carrierPapers, transit, carriers, shops: this.shopRows(now), sweep: this.lastRun, sweepEveryHours: SWEEP_MS / 3_600_000 };
+  }
+
+  /** Round 40 — every shop past joining, with its trading licence: what waits on us first, then what has stopped, then the rest. */
+  shopRows(now: number = Date.now()): ShopLicenceRow[] {
+    const order: Record<ShopLicenceStanding['state'], number> = { stopped: 0, grace: 1, due: 2, none: 3, ok: 4 };
+    return (this.agents?.list() ?? [])
+      .filter(approvedShop)
+      .map((a) => ({
+        did: a.did,
+        shopName: a.shopName,
+        zone: a.zone,
+        country: this.agents!.countryOf(a),
+        status: a.status,
+        ...(a.requirements?.tradingLicence ? { number: a.requirements.tradingLicence } : {}),
+        ...(a.licence ? { licence: { ...a.licence } } : {}),
+        ...(a.kyc?.tradingLicenceRef ? { joiningCopyRef: a.kyc.tradingLicenceRef } : {}),
+        ...(a.licenceRenewal ? { renewal: { ...a.licenceRenewal } } : {}),
+        ...(a.licenceRenewalRefusal ? { renewalRefusal: { ...a.licenceRenewalRefusal } } : {}),
+        standing: shopLicenceStanding(a, now),
+      }))
+      .sort((a, b) => Number(Boolean(b.renewal)) - Number(Boolean(a.renewal)) || order[a.standing.state] - order[b.standing.state] || a.shopName.localeCompare(b.shopName));
   }
 
   /** Returns what the pass did. */
@@ -456,6 +530,21 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
         const kind = p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due';
         if (await this.tellOnce(`fleetown:${m.did}:${p.kind}:${p.expiresAt}:${p.state}`, m.did, title, body, kind, now, `papers:${m.did}:${p.kind}`)) out.notified++;
       }
+    }
+    /*
+     * Round 40 — EVERY SHOP'S TRADING LICENCE (the user: "Expiry, notice, grace"): told thirty days before it runs out, again
+     * the day it lapses, and when its fourteen days' grace are over and no new parcel can start there. Once per mark per
+     * date, so a renewed licence starts again and an ignored notice is never repeated. A shop that has sent its renewed
+     * licence is not told to send it: it has done its part. The day new parcels stop is said whatever it sent, because
+     * that is a fact about today.
+     */
+    for (const a of this.agents?.list() ?? []) {
+      if (!approvedShop(a)) continue;
+      const l = shopLicenceStanding(a, now);
+      if (l.state !== 'due' && l.state !== 'grace' && l.state !== 'stopped') continue;
+      if (l.renewalSent && l.state !== 'stopped') continue;
+      const words = shopLicenceNotice(l);
+      if (await this.tellOnce(`shop:${a.did}:trading_licence:${l.expiresAt}:${l.state}`, a.did, words.title, words.body, l.state === 'due' ? 'papers_due' : 'papers_lapsed', now, `papers:${a.did}:trading_licence`)) out.notified++;
     }
     this.lastRun = { at: new Date(now).toISOString(), ...out };
     return out;

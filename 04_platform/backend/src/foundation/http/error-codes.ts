@@ -107,6 +107,8 @@ export const ERROR_CODES = {
   // Round 39 — a corridor or hub rated high asks for a coded seal, and no night running.
   RISK_SEAL_REQUIRED: { status: 409, title: 'A coded seal is required here' },
   RISK_NIGHT: { status: 409, title: 'Nothing moves here at night' },
+  // Round 40 — a shop whose trading licence lapsed more than fourteen days ago starts no new parcel until it is renewed.
+  LICENCE_LAPSED: { status: 409, title: 'The trading licence has lapsed' },
   // Round 18 — a GS1 company prefix another business prints under with that extension digit, or one staff decided is another's.
   GS1_PREFIX_TAKEN: { status: 409, title: 'Another business uses this GS1 prefix' },
   COMMERCIAL_INVOICE_REQUIRED: { status: 409, title: 'The commercial invoice is not signed' },

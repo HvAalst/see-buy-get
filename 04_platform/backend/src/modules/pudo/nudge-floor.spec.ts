@@ -139,7 +139,7 @@ describe('the nudge floor', () => {
       deviceImei: `IMEI-N${seq}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true },
     });
     agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'tl.jpg', shopPhotoRefs: ['shop.jpg'] });
-    agents.decideKyc(a.did, true);
+    agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
     gate.topUp(a.did, 50); // an active shop — a counter take-in bills its float
     return agents.get(a.did);
   }

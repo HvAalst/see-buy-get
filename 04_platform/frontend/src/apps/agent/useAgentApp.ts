@@ -1407,6 +1407,26 @@ export function useAgentApp() {
     [client, did, run, fail, pushToast, refresh],
   );
 
+  /**
+   * Round 40 — the shop sends its renewed trading licence: the photo it just took, and the date it runs to. True when it went —
+   * the sheet closes on that and on nothing else. Staff read it; the date counts once they have.
+   */
+  const sendLicenceRenewal = useCallback(
+    async (body: { copyRef: string; expiresAt: string }): Promise<boolean> => {
+      if (!client || !did) return false;
+      let sent = false;
+      await run('licence', async () => {
+        const r = await client.api.sendLicenceRenewal(did, body);
+        if (r.error) return fail(r.error);
+        sent = true;
+        await refresh();
+        pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.licenceSent') });
+      });
+      return sent;
+    },
+    [client, did, run, fail, pushToast, refresh],
+  );
+
   /** Capture + upload a shop-front photo → point the shop at it → refresh. */
   const saveShopfront = useCallback(
     async (file: File) => {
@@ -2453,6 +2473,7 @@ export function useAgentApp() {
       setLocationPin,
       saveHours,
       sendPapers,
+      sendLicenceRenewal,
       saveShopfront,
       submitAccept,
       /** CV1 — the conversations API for this shop (null until signed in). */

@@ -128,7 +128,7 @@ describe('a shop’s float rests on a confirmed payment', () => {
     });
     if (approve) {
       agents.submitKyc(a.did, { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.pdf', shopPhotoRefs: ['shop.jpg'] });
-      agents.decideKyc(a.did, true);
+      agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
     }
     return agents.get(a.did);
   }

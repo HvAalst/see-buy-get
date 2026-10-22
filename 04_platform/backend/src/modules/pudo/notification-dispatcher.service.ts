@@ -147,6 +147,7 @@ import { UnclaimedService } from './unclaimed.service';
 import { VendorService } from './vendor.service';
 import { MARKET_SUPPLY_STALE_MIN, NUDGE_COOLDOWN_MIN, NUDGE_MIN_MOVE_KM, UNCOLLECTED_REMINDER_H, UNCOLLECTED_SWEEP_MS } from './pudo.config';
 import { HELD_BY_WORDS, type HeldByAuthority } from './load-detention.types';
+import { licenceDay } from './shop-licence';
 
 /** A load held by an authority, or let go, as the event says it. */
 interface HeldOnTheRoad {
@@ -486,6 +487,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         body: p.seen ? 'From now, how many parcels you may carry at once grows with each one you hand on.' : `${p.reason ?? 'Something was wrong with it.'} Send another from the Driver app’s home screen.`,
         tag: `id-photo:${p.did}`,
         data: { seen: p.seen },
+      });
+    });
+    // Round 40 — a shop's trading licence recorded to a new date, or the one it sent sent back with the reason.
+    this.events.subscribe<{ did: string; accepted: boolean; expiresAt?: string; reason?: string }>(GlosEvent.Pudo.ShopLicenceChecked, (e) => {
+      const p = e.payload;
+      void this.tell(p.did, {
+        kind: 'papers_checked',
+        title: p.accepted ? 'Your trading licence is recorded' : 'Your licence photo was not accepted',
+        body: p.accepted ? `SeeBuyGet has your trading licence to ${p.expiresAt ? licenceDay(p.expiresAt) : 'its new date'}.` : `${p.reason ?? 'Something was wrong with it.'} Send another from the Shop app’s home screen.`,
+        tag: `shop-licence:${p.did}`,
+        data: { accepted: p.accepted },
       });
     });
     this.events.subscribe<DriverRostered>(GlosEvent.Pudo.DriverRostered, (e) => this.onDriverRostered(e.payload));

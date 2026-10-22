@@ -44,7 +44,7 @@ describe('a counter’s step done with no signal keeps its time, over the wire',
       .set(shop)
       .send({ idCopyRef: await photo(shop, 'kyc_id'), tradingLicenceRef: await photo(shop, 'kyc_licence'), shopPhotoRefs: [await photo(shop, 'shop')] })
       .expect(201);
-    await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true }).expect(201);
+    await http().post(`/v1/sbg/agents/${did}/kyc-decision`).set(staff).send({ approve: true, licenceExpiresAt: '2099-12-31' }).expect(201);
     declared(app, 'shop', did);
     return did;
   };

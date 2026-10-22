@@ -144,7 +144,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
@@ -502,7 +502,39 @@ export class SbgController {
   @Roles('operator')
   @Post('agents/:did/kyc-decision')
   decideKyc(@Param('did') did: string, @Body() dto: KycDecisionDto, @Actor() actor: IntrospectionResult) {
-    return this.agents.decideKyc(did, dto.approve, auditActor(actor, dto.by), dto.reason);
+    return this.agents.decideKyc(did, dto.approve, auditActor(actor, dto.by), dto.reason, dto.licenceExpiresAt);
+  }
+
+  /**
+   * Round 40 — A SHOP SENDS ITS RENEWED TRADING LICENCE (the user: "Expiry, notice, grace"): a photograph it took, and the
+   * date the licence runs to as it reads it. From the shop's own sign-in and nobody else's — staff or somebody at the counter
+   * sending one "for it" would be the checker supplying the thing checked. Waits for staff to read it.
+   */
+  @Roles('agent')
+  @Post('agents/:did/licence-renewal')
+  sendShopLicence(@Param('did') did: string, @Body() dto: ShopLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
+    this.assertAgentSelf(did, actor, 'Only the shop sends its own licence, from its own sign-in');
+    const a = this.agents.sendLicenceRenewal(did, { copyRef: dto.copyRef, expiresAt: dto.expiresAt });
+    return { did, licenceStanding: this.agents.licenceStandingOf(did), ...(a.licenceRenewal ? { licenceRenewal: a.licenceRenewal } : {}) };
+  }
+
+  /**
+   * Round 40 — staff record the date a shop's trading licence runs to, read off the renewed licence it sent (or the licence
+   * on record). The date is the whole of a renewal: a shop whose new parcels had stopped starts them again at once.
+   */
+  @Roles('operator')
+  @Post('agents/:did/licence')
+  recordShopLicence(@Param('did') did: string, @Body() dto: ShopLicenceRecordDto, @Actor() actor: IntrospectionResult) {
+    const a = this.agents.recordLicence(did, dto.expiresAt, auditActor(actor, dto.by));
+    return { did, licence: a.licence, licenceStanding: this.agents.licenceStandingOf(did) };
+  }
+
+  /** Round 40 — the licence a shop sent is not accepted, with the reason it is shown; it sends another. */
+  @Roles('operator')
+  @Post('agents/:did/licence-renewal/refuse')
+  refuseShopLicence(@Param('did') did: string, @Body() dto: RefuseLicenceRenewalDto, @Actor() actor: IntrospectionResult) {
+    const a = this.agents.refuseLicenceRenewal(did, dto.reason, auditActor(actor, dto.by));
+    return { did, licenceStanding: this.agents.licenceStandingOf(did), ...(a.licenceRenewalRefusal ? { licenceRenewalRefusal: a.licenceRenewalRefusal } : {}) };
   }
 
   /**
@@ -2616,7 +2648,8 @@ export class SbgController {
   getAgent(@Param('did') did: string, @Actor() actor: IntrospectionResult) {
     this.assertAgentOwner(did, actor);
     const a = this.agents.get(did);
-    return { ...a, balance: this.agents.balance(did), ...this.shopMoney(did), rating: this.ratings.agentRating(did) };
+    // Round 40 — and where its trading licence stands, so the home screen says it before the counter refuses anything.
+    return { ...a, balance: this.agents.balance(did), ...this.shopMoney(did), rating: this.ratings.agentRating(did), licenceStanding: this.agents.licenceStandingOf(did) };
   }
 
   /** The money a shop's float is in, and what one parcel costs it there: its own company's (amounts.ts). */
@@ -3408,6 +3441,12 @@ export class SbgController {
    * sign-in, or network staff standing in for it. These took any valid token: any account could close a
    * shop, reprice it, move its pin, or credit its float.
    */
+  /** Round 40 — the shop ONLY, from its own sign-in: not staff standing in for it — the checker never supplies the thing checked. */
+  private assertAgentSelf(did: string, actor: IntrospectionResult, refusal: string): void {
+    this.agents.get(did); // 404 if unknown
+    if (actor?.role !== 'agent' || actor.did !== did) throw new GlosError('FORBIDDEN', refusal);
+  }
+
   private assertAgentActs(did: string, actor: IntrospectionResult): void {
     this.agents.get(did); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== did)) {
@@ -4024,7 +4063,8 @@ export class SbgController {
       openState: a.openState,
       // False: no NEW parcel can name this shop, as the place to hand in or to collect. It still hands out what it
       // holds — so it stays on the map for whoever is collecting — and a picker simply does not offer it.
-      takesNew: !a.idHold,
+      // Round 40 — nor while its trading licence has lapsed past the grace: the one rule, asked of the service.
+      takesNew: !a.idHold && !this.agents.licenceStoppedFor(a.did),
       pricePerParcel: a.pricePerParcel,
       // The money that price is in — its company's. A price is public; without its money it says nothing.
       currency: this.shopCurrency(a.did),

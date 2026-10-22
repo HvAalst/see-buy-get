@@ -9,6 +9,7 @@ import { DocumentStrip } from './DocumentStrip';
 import { TransitPanel } from './TransitPanel';
 import { OperatorPapersPanel } from './OperatorPapers';
 import { DeclarationsPanel } from './DeclarationsPanel';
+import { ShopLicencesPanel } from './ShopLicences';
 import { useCountryAtlas } from './CountrySelect';
 import { paperDay, paperLine, papersToShow, renewalBlocker } from '../../../shared/papers';
 import { isStuck, type CourierContact, type CourierPaperRow, type LooseVehicleRow } from '../papers';
@@ -77,6 +78,9 @@ export function PapersScreen({ state, actions }: { state: TowerState; actions: T
 
       {/* Round 39 — the yearly security declarations: who takes on nothing new because theirs is not in force. */}
       <DeclarationsPanel actions={actions} />
+
+      {/* Round 40 — the shops' trading licences: a renewed one sent comes first, then those whose new parcels have stopped. */}
+      <ShopLicencesPanel rows={r === null ? null : (r.shops ?? [])} state={state} actions={actions} />
 
       {/* The check itself — when it last looked, and a way to make it look now. */}
       <section class="cons__panel">

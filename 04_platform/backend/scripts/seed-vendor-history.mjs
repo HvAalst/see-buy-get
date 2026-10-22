@@ -127,7 +127,7 @@ const run = async () => {
     const did = acct.did;
     const tok = acct.token.access_token;
     need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/submit-kyc`, { token: tok, body: { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.jpg', shopPhotoRefs: ['shop.jpg'] } }), `kyc ${label}`);
-    need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/kyc-decision`, { token: op, body: { approve: true, by: 'seed' } }), `approve ${label}`);
+    need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/kyc-decision`, { token: op, body: { approve: true, by: 'seed', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10) } }), `approve ${label}`);
     // The starter-kit deposit is recorded by the staff who hand over the kit, not by the shop.
     need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/deposit`, { token: op }), `deposit ${label}`);
     await fundVia(`/v1/sbg/agents/${encodeURIComponent(did)}/top-up`, 60, tok, op);

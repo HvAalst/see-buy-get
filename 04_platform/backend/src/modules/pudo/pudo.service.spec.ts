@@ -271,7 +271,7 @@ describe('PUDO Light', () => {
     agentSeq += 1;
     const a = agents.register({ shopName, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'next to the market', openingHours: uniformHours(), shelf: defaultShelf, fullName: `${shopName} owner`, nationalId: `ID-${agentSeq}`, mobile: `+25470${agentSeq}`, deviceImei: `IMEI-${agentSeq}`, requirements: eligibleReqs() });
     agents.submitKyc(a.did, kycDocs);
-    agents.decideKyc(a.did, true);
+    agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
     if (topUp > 0) gate.topUp(a.did, topUp);
     return agents.get(a.did);
   }
@@ -305,7 +305,7 @@ describe('PUDO Light', () => {
         requirements: eligibleReqs(),
       } as never);
       agents.submitKyc(a.did, kycDocs);
-      agents.decideKyc(a.did, true);
+      agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
       return agents.get(a.did);
     };
 
@@ -425,7 +425,7 @@ describe('PUDO Light', () => {
     const a = agents.register({ shopName: "Mama Sarah's", zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'blue gate', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Sarah K', nationalId: 'ID-999', mobile: '+254700111', deviceImei: 'IMEI-X', requirements: eligibleReqs() });
     expect(a.status).toBe('DRAFT');
     expect(agents.submitKyc(a.did, kycDocs).status).toBe('KYC_PENDING');
-    expect(agents.decideKyc(a.did, true).status).toBe('APPROVED_UNFUNDED'); // wallet provisioned, scan disabled
+    expect(agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31').status).toBe('APPROVED_UNFUNDED'); // wallet provisioned, scan disabled
     expect(agents.canScan(a.did)).toBe(false);
     gate.topUp(a.did, 50);
     expect(agents.get(a.did).status).toBe('ACTIVE');
@@ -467,7 +467,7 @@ describe('PUDO Light', () => {
 
     // They send a fresh set and are approved: the old refusal stops being the news.
     agents.submitKyc(a.did, kycDocs);
-    expect(agents.decideKyc(a.did, true).kycRejection).toBeUndefined();
+    expect(agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31').kycRejection).toBeUndefined();
   });
 
   it('publishes a registration so the applicant can be told what is still needed', () => {
@@ -2812,7 +2812,7 @@ describe('PUDO Light', () => {
         agentSeq += 1;
         const a = agents.register({ shopName, zone, country: 'ET', location: { lat: 9.03, lng: 38.74 }, landmark: 'by the roundabout', openingHours: uniformHours(), shelf: defaultShelf, fullName: `${shopName} owner`, nationalId: `ID-ET-${agentSeq}`, mobile: `+2519${agentSeq}`, deviceImei: `IMEI-ET-${agentSeq}`, requirements: eligibleReqs() } as never);
         agents.submitKyc(a.did, kycDocs);
-        agents.decideKyc(a.did, true);
+        agents.decideKyc(a.did, true, undefined, undefined, '2099-12-31');
         gate.topUp(a.did, 5000);
         return agents.get(a.did);
       };
@@ -9689,7 +9689,7 @@ describe('PUDO Light', () => {
       agentSeq += 1;
       const waiting = agents.register({ shopName: 'Waiting Shop', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Waiting owner', nationalId: `ID-WAIT-${agentSeq}`, mobile: `+2547009${agentSeq}`, deviceImei: `IMEI-WAIT-${agentSeq}`, requirements: eligibleReqs() });
       agents.submitKyc(waiting.did, kycDocs);
-      agents.decideKyc(waiting.did, true);
+      agents.decideKyc(waiting.did, true, undefined, undefined, '2099-12-31');
       expect(agents.get(waiting.did).status).toBe('APPROVED_UNFUNDED');
 
       // The price falls: nineteen parcels at 160 are more than twenty at 100, so the line is used up — shut, now.
