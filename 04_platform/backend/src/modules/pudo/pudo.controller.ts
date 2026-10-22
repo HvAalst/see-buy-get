@@ -4091,7 +4091,8 @@ export class SbgController {
   @Public()
   @Get('network/points')
   networkPoints() {
-    return this.agents.list().map((a) => this.shopCard(a));
+    // A shop at rest — its owner muted the account — is off the map: receivers find it from their own parcel.
+    return this.agents.list().filter((a) => !this.agents.isResting(a.did)).map((a) => this.shopCard(a));
   }
 
   /** A shop as anybody may see it: where it is, whether it is open, what it charges. Nothing it holds, owes or was asked for. */
@@ -4109,7 +4110,7 @@ export class SbgController {
       // False: no NEW parcel can name this shop, as the place to hand in or to collect. It still hands out what it
       // holds — so it stays on the map for whoever is collecting — and a picker simply does not offer it.
       // Round 40 — nor while its trading licence has lapsed past the grace: the one rule, asked of the service.
-      takesNew: !a.idHold && !this.agents.licenceStoppedFor(a.did),
+      takesNew: !a.idHold && !this.agents.licenceStoppedFor(a.did) && !this.agents.isResting(a.did),
       pricePerParcel: a.pricePerParcel,
       // The money that price is in — its company's. A price is public; without its money it says nothing.
       currency: this.shopCurrency(a.did),

@@ -75,6 +75,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'driver-sign-in', apps: ['driver'], group: 'start', steps: 4, notes: ['careful', 'careful', 'why', 'why', 'rare', 'rare'] },
   { id: 'driver-fleet', apps: ['driver'], group: 'start', steps: 3, notes: ['note', 'why', 'note', 'note', 'note', 'note'] },
   { id: 'change-pin', apps: ['fleet', 'driver', 'send'], group: 'account', steps: 3, notes: ['careful', 'note', 'careful', 'note', 'rare', 'careful', 'note'] },
+  { id: 'mute-account', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'business'], group: 'account', steps: 3, notes: ['note', 'note', 'why'] },
   { id: 'who-you-contract-with', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'business'], group: 'account', steps: 4, notes: ['note', 'why', 'rare'] },
   { id: 'account-recovery', apps: ['fleet', 'driver', 'send'], group: 'account', steps: 5, notes: ['note', 'why', 'note', 'note', 'careful', 'rare', 'rare', 'rare', 'careful', 'rare', 'rare', 'rare', 'rare', 'rare', 'note', 'why', 'note', 'rare', 'why', 'note', 'careful', 'rare', 'note'] },
   { id: 'store-sign-in', apps: ['vendor'], group: 'start', steps: 10 },

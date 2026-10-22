@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { createHash, randomBytes } from 'crypto';
@@ -63,6 +64,8 @@ export class FleetManagerService {
     // Optional so the specs that build this by hand keep working, exactly as DriverService does it; the
     // boot spec is what catches it missing from the real module.
     @Optional() private readonly media?: MediaService,
+    // Optional for the same reason: without it no fleet is ever at rest.
+    @Optional() private readonly rest?: RestingAccounts,
   ) {}
 
   /**
@@ -432,6 +435,8 @@ export class FleetManagerService {
     const m = this.managers.get(did);
     if (!m) return ['We do not know this fleet'];
     if (m.status !== 'ACTIVE') return [`${m.companyName} is ${m.status.toLowerCase().replace('_', ' ')} on the network`];
+    // Its owner muted the account: no new commitment, and what it is already carrying is finished (above).
+    if (this.rest?.isResting(did)) return [`${m.companyName} has paused its account`];
 
     const enforced = new Set(this.enforcedFor(m));
     if (!enforced.size) return [];

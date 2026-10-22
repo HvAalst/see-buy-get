@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
@@ -107,7 +108,14 @@ export class AgentService {
     private readonly presence: PresenceService,
     private readonly books: BooksService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
+    // Optional so the specs that build this by hand keep compiling: without it no shop is ever at rest.
+    @Optional() private readonly rest?: RestingAccounts,
   ) {}
+
+  /** Is this shop at rest — its owner muted their account? It is offered for nothing new, and leaves the public map. */
+  isResting(did: string | undefined): boolean {
+    return Boolean(this.rest?.isResting(did));
+  }
 
   /** The sister this deployment's shops and hubs belong to — the fallback for pre-entity records. */
   homeEntityId(): string {
@@ -666,9 +674,10 @@ export class AgentService {
    * over its national ID. Every place a shop is OFFERED for a new parcel asks this, so a held shop is never
    * chosen; what it already holds, and what was already booked to it, goes on.
    */
-  takesNew(agent: Pick<Agent, 'status' | 'idHold' | 'licence'>, now: number = Date.now()): boolean {
-    // Round 40 — nor is a shop whose trading licence lapsed and whose fourteen days' grace are over.
-    return agent.status === 'ACTIVE' && !agent.idHold && !licenceStopped(agent, now);
+  takesNew(agent: Pick<Agent, 'status' | 'idHold' | 'licence'> & { did?: string }, now: number = Date.now()): boolean {
+    // Round 40 — nor is a shop whose trading licence lapsed and whose fourteen days' grace are over; nor (2026-10-22)
+    // one whose owner muted their account.
+    return agent.status === 'ACTIVE' && !agent.idHold && !licenceStopped(agent, now) && !this.isResting(agent.did);
   }
 
   /**
@@ -680,6 +689,8 @@ export class AgentService {
     const agent = did ? this.agents.get(did) : undefined;
     // A lapsed licence (round 40) is said in the same words: why is the shopkeeper's own business.
     if (agent?.idHold || (agent && licenceStopped(agent, now))) throw new GlosError('FORBIDDEN', `${agent.shopName} is not taking new parcels for now. Choose another shop.`, { reason: 'shop_held', shop: agent.did });
+    // Muted by its owner: said in the same words — that, too, is the shopkeeper's own business.
+    if (agent && this.isResting(agent.did)) throw new GlosError('FORBIDDEN', `${agent.shopName} is not taking new parcels for now. Choose another shop.`, { reason: 'shop_resting', shop: agent.did });
   }
 
   /**
@@ -693,6 +704,8 @@ export class AgentService {
     if (hold) {
       throw new GlosError('FORBIDDEN', `No new parcel can be started at this shop for now: the national ID it registered with went to somebody else (reference ${hold.reference}). Parcels already booked to be handed in here, and everything on the shelf, go on as usual. Put the number of your own ID card on record, in Settings, to start new ones again.`, { reason: 'id_held', reference: hold.reference });
     }
+    // Muted by its owner: no new parcel starts here until they unmute — what is booked and on the shelf goes on.
+    if (this.isResting(did)) throw new GlosError('FORBIDDEN', 'No new parcel can be started at this shop: its owner muted the account. Parcels already booked to be handed in here, and everything on the shelf, go on as usual. The owner can unmute it in Settings.', { reason: 'shop_resting' });
     // Round 40 — the trading licence lapsed and the grace is over.
     const licence = agent ? shopLicenceStanding(agent, now) : undefined;
     if (licence?.state === 'stopped') throw new GlosError('LICENCE_LAPSED', licenceStopWords(licence), { reason: 'licence_lapsed', expiresAt: licence.expiresAt, stopsOn: licence.stopsOn });

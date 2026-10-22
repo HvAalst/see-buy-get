@@ -1731,6 +1731,7 @@ export class ParcelService implements OnApplicationBootstrap {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
+    this.vendors.assertTakesOrders(input.vendorId);
     // Round 29 — refused before anything is written where the store's prefix has no code left for it.
     this.codes?.assertCanIssue(vendorCoder(input.vendorId), 1);
     // A parcel handed in at a shop names that shop; one collected from the store's own dock names none,

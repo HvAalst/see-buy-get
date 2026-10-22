@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { GlosError } from '../../foundation/http/glos-error';
 import type { HookMessage } from '../../foundation/outbound/hook-delivery';
 import { PasswordTries, keptLocks } from '../../foundation/auth/password-tries';
@@ -188,7 +189,20 @@ export class VendorService {
     private readonly entities: EntityService,
     private readonly books: BooksService,
     private readonly presence: PresenceService,
+    // Optional so the specs that build this by hand keep compiling: without it no store is ever at rest.
+    @Optional() private readonly rest?: RestingAccounts,
   ) {}
+
+  /**
+   * A STORE AT REST TAKES NO NEW ORDER — its owner muted their account (2026-10-22). Asked wherever a new order or a
+   * new parcel for the store begins; what it already shipped goes on.
+   */
+  assertTakesOrders(vendorId: string): void {
+    const vendor = this.vendors.get(vendorId);
+    if (vendor && this.rest?.isResting(vendor.did)) {
+      throw new GlosError('FORBIDDEN', `${vendor.name}'s account is muted, so it takes no new orders through SeeBuyGet for now. Its owner can unmute it in Settings.`, { reason: 'store_resting' });
+    }
+  }
 
   /**
    * The sister company that settles this vendor. Records written before entities existed carry no
@@ -650,6 +664,7 @@ export class VendorService {
   /** Capture a buyer's checkout selection (the embedded node, a webhook, or manual entry). */
   captureCheckout(input: { vendorId: string; destAgentDid: string; buyerEmail: string; buyerMobile?: string; externalOrderId?: string; items?: Array<{ name: string; qty: number }>; subtotal?: number; source?: CheckoutHandoff['source'] }): CheckoutHandoff {
     this.get(input.vendorId); // 404 if unknown
+    this.assertTakesOrders(input.vendorId);
     const handoff: CheckoutHandoff = { id: `chk_${randomBytes(6).toString('hex')}`, vendorId: input.vendorId, destAgentDid: input.destAgentDid, buyerEmail: input.buyerEmail, buyerMobile: input.buyerMobile, externalOrderId: input.externalOrderId, items: input.items, subtotal: input.subtotal, source: input.source ?? 'node', consumed: false, at: new Date().toISOString() };
     this.checkouts.set(handoff.id, handoff);
     return handoff;

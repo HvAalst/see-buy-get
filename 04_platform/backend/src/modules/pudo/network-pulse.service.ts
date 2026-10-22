@@ -104,7 +104,8 @@ export class NetworkPulseService {
   towns(now: number = Date.now()): TownPage[] {
     if (this.cachedTowns && now - this.cachedTowns.at < CACHE_MS) return this.cachedTowns.towns;
     const byTown = new Map<string, TownPage>();
-    for (const a of this.agents.list().filter((x) => x.status === 'ACTIVE')) {
+    // Trading, and not at rest: a shop whose owner muted the account is not one anybody can use today.
+    for (const a of this.agents.list().filter((x) => x.status === 'ACTIVE' && !this.agents.isResting(x.did))) {
       const town = a.zone.trim();
       if (!town) continue;
       const page = byTown.get(town.toLowerCase()) ?? { town, slug: townSlug(town), country: this.agents.countryOf(a), shops: [] };
@@ -128,7 +129,7 @@ export class NetworkPulseService {
 
   /** Uncached — what `pulse` serves. */
   measure(now: number = Date.now()): NetworkPulse {
-    const trading = this.agents.list().filter((a) => a.status === 'ACTIVE');
+    const trading = this.agents.list().filter((a) => a.status === 'ACTIVE' && !this.agents.isResting(a.did));
     const byDid = new Map(trading.map((a) => [a.did, a]));
     const since = now - WINDOW_DAYS * 24 * 60 * 60 * 1000;
 

@@ -52,7 +52,7 @@ export const NOTICES: Record<Notice, { path: string; other: Notice; sections: Re
       { id: 'see', items: 7 },
       { id: 'others', items: 8 },
       { id: 'howLong', items: 11 },
-      { id: 'you', items: 6 },
+      { id: 'you', items: 7 },
     ],
   },
   cookies: {

@@ -8,6 +8,7 @@ import { SmsService } from '../../foundation/sms/sms.service';
 import { DEVICE_UNUSED_DAYS, DeviceBook, type DeviceSeen, type KnownDevice } from './person-devices';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
+import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { PASSWORD_WORDS, PasswordTries, keptLocks, spendTime } from '../../foundation/auth/password-tries';
 import { assertPassword, newResetCode, readResetCode } from '../../foundation/auth/password-rules';
 import { AccessToken } from '../../foundation/auth/auth.types';
@@ -116,7 +117,15 @@ export class AccountService implements OnApplicationBootstrap {
     @Optional() private readonly sms?: SmsService,
     // Round 40 — the number a hub's or a store's codes go to is kept encrypted. Optional for the specs that build this by hand.
     @Optional() private readonly crypto?: FieldEncryption,
-  ) {}
+    // Optional for the specs that build this by hand: without it, the email an account signs in with is never at rest.
+    @Optional() rest?: RestingAccounts,
+  ) {
+    // The email a shop, hub or store signs in with is its owner's too: when they mute their account, it rests.
+    rest?.answerForAddress((address) => {
+      const account = this.accounts.get(address);
+      return Boolean(account?.phoneHash && this.persons.findByHash(account.phoneHash)?.mutedAt);
+    });
+  }
 
   /**
    * Migration (S20): fold every existing account onto a person identity by phone. New signups link

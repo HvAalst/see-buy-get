@@ -176,6 +176,11 @@ export interface MailTemplate<P> {
    * back from — it is the one way such an address proves it works again — and it is never sent late.
    */
   asked?: true;
+  /**
+   * STILL GOES TO AN ACCOUNT AT REST (muted by its owner): it is about that account's own safety, or an answer to
+   * something its owner wrote. Everything else waits for them to unmute — a code (`asked`) goes regardless.
+   */
+  stillToRest?: true;
   /** Believable data, for the preview page and the tests. */
   sample: P;
   /** The same email as somebody else gets it, where who it goes to changes what it says. For the preview page. */
@@ -392,6 +397,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
   },
 
   'account-safety': {
+    stillToRest: true,
     title: 'Something changed about how you sign in',
     sentWhen: 'A PIN is locked by wrong guesses, a phone number is changed or put back, an account is recovered, or the recovery email is replaced.',
     wired: true,
@@ -492,6 +498,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
   },
 
   'password-changed': {
+    stillToRest: true,
     title: 'Password changed',
     sentWhen: 'A password is changed or reset — Shop and Hub accounts, company administrators, network staff.',
     wired: true,
@@ -525,6 +532,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
    * opens it; or it was somebody else, and the holder would want to know. It says what did NOT happen first.
    */
   'password-locked': {
+    stillToRest: true,
     title: 'Sign-in locked after wrong passwords',
     sentWhen: 'The wrong password is typed five times in a quarter of an hour for one account — a shop, a hub, a store, a driver, a company administrator or network staff.',
     wired: true,
@@ -686,6 +694,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
   },
 
   'access-removed': {
+    stillToRest: true,
     title: 'Sign-in removed',
     sentWhen: 'A company administrator or a staff account is taken away.',
     wired: true,
@@ -957,6 +966,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
   },
 
   'support-received': {
+    stillToRest: true,
     title: 'We have your message (written from the help)',
     sentWhen: 'Somebody writes to SeeBuyGet from “Write to us” in the help.',
     wired: true,
@@ -977,6 +987,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
   },
 
   'support-answer': {
+    stillToRest: true,
     title: 'An answer to a message written from the help',
     sentWhen: 'A member of SeeBuyGet staff answers a message on the console’s Messages.',
     wired: true,

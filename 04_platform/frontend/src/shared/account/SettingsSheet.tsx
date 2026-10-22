@@ -18,7 +18,7 @@ import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, type PayoutNumberSav
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'payout';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'payout' | 'mute';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -91,7 +91,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const me = api.account;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -100,6 +100,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'list' ? (
         <>
           <p class="t-body">{t('account.settings.lede')}</p>
+          {/* A live fact about the account, said for as long as it is true: it rests, and nothing new reaches it. */}
+          {me?.mutedAt ? <Note tone="info" icon="info" title={t('account.mute.mutedTitle')} detail={t('account.mute.mutedSince', { when: when(me.mutedAt) })} /> : null}
           {saved ? <Note tone="ok" icon="check" title={t('account.settings.emailSaved')} /> : null}
           {/* SOMEBODY ASKED STAFF TO MOVE THIS ACCOUNT. Its holder is the one person who knows whether that was them,
               and being signed in is the proof the asker said they could not give. One press ends it. */}
@@ -152,6 +154,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t('account.payout.title')} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
             {hasContract(api.contract) ? <Row icon="badge" label={t('account.contract.title')} sub={api.contract?.company?.name} onClick={() => setView('contract')} /> : null}
+            {/* TO REST IT (the user, 2026-10-22: "an account can be muted by the user") — and to wake it again. */}
+            {me ? <Row icon="moon" label={t(me.mutedAt ? 'account.mute.unmuteTitle' : 'account.mute.title')} sub={me.mutedAt ? t('account.mute.since', { when: when(me.mutedAt) }) : t('account.mute.sub')} onClick={() => setView('mute')} /> : null}
           </div>
           {me?.numberChange ? <Note tone="info" icon="info" title={t('account.settings.changed', { when: when(me.numberChange.at), until: when(me.numberChange.undoUntil) })} /> : null}
           {/* THE NUMBER THEY MOVED OFF IS STILL THEIRS FOR A WEEK — the user, 2026-10-08: "the user blocks their own old
@@ -190,6 +194,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'payout' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
       {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
+      {view === 'mute' ? <MuteForm api={api} onDone={() => setView('list')} /> : null}
       {view === 'id' && idRef ? <IdDisputeCase api={api.idDispute} reference={idRef} ownId={api.ownId} onChanged={() => void api.reload()} /> : null}
       {view === 'phone-done' ? (
         <>
@@ -457,6 +462,48 @@ function OldNumberForm({ api, onDone }: { api: AccountApi; onDone: () => void })
       <Refused error={error} />
       <Button chevron={false} busy={busy} disabled={pin.length !== PIN_LENGTH} onClick={() => void block()}>
         {t('account.settings.oldNumber.blockSave')}
+      </Button>
+    </>
+  );
+}
+
+/**
+ * MUTE MY ACCOUNT — what it does said before it is done, in full, because it reaches every role the person owns: their
+ * shop, their driving, their fleet, their store. Nothing is deleted and it is undone here, so it asks for no PIN.
+ */
+function MuteForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+  const muted = Boolean(api.account?.mutedAt);
+
+  const go = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await api.setMuted(!muted);
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    onDone();
+  };
+
+  return (
+    <>
+      {muted ? (
+        <p class="t-body">{t('account.mute.unmuteBody')}</p>
+      ) : (
+        <>
+          <p class="t-body">{t('account.mute.lede')}</p>
+          {/* Plain sentences, one per thing it does: the sheet's own reading style, no tick — none of it is a choice. */}
+          {(['account.mute.what1', 'account.mute.what2', 'account.mute.what3', 'account.mute.what4'] as const).map((k) => (
+            <p key={k} class="t-body">
+              {t(k)}
+            </p>
+          ))}
+        </>
+      )}
+      <Refused error={error} />
+      <Button variant={muted ? 'primary' : 'outline'} chevron={false} busy={busy} onClick={() => void go()}>
+        {t(muted ? 'account.mute.unmute' : 'account.mute.go')}
       </Button>
     </>
   );

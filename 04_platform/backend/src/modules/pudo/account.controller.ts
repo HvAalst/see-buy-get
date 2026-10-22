@@ -78,6 +78,26 @@ export class AccountController {
     };
   }
 
+  /**
+   * MUTE MY ACCOUNT (the user, 2026-10-22: "an account can be muted by the user"). It rests: nothing new reaches it —
+   * no notification or email beyond codes and its own safety, no new parcel at a shop of theirs, no load offered to
+   * them as a driver, no new work for their fleet, no new order for their store — and what it already holds goes on.
+   * They can still sign in and read everything. Keyed to the token, like everything here. Answers the account as
+   * Settings shows it.
+   */
+  @SignedIn()
+  @Post('mute')
+  mute(@Actor() actor: IntrospectionResult) {
+    return this.persons.view(this.persons.mute(actingPerson(actor)));
+  }
+
+  /** …and wake it: everything is offered to it again from now on. Nothing missed while it rested is replayed. */
+  @SignedIn()
+  @Post('unmute')
+  unmute(@Actor() actor: IntrospectionResult) {
+    return this.persons.view(this.persons.unmute(actingPerson(actor)));
+  }
+
   /** Set the person's own name, photo or address. Each field independent; an empty address clears it. */
   @SignedIn()
   @Patch('profile')

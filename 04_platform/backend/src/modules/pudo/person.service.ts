@@ -4,6 +4,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DidService } from '../../foundation/did/did.service';
 import { AuthService } from '../../foundation/auth/auth.service';
+import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -100,6 +101,13 @@ export class PersonService {
   private readonly whenEmailChanged: Array<(personDid: string) => void> = [];
   /** Whoever keeps something addressed to a phone number, and has to hear that an account is moving off one. */
   private readonly whenNumberLeft: Array<(personDid: string, fromHash: string) => void> = [];
+  /**
+   * EVERY DID AT REST: a muted person's own, and each shop, driver, fleet and store they own. Derived from the durable
+   * map at construction and kept in step on every save(), so "is this resting?" — asked by every notification, email
+   * and finder — is one lookup, never a walk over every person.
+   */
+  private readonly resting = new Set<string>();
+  private readonly restingOf = new Map<string, string[]>();
 
   constructor(
     private readonly dids: DidService,
@@ -110,11 +118,17 @@ export class PersonService {
     @Optional() private readonly events?: EventBus,
     // Optional for the same reason; without it nobody is told their email came back, and nothing else changes.
     @Optional() private readonly bounces?: MailBounces,
+    // Optional for the same reason; without it a mute is kept and shown, and nobody else hears of it.
+    @Optional() private readonly rest?: RestingAccounts,
   ) {
     for (const p of this.persons.values()) {
       this.byDid.set(p.personDid, p.phoneHash);
       if (p.emailHash) this.byEmail.set(p.emailHash, p.personDid);
+      this.indexRest(p);
     }
+    this.rest?.answerForDid((did) => this.resting.has(did));
+    this.rest?.answerForAddress((address) => Boolean(this.findByEmail(address)?.mutedAt));
+    this.auth.onPersonToken((personDid) => this.noteSignIn(personDid));
   }
 
   // --- lookups ---
@@ -869,12 +883,64 @@ export class PersonService {
     }
   }
 
+  // --- at rest (the user, 2026-10-22: "an account can be muted by the user") ---
+
+  /**
+   * THE OWNER MUTES THEIR ACCOUNT. It rests: nothing new reaches it (RestingAccounts says what that means to each
+   * sender and finder), and what it already holds goes on. Keyed to the person, so it covers every role they own at
+   * once — the account is the phone number, and its roles are what they do with it. Muting again changes nothing.
+   */
+  mute(personDid: string, now: number = Date.now()): Person {
+    const person = this.requireByDid(personDid);
+    if (!person.mutedAt) {
+      person.mutedAt = new Date(now).toISOString();
+      this.save(person);
+    }
+    return person;
+  }
+
+  /** …and wakes it. Everything is offered to it again from this moment; nothing missed while it rested is replayed. */
+  unmute(personDid: string): Person {
+    const person = this.requireByDid(personDid);
+    if (person.mutedAt) {
+      delete person.mutedAt;
+      this.save(person);
+    }
+    return person;
+  }
+
+  /** Is this DID — a person, or a shop, driver, fleet or store a person owns — at rest? */
+  isResting(did: string | undefined): boolean {
+    return Boolean(did) && this.resting.has(did as string);
+  }
+
+  /** The day of the last sign-in, written at most once a day (a sign-in writes nothing else here). */
+  private noteSignIn(personDid: string, now: number = Date.now()): void {
+    const person = this.findByDid(personDid);
+    if (!person) return;
+    const today = new Date(now).toISOString().slice(0, 10);
+    if (person.lastSignInAt?.slice(0, 10) === today) return;
+    person.lastSignInAt = new Date(now).toISOString();
+    this.persons.set(person.phoneHash, person);
+  }
+
+  /** Keep the resting index in step with one person: their own DID and every role they own, or none of them. */
+  private indexRest(person: Person): void {
+    for (const did of this.restingOf.get(person.personDid) ?? []) this.resting.delete(did);
+    this.restingOf.delete(person.personDid);
+    if (!person.mutedAt) return;
+    const dids = [person.personDid, ...person.roles.filter((r) => r.role !== 'consumer' && r.entityDid).map((r) => r.entityDid)];
+    for (const did of dids) this.resting.add(did);
+    this.restingOf.set(person.personDid, dids);
+  }
+
   // --- internals ---
 
   private save(person: Person): void {
     this.persons.set(person.phoneHash, person);
     this.byDid.set(person.personDid, person.phoneHash);
     if (person.emailHash) this.byEmail.set(person.emailHash, person.personDid);
+    this.indexRest(person);
   }
 
   /** Read the person's vault record, apply only what was asked, write the whole thing back — `update` REPLACES. */

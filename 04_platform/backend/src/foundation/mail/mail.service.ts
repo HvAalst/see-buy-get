@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { MailBounces } from './mail-bounces.service';
+import { RestingAccounts } from '../auth/resting-accounts';
 import { MAIL_SENDER, MailAddress, MailConnection, MailLast, MailSendError, MailSender, OutgoingMail } from './mail.types';
 import { MAIL_TEMPLATES, MailParams, MailTemplateId, renderMail } from './mail.templates';
 import { OutboxMailSender } from './outbox-mail.sender';
@@ -65,6 +66,8 @@ export class MailService implements OnModuleDestroy {
     @Inject(MAIL_SENDER) private readonly sender: MailSender,
     // Optional so everything that builds this by hand keeps compiling: without it no address is ever held back.
     @Optional() private readonly bounces?: MailBounces,
+    // Optional for the same reason: without it no address is ever at rest.
+    @Optional() private readonly rest?: RestingAccounts,
   ) {}
 
   onModuleDestroy(): void {
@@ -87,6 +90,10 @@ export class MailService implements OnModuleDestroy {
       this.bounced += 1;
       return false;
     }
+    // AN ACCOUNT AT REST — muted by its owner — is written to only about its own safety, or in answer to them; and a
+    // code, which somebody at a screen asked for. Not kept to send later: nothing missed while it rested is replayed.
+    const tpl = MAIL_TEMPLATES[template];
+    if (!tpl?.asked && !tpl?.stillToRest && this.rest?.isRestingAddress(to.address)) return false;
     this.written += 1;
     const reference = `${template}:${randomBytes(6).toString('hex')}`;
     const failure = await this.handOver(template, to, params, reference, now);

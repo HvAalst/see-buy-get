@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { RiskRegisterService } from './risk-register.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes, randomInt, timingSafeEqual } from 'crypto';
@@ -153,6 +154,8 @@ export class FleetService {
     private readonly events: EventBus,
     // Round 39 — the risk register asks which corridor a driver is on, to propose a raise where tampering was carried.
     @Optional() risk?: RiskRegisterService,
+    // Optional for the same reason: without it no driver is ever at rest.
+    @Optional() private readonly rest?: RestingAccounts,
   ) {
     risk?.registerCorridorOf((did) => this.activeForDriver(did)?.corridorId);
   }
@@ -399,11 +402,12 @@ export class FleetService {
   }
 
   /**
-   * Is this driver taking new work right now? False only while a snooze is live — and an expired snooze is
-   * cleared as it is read, so the driver's own screen and the matcher can never disagree about whether it
-   * has run out.
+   * Is this driver taking new work right now? False while a snooze is live — and an expired snooze is cleared as it
+   * is read, so the driver's own screen and the matcher can never disagree about whether it has run out — and while
+   * the driver's account is muted (2026-10-22): a mute is the snooze that lasts until they lift it.
    */
   acceptingWork(driverDid: string, now: number = Date.now()): boolean {
+    if (this.rest?.isResting(driverDid)) return false;
     const active = this.activeForDriver(driverDid);
     if (!active?.snoozedUntil) return true;
     if (new Date(active.snoozedUntil).getTime() > now) return false;

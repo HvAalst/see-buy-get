@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { createECDH, createHash, randomBytes } from 'crypto';
 import { BUILT_IN_PUBLIC, vapidIdentity } from './vapid';
 import { PushGone, isDeviceKeys, pushServiceOf } from './web-push';
@@ -68,7 +69,11 @@ export class NotificationService {
   /** Read as this service is made, like every secret: outside a sandbox a server that cannot sign a push does not start. */
   private readonly identity = vapidIdentity();
 
-  constructor(@Inject(PUSH_SENDER) private readonly sender: PushSender) {}
+  constructor(
+    @Inject(PUSH_SENDER) private readonly sender: PushSender,
+    // Optional so a hand-built service keeps compiling: without it nobody is ever at rest.
+    @Optional() private readonly rest?: RestingAccounts,
+  ) {}
 
   /** The `applicationServerKey` a browser needs to subscribe. Public by design — not a secret. */
   vapidPublicKey(): string {
@@ -187,6 +192,9 @@ export class NotificationService {
       createdAt: new Date().toISOString(),
     };
     this.inbox.set(record.id, record);
+    // AN ACCOUNT AT REST is not rung — it is in the inbox, where its owner can read it — unless it is about the
+    // account's own safety, which reaches it wherever it is.
+    if (payload.kind !== 'security' && this.rest?.isResting(ownerDid)) return record;
     await this.pushToOwner(ownerDid, payload);
     return record;
   }

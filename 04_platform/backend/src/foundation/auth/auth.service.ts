@@ -49,6 +49,8 @@ export class AuthService {
    * could not sign anybody out. Durable: a restart must not quietly bring a signed-out session back.
    */
   private readonly revocations = new PersistentMap<string, number>('auth-revocations');
+  /** Whoever keeps a person's last sign-in. Told each time a token is opened for a person; registered, not injected. */
+  private readonly personTokenListeners: Array<(personDid: string) => void> = [];
 
   constructor(
     private readonly didService: DidService,
@@ -186,6 +188,18 @@ export class AuthService {
    */
   mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier; actorName?: string; revocationKey?: string; personDid?: string }): AccessToken {
     const profile = this.profiles.get(input.did);
+    // A PERSON SIGNED IN — at a PIN, a code, a password, or switching to one of their roles. Every one of those doors
+    // ends here, so this is where it is noted once rather than at fifteen doors (it starts the 48 months after which
+    // an owner is told an unused account can be closed). A listener that fails does not stop the sign-in.
+    if (input.personDid) {
+      for (const listener of this.personTokenListeners) {
+        try {
+          listener(input.personDid);
+        } catch (err) {
+          this.logger.warn(`sign-in not noted: ${(err as Error).message}`);
+        }
+      }
+    }
     return this.issueToken({
       sub: input.did,
       type: 'did',
@@ -200,6 +214,11 @@ export class AuthService {
       ...(input.revocationKey ? { revocationKey: input.revocationKey, revocationVersion: this.revocations.get(input.revocationKey) ?? 0 } : {}),
       ttlSeconds: SHIFT_TTL_SECONDS,
     });
+  }
+
+  /** Be told whenever a token is opened for a person (PersonService notes the day of their last sign-in). */
+  onPersonToken(listener: (personDid: string) => void): void {
+    this.personTokenListeners.push(listener);
   }
 
   /**

@@ -52,6 +52,8 @@ export interface AccountView {
    * the registration is held. With THIS person's own reference: it is what they answer with.
    */
   idDispute?: DisputeAgainstMe;
+  /** Muted by its owner, since when (the user, 2026-10-22). Absent: not muted. */
+  mutedAt?: string;
 }
 
 type Sent = { sent: boolean; code?: string };
@@ -96,6 +98,8 @@ export interface AccountApi {
   blockOldNumber: (pin: string) => Promise<Result<unknown>>;
   /** "That was not me": end every request waiting to move this account. Being signed in is what makes it theirs to say. */
   stopMove: () => Promise<Result<{ stopped: number }>>;
+  /** Mute the account (it rests: nothing new reaches it), or unmute it. The menu redraws from what the server stored. */
+  setMuted: (muted: boolean) => Promise<Result<unknown>>;
   /** This person's side of a dispute over their national ID, by their own reference. */
   idDispute: IdDisputeApi;
   /** "The number on my record is not mine — this one is." Ends a dispute at once, or a hold it left. */
@@ -135,6 +139,7 @@ const IDLE: AccountApi = {
   changeNumber: async () => NO_CLIENT,
   blockOldNumber: async () => NO_CLIENT,
   stopMove: async () => NO_CLIENT,
+  setMuted: async () => NO_CLIENT,
   idDispute: idDisputeApi(async () => NO_CLIENT),
   ownId: async () => NO_CLIENT,
   devices: pinDevicesApi(async () => NO_CLIENT),
@@ -323,6 +328,16 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
     return r;
   }, [post]);
 
+  const setMuted = useCallback(
+    async (muted: boolean) => {
+      const r = await post<{ mutedAt?: string }>(muted ? '/v1/sbg/account/mute' : '/v1/sbg/account/unmute', {});
+      // Only the mute changes: the rest of the account, as the menu already has it, stays.
+      if (!r.error && r.data) setAccount((prev) => (prev ? { ...prev, mutedAt: narrow<{ mutedAt?: string }>(r.data).mutedAt } : prev));
+      return r;
+    },
+    [post],
+  );
+
   const idDispute = useMemo(() => idDisputeApi(post), [post]);
   const ownId = useCallback((nationalId: string) => post<{ saved: boolean }>('/v1/sbg/account/id-disputes/own-id', { nationalId }), [post]);
   const devices = useMemo(() => pinDevicesApi(post), [post]);
@@ -338,5 +353,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, idDispute, ownId, devices, payout, sendPayoutCode, savePayoutNumber };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, idDispute, ownId, devices, payout, sendPayoutCode, savePayoutNumber };
 }

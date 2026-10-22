@@ -19818,6 +19818,46 @@
         }
       }
     },
+    "/v1/sbg/account/mute": {
+      "post": {
+        "operationId": "Account.mute",
+        "summary": "",
+        "description": "MUTE MY ACCOUNT (the user, 2026-10-22: \"an account can be muted by the user\"). It rests: nothing new reaches it —\nno notification or email beyond codes and its own safety, no new parcel at a shop of theirs, no load offered to\nthem as a driver, no new work for their fleet, no new order for their store — and what it already holds goes on.\nThey can still sign in and read everything. Keyed to the token, like everything here. Answers the account as\nSettings shows it.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/unmute": {
+      "post": {
+        "operationId": "Account.unmute",
+        "summary": "",
+        "description": "…and wake it: everything is offered to it again from now on. Nothing missed while it rested is replayed.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/account/profile": {
       "patch": {
         "operationId": "Account.setProfile",

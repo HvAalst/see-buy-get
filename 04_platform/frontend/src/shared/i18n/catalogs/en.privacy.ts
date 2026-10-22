@@ -22,7 +22,7 @@ export const enPrivacy = {
   'pages.privacy.keeps.title': 'What SeeBuyGet keeps',
   'pages.privacy.keeps.1': 'For a parcel, SeeBuyGet keeps the sender’s and the receiver’s phone numbers, the two shops, every step with its time, and the photos taken at each hand-over.',
   'pages.privacy.keeps.2': 'For a shop, driver, sort hub or fleet that works with SeeBuyGet, SeeBuyGet keeps the name, national ID number and phone number of the person responsible, and the papers checked before the first parcel.',
-  'pages.privacy.keeps.3': 'For an account, SeeBuyGet keeps the phone number or email address it signs in with, and the phones and browsers it was confirmed on.',
+  'pages.privacy.keeps.3': 'For an account, SeeBuyGet keeps the phone number or email address it signs in with, the phones and browsers it was confirmed on, and the day it last signed in.',
   'pages.privacy.keeps.4': 'During a shift, SeeBuyGet keeps a driver’s latest position, each new one replacing the last.',
   'pages.privacy.keeps.5': 'For freight, SeeBuyGet keeps the consignment note: the sender, the consignee, the goods, the seals and who received them.',
   'pages.privacy.keeps.6': 'When you write to SeeBuyGet, it keeps your email address and your message, to answer you.',
@@ -81,7 +81,8 @@ export const enPrivacy = {
   'pages.privacy.you.3': 'A change of phone number can be undone for 24 hours, and a change of recovery email is told to the old address.',
   'pages.privacy.you.4': 'SeeBuyGet notifications can be turned off on each phone.',
   'pages.privacy.you.5': 'A shop, online store or business can download its own SeeBuyGet records, and have a copy sent to storage of its own.',
-  'pages.privacy.you.6': 'There is no button yet to close a SeeBuyGet account. To ask for that, or to ask what SeeBuyGet holds about you, or to have it corrected, write to us and choose “My data, or closing my account”.',
+  'pages.privacy.you.6': 'Under “Settings › Mute my account” you can rest your SeeBuyGet account: nothing new reaches it — no notification on your phone, no email beyond codes and your account’s safety, no new work — until you unmute it. Nothing is deleted.',
+  'pages.privacy.you.7': 'There is no button yet to close a SeeBuyGet account. To ask for that, or to ask what SeeBuyGet holds about you, or to have it corrected, write to us and choose “My data, or closing my account”.',
 
   // Cookies (/cookies/).
   'pages.cookies.metaTitle': 'Cookies at SeeBuyGet — none set, and what is kept on your phone',

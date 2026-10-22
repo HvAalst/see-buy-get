@@ -58,6 +58,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/account-moves': 'vetting',
   'GET sbg/account-moves/:moveId': 'vetting',
   'GET sbg/account/me': 'none',
+  // A person mutes or wakes their own account (2026-10-22): theirs alone, never staff's.
+  'POST sbg/account/mute': 'none',
+  'POST sbg/account/unmute': 'none',
   // A company administrator's own sign-in, asked by the console when a tab comes back — not a staff door.
   'GET sbg/entities/admins/me': 'none',
   'GET sbg/agents': 'any',

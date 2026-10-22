@@ -1,6 +1,7 @@
 import { createECDH } from 'crypto';
 import { NotificationService, vapidKeysOf } from './notification.service';
 import { OutboxPushSender } from './push-sender';
+import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { NotificationPayload, PushSender, PushSubscriptionRecord, WebPushSubscription } from './notification.types';
 
 const sub = (endpoint: string): WebPushSubscription => ({
@@ -178,6 +179,25 @@ describe('NotificationService — the push spine (N1)', () => {
       expect(record.readAt).toBeUndefined(); // starts unread
       expect(svc.inboxFor('did:person:a')).toHaveLength(1);
       expect(outbox.outboxFor('did:person:a')).toHaveLength(1); // also pushed to the device
+    });
+
+    it('an account at rest (muted by its owner) is not rung — it is in the inbox — unless it is about its safety', async () => {
+      const outbox = new OutboxPushSender();
+      const rest = new RestingAccounts();
+      rest.answerForDid((did) => did === 'did:person:resting');
+      const svc = new NotificationService(outbox, rest);
+      svc.subscribe('did:person:resting', 'consumer', sub('https://push/r'));
+      svc.subscribe('did:person:awake', 'consumer', sub('https://push/w'));
+
+      await svc.notify('did:person:resting', payload);
+      expect(svc.inboxFor('did:person:resting')).toHaveLength(1);
+      expect(outbox.outboxFor('did:person:resting')).toHaveLength(0);
+      // Its own safety reaches it wherever it is.
+      await svc.notify('did:person:resting', { ...payload, kind: 'security' });
+      expect(outbox.outboxFor('did:person:resting')).toHaveLength(1);
+      // Somebody else is rung as ever.
+      await svc.notify('did:person:awake', payload);
+      expect(outbox.outboxFor('did:person:awake')).toHaveLength(1);
     });
 
     it('records even when the owner has no devices (the notification is not lost)', async () => {

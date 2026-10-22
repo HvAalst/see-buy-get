@@ -73,6 +73,18 @@ export interface Person {
   oldNumber?: OldNumber;
   roles: RoleLink[];
   createdAt: string;
+  /**
+   * MUTED BY ITS OWNER, and since when (the user, 2026-10-22). The account rests: nothing new reaches it — no
+   * notification or email beyond codes and safety, no new parcel at its shop, no load for its driver, no work for its
+   * fleet, no order for its store — and the owner can still sign in, read, and unmute. Absent: not muted.
+   */
+  mutedAt?: string;
+  /**
+   * The DAY this person last signed in — at any door, or switching to a role (AuthService tells the spine). Written
+   * at most once a day. After 48 months without one, the owner is told the account can be closed. Absent on a
+   * record from before it was kept: such an account counts from when it was made.
+   */
+  lastSignInAt?: string;
 }
 
 /**
@@ -146,6 +158,8 @@ export interface PersonView {
   emailBounced?: boolean;
   /** Self-view only: a number change that can still be undone, and until when. */
   numberChange?: { at: string; undoUntil: string };
+  /** Self-view only: muted by its owner, since when. Absent: not muted. */
+  mutedAt?: string;
   /**
    * Self-view only: the number this account moved off is still its own until then — what is sent to it arrives here.
    * `canBlock` once the move can no longer be undone: the holder lets the old number go themselves.
@@ -178,5 +192,6 @@ export function toView(person: Person): PersonView {
     avatarMediaId: person.avatarMediaId,
     ...(person.emailMasked && person.emailVerifiedAt ? { email: person.emailMasked } : {}),
     ...(person.phoneChange ? { numberChange: { at: person.phoneChange.at, undoUntil: person.phoneChange.undoUntil } } : {}),
+    ...(person.mutedAt ? { mutedAt: person.mutedAt } : {}),
   };
 }

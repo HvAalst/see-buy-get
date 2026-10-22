@@ -28,9 +28,9 @@ describe('the network, measured for the front page', () => {
     ],
   });
 
-  const make = (shops: unknown[], parcels: unknown[], ratings: Record<string, { average: number; count: number }> = {}) =>
+  const make = (shops: unknown[], parcels: unknown[], ratings: Record<string, { average: number; count: number }> = {}, resting: string[] = []) =>
     new NetworkPulseService(
-      { list: () => shops, countryOf: (a: { country: string }) => a.country } as unknown as AgentService,
+      { list: () => shops, countryOf: (a: { country: string }) => a.country, isResting: (did: string) => resting.includes(did) } as unknown as AgentService,
       { list: () => parcels } as unknown as ParcelService,
       { agentRating: (did: string) => ({ agentDid: did, average: ratings[did]?.average ?? 0, count: ratings[did]?.count ?? 0, isNew: false }) } as unknown as RatingService,
     );
@@ -43,6 +43,12 @@ describe('the network, measured for the front page', () => {
     expect(pulse).toMatchObject({ shops: 3, shopsOpen: 2, towns: 2, countries: ['KE', 'UG'], collected30d: 0 });
     // The list is of the same trading shops as the count: no town for the shop still being checked.
     expect(pulse.townList).toEqual([{ town: 'Nairobi', slug: 'nairobi', shops: 2 }, { town: 'Kisumu', slug: 'kisumu', shops: 1 }]);
+  });
+
+  it('does not count a shop whose owner muted the account: it is not one anybody can use today', () => {
+    const pulse = make([shop('a', 'Nairobi'), shop('b', 'Kisumu')], [], {}, ['b']).measure(NOW);
+    expect(pulse).toMatchObject({ shops: 1, towns: 1 });
+    expect(pulse.townList).toEqual([{ town: 'Nairobi', slug: 'nairobi', shops: 1 }]);
   });
 
   it('withholds the median and the rating until there are enough cases, then publishes them', () => {
