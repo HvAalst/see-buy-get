@@ -229,6 +229,7 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
             {t('home.landing.footVerify')}
           </a>
           <a href="/help/">{t('home.landing.footHelp')}</a>
+          <a href="/about/">{t('pages.about')}</a>
           <a href="/?go=signin" onClick={inApp(() => actions.go('signin'))}>
             {t('home.landing.footSignIn')}
           </a>

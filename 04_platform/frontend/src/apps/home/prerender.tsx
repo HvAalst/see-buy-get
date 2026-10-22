@@ -5,6 +5,7 @@ import { FAQ } from './screens/WelcomeScreen';
 import type { TownPage } from './api';
 import { townSlugFromPath } from './prerendered';
 import { CONTACT_PATH, HELP_PATH, articlePath, helpPageOf } from './help';
+import { ABOUT_PATH, AUDIENCES, forPath, infoPageOf, pageKey, range, type InfoPage } from './pages';
 import { GUIDE_APPS, articleById, articles, type PublicApp } from '../../shared/guide/articles';
 
 type HeadElement = { type: string; props: Record<string, string> };
@@ -56,12 +57,13 @@ export async function prerender(data: { url: string }): Promise<{
   const slug = townSlugFromPath(url);
   const town = slug ? towns.find((p) => p.slug === slug) : undefined;
   const help = helpPageOf(url);
-  const head = town ? townHead(town) : help ? helpHead(help) : frontHead();
+  const info = infoPageOf(url);
+  const head = town ? townHead(town) : help ? helpHead(help) : info ? infoHead(info) : frontHead();
   return {
     html,
     // From the front page, every town page and the help — and from the help, every article and writing to us. The
     // plugin renders each of them in turn.
-    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH]) } : {}),
+    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, ...AUDIENCES.map((a) => forPath(a.who))]) } : {}),
     ...(help?.kind === 'index' ? { links: new Set([...articles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
     data: { towns },
     head: { lang: 'en', ...head },
@@ -116,6 +118,38 @@ function frontHead(): { title: string; elements: Set<HeadElement> } {
     },
   ];
   return { title, elements: new Set([...common(title, description, '/'), ldScript(ld)]) };
+}
+
+/** SeeBuyGet at a glance, or a page for one reader: what it is, and the questions as a FAQPage a machine can read. */
+function infoHead(page: InfoPage): { title: string; elements: Set<HeadElement> } {
+  const crumb = (name: string, path: string) => ({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'SeeBuyGet', ...(SITE ? { item: `${SITE}/` } : {}) },
+      { '@type': 'ListItem', position: 2, name, ...(SITE ? { item: `${SITE}${path}` } : {}) },
+    ],
+  });
+  if (page.kind === 'about') {
+    const title = t('pages.about.metaTitle');
+    const description = t('pages.about.metaDescription');
+    const ld = [
+      { '@context': 'https://schema.org', '@type': 'AboutPage', name: t('pages.about.title'), description, about: { '@type': 'Organization', name: 'SeeBuyGet', ...(SITE ? { url: `${SITE}/` } : {}) } },
+      crumb(t('pages.about.title'), ABOUT_PATH),
+    ];
+    return { title, elements: new Set([...common(title, description, ABOUT_PATH), ldScript(ld)]) };
+  }
+  const spec = AUDIENCES.find((a) => a.who === page.who)!;
+  const k = (part: string) => t(pageKey(page.who, part));
+  const path = forPath(page.who);
+  const title = k('metaTitle');
+  const description = k('metaDescription');
+  const ld = [
+    { '@context': 'https://schema.org', '@type': 'WebPage', name: k('title'), description, about: { '@type': 'Organization', name: 'SeeBuyGet' } },
+    { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: range(spec.questions).map((i) => ({ '@type': 'Question', name: k(`q${i}`), acceptedAnswer: { '@type': 'Answer', text: k(`a${i}`) } })) },
+    crumb(k('title'), path),
+  ];
+  return { title, elements: new Set([...common(title, description, path), ldScript(ld)]) };
 }
 
 /** A help page: the index, one article (its steps as a HowTo a machine can read), or writing to us. */

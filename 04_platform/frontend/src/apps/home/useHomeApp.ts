@@ -30,12 +30,13 @@ import {
 } from './api';
 import { currentPath, townSlugFromPath } from './prerendered';
 import { helpPageOf, type HelpPage } from './help';
+import { infoPageOf, type InfoPage } from './pages';
 import { readLinkKey } from '../../shared/archive/documentLink';
 import { readReportKey } from '../../shared/damage/damageReport';
 import { EMPTY_JOIN, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help' | 'info';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -101,12 +102,15 @@ export interface HomeState {
   townSlug: string | null;
   /** The help page being shown, by its address (`/help/`, `/help/<article>/`, `/help/contact/`). */
   helpPage: HelpPage | null;
+  /** /about/ or /for/<who>/: the pages written to be quoted. */
+  infoPage: InfoPage | null;
 }
 
 const INITIAL: HomeState = {
   screen: 'welcome',
   townSlug: null,
   helpPage: null,
+  infoPage: null,
   agents: null,
   agentsBasis: null,
   agentsState: 'idle',
@@ -156,7 +160,9 @@ export function useHomeApp() {
     if (slug) return { ...INITIAL, screen: 'town', townSlug: slug };
     // The help is an address too: its pages are built into HTML, and the first frame must be that page.
     const helpPage = helpPageOf(path);
-    return helpPage ? { ...INITIAL, screen: 'help', helpPage } : INITIAL;
+    if (helpPage) return { ...INITIAL, screen: 'help', helpPage };
+    const infoPage = infoPageOf(path);
+    return infoPage ? { ...INITIAL, screen: 'info', infoPage } : INITIAL;
   });
   /** FB3b — which look owns the screen. A slow answer for "Nairobi" must not overwrite a fast one for
    *  "Kaapstad" typed after it; the market is read by someone trying several places in a row. */

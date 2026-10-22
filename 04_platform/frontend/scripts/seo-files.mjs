@@ -87,7 +87,10 @@ writeFileSync(
     '## Pages',
     `- [Front page](${abs('/')}): how it works, the network's live figures, who it is for, questions and answers`,
     `- [Send or track a parcel](${abs('/send/')}): prices, booking and tracking by tracking code`,
+    `- [SeeBuyGet at a glance](${abs('/about/')}): what it is, how a parcel travels, where it runs, how prices are set, how parcels are kept safe`,
+    `- [For shops](${abs('/for/shops/')}), [for drivers](${abs('/for/drivers/')}), [for sort hubs](${abs('/for/hubs/')}), [for online stores](${abs('/for/stores/')}), [for businesses](${abs('/for/business/')}): how each works, what is needed, questions and answers`,
     `- [Help](${abs('/help/')}): how each app works, signing in, codes and PINs — one page per article — and how to write to us`,
+    `- [Everything above as plain text](${abs('/llms-full.txt')}): these pages and every help article`,
     ...(towns.length ? ['', '## Towns with parcel shops', ...towns.map((p) => `- [${townName(p)}](${abs(p)})`)] : []),
     '',
     '## Earning with the network',
@@ -95,6 +98,61 @@ writeFileSync(
     '',
   ].join('\n'),
 );
+
+/*
+ * llms-full.txt — the pages written to be quoted (/about/, /for/<who>/) and every help article, as plain text, from the
+ * pages the build rendered: what an AI assistant reads in one go instead of crawling seventy pages. Only the article
+ * itself is taken from a help page — not its side list, its search or its footer.
+ */
+const decode = (s) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'");
+function plain(html) {
+  return decode(
+    html
+      .replace(/<(script|style|nav|aside|svg|form|button)[^>]*>[\s\S]*?<\/\1>/g, '')
+      // The apps an article is for, as a line; a button the reader presses, back in its quotation marks; a route, with its ›.
+      .replace(/<p class="hc__applies"[^>]*>([\s\S]*?)<\/p>/g, (_m, inner) => `<p>${inner.replace(/<\/span><span>/g, ' · ')}</p>`)
+      .replace(/<kbd[^>]*>([\s\S]*?)<\/kbd>/g, '“$1”')
+      // A note's kind (Note, Careful) before its words.
+      .replace(/<b>([\s\S]*?)<\/b>/g, '$1: ')
+      .replace(/<i aria-hidden="true">›<\/i>/g, ' › ')
+      .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/g, '\n# $1\n')
+      .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/g, '\n## $1\n')
+      .replace(/<h[34][^>]*>([\s\S]*?)<\/h[34]>/g, '\n### $1\n')
+      .replace(/<summary[^>]*>([\s\S]*?)<\/summary>/g, '\n**$1**\n')
+      .replace(/<li[^>]*>/g, '\n- ')
+      .replace(/<\/(p|li|ol|ul|div|details|section|header|dl)>/g, '\n')
+      .replace(/<br\s*\/?>/g, '\n')
+      .replace(/<[^>]+>/g, ''),
+  )
+    .split('\n')
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter((l, i, all) => l || (all[i - 1] ?? '') !== '')
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+const fullParts = [];
+const ARTICLE = /<article class="land pg">([\s\S]*?)<\/article>/;
+const HELP_ARTICLE = /<main class="hc__article"[^>]*>([\s\S]*?)<\/main>/;
+const wanted = [
+  ['/about/', ARTICLE],
+  ...['shops', 'drivers', 'hubs', 'stores', 'business'].map((w) => [`/for/${w}/`, ARTICLE]),
+  ...found.filter((p) => /^\/help\/[a-z0-9-]+\/$/.test(p) && p !== '/help/contact/').map((p) => [p, HELP_ARTICLE]),
+];
+for (const [p, pick] of wanted) {
+  const file = join(DIST, p, 'index.html');
+  if (!existsSync(file)) continue;
+  const m = readFileSync(file, 'utf8').match(pick);
+  const text = m ? plain(m[1]) : '';
+  if (text) fullParts.push(`<!-- ${abs(p)} -->\n${text}`);
+}
+if (fullParts.length) {
+  writeFileSync(
+    join(DIST, 'llms-full.txt'),
+    ['# SeeBuyGet — the whole of it, as plain text', '', '> SeeBuyGet at a glance, the page for each kind of reader, and every help article. Each part begins with its address.', '', fullParts.join('\n\n---\n\n'), ''].join('\n'),
+  );
+  console.log(`seo-files: llms-full.txt with ${fullParts.length} page(s)`);
+}
 
 if (SITE) {
   const urls = found.map((p) => `  <url><loc>${SITE}${p}</loc><lastmod>${today}</lastmod>${p === '/' ? '<priority>1.0</priority>' : ''}</url>`);

@@ -1,0 +1,87 @@
+/* The pages written to be quoted (/about/, /for/<who>/): the front page's own look (landing.css), a reading column. */
+
+.pg {
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 24px 16px 48px;
+}
+
+.pg__head .land__title {
+  margin-bottom: 8px;
+}
+
+.pg__steps {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  counter-reset: pg;
+  display: grid;
+  gap: 14px;
+}
+
+.pg__steps li {
+  counter-increment: pg;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--tx);
+}
+
+.pg__steps li::before {
+  content: counter(pg);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--blue-light);
+  color: var(--blue);
+  font-weight: 800;
+}
+
+.pg__list {
+  margin: 12px 0 0;
+  padding-inline-start: 22px;
+  display: grid;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.pg__who {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.pg__who a {
+  display: grid;
+  gap: 2px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  text-decoration: none;
+}
+
+.pg__whot {
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.pg__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+/* The sections sit on the page's own column: their own side padding would push them in past the title. */
+.land.pg > section {
+  padding-left: 0;
+  padding-right: 0;
+}

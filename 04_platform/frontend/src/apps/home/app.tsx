@@ -11,6 +11,7 @@ import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { TownScreen } from './screens/TownScreen';
 import { HelpScreen } from './screens/HelpScreen';
+import { InfoScreen } from './screens/InfoScreen';
 import { NoteCheck } from '../../shared/archive/NoteCheck';
 import { lookAtDocumentLink, lookAtReportLink, takeDocumentLink, takeReportLink, verifyNote } from './api';
 import { DamageReportLinkPage } from '../../shared/damage/DamageReportLinkPage';
@@ -61,7 +62,7 @@ export function App() {
       <TopBar
         title={t('home.appTitle')}
         subtitle={subtitle}
-        onBack={state.screen === 'welcome' ? undefined : () => (state.screen === 'join' ? actions.back() : state.screen === 'town' ? location.assign('/') : state.screen === 'help' ? location.assign(state.helpPage?.kind === 'index' ? '/' : '/help/') : actions.go('welcome'))}
+        onBack={state.screen === 'welcome' ? undefined : () => (state.screen === 'join' ? actions.back() : state.screen === 'town' ? location.assign('/') : state.screen === 'help' ? location.assign(state.helpPage?.kind === 'index' ? '/' : '/help/') : state.screen === 'info' ? location.assign(state.infoPage?.kind === 'about' ? '/' : '/about/') : actions.go('welcome'))}
         backLabel={t('home.back')}
         end={
           <>
@@ -93,7 +94,7 @@ export function App() {
         }
       />
 
-      <main class={`app__scroll app__scroll--nonav${state.screen === 'welcome' ? ' app__scroll--land' : ''}`}>
+      <main class={`app__scroll app__scroll--nonav${state.screen === 'welcome' || state.screen === 'info' ? ' app__scroll--land' : ''}`}>
         {state.screen === 'market' ? <MarketScreen state={state} actions={actions} /> : null}
         {state.screen === 'store' ? <StoreScreen state={state} actions={actions} /> : null}
         {state.screen === 'profile' ? <ProfileScreen state={state} actions={actions} /> : null}
@@ -119,6 +120,7 @@ export function App() {
         {state.screen === 'report' && state.reportKey !== undefined ? <DamageReportLinkPage linkKey={state.reportKey} look={lookAtReportLink} take={takeReportLink} /> : null}
         {state.screen === 'welcome' ? <WelcomeScreen actions={actions} /> : null}
         {state.screen === 'town' && state.townSlug ? <TownScreen slug={state.townSlug} /> : null}
+        {state.screen === 'info' && state.infoPage ? <InfoScreen page={state.infoPage} /> : null}
       </main>
     </div>
   );
