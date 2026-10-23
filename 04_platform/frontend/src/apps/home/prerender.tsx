@@ -8,7 +8,7 @@ import type { TownPage } from './api';
 import { townSlugFromPath } from './prerendered';
 import { CONTACT_PATH, HELP_PATH, articlePath, helpPageOf } from './help';
 import { ABOUT_PATH, AUDIENCES, NOTICES, forPath, infoPageOf, noticeKey, pageKey, range, type InfoPage } from './pages';
-import { GUIDE_APPS, articleById, articles, type PublicApp } from '../../shared/guide/articles';
+import { GUIDE_APPS, siteArticleById, siteArticles, type PublicApp } from '../../shared/guide/articles';
 
 type HeadElement = { type: string; props: Record<string, string> };
 
@@ -68,7 +68,7 @@ export async function prerender(data: { url: string }): Promise<{
     // From the front page, every town page and the help — and from the help, every article and writing to us. The
     // plugin renders each of them in turn.
     ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, ...AUDIENCES.map((a) => forPath(a.who)), NOTICES.privacy.path, NOTICES.cookies.path]) } : {}),
-    ...(help?.kind === 'index' ? { links: new Set([...articles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
+    ...(help?.kind === 'index' ? { links: new Set([...siteArticles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
     data: { towns },
     head: { lang: 'en', ...head },
   };
@@ -180,7 +180,7 @@ function helpHead(page: NonNullable<ReturnType<typeof helpPageOf>>): { title: st
     return { title, elements: new Set([...common(title, t('help.ui.contactMetaDescription'), CONTACT_PATH), ldScript([crumbs({ name: t('help.contact.title'), path: CONTACT_PATH })])]) };
   }
   if (page.kind === 'article') {
-    const a = articleById(page.id);
+    const a = siteArticleById(page.id);
     if (!a) return frontHead();
     const path = articlePath(a.id);
     const title = t('help.ui.articleMetaTitle', { title: a.title });

@@ -1,9 +1,11 @@
+import { enSpecialisms } from './en.specialisms';
 /**
  * Home (network landing/hub) app — English base slice. Namespace: home.* (keep every key prefixed).
  * Filled during the per-app i18n extraction; spread into the composed base catalog in en.ts.
  * Not `as const` — values must be typed `string` so a translation may differ from the English literal.
  */
 export const enHome = {
+  ...enSpecialisms,
   // A store's public reputation. Every line is doing one job: say what we MEASURED, say how much of it
   // there is, and never let a shopper mistake "we have not seen enough yet" for "this store is fine".
   'home.store.lede': 'What we measured while carrying this store’s parcels — and what the people who received them said.',
@@ -110,18 +112,6 @@ export const enHome = {
   'home.agents.foot':
     'What an agent says about themselves is their claim and we do not check it. What we have seen counts only consignments handled through this network, so an agent may have cleared thousands elsewhere and show nothing here. Read the page before you appoint anybody.',
   'home.agents.back': 'Back',
-  'home.agents.spec.sea_container': 'Sea containers',
-  'home.agents.spec.air_freight': 'Air freight',
-  'home.agents.spec.vehicles': 'Vehicles and plant',
-  'home.agents.spec.bulk_breakbulk': 'Bulk and breakbulk',
-  'home.agents.spec.project_heavy_lift': 'Project and heavy lift',
-  'home.agents.spec.perishables': 'Perishables',
-  'home.agents.spec.livestock': 'Livestock',
-  'home.agents.spec.pharma_cold_chain': 'Pharmaceuticals and cold chain',
-  'home.agents.spec.dangerous_goods': 'Dangerous goods',
-  'home.agents.spec.personal_effects': 'Personal effects and removals',
-  'home.agents.spec.courier_express': 'Courier and express consignments',
-  'home.agents.spec.bonded_transit': 'Goods in bonded transit',
   'home.store.underAnHour': 'Under an hour',
   'home.store.hours': 'About {n, plural, one {# hour} other {# hours}}',
   'home.store.days': 'About {n, plural, one {# day} other {# days}}',

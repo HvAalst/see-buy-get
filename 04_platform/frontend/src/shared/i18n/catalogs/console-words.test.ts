@@ -8,6 +8,10 @@ import { enTowerAll } from './en.tower';
  * THE CONSOLE'S WORDS STAY IN THE CONSOLE'S CODE (2026-10-22). en.tower.ts is loaded by the console alone, so how the
  * console works is in no other app's code. What is held to here: a word another app shows is in the catalog every app
  * carries — or that app would show its key instead — and none of the console's own words is.
+ *
+ * What this cannot see: the console's own screens another app hosts (the Business app hosts an import, its depots, a
+ * company's papers), whose code is in apps/tower/. Their words are in en.tower-business.ts, which the Business app adds;
+ * scripts/check-words.mjs reads each built app after a build and refuses one that names a word it does not carry.
  */
 const SRC = 'src';
 

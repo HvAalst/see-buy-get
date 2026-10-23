@@ -1,3 +1,4 @@
+import { enSiteHours } from './en.site-hours';
 /**
  * Fleet (manager) app — English base slice. Namespace: fleet.* (keep every key prefixed).
  * Filled during the per-app i18n extraction; spread into the composed base catalog in en.ts.
@@ -7,6 +8,7 @@
  * pure functions in logic.ts (they take `t` and build the finished sentence); fleet.toast.* backs the hook.
  */
 export const enFleet = {
+  ...enSiteHours,
   // Shell (app.tsx)
   'fleet.appTitle': 'Fleet',
   // The top bar's LIVE line — the same figure as the dashboard tile, from the same loaded data.
@@ -266,27 +268,6 @@ export const enFleet = {
   'fleet.sites.alwaysOpen': 'Open for loading at any hour. Tick to set its hours: a truck that comes before it opens waits at the gate, and nothing is collected there on a closed day.',
   'fleet.sites.open': 'Open',
   'fleet.sites.closed': 'Closed',
-  'fleet.sites.opens': 'Opens',
-  'fleet.sites.closes': 'Closes',
-  'fleet.sites.dayName.mon': 'Monday',
-  'fleet.sites.dayName.tue': 'Tuesday',
-  'fleet.sites.dayName.wed': 'Wednesday',
-  'fleet.sites.dayName.thu': 'Thursday',
-  'fleet.sites.dayName.fri': 'Friday',
-  'fleet.sites.dayName.sat': 'Saturday',
-  'fleet.sites.dayName.sun': 'Sunday',
-  'fleet.sites.day.mon': 'Mon',
-  'fleet.sites.day.tue': 'Tue',
-  'fleet.sites.day.wed': 'Wed',
-  'fleet.sites.day.thu': 'Thu',
-  'fleet.sites.day.fri': 'Fri',
-  'fleet.sites.day.sat': 'Sat',
-  'fleet.sites.day.sun': 'Sun',
-  'fleet.sites.dayRun': '{from}–{to}',
-  'fleet.sites.openRun': '{days} {hours}',
-  'fleet.sites.closedRun': '{days} closed',
-  'fleet.sites.baysCount': '{n, plural, one {# bay} other {# bays}}',
-  'fleet.sites.loadsLine': 'Loading: {what}',
   'fleet.use.title': 'How the vehicles were used',
   'fleet.use.lead': 'From what was recorded: the shifts started in each vehicle, the odometer readings given, the loads delivered and the runs driven, and the days it was off the road. Never how anybody drove.',
   'fleet.use.earlier': '‹ Earlier',

@@ -157,3 +157,12 @@
     border-radius: var(--r-sheet, 20px) var(--r-sheet, 20px) 0 0;
   }
 }
+
+/* A task heading over a group of an app's help; the first sits close under the sheet's lede. */
+.guide__group > .guide__h {
+  margin-bottom: 8px;
+}
+
+.guide__group:first-of-type > .guide__h {
+  margin-top: 8px;
+}

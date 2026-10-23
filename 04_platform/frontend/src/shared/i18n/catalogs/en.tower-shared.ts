@@ -1,7 +1,8 @@
 /**
  * The console's words that other apps show too — a business's places, a paper's expiry date. Kept under their tower.*
  * names, and in the catalog every app carries; the rest of the console's words are in en.tower.ts, which only the
- * console loads (apps/tower/english.ts), so no other app's code carries how the console works (2026-10-22).
+ * console loads (apps/tower/english.ts), so no other app's code carries how the console works (2026-10-22) — except
+ * those of the console's screens the Business app hosts, which it adds itself (en.tower-business.ts).
  */
 export const enTowerShared = {
   'tower.papers.needDate': 'A new expiry date is needed.',

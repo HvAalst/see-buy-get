@@ -1,22 +1,25 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { ErrorNote, Icon, Note } from '../../../shared/ui';
 import { useLocale, useT, type MessageKey } from '../../../shared/i18n';
-import { articles, type GuideArticle } from '../../../shared/guide/articles';
+import { siteArticles, type GuideArticle } from '../../../shared/guide/articles';
 import type { SbgError } from '../../../lib/sbg';
 import { writeToUs, type SupportCategory } from '../api';
 import { HELP_PATH } from '../help';
 import { HelpCrumbs } from './HelpCrumbs';
 import { HelpCards } from './HelpCards';
 
-/** What a message can be about, in the reader's words — and the help that most often answers it, offered first. */
+/**
+ * What a message can be about, in the reader's words — and the help that most often answers it, offered first. Only the
+ * public site's articles: the rest are inside the apps (2026-10-23), and the person writing may not be able to get in.
+ */
 export const TOPICS: ReadonlyArray<{ category: SupportCategory; label: MessageKey; answers: string[] }> = [
-  { category: 'sign-in', label: 'help.contact.topic.sign-in', answers: ['which-sign-in', 'account-recovery', 'change-pin', 'change-password'] },
-  { category: 'parcel', label: 'help.contact.topic.parcel', answers: ['send-sign-in', 'follow-shop-order', 'freight-tracking', 'no-signal'] },
-  { category: 'damage', label: 'help.contact.topic.damage', answers: ['parcel-problem', 'tampering'] },
-  { category: 'money', label: 'help.contact.topic.money', answers: ['who-you-contract-with', 'quotations'] },
-  { category: 'joining', label: 'help.contact.topic.joining', answers: ['shop-papers', 'hub-papers', 'driver-fleet', 'new-partner-limit'] },
-  { category: 'business', label: 'help.contact.topic.business', answers: ['business-sign-in', 'business-loads', 'api-keys', 'business-check'] },
-  { category: 'safety', label: 'help.contact.topic.safety', answers: ['tampering', 'held-on-the-road', 'account-recovery'] },
+  { category: 'sign-in', label: 'help.contact.topic.sign-in', answers: ['which-sign-in', 'account-recovery', 'when-to-change'] },
+  { category: 'parcel', label: 'help.contact.topic.parcel', answers: ['send-sign-in', 'follow-shop-order'] },
+  { category: 'damage', label: 'help.contact.topic.damage', answers: ['parcel-problem'] },
+  { category: 'money', label: 'help.contact.topic.money', answers: [] },
+  { category: 'joining', label: 'help.contact.topic.joining', answers: ['shop-papers', 'hub-papers', 'business-check'] },
+  { category: 'business', label: 'help.contact.topic.business', answers: ['business-sign-in', 'business-check'] },
+  { category: 'safety', label: 'help.contact.topic.safety', answers: ['parcel-problem', 'account-recovery'] },
   { category: 'privacy', label: 'help.contact.topic.privacy', answers: ['account-recovery'] },
   { category: 'other', label: 'help.contact.topic.other', answers: [] },
 ];
@@ -36,7 +39,7 @@ const MAX = 2000;
 export function ContactScreen() {
   const t = useT();
   const locale = useLocale();
-  const all = useMemo(() => articles(t), [t, locale]);
+  const all = useMemo(() => siteArticles(t), [t, locale]);
   const [topic, setTopic] = useState<SupportCategory | null>(null);
   const [about, setAbout] = useState<string | undefined>(undefined);
   const [from, setFrom] = useState<string | undefined>(undefined);

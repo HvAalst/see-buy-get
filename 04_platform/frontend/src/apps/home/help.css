@@ -249,6 +249,14 @@ html[data-help-theme='dark']:has(.hc) {
   margin-bottom: 1.5rem;
 }
 
+/* The apps an article that moved inside them is found in: their names, plainly, before the way back to the help. */
+.hc__apps {
+  margin: -0.75rem 0 1.5rem;
+  padding-left: 1.25rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
 .hc__roles {
   display: flex;
   flex-wrap: wrap;

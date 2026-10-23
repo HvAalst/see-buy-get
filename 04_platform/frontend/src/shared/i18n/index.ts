@@ -10,12 +10,12 @@ export * from './locales';
 export type { MessageKey, Messages } from './catalogs/en';
 
 /**
- * English, the fallback: the catalog every app carries, and what an app adds of its own before it renders — the console
- * its own words (apps/tower/english.ts), which no other app's code carries.
+ * English, the fallback: the catalog every app carries, and what each app adds of its own before it renders
+ * (apps/<app>/english.ts), which no other app's code carries.
  */
 const english: Partial<Messages> = { ...en };
 
-/** Add an app's own English words. The console calls it before anything renders; so do the tests, for every app. */
+/** Add an app's own English words. Every app calls it before anything renders; so do the tests, for every app. */
 export function addEnglish(more: Partial<Messages>): void {
   Object.assign(english, more);
 }
@@ -146,24 +146,40 @@ export function useT(): typeof t {
 }
 
 /*
- * THE HELP'S WORDS, WHEN THEY ARE NEEDED (2026-10-23). en.help.ts is the biggest catalog there is — every article, in
- * full. The apps carry it (their english.ts); the front door does not, so its homepage stays light on a slow connection,
- * and loads it for a help page (main.tsx, before the page is drawn) or when a help sheet opens (useHelpWords).
+ * THE HELP'S WORDS, WHEN THEY ARE NEEDED (2026-10-23). Every article, in full, is more words than any app's own, so no
+ * app downloads them before it is drawn: they come for a help page (the front door's main.tsx, before the page is
+ * drawn) or when a help sheet opens (useHelpWords). en.help.ts is the public site's — getting in and getting started;
+ * an app adds the articles about working in it (en.help-app.ts) with helpWordsAlso, from its english.ts, so they come
+ * in the same fetch. The front door never adds them: the public site does not carry them at all.
  */
 let helpLoading: Promise<void> | null = null;
+const helpAlso: Array<() => Promise<Partial<Messages>>> = [];
 
 /** Whether the help's words are here yet. */
 export function helpWordsHere(): boolean {
   return 'help.ui.title' in english;
 }
 
+/** More help words this app fetches with the help's own: called by an app's english.ts, before anything is drawn. */
+export function helpWordsAlso(load: () => Promise<Partial<Messages>>): void {
+  helpAlso.push(load);
+}
+
 /** Bring the help's words in, once; every component showing words is drawn again when they arrive. */
 export function loadHelpWords(): Promise<void> {
   if (helpWordsHere()) return Promise.resolve();
-  helpLoading ??= import('./catalogs/en.help').then((m) => {
-    addEnglish(m.enHelp);
-    subscribers.forEach((fn) => fn());
-  });
+  helpLoading ??= Promise.all([import('./catalogs/en.help').then((m) => m.enHelp), ...helpAlso.map((load) => load())]).then(
+    (catalogs) => {
+      // All together, so the words are never here in part.
+      for (const words of catalogs) addEnglish(words);
+      subscribers.forEach((fn) => fn());
+    },
+    (error: unknown) => {
+      // No signal: the next opening asks again.
+      helpLoading = null;
+      throw error;
+    },
+  );
   return helpLoading;
 }
 
@@ -173,7 +189,10 @@ export function useHelpWords(wanted = true): boolean {
   useEffect(() => {
     if (!wanted || here) return;
     let live = true;
-    void loadHelpWords().then(() => live && setHere(true));
+    void loadHelpWords().then(
+      () => live && setHere(true),
+      () => undefined, // no signal: the sheet keeps saying it is waiting, and asks again when it opens again
+    );
     return () => {
       live = false;
     };

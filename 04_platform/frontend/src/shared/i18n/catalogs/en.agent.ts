@@ -1,3 +1,5 @@
+import { enGoods } from './en.goods';
+import { enCounter } from './en.counter';
 /**
  * Agent (PUDO shop) app — English base slice. Namespace: agent.* (keep every key prefixed).
  * Filled during the per-app i18n extraction; spread into the composed base catalog in en.ts.
@@ -7,6 +9,8 @@
  * pure functions in logic.ts (they take `t` and build the finished sentence); agent.toast.* backs the hook.
  */
 export const enAgent = {
+  ...enCounter,
+  ...enGoods,
   // Shared within the shop app (reused across screens).
   'agent.appTitle': 'Shop',
   // The top bar's LIVE line — the two piles a counter has to clear. Closed stands alone.
@@ -75,30 +79,6 @@ export const enAgent = {
   'agent.size.l.hint': 'Needs both arms',
   'agent.size.heavy.label': 'Heavy',
   'agent.size.heavy.hint': 'Over 20 kg',
-
-  // The cargo natures (the "what's inside" picker).
-  'agent.nature.gen': 'General goods',
-  'agent.nature.fod': 'Dry food — rice, tins',
-  'agent.nature.fop': 'Fresh or frozen food',
-  'agent.nature.frg': 'Fragile — glass, electronics',
-  'agent.nature.odr': 'Strong smell — perfume, fish',
-  'agent.nature.hum': 'Medicine or aid',
-  'agent.nature.hazChem': 'Chemicals — paint, bleach',
-  'agent.nature.hazDust': 'Cement or powder',
-  'agent.nature.hazBio': 'Medical or biological',
-  'agent.nature.hazFlam': 'Gas, fuel or flammable',
-  // The sentence beside each picture in the help sheet. Written as what the ANSWER DOES, because the nature
-  // is not a description for the file — it decides what may travel alongside it and what truck may take it.
-  'agent.nature.genWhy': 'Ordinary dry goods with nothing special about them. Travels with almost anything.',
-  'agent.nature.fodWhy': 'Food that keeps at room temperature — rice, flour, tins, sugar. Kept away from chemicals, cement dust and anything that smells.',
-  'agent.nature.fopWhy': 'Food that spoils — fresh, chilled or frozen. Needs a refrigerated truck and an unbroken cold chain, so it is never left standing.',
-  'agent.nature.frgWhy': 'Breaks if dropped or crushed — glass, screens, electronics. Never on a bike or motorcycle.',
-  'agent.nature.odrWhy': 'Smells strongly enough to taint what it travels with — fish, perfume, hides. Kept away from food.',
-  'agent.nature.humWhy': 'Medicine, vaccines or relief supplies. Handled with priority, and cold-chain rules apply if it is chilled.',
-  'agent.nature.hazChemWhy': 'Chemicals — paint, bleach, solvents, acid. Needs a certified truck and never rides with food.',
-  'agent.nature.hazDustWhy': 'Fine powder that escapes and settles on everything — cement, lime, ash, flour. The risk is contamination, so it never travels with food.',
-  'agent.nature.hazBioWhy': 'Medical or biological material — samples, sharps, waste. Certified transport only.',
-  'agent.nature.hazFlamWhy': 'Catches fire — fuel, gas cylinders, spirits. Certified truck, and never with anything else that could ignite.',
 
   // The driver failings an agent can flag alongside the star rating (REP2).
   'agent.driverIssue.latePickup': 'Late to pick up',
@@ -286,7 +266,6 @@ export const enAgent = {
   'agent.home.askAmount': 'Pay in {amount}',
   'agent.home.addAmount': 'Add {amount}',
   'agent.home.addMoney': 'Add money',
-  'agent.home.notNow': 'Not now',
   'agent.home.topUpWaitTitle': 'Waiting for your payment',
   'agent.home.topUpWaitNote': 'You said you are paying in {amount}',
   'agent.home.topUpWaitRow': 'Quote {reference} when you pay',
@@ -473,54 +452,9 @@ export const enAgent = {
   'agent.accept.planned': 'Planned',
   'agent.accept.pickupWhen': 'Pickup day and time',
   'agent.accept.earlyClaim': 'Let a driver reserve it before the day — useful when trucks are scarce',
-
-  // FB2b — posting for negotiation, and answering the prices that come back.
-  // FB5 — how it is packed. An observation, not a judgement: the clerk is looking at the load, and this is
-  // the one answer here that decides both the kind of truck and whether anything has to lift it.
-  'agent.accept.packaging': 'How is it packed?',
-  'agent.accept.packagingNote': 'Look at the load and say what you see. Sacks and pallets are the same goods and not the same job — one is worked on and off an open deck, the other is forklifted into a closed body.',
-  'agent.accept.packagingChoose': 'Choose…',
-  'agent.accept.packBagged': 'In sacks or bags',
-  'agent.accept.packPalletised': 'On pallets',
-  'agent.accept.packLoose': 'Loose — poured, blown or tipped',
-  'agent.accept.packDrummed': 'In drums',
-  'agent.accept.packBaled': 'In bales',
-  'agent.accept.packIbc': 'In IBC cubes or totes',
-  'agent.accept.packPiece': 'One single piece',
-  // The sentence beside each picture in the help sheet. Written as what the DRIVER will have to do, because
-  // that is what the answer actually decides — the body that turns up, and whether anything can lift it.
-  'agent.accept.packBaggedWhy': 'Sacks stacked on an open deck and sheeted over. Worked on and off by hand, by conveyor or by forklift — someone has to lift every one.',
-  'agent.accept.packPalletisedWhy': 'Stacked and wrapped on wooden pallets. Forklifted into a closed body, which is also what keeps it dry.',
-  'agent.accept.packLooseWhy': 'Not packed at all — poured, blown or tipped straight into the truck. Nothing lifts it, and it cannot sit on a flat deck: it needs a tipper, a silo or a tanker.',
-  'agent.accept.packDrummedWhy': 'Steel or plastic drums, lifted in and strapped upright so they cannot roll.',
-  'agent.accept.packBaledWhy': 'Compressed bales — cotton, wool, waste, hay. Strapped down on an open deck and sheeted.',
-  'agent.accept.packIbcWhy': 'Cube-shaped tanks in a metal cage, usually about a thousand litres. Forklifted into a closed body.',
-  'agent.accept.packPieceWhy': 'One item travelling on its own terms — a machine, a beam, a tank. Its size and weight decide the truck, not the wrapping.',
   // FB2c — the two facts only the counter can supply.
   'agent.accept.indivisible': 'This cannot be split into smaller loads',
   'agent.accept.indivisibleNote': 'One piece that has to travel whole — a machine, a tank, a beam. It changes what kind of truck is needed, and measuring cannot tell us.',
-  'agent.accept.bodyHint': 'What kind of truck do you think it needs?',
-  'agent.accept.bodyHintNote': 'Only if you know. We work it out from the size and weight either way, and your answer never stops a suitable truck taking it.',
-  'agent.accept.bodyAny': "I don't know",
-  // A real answer, and often the right one — the hint is advisory and a confident wrong guess is worse than
-  // none, so this row says so rather than making "I don't know" feel like a failure to fill the form in.
-  'agent.accept.bodyAnyWhy': 'Leave it to us. We work the truck out from the size, the weight and how it is packed — and your answer never stops a suitable truck taking it.',
-  'agent.accept.bodyFlatbed': 'Open flatbed',
-  'agent.accept.bodyBox': 'Closed box van',
-  'agent.accept.bodyCurtain': 'Curtain-side',
-  'agent.accept.bodyReefer': 'Refrigerated',
-  'agent.accept.bodyTipper': 'Tipper',
-  'agent.accept.bodyLowboy': 'Low-loader',
-  'agent.accept.bodyContainer': 'Container chassis',
-  // The sentence beside each picture in the body help sheet — what the truck IS, in the words of someone who
-  // would recognise it in the yard rather than name it from a catalogue.
-  'agent.accept.bodyFlatbedWhy': 'A flat open deck with no sides and no roof. Loaded from the side or lifted on from above, then strapped down and sheeted.',
-  'agent.accept.bodyBoxWhy': 'A closed box on the back, with doors. Keeps everything dry and locked; loaded from the back, usually by forklift or tail-lift.',
-  'agent.accept.bodyCurtainWhy': 'A box whose sides are heavy curtains that slide back. Dry like a box, but loadable along its whole length by forklift.',
-  'agent.accept.bodyReeferWhy': 'An insulated closed body with a cooling unit on the front. The only one that holds a temperature.',
-  'agent.accept.bodyTipperWhy': 'An open tub that lifts at the front to tip its load out of the back. For things that are poured in, never lifted.',
-  'agent.accept.bodyLowboyWhy': 'A trailer that sits very low between its wheels, so a tall machine still passes under bridges. For one heavy piece that cannot be split.',
-  'agent.accept.bodyContainerWhy': 'A bare steel frame that a shipping container locks onto. It carries the container, not loose goods.',
   // FB2d — the customer's own refusals, which bind where the hint above does not.
   'agent.accept.excludedBodies': 'Is there any truck the customer will not accept?',
   'agent.accept.excludedBodiesNote': 'Only if they say so — most customers do not mind. Drivers on these trucks will still see the load and will be told it is the customer’s choice, but they cannot take it.',
@@ -1234,61 +1168,5 @@ export const enAgent = {
   'agent.signin.deviceConfirm': 'Confirm this phone',
   'agent.counter.noSignalTitle': 'Handing over needs a signal',
   'agent.counter.noSignalDetail': 'The pickup code is checked by SeeBuyGet, so a parcel is handed over only when there is a signal. Taking parcels in, giving them to a driver and shelving still work: they wait on this phone.',
-  'agent.people.row': 'People at the counter',
-  'agent.people.rowSub': 'Who works the counter, and who did what',
-  'agent.people.title': 'People at the counter',
-  'agent.people.lede': 'Add a person by their phone number. They say yes from their own SeeBuyGet sign-in, then sign in here with their number and PIN, and what they do is kept under their name. Money, prices, hours and people stay with you.',
-  'agent.people.none': 'Nobody but you works the counter yet.',
-  'agent.people.state.invited': 'Added · has not said yes yet',
-  'agent.people.state.working': 'Works the counter · number ending {ends}',
-  'agent.people.state.declined': 'Said no · number ending {ends}',
-  'agent.people.state.removed': 'Taken out · number ending {ends}',
-  'agent.people.nameLabel': 'Their name',
-  'agent.people.phoneLabel': 'Their phone number',
-  'agent.people.add': 'Add this person',
-  'agent.people.remove': 'Take out',
-  'agent.people.owner': 'You',
-  'agent.people.logCta': 'Who did what',
-  'agent.people.logTitle': 'Who did what',
-  'agent.people.logLede': 'Every act at the counter, newest first, under the name of who did it. It is yours to read: it is not written on the parcel.',
-  'agent.people.logEmpty': 'Nothing has been done at the counter yet.',
-  'agent.staff.entry': 'I work at the counter here',
-  'agent.staff.entrySub': 'Sign in as yourself, with your phone number and PIN',
-  'agent.staff.ownerInstead': 'The shop’s own sign-in',
-  'agent.staff.loginTitle': 'Sign in as yourself',
-  'agent.staff.loginLede': 'Your phone number and your 5-digit PIN, the same PIN you use in any SeeBuyGet app. No PIN yet? Choose “Forgot your PIN?” to set one. What you do at the counter is kept under your name.',
-  'agent.staff.loginCta': 'Sign in',
-  'agent.staff.phoneTitle': 'Your phone number',
-  'agent.staff.phoneLede': 'New to SeeBuyGet, or forgot your PIN? We send a code to your phone to prove it is yours.',
-  'agent.staff.phoneCta': 'Send me a code',
-  'agent.staff.codeTitle': 'Type the code',
-  'agent.staff.codeLede': 'We sent a 6-digit code to {phone}.',
-  'agent.staff.codeCta': 'Check the code',
-  'agent.staff.pinTitle': 'Choose your PIN',
-  'agent.staff.pinLede': 'Five digits you will remember and nobody else would guess. It is yours: never tell it to the owner or anybody at the counter.',
-  'agent.staff.pinCta': 'Save my PIN',
-  'agent.staff.emailTitle': 'An email for getting back in',
-  'agent.staff.emailLede': 'If you ever lose your phone number, this is how you get back into your account. We send a code to prove you read it.',
-  'agent.staff.emailCta': 'Save and sign in',
-  'agent.staff.phone': 'Phone number',
-  'agent.staff.pin': 'PIN',
-  'agent.staff.newPin': 'New PIN',
-  'agent.staff.code': 'Code',
-  'agent.staff.firstTime': 'Forgot your PIN?',
-  'agent.staff.newCode': 'Send a new code',
-  'agent.staff.placesTitle': 'Your shops',
-  'agent.staff.placesLede': 'The shops whose owner added you by your number. Say yes to one, then work its counter.',
-  'agent.staff.noPlaces': 'No shop has added you yet',
-  'agent.staff.noPlacesDetail': 'Ask the owner to add you under People at the counter, with your number {phone}. Then sign in again.',
-  'agent.staff.placeWorking': 'You work here as {name}',
-  'agent.staff.placeInvited': 'Added you as {name} · say yes or no',
-  'agent.staff.work': 'Work here',
-  'agent.staff.yes': 'Yes',
-  'agent.staff.no': 'No',
-  'agent.staff.notMe': 'Sign out',
-  'agent.staff.chipAria': 'Signed in as {name}',
-  'agent.staff.sheetTitle': '{name} at the counter',
-  'agent.staff.sheetLede': 'You work the counter at {shop}. What you do here is kept under your name for the owner. Money, prices, hours and people stay with the owner.',
-  'agent.staff.signOut': 'Sign out',
   'agent.outbox.owner': 'The shop’s own sign-in',
 };

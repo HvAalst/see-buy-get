@@ -1,3 +1,4 @@
+import { enVehicles } from './en.vehicles';
 /**
  * Driver app — English base slice. Namespace: driver.* (keep every key prefixed).
  * Filled during the per-app i18n extraction; spread into the composed base catalog in en.ts.
@@ -7,6 +8,7 @@
  * the pure functions in logic.ts (they take `t` and build the finished sentence); driver.toast.* backs the hook.
  */
 export const enDriver = {
+  ...enVehicles,
   // Shell + shared within the driver app (reused across screens).
   'driver.appTitle': 'Driver',
   // The top bar's LIVE line — committed state only, never an incoming offer.
@@ -15,18 +17,6 @@ export const enDriver = {
   'driver.bar.heading': 'To {place}',
   'driver.bar.bagsFree': '{count, plural, one {# bag} other {# bags}} free',
   'driver.signinSubtitle': 'Sign in',
-  /* WHAT THE DRIVER ACTUALLY RIDES. The class is registered against the vehicle, so the word is derived
-     rather than fixed — see vehicle-words.ts. The map there is complete by compilation: an eighth class
-     on the server stops this app building until somebody writes its noun. */
-  'driver.vehicleWord.bike': 'bike',
-  'driver.vehicleWord.motorcycle': 'motorbike',
-  'driver.vehicleWord.tuktuk': 'tuk-tuk',
-  'driver.vehicleWord.car': 'car',
-  'driver.vehicleWord.van': 'van',
-  'driver.vehicleWord.bus': 'bus',
-  'driver.vehicleWord.truck': 'truck',
-  /* For a class this build has never heard of. Slightly generic beats confidently wrong. */
-  'driver.vehicleWord.generic': 'vehicle',
   /* WHERE THE STICKER GOES, and a bicycle has no dashboard. */
   'driver.stickerPlace.dashboard': 'dashboard',
   'driver.stickerPlace.frame': 'frame',
@@ -750,8 +740,6 @@ export const enDriver = {
   'driver.road.onlyAdvisories': '{count} reported, none of them in your way',
   'driver.road.someBlocking': '{count} reported, {blocking} could stop you',
   'driver.road.caveat': 'This map is built by drivers, not surveyed. Check the road yourself.',
-  'driver.road.metres': '{n} m',
-  'driver.road.tonnes': '{n} t',
   'driver.road.away': '{km} km away',
   'driver.road.agreeCount': '{count, plural, one {# driver agrees} other {# drivers agree}}',
   'driver.road.agreeOne': '1 other driver agrees',
@@ -799,17 +787,6 @@ export const enDriver = {
   'driver.road.back': 'Back',
   'driver.road.retry': 'Try again',
   'driver.road.loadFailed': 'We could not load what is reported here',
-  // The eight things a driver can report, in the words they would use looking out of a windscreen.
-  'driver.road.kind.LOW_BRIDGE': 'Low bridge',
-  'driver.road.kind.HEIGHT_BARRIER': 'Height barrier',
-  'driver.road.kind.WEIGHT_LIMIT': 'Weight limit',
-  'driver.road.kind.NO_HAZMAT': 'No dangerous goods',
-  'driver.road.kind.WASHOUT': 'Road washed out',
-  'driver.road.kind.WEIGHBRIDGE': 'Weighbridge',
-  'driver.road.kind.FERRY': 'Ferry',
-  'driver.road.kind.CHECKPOINT': 'Checkpoint',
-  'driver.road.kind.ROAD_CLOSED': 'Road closed',
-  'driver.road.kind.BORDER_CLOSED': 'Border closed',
   'driver.toast.roadReported': 'Reported — thank you',
   'driver.toast.roadReportedDetail': 'Other drivers on this road will see it.',
   'driver.toast.roadQueued': 'No signal — kept on this phone',

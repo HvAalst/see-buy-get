@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToString } from 'preact-render-to-string';
-import { articles } from '../../shared/guide/articles';
+import { articles, inAppOnly, siteArticles } from '../../shared/guide/articles';
 import { HELP_ROLES, MOST_ASKED, alphabetical, articlePath, forRole, helpPageOf, relatedOf, roleOf, searchArticles } from './help';
 import { HelpScreen } from './screens/HelpScreen';
 import { pieces } from './helpText';
@@ -14,9 +14,10 @@ import { TOPICS } from './screens/ContactScreen';
 /*
  * THE HELP CENTRE (/help/ on the front door). What is held to here: every address means one page; search finds an
  * article by any of its words, title first; a role shows that role's help; what is related shares an app; the pages, as
- * built, carry the article's own words — and every "may answer it" points at an article that exists.
+ * built, carry the article's own words — and every "may answer it" points at an article that exists. The site holds the
+ * articles about getting in and getting started; the rest are in the apps only (the user, 2026-10-23).
  */
-const all = articles();
+const all = siteArticles();
 
 describe('the help centre', () => {
   it('reads its addresses: the index, an article, writing to us — nothing else', () => {
@@ -50,7 +51,7 @@ describe('the help centre', () => {
   });
 
   it('relates an article to others in the same apps, never to itself', () => {
-    const a = all.find((x) => x.id === 'change-pin')!;
+    const a = all.find((x) => x.id === 'shop-sign-in')!;
     const related = relatedOf(a, all);
     expect(related.length).toBeGreaterThan(0);
     expect(related.length).toBeLessThanOrEqual(4);
@@ -65,14 +66,14 @@ describe('the help centre', () => {
   });
 
   it('builds an article’s page with its own words, a way back, and a way to write to us about it', () => {
-    const html = renderToString(<HelpScreen page={{ kind: 'article', id: 'change-pin' }} />);
-    const a = all.find((x) => x.id === 'change-pin')!;
+    const html = renderToString(<HelpScreen page={{ kind: 'article', id: 'account-recovery' }} />);
+    const a = all.find((x) => x.id === 'account-recovery')!;
     const text = html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
     // Every step and note is on the page, in its words — chips and paths drawn without their quotation marks.
     for (const s of [...(a.steps ?? []), ...(a.notes ?? [])]) expect(text, s).toContain(s.replace(/[“”]/g, '').replace(/ › /g, '›').slice(0, 30).replace(/›/g, '›'.normalize()).split('›')[0].trim().slice(0, 20));
     expect((html.match(/<li><p>/g) ?? []).length).toBe(a.steps?.length ?? 0);
     expect(html).toContain('href="/help/"');
-    expect(html).toContain('/help/contact/?about=change-pin');
+    expect(html).toContain('/help/contact/?about=account-recovery');
     // The reader's other articles, under their task headings, beside it; the steps' numbers are the page's own.
     expect(html).toContain('class="hc__side');
     expect(html).toContain('aria-current="page"');
@@ -91,8 +92,30 @@ describe('the help centre', () => {
       expect(HELP_GROUPS, a.id).toContain(a.group);
       expect((a.noteKinds ?? []).length, a.id).toBe((a.notes ?? []).length);
     }
-    // Every heading is used: a reader's help is never under one heading alone.
-    for (const g of HELP_GROUPS) expect(all.some((a) => a.group === g), g).toBe(true);
+    // Every heading is used by the apps' help: a reader's help is never under one heading alone.
+    for (const g of HELP_GROUPS) expect(articles().some((a) => a.group === g), g).toBe(true);
+  });
+
+  // The user, 2026-10-23: "was wondering if we need all the help pages outside the app. Just the info to get started
+  // should be enough, and the operational issues could live in the apps" — chosen: getting in and getting started.
+  it('holds getting in and getting started only: which app, signing in, getting back in, papers, a parcel', () => {
+    expect(all.map((a) => a.id).sort()).toEqual(
+      ['which-sign-in', 'shop-sign-in', 'driver-sign-in', 'fleet-sign-in', 'store-sign-in', 'send-sign-in', 'business-sign-in', 'account-recovery', 'when-to-change', 'shop-papers', 'hub-papers', 'business-check', 'follow-shop-order', 'parcel-problem'].sort(),
+    );
+    // The rest is still every app's own help.
+    expect(articles().length).toBeGreaterThan(all.length + 30);
+  });
+
+  it('says where an article that moved inside the apps went, and shows none of its words', () => {
+    // The guard reads a real one: changing a PIN is the Driver, Fleet and Send apps' own.
+    expect(inAppOnly('change-pin')).toEqual(['fleet', 'driver', 'send']);
+    expect(inAppOnly('shop-sign-in')).toBeUndefined();
+    const html = renderToString(<HelpScreen page={{ kind: 'article', id: 'change-pin' }} />);
+    expect(html).toContain('That help is inside the app now');
+    for (const app of ['Fleet app', 'Driver app', 'Send app']) expect(html, app).toContain(`<li>${app}</li>`);
+    const pin = articles().find((a) => a.id === 'change-pin')!;
+    expect(html).not.toContain(pin.title);
+    expect(html).not.toContain(pin.summary.slice(0, 40));
   });
 
   it('answers every front-page question on its own, and never promises a text about a parcel', () => {

@@ -63,6 +63,14 @@ for (const app of apps) {
 }
 
 console.log(`\nbuilt ${apps.length} app(s): ${apps.join(', ')}`);
+
+// Every app carries the words it shows, read on what was just built: an app adds only its own words, and one it names
+// without adding would be drawn as its key (scripts/check-words.mjs).
+const words = spawnSync(process.execPath, [resolve(ROOT, 'scripts/check-words.mjs'), ...apps], { cwd: ROOT, env: process.env, stdio: 'inherit' });
+if (words.status !== 0) {
+  console.error('\nbuild failed: an app names words it does not carry (above)');
+  process.exit(words.status ?? 1);
+}
 // The console is not part of the public site: it is built to dist-console/ and deployed to its own address.
 if (apps.includes('tower')) console.log('the operator console went to dist-console/ — deploy it to its own address, not with dist/');
 

@@ -86,6 +86,17 @@ describe('the front door’s own words', () => {
     expect(first.filter((f) => wordsIn(f, 'help') > 0 && !fetchFirst.includes(f))).toEqual([]);
   });
 
+  it('never fetches the help about working in an app: the public site holds getting in and getting started only', () => {
+    // The user, 2026-10-23: "Just the info to get started should be enough, and the operational issues could live in the
+    // apps". Each other app asks for en.help-app.ts in its english.ts; nothing the front door reaches may.
+    const asks = (f: string) => /(?:import\(|from)\s*['"][^'"]*\/en\.help-app['"]/.test(readFileSync(join(SRC, f), 'utf8'));
+    const files = reached('apps/home/main.tsx', true);
+    expect(files).toContain('shared/i18n/index.ts');
+    expect(files.filter(asks)).toEqual([]);
+    // The guard reads what it is meant to: an app that does ask for them is found asking.
+    expect(asks('apps/agent/english.ts')).toBe(true);
+  });
+
   it('what it adds is its own: the front page, joining, the pages written to be quoted — and the core every app carries', () => {
     const own = { ...enHome, ...enFront, ...enPages, ...enPrivacy };
     expect(Object.keys(own).every((k) => /^(home|front|pages)\./.test(k))).toBe(true);

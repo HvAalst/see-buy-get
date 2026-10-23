@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { Chip, Icon } from '../../../shared/ui';
 import { useLocale, useT } from '../../../shared/i18n';
-import { GUIDE_APPS, HELP_GROUPS, articleById, articles, type GuideArticle, type HelpGroup, type PublicApp } from '../../../shared/guide/articles';
+import { GUIDE_APPS, HELP_GROUPS, inAppOnly, siteArticleById, siteArticles, type GuideArticle, type HelpGroup, type PublicApp } from '../../../shared/guide/articles';
 import { CONTACT_PATH, HELP_PATH, HELP_ROLES, MOST_ASKED, articlePath, byGroup, forRole, roleOf, roleOfArticle, searchArticles, type HelpPage, type HelpRole } from '../help';
 import { HelpText } from '../helpText';
 import { ContactScreen } from './ContactScreen';
@@ -34,8 +34,8 @@ export function HelpScreen({ page, update }: { page: HelpPage; update?: () => vo
       <HelpBar
         dark={dark}
         onDark={setDark}
-        wide={page.kind === 'article' && Boolean(articleById(page.id))}
-        contents={page.kind === 'article' && articleById(page.id) ? { open: contentsOpen, toggle: () => setContentsOpen((o) => !o) } : undefined}
+        wide={page.kind === 'article' && Boolean(siteArticleById(page.id))}
+        contents={page.kind === 'article' && siteArticleById(page.id) ? { open: contentsOpen, toggle: () => setContentsOpen((o) => !o) } : undefined}
       />
       {page.kind === 'contact' ? (
         <div class="hc__single">
@@ -78,7 +78,7 @@ function useHelpTheme(): [boolean, (dark: boolean) => void] {
 function HelpBar({ dark, onDark, contents, wide }: { dark: boolean; onDark: (dark: boolean) => void; contents?: { open: boolean; toggle: () => void }; wide: boolean }) {
   const t = useT();
   const locale = useLocale();
-  const all = useMemo(() => articles(t), [t, locale]);
+  const all = useMemo(() => siteArticles(t), [t, locale]);
   const [q, setQ] = useState('');
   const found = q.trim() ? searchArticles(all, q).slice(0, 6) : [];
   return (
@@ -126,7 +126,7 @@ function HelpBar({ dark, onDark, contents, wide }: { dark: boolean; onDark: (dar
 function HelpIndex() {
   const t = useT();
   const locale = useLocale();
-  const all = useMemo(() => articles(t), [t, locale]);
+  const all = useMemo(() => siteArticles(t), [t, locale]);
   const [role, setRole] = useState<HelpRole | null>(null);
   const [query, setQuery] = useState('');
   // Who the reader is (?for=shop) and what they searched (?q=), from the address — after the first frame, which is the
@@ -211,17 +211,29 @@ function HelpIndex() {
 function ArticlePage({ id, contentsOpen }: { id: string; contentsOpen: boolean }) {
   const t = useT();
   const locale = useLocale();
-  const all = useMemo(() => articles(t), [t, locale]);
-  const a = useMemo(() => articleById(id, t), [id, t, locale]);
+  const all = useMemo(() => siteArticles(t), [t, locale]);
+  const a = useMemo(() => siteArticleById(id, t), [id, t, locale]);
   // Whose help this is being read as: the address says (?for=), else the article's own first reader.
   const [role, setRole] = useState<HelpRole | null>(null);
   useEffect(() => setRole(roleOf(globalThis.location?.search ?? '')), []);
   if (!a) {
+    // An article that lives inside the apps now: its old address says which app holds it.
+    const inApps = inAppOnly(id);
     return (
       <div class="hc__single">
         <div class="hc__index">
-          <h1>{t('help.ui.unknownTitle')}</h1>
-          <p class="hc__lead">{t('help.ui.unknownBody')}</p>
+          <h1>{t(inApps ? 'help.ui.inAppTitle' : 'help.ui.unknownTitle')}</h1>
+          <p class="hc__lead">{t(inApps ? 'help.ui.inAppBody' : 'help.ui.unknownBody')}</p>
+          {inApps?.length ? (
+            <>
+              <p class="hc__lead">{t('help.ui.inAppWhere')}</p>
+              <ul class="hc__apps">
+                {inApps.map((x) => (
+                  <li key={x}>{t(GUIDE_APPS[x])}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
           <a class="pbtn pbtn--primary" href={HELP_PATH}>
             {t('help.ui.allHelp')}
           </a>

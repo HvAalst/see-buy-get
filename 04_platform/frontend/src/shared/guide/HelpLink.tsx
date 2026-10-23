@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Sheet } from '../ui';
-import { useHelpWords, useT } from '../i18n';
-import { articlesFor, type GuideApp, type GuideArticle } from './articles';
+import { useHelpWords, useT, type MessageKey } from '../i18n';
+import { HELP_GROUPS, articlesFor, type GuideApp, type GuideArticle } from './articles';
 import { frontDoorUrl } from '../ui/AllAppsLink';
 import { GuideArticles } from './GuideArticles';
 
@@ -45,20 +45,38 @@ export function HelpLink({
       )}
       <Sheet open={open} onClose={() => setOpen(false)} title={t('guide.title')}>
         <p class="card__note">{t('guide.lede')}</p>
-        {helpHere ? <GuideArticles articles={articles ?? articlesFor(app)} /> : <p class="card__note" aria-busy="true">…</p>}
-        {/* The same help on the front door, an article to a page — and when it did not answer it, writing to us. Not the
-            console's: staff have each other. */}
+        {helpHere ? <GroupedArticles articles={articles ?? articlesFor(app)} /> : <p class="card__note" aria-busy="true">…</p>}
+        {/* This is all of this app's help — the public site holds only getting in and getting started (2026-10-23) — so
+            what is left is writing to us when it did not answer. Not the console's: staff have each other. */}
         {app === 'console' || !helpHere ? null : (
           <p class="guide__more">
-            <a class="btn btn--link" href={`${frontDoorUrl()}help/`} target="_blank" rel="noopener">
-              {t('help.ui.allHelp')}
-            </a>
             <a class="btn btn--link" href={`${frontDoorUrl()}help/contact/?from=${app}`} target="_blank" rel="noopener">
               {t('help.ui.stuckCta')}
             </a>
           </p>
         )}
       </Sheet>
+    </>
+  );
+}
+
+/**
+ * An app's help under its task headings — Getting started, Every day, Freight, When something goes wrong, Your account —
+ * as the help centre groups it. Inside the app is where all of it lives now (2026-10-23), and a shop's twenty-odd
+ * articles in one list was a list to scroll, not to find in. A list with one heading (the console's own) is drawn plain.
+ */
+function GroupedArticles({ articles }: { articles: GuideArticle[] }) {
+  const t = useT();
+  const groups = HELP_GROUPS.map((g) => [g, articles.filter((a) => (a.group ?? 'daily') === g)] as const).filter(([, list]) => list.length > 0);
+  if (groups.length < 2) return <GuideArticles articles={articles} />;
+  return (
+    <>
+      {groups.map(([group, list]) => (
+        <section key={group} class="guide__group">
+          <h3 class="guide__h">{t(`help.ui.group.${group}` as MessageKey)}</h3>
+          <GuideArticles articles={list} />
+        </section>
+      ))}
     </>
   );
 }
