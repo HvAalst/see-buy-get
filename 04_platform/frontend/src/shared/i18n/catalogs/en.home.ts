@@ -143,8 +143,8 @@ export const enHome = {
   'home.back': 'Back',
   'home.update.aria': 'A new version is ready — update now',
   'home.update.title': 'Update the app',
-  'home.subtitle.joining': 'Joining as {role}',
-  'home.subtitle.roles': 'Join the network',
+  'home.subtitle.joining': 'Signing up as {role}',
+  'home.subtitle.roles': 'Sign up',
   'home.subtitle.market': 'The open freight market',
   'home.subtitle.signin': 'Sign in',
 
@@ -157,7 +157,7 @@ export const enHome = {
   'home.closedNow': 'Closed right now',
 
   // The five roles — plain-words presentation resolved by roleMeta() in logic.ts. Each role carries the
-  // full label ("A shop"), its lowercased form ("a shop", for "Join as …"), an article-stripped name
+  // full label ("A shop"), its lowercased form ("a shop", for "Sign up as …"), an article-stripped name
   // ("shop", for the sign-in list), a short app noun ("Open the shop app"), plus the blurb and promise.
   'home.role.pudo.label': 'A shop',
   'home.role.pudo.labelLower': 'a shop',
@@ -264,7 +264,7 @@ export const enHome = {
   'home.landing.forTitle': 'Who it is for',
   'home.landing.forSender': 'Sending or collecting',
   'home.landing.forSenderPromise': 'No address needed: a shop near you is the address.',
-  'home.landing.joinAs': 'Join as {role}',
+  'home.landing.joinAs': 'Sign up as {role}',
   'home.landing.joinFleet': 'How a fleet joins',
   'home.landing.alt.sender': 'A person holding a parcel',
   'home.landing.alt.pudo': 'A shop with parcels on its shelf',
@@ -298,7 +298,7 @@ export const enHome = {
   'home.landing.faq7q': 'How do I earn with SeeBuyGet?',
   'home.landing.faq7a': 'Where a SeeBuyGet company runs in the country, shops earn a fee on every parcel they take in or hand out, drivers and riders earn per load they carry, and sort hubs earn on every parcel they sort. Where SeeBuyGet only matches, you agree the price with whoever you carry for and settle it with them directly. Joining takes a few minutes.',
   'home.landing.faq8q': 'Is it safe?',
-  'home.landing.faq9q': 'What does a shop need to join?',
+  'home.landing.faq9q': 'What does a shop need to sign up?',
   'home.landing.faq9a': 'A phone with Android 10 or newer, power all day, a trading licence and the owner’s national ID. Signing up takes a few minutes; the shop takes parcels once SeeBuyGet has checked its papers.',
   'home.landing.faq11q': 'Can the shop open my parcel?',
   'home.landing.faq11a': 'A SeeBuyGet parcel is photographed when the shop takes it in and when it is handed out, and it travels between shops in closed bags — on a coded seal, or photographed closed. A seal that is not as written is held and reported before anything moves on.',
@@ -322,11 +322,11 @@ export const enHome = {
   'home.landing.footHelp': 'Help',
   'home.landing.footSignIn': 'Sign in to your app',
   'home.landing.footNav': 'More from SeeBuyGet',
-  'home.welcome.spoken': 'Welcome to SeeBuyGet. Send a parcel, track one, or join the network as a shop, a driver, a hub or a store.',
+  'home.welcome.spoken': 'Welcome to SeeBuyGet. Send a parcel, track one, or sign up as a shop, a driver, a sort hub, an online store or a fleet office.',
 
   // Roles screen (the "what are you?" chooser).
   'home.roles.title': 'What are you?',
-  'home.roles.lede': 'Pick the one that fits. You can join in a few minutes.',
+  'home.roles.lede': 'Pick the one that fits. You can sign up in a few minutes.',
   'home.roles.aloudLead': 'Pick what you are.',
   'home.roles.aloudRole': '{label}: {promise}',
   'home.roles.aloudLabel': 'Read the choices aloud',
@@ -351,17 +351,17 @@ export const enHome = {
 
   // Join wizard — shared.
   'home.join.step': 'Step {at} of {total}',
-  'home.join.joinAs': 'Join as {role}',
+  'home.join.joinAs': 'Sign up as {role}',
 
   // Join wizard — the spoken lines (logic.ts joinSpoken).
-  'home.join.spoken.phone': 'Joining as {role}. Type the phone number you use every day — we send a code to it.',
+  'home.join.spoken.phone': 'Signing up as {role}. Type the phone number you use every day — we send a code to it.',
   'home.join.spoken.code': 'Type the code we just sent to your phone.',
   'home.join.spoken.aboutDriver': 'Tell us about yourself.',
   'home.join.spoken.aboutPlace': 'Tell us about your place.',
   'home.join.spoken.where': 'Tap the map to show where you are. No street address needed.',
   'home.join.spoken.login': 'Last step. Pick an email and a password to sign in with.',
-  'home.join.spoken.done': 'You are in.',
-  'home.join.spoken.pin': 'Choose a five-digit PIN. You open the Fleet app with your phone number and this PIN.',
+  'home.join.spoken.done': 'You are signed up.',
+  'home.join.spoken.pin': 'Choose a five-digit PIN. You open your app with your phone number and this PIN.',
   'home.join.spoken.papers': 'Take a photograph of each of the four papers.',
 
   // Join wizard — the step blockers (logic.ts stepBlocker; the CTA hint that says the next thing to do).
@@ -384,7 +384,7 @@ export const enHome = {
   'home.block.vehiclePlate': 'Type your number plate.',
   'home.block.truckSubtype': 'Say what kind of truck it is.',
   'home.block.location': 'Tap the map to drop a pin where you are.',
-  'home.block.country': 'Pick the country you are joining in.',
+  'home.block.country': 'Pick the country you are signing up in.',
   'home.block.zone': 'Pick the area you serve.',
   'home.block.email': 'Type an email you can open.',
   'home.block.password': 'Use at least 8 characters.',
@@ -408,13 +408,16 @@ export const enHome = {
    * A FLEET SIGNS ITSELF UP (the user, 2026-10-23: "it should give a clear sign up form that can be checked by sbg
    * staff"). It used to be "joins by invite": the front page sent a fleet to a contact form.
    */
-  'home.fleet.pin.title': 'Choose your PIN',
-  'home.fleet.pin.lede': 'Five digits. You open the Fleet app with your phone number and this PIN.',
-  'home.fleet.pin.label': 'Your PIN',
-  'home.fleet.pin.note': 'It is the same PIN in every SeeBuyGet app. Already have one? Choosing a new one here replaces it, and your other phones ask for a code once.',
-  'home.fleet.pin.emailTitle': 'Add a recovery email',
-  'home.fleet.pin.emailLede': 'If you ever lose this phone number, this email is how you get back in. We send it a code to check it is yours.',
-  'home.fleet.pin.cta': 'Continue',
+  'home.join.about.storeAddress': 'Address (optional)',
+  'home.join.pin.title': 'Choose your PIN',
+  'home.join.pin.lede': 'Five digits. You open the {app} app with your phone number and this PIN.',
+  'home.join.pin.label': 'Your PIN',
+  'home.join.pin.note': 'It is the same PIN in every SeeBuyGet app. Already have one? Choosing a new one here replaces it, and your other phones ask for a code once.',
+  'home.join.pin.emailTitle': 'Add a recovery email',
+  'home.join.pin.emailLede': 'If you ever lose this phone number, this email is how you get back in. We send it a code to check it is yours.',
+  'home.join.pin.cta': 'Continue',
+  // A driver signs in on the last step, and is told so: the Driver app opens with this phone and this PIN, nothing else.
+  'home.join.pin.titleDriver': 'How you sign in',
   'home.fleet.mine.title': 'Your fleet sign-ups',
   'home.fleet.mine.lede': 'Where each one stands.',
   'home.fleet.mine.whyTitle': 'What SeeBuyGet said',
@@ -538,7 +541,7 @@ export const enHome = {
   'home.join.about.truckSubtype': 'What kind of truck',
   'home.join.about.truckSubtypeLoading': 'Reading the body types…',
   'home.join.about.vehicleNote': 'The one you will start your first shift on — picking it also clears you to drive that class. You can add more later, or scan the sticker on any vehicle a fleet has registered.',
-  'home.join.about.ctaVendor': 'Create my store',
+  'home.join.about.ctaVendor': 'Sign up my store',
 
   // Join wizard — step: where.
   'home.join.where.titleDriver': 'Where do you start?',
@@ -565,7 +568,7 @@ export const enHome = {
   'home.join.login.passwordPh': 'At least 8 characters, and not one that is easy to guess',
 
   // Join wizard — step: done.
-  'home.join.done.title': 'You are in',
+  'home.join.done.title': 'You are signed up',
   'home.join.done.ledeVendor': 'Your store is registered. You sign in to the Store app with {email} and the password you chose.',
   'home.join.done.ledeWelcome': 'Welcome to SeeBuyGet, {name}.',
   'home.join.done.storeId': 'Store ID',
@@ -577,6 +580,7 @@ export const enHome = {
   'home.join.done.whatNext': 'What happens next',
   'home.join.done.active1': 'Your app is ready to open',
   'home.join.done.active2': 'Sign in with your email and password',
+  'home.join.done.active2Pin': 'Sign in with your phone number and the PIN you just chose',
   'home.join.done.active3': 'Your phone number stays your key',
   'home.join.done.pending1': 'SeeBuyGet checks your details — usually same day',
   'home.join.done.pending2': 'You can open your app and look around now',
@@ -618,7 +622,7 @@ export const enHome = {
   'home.market.perKmNone': 'No per-km figure',
   'home.market.noPrice': 'No price',
   'home.market.indicative': 'indicative',
-  'home.market.joinCta': 'Join the network and take this work',
+  'home.market.joinCta': 'Sign up and take this work',
   'home.market.bodyUnknown': 'Truck',
   'home.market.spoken': '{n, plural, one {# load} other {# loads}} open. The most wanted truck is a {body}, with {k} of them.',
   'home.market.spokenPlain': '{n, plural, one {# load} other {# loads}} open.',
@@ -718,7 +722,7 @@ export const enHome = {
   'home.join.shop.powerYes': 'Yes: mains, solar or a backup',
   'home.join.shop.powerNo': 'No',
   'home.join.shop.licence': 'Trading licence number',
-  'home.join.shop.licenceHint': 'The number on your business permit. You add a photo of it after you join.',
+  'home.join.shop.licenceHint': 'The number on your business permit. You add a photo of it after you sign up.',
   'home.join.shop.hours': 'Usual opening hours, every day',
   'home.join.shop.opens': 'Opens',
   'home.join.shop.closes': 'Closes',

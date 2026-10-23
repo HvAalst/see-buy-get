@@ -1,15 +1,12 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
-import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
+import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { accountBlocker } from '../logic';
 import type { SbgError } from '../../../lib/sbg';
 import type { VendorState, VendorActions } from '../useVendorApp';
 import { ConfirmDevice } from '../../../shared/account/ConfirmDevice';
-import { PhoneVerify } from '../../../shared/account/PhoneVerify';
-import { fetchCountries, vendorConfig, type OperatingCountry } from '../api';
 
 export interface SignInScreenProps {
   state: VendorState;
@@ -35,9 +32,7 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
   const [bySecret, setBySecret] = useState(false);
   const [vendorId, setVendorId] = useState('');
   const [secret, setSecret] = useState('');
-  const [creating, setCreating] = useState(false);
   const [forgetting, setForgetting] = useState(false);
-  const reg = state.registered;
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -47,30 +42,6 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
 
   // Round 40 — a browser new to the store: the code to its number, or first a number to send it to.
   if (state.deviceAsk) return <ConfirmDevice ask={state.deviceAsk} party="store" busy={state.busy === 'signin'} error={error} onConfirm={(code) => void actions.confirmDevice(code)} onGivePhone={(phone) => void actions.giveDevicePhone(phone)} onBack={actions.cancelDeviceAsk} />;
-
-  if (reg) {
-    return (
-      <div class="scr">
-        <h1 class="scr__title">{t('vendor.signin.saveTitle')}</h1>
-        <p class="scr__lede">{t('vendor.signin.saveLede', { email: reg.email ?? '' })}</p>
-        {/* Each said by name, in words on the page: a card's `label` is only read by a screen reader. */}
-        <Card label={t('vendor.signin.storeId')}>
-          <p class="t-label">{t('vendor.signin.storeId')}</p>
-          <p class="cred mono-t">{reg.vendorId}</p>
-        </Card>
-        <Card label={t('vendor.secret.title')}>
-          <p class="t-label">{t('vendor.secret.title')}</p>
-          <p class="cred mono-t">{reg.secret}</p>
-        </Card>
-        <Card title={t('vendor.signin.keepSafeTitle')} tone="soft">
-          <Checklist items={[t('vendor.signin.keep1'), t('vendor.signin.keep2'), t('vendor.signin.keep3')]} />
-        </Card>
-        <div class="scr__cta">
-          <Button onClick={() => void actions.adoptRegistration()}>{t('vendor.signin.saved')}</Button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <form class="scr" onSubmit={submit}>
@@ -124,9 +95,8 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
             {t('vendor.signin.forgot')}
           </Button>
         )}
-        <Button variant="link" full={false} onClick={() => setCreating(true)}>
-          {t('vendor.signin.createLink')}
-        </Button>
+        {/* One form makes a store: the front page's, like every other sign-up (the user, 2026-10-23). */}
+        <SignUpLink role="vendor" />
         <Button variant="link" full={false} onClick={() => setBySecret(!bySecret)}>
           {t(bySecret ? 'vendor.signin.byEmail' : 'vendor.signin.bySecret')}
         </Button>
@@ -134,88 +104,8 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
         <ReadAloud text={() => t('vendor.signin.spoken')} label={t('vendor.readAloud')} />
       </div>
 
-      <CreateSheet open={creating} onClose={() => setCreating(false)} state={state} actions={actions} error={error} />
       <ForgotSheet open={forgetting} onClose={() => setForgetting(false)} actions={actions} email={email} />
     </form>
-  );
-}
-
-function CreateSheet({ open, onClose, state, actions, error }: { open: boolean; onClose: () => void; state: VendorState; actions: VendorActions; error: SbgError | null }) {
-  const t = useT();
-  const [name, setName] = useState('');
-  const [country, setCountry] = useState('');
-  const [address, setAddress] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  // Round 40 — the store's number, verified by its code before the store is made: new browsers are confirmed by a code to it.
-  const [ownerPhone, setOwnerPhone] = useState('');
-  // Where the network can actually take a store on. Loaded when the sheet opens rather than on mount — a
-  // merchant signing IN never needs it, and it is the one thing this form cannot sensibly guess.
-  const [countries, setCountries] = useState<OperatingCountry[] | null>(null);
-  useEffect(() => {
-    if (!open || countries) return;
-    void fetchCountries().then((r) => {
-      const list = r.data ?? [];
-      setCountries(list);
-      if (list.length === 1) setCountry(list[0].country); // one answer is not a choice
-    });
-  }, [open, countries]);
-  const choices = countries ?? [];
-  const account = accountBlocker(email, password);
-
-  return (
-    <Sheet open={open} onClose={onClose} title={t('vendor.signin.createTitle')}>
-      {error ? <ErrorNote error={error} showDetail /> : null}
-      <div class="field">
-        <label class="field__label" for="sname">
-          {t('vendor.signin.storeName')}
-        </label>
-        <input id="sname" class="input" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="Nairobi Threads" />
-      </div>
-      {choices.length > 1 ? (
-        <div class="field" style="margin-top:12px">
-          <label class="field__label" for="scountry">
-            {t('vendor.signin.country')}
-          </label>
-          <select id="scountry" class="input" value={country} onChange={(e) => setCountry(e.currentTarget.value)}>
-            <option value="">{t('vendor.signin.countryChoose')}</option>
-            {choices.map((c) => (
-              <option key={c.country} value={c.country}>
-                {c.name} ({c.country}){c.settles === false ? ` · ${t('vendor.signin.countryNoMoney')}` : ''}
-              </option>
-            ))}
-          </select>
-          <p class="card__note">{t('vendor.signin.countryNote')}</p>
-        </div>
-      ) : null}
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="saddress">
-          {t('vendor.signin.address')}
-        </label>
-        <input id="saddress" class="input" value={address} onInput={(e) => setAddress(e.currentTarget.value)} placeholder="Biashara St 12" />
-      </div>
-      {/* HOW ITS PEOPLE SIGN IN from now on: asked here, in the same act, so no store is made without a way back in. */}
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="semail">
-          {t('vendor.signin.email')}
-        </label>
-        <input id="semail" class="input" type="email" value={email} onInput={(e) => setEmail(e.currentTarget.value)} placeholder="orders@yourstore.com" autocapitalize="none" autocomplete="username" spellcheck={false} />
-      </div>
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="spass">
-          {t('vendor.signin.newPassword')}
-        </label>
-        <input id="spass" class="input" type="password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} autocomplete="new-password" />
-        <p class="card__note">{t(account && (email || password) ? account : 'vendor.account.passwordNote')}</p>
-      </div>
-      <PhoneVerify config={vendorConfig()} verified={ownerPhone} onVerified={setOwnerPhone} label={t('account.bound.phone', { party: t('account.bound.party.store') })} />
-      <Button chevron={false} busy={state.busy === 'register'} disabled={!name.trim() || (choices.length > 1 && !country) || account !== null || !ownerPhone} onClick={() => void actions.register(name, country, address, email, password, ownerPhone)}>
-        {t('vendor.signin.createCta')}
-      </Button>
-      <Button variant="link" onClick={onClose}>
-        {t('vendor.signin.goBack')}
-      </Button>
-    </Sheet>
   );
 }
 

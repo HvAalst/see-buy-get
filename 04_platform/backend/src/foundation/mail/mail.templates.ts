@@ -60,7 +60,7 @@ const SUPPORT_TOPIC: Record<string, string> = {
   parcel: 'A parcel: sending, collecting or tracking it',
   damage: 'Something broken, opened or missing',
   money: 'Money: a fee, a payout or a top-up',
-  joining: 'Joining SeeBuyGet, or getting approved',
+  joining: 'Signing up, or getting approved',
   business: 'A business account, freight or the API',
   safety: 'Safety, or something that looks wrong',
   privacy: 'My data, or closing my account',
@@ -196,7 +196,7 @@ const WELCOME_INTRO: Record<MailParams['welcome']['role'], string> = {
   shop: 'Your shop is signed up. Before it can take parcels in, we check the papers you sent, and you will see the answer in the Shop app.',
   hub: 'Your hub is signed up. You can sign in to the Hub app now and start receiving bags.',
   store: 'Your store has an account. Sign in to the Store app with this email address and the password you chose. Your signing secret is for your own systems: it no longer signs anybody in, and you can replace it from the Store app with your password.',
-  driver: 'Your driver account is ready. The first time you open the Driver app, we send a code to your phone and you choose a PIN.',
+  driver: 'Your driver account is ready. Open the Driver app and sign in with your phone number and the PIN you chose when you signed up.',
 };
 const WELCOME_APP: Record<MailParams['welcome']['role'], MailApp> = { shop: 'agent', hub: 'mdp', driver: 'driver', store: 'vendor' };
 

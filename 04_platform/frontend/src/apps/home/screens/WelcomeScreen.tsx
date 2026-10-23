@@ -346,7 +346,7 @@ function Ladder() {
 function JoinLink({ role, onGo }: { role: RoleSpec; onGo: (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => void }) {
   const t = useT();
   const meta = roleMeta(role, t);
-  const label = role.id === 'vendor' ? t('front.earn.store') : t('home.landing.joinAs', { role: meta.labelLower });
+  const label = t('home.landing.joinAs', { role: meta.labelLower });
   return (
     <a class="fr__join" href={`/?join=${role.id}`} onClick={onGo}>
       <img src={`${IMG}for-${ROLE_IMG[role.id]}.svg`} width={44} height={33} alt="" loading="lazy" />

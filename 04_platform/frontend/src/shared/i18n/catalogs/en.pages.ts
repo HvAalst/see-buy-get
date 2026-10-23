@@ -63,14 +63,14 @@ export const enPages = {
   'pages.for.shops.a2': 'Where the SeeBuyGet company of the country has set a limit, a new shop holds at most so many parcels at once. The limit grows with every parcel the shop hands on, and goes once it has handed on enough.',
   'pages.for.shops.q3': 'Can the people who work at the counter use the SeeBuyGet Shop app?',
   'pages.for.shops.a3': 'Yes. Each person at a SeeBuyGet counter signs in as themselves, with their own phone and PIN, and what each one does is kept under their name.',
-  'pages.for.shops.cta': 'Sign your shop up',
+  'pages.for.shops.cta': 'Sign up your shop',
 
   // Drivers and riders (/for/drivers/).
   'pages.for.drivers.metaTitle': 'Carry parcels and get paid per load — SeeBuyGet',
   'pages.for.drivers.metaDescription': 'SeeBuyGet drivers and riders carry parcels and loads between shops, hubs and businesses and are paid per load. How it works, what you need, and how to join.',
   'pages.for.drivers.title': 'Carry parcels on the road you already drive',
   'pages.for.drivers.lede': 'SeeBuyGet drivers carry parcels and loads between shops, sort hubs and businesses, and are paid per load. You can ride for yourself on a bicycle or a motorcycle, or drive for a fleet that takes you on.',
-  'pages.for.drivers.step1': 'Sign up on the SeeBuyGet site with your phone number, your full name and your national ID.',
+  'pages.for.drivers.step1': 'Sign up on the SeeBuyGet site with your phone number, your full name and your national ID, and choose the PIN you open the Driver app with.',
   'pages.for.drivers.step2': 'Riding for yourself, send a photo of your ID from the SeeBuyGet Driver app. Driving for a fleet, the fleet offers you a place and you say yes in the app.',
   'pages.for.drivers.step3': 'Claim work in the Driver app, take each parcel or load on at pickup, and record who received it at delivery.',
   'pages.for.drivers.step4': 'A SeeBuyGet driver is paid per load carried.',
@@ -100,14 +100,14 @@ export const enPages = {
   'pages.for.hubs.a1': 'A SeeBuyGet sort hub earns a fee on every parcel it sorts. The fees are set for each country.',
   'pages.for.hubs.q2': 'What does a SeeBuyGet hub do with a seal that is not as written?',
   'pages.for.hubs.a2': 'The hub holds the bag and reports it in the Hub app, with the number it read and a photo. SeeBuyGet operations are told before anyone takes the bag on.',
-  'pages.for.hubs.cta': 'Sign your hub up',
+  'pages.for.hubs.cta': 'Sign up your hub',
 
   // Online stores (/for/stores/).
   'pages.for.stores.metaTitle': 'Click-and-collect for your online store — SeeBuyGet',
   'pages.for.stores.metaDescription': 'A SeeBuyGet store ships each order to the shop its buyer picks, and the buyer collects it with a code. How it works, what you need, and how to start.',
   'pages.for.stores.title': 'Click-and-collect for your online store',
   'pages.for.stores.lede': 'A SeeBuyGet store ships each order to the neighbourhood shop its buyer picks, and the buyer collects it there with a code. A SeeBuyGet store needs no couriers of its own.',
-  'pages.for.stores.step1': 'Create the store on the SeeBuyGet site with its name, its country, an email and password, and a phone number checked by a code.',
+  'pages.for.stores.step1': 'Sign the store up on the SeeBuyGet site with its name, its country, an email and password, and a phone number checked by a code.',
   'pages.for.stores.step2': 'Put SeeBuyGet in your checkout: the buyer picks a shop and sees the delivery price.',
   'pages.for.stores.step3': 'For each order, print a label from the SeeBuyGet Store app, or from your own system through the SeeBuyGet shipping API.',
   'pages.for.stores.step4': 'The buyer follows the parcel in the SeeBuyGet Send app and collects it with a code.',
@@ -120,7 +120,7 @@ export const enPages = {
   'pages.for.stores.a2': 'Yes. A store with its own GS1 prefix can print its own GS1 barcodes on SeeBuyGet labels.',
   'pages.for.stores.q3': 'Does SeeBuyGet have an API for stores?',
   'pages.for.stores.a3': 'Yes: the SeeBuyGet shipping API, with a publishable key for the store’s web page and a secret key for its server.',
-  'pages.for.stores.cta': 'Create your store',
+  'pages.for.stores.cta': 'Sign up your store',
 
   // Businesses (/for/business/).
   'pages.for.business.metaTitle': 'Freight for shippers, importers and agents — SeeBuyGet',

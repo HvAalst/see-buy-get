@@ -22,7 +22,6 @@ import {
   saveEmail,
   vendorForgot,
   vendorLogin,
-  vendorRegister,
   vendorReset,
   vendorSession,
   vendorConfig,
@@ -46,7 +45,6 @@ import type {
   SettlementRow,
   VendorFundingView,
   VendorLoginView,
-  VendorRegisteredView,
   VendorView,
 } from './types';
 
@@ -143,8 +141,6 @@ export interface VendorState {
   ledgerQuery: LedgerQuery;
   ledgerSummary: LedgerSummary | null;
   checkouts: CheckoutRow[];
-  /** Fresh registration — the secret is on screen exactly once. */
-  registered: VendorRegisteredView | null;
   detail: OrderDetail | null;
   detailState: 'idle' | 'loading' | 'ready';
   settlement: SettlementRow[];
@@ -200,7 +196,6 @@ const INITIAL: VendorState = {
   ledgerQuery: INITIAL_LEDGER_QUERY,
   ledgerSummary: null,
   checkouts: [],
-  registered: null,
   detail: null,
   detailState: 'idle',
   settlement: [],
@@ -579,28 +574,6 @@ export function useVendorApp() {
     },
     [enter],
   );
-
-  const register = useCallback(async (name: string, country: string, address: string, email: string, password: string, ownerPhone: string) => {
-    setState((s) => ({ ...s, busy: 'register', error: null }));
-    const mail = email.trim().toLowerCase();
-    // Round 40 — with its number, verified by its code: the browser it is made on is the store's first.
-    const r = await vendorRegister({ name: name.trim(), country: country.trim() || undefined, address: address.trim() || undefined, email: mail, password, ownerPhone });
-    if (r.error) {
-      setState((s) => ({ ...s, busy: null, error: r.error }));
-      return;
-    }
-    saveShopDeviceKey(mail, r.data?.device);
-    // The secret is on screen ONCE, for the store's own systems. It is not how anybody signs in, and it is not kept here.
-    setState((s) => ({ ...s, busy: null, registered: r.data }));
-  }, []);
-
-  const adoptRegistration = useCallback(async () => {
-    const reg = stateRef.current.registered;
-    if (!reg) return;
-    // Registered with its account: the answer carried a sign-in. (One that did not goes to the sign-in screen.)
-    if (reg.token) return enter(reg.vendorId, reg.token, reg.email);
-    setState((s) => ({ ...INITIAL, phase: 'signin', toasts: s.toasts }));
-  }, [enter]);
 
   /**
    * A STORE THAT SIGNED IN WITH ITS SECRET SETS UP ITS ACCOUNT. From this moment it signs in with these, the secret
@@ -1373,8 +1346,6 @@ export function useVendorApp() {
       cancelDeviceAsk,
       storeDevices,
       signInWithSecret,
-      register,
-      adoptRegistration,
       setUpAccount,
       adoptToken,
       forgot,

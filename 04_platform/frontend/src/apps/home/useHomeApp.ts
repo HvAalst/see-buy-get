@@ -36,7 +36,7 @@ import { readReportKey } from '../../shared/damage/damageReport';
 import { EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 import { isPinReset } from '../../shared/account/recovery';
-import { enrollPerson, mySignups, sendPapersAgain, signUpFleet, uploadPaper, type FleetSignupView, type PersonSession } from './api';
+import { enrollPerson, mySignups, sendPapersAgain, signUpDriver, signUpFleet, uploadPaper, type FleetSignupView, type PersonSession } from './api';
 
 export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help' | 'info';
 
@@ -509,16 +509,36 @@ export function useHomeApp() {
     });
   }, [run]);
 
+  /** The driver, made under the person's sign-in. The Driver app on this browser then opens with the phone and PIN. */
+  const makeDriver = useCallback(async (person: PersonSession) => {
+    const { role, form } = stateRef.current;
+    if (!role) return;
+    const r = await signUpDriver(person, { phone: normalizePhone(form.phone), profile: (signupBody(role, form, deviceMarker()) as { profile: unknown }).profile });
+    if (r.error || !r.data) {
+      setState((s) => ({ ...s, error: r.error }));
+      return;
+    }
+    const made = r.data;
+    handOff('driver', made.did, '');
+    setState((s) => ({ ...s, account: { role: 'driver', did: made.did, entityStatus: made.entityStatus }, step: 'done', error: null }));
+  }, []);
+
   /**
-   * A FLEET'S PERSON SIGNS IN: the PIN they will open the Fleet app with — and, the first time, a recovery email behind
-   * it. Then the fleets they signed up before are read, so somebody coming back (papers sent back, or to see where it
-   * stands) is shown that, not an empty form.
+   * THE PERSON SIGNS IN: the PIN their app opens with — and, the first time, a recovery email behind it. A fleet's
+   * person does it before the papers (they are uploaded under this sign-in), and then the fleets they signed up before
+   * are read, so somebody coming back is shown those. A driver does it last, and the driver is made under it.
    */
   const choosePin = useCallback(async () => {
-    const { role, form, pinEmail } = stateRef.current;
+    const { role, form, pinEmail, person: signedIn } = stateRef.current;
     if (!role || stepBlocker(role, 'pin', form, t)) return;
     if (pinEmail && (!form.recoveryEmail.includes('@') || !/^\d{6}$/.test(form.recoveryCode))) return;
     await run('pin', async () => {
+      // A driver whose details were refused (already registered) puts them right and comes back here signed in: the
+      // code is spent, so the driver is made again under the sign-in they already have.
+      if (role.kind === 'driver' && signedIn) {
+        await makeDriver(signedIn);
+        return;
+      }
       const phone = normalizePhone(form.phone);
       const r = await enrollPerson(phone, form.pin, pinEmail ? { email: form.recoveryEmail.trim(), code: form.recoveryCode } : undefined);
       if (r.error || !r.data) {
@@ -534,10 +554,15 @@ export function useHomeApp() {
         return;
       }
       const person = r.data;
+      if (role.kind === 'driver') {
+        setState((s) => ({ ...s, person, pinEmail: null, error: null }));
+        await makeDriver(person);
+        return;
+      }
       const mine = await mySignups(person);
       setState((s) => ({ ...s, person, pinEmail: null, fleetSignups: mine.data?.items ?? [], step: 'about', error: null }));
     });
-  }, [run]);
+  }, [run, makeDriver]);
 
   /** One of the four papers, photographed and uploaded as the person. */
   const uploadFleetPaper = useCallback(async (kind: string, file: File): Promise<string | null> => {
@@ -587,7 +612,7 @@ export function useHomeApp() {
       await run('submit', async () => {
         const email = form.email.trim().toLowerCase();
         // Round 40 — with the number checked in the first steps: new phones and browsers are confirmed by a code to it.
-        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined, email, password: form.password, ownerPhone: normalizePhone(form.phone) });
+        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined, address: form.storeAddress.trim() || undefined, email, password: form.password, ownerPhone: normalizePhone(form.phone) });
         if (r.error) {
           // The check of the number is spent or gone: back to it, rather than a button that can only say no.
           const reverify = r.error.code === 'PHONE_NOT_VERIFIED';
@@ -616,8 +641,8 @@ export function useHomeApp() {
       const account = r.data!;
       // Same-origin handoff: the role's app finds its identity already stored — and a shop, the phone it signed up on,
       // which is its first (its sign-in works only on its own phones).
-      handOff(account.role, account.did, account.email);
-      saveShopDeviceKey(account.email, account.device);
+      handOff(account.role, account.did, account.email ?? '');
+      if (account.email) saveShopDeviceKey(account.email, account.device);
       setState((s) => ({ ...s, account, step: 'done' }));
     });
   }, [run]);

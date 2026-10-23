@@ -80,12 +80,13 @@ export function verifyCode(phone: string, code: string): Promise<Result<{ verifi
 }
 
 export interface SignupView {
-  accountId: string;
+  /** Absent for a driver, who has no email account: the phone and PIN are theirs. */
+  accountId?: string;
   role: 'pudo' | 'driver' | 'mdp';
   did: string;
-  email: string;
+  email?: string;
   entityStatus?: string;
-  token: { access_token: string; expires_in?: number };
+  token?: { access_token: string; expires_in?: number };
   /** A shop's first phone: the key of the one it signed up on. */
   device?: string;
 }
@@ -136,6 +137,11 @@ export interface FleetSignupView {
   refused?: { reason: string; at: string };
 }
 
+/** A driver, made under the person's own sign-in: the same profile the email door took. */
+export function signUpDriver(session: PersonSession, body: { phone: string; profile: unknown }): Promise<Result<{ did: string; entityStatus?: string }>> {
+  return publicRequest<{ did: string; entityStatus?: string }>(homeConfig(), '/v1/sbg/drivers/signups', { body, bearer: session.token });
+}
+
 export function signUpFleet(session: PersonSession, body: Record<string, unknown>): Promise<Result<FleetSignupView>> {
   return publicRequest<FleetSignupView>(homeConfig(), '/v1/sbg/fleet/signups', { body, bearer: session.token });
 }
@@ -161,7 +167,7 @@ export interface VendorRegisteredView {
 }
 
 /** A store is registered WITH its account: the email and password its people sign in to the Store app with. */
-export function registerStore(body: { name: string; country?: string; email: string; password: string; ownerPhone: string }): Promise<Result<VendorRegisteredView>> {
+export function registerStore(body: { name: string; country?: string; address?: string; email: string; password: string; ownerPhone: string }): Promise<Result<VendorRegisteredView>> {
   return publicRequest<VendorRegisteredView>(homeConfig(), '/v1/sbg/vendors', { body });
 }
 

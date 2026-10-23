@@ -16,7 +16,7 @@ import {
   type SbgConfig,
   type VendorApi,
 } from '../../lib/sbg';
-import type { NetworkPoint, VendorLoginView, VendorRegisteredView } from './types';
+import type { NetworkPoint, VendorLoginView } from './types';
 
 const APP_VERSION = '1.0.0';
 
@@ -46,24 +46,6 @@ export function vendorLogin(vendorId: string, secret: string): Promise<Result<Ve
 /** A code to the store's address, and the new password it opens. */
 export const vendorForgot = (email: string) => sbgForgot(vendorConfig(), email);
 export const vendorReset = (token: string, password: string) => sbgReset(vendorConfig(), token, password);
-
-/**
- * @Public vendors registration — the store AND its account in one act. The response carries the signing secret
- * EXACTLY ONCE (for the store's own systems), and a sign-in for this device.
- */
-export function vendorRegister(body: {
-  name: string;
-  country?: string;
-  address?: string;
-  location?: { lat: number; lng: number };
-  callbackUrl?: string;
-  email: string;
-  password: string;
-  /** Round 40 — the store's number, verified by its code: new phones and browsers are confirmed by a code to it. */
-  ownerPhone?: string;
-}): Promise<Result<VendorRegisteredView>> {
-  return publicRequest<VendorRegisteredView>(vendorConfig(), '/v1/sbg/vendors', { body });
-}
 
 /** The public network directory — powers both pickers without a token. */
 export function fetchPoints(): Promise<Result<NetworkPoint[]>> {

@@ -181,16 +181,9 @@ export const enVendor = {
   'vendor.ledger.typeRebate': 'Rebate',
 
   // Sign-in screen (login + create store).
-  'vendor.signin.spoken': 'Sign in with your store’s email and password. New here? Create a store.',
-  'vendor.signin.saveTitle': 'Your store is created',
-  'vendor.signin.saveLede': 'You sign in with {email} and the password you chose. Below is your signing secret, for your own systems. This is the only time it is shown.',
+  'vendor.signin.spoken': 'Sign in with your store’s email and password. New here? Sign up on the SeeBuyGet front page.',
   'vendor.signin.storeId': 'Store ID',
   'vendor.signin.storeSecret': 'Store secret',
-  'vendor.signin.keepSafeTitle': 'Keep it safe',
-  'vendor.signin.keep1': 'The secret signs your status callbacks: give it to your shop system',
-  'vendor.signin.keep2': 'It does not sign anybody in: you sign in with your email and password',
-  'vendor.signin.keep3': 'Lost it? Replace it from the Store tab, with your password',
-  'vendor.signin.saved': 'I saved it — open my store',
   'vendor.signin.title': 'Open your store',
   'vendor.signin.lede': 'Sign in with your store’s email and password.',
   'vendor.signin.secretLede': 'For a store that has not set up its email and password yet. Sign in with the store ID and secret this once; you will be asked to set them up.',
@@ -221,15 +214,6 @@ export const enVendor = {
   'vendor.toast.accountSetUp': 'Your store has an account',
   'vendor.toast.accountSetUpDetail': 'Sign in with {email} and your password from now on.',
   'vendor.signin.signIn': 'Sign in',
-  'vendor.signin.createLink': 'New here? Create a store',
-  'vendor.signin.createTitle': 'Create your store',
-  'vendor.signin.storeName': 'Store name',
-  'vendor.signin.country': 'Country',
-  'vendor.signin.countryChoose': 'Choose a country',
-  'vendor.signin.countryNoMoney': 'you settle with the carrier',
-  'vendor.signin.countryNote': 'The company that will invoice you, so it has to be where your store really trades.',
-  'vendor.signin.address': 'Address (optional)',
-  'vendor.signin.createCta': 'Create the store',
   'vendor.signin.goBack': 'Go back',
 
   // Store screen.

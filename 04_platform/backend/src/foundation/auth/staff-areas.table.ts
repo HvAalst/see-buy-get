@@ -551,6 +551,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/drivers/:did/ride-alone': 'none',
   'POST sbg/drivers/onboard': 'vetting',
   'POST sbg/drivers/payout': 'money',
+  'POST sbg/drivers/signups': 'none',
   'POST sbg/entities': 'admin',
   'POST sbg/entities/:entityId/admins': 'admin',
   'POST sbg/entities/:entityId/amounts': 'admin',

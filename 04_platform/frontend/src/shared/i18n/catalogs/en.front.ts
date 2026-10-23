@@ -64,8 +64,7 @@ export const enFront = {
 
   // Earning.
   'front.earn.sign': 'Parcels taken in here',
-  'front.earn.lede': 'A SeeBuyGet shop earns on every parcel over its own counter. A rider or driver is paid per load. A sort hub earns on every parcel it sorts. You join on this site: your papers are checked before the first parcel, and kept up to date after.',
-  'front.earn.store': 'Add it to my online store',
+  'front.earn.lede': 'A SeeBuyGet shop earns on every parcel over its own counter. A rider or driver is paid per load. A sort hub earns on every parcel it sorts. You sign up on this site: your papers are checked before the first parcel, and kept up to date after.',
   'front.board.title': 'Who earns what',
   'front.board.shop': 'Shop',
   'front.board.shopHow': 'A fee on every parcel taken in or handed out',
@@ -117,7 +116,7 @@ export const enFront = {
   'front.grow.settlesBody': 'That company contracts with you, sets the price of each parcel and pays you for what you handle.',
   'front.grow.matches': 'Where SeeBuyGet only matches',
   'front.grow.matchesBody': 'You join, find loads and move goods on the same records — every hand-over, photo and consignment note. The price and the money stay between you and whoever you carry for.',
-  'front.grow.join': 'Join where you are',
+  'front.grow.join': 'Sign up where you are',
 
   'front.faq.title': 'Questions people ask',
 

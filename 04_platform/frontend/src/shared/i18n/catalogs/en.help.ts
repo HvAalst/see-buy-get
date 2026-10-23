@@ -78,7 +78,7 @@ export const enHelp = {
   'help.contact.topic.parcel': 'A parcel: sending, collecting or tracking it',
   'help.contact.topic.damage': 'Something broken, opened or missing',
   'help.contact.topic.money': 'Money: a fee, a payout or a top-up',
-  'help.contact.topic.joining': 'Joining SeeBuyGet, or getting approved',
+  'help.contact.topic.joining': 'Signing up, or getting approved',
   'help.contact.topic.business': 'A business account, freight or the API',
   'help.contact.topic.safety': 'Safety, or something that looks wrong',
   'help.contact.topic.privacy': 'My data, or closing my account',

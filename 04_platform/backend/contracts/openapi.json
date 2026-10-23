@@ -30042,6 +30042,27 @@
         }
       }
     },
+    "/v1/sbg/drivers/signups": {
+      "post": {
+        "operationId": "DriverSignup.signUp",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DriverSignupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -62043,6 +62064,21 @@
           "status",
           "createdAt",
           "refused"
+        ]
+      },
+      "DriverSignupDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "phone",
+          "profile"
         ]
       },
       "MilestoneTermDto": {

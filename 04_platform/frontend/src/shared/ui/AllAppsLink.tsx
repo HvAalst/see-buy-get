@@ -47,7 +47,7 @@ export function AllAppsLink() {
  * "the sign up process for the apps should seem more unified and straightforward"). Somebody who reached the shop's, the
  * driver's, the hub's or the fleet's door without an account had no way from it to the form that makes one.
  */
-export function SignUpLink({ role }: { role: 'pudo' | 'driver' | 'mdp' | 'fleet' }) {
+export function SignUpLink({ role }: { role: 'pudo' | 'driver' | 'mdp' | 'fleet' | 'vendor' }) {
   const t = useT();
   const door = frontDoorLink();
   return (

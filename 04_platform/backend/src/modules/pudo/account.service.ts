@@ -82,6 +82,9 @@ export interface AccountSignIn {
 /** Which app an account signs in to — where its emails send people. */
 const ACCOUNT_APP: Record<AccountRole, MailApp> = { pudo: 'agent', mdp: 'mdp', driver: 'driver', vendor: 'vendor' };
 const WELCOME_ROLE = { pudo: 'shop', mdp: 'hub', driver: 'driver', vendor: 'store' } as const;
+/** Refused driver sign-ups a person may have in a day — see signUpDriver. */
+export const MAX_DRIVER_REFUSALS_PER_DAY = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * AccountService — participant sign-in (email + password) for the PUDO field apps. Sign-up creates the
@@ -233,6 +236,42 @@ export class AccountService implements OnApplicationBootstrap {
     const device = this.isBound(account) ? this.devices.add(account.accountId) : undefined;
     return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account), ...(device ? { device } : {}) };
   }
+
+  /**
+   * A DRIVER SIGNS UP AS THEMSELVES (the user, 2026-10-23: drivers choose their PIN in the sign-up). The front page made
+   * every driver choose an email and a password the Driver app never asks for — it opens with the phone and a PIN — so
+   * the first time they opened it they proved the phone again and chose a PIN anyway. Now the person signs in first (a
+   * code, a PIN, a recovery email: `identity/enroll`), and the driver is made under that sign-in. No email account.
+   *
+   * The details a driver gives can be refused as already registered — and that refusal names WHICH detail, so it is an
+   * answer about somebody else's ID too. The email door counted those against the phone's verification; this one counts
+   * them against the person, a few a day.
+   */
+  signUpDriver(personDid: string, phone: string, profile: Record<string, unknown>): { did: string; entityStatus?: string } {
+    const person = this.persons.requireByDid(personDid);
+    if (!person.pinHash) throw new GlosError('INVALID_STATE', 'Choose your PIN first: it is how you open the Driver app');
+    if (!phone?.trim() || hashPhone(phone) !== person.phoneHash) {
+      throw new GlosError('FORBIDDEN', 'Sign up with the phone number you signed in with', { field: 'phone' });
+    }
+    const now = Date.now();
+    const tries = (this.driverRefusals.get(personDid) ?? []).filter((at) => now - at < DAY_MS);
+    if (tries.length >= MAX_DRIVER_REFUSALS_PER_DAY) {
+      throw new GlosError('RATE_LIMITED', 'Too many sign-ups refused today. Check your details and try again tomorrow, or write to us from the help.');
+    }
+    let provisioned: { did: string; entityStatus?: string };
+    try {
+      provisioned = this.provision('driver', profile);
+    } catch (err) {
+      if (err instanceof GlosError && err.code === 'DUPLICATE') this.driverRefusals.set(personDid, [...tries, now]);
+      throw err;
+    }
+    this.persons.attachRole(phone.trim(), 'driver', provisioned.did, undefined);
+    const address = this.persons.emailOf(this.persons.requireByDid(personDid));
+    if (address) void this.mail?.send('welcome', { address }, { name: welcomeName('driver', profile), email: address, role: 'driver' });
+    return provisioned;
+  }
+  /** Refused driver sign-ups per person, by time — the cap above. Kept in memory: a restart forgives, a day forgives too. */
+  private readonly driverRefusals = new Map<string, number[]>();
 
   /**
    * A driver moved fleets: the account they sign in to by email carries the fleet as its tenant, and that is what

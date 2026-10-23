@@ -14,8 +14,14 @@ import { THIN_MARKET_LOADS } from '../../shared/market';
 
 /** How an account of this kind comes into being. */
 export type JoinKind =
-  /** POST /v1/sbg/auth/signup — phone-verified, creates the domain entity + credentials. */
+  /** POST /v1/sbg/auth/signup — phone-verified, creates the domain entity + an email-and-password account. */
   | 'signup'
+  /**
+   * POST /v1/sbg/drivers/signups — the person signs in on the last step (the PIN the Driver app opens with, and a
+   * recovery email the first time), and the driver is made under that sign-in. It was `signup`: an email and a password
+   * the Driver app never asks for (the user, 2026-10-23: "PIN in the sign-up").
+   */
+  | 'driver'
   /** POST /v1/sbg/vendors — self-serve, returns a store id + secret shown once. */
   | 'vendor'
   /**
@@ -42,7 +48,7 @@ export interface RoleSpec {
  */
 export const ROLES: RoleSpec[] = [
   { id: 'pudo', icon: 'home', app: '/agent/', kind: 'signup' },
-  { id: 'driver', icon: 'truck', app: '/driver/', kind: 'signup' },
+  { id: 'driver', icon: 'truck', app: '/driver/', kind: 'driver' },
   { id: 'mdp', icon: 'grid', app: '/mdp/', kind: 'signup' },
   { id: 'vendor', icon: 'send', app: '/vendor/', kind: 'vendor' },
   { id: 'fleet', icon: 'badge', app: '/fleet/', kind: 'fleet' },
@@ -219,6 +225,8 @@ export interface JoinForm {
   recoveryCode: string;
   tradingName: string;
   contactEmail: string;
+  /** A store's street address, if it has one — asked on the front page now that it is the only form that makes a store. */
+  storeAddress: string;
   businessRegistrationNo: string;
   operatorLicence: string;
   taxId: string;
@@ -273,6 +281,7 @@ export const EMPTY_JOIN: JoinForm = {
   recoveryEmail: '',
   recoveryCode: '',
   tradingName: '',
+  storeAddress: '',
   contactEmail: '',
   businessRegistrationNo: '',
   operatorLicence: '',
@@ -293,6 +302,8 @@ export function stepsFor(kind: JoinKind): JoinStep[] {
   // A fleet signs in as its person straight after the code — its papers are uploaded under that sign-in — and has no
   // 'login' step: the PIN chosen here is how the Fleet app opens.
   if (kind === 'fleet') return ['phone', 'code', 'pin', 'about', 'where', 'papers', 'done'];
+  // A driver says how they sign in last, as everybody else does — with the PIN the Driver app opens with.
+  if (kind === 'driver') return ['phone', 'code', 'about', 'where', 'pin', 'done'];
   return ['phone', 'code', 'about', 'where', 'login', 'done'];
 }
 
@@ -451,10 +462,12 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
         },
         // Their own vehicle. The backend registers it as driver_owned, refuses a class they are not
         // cleared for, and puts it on their first morning's screen so there is something to start on.
+        // The class the step's check worked out, not only one that was tapped: a courier who never touched the default
+        // (a bike) was let through the step and then sent an empty class, which the server refused as unknown.
         vehicle: {
           plate: f.vehiclePlate.trim(),
-          vehicleClass: f.vehicleClass,
-          ...(f.vehicleClass === 'truck' && f.truckSubtype ? { truckSubtype: f.truckSubtype } : {}),
+          vehicleClass: vehicleClassFor(f),
+          ...(vehicleClassFor(f) === 'truck' && f.truckSubtype ? { truckSubtype: f.truckSubtype } : {}),
         },
       },
     };

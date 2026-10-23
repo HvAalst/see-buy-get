@@ -1372,7 +1372,7 @@ export const en = {
 
   // Auth screen (login + enroll).
   'send.auth.invitedTitle': 'You\'ve been invited to SeeBuyGet',
-  'send.auth.invitedDetail': 'Join to send, track and collect parcels.',
+  'send.auth.invitedDetail': 'Sign up to send, track and collect parcels.',
   'send.auth.followTitle': 'Follow your parcel',
   'send.auth.followDetail': 'Use the phone number you give the shop. When the shop sends your parcel it shows here: where it is, and your code to collect it.',
   'send.auth.aloudLogin': 'Enter your phone number and your five digit PIN to see your parcels.',
@@ -1386,7 +1386,7 @@ export const en = {
   'send.auth.notYou': 'Not you? Use a different number',
   'send.auth.pin': 'Your 5-digit PIN',
   'send.auth.signIn': 'Sign in',
-  'send.auth.newHere': 'New here? Create an account',
+  'send.auth.newHere': 'New here? Sign up',
   'send.auth.forgot': 'Forgot your PIN?',
   'send.auth.codeTitle': 'Enter the code',
   'send.auth.codeLede': 'We sent a 6-digit code to {phone}.',
@@ -1397,8 +1397,8 @@ export const en = {
   'send.auth.changeNumber': 'Change the number',
   'send.auth.pinTitle': 'Choose a PIN',
   'send.auth.pinLede': 'Pick 5 digits you will remember — you use it to sign in next time.',
-  'send.auth.createAccount': 'Create my account',
-  'send.auth.title': 'Create your account',
+  'send.auth.createAccount': 'Sign me up',
+  'send.auth.title': 'Sign up',
   'send.auth.lede': 'One account for everything you send and receive. We only use your number to reach you.',
   'send.auth.sendCode': 'Send me a code',
   'send.auth.perk1': 'One account for sending and receiving',

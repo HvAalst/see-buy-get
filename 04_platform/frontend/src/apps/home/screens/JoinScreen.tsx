@@ -378,18 +378,19 @@ function PinStep({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
   const f = state.form;
+  const driver = role.kind === 'driver';
   const blocker = stepBlocker(role, 'pin', f, t) ?? (state.pinEmail && (!f.recoveryEmail.includes('@') || !/^\d{6}$/.test(f.recoveryCode)) ? t('home.block.recoveryEmail') : null);
   return (
     <>
-      <h1 class="scr__title">{t(state.pinEmail === 'reset' ? 'account.safety.resetTitle' : state.pinEmail ? 'home.fleet.pin.emailTitle' : 'home.fleet.pin.title')}</h1>
-      <p class="scr__lede">{t(state.pinEmail === 'reset' ? 'account.safety.resetLede' : state.pinEmail ? 'home.fleet.pin.emailLede' : 'home.fleet.pin.lede')}</p>
+      <h1 class="scr__title">{t(state.pinEmail === 'reset' ? 'account.safety.resetTitle' : state.pinEmail ? 'home.join.pin.emailTitle' : driver ? 'home.join.pin.titleDriver' : 'home.join.pin.title')}</h1>
+      <p class="scr__lede">{state.pinEmail === 'reset' ? t('account.safety.resetLede') : state.pinEmail ? t('home.join.pin.emailLede') : t('home.join.pin.lede', { app: driver ? 'Driver' : 'Fleet' })}</p>
 
       <Card>
         <div class="field">
-          <span class="field__label">{t('home.fleet.pin.label')}</span>
-          <CodeBoxes id="fleet-pin" label={t('home.fleet.pin.label')} length={5} value={f.pin} onInput={(pin) => actions.setForm({ pin })} mask disabled={Boolean(state.pinEmail)} />
+          <span class="field__label">{t('home.join.pin.label')}</span>
+          <CodeBoxes id="fleet-pin" label={t('home.join.pin.label')} length={5} value={f.pin} onInput={(pin) => actions.setForm({ pin })} mask disabled={Boolean(state.pinEmail)} />
         </div>
-        {!state.pinEmail ? <p class="card__note">{t('home.fleet.pin.note')}</p> : null}
+        {!state.pinEmail ? <p class="card__note">{t('home.join.pin.note')}</p> : null}
         {state.pinEmail ? (
           <div class="field" style="margin-top:12px">
             <EmailStep
@@ -407,7 +408,8 @@ function PinStep({ state, actions }: JoinScreenProps) {
 
       <div class="scr__cta">
         <Button onClick={() => void actions.choosePin()} disabled={Boolean(blocker)} busy={state.busy === 'pin'}>
-          {t('home.fleet.pin.cta')}
+          {/* A driver's last step makes the driver; a fleet's person goes on to the company. */}
+          {driver ? t('home.join.joinAs', { role: roleMeta(role, t).labelLower }) : t('home.join.pin.cta')}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>
@@ -608,6 +610,14 @@ function AboutStep({ state, actions }: JoinScreenProps) {
         </div>
 
         {role.id === 'vendor' ? <CountryField id="country" state={state} actions={actions} /> : null}
+        {role.id === 'vendor' ? (
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="store-address">
+              {t('home.join.about.storeAddress')}
+            </label>
+            <input id="store-address" class="input" value={f.storeAddress} onInput={(e) => actions.setForm({ storeAddress: e.currentTarget.value })} placeholder="Biashara St 12" />
+          </div>
+        ) : null}
 
         {role.id !== 'mdp' && role.id !== 'vendor' ? (
           <>
@@ -1001,7 +1011,7 @@ function DoneStep({ state, actions }: JoinScreenProps) {
           <Checklist
             items={
               acc.entityStatus === 'ACTIVE'
-                ? [t('home.join.done.active1'), t('home.join.done.active2'), t('home.join.done.active3')]
+                ? [t('home.join.done.active1'), t(role.kind === 'driver' ? 'home.join.done.active2Pin' : 'home.join.done.active2'), t('home.join.done.active3')]
                 : role.id === 'mdp'
                   ? // A hub sends its papers from the Hub app first: nobody checks what has not been sent.
                     [t('home.join.done.hubPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]

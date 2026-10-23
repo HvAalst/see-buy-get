@@ -62,11 +62,11 @@ describe('roles', () => {
     expect(ROLES.length).toBe(5);
     for (const r of ROLES) {
       expect(r.app).toMatch(/^\/[a-z]+\/$/);
-      expect(['signup', 'vendor', 'fleet']).toContain(r.kind);
+      expect(['signup', 'driver', 'vendor', 'fleet']).toContain(r.kind);
       expect(roleMeta(r, t).promise.length).toBeGreaterThan(0);
     }
-    // The three roles the backend's /auth/signup actually supports.
-    expect(ROLES.filter((r) => r.kind === 'signup').map((r) => r.id)).toEqual(['pudo', 'driver', 'mdp']);
+    // The roles made with an email and a password (/auth/signup). A driver signs up with a PIN now (drivers/signups).
+    expect(ROLES.filter((r) => r.kind === 'signup').map((r) => r.id)).toEqual(['pudo', 'mdp']);
   });
 });
 
@@ -508,5 +508,31 @@ describe('a fleet signs itself up', () => {
     expect(fleetSignupWords('DRAFT', true)).toBe('home.fleet.status.refused');
     expect(fleetSignupWords('KYC_PENDING', false)).toBe('home.fleet.status.pending');
     expect(fleetSignupWords('ACTIVE', false)).toBe('home.fleet.status.active');
+  });
+});
+
+/* The user, 2026-10-23: drivers choose their PIN in the sign-up — the Driver app opens with the phone and a PIN, and the
+   email and password this form used to ask for were never asked for again. */
+describe('a driver signs up with their PIN', () => {
+  it('says how they sign in last, with a PIN, and has no email-and-password step', () => {
+    expect(role('driver').kind).toBe('driver');
+    expect(stepsFor('driver')).toEqual(['phone', 'code', 'about', 'where', 'pin', 'done']);
+    expect(stepsFor('driver')).not.toContain('login');
+    expect(nextStep('driver', 'where')).toBe('pin');
+    expect(stepBlocker(role('driver'), 'pin', filled({ pin: '1234' }), t)).toBe(t('home.block.pin'));
+    expect(stepBlocker(role('driver'), 'pin', filled({ pin: '48261' }), t)).toBeNull();
+  });
+
+  it('still sends the profile the driver door has always taken', () => {
+    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'BK 1' }), 'm') as { profile: { driver: { licenceClasses: string[] }; vehicle: { plate: string } } };
+    expect(body.profile.driver.licenceClasses).toEqual(['bike']);
+    expect(body.profile.vehicle.plate).toBe('BK 1');
+  });
+});
+
+describe('the vehicle a courier never tapped', () => {
+  it('is sent as the class the step worked out, not as an empty one the server refuses', () => {
+    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: '', vehiclePlate: 'BK 2' }), 'm') as { profile: { vehicle: { vehicleClass: string } } };
+    expect(body.profile.vehicle.vehicleClass).toBe('bike');
   });
 });
