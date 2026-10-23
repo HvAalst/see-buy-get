@@ -115,6 +115,8 @@ function plain(html) {
       // The apps an article is for, as a line; a button the reader presses, back in its quotation marks; a route, with its ›.
       .replace(/<p class="hc__applies"[^>]*>([\s\S]*?)<\/p>/g, (_m, inner) => `<p>${inner.replace(/<\/span><span>/g, ' · ')}</p>`)
       .replace(/<kbd[^>]*>([\s\S]*?)<\/kbd>/g, '“$1”')
+      // Two links side by side are two things, not one run-together word.
+      .replace(/<\/a>\s*<a\b/g, '</a> · <a')
       // A note's kind (Note, Careful) before its words.
       .replace(/<b>([\s\S]*?)<\/b>/g, '$1: ')
       .replace(/<i aria-hidden="true">›<\/i>/g, ' › ')
@@ -137,7 +139,8 @@ function plain(html) {
 const fullParts = [];
 const ARTICLE = /<article class="land pg">([\s\S]*?)<\/article>/;
 // An <article>, not a <main>: the help sits in the site's own frame now, whose <main> holds it (2026-10-23).
-const HELP_ARTICLE = /<article class="hc__article"[^>]*>([\s\S]*?)<\/article>/;
+// Attributes in any order: the build's renderer writes the id before the class.
+const HELP_ARTICLE = /<article\b[^>]*\bclass="hc__article"[^>]*>([\s\S]*?)<\/article>/;
 const wanted = [
   ['/about/', ARTICLE],
   ...['shops', 'drivers', 'hubs', 'stores', 'business'].map((w) => [`/for/${w}/`, ARTICLE]),
