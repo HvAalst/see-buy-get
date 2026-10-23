@@ -395,7 +395,7 @@ export default defineConfig({
        * AI ones — read the HTML the server sends, and to them a client-rendered page is an empty <div>. Only the
        * front door, whose job is to be found; the apps behind sign-in have nothing to show a crawler.
        */
-      APP_ID === 'home' ? { prerender: { enabled: true, renderTarget: '#app', prerenderScript: resolve(APP_DIR, 'prerender.tsx') } } : undefined,
+      APP_ID === 'home' ? { prerender: { enabled: true, renderTarget: '#app', prerenderScript: resolve(APP_DIR, 'prerender.tsx').replace(/\\/g, '/') } } : undefined,
     ),
     cleanRootAssetsPlugin(),
     ...(INSTALLABLE ? installablePlugins() : []),
@@ -415,6 +415,16 @@ export default defineConfig({
     target: 'es2020',
     rollupOptions: {
       input: { [APP_ID]: resolve(APP_DIR, 'index.html') },
+      /*
+       * THE BUILD-TIME SCRIPT STAYS OUT OF WHAT A VISITOR DOWNLOADS. Left to itself, the prerender plugin sets a chunking
+       * rule that puts its script (prerender.tsx: the page heads, the help's words, render-to-string) in the chunk the
+       * page starts from. It finds that script by its path, which never matched on Windows — so the builds here split
+       * cleanly — and does on Linux, where the release is built: there the homepage started from that chunk, 20 KB
+       * heavier, and outside the first visit's offline copy, which leaves the prerender entry out (2026-10-23). A rule
+       * of our own makes the plugin leave chunking alone, on every machine. The modulepreload polyfill keeps the chunk
+       * the plugin gave it. scripts/check-start.mjs checks the built page after every build.
+       */
+      ...(APP_ID === 'home' ? { output: { manualChunks: (id: string) => (id.includes('vite/modulepreload-polyfill') ? 'index' : undefined) } } : {}),
     },
   },
 

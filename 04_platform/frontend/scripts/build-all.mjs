@@ -71,6 +71,14 @@ if (words.status !== 0) {
   console.error('\nbuild failed: an app names words it does not carry (above)');
   process.exit(words.status ?? 1);
 }
+
+// Every app starts from files its first visit saves for use without signal, and the front page from none of the
+// build-time prerender script's (scripts/check-start.mjs).
+const start = spawnSync(process.execPath, [resolve(ROOT, 'scripts/check-start.mjs'), ...apps], { cwd: ROOT, env: process.env, stdio: 'inherit' });
+if (start.status !== 0) {
+  console.error('\nbuild failed: an app starts from a file it does not save, or from build-time code (above)');
+  process.exit(start.status ?? 1);
+}
 // The console is not part of the public site: it is built to dist-console/ and deployed to its own address.
 if (apps.includes('tower')) console.log('the operator console went to dist-console/ — deploy it to its own address, not with dist/');
 
