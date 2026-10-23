@@ -315,11 +315,11 @@ export const enHome = {
   'home.landing.faqMore.safe': 'All the help',
   'home.landing.faq8a': 'Shops and drivers are ID-checked, parcels are photographed at both ends, and only the receiver’s code releases a parcel.',
   'home.landing.footSend': 'Send or track',
-  'home.landing.footEarn': 'Earn with SeeBuyGet',
+  'home.landing.footEarn': 'Sign up',
   'home.landing.footMarket': 'The freight market',
   'home.landing.footAgents': 'Find a clearing agent',
   'home.landing.footVerify': 'Check a consignment note',
-  'home.landing.footHelp': 'Help',
+  'home.landing.footHelp': 'The help centre',
   'home.landing.footSignIn': 'Sign in to your app',
   'home.landing.footNav': 'More from SeeBuyGet',
   'home.welcome.spoken': 'Welcome to SeeBuyGet. Send a parcel, track one, or sign up as a shop, a driver, a sort hub, an online store or a fleet office.',
@@ -346,7 +346,7 @@ export const enHome = {
   'home.signin.justSending': 'Just sending or tracking',
   'home.signin.noAccount': 'No account needed',
   'home.signin.open': 'Open',
-  'home.signin.noAccountYet': 'I do not have an account yet',
+  'home.signin.noAccountYet': 'New here? Sign up',
   'home.signin.aloud': 'Pick the app you work with: shop, driver, sort hub, online store, or fleet office.',
 
   // Join wizard — shared.

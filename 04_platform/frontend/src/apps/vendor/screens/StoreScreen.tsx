@@ -1,4 +1,3 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
@@ -117,9 +116,6 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
       <KeysCard state={state} actions={actions} />
 
       <SecretCard state={state} actions={actions} />
-      <div class="scr__foot">
-        <HelpLink app="vendor" />
-      </div>
 
       <Card title={t('vendor.store.settlementTitle')}>
         {state.storeState === 'loading' ? <p class="hint">{t('vendor.store.gettingBooks')}</p> : null}

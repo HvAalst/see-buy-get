@@ -1,4 +1,4 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
@@ -149,7 +149,7 @@ function EmailAndPassword({ actions, error, busy, onStaff }: { actions: AgentAct
         <Button variant="link" full={false} onClick={() => setHelp(true)}>
           {t('agent.signin.forgot')}
         </Button>
-        <HelpLink app="agent" label="signin" />
+        <SignInHelp app="agent" />
         <SignUpLink role="pudo" />
         <AllAppsLink />
         <ReadAloud text={() => t('agent.signin.spoken')} label={t('agent.readAloud')} />

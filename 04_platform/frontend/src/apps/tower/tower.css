@@ -41,13 +41,19 @@
   margin-bottom: 18px;
 }
 
-/* Help, and the quiet way to the setup key: under the form, never a third door beside the two real ones. */
+/* The foot every sign-in screen has, in the same order: the credential's way back, "Trouble signing in?", signing up,
+   the other apps. */
 .twr-signin__foot {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
   margin-top: 18px;
+}
+
+/* A door's own way round — the setup key — with the form, under its button: never a third door beside the two real ones. */
+.twr-signin__alt {
+  margin-top: 10px;
 }
 
 /* The account a code is being asked for, with the way back to correct it. */

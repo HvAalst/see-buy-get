@@ -2160,7 +2160,7 @@ export const enTowerQueues = {
   'tower.fleets.recordBond': 'Record the bond',
   'tower.fleets.bondRecorded': 'The fleet is active. Give its office the code shown on its row.',
   'tower.fleets.codeIs': 'Its code is',
-  'tower.fleets.codeHint': 'give this to the fleet’s office. In the Fleet app they enter it and tap “First time here, or forgot your PIN?”: a code is texted to the phone number above, they add a recovery email, and they choose their own PIN.',
+  'tower.fleets.codeHint': 'give this to the fleet’s office. In the Fleet app they enter it and tap “Forgot your PIN, or have none yet?”: a code is texted to the phone number above, they add a recovery email, and they choose their own PIN.',
   'tower.reports.notes': '{count, plural, one {# note} other {# notes}} the receiver added after handover.',
   'tower.drivers.title': 'Driver applications',
   'tower.drivers.lede': 'Heavy-registry drivers waiting on us — new couriers, and drivers in no fleet asking to ride for themselves. What is being judged is whether this person may legally drive, so the licence they sent is shown on the row rather than behind a tap.',

@@ -124,6 +124,33 @@
   color: var(--p-ink);
 }
 
+/* Where you are: in ink, underlined in the brand's orange. */
+.pub__nav a[aria-current='page'] {
+  color: var(--p-ink);
+  box-shadow: inset 0 -3px 0 var(--p-orange);
+}
+
+/*
+ * THE HELP'S DARK, on the whole frame (the user, 2026-10-22: dark mode "only for the help pages … a switch for the
+ * drivers, not the standard"). The help now sits in the site's own frame, so the frame follows the reader's switch there
+ * — and only there: every other public page stays paper.
+ */
+.pub--help[data-theme='dark'],
+html[data-help-theme='dark'] .pub--help {
+  --p-bg: #141821;
+  --p-paper: #1c2130;
+  --p-ink: #e8e9ee;
+  --p-muted: #a3a9b6;
+  --p-rule: #2c3344;
+  color-scheme: dark;
+}
+
+/* Words on the orange stay dark in the dark: the ink turned light, and light on orange cannot be read. */
+.pub--help[data-theme='dark'] .pbtn--primary,
+html[data-help-theme='dark'] .pub--help .pbtn--primary {
+  color: #1a1206 !important;
+}
+
 .pub__signin {
   font-weight: 600;
   font-size: 0.95rem;
@@ -190,6 +217,13 @@
 
 .pbtn--primary:hover {
   filter: brightness(1.05);
+}
+
+/* Not ready yet: said by the button itself, not only by the form refusing. */
+.pbtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
 }
 
 /* -------------------------------------------------------- the front -- */
@@ -1028,11 +1062,28 @@
   gap: 1.2rem;
 }
 
+/* Three columns, each with its small heading: the site's map, every page once. */
 .pub__footnav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem 1.4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: 1.5rem 2rem;
   font-weight: 600;
+}
+
+.pub__footcol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.pub__footh {
+  margin: 0 0 0.35rem;
+  font: 700 0.78rem var(--p-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--p-ink);
 }
 
 .pub__footnav a {

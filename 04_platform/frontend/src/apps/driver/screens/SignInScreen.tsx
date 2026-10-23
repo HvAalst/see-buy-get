@@ -1,4 +1,3 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
 import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
@@ -6,7 +5,7 @@ import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, Note, R
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
-import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
@@ -44,7 +43,6 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
-  const [trouble, setTrouble] = useState(false);
   /** The email step is "confirm it is you" (a PIN replaced on a new phone), not "add a recovery email" (a first PIN). */
   const [reset, setReset] = useState(false);
   // A PIN typed on a phone no code was ever typed on: not an error, a step — the code, once.
@@ -186,20 +184,14 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
             {t('driver.signin.back')}
           </button>
         )}
-        {/* The two cases a code to the number cannot solve: the number is gone, or somebody moved the account. */}
-        {step === 'pin' ? (
-          <button type="button" class="btn btn--link" onClick={() => setTrouble(true)} disabled={busy}>
-            {t('account.trouble.link')}
-          </button>
-        ) : null}
-        <HelpLink app="driver" label="signin" />
+        {/* The cases a code to the number cannot solve — the number is gone, somebody moved the account — and how signing in works. */}
+        <SignInHelp app="driver" api={recovery} />
         <SignUpLink role="driver" />
         <AllAppsLink />
         <ReadAloud text={() => t('driver.signin.aloud')} label={t('driver.readAloud')} />
       </div>
     </form>
     {/* Outside the form: Enter in one of its fields must not submit the sign-in behind it. */}
-    <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
     <NewDeviceSheet
       open={confirming}
       onClose={() => setClosedFor(error)}

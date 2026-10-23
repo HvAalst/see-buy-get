@@ -1,8 +1,8 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, ErrorNote, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { MdpActions } from '../useMdpApp';
@@ -85,6 +85,20 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
         </Button>
       </div>
 
+      {/* Not the hub's password: the people on its floor sign in as themselves — the same row as the shop's counter. */}
+      <button type="button" class="row" onClick={() => setAsStaff(true)}>
+        <span class="row__ic">
+          <Icon name="person" size={24} />
+        </span>
+        <span class="row__body">
+          <span class="row__t">{t('mdp.staff.entry')}</span>
+          <span class="row__s">{t('mdp.staff.entrySub')}</span>
+        </span>
+        <span class="row__end">
+          <Icon name="chevronRight" size={22} />
+        </span>
+      </button>
+
       <Card title={t('mdp.signin.cardTitle')} tone="soft">
         <Checklist
           items={[t('mdp.signin.item1'), t('mdp.signin.item2'), t('mdp.signin.item3')]}
@@ -95,12 +109,9 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
         <Button variant="link" full={false} onClick={() => setHelp(true)}>
           {t('mdp.signin.forgot')}
         </Button>
-        <HelpLink app="mdp" label="signin" />
+        <SignInHelp app="mdp" />
         <SignUpLink role="mdp" />
         <AllAppsLink />
-        <Button variant="link" full={false} onClick={() => setAsStaff(true)}>
-          {t('mdp.staff.entry')}
-        </Button>
         <ReadAloud text={() => t('mdp.signin.spoken')} label={t('mdp.readAloud')} />
       </div>
 

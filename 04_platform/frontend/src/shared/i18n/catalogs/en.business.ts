@@ -29,7 +29,7 @@ export const enBusiness = {
   'business.signIn.newPin': 'New PIN',
   'business.signIn.code': 'Code',
   'business.signIn.testCode': 'Test code: {code}',
-  'business.signIn.forgot': 'New here, or forgot your PIN?',
+  'business.signIn.forgot': 'Forgot your PIN?',
   'business.signIn.havePin': 'I have a PIN',
   'business.signIn.newCode': 'Send a new code',
   'business.signIn.changeNumber': 'Change the number',

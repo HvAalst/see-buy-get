@@ -4,7 +4,8 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgConfig, SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
-import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
+import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
 import { PIN_LENGTH, isNewDevice, pinReady } from '../../../shared/account/pin';
 import { asksForEmail, isPinReset, recoveryApi } from '../../../shared/account/recovery';
 import { agentConfig } from '../api';
@@ -63,7 +64,6 @@ export function StaffSignIn({
   const [error, setError] = useState<SbgError | null>(null);
   const [places, setPlaces] = useState<CounterPlace[] | null>(null);
   const [api, setApi] = useState<CounterPlacesApi | null>(null);
-  const [trouble, setTrouble] = useState(false);
   // A PIN typed on a phone no code was ever typed on: not an error, a step — the code, once.
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const confirming = step === 'login' && isNewDevice(error) && closedFor !== error;
@@ -272,7 +272,12 @@ export function StaffSignIn({
           {t(cta)}
         </Button>
       </div>
+      {/* The other door, with the form it stands in for: the shop's (or the hub's) own sign-in. */}
+      <Button variant="link" onClick={onBack}>
+        {t('agent.staff.ownerInstead')}
+      </Button>
 
+      {/* The same foot as every sign-in screen: the PIN's own way back, "Trouble signing in?", the other apps. */}
       <div class="scr__foot">
         {step === 'login' ? (
           <Button variant="link" full={false} onClick={() => go('phone')}>
@@ -287,15 +292,10 @@ export function StaffSignIn({
             {t('common.back')}
           </Button>
         )}
-        <Button variant="link" full={false} onClick={() => setTrouble(true)}>
-          {t('account.trouble.link')}
-        </Button>
-        <Button variant="link" full={false} onClick={onBack}>
-          {t('agent.staff.ownerInstead')}
-        </Button>
+        <SignInHelp app={place === 'hub' ? 'mdp' : 'agent'} api={recovery} />
+        <AllAppsLink />
       </div>
 
-      <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
       <NewDeviceSheet
         open={confirming}
         onClose={() => setClosedFor(error)}

@@ -1,4 +1,3 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
 import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -7,7 +6,7 @@ import { codeReady, phoneReady } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
 import { useState } from 'preact/hooks';
 import { EmailStep } from '../../../shared/account/EmailStep';
-import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
@@ -91,7 +90,6 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
   // typed (that would collapse the field mid-entry for a first-time signer).
   const known = state.phoneKnown;
   const ready = phoneReady(state.authPhone) && codeReady(state.authPin, PIN_LENGTH);
-  const [trouble, setTrouble] = useState(false);
   // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once.
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const confirming = isNewDevice(state.authError) && closedFor !== state.authError;
@@ -124,13 +122,15 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
         </Button>
       </div>
 
+      {/* The same foot as every sign-in screen. Forgot-PIN and sign-up are the same step here — a code, then a PIN —
+          but they are two questions, so two links. */}
       <div class="scr__foot">
-        <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.newHere')}</Button>
         <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.forgot')}</Button>
-        {/* The two cases a code to the number cannot solve: the number is gone, or somebody moved the account. */}
-        <Button variant="link" onClick={() => setTrouble(true)}>{t('account.trouble.link')}</Button>
+        {/* The cases a code to the number cannot solve — the number is gone, somebody moved the account — and how signing in works. */}
+        <SignInHelp app="send" api={recovery} />
+        <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.newHere')}</Button>
+        <AllAppsLink />
       </div>
-      <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
       <NewDeviceSheet
         open={confirming}
         onClose={() => setClosedFor(state.authError)}
@@ -239,7 +239,7 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
       </Card>
       <div class="scr__foot">
         <Button variant="link" onClick={() => actions.setAuthMode('login')}>{t('send.auth.haveAccount')}</Button>
-        <HelpLink app="send" label="signin" />
+        <SignInHelp app="send" api={recovery} />
         <AllAppsLink />
       </div>
     </>

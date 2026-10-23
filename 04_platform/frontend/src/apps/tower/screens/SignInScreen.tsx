@@ -1,4 +1,4 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { consoleArticles } from '../../../shared/guide/staff-articles';
 import { useState } from 'preact/hooks';
 import { BrandMark } from '../../../shared/ui';
@@ -67,8 +67,8 @@ export function SignInScreen({
           <OperatorForm actions={actions} error={error} busy={busy} />
         )}
 
-        <p class="twr-signin__foot">
-          <HelpLink app="console" label="signin" buttonClass="cbtn cbtn--ghost cbtn--sm" articles={consoleArticles()} />
+        {/* The quiet way to the setup key, with the forms it stands beside — never a third door beside the two real ones. */}
+        <p class="twr-signin__alt">
           {mode === 'operator' ? (
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setMode('staff')}>
               {t('tower.signIn.backToAccounts')}
@@ -78,6 +78,12 @@ export function SignInScreen({
               {t('tower.signIn.setupLink')}
             </button>
           )}
+        </p>
+
+        {/* The same foot as every sign-in screen — here only "Trouble signing in?": the console has no forgot-password
+            door of its own, and no sign-up. */}
+        <p class="twr-signin__foot">
+          <SignInHelp app="console" articles={consoleArticles()} buttonClass="cbtn cbtn--ghost cbtn--sm" />
         </p>
       </div>
     </div>

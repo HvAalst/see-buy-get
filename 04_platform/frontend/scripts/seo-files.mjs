@@ -136,7 +136,8 @@ function plain(html) {
 }
 const fullParts = [];
 const ARTICLE = /<article class="land pg">([\s\S]*?)<\/article>/;
-const HELP_ARTICLE = /<main class="hc__article"[^>]*>([\s\S]*?)<\/main>/;
+// An <article>, not a <main>: the help sits in the site's own frame now, whose <main> holds it (2026-10-23).
+const HELP_ARTICLE = /<article class="hc__article"[^>]*>([\s\S]*?)<\/article>/;
 const wanted = [
   ['/about/', ARTICLE],
   ...['shops', 'drivers', 'hubs', 'stores', 'business'].map((w) => [`/for/${w}/`, ARTICLE]),

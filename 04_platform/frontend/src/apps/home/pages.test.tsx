@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AUDIENCES, NOTICES, countriesOf, forPath, infoPageOf, noticeKey, pageKey, range, type Notice } from './pages';
 import { InfoScreen } from './screens/InfoScreen';
+import { PublicShell } from './screens/PublicShell';
 
 /*
  * THE PAGES WRITTEN TO BE QUOTED (/about/, /for/<who>/). What is held to here: every address means one page; every page
@@ -76,13 +77,15 @@ describe('your data, and cookies', () => {
     }
   });
 
-  it('draws each page whole, with the way to write to us about your data and the other page', () => {
+  it('draws each page whole, with the way to write to us about your data — the other notice is in the site’s foot', () => {
     for (const which of NOTICE_KINDS) {
       const html = renderToString(<InfoScreen page={{ kind: 'notice', which }} />);
       const count = NOTICES[which].sections.reduce((n, s) => n + s.items, 0);
       expect((html.match(/<li>/g) ?? []).length, which).toBe(count);
       expect(html, which).toContain('href="/help/contact/?topic=privacy"');
-      expect(html, which).toContain(`href="${NOTICES[NOTICES[which].other].path}"`);
+      // Once, in the foot right below — not again in the page (the user, 2026-10-23: "double links").
+      expect(html, which).not.toContain(`href="${NOTICES[NOTICES[which].other].path}"`);
+      expect(renderToString(<PublicShell>{null}</PublicShell>), which).toContain(`href="${NOTICES[NOTICES[which].other].path}"`);
     }
   });
 

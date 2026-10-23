@@ -123,14 +123,25 @@ describe('the help centre', () => {
     expect(renderToString(<HelpScreen page={{ kind: 'article', id: 'no-such-article' }} />)).toContain('That help page is not here');
   });
 
-  it('leads home from every help page: the mark to the front page, the word to the help’s start', () => {
+  // The user, 2026-10-23: "help pages are a mess with different styles and double links". The help sits in the site's own
+  // frame — its top bar (the mark home, Help marked as where you are) and its foot — with no second trail of its own.
+  it('sits in the site’s own frame on every help page: the mark home, Help marked as here, the foot, one trail', () => {
     for (const page of [{ kind: 'index' } as const, { kind: 'article', id: all[0].id } as const, { kind: 'contact' } as const]) {
       const html = renderToString(<HelpScreen page={page} />);
-      expect(html, page.kind).toMatch(/<a class="hc__logo" href="\/" aria-label="SeeBuyGet front page"/);
-      expect(html, page.kind).toMatch(/<a class="hc__logo hc__logo--help" href="\/help\/"/);
+      expect(html, page.kind).toMatch(/<div class="pub pub--help"/);
       // The brand tile itself, never letters typed on a square.
-      expect(html, page.kind).toContain('<img class="hc__tile" src="/img/brand-tile.svg"');
+      expect(html, page.kind).toMatch(/<a class="pub__logo" href="\/"><img src="\/img\/brand-tile.svg"/);
+      expect(html, page.kind).toMatch(/<a href="\/help\/" aria-current="page">/);
+      expect(html, page.kind).toContain('class="pub__foot"');
+      expect(html, page.kind).toContain('href="/help/contact/"');
+      expect((html.match(/class="hc__crumbs"/g) ?? []).length, page.kind).toBe(page.kind === 'index' ? 0 : 1);
+      expect(html, page.kind).not.toContain('hc__logo');
     }
+  });
+
+  it('links each article once on the index: what is most asked is not listed again under its task', () => {
+    const html = renderToString(<HelpScreen page={{ kind: 'index' }} />);
+    for (const a of all) expect((html.match(new RegExp(`href="/help/${a.id}/"`, 'g')) ?? []).length, a.id).toBe(1);
   });
 
   it('names its favicon from the site’s root, so a page below it (/help/<id>/) finds it too', () => {

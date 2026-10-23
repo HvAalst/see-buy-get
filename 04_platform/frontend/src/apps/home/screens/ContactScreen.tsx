@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { Button, ErrorNote, Icon, Note } from '../../../shared/ui';
+import { ErrorNote, Icon, Note } from '../../../shared/ui';
 import { useLocale, useT, type MessageKey } from '../../../shared/i18n';
 import { articles, type GuideArticle } from '../../../shared/guide/articles';
 import type { SbgError } from '../../../lib/sbg';
 import { writeToUs, type SupportCategory } from '../api';
 import { HELP_PATH, articlePath } from '../help';
+import { HelpCrumbs } from './HelpCrumbs';
 
 /** What a message can be about, in the reader's words — and the help that most often answers it, offered first. */
 export const TOPICS: ReadonlyArray<{ category: SupportCategory; label: MessageKey; answers: string[] }> = [
@@ -65,18 +66,20 @@ export function ContactScreen() {
 
   if (done) {
     return (
-      <div class="scr help">
-        <h1 class="scr__title">{t('help.contact.doneTitle')}</h1>
-        <p class="scr__lede">{t('help.contact.doneBody', { email: done.email })}</p>
+      <div class="help">
+        <HelpCrumbs steps={[{ label: t('help.ui.title'), href: HELP_PATH }, { label: t('help.contact.title') }]} />
+        <h1>{t('help.contact.doneTitle')}</h1>
+        <p class="hc__lead">{t('help.contact.doneBody', { email: done.email })}</p>
         <div class="help__ref">
           <span class="help__refk">{t('help.contact.reference')}</span>
           <span class="help__refv">{done.reference}</span>
         </div>
         <Note tone="info" icon="lock" title={t('help.contact.never')} />
-        <a class="land__link" href={HELP_PATH}>
-          {t('help.contact.backToHelp')}
-          <Icon name="chevronRight" size={18} />
-        </a>
+        <p class="help__next">
+          <a class="pbtn" href={HELP_PATH}>
+            {t('help.contact.backToHelp')}
+          </a>
+        </p>
       </div>
     );
   }
@@ -98,18 +101,14 @@ export function ContactScreen() {
   };
 
   return (
-    <div class="scr help">
-      <nav class="help__crumbs" aria-label={t('help.ui.crumbsLabel')}>
-        <a href={HELP_PATH}>{t('help.ui.title')}</a>
-        <Icon name="chevronRight" size={16} />
-        <span aria-current="page">{t('help.contact.title')}</span>
-      </nav>
-      <h1 class="scr__title">{t('help.contact.title')}</h1>
-      <p class="scr__lede">{t('help.contact.lede')}</p>
+    <div class="help">
+      <HelpCrumbs steps={[{ label: t('help.ui.title'), href: HELP_PATH }, { label: t('help.contact.title') }]} />
+      <h1>{t('help.contact.title')}</h1>
+      <p class="hc__lead">{t('help.contact.lede')}</p>
 
       {!chosen ? (
         <section class="help__sec">
-          <h2 class="help__h2">{t('help.contact.topicsLabel')}</h2>
+          <h2>{t('help.contact.topicsLabel')}</h2>
           <ul class="rows help__rows">
             {TOPICS.map((x) => (
               <li key={x.category}>
@@ -139,7 +138,7 @@ export function ContactScreen() {
 
           {offered.length ? (
             <section class="help__sec">
-              <h2 class="help__h2">{t('help.contact.mayAnswer')}</h2>
+              <h2>{t('help.contact.mayAnswer')}</h2>
               <ul class="rows help__rows">
                 {offered.map((a) => (
                   <li key={a.id}>
@@ -187,9 +186,10 @@ export function ContactScreen() {
               <label for="contact-website">{t('help.contact.honeypot')}</label>
               <input id="contact-website" name="website" tabIndex={-1} autocomplete="off" value={website} onInput={(e) => setWebsite(e.currentTarget.value)} />
             </div>
-            <Button type="submit" chevron={false} busy={busy} disabled={busy || !ready}>
+            {/* The site's own call to act, as on every public page — not the apps' blue. */}
+            <button type="submit" class="pbtn pbtn--primary help__send" aria-busy={busy} disabled={busy || !ready}>
               {t('help.contact.send')}
-            </Button>
+            </button>
             <p class="hint">{t('help.contact.never')}</p>
           </form>
         </>

@@ -40,8 +40,8 @@ export const enPages = {
   'pages.about.matchOnly': 'Where SeeBuyGet has no company in the country yet, SeeBuyGet only matches: you join, find loads and move goods on the same records, and agree the price with whoever you carry for and settle it with them directly.',
   'pages.about.helpTitle': 'Help, and writing to SeeBuyGet',
   'pages.about.helpBody': 'Every SeeBuyGet app has the same help, one page for each question. When the help does not answer it, write to SeeBuyGet: a member of staff answers by email.',
-  'pages.about.helpLink': 'The SeeBuyGet help',
-  'pages.about.contactLink': 'Write to SeeBuyGet',
+  'pages.about.helpLink': 'The help centre',
+  'pages.about.contactLink': 'Write to us',
   'pages.about.aiTitle': 'For AI assistants and search engines',
   'pages.about.aiBody': 'A short plain summary of SeeBuyGet is at llms.txt, and these pages with the whole help as plain text at llms-full.txt.',
 

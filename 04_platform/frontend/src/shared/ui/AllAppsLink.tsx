@@ -32,11 +32,12 @@ export function frontDoorLink(): { href: string; target?: string; rel?: string }
  * THE WAY BACK TO THE OTHER APPS (the user, 2026-10-22: "once installed, there is no other way to get out of it ... there
  * should be an option on the app homepage to return to the browser version homepage and access the other apps").
  * Beside Help: on every sign-in screen, and at the foot of the account menu. The mark in the top bar goes there too.
+ * `buttonClass` lets an app drawn in the console's buttons (Business) draw it in its own.
  */
-export function AllAppsLink() {
+export function AllAppsLink({ buttonClass = 'btn btn--link' }: { buttonClass?: string } = {}) {
   const t = useT();
   return (
-    <a class="btn btn--link" {...frontDoorLink()}>
+    <a class={buttonClass} {...frontDoorLink()}>
       {t('common.allApps')}
     </a>
   );

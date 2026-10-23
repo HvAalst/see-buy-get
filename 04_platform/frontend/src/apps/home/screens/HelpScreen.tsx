@@ -3,9 +3,11 @@ import type { ComponentChildren } from 'preact';
 import { Chip, Icon } from '../../../shared/ui';
 import { useLocale, useT } from '../../../shared/i18n';
 import { GUIDE_APPS, HELP_GROUPS, articleById, articles, type GuideArticle, type HelpGroup, type PublicApp } from '../../../shared/guide/articles';
-import { CONTACT_PATH, HELP_PATH, HELP_ROLES, MOST_ASKED, articlePath, byGroup, forRole, relatedOf, roleOf, roleOfArticle, searchArticles, type HelpPage, type HelpRole } from '../help';
+import { CONTACT_PATH, HELP_PATH, HELP_ROLES, MOST_ASKED, articlePath, byGroup, forRole, roleOf, roleOfArticle, searchArticles, type HelpPage, type HelpRole } from '../help';
 import { HelpText } from '../helpText';
 import { ContactScreen } from './ContactScreen';
+import { HelpCrumbs } from './HelpCrumbs';
+import { PublicShell } from './PublicShell';
 import '../help.css';
 
 /**
@@ -16,12 +18,19 @@ import '../help.css';
  * the rare cases folded away; every button the reader must find drawn as a chip and every route through the screens as
  * a path. Every word is in the catalog (en.help.ts), in the reader's language. Built into HTML at build time.
  */
-export function HelpScreen({ page }: { page: HelpPage }) {
+export function HelpScreen({ page, update }: { page: HelpPage; update?: () => void }) {
   const [dark, setDark] = useHelpTheme();
   const [contentsOpen, setContentsOpen] = useState(false);
+  /*
+   * ONE SITE (the user, 2026-10-23: "help pages are a mess with different styles and double links. Make it all together
+   * neat and professional"). The help had a top bar of its own — its own mark, its own trail, a white ground — and no
+   * foot, so leaving the front page for the help felt like leaving the site. It now sits in the site's own frame, on its
+   * paper, with its tools (search, contents, light or dark) on one slim bar under the site's top bar.
+   */
   return (
-    <div class="hc" data-theme={dark ? 'dark' : 'light'}>
-      <HelpTop dark={dark} onDark={setDark} contents={page.kind === 'article' ? { open: contentsOpen, toggle: () => setContentsOpen((o) => !o) } : undefined} />
+    <PublicShell help theme={dark ? 'dark' : 'light'} update={update}>
+      <div class="hc" data-theme={dark ? 'dark' : 'light'}>
+      <HelpBar dark={dark} onDark={setDark} contents={page.kind === 'article' ? { open: contentsOpen, toggle: () => setContentsOpen((o) => !o) } : undefined} />
       {page.kind === 'contact' ? (
         <div class="hc__single">
           <ContactScreen />
@@ -31,7 +40,8 @@ export function HelpScreen({ page }: { page: HelpPage }) {
       ) : (
         <HelpIndex />
       )}
-    </div>
+      </div>
+    </PublicShell>
   );
 }
 
@@ -58,29 +68,16 @@ function useHelpTheme(): [boolean, (dark: boolean) => void] {
   return [dark, choose];
 }
 
-/** The help's own top bar: its mark, a search over every article, Contents on a phone, and light or dark. */
-function HelpTop({ dark, onDark, contents }: { dark: boolean; onDark: (dark: boolean) => void; contents?: { open: boolean; toggle: () => void } }) {
+/** The help's tools, on one bar under the site's: a search over every article, Contents on a phone, and light or dark. */
+function HelpBar({ dark, onDark, contents }: { dark: boolean; onDark: (dark: boolean) => void; contents?: { open: boolean; toggle: () => void } }) {
   const t = useT();
   const locale = useLocale();
   const all = useMemo(() => articles(t), [t, locale]);
   const [q, setQ] = useState('');
   const found = q.trim() ? searchArticles(all, q).slice(0, 6) : [];
   return (
-    <header class="hc__top">
-      <div class="hc__topin">
-        {/* The mark goes home, to the front page; the word goes to the help's own start. */}
-        <nav class="hc__brand" aria-label={t('help.ui.crumbsLabel')}>
-          <a class="hc__logo" href="/" aria-label={t('help.ui.home')} title={t('help.ui.home')}>
-            <img class="hc__tile" src="/img/brand-tile.svg" width={30} height={30} alt="" />
-            <span aria-hidden="true">SeeBuyGet</span>
-          </a>
-          <span class="hc__sep" aria-hidden="true">
-            ›
-          </span>
-          <a class="hc__logo hc__logo--help" href={HELP_PATH}>
-            {t('help.ui.title')}
-          </a>
-        </nav>
+    <div class="hc__bar">
+      <div class="hc__barin">
         <form
           class="hc__search"
           role="search"
@@ -115,7 +112,7 @@ function HelpTop({ dark, onDark, contents }: { dark: boolean; onDark: (dark: boo
           <span>{t(dark ? 'help.ui.light' : 'help.ui.dark')}</span>
         </button>
       </div>
-    </header>
+    </div>
   );
 }
 
@@ -148,11 +145,16 @@ function HelpIndex() {
 
   const found = query.trim() ? searchArticles(all, query) : null;
   const most = MOST_ASKED.map((id) => all.find((a) => a.id === id)).filter((a): a is GuideArticle => Boolean(a));
-  const groups = byGroup(forRole(all, role), locale);
+  // EACH ARTICLE ONCE ON THE PAGE: what is most asked is not listed again under its task below it.
+  const shownAbove = new Set<string>(role === null ? MOST_ASKED : []);
+  const groups = byGroup(
+    forRole(all, role).filter((a) => !shownAbove.has(a.id)),
+    locale,
+  ).filter(([, list]) => list.length > 0);
 
   return (
     <div class="hc__single">
-      <main class="hc__index">
+      <div class="hc__index">
         <h1>{t('help.ui.title')}</h1>
         <p class="hc__lead">{t('help.ui.lede')}</p>
 
@@ -176,6 +178,7 @@ function HelpIndex() {
                 <Cards list={most} />
               </section>
             ) : null}
+            <div class="hc__groups">
             {groups.map(([group, list]) => (
               <section key={group}>
                 <h2>{t(`help.ui.group.${group}`)}</h2>
@@ -188,11 +191,12 @@ function HelpIndex() {
                 </ul>
               </section>
             ))}
+            </div>
           </>
         )}
 
         <StillStuck />
-      </main>
+      </div>
     </div>
   );
 }
@@ -227,13 +231,13 @@ function ArticlePage({ id, contentsOpen }: { id: string; contentsOpen: boolean }
   if (!a) {
     return (
       <div class="hc__single">
-        <main class="hc__index">
+        <div class="hc__index">
           <h1>{t('help.ui.unknownTitle')}</h1>
           <p class="hc__lead">{t('help.ui.unknownBody')}</p>
-          <a class="hc__more" href={HELP_PATH}>
-            {t('help.ui.allHelp')} ›
+          <a class="pbtn pbtn--primary" href={HELP_PATH}>
+            {t('help.ui.allHelp')}
           </a>
-        </main>
+        </div>
       </div>
     );
   }
@@ -245,12 +249,10 @@ function ArticlePage({ id, contentsOpen }: { id: string; contentsOpen: boolean }
   const inline = (a.notes ?? []).map((text, i) => ({ text, kind: kinds[i] ?? 'note' })).filter((n) => n.kind === 'note' || n.kind === 'careful');
   const why = notesOf('why');
   const rare = notesOf('rare');
-  const related = relatedOf(a, all);
   const onPage: Array<[string, string]> = [
     ...(a.steps?.length ? ([['steps', t('help.ui.steps')]] as Array<[string, string]>) : []),
     ...(why.length ? ([['why', t('help.ui.why')]] as Array<[string, string]>) : []),
     ...(rare.length ? ([['rare', t('help.ui.rare')]] as Array<[string, string]>) : []),
-    ...(related.length ? ([['related', t('help.ui.related')]] as Array<[string, string]>) : []),
   ];
 
   return (
@@ -276,18 +278,14 @@ function ArticlePage({ id, contentsOpen }: { id: string; contentsOpen: boolean }
         ))}
       </nav>
 
-      <main class="hc__article" id="hc-top">
-        <nav class="hc__crumbs" aria-label={t('help.ui.crumbsLabel')}>
-          <a href={HELP_PATH}>{t('help.ui.title')}</a>
-          <span aria-hidden="true"> › </span>
-          {readerLabel ? (
-            <>
-              <a href={`${HELP_PATH}?for=${reader}`}>{t(readerLabel)}</a>
-              <span aria-hidden="true"> › </span>
-            </>
-          ) : null}
-          <span>{t(`help.ui.group.${a.group ?? 'daily'}`)}</span>
-        </nav>
+      <article class="hc__article" id="hc-top">
+        <HelpCrumbs
+          steps={[
+            { label: t('help.ui.title'), href: HELP_PATH },
+            ...(readerLabel ? [{ label: t(readerLabel), href: `${HELP_PATH}?for=${reader}` }] : []),
+            { label: t(`help.ui.group.${a.group ?? 'daily'}`) },
+          ]}
+        />
         <h1>{a.title}</h1>
         {apps.length ? (
           <p class="hc__applies" aria-label={t('help.ui.appliesTo')}>
@@ -344,26 +342,11 @@ function ArticlePage({ id, contentsOpen }: { id: string; contentsOpen: boolean }
 
         <StillStuck about={a.id} />
 
-        {related.length ? (
-          <section class="hc__related" id="related">
-            <h3>{t('help.ui.related')}</h3>
-            <ul>
-              {related.map((r) => (
-                <li key={r.id}>
-                  <a href={`${articlePath(r.id)}?for=${reader}`}>
-                    {r.title} <span aria-hidden="true">›</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
         <div class="hc__foot">
           <CopyLink path={articlePath(a.id)} />
           <a href="#hc-top">{t('help.ui.backToTop')} ↑</a>
         </div>
-      </main>
+      </article>
 
       {onPage.length > 1 ? (
         <aside class="hc__onpage" aria-label={t('help.ui.onThisPage')}>
@@ -425,7 +408,7 @@ function StillStuck({ about }: { about?: string }) {
     <aside class="hc__stuck">
       <h3>{t('help.ui.stuckTitle')}</h3>
       <p>{t('help.ui.stuckBody')}</p>
-      <a class="hc__stuckbtn" href={about ? `${CONTACT_PATH}?about=${encodeURIComponent(about)}` : CONTACT_PATH}>
+      <a class="pbtn pbtn--primary" href={about ? `${CONTACT_PATH}?about=${encodeURIComponent(about)}` : CONTACT_PATH}>
         {t('help.ui.stuckCta')}
       </a>
     </aside>

@@ -1,10 +1,9 @@
 import { useState } from 'preact/hooks';
-import { HelpLink } from '../../../shared/guide/HelpLink';
 import { BrandMark, CodeBoxes } from '../../../shared/ui';
-import { frontDoorLink } from '../../../shared/ui/AllAppsLink';
+import { AllAppsLink, frontDoorLink } from '../../../shared/ui/AllAppsLink';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { EmailStep } from '../../../shared/account/EmailStep';
-import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
@@ -48,7 +47,6 @@ const CTA: Record<SignInStep, MessageKey> = {
  */
 export function SignInScreen({ state, actions }: { state: BusinessState; actions: BusinessActions }) {
   const t = useT();
-  const [trouble, setTrouble] = useState(false);
   const { step, busy } = state;
   // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once.
   const [closedFor, setClosedFor] = useState<unknown>(null);
@@ -151,17 +149,20 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
           </button>
         </form>
 
+        {/* The same foot as every sign-in screen, in this app's own buttons: the PIN's way back, "Trouble signing in?",
+            signing up, the other apps. Forgot-PIN and sign-up are the same step here — a code to the phone, then a PIN —
+            but they are two questions, so two links. */}
         <p class="twr-signin__foot">
           {step === 'login' ? (
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
               {t('business.signIn.forgot')}
             </button>
           ) : step === 'phone' ? (
-            state.phoneKnown || state.phone ? (
-              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('login')}>
-                {t('business.signIn.havePin')}
-              </button>
-            ) : null
+            // Always: a browser that remembers no number opens on this step, and somebody who already has a PIN —
+            // from this app or any other SeeBuyGet app — must see the way to use it before typing anything.
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('login')}>
+              {t('business.signIn.havePin')}
+            </button>
           ) : step === 'code' ? (
             <>
               <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void actions.requestCode()}>
@@ -176,15 +177,16 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
               {t('common.back')}
             </button>
           )}
-          <HelpLink app="business" label="signin" buttonClass="cbtn cbtn--ghost cbtn--sm" />
-          {/* The two cases a code to the phone cannot solve: the number is gone, or somebody moved the account. */}
-          <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setTrouble(true)}>
-            {t('account.trouble.link')}
-          </button>
+          <SignInHelp app="business" api={recovery} buttonClass="cbtn cbtn--ghost cbtn--sm" />
+          {step === 'login' ? (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
+              {t('common.signUp')}
+            </button>
+          ) : null}
+          <AllAppsLink buttonClass="cbtn cbtn--ghost cbtn--sm" />
         </p>
         <p class="chint biz-signin__same">{t('business.signIn.samePin')}</p>
       </div>
-      <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
       <NewDeviceSheet
         open={confirming}
         onClose={() => setClosedFor(state.error)}

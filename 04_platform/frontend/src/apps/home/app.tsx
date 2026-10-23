@@ -57,7 +57,7 @@ export function App() {
               : undefined;
 
   // The help is a reading page of its own (help.css): its own top bar, its own look — not inside the app's.
-  if (state.screen === 'help' && state.helpPage) return <HelpScreen page={state.helpPage} />;
+  if (state.screen === 'help' && state.helpPage) return <HelpScreen page={state.helpPage} update={needRefresh ? () => void sw.updateServiceWorker(true) : undefined} />;
   // The public site — the front page and the pages written to be quoted — in its own frame and look (public.css).
   const update = needRefresh ? () => void sw.updateServiceWorker(true) : undefined;
   if (state.screen === 'welcome') {

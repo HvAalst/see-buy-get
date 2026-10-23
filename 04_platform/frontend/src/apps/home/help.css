@@ -14,9 +14,9 @@
 @import '@fontsource/source-sans-3/latin-400-italic.css';
 
 .hc {
-  --hc-bg: #ffffff;
-  --hc-surface: #f6f5f2;
-  --hc-line: #e3e0d9;
+  --hc-bg: #fbfaf7;
+  --hc-surface: #ffffff;
+  --hc-line: #d9d5ca;
   --hc-fg: #1c2230;
   --hc-muted: #5d6472;
   --hc-navy: var(--navy);
@@ -31,7 +31,6 @@
   --hc-body: 'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --hc-display: var(--font-display);
 
-  min-height: 100dvh;
   background: var(--hc-bg);
   color: var(--hc-fg);
   font-family: var(--hc-body);
@@ -122,56 +121,22 @@ html[data-help-theme='dark']:has(.hc) {
   color: var(--hc-muted);
 }
 
-/* -------------------------------------------------------------- the top -- */
+/* --------------------------------------------------------- the tools bar -- */
 
-.hc__top {
-  position: sticky;
-  top: 0;
-  z-index: 9;
-  background: var(--hc-bg);
+/* Under the site's top bar: the search over every article, Contents on a phone, light or dark. Not sticky — the site's
+   bar above it is, and two sticky bars eat a phone's screen. */
+.hc__bar {
   border-bottom: 1px solid var(--hc-line);
-  padding-top: var(--sa-t);
+  background: var(--hc-bg);
 }
 
-.hc__topin {
-  max-width: 80rem;
+.hc__barin {
+  max-width: 74rem;
   margin: 0 auto;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem max(16px, var(--sa-r)) 0.6rem max(16px, var(--sa-l));
-}
-
-.hc__logo {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  text-decoration: none;
-  color: var(--hc-navy) !important;
-  font-family: var(--hc-display);
-  font-weight: 800;
-  font-size: 1.05rem;
-  white-space: nowrap;
-}
-
-.hc__brand {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex: none;
-}
-
-.hc__sep {
-  color: var(--hc-muted, currentColor);
-  font-weight: 700;
-}
-
-/* The brand tile itself (brand/svg/tile.svg): flat, its own colours and corners, never redrawn. */
-.hc__tile {
-  display: block;
-  width: 30px;
-  height: 30px;
-  flex: none;
 }
 
 .hc__search {
@@ -336,22 +301,34 @@ html[data-help-theme='dark']:has(.hc) {
   font-size: 1.3em;
 }
 
+/* A list of titles reads in ink, like the contents beside an article: sixty orange links in a column are a wall. Orange
+   is the hover, where the eye has already landed. */
 .hc__list a {
   display: block;
-  padding: 0.5rem 0;
+  padding: 0.55rem 0;
   font-weight: 600;
+  color: var(--hc-navy) !important;
   text-decoration: none;
   border-bottom: 1px solid var(--hc-line);
 }
 
 .hc__list a:hover {
+  color: var(--hc-link) !important;
   text-decoration: underline;
+}
+
+/* The task headings side by side at a desk: the index is a map, not a scroll. */
+.hc__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
+  gap: 0 2.5rem;
+  align-items: start;
 }
 
 /* --------------------------------------------------------- an article -- */
 
 .hc__wrap {
-  max-width: 80rem;
+  max-width: 74rem;
   margin: 0 auto;
   display: grid;
   grid-template-columns: 15rem minmax(0, 1fr) 12rem;
@@ -457,9 +434,18 @@ html[data-help-theme='dark']:has(.hc) {
 }
 
 .hc__crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
   font-size: 0.85rem;
   color: var(--hc-muted);
   margin-bottom: 1rem;
+}
+
+.hc__crumbsep {
+  margin-inline: 0.35rem;
+  color: var(--hc-muted);
 }
 
 .hc__crumbs a {
@@ -633,41 +619,6 @@ html[data-help-theme='dark']:has(.hc) {
   padding-inline-start: 1.3rem;
 }
 
-.hc__related {
-  margin-top: 2.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--hc-line);
-}
-
-.hc__related ul {
-  list-style: none;
-  padding: 0;
-  margin: 0.6rem 0 0;
-  display: grid;
-  gap: 0.5rem;
-}
-
-.hc__related a {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.7rem 0.9rem;
-  border: 1px solid var(--hc-line);
-  border-radius: 10px;
-  text-decoration: none;
-  color: var(--hc-fg) !important;
-  font-weight: 600;
-}
-
-.hc__related a:hover {
-  background: var(--hc-surface);
-}
-
-.hc__related a span {
-  color: var(--hc-orange);
-}
-
 .hc__stuck {
   margin-top: 2.5rem;
   padding: 1.25rem;
@@ -679,23 +630,15 @@ html[data-help-theme='dark']:has(.hc) {
   margin-bottom: 0.4rem;
 }
 
-.hc__stuckbtn,
-.hc__more {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 1.1rem;
-  border-radius: 999px;
-  background: var(--hc-navy);
-  color: var(--hc-bg) !important;
-  font-weight: 600;
-  text-decoration: none;
+.hc__stuck .pbtn {
+  margin-top: 0.25rem;
 }
 
 .hc__foot {
   margin-top: 2.5rem;
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
   justify-content: space-between;
   font-size: 0.85rem;
@@ -720,25 +663,21 @@ html[data-help-theme='dark']:has(.hc) {
 
 /* ----------------------------------------------------- writing to us -- */
 
-.hc .help__crumbs,
-.hc .scr__lede,
 .hc .hint {
   color: var(--hc-muted);
 }
 
-.hc .scr__title {
-  font-family: var(--hc-display);
-  color: var(--hc-navy);
+.hc .btn--link {
+  color: var(--hc-link);
 }
 
 .hc .row {
-  background: var(--hc-bg);
+  background: var(--hc-surface);
   border-color: var(--hc-line);
   color: var(--hc-fg);
 }
 
 .hc .row__t,
-.hc .help__h2,
 .hc .help__chosenv {
   color: var(--hc-navy);
 }
@@ -760,9 +699,7 @@ html[data-help-theme='dark']:has(.hc) {
   border-color: var(--hc-line);
 }
 
-.hc .help__crumbs a {
-  color: var(--hc-link);
-}
+
 
 /* ------------------------------------------------------ narrower screens -- */
 
@@ -805,11 +742,6 @@ html[data-help-theme='dark']:has(.hc) {
     display: block;
   }
 
-  .hc__logo span:last-child,
-  .hc__sep {
-    display: none;
-  }
-
   .hc h1 {
     font-size: 1.75rem;
   }
@@ -822,7 +754,9 @@ html[data-help-theme='dark']:has(.hc) {
 }
 
 @media print {
-  .hc__top,
+  .pub__top,
+  .pub__foot,
+  .hc__bar,
   .hc__side,
   .hc__onpage,
   .hc__stuck,
@@ -845,17 +779,25 @@ html[data-help-theme='dark']:has(.hc) {
   margin-inline: auto;
 }
 
+.help > h1 {
+  margin-bottom: 0.5rem;
+}
+
 .help__sec {
   margin-top: 28px;
 }
 
-.help__h2 {
-  margin: 0 0 12px;
-  font-family: var(--hc-display, var(--font-display));
-  font-size: 20px;
-  line-height: 1.25;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+/* A section's heading is the help's own h2; the section already stands apart. */
+.help__sec > h2 {
+  margin-top: 0;
+}
+
+.help__send {
+  align-self: flex-start;
+}
+
+.help__next {
+  margin-top: 1.5rem;
 }
 
 .help__rows .row {
@@ -867,20 +809,6 @@ html[data-help-theme='dark']:has(.hc) {
 
 .help__rows .row__t {
   font-weight: 700;
-}
-
-.help__crumbs {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 10px;
-  font-size: 14px;
-}
-
-.help__crumbs a {
-  font-weight: 600;
-  text-decoration: none;
 }
 
 .help__chosen {

@@ -32,6 +32,11 @@
 .biz-signin__same {
   margin-top: 12px;
 }
+/* The sign-in's foot is a list read in order — the PIN's way back, "Trouble signing in?", signing up, the other apps —
+   so it lines up from the left as it wraps, rather than spreading each row to the card's edges. */
+.biz-signin .twr-signin__foot {
+  justify-content: flex-start;
+}
 
 .biz-new .cfield {
   margin-bottom: 14px;

@@ -121,7 +121,11 @@ export const enFront = {
   'front.faq.title': 'Questions people ask',
 
   // The foot.
-  'front.foot.data': 'Your data',
+  'front.foot.colUse': 'Use SeeBuyGet',
+  'front.foot.colHelp': 'Help',
+  'front.foot.colData': 'Your data',
+  'front.foot.write': 'Write to us',
+  'front.foot.data': 'How we treat your data',
   'front.foot.cookies': 'Cookies',
   'front.foot.line': 'SeeBuyGet — parcels through neighbourhood shops',
 };

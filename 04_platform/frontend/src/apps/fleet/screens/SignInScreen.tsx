@@ -1,4 +1,3 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
 import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
@@ -6,7 +5,7 @@ import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/u
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { FleetActions } from '../useFleetApp';
-import { TroubleSheet } from '../../../shared/account/TroubleSheet';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { ChoosePinSheet } from '../../../shared/account/ChoosePinSheet';
 import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
@@ -47,7 +46,7 @@ export interface SignInScreenProps {
  * And because the code only NAMES the fleet, forgetting it must not lock anybody out: "Forgot the code?" asks
  * for the phone and PIN first and lists the fleets that person manages.
  *
- * A PIN can be CHOSEN here too — "First time here, or forgot your PIN?" (`ChoosePinSheet`). It could not: somebody
+ * A PIN can be CHOSEN here too — "Forgot your PIN, or have none yet?" (`ChoosePinSheet`). It could not: somebody
  * added to a fleet's office by their number had to go and choose a PIN in another app before this one would let
  * them in, and the screen did not say so.
  */
@@ -57,7 +56,6 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
   const [code, setCode] = useState('');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
-  const [trouble, setTrouble] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const [fleets, setFleets] = useState<Array<{ did: string; companyName: string; status: string }> | null>(null);
   // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once. What was
@@ -88,7 +86,6 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
   // device was answered with nothing at all.
   const sheets = (
     <>
-      <TroubleSheet open={trouble} onClose={() => setTrouble(false)} api={recovery} />
       <NewDeviceSheet
         open={confirming}
         onClose={() => setClosedFor(error)}
@@ -189,7 +186,6 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
             </Button>
           </div>
         ) : null}
-        {fleets === null ? choosePin : null}
         <Button
           variant="link"
           onClick={() => {
@@ -199,6 +195,14 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
         >
           {t('fleet.signin.backToCode')}
         </Button>
+
+        {/* The same foot as every sign-in screen: the PIN's own way back, then the rest. */}
+        <div class="scr__foot">
+          {fleets === null ? choosePin : null}
+          <SignInHelp app="fleet" api={recovery} />
+          <SignUpLink role="fleet" />
+          <AllAppsLink />
+        </div>
       </form>
       {sheets}
       </>
@@ -248,7 +252,6 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           {company ? t('fleet.signin.submit') : t('fleet.signin.next')}
         </Button>
       </div>
-      {company ? choosePin : null}
       {company ? (
         <Button variant="link" onClick={() => actions.clearCompany()}>
           {t('fleet.signin.otherCompany')}
@@ -270,11 +273,10 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
       </Card>
 
       <div class="scr__foot">
+        {/* The PIN is asked once the fleet is named: its way back is offered from then. */}
+        {company ? choosePin : null}
         {/* A manager signs in with their own phone and PIN, so a lost number or a moved account is theirs to mend here too. */}
-        <button type="button" class="btn btn--link" onClick={() => setTrouble(true)}>
-          {t('account.trouble.link')}
-        </button>
-        <HelpLink app="fleet" label="signin" />
+        <SignInHelp app="fleet" api={recovery} />
         <SignUpLink role="fleet" />
         <AllAppsLink />
         <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />

@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { createPortal } from 'preact/compat';
 import { Button, CodeBoxes, CodeCard, Note, RefusalNote, Sheet } from '../ui';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
@@ -9,6 +10,36 @@ import { looksLikeIdReference } from './idDispute';
 import { looksLikeReference, moveStatusSays, supportLines, type MoveAsked, type MoveStatus } from './move';
 import { PIN_LENGTH } from './pin';
 import { asksForNationalId, type RecoveryApi } from './recovery';
+import { articlesFor, type GuideApp, type GuideArticle } from '../guide/articles';
+import { frontDoorUrl } from '../ui/AllAppsLink';
+import '../guide/guide.css';
+
+/** The articles about getting in — signing in, the PIN or the password, getting back in — out of an app's help. */
+export function signInArticles(app: GuideApp): GuideArticle[] {
+  return articlesFor(app).filter((a) => a.id.endsWith('-sign-in') || SIGN_IN_ARTICLES.includes(a.id));
+}
+const SIGN_IN_ARTICLES = ['which-sign-in', 'account-recovery', 'change-pin', 'change-password'];
+
+/**
+ * THE ONE HELP LINK ON A SIGN-IN SCREEN (the user, 2026-10-23). "Trouble signing in?" opens one sheet: the ways back
+ * into a phone-and-PIN account where the door has them (`api`), how signing in to this app works, and writing to us.
+ * `buttonClass` lets the console draw it in its own buttons.
+ */
+export function SignInHelp({ app, api, articles, buttonClass = 'btn btn--link' }: { app: GuideApp; api?: RecoveryApi; articles?: GuideArticle[]; buttonClass?: string }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const sheet = <TroubleSheet open={open} onClose={() => setOpen(false)} api={api} app={app} articles={articles} />;
+  return (
+    <>
+      <button type="button" class={buttonClass} onClick={() => setOpen(true)}>
+        {t('account.trouble.link')}
+      </button>
+      {/* Into the page, not beside the button: on most screens the button sits inside the sign-in form, and Enter in
+          one of the sheet's fields would submit the sign-in behind it. */}
+      {typeof document === 'undefined' ? sheet : createPortal(sheet, document.body)}
+    </>
+  );
+}
 
 type Mode = 'choose' | 'gone' | 'undo' | 'staff' | 'id' | 'status' | 'done-gone' | 'done-undo';
 
@@ -35,17 +66,34 @@ type Mode = 'choose' | 'gone' | 'undo' | 'staff' | 'id' | 'status' | 'done-gone'
  *
  * Somebody who still knows their PIN and only wants a new number is told where that is: signed in, in the menu.
  */
-export function TroubleSheet({ open, onClose, api }: { open: boolean; onClose: () => void; api: RecoveryApi }) {
+export function TroubleSheet({
+  open,
+  onClose,
+  api,
+  app,
+  articles,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** The ways back into a phone-and-PIN account. Absent on a door that signs in with an email and a password. */
+  api?: RecoveryApi;
+  /** Whose sign-in help to show below them: this app's articles about signing in. */
+  app?: GuideApp;
+  /** The console's own articles, which no other app imports. */
+  articles?: GuideArticle[];
+}) {
   const t = useT();
   const [mode, setMode] = useState<Mode>('choose');
   const close = () => {
     setMode('choose');
     onClose();
   };
+  const reading = articles ?? (app ? signInArticles(app) : []);
 
   return (
     <Sheet open={open} onClose={close} title={t('account.trouble.title')}>
-      {mode === 'choose' ? (
+      {mode === 'choose' && !api ? <p class="t-body">{t('account.trouble.ledeHelp')}</p> : null}
+      {mode === 'choose' && api ? (
         <>
           <p class="t-body">{t('account.trouble.lede')}</p>
           <div class="rows" role="list">
@@ -83,11 +131,50 @@ export function TroubleSheet({ open, onClose, api }: { open: boolean; onClose: (
           <Note tone="info" icon="info" title={t('account.trouble.knowPinTitle')} detail={t('account.trouble.knowPin')} />
         </>
       ) : null}
-      {mode === 'gone' ? <Gone api={api} onDone={() => setMode('done-gone')} /> : null}
-      {mode === 'undo' ? <Undo api={api} onDone={() => setMode('done-undo')} /> : null}
-      {mode === 'staff' ? <AskStaff api={api} /> : null}
-      {mode === 'id' ? <IdDisputeOpen api={api} /> : null}
-      {mode === 'status' ? <MoveOutcome api={api} onAskAgain={() => setMode('staff')} /> : null}
+      {/* HOW SIGNING IN WORKS, in the same sheet: it was a second link beside this one ("Need help signing in?") that
+          opened a second sheet — the user, 2026-10-23: "a bit redundant right?". One question, one place to answer it. */}
+      {mode === 'choose' && reading.length ? (
+        <>
+          {/* A heading only where the ways back stand above it: on a door with none, the lede already says this. */}
+          {api ? <h3 class="guide__h">{t('account.trouble.howTitle')}</h3> : null}
+          <div class="guide">
+            {reading.map((a) => (
+              <details key={a.id} class="guide__item">
+                <summary class="guide__t">{a.title}</summary>
+                <p class="guide__s">{a.summary}</p>
+                {a.steps?.length ? (
+                  <ol class="guide__steps">
+                    {a.steps.map((step) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                ) : null}
+                {a.notes?.map((note) => (
+                  <p key={note} class="guide__p">
+                    {note}
+                  </p>
+                ))}
+              </details>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {/* Not the console's: staff have each other. */}
+      {mode === 'choose' && app && app !== 'console' ? (
+        <p class="guide__more">
+          <a class="btn btn--link" href={`${frontDoorUrl()}help/`} target="_blank" rel="noopener">
+            {t('help.ui.allHelp')}
+          </a>
+          <a class="btn btn--link" href={`${frontDoorUrl()}help/contact/?from=${app}`} target="_blank" rel="noopener">
+            {t('help.ui.stuckCta')}
+          </a>
+        </p>
+      ) : null}
+      {api && mode === 'gone' ? <Gone api={api} onDone={() => setMode('done-gone')} /> : null}
+      {api && mode === 'undo' ? <Undo api={api} onDone={() => setMode('done-undo')} /> : null}
+      {api && mode === 'staff' ? <AskStaff api={api} /> : null}
+      {api && mode === 'id' ? <IdDisputeOpen api={api} /> : null}
+      {api && mode === 'status' ? <MoveOutcome api={api} onAskAgain={() => setMode('staff')} /> : null}
       {mode === 'done-gone' ? <Note tone="ok" icon="check" title={t('account.trouble.goneDoneTitle')} detail={t('account.trouble.goneDone')} /> : null}
       {mode === 'done-undo' ? <Note tone="ok" icon="check" title={t('account.trouble.undoDoneTitle')} detail={t('account.trouble.undoDone')} /> : null}
       <Button variant="link" onClick={mode === 'gone' || mode === 'undo' || mode === 'staff' || mode === 'id' || mode === 'status' ? () => setMode('choose') : close}>

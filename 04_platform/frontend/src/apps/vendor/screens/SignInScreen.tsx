@@ -1,4 +1,4 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
@@ -47,7 +47,6 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
     <form class="scr" onSubmit={submit}>
       <h1 class="scr__title">{t('vendor.signin.title')}</h1>
       <p class="scr__lede">{t(bySecret ? 'vendor.signin.secretLede' : 'vendor.signin.lede')}</p>
-      <HelpLink app="vendor" label="signin" />
 
       {error ? <ErrorNote error={error} showDetail /> : null}
 
@@ -88,18 +87,21 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
           {t('vendor.signin.signIn')}
         </Button>
       </div>
+      {/* The other door, with the form it stands in for: a store registered before stores had an email and password. */}
+      <Button variant="link" onClick={() => setBySecret(!bySecret)}>
+        {t(bySecret ? 'vendor.signin.byEmail' : 'vendor.signin.bySecret')}
+      </Button>
 
+      {/* The same foot as every sign-in screen. */}
       <div class="scr__foot">
         {bySecret ? null : (
           <Button variant="link" full={false} onClick={() => setForgetting(true)}>
             {t('vendor.signin.forgot')}
           </Button>
         )}
+        <SignInHelp app="vendor" />
         {/* One form makes a store: the front page's, like every other sign-up (the user, 2026-10-23). */}
         <SignUpLink role="vendor" />
-        <Button variant="link" full={false} onClick={() => setBySecret(!bySecret)}>
-          {t(bySecret ? 'vendor.signin.byEmail' : 'vendor.signin.bySecret')}
-        </Button>
         <AllAppsLink />
         <ReadAloud text={() => t('vendor.signin.spoken')} label={t('vendor.readAloud')} />
       </div>

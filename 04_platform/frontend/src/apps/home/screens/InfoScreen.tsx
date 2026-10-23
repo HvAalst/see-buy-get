@@ -48,10 +48,6 @@ function NoticePage({ which }: { which: Notice }) {
             {t('pages.notice.write')}
             <Icon name="chevronRight" size={18} />
           </a>
-          <a class="land__link" href={NOTICES[spec.other].path}>
-            {k('other')}
-            <Icon name="chevronRight" size={18} />
-          </a>
         </p>
       </footer>
     </article>
@@ -194,10 +190,6 @@ function ForPage({ who }: { who: Audience }) {
         <p class="pg__links">
           <a class="land__link" href={`${HELP_PATH}?for=${spec.help}`}>
             {t('pages.help')}
-            <Icon name="chevronRight" size={18} />
-          </a>
-          <a class="land__link" href="/about/">
-            {t('pages.about')}
             <Icon name="chevronRight" size={18} />
           </a>
         </p>

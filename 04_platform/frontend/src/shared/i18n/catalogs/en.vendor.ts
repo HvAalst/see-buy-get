@@ -190,7 +190,7 @@ export const enVendor = {
   'vendor.signin.email': 'Email',
   'vendor.signin.password': 'Password',
   'vendor.signin.newPassword': 'Choose a password',
-  'vendor.signin.forgot': 'I forgot my password',
+  'vendor.signin.forgot': 'Forgot your password?',
   'vendor.signin.bySecret': 'My store has no email and password yet',
   'vendor.signin.byEmail': 'Sign in with email and password',
   'vendor.signin.resetTitle': 'Reset your password',

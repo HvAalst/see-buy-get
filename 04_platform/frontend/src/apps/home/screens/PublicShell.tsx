@@ -9,10 +9,23 @@ import '../public.css';
  * Freight · Help, Sign in — and its own foot, with the ways to every public page and to how SeeBuyGet treats your data.
  * On a phone the top bar keeps Track, Help and Sign in: what somebody stuck looks for.
  */
-export function PublicShell({ children, update, readAloud }: { children: ComponentChildren; update?: () => void; readAloud?: () => string }) {
+export function PublicShell({
+  children,
+  update,
+  readAloud,
+  help,
+  theme,
+}: {
+  children: ComponentChildren;
+  update?: () => void;
+  readAloud?: () => string;
+  /** A help page: Help is where you are in the top bar, and the reader's light or dark reaches the frame too. */
+  help?: boolean;
+  theme?: 'light' | 'dark';
+}) {
   const t = useT();
   return (
-    <div class="pub">
+    <div class={`pub${help ? ' pub--help' : ''}`} data-theme={help ? theme ?? 'light' : undefined}>
       <header class="pub__top">
         <div class="pub__in pub__topin">
           <a class="pub__logo" href="/">
@@ -30,7 +43,9 @@ export function PublicShell({ children, update, readAloud }: { children: Compone
             <a class="pub__wide" href="/#freight">
               {t('front.nav.freight')}
             </a>
-            <a href="/help/">{t('front.nav.help')}</a>
+            <a href="/help/" aria-current={help ? 'page' : undefined}>
+              {t('front.nav.help')}
+            </a>
           </nav>
           {update ? (
             <button type="button" class="pub__update" onClick={update} aria-label={t('front.update')} title={t('front.update')}>
@@ -45,19 +60,31 @@ export function PublicShell({ children, update, readAloud }: { children: Compone
 
       <main>{children}</main>
 
+      {/* THE FOOT IS THE SITE'S MAP, in three columns with a heading each — every public page once, and the one way to
+          write to us, which was in no menu at all. */}
       <footer class="pub__foot">
         <div class="pub__in pub__footin">
           <nav class="pub__footnav" aria-label={t('home.landing.footNav')}>
-            <a href="/send/">{t('home.landing.footSend')}</a>
-            <a href="/?go=roles">{t('home.landing.footEarn')}</a>
-            <a href="/?go=market">{t('home.landing.footMarket')}</a>
-            <a href="/?go=agents">{t('home.landing.footAgents')}</a>
-            <a href="/?go=verify">{t('home.landing.footVerify')}</a>
-            <a href="/help/">{t('home.landing.footHelp')}</a>
-            <a href="/about/">{t('pages.about')}</a>
-            <a href="/privacy/">{t('front.foot.data')}</a>
-            <a href="/cookies/">{t('front.foot.cookies')}</a>
-            <a href="/?go=signin">{t('home.landing.footSignIn')}</a>
+            <div class="pub__footcol">
+              <h2 class="pub__footh">{t('front.foot.colUse')}</h2>
+              <a href="/send/">{t('home.landing.footSend')}</a>
+              <a href="/#earn">{t('home.landing.footEarn')}</a>
+              <a href="/?go=market">{t('home.landing.footMarket')}</a>
+              <a href="/?go=agents">{t('home.landing.footAgents')}</a>
+              <a href="/?go=verify">{t('home.landing.footVerify')}</a>
+              <a href="/?go=signin">{t('home.landing.footSignIn')}</a>
+            </div>
+            <div class="pub__footcol">
+              <h2 class="pub__footh">{t('front.foot.colHelp')}</h2>
+              <a href="/help/">{t('home.landing.footHelp')}</a>
+              <a href="/help/contact/">{t('front.foot.write')}</a>
+              <a href="/about/">{t('pages.about')}</a>
+            </div>
+            <div class="pub__footcol">
+              <h2 class="pub__footh">{t('front.foot.colData')}</h2>
+              <a href="/privacy/">{t('front.foot.data')}</a>
+              <a href="/cookies/">{t('front.foot.cookies')}</a>
+            </div>
           </nav>
           <div class="pub__footend">
             <span>{t('front.foot.line')}</span>

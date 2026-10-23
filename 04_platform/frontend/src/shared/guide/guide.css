@@ -13,3 +13,6 @@
   gap: 4px 16px;
   margin: 16px 0 0;
 }
+
+/* The heading over the sign-in help inside "Trouble signing in?" — the sheet's own section, not a page title. */
+.guide__h { margin: 20px 0 0; font-size: 15px; font-weight: 700; line-height: 1.3; }

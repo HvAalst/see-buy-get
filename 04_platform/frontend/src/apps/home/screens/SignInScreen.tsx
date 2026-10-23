@@ -1,4 +1,4 @@
-import { HelpLink } from '../../../shared/guide/HelpLink';
+import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { Button, Icon, Pill, ReadAloud } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ROLES, roleMeta } from '../logic';
@@ -69,10 +69,11 @@ export function SignInScreen({ actions }: SignInScreenProps) {
         <Button variant="link" full={false} onClick={() => actions.go('welcome')}>
           {t('home.goBack')}
         </Button>
+        {/* The same foot as every sign-in screen: "Trouble signing in?", then signing up. */}
+        <SignInHelp app="home" />
         <Button variant="link" full={false} onClick={() => actions.go('roles')}>
           {t('home.signin.noAccountYet')}
         </Button>
-        <HelpLink app="home" label="signin" />
         <ReadAloud text={() => t('home.signin.aloud')} label={t('home.readAloud')} />
       </div>
     </div>
