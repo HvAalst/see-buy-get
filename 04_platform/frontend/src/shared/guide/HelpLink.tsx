@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Sheet } from '../ui';
-import { useT } from '../i18n';
+import { useHelpWords, useT } from '../i18n';
 import { articlesFor, type GuideApp, type GuideArticle } from './articles';
 import { frontDoorUrl } from '../ui/AllAppsLink';
 import { GuideArticles } from './GuideArticles';
@@ -33,6 +33,8 @@ export function HelpLink({
   const controlled = openFromParent !== undefined;
   const open = controlled ? openFromParent : ownOpen;
   const setOpen = (next: boolean) => (controlled ? onOpenChange?.(next) : setOwnOpen(next));
+  // Always here in an app; fetched when the sheet opens where it is not (useHelpWords).
+  const helpHere = useHelpWords(open);
 
   return (
     <>
@@ -43,10 +45,10 @@ export function HelpLink({
       )}
       <Sheet open={open} onClose={() => setOpen(false)} title={t('guide.title')}>
         <p class="card__note">{t('guide.lede')}</p>
-        <GuideArticles articles={articles ?? articlesFor(app)} />
+        {helpHere ? <GuideArticles articles={articles ?? articlesFor(app)} /> : <p class="card__note" aria-busy="true">…</p>}
         {/* The same help on the front door, an article to a page — and when it did not answer it, writing to us. Not the
             console's: staff have each other. */}
-        {app === 'console' ? null : (
+        {app === 'console' || !helpHere ? null : (
           <p class="guide__more">
             <a class="btn btn--link" href={`${frontDoorUrl()}help/`} target="_blank" rel="noopener">
               {t('help.ui.allHelp')}

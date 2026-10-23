@@ -1,3 +1,4 @@
+import './english';
 import { render } from 'preact';
 import '../../shared/tokens.css';
 import { App } from './app';

@@ -190,6 +190,12 @@ const INSTALLABLE = app.installable !== false;
 const SIBLING_DIRS = Object.values(APPS)
   .map((a) => a.base.replace(/^\/|\/$/g, ''))
   .filter(Boolean);
+/**
+ * The front door's files a first visit does NOT download into its offline store: every page but the front page (its own
+ * HTML, kept when it is first opened), the help's words and screen, the fonts only the app screens use, and the build's
+ * own pre-rendering code. See `runtimeCaching` below.
+ */
+const ROOT_ON_DEMAND = ['help/**', 'towns/**', 'for/**', 'about/**', 'privacy/**', 'cookies/**', 'help.html', 'assets/en.help-*', 'assets/HelpScreen-*', 'assets/prerenderEntry-*', 'assets/inter-*', 'assets/bricolage-grotesque-latin-wdth-*'];
 const APP_DIR = resolve(ROOT, 'src/apps', APP_ID);
 
 /**
@@ -329,14 +335,38 @@ function installablePlugins(): PluginOption[] {
           '**/PlaceMapLeaflet-*.js',
           '**/PlaceMapLeaflet-*.css',
           ...(IS_ROOT ? SIBLING_DIRS.map((d) => `${d}/**`) : []),
+          ...(IS_ROOT ? ROOT_ON_DEMAND : []),
         ],
+        /*
+         * WHAT THE FRONT DOOR KEEPS ONLY ONCE IT HAS BEEN USED (the user, 2026-10-23: "the loading time of the homepage
+         * should be short for a low quality phone with poor connection"). Everything precached is downloaded on the first
+         * visit, whatever the visitor came for: it was 120 files, 2.4 MB — every help article and town page as HTML, every
+         * font, the help's words. Those are kept here when they are first opened, and offered from here offline after.
+         */
+        ...(IS_ROOT
+          ? {
+              runtimeCaching: [
+                {
+                  urlPattern: ({ request, url }: { request: Request; url: URL }) => request.mode === 'navigate' && /^\/(help|towns|for|about|privacy|cookies)(\/|$)/.test(url.pathname),
+                  handler: 'NetworkFirst' as const,
+                  options: { cacheName: 'sbg-pages', networkTimeoutSeconds: 6, expiration: { maxEntries: 40, maxAgeSeconds: 30 * 24 * 3600 } },
+                },
+                {
+                  urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/assets/') && /\.(?:js|css|woff2)$/.test(url.pathname),
+                  handler: 'CacheFirst' as const,
+                  options: { cacheName: 'sbg-assets', expiration: { maxEntries: 60, maxAgeSeconds: 90 * 24 * 3600 } },
+                },
+              ],
+            }
+          : {}),
         navigateFallback: `${BASE}index.html`,
         /**
          * Never serve an app shell for an API path — nor, from the root worker (whose scope
          * is the WHOLE origin), for a sibling app's route: without this, navigating to
          * /driver/ before that app is cached renders the LANDING page at the driver's URL.
          */
-        navigateFallbackDenylist: [/^\/v1\//, ...(IS_ROOT ? SIBLING_DIRS.map((d) => new RegExp(`^/${d}/`)) : [])],
+        // The pages kept on demand (above) are their own finished HTML: never answered with the front page's shell.
+        navigateFallbackDenylist: [/^\/v1\//, ...(IS_ROOT ? SIBLING_DIRS.map((d) => new RegExp(`^/${d}/`)) : []), ...(IS_ROOT ? [/^\/(help|towns|for|about|privacy|cookies)(\/|$)/] : [])],
       },
 
       // Keep the service worker out of dev (also avoids writing an ungitignored dev-dist/).

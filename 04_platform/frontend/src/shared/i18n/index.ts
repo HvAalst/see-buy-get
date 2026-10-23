@@ -145,6 +145,42 @@ export function useT(): typeof t {
   return t;
 }
 
+/*
+ * THE HELP'S WORDS, WHEN THEY ARE NEEDED (2026-10-23). en.help.ts is the biggest catalog there is — every article, in
+ * full. The apps carry it (their english.ts); the front door does not, so its homepage stays light on a slow connection,
+ * and loads it for a help page (main.tsx, before the page is drawn) or when a help sheet opens (useHelpWords).
+ */
+let helpLoading: Promise<void> | null = null;
+
+/** Whether the help's words are here yet. */
+export function helpWordsHere(): boolean {
+  return 'help.ui.title' in english;
+}
+
+/** Bring the help's words in, once; every component showing words is drawn again when they arrive. */
+export function loadHelpWords(): Promise<void> {
+  if (helpWordsHere()) return Promise.resolve();
+  helpLoading ??= import('./catalogs/en.help').then((m) => {
+    addEnglish(m.enHelp);
+    subscribers.forEach((fn) => fn());
+  });
+  return helpLoading;
+}
+
+/** For a help sheet: asks for the help's words when `wanted` (the sheet is open) and says whether they are here. */
+export function useHelpWords(wanted = true): boolean {
+  const [here, setHere] = useState(helpWordsHere);
+  useEffect(() => {
+    if (!wanted || here) return;
+    let live = true;
+    void loadHelpWords().then(() => live && setHere(true));
+    return () => {
+      live = false;
+    };
+  }, [wanted, here]);
+  return here || helpWordsHere();
+}
+
 /** Reactive hook — the component re-renders when the language changes, and returns the current locale. */
 export function useLocale(): Locale {
   const [, setTick] = useState(0);

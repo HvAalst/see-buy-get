@@ -8,22 +8,14 @@
  * one, two, few, many, other). A test refuses "(s)" in these strings.
  * Not `as const`: the values must be typed `string` so a translation may differ from the English literal.
  *
- * Per-app slices live in their own files (en.<app>.ts) so each app owns its <app>.* namespace and the six
- * apps can be extracted independently without contending over this file. They are spread in below.
+ * Per-app slices live in their own files (en.<app>.ts) so each app owns its <app>.* namespace. THEY ARE NOT IN HERE
+ * (2026-10-23): this is the core every app carries, and each app adds its own words before it draws (its english.ts,
+ * from en.apps.ts) — the front door only its own, so the homepage a phone on a poor connection loads first does not
+ * carry six other apps' words.
  */
-import { enAgent } from './en.agent';
-import { enDriver } from './en.driver';
-import { enFleet } from './en.fleet';
-import { enMdp } from './en.mdp';
-import { enVendor } from './en.vendor';
-import { enHome } from './en.home';
-import { enBusiness } from './en.business';
 import type { enTowerAll } from './en.tower';
+import type { enApps } from './en.apps';
 import { enTowerShared } from './en.tower-shared';
-import { enHelp } from './en.help';
-import { enPages } from './en.pages';
-import { enFront } from './en.front';
-import { enPrivacy } from './en.privacy';
 
 /* HOW A SHIPPER PAYS A CARRIER DIRECTLY. Shared, because the fleet declaring it, the shop reading it
    before booking, and the shop reading it back afterwards must all say the same thing. */
@@ -107,25 +99,9 @@ export const en = {
   ...enCover,
   ...enSettle,
   ...enQuote,
-  // Per-app slices (each app owns its own <app>.* namespace; filled in its own en.<app>.ts file).
-  ...enAgent,
-  ...enDriver,
-  ...enFleet,
-  ...enMdp,
-  ...enVendor,
-  ...enHome,
-  ...enBusiness,
   // The console's own words are NOT here: en.tower.ts is loaded by the console alone (apps/tower/english.ts), so no
   // other app's code carries them. Only those other apps show too are (en.tower-shared.ts).
   ...enTowerShared,
-  // Help: every public article's words, and the help centre's own (en.help.ts).
-  ...enHelp,
-  // The pages written to be quoted: /about/ and /for/<who>/ (en.pages.ts).
-  ...enPages,
-  // The front page, restyled (en.front.ts).
-  ...enFront,
-  // Your data, and cookies: what the system does with personal data today (en.privacy.ts).
-  ...enPrivacy,
 
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',
@@ -1787,6 +1763,6 @@ export const en = {
   'fiscal.gone': 'The invoice could not be opened. Try again.',
 };
 
-/** Every key there is — the console's included, which only the console loads at run time. */
-export type Messages = typeof en & typeof enTowerAll;
+/** Every key there is — each app's own, and the console's, which only the apps that show them load at run time. */
+export type Messages = typeof en & typeof enApps & typeof enTowerAll;
 export type MessageKey = keyof Messages;

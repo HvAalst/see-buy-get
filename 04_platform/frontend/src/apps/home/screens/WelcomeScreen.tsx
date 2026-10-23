@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { loadSignFontWhenLoaded } from '../signFont';
 import type { JSX } from 'preact';
 import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -42,6 +43,7 @@ export function WelcomeScreen({ actions }: WelcomeScreenProps) {
   useEffect(() => {
     setMine(appsOnThisDevice());
     void fetchPulse().then((r) => setPulse(r.error ? null : (r.data ?? null)));
+    loadSignFontWhenLoaded();
   }, []);
 
   /** A real link that stays in the app when tapped. */

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import helpRaw from '../../../../../help.html?raw';
-import { en } from '../i18n/catalogs/en';
 import { enHelp } from '../i18n/catalogs/en.help';
 import { ARTICLE_SPECS, GUIDE_APPS, articles, articlesFor, type GuideApp } from './articles';
 import { STAFF_ARTICLES, STAFF_LINES, consoleArticles } from './staff-articles';
@@ -28,7 +27,7 @@ describe('help, in the apps and at /help/', () => {
     for (const s of ARTICLE_SPECS) {
       for (const part of ['title', 'summary', ...Array.from({ length: s.steps ?? 0 }, (_, i) => `step${i + 1}`), ...Array.from({ length: s.notes?.length ?? 0 }, (_, i) => `note${i + 1}`)]) wanted.add(`help.${s.id}.${part}`);
     }
-    for (const k of wanted) expect(k in en, k).toBe(true);
+    for (const k of wanted) expect(k in enHelp, k).toBe(true);
     const articleKeys = Object.keys(enHelp).filter((k) => !/^help\.(ui|app|contact)\./.test(k));
     expect(articleKeys.filter((k) => !wanted.has(k))).toEqual([]);
     // Read as words, never as their keys.

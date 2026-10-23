@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { interpolate, setLocale, t } from './index';
 import { en as shared } from './catalogs/en';
 import { enTowerAll } from './catalogs/en.tower';
+import { enApps } from './catalogs/en.apps';
 
-/** Every English word there is: the catalog every app carries, and the console's own. */
-const en = { ...shared, ...enTowerAll };
+/** Every English word there is: the catalog every app carries, each app's own, and the console's. */
+const en = { ...shared, ...enApps, ...enTowerAll };
 
 /**
  * A COUNTED WORD IN THE FORM ITS LANGUAGE GIVES THAT NUMBER.

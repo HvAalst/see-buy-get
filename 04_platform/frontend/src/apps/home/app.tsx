@@ -1,23 +1,16 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { Icon, TopBar } from '../../shared/ui';
+import { useEffect, useState } from 'preact/hooks';
+import { Suspense } from 'preact/compat';
 import { useT } from '../../shared/i18n';
-import { JoinScreen } from './screens/JoinScreen';
-import { AgentsScreen } from './screens/AgentsScreen';
-import { MarketScreen } from './screens/MarketScreen';
-import { RolesScreen } from './screens/RolesScreen';
-import { StoreScreen } from './screens/StoreScreen';
-import { ProfileScreen } from './screens/ProfileScreen';
-import { SignInScreen } from './screens/SignInScreen';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import { TownScreen } from './screens/TownScreen';
-import { HelpScreen } from './screens/HelpScreen';
 import { InfoScreen } from './screens/InfoScreen';
 import { PublicShell } from './screens/PublicShell';
 import { welcomeSpoken } from './logic';
-import { NoteCheck } from '../../shared/archive/NoteCheck';
 import { lookAtDocumentLink, lookAtReportLink, takeDocumentLink, takeReportLink, verifyNote } from './api';
-import { DamageReportLinkPage } from '../../shared/damage/DamageReportLinkPage';
-import { DocumentLinkPage } from '../../shared/archive/DocumentLinkPage';
+// Not in the homepage's first download: each is fetched when it is opened (lazyScreens.ts).
+import { AgentsScreen, DamageReportLinkPage, DocumentLinkPage, JoinScreen, MarketScreen, NoteCheck, ProfileScreen, RolesScreen, SignInScreen, StoreScreen, helpScreen, loadHelpPage } from './lazyScreens';
 import { roleMeta } from './logic';
 import { useHomeApp } from './useHomeApp';
 import '../../shared/screens.css';
@@ -33,6 +26,11 @@ export function App() {
   const { state, actions } = useHomeApp();
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
+  // A help page is loaded before it is drawn (main.tsx); reached any other way, it is brought in here, then drawn.
+  const [, helpArrived] = useState(0);
+  useEffect(() => {
+    if (state.screen === 'help' && !helpScreen()) void loadHelpPage().then(() => helpArrived((n) => n + 1));
+  }, [state.screen]);
 
   /**
    * A subtitle says WHERE YOU ARE. Every one below is a state — joining as a driver, browsing the
@@ -57,7 +55,10 @@ export function App() {
               : undefined;
 
   // The help is a reading page of its own (help.css): its own top bar, its own look — not inside the app's.
-  if (state.screen === 'help' && state.helpPage) return <HelpScreen page={state.helpPage} update={needRefresh ? () => void sw.updateServiceWorker(true) : undefined} />;
+  if (state.screen === 'help' && state.helpPage) {
+    const Help = helpScreen();
+    return Help ? <Help page={state.helpPage} update={needRefresh ? () => void sw.updateServiceWorker(true) : undefined} /> : null;
+  }
   // The public site — the front page and the pages written to be quoted — in its own frame and look (public.css).
   const update = needRefresh ? () => void sw.updateServiceWorker(true) : undefined;
   if (state.screen === 'welcome') {
@@ -100,6 +101,7 @@ export function App() {
       />
 
       <main class={`app__scroll app__scroll--nonav${state.screen === 'info' ? ' app__scroll--land' : ''}`}>
+        <Suspense fallback={<div class="scr" aria-busy="true" />}>
         {state.screen === 'market' ? <MarketScreen state={state} actions={actions} /> : null}
         {state.screen === 'store' ? <StoreScreen state={state} actions={actions} /> : null}
         {state.screen === 'profile' ? <ProfileScreen state={state} actions={actions} /> : null}
@@ -125,6 +127,7 @@ export function App() {
         {state.screen === 'report' && state.reportKey !== undefined ? <DamageReportLinkPage linkKey={state.reportKey} look={lookAtReportLink} take={takeReportLink} /> : null}
         {state.screen === 'town' && state.townSlug ? <TownScreen slug={state.townSlug} /> : null}
         {state.screen === 'info' && state.infoPage ? <InfoScreen page={state.infoPage} /> : null}
+        </Suspense>
       </main>
     </div>
   );

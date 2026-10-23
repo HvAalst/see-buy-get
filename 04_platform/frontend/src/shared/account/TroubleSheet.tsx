@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
 import { Button, CodeBoxes, CodeCard, Note, RefusalNote, Sheet } from '../ui';
-import { useT } from '../i18n';
+import { useHelpWords, useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { EmailStep } from './EmailStep';
 import { IdDisputeCase } from './IdDisputeCase';
@@ -88,7 +88,9 @@ export function TroubleSheet({
     setMode('choose');
     onClose();
   };
-  const reading = articles ?? (app ? signInArticles(app) : []);
+  // The help's words: always here in an app; on the front door, fetched the moment this opens (useHelpWords).
+  const helpHere = useHelpWords(open);
+  const reading = helpHere ? (articles ?? (app ? signInArticles(app) : [])) : [];
 
   return (
     <Sheet open={open} onClose={close} title={t('account.trouble.title')}>
@@ -140,7 +142,7 @@ export function TroubleSheet({
         </>
       ) : null}
       {/* Not the console's: staff have each other. */}
-      {mode === 'choose' && app && app !== 'console' ? (
+      {mode === 'choose' && helpHere && app && app !== 'console' ? (
         <p class="guide__more">
           <a class="btn btn--link" href={`${frontDoorUrl()}help/`} target="_blank" rel="noopener">
             {t('help.ui.allHelp')}

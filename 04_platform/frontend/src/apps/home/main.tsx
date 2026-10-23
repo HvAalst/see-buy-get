@@ -1,6 +1,8 @@
+import './english';
 import { hydrate, render } from 'preact';
 import '../../shared/tokens.css';
 import { App } from './app';
+import { loadHelpPage } from './lazyScreens';
 import { getLocale, initI18n } from '../../shared/i18n';
 
 /**
@@ -21,10 +23,18 @@ initI18n(); // adopt the saved/device language + stamp <html lang/dir> before fi
  * app takes over that markup (hydrate); in any other language it draws afresh, so nobody reads English text that
  * the app never replaces. A page with nothing prerendered in it — dev, or a deep screen — is simply rendered.
  */
-if (host) {
-  if (host.firstElementChild && getLocale() === 'en') hydrate(<App />, host);
+function mount(el: HTMLElement): void {
+  if (el.firstElementChild && getLocale() === 'en') hydrate(<App />, el);
   else {
-    host.textContent = '';
-    render(<App />, host);
+    el.textContent = '';
+    render(<App />, el);
   }
+}
+/*
+ * A HELP PAGE BRINGS ITS OWN CODE AND WORDS FIRST — they are not in the homepage's download (lazyScreens.ts) — so the
+ * page is taken over whole, never half. Until then the finished HTML is already on screen and readable.
+ */
+if (host) {
+  if (/^\/help(\/|$)/.test(location.pathname)) void loadHelpPage().then(() => mount(host), () => mount(host));
+  else mount(host);
 }

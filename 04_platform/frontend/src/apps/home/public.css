@@ -14,15 +14,8 @@
 @import '@fontsource/ibm-plex-mono/latin-400.css';
 @import '@fontsource/ibm-plex-mono/latin-600.css';
 
-/* Bricolage's width axis: the condensed sign, from a face already loaded. */
-@font-face {
-  font-family: 'Bricolage Grotesque Width';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 200 800;
-  font-stretch: 75% 100%;
-  src: url('@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wdth-normal.woff2') format('woff2-variations');
-}
+/* Bricolage's width axis, the condensed sign: added by signFont.ts after the page has loaded, and only on a connection
+   that can spare it. Until then — or on a slow one, always — the sign is drawn in the headings' own face. */
 
 .pub {
   --p-bg: #fbfaf7;
@@ -512,6 +505,19 @@ html[data-help-theme='dark'] .pub--help .pbtn--primary {
 .fr__sec {
   padding-block: 3rem;
   border-top: 2px solid var(--p-ink);
+}
+
+/*
+ * BELOW THE FIRST SCREEN, DRAWN WHEN IT IS NEARLY IN VIEW (the user, 2026-10-23: "the loading time of the homepage
+ * should be short for a low quality phone with poor connection"). A slow phone lays out and paints only the top of the
+ * page first, and the faces only these sections use — the painted sign's narrow letters, a quarter of the page's font
+ * weight — are not fetched until somebody scrolls towards them. Still in the page for a search, a screen reader or a
+ * link to #earn, which draws it on the way.
+ */
+.fr__sign,
+.fr__sec {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
 }
 
 .fr__h2 {

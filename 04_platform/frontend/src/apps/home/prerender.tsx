@@ -1,5 +1,7 @@
+import './prerenderEnglish';
 import { renderToString } from 'preact-render-to-string';
 import { App } from './app';
+import { loadHelpPage } from './lazyScreens';
 import { t } from '../../shared/i18n';
 import { FAQ } from './screens/WelcomeScreen';
 import type { TownPage } from './api';
@@ -50,6 +52,8 @@ export async function prerender(data: { url: string }): Promise<{
   head: { lang: string; title: string; elements: Set<HeadElement> };
 }> {
   const towns = await loadTowns();
+  // The help page's code is fetched on demand in the browser (lazyScreens.ts); here it is brought in before rendering.
+  await loadHelpPage();
   const url = data.url || '/';
   (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url, towns };
   const html = renderToString(<App />);
