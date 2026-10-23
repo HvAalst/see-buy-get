@@ -345,7 +345,6 @@ export const enHome = {
   'home.signin.businessSub': 'Your team, each with their own phone and PIN — also clearing agents and container yards',
   'home.signin.justSending': 'Just sending or tracking',
   'home.signin.noAccount': 'No account needed',
-  'home.signin.open': 'Open',
   'home.signin.noAccountYet': 'New here? Sign up',
   'home.signin.aloud': 'Pick the app you work with: shop, driver, sort hub, online store, or fleet office.',
 

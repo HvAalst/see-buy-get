@@ -748,7 +748,7 @@ export const enFleet = {
   'fleet.signin.pinLabel': 'Your PIN',
   // Says why it is personal, because a manager handed a shared code for years will otherwise assume
   // this is the same code again and try to type it here.
-  'fleet.signin.pinNote': 'Your own PIN, not the company code — so the fleet can see who did what, and one person leaving does not change everybody else’s sign-in.',
+  'fleet.signin.pinNote': 'No PIN yet? Choose “Forgot your PIN?” to set one. Your own PIN, not the company code — so the fleet can see who did what, and one person leaving does not change everybody else’s sign-in.',
   'fleet.signin.otherCompany': 'Different company',
   'fleet.signin.forgot': 'No code? Sign in with your phone number',
   'fleet.signin.forgotTitle': 'Find your fleet',

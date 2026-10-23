@@ -1,5 +1,8 @@
 import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { consoleArticles } from '../../../shared/guide/staff-articles';
+
+/** The staff articles about getting in: signing in, the setup key, signing in for a company. */
+const CONSOLE_SIGN_IN = ['console-staff', 'console-setup-key', 'console-company'];
 import { useState } from 'preact/hooks';
 import { BrandMark } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -83,7 +86,8 @@ export function SignInScreen({
         {/* The same foot as every sign-in screen — here only "Trouble signing in?": the console has no forgot-password
             door of its own, and no sign-up. */}
         <p class="twr-signin__foot">
-          <SignInHelp app="console" articles={consoleArticles()} buttonClass="cbtn cbtn--ghost cbtn--sm" />
+          {/* Only what is about getting in — not the whole staff handbook (the review of 2026-10-23). */}
+          <SignInHelp app="console" articles={consoleArticles().filter((a) => CONSOLE_SIGN_IN.includes(a.id))} buttonClass="cbtn cbtn--ghost cbtn--sm" />
         </p>
       </div>
     </div>

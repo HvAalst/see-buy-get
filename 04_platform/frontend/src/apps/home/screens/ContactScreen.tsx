@@ -4,8 +4,9 @@ import { useLocale, useT, type MessageKey } from '../../../shared/i18n';
 import { articles, type GuideArticle } from '../../../shared/guide/articles';
 import type { SbgError } from '../../../lib/sbg';
 import { writeToUs, type SupportCategory } from '../api';
-import { HELP_PATH, articlePath } from '../help';
+import { HELP_PATH } from '../help';
 import { HelpCrumbs } from './HelpCrumbs';
+import { HelpCards } from './HelpCards';
 
 /** What a message can be about, in the reader's words — and the help that most often answers it, offered first. */
 export const TOPICS: ReadonlyArray<{ category: SupportCategory; label: MessageKey; answers: string[] }> = [
@@ -109,16 +110,12 @@ export function ContactScreen() {
       {!chosen ? (
         <section class="help__sec">
           <h2>{t('help.contact.topicsLabel')}</h2>
-          <ul class="rows help__rows">
+          <ul class="hc__list hc__list--pick">
             {TOPICS.map((x) => (
               <li key={x.category}>
-                <button type="button" class="row" onClick={() => setTopic(x.category)}>
-                  <span class="row__body">
-                    <span class="row__t">{t(x.label)}</span>
-                  </span>
-                  <span class="row__end">
-                    <Icon name="chevronRight" size={20} />
-                  </span>
+                <button type="button" onClick={() => setTopic(x.category)}>
+                  <span>{t(x.label)}</span>
+                  <Icon name="chevronRight" size={20} />
                 </button>
               </li>
             ))}
@@ -139,21 +136,7 @@ export function ContactScreen() {
           {offered.length ? (
             <section class="help__sec">
               <h2>{t('help.contact.mayAnswer')}</h2>
-              <ul class="rows help__rows">
-                {offered.map((a) => (
-                  <li key={a.id}>
-                    <a class="row" href={articlePath(a.id)}>
-                      <span class="row__body">
-                        <span class="row__t">{a.title}</span>
-                        <span class="row__s">{a.summary}</span>
-                      </span>
-                      <span class="row__end">
-                        <Icon name="chevronRight" size={20} />
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
+              <HelpCards list={offered} />
             </section>
           ) : null}
 

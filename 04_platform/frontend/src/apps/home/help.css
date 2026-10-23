@@ -18,11 +18,11 @@
   --hc-surface: #ffffff;
   --hc-line: #d9d5ca;
   --hc-fg: #1c2230;
-  --hc-muted: #5d6472;
+  --hc-muted: #4b5170;
   --hc-navy: var(--navy);
   /* Brand orange on the numbers and marks; a deeper one for link TEXT, which must be read (contrast above 4.5:1). */
   --hc-orange: var(--org);
-  --hc-orange-ink: #ffffff;
+  --hc-orange-ink: var(--navy);
   --hc-link: #b54600;
   --hc-orange-soft: #fff1e8;
   --hc-warn: #c0392b;
@@ -96,14 +96,15 @@ html[data-help-theme='dark']:has(.hc) {
 }
 
 .hc h1 {
-  font-size: 2rem;
+  font-size: clamp(2rem, 6vw, 3.2rem);
+  line-height: 1.05;
   font-weight: 800;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 
 .hc h2 {
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: clamp(1.4rem, 3.5vw, 1.9rem);
+  font-weight: 800;
   margin-top: 2.4rem;
   margin-bottom: 0.8rem;
 }
@@ -139,6 +140,19 @@ html[data-help-theme='dark']:has(.hc) {
   padding: 0.6rem max(16px, var(--sa-r)) 0.6rem max(16px, var(--sa-l));
 }
 
+.hc__barin--narrow {
+  max-width: 48rem;
+}
+
+.hc__barin--narrow .hc__search {
+  max-width: none;
+}
+
+/* Light or dark sits at the far end of the bar, whatever is before it. */
+.hc__barin > .hc__btn:last-child {
+  margin-inline-start: auto;
+}
+
 .hc__search {
   position: relative;
   flex: 1;
@@ -147,7 +161,7 @@ html[data-help-theme='dark']:has(.hc) {
   gap: 0.5rem;
   background: var(--hc-surface);
   border: 1px solid var(--hc-line);
-  border-radius: 999px;
+  border-radius: 4px;
   padding: 0.35rem 0.9rem;
   min-width: 0;
   max-width: 34rem;
@@ -205,7 +219,7 @@ html[data-help-theme='dark']:has(.hc) {
   font-weight: 600;
   background: var(--hc-surface);
   border: 1px solid var(--hc-line);
-  border-radius: 999px;
+  border-radius: 4px;
   padding: 0.4rem 0.85rem;
   color: var(--hc-fg);
   min-height: 44px;
@@ -230,7 +244,7 @@ html[data-help-theme='dark']:has(.hc) {
 }
 
 .hc__lead {
-  font-size: 1.12em;
+  font-size: 1.15rem;
   color: var(--hc-muted);
   margin-bottom: 1.5rem;
 }
@@ -271,18 +285,19 @@ html[data-help-theme='dark']:has(.hc) {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.15rem 1rem;
   padding: 0.85rem 1rem;
-  border: 1px solid var(--hc-line);
-  border-radius: 12px;
+  background: var(--hc-surface);
+  border: 2px solid var(--hc-navy);
+  border-radius: 4px;
   text-decoration: none;
   color: var(--hc-fg);
 }
 
 .hc__cards a:hover {
-  background: var(--hc-surface);
+  border-color: var(--hc-orange);
 }
 
 .hc__cardt {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--hc-navy);
 }
 
@@ -297,8 +312,8 @@ html[data-help-theme='dark']:has(.hc) {
   grid-column: 2;
   grid-row: 1 / span 2;
   align-self: center;
-  color: var(--hc-orange);
-  font-size: 1.3em;
+  display: flex;
+  color: var(--hc-link);
 }
 
 /* A list of titles reads in ink, like the contents beside an article: sixty orange links in a column are a wall. Orange
@@ -315,6 +330,35 @@ html[data-help-theme='dark']:has(.hc) {
 .hc__list a:hover {
   color: var(--hc-link) !important;
   text-decoration: underline;
+}
+
+.hc__list--pick button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 52px;
+  padding: 0.55rem 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--hc-line);
+  font: inherit;
+  font-weight: 600;
+  color: var(--hc-navy);
+  text-align: start;
+  cursor: pointer;
+}
+
+.hc__list--pick button svg {
+  flex: none;
+  color: var(--hc-link);
+}
+
+.hc__list--pick button:hover span {
+  color: var(--hc-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* The task headings side by side at a desk: the index is a map, not a scroll. */
@@ -488,7 +532,7 @@ html[data-help-theme='dark']:has(.hc) {
 .hc__steps li {
   counter-increment: s;
   display: grid;
-  grid-template-columns: 2.25rem minmax(0, 1fr);
+  grid-template-columns: 2.1rem minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -498,9 +542,9 @@ html[data-help-theme='dark']:has(.hc) {
   font-family: var(--hc-display);
   font-weight: 800;
   font-size: 1.1rem;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 8px;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 6px;
   background: var(--hc-orange);
   color: var(--hc-orange-ink);
   display: grid;
@@ -650,13 +694,22 @@ html[data-help-theme='dark']:has(.hc) {
   color: var(--hc-muted) !important;
 }
 
+.hc__foot a,
+.hc__linkbtn {
+  text-decoration: none;
+}
+
+.hc__foot a:hover,
+.hc__linkbtn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .hc__linkbtn {
   background: none;
   border: 0;
   padding: 0;
   font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
   cursor: pointer;
   min-height: 44px;
 }
@@ -742,8 +795,21 @@ html[data-help-theme='dark']:has(.hc) {
     display: block;
   }
 
-  .hc h1 {
-    font-size: 1.75rem;
+  .hc__roles {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-inline: calc(-1 * max(16px, var(--sa-l))) calc(-1 * max(16px, var(--sa-r)));
+    padding-inline: max(16px, var(--sa-l)) max(16px, var(--sa-r));
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .hc__roles::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hc__roles .chip {
+    flex: none;
   }
 }
 

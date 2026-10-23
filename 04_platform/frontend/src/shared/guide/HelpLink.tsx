@@ -3,7 +3,7 @@ import { Sheet } from '../ui';
 import { useT } from '../i18n';
 import { articlesFor, type GuideApp, type GuideArticle } from './articles';
 import { frontDoorUrl } from '../ui/AllAppsLink';
-import './guide.css';
+import { GuideArticles } from './GuideArticles';
 
 /**
  * The Help link: a button that opens this app's help in a sheet — the "Help" in a signed-in app's menu. A sign-in
@@ -43,26 +43,7 @@ export function HelpLink({
       )}
       <Sheet open={open} onClose={() => setOpen(false)} title={t('guide.title')}>
         <p class="card__note">{t('guide.lede')}</p>
-        <div class="guide">
-          {(articles ?? articlesFor(app)).map((a) => (
-            <details key={a.id} class="guide__item">
-              <summary class="guide__t">{a.title}</summary>
-              <p class="guide__s">{a.summary}</p>
-              {a.steps?.length ? (
-                <ol class="guide__steps">
-                  {a.steps.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
-              ) : null}
-              {a.notes?.map((note) => (
-                <p key={note} class="guide__p">
-                  {note}
-                </p>
-              ))}
-            </details>
-          ))}
-        </div>
+        <GuideArticles articles={articles ?? articlesFor(app)} />
         {/* The same help on the front door, an article to a page — and when it did not answer it, writing to us. Not the
             console's: staff have each other. */}
         {app === 'console' ? null : (

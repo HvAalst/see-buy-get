@@ -98,7 +98,7 @@ export const STAFF_ARTICLES: GuideArticle[] = [
       "On the fleet’s row, choose a photograph or scan of each of the four papers: the certificate of registration, the transport operator’s licence, the owner’s ID and a proof of address. Press Put on record.",
       "A different member of staff opens the same screen, looks at the four pictures and presses Approve its papers. Whoever put them on record sees no such button.",
       "When the fleet’s operating bond has been received, press Record the bond. The fleet is now active.",
-      "The row now shows the fleet’s code. Give it to the fleet’s office. In the Fleet app they type it and tap “Forgot your PIN, or have none yet?”: a code is texted to the first manager’s phone, they add a recovery email and choose their own PIN."
+      "The row now shows the fleet’s code. Give it to the fleet’s office. In the Fleet app they type it and tap “Forgot your PIN?”: a code is texted to the first manager’s phone, they add a recovery email and choose their own PIN."
     ],
     notes: [
       "Papers that are not right are sent back with the reason, by either of you. The row then asks for the four pictures again, and shows who sent them back and why.",

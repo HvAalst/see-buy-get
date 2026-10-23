@@ -46,7 +46,7 @@ export interface SignInScreenProps {
  * And because the code only NAMES the fleet, forgetting it must not lock anybody out: "Forgot the code?" asks
  * for the phone and PIN first and lists the fleets that person manages.
  *
- * A PIN can be CHOSEN here too — "Forgot your PIN, or have none yet?" (`ChoosePinSheet`). It could not: somebody
+ * A PIN can be CHOSEN here too — "Forgot your PIN?" (`ChoosePinSheet`). It could not: somebody
  * added to a fleet's office by their number had to go and choose a PIN in another app before this one would let
  * them in, and the screen did not say so.
  */

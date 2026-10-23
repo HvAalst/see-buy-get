@@ -1,4 +1,4 @@
-import { Button, Icon, ReadAloud } from '../../../shared/ui';
+import { Icon, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { ROLES, roleMeta } from '../logic';
 import type { HomeActions } from '../useHomeApp';
@@ -41,9 +41,6 @@ export function RolesScreen({ actions }: RolesScreenProps) {
       </div>
 
       <div class="scr__foot">
-        <Button variant="link" full={false} onClick={() => actions.go('welcome')}>
-          {t('home.goBack')}
-        </Button>
         <ReadAloud
           text={() =>
             `${t('home.roles.aloudLead')} ${ROLES.map((r) => {

@@ -45,10 +45,32 @@
    the other apps. */
 .twr-signin__foot {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 18px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  margin-top: 14px;
+}
+
+/* Drawn as the field apps draw theirs: text links, one under the other, each a full-size target — not small outlined
+   chips that wrap two and one (the review of 2026-10-23). */
+.twr-signin__foot > .cbtn,
+.twr-signin__alt > .cbtn {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--blue);
+  text-align: start;
+  justify-content: flex-start;
+}
+
+.twr-signin__foot > .cbtn:hover,
+.twr-signin__alt > .cbtn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* A door's own way round — the setup key — with the form, under its button: never a third door beside the two real ones. */

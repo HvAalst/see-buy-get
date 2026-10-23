@@ -30,7 +30,7 @@ export const enBusiness = {
   'business.signIn.code': 'Code',
   'business.signIn.testCode': 'Test code: {code}',
   'business.signIn.forgot': 'Forgot your PIN?',
-  'business.signIn.havePin': 'I have a PIN',
+  'business.signIn.havePin': 'I already have an account',
   'business.signIn.newCode': 'Send a new code',
   'business.signIn.changeNumber': 'Change the number',
   'business.signIn.samePin': 'Everyone in a business signs in as themselves. There is no shared company password.',

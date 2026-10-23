@@ -12,7 +12,7 @@ import { PIN_LENGTH } from './pin';
 import { asksForNationalId, type RecoveryApi } from './recovery';
 import { articlesFor, type GuideApp, type GuideArticle } from '../guide/articles';
 import { frontDoorUrl } from '../ui/AllAppsLink';
-import '../guide/guide.css';
+import { GuideArticles } from '../guide/GuideArticles';
 
 /** The articles about getting in — signing in, the PIN or the password, getting back in — out of an app's help. */
 export function signInArticles(app: GuideApp): GuideArticle[] {
@@ -92,7 +92,6 @@ export function TroubleSheet({
 
   return (
     <Sheet open={open} onClose={close} title={t('account.trouble.title')}>
-      {mode === 'choose' && !api ? <p class="t-body">{t('account.trouble.ledeHelp')}</p> : null}
       {mode === 'choose' && api ? (
         <>
           <p class="t-body">{t('account.trouble.lede')}</p>
@@ -133,30 +132,11 @@ export function TroubleSheet({
       ) : null}
       {/* HOW SIGNING IN WORKS, in the same sheet: it was a second link beside this one ("Need help signing in?") that
           opened a second sheet — the user, 2026-10-23: "a bit redundant right?". One question, one place to answer it. */}
+      {/* The same section on every door, under the same heading (the review: two layouts, the browser's own triangles). */}
       {mode === 'choose' && reading.length ? (
         <>
-          {/* A heading only where the ways back stand above it: on a door with none, the lede already says this. */}
-          {api ? <h3 class="guide__h">{t('account.trouble.howTitle')}</h3> : null}
-          <div class="guide">
-            {reading.map((a) => (
-              <details key={a.id} class="guide__item">
-                <summary class="guide__t">{a.title}</summary>
-                <p class="guide__s">{a.summary}</p>
-                {a.steps?.length ? (
-                  <ol class="guide__steps">
-                    {a.steps.map((step) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
-                ) : null}
-                {a.notes?.map((note) => (
-                  <p key={note} class="guide__p">
-                    {note}
-                  </p>
-                ))}
-              </details>
-            ))}
-          </div>
+          <h3 class="guide__h">{t('account.trouble.howTitle')}</h3>
+          <GuideArticles articles={reading} />
         </>
       ) : null}
       {/* Not the console's: staff have each other. */}

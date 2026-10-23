@@ -7,6 +7,7 @@ import { CONTACT_PATH, HELP_PATH, HELP_ROLES, MOST_ASKED, articlePath, byGroup, 
 import { HelpText } from '../helpText';
 import { ContactScreen } from './ContactScreen';
 import { HelpCrumbs } from './HelpCrumbs';
+import { HelpCards } from './HelpCards';
 import { PublicShell } from './PublicShell';
 import '../help.css';
 
@@ -30,7 +31,12 @@ export function HelpScreen({ page, update }: { page: HelpPage; update?: () => vo
   return (
     <PublicShell help theme={dark ? 'dark' : 'light'} update={update}>
       <div class="hc" data-theme={dark ? 'dark' : 'light'}>
-      <HelpBar dark={dark} onDark={setDark} contents={page.kind === 'article' ? { open: contentsOpen, toggle: () => setContentsOpen((o) => !o) } : undefined} />
+      <HelpBar
+        dark={dark}
+        onDark={setDark}
+        wide={page.kind === 'article' && Boolean(articleById(page.id))}
+        contents={page.kind === 'article' && articleById(page.id) ? { open: contentsOpen, toggle: () => setContentsOpen((o) => !o) } : undefined}
+      />
       {page.kind === 'contact' ? (
         <div class="hc__single">
           <ContactScreen />
@@ -69,7 +75,7 @@ function useHelpTheme(): [boolean, (dark: boolean) => void] {
 }
 
 /** The help's tools, on one bar under the site's: a search over every article, Contents on a phone, and light or dark. */
-function HelpBar({ dark, onDark, contents }: { dark: boolean; onDark: (dark: boolean) => void; contents?: { open: boolean; toggle: () => void } }) {
+function HelpBar({ dark, onDark, contents, wide }: { dark: boolean; onDark: (dark: boolean) => void; contents?: { open: boolean; toggle: () => void }; wide: boolean }) {
   const t = useT();
   const locale = useLocale();
   const all = useMemo(() => articles(t), [t, locale]);
@@ -77,7 +83,8 @@ function HelpBar({ dark, onDark, contents }: { dark: boolean; onDark: (dark: boo
   const found = q.trim() ? searchArticles(all, q).slice(0, 6) : [];
   return (
     <div class="hc__bar">
-      <div class="hc__barin">
+      {/* As wide as the column under it: an article's (its topics beside it), or the index's and the contact page's. */}
+      <div class={`hc__barin${wide ? '' : ' hc__barin--narrow'}`}>
         <form
           class="hc__search"
           role="search"
@@ -168,14 +175,14 @@ function HelpIndex() {
         {found ? (
           <section aria-live="polite">
             <h2>{t('help.ui.results', { n: found.length })}</h2>
-            {found.length ? <Cards list={found} /> : <p class="hc__muted">{t('help.ui.noResults')}</p>}
+            {found.length ? <HelpCards list={found} /> : <p class="hc__muted">{t('help.ui.noResults')}</p>}
           </section>
         ) : (
           <>
             {role === null ? (
               <section>
                 <h2>{t('help.ui.mostAsked')}</h2>
-                <Cards list={most} />
+                <HelpCards list={most} />
               </section>
             ) : null}
             <div class="hc__groups">
@@ -198,25 +205,6 @@ function HelpIndex() {
         <StillStuck />
       </div>
     </div>
-  );
-}
-
-/** Rows that carry an article's summary: what most readers came for, and search results. */
-function Cards({ list }: { list: GuideArticle[] }) {
-  return (
-    <ul class="hc__cards">
-      {list.map((a) => (
-        <li key={a.id}>
-          <a href={articlePath(a.id)}>
-            <span class="hc__cardt">{a.title}</span>
-            <span class="hc__cardsum">{a.summary}</span>
-            <span class="hc__chev" aria-hidden="true">
-              ›
-            </span>
-          </a>
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -243,7 +231,7 @@ function ArticlePage({ id, contentsOpen }: { id: string; contentsOpen: boolean }
   }
   const reader = role && forRole([a], role).length ? role : roleOfArticle(a);
   const readerLabel = HELP_ROLES.find((r) => r.role === reader)?.label;
-  const apps = a.apps.filter((x): x is PublicApp => x !== 'console').map((x) => t(GUIDE_APPS[x]));
+  const apps = a.apps.filter((x): x is PublicApp => x !== 'console' && x !== 'home').map((x) => t(GUIDE_APPS[x]));
   const kinds = a.noteKinds ?? [];
   const notesOf = (kind: string) => (a.notes ?? []).filter((_, i) => (kinds[i] ?? 'note') === kind);
   const inline = (a.notes ?? []).map((text, i) => ({ text, kind: kinds[i] ?? 'note' })).filter((n) => n.kind === 'note' || n.kind === 'careful');

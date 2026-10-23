@@ -50,8 +50,8 @@ export const ROLES: RoleSpec[] = [
   { id: 'pudo', icon: 'home', app: '/agent/', kind: 'signup' },
   { id: 'driver', icon: 'truck', app: '/driver/', kind: 'driver' },
   { id: 'mdp', icon: 'grid', app: '/mdp/', kind: 'signup' },
-  { id: 'vendor', icon: 'send', app: '/vendor/', kind: 'vendor' },
-  { id: 'fleet', icon: 'badge', app: '/fleet/', kind: 'fleet' },
+  { id: 'vendor', icon: 'bag', app: '/vendor/', kind: 'vendor' },
+  { id: 'fleet', icon: 'route', app: '/fleet/', kind: 'fleet' },
 ];
 
 export function roleById(id: string): RoleSpec | undefined {

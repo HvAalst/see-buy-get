@@ -930,8 +930,8 @@ export const en = {
   'account.pin.needCurrent': 'Type your current 5-digit PIN.',
   'account.pin.digits': 'A PIN is 5 digits.',
   // A PIN typed on a phone or browser no code to that number was ever typed on (NewDeviceSheet).
-  // "Forgot your PIN, or have none yet?" — one sheet, for an app whose sign-in screen has no such step of its own.
-  'account.choosePin.link': 'Forgot your PIN, or have none yet?',
+  // "Forgot your PIN?" — one sheet, for an app whose sign-in screen has no such step of its own.
+  'account.choosePin.link': 'Forgot your PIN?',
   'account.choosePin.title': 'Choose a PIN',
   'account.choosePin.lede': 'We send a code to your phone. You type it, then choose a PIN. The first time, you also add a recovery email.',
   'account.choosePin.phone': 'Your phone number',
@@ -1333,8 +1333,7 @@ export const en = {
   'account.safety.resetCta': 'Replace my PIN and sign in',
   'account.trouble.link': 'Trouble signing in?',
   'account.trouble.title': 'Trouble signing in?',
-  'account.trouble.lede': 'Forgot your PIN but still have your number? Close this and use the forgot-PIN link under the sign-in — a code to your phone is all you need. These are for when that cannot work.',
-  'account.trouble.ledeHelp': 'How signing in works here. Tap a question to open it.',
+  'account.trouble.lede': 'Forgot your PIN but still have your number? Close this and choose “Forgot your PIN?” — a code to your phone is all you need. These are for when that cannot work.',
   'account.trouble.howTitle': 'How signing in works',
   'account.trouble.gone': 'I no longer have my number',
   'account.trouble.goneSub': 'And I forgot my PIN — get back in with my email',
@@ -1362,7 +1361,7 @@ export const en = {
   'account.trouble.undoCta': 'Put my account back',
   'guide.link': 'Help',
   'guide.title': 'Help',
-  'guide.lede': 'How this app works, and what to do when something goes wrong. Tap a question to open it.',
+  'guide.lede': 'How this app works, and what to do when something goes wrong.',
   'send.account.changePhoto': 'Change photo',
   'send.account.addPhoto': 'Add a photo',
   'send.account.photoHelps': 'A clear photo helps friends recognise your invites.',

@@ -1,5 +1,5 @@
 import { SignInHelp } from '../../../shared/account/TroubleSheet';
-import { Button, Icon, Pill, ReadAloud } from '../../../shared/ui';
+import { Button, Icon, ReadAloud } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ROLES, roleMeta } from '../logic';
 import type { HomeActions } from '../useHomeApp';
@@ -27,7 +27,7 @@ export function SignInScreen({ actions }: SignInScreenProps) {
               <Icon name={r.icon} size={24} />
             </span>
             <span class="row__body">
-              <span class="row__t">{roleMeta(r, t).name}</span>
+              <span class="row__t">{roleMeta(r, t).label}</span>
               <span class="row__s">
                 {t(`home.signin.cred.${r.id}` as MessageKey)}
               </span>
@@ -41,7 +41,7 @@ export function SignInScreen({ actions }: SignInScreenProps) {
             above: everybody in it signs in with their own phone and PIN. */}
         <a class="row" href="/business/">
           <span class="row__ic">
-            <Icon name="badge" size={24} />
+            <Icon name="box" size={24} />
           </span>
           <span class="row__body">
             <span class="row__t">{t('home.signin.business')}</span>
@@ -60,16 +60,13 @@ export function SignInScreen({ actions }: SignInScreenProps) {
             <span class="row__s">{t('home.signin.noAccount')}</span>
           </span>
           <span class="row__end">
-            <Pill tone="ok">{t('home.signin.open')}</Pill>
+            <Icon name="chevronRight" size={22} />
           </span>
         </a>
       </div>
 
       <div class="scr__foot">
-        <Button variant="link" full={false} onClick={() => actions.go('welcome')}>
-          {t('home.goBack')}
-        </Button>
-        {/* The same foot as every sign-in screen: "Trouble signing in?", then signing up. */}
+        {/* The same foot as every sign-in screen: "Trouble signing in?", then signing up. The top bar's arrow goes back. */}
         <SignInHelp app="home" />
         <Button variant="link" full={false} onClick={() => actions.go('roles')}>
           {t('home.signin.noAccountYet')}
