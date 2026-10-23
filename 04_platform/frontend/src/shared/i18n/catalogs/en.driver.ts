@@ -115,7 +115,7 @@ export const enDriver = {
   'driver.signin.phoneNote': 'The number you signed up with — or, if a fleet took you on, the one they registered for you.',
   'driver.signin.pinLabel': 'PIN',
   'driver.signin.notDriver': 'This phone is not registered to a driver',
-  'driver.signin.notDriverNote': 'Your PIN is fine — no driver is registered to this number. Check the number you signed up with, or the one your fleet used if they took you on.',
+  'driver.signin.notDriverNote': 'Your PIN is fine — no driver is registered to this number. Check the number you signed up with, or the one your fleet used if they took you on. Not signed up as a driver yet? Use “New here? Sign up” below.',
   'driver.signin.continue': 'Sign in',
   'driver.signin.firstTime': 'First time here, or forgot your PIN?',
   'driver.signin.codeTitle': 'Choose your PIN',

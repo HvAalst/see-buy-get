@@ -9,7 +9,7 @@ import { OperationalStore } from '../../foundation/data-firewall/operational-sto
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { Geocoder, GEOCODER } from './geocoder';
-import { CarrierPapers, FleetClockView, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus, FleetSetupRow } from './fleet.types';
+import { CarrierPapers, FleetClockView, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus, FleetSetupRow, FleetSignupView } from './fleet.types';
 import { sameSigner, type Signer } from '../../foundation/entity/same-person';
 import { clockAt, clocksOfCountry, isTimeZone, utcDay, zoneName } from './fleet-clock';
 import { CARRIER_PAPER_KINDS, fleetPapers, lapsedOf, offRoadLine, paperLabel, paperLapsesAt, type CarrierPaperKind, type PaperStatus } from './papers';
@@ -99,7 +99,11 @@ export class FleetManagerService {
     return fails;
   }
 
-  register(input: RegisterManagerInput): FleetManager {
+  /**
+   * `signedUp`: the fleet itself filled in the front page's form (FleetSignupController), rather than a member of staff
+   * the console's. Everything else is the same record, refused for the same reasons.
+   */
+  register(input: RegisterManagerInput, opts: { signedUp?: boolean } = {}): FleetManager {
     const unmet = this.unmetRequirements(input);
     if (unmet.length) throw new GlosError('REQUIREMENTS_NOT_MET', `Does not meet fleet-manager requirements: ${unmet.join('; ')}`);
     // Where this company is incorporated decides which sister contracts it. It used to REFUSE a country with no
@@ -142,6 +146,7 @@ export class FleetManagerService {
       bondPaid: false,
       status: 'DRAFT',
       createdAt: new Date().toISOString(),
+      ...(opts.signedUp ? { signedUpAt: new Date().toISOString() } : {}),
     };
     this.managers.set(did, manager);
     return manager;
@@ -517,6 +522,26 @@ export class FleetManagerService {
         ...(m.kycRejection ? { refused: m.kycRejection } : {}),
         // The code is the office's way in once the fleet is active, and staff are who pass it on.
         ...(m.status === 'ACTIVE' && m.loginCode ? { loginCode: m.loginCode } : {}),
+        ...(m.signedUpAt ? { signedUpAt: m.signedUpAt } : {}),
+      }));
+  }
+
+  /**
+   * THE FLEETS A PERSON SIGNED UP, as they read them back on the front page: where each stands, and why its papers came
+   * back. Only fleets that signed themselves up — a fleet staff registered is the console's to set up, not this page's.
+   */
+  signupsOf(dids: string[]): FleetSignupView[] {
+    return dids
+      .map((did) => this.managers.get(did))
+      .filter((m): m is FleetManager => Boolean(m?.signedUpAt))
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map((m) => ({
+        did: m.did,
+        companyName: m.companyName,
+        status: m.status,
+        createdAt: m.createdAt,
+        ...(m.kyc ? { papersSentAt: m.kyc.submittedAt } : {}),
+        ...(m.kycRejection ? { refused: { reason: m.kycRejection.reason, at: m.kycRejection.at } } : {}),
       }));
   }
 

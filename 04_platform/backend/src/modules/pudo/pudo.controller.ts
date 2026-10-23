@@ -1,7 +1,7 @@
 ﻿import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
-import type { FleetDriver, FleetSetupRow } from './fleet.types';
+import type { FleetDriver, FleetManager, FleetSetupRow } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
 import { NoteArchiveService } from './note-archive.service';
@@ -5214,7 +5214,10 @@ export class SbgController {
   managerDecideKyc(@Param('did') did: string, @Body() dto: ManagerKycDecisionDto, @Actor() actor: IntrospectionResult) {
     const who = staffOf(actor, dto.by);
     if (!dto.approve && !dto.reason?.trim()) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: whoever puts the papers on record again reads it');
-    return this.managers.decideKyc(did, dto.approve, who.name, dto.reason, who);
+    const m = this.managers.decideKyc(did, dto.approve, who.name, dto.reason, who);
+    // A fleet that signed itself up has no app until it is active: the email is where it reads the answer, and the reason.
+    this.tellSignedUpFleet(m, dto.approve ? 'approved' : 'refused', dto.approve ? undefined : dto.reason?.trim());
+    return m;
   }
 
   /** Record the refundable operating bond → ACTIVE — operator only (the fleet console recorded its
@@ -5222,7 +5225,15 @@ export class SbgController {
   @Roles('operator')
   @Post('fleet/managers/:did/bond')
   managerBond(@Param('did') did: string) {
-    return this.managers.recordBond(did);
+    const m = this.managers.recordBond(did);
+    this.tellSignedUpFleet(m, 'active');
+    return m;
+  }
+
+  /** Each step of a fleet's own sign-up, said to the address it gave. A fleet staff registered hears from staff. */
+  private tellSignedUpFleet(m: FleetManager, stage: 'approved' | 'refused' | 'active', reason?: string): void {
+    if (!m.signedUpAt || !m.contactEmail) return;
+    void this.mail?.send('fleet-signup', { address: m.contactEmail, name: m.companyName }, { company: m.companyName, stage, ...(reason ? { reason } : {}), when: new Date().toISOString() });
   }
 
   @Roles('operator')

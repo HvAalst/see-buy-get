@@ -33,8 +33,10 @@ import { helpPageOf, type HelpPage } from './help';
 import { infoPageOf, type InfoPage } from './pages';
 import { readLinkKey } from '../../shared/archive/documentLink';
 import { readReportKey } from '../../shared/damage/damageReport';
-import { EMPTY_JOIN, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
+import { EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
+import { isPinReset } from '../../shared/account/recovery';
+import { enrollPerson, mySignups, sendPapersAgain, signUpFleet, uploadPaper, type FleetSignupView, type PersonSession } from './api';
 
 export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help' | 'info';
 
@@ -104,6 +106,19 @@ export interface HomeState {
   helpPage: HelpPage | null;
   /** /about/ or /for/<who>/: the pages written to be quoted. */
   infoPage: InfoPage | null;
+  /* --- a fleet signs itself up --- */
+  /** The person, signed in after the PIN step: in memory only, for the papers and the sign-up. */
+  person: PersonSession | null;
+  /** The PIN step asks for a recovery email too: a first PIN (`first`), or a PIN replaced on a new device (`reset`). */
+  pinEmail: 'first' | 'reset' | null;
+  /** The fleets this person signed up before, read after the PIN. Null until then. */
+  fleetSignups: FleetSignupView[] | null;
+  /** They have a sign-up already and chose to sign up another fleet. */
+  fleetAnother: boolean;
+  /** Papers that came back, being sent again for this fleet. */
+  resendFor: string | null;
+  /** What the sign-up (or the papers sent again) came back as: the done screen. */
+  fleetSignup: FleetSignupView | null;
 }
 
 const INITIAL: HomeState = {
@@ -145,7 +160,16 @@ const INITIAL: HomeState = {
   marketView: 'loads',
   series: null,
   seriesState: 'idle',
+  person: null,
+  pinEmail: null,
+  fleetSignups: null,
+  fleetAnother: false,
+  resendFor: null,
+  fleetSignup: null,
 };
+
+/** Everything a fleet's sign-up holds, cleared whenever a join starts again. */
+const NO_FLEET = { person: null, pinEmail: null, fleetSignups: null, fleetAnother: false, resendFor: null, fleetSignup: null } as const;
 
 /**
  * The front door's state. No session, no phases, no toasts — every call is a public POST
@@ -396,6 +420,7 @@ export function useHomeApp() {
         role,
         step: 'phone',
         form: { ...EMPTY_JOIN },
+        ...NO_FLEET,
         issuedCode: null,
         account: null,
         store: null,
@@ -422,6 +447,12 @@ export function useHomeApp() {
     setState((s) => {
       if (!s.role) return { ...s, screen: 'roles' };
       if (s.step === 'phone') return { ...s, screen: 'roles', error: null };
+      // A fleet's person is signed in by now: back from the papers sent again is back to their list, and back from
+      // the first form is out of the join — never into a PIN step whose code has been spent.
+      if (s.role.kind === 'fleet' && s.person) {
+        if (s.resendFor) return { ...s, resendFor: null, step: 'about', error: null };
+        if (s.step === 'about') return s.fleetAnother && s.fleetSignups?.length ? { ...s, fleetAnother: false, error: null } : { ...s, screen: 'roles', error: null };
+      }
       return { ...s, step: prevStep(s.role.kind, s.step), error: null };
     });
   }, []);
@@ -473,7 +504,66 @@ export function useHomeApp() {
         setState((s) => ({ ...s, error: r.error }));
         return;
       }
-      setState((s) => ({ ...s, step: 'about' }));
+      // A fleet's person chooses their PIN next; everybody else goes on to say who they are.
+      setState((s) => ({ ...s, step: nextStep(role.kind, 'code') }));
+    });
+  }, [run]);
+
+  /**
+   * A FLEET'S PERSON SIGNS IN: the PIN they will open the Fleet app with — and, the first time, a recovery email behind
+   * it. Then the fleets they signed up before are read, so somebody coming back (papers sent back, or to see where it
+   * stands) is shown that, not an empty form.
+   */
+  const choosePin = useCallback(async () => {
+    const { role, form, pinEmail } = stateRef.current;
+    if (!role || stepBlocker(role, 'pin', form, t)) return;
+    if (pinEmail && (!form.recoveryEmail.includes('@') || !/^\d{6}$/.test(form.recoveryCode))) return;
+    await run('pin', async () => {
+      const phone = normalizePhone(form.phone);
+      const r = await enrollPerson(phone, form.pin, pinEmail ? { email: form.recoveryEmail.trim(), code: form.recoveryCode } : undefined);
+      if (r.error || !r.data) {
+        const field = (r.error?.params as { field?: string } | undefined)?.field;
+        // Not an error: the server wants a recovery email behind a first PIN, or the account's own on a new device.
+        if (!pinEmail && field === 'email') {
+          setState((s) => ({ ...s, pinEmail: isPinReset(r.error) ? 'reset' : 'first', error: null }));
+          return;
+        }
+        // The check of the number is spent or gone: back to it.
+        const reverify = r.error?.code === 'PHONE_NOT_VERIFIED';
+        setState((s) => ({ ...s, error: r.error, ...(reverify ? { step: 'phone' as JoinStep } : {}) }));
+        return;
+      }
+      const person = r.data;
+      const mine = await mySignups(person);
+      setState((s) => ({ ...s, person, pinEmail: null, fleetSignups: mine.data?.items ?? [], step: 'about', error: null }));
+    });
+  }, [run]);
+
+  /** One of the four papers, photographed and uploaded as the person. */
+  const uploadFleetPaper = useCallback(async (kind: string, file: File): Promise<string | null> => {
+    const person = stateRef.current.person;
+    return person ? uploadPaper(person, kind, file) : null;
+  }, []);
+
+  /** Sign up another fleet, from the list of the ones already signed up. */
+  const signUpAnother = useCallback(() => setState((s) => ({ ...s, fleetAnother: true, resendFor: null, error: null })), []);
+
+  /** Papers came back: take the ones that were wrong again, and send them. The rest of the sign-up stands. */
+  const resendPapers = useCallback((did: string) => {
+    setState((s) => ({ ...s, resendFor: did, step: 'papers', form: { ...s.form, papers: { ...EMPTY_JOIN.papers } }, error: null }));
+  }, []);
+
+  /** The fleet's last step: the sign-up with its papers — or, for papers that came back, the papers alone. */
+  const submitFleet = useCallback(async () => {
+    const { role, form, person, resendFor } = stateRef.current;
+    if (!role || !person || stepBlocker(role, 'papers', form, t)) return;
+    await run('submit', async () => {
+      const r = resendFor ? await sendPapersAgain(person, resendFor, form.papers) : await signUpFleet(person, fleetSignupBody(form));
+      if (r.error || !r.data) {
+        setState((s) => ({ ...s, error: r.error }));
+        return;
+      }
+      setState((s) => ({ ...s, fleetSignup: r.data, step: 'done', error: null }));
     });
   }, [run]);
 
@@ -623,7 +713,7 @@ export function useHomeApp() {
 
   return {
     state,
-    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries },
+    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries, choosePin, uploadFleetPaper, signUpAnother, resendPapers, submitFleet },
   };
 }
 

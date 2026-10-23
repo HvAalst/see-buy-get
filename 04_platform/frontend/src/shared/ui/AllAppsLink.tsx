@@ -41,3 +41,18 @@ export function AllAppsLink() {
     </a>
   );
 }
+
+/**
+ * NEW HERE? SIGN UP — on the sign-in screen of every app an account is made for on the front page (the user, 2026-10-23:
+ * "the sign up process for the apps should seem more unified and straightforward"). Somebody who reached the shop's, the
+ * driver's, the hub's or the fleet's door without an account had no way from it to the form that makes one.
+ */
+export function SignUpLink({ role }: { role: 'pudo' | 'driver' | 'mdp' | 'fleet' }) {
+  const t = useT();
+  const door = frontDoorLink();
+  return (
+    <a class="btn btn--link" {...door} href={`${door.href}?join=${role}`}>
+      {t('common.signUp')}
+    </a>
+  );
+}

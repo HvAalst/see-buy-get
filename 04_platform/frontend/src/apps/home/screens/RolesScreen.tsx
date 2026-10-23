@@ -1,4 +1,4 @@
-import { Button, Icon, Pill, ReadAloud } from '../../../shared/ui';
+import { Button, Icon, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { ROLES, roleMeta } from '../logic';
 import type { HomeActions } from '../useHomeApp';
@@ -33,7 +33,6 @@ export function RolesScreen({ actions }: RolesScreenProps) {
                 <span class="role__promise">{m.promise}</span>
               </span>
               <span class="row__end">
-                {r.kind === 'invite' ? <Pill tone="idle">{t('home.roles.byInvite')}</Pill> : null}
                 <Icon name="chevronRight" size={22} />
               </span>
             </button>

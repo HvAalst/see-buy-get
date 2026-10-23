@@ -54,6 +54,13 @@ describe('fleetsWaitingOnMe — only what this reader can move', () => {
   it('is not a zero before it has been read', () => {
     expect(fleetsWaitingOnMe(null)).toBeNull();
   });
+  // The user, 2026-10-23: a fleet signs itself up. Sent back, it sends its own papers again: it waits on the fleet.
+  it('a fleet that signed itself up and was sent back waits on the fleet, not on us; its papers wait on any one of us', () => {
+    const theirs = row({ did: 'g', status: 'DRAFT', signedUpAt: '2026-10-23T09:00:00Z' });
+    expect(fleetStep(theirs)).toBe('theirs');
+    expect(fleetStep(row({ did: 'h', status: 'KYC_PENDING', signedUpAt: '2026-10-23T09:00:00Z', papers: papers(false) }))).toBe('approve');
+    expect(fleetsWaitingOnMe([theirs, row({ did: 'h', status: 'KYC_PENDING', signedUpAt: '2026-10-23T09:00:00Z', papers: papers(false) })])).toBe(1);
+  });
 });
 
 describe('the form a fleet is registered with', () => {

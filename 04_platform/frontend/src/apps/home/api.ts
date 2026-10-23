@@ -2,6 +2,9 @@ import { makeConfig, publicDownload, publicRequest, type Result, type SbgConfig 
 import type { DocumentLinkView, LinkAnswer } from '../../shared/archive/documentLink';
 import type { ReportLinkAnswer, ReportLinkView } from '../../shared/damage/damageReport';
 import type { ProofAnswer } from '../../lib/sbg/personas/archive';
+import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
+import { downscaleImage } from '../../shared/media';
+import type { FleetSignupStatus } from './logic';
 
 const APP_VERSION = '1.0.0';
 
@@ -89,6 +92,60 @@ export interface SignupView {
 
 export function signup(body: Record<string, unknown>): Promise<Result<SignupView>> {
   return publicRequest<SignupView>(homeConfig(), '/v1/sbg/auth/signup', { body });
+}
+
+/* ------------------------------------------------ a fleet signs itself up -- */
+
+/** The person, signed in: the token the fleet's papers are uploaded and its sign-up sent with. Kept in memory only. */
+export interface PersonSession {
+  token: string;
+}
+
+/**
+ * A verified phone and a PIN — and, the first time a PIN is chosen, a recovery email confirmed by its code. The same
+ * door the Business app and the Send app use. The device key is kept for the number, so the Fleet app on this browser
+ * is a device the PIN already works on.
+ */
+export async function enrollPerson(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<PersonSession>> {
+  const r = await publicRequest<{ token: { access_token: string }; device?: string }>(homeConfig(), '/v1/sbg/identity/enroll', {
+    body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) },
+  });
+  if (r.error || !r.data) return { data: null, error: r.error, status: r.status };
+  saveDeviceKey(phone, r.data.device);
+  return { data: { token: r.data.token.access_token }, error: null, status: r.status };
+}
+
+/** One paper, downscaled and stripped on this device, uploaded as the person: its id. Null when it did not go. */
+export async function uploadPaper(session: PersonSession, kind: string, file: File): Promise<string | null> {
+  try {
+    const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+    const r = await publicRequest<{ mediaId: string }>(homeConfig(), '/v1/sbg/media', { body: { kind, dataUrl, thumbDataUrl }, bearer: session.token });
+    return r.error ? null : (r.data?.mediaId ?? null);
+  } catch {
+    return null;
+  }
+}
+
+/** A fleet's sign-up as its person reads it back: where it stands and, sent back, why. */
+export interface FleetSignupView {
+  did: string;
+  companyName: string;
+  status: FleetSignupStatus;
+  createdAt: string;
+  papersSentAt?: string;
+  refused?: { reason: string; at: string };
+}
+
+export function signUpFleet(session: PersonSession, body: Record<string, unknown>): Promise<Result<FleetSignupView>> {
+  return publicRequest<FleetSignupView>(homeConfig(), '/v1/sbg/fleet/signups', { body, bearer: session.token });
+}
+
+export function mySignups(session: PersonSession): Promise<Result<{ items: FleetSignupView[] }>> {
+  return publicRequest<{ items: FleetSignupView[] }>(homeConfig(), '/v1/sbg/fleet/signups/mine', { bearer: session.token });
+}
+
+export function sendPapersAgain(session: PersonSession, did: string, papers: Record<string, string>): Promise<Result<FleetSignupView>> {
+  return publicRequest<FleetSignupView>(homeConfig(), `/v1/sbg/fleet/signups/${encodeURIComponent(did)}/papers`, { body: papers, bearer: session.token });
 }
 
 export interface VendorRegisteredView {

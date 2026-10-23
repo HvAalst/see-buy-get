@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { EmailStep } from '../../../shared/account/EmailStep';
 import { toPlaceWords } from '../../../shared/placewords';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { duplicateField, isIdentityDocument, type DuplicateField } from '../../../shared/duplicate';
@@ -7,7 +8,7 @@ import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { homeConfig } from '../api';
 
-import { ANDROID_CHOICES, DRIVER_CLASSES, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor } from '../logic';
+import { ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -27,9 +28,10 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
   const role = state.role;
   if (!role) return null;
 
-  if (role.kind === 'invite' && state.step !== 'done') return <InviteOnly state={state} actions={actions} />;
-
   const steps = stepsFor(role.kind);
+  const fleet = role.kind === 'fleet';
+  // Somebody coming back to a fleet they signed up is shown it, not an empty form for a second one.
+  const showSignups = fleet && state.step === 'about' && Boolean(state.fleetSignups?.length) && !state.fleetAnother;
   const at = steps.indexOf(state.step) + 1;
   const blocker = stepBlocker(role, state.step, state.form, t, notJoinable(state));
 
@@ -47,10 +49,12 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
 
       {state.step === 'phone' ? <PhoneStep state={state} actions={actions} /> : null}
       {state.step === 'code' ? <CodeStep state={state} actions={actions} /> : null}
-      {state.step === 'about' ? <AboutStep state={state} actions={actions} /> : null}
+      {state.step === 'pin' ? <PinStep state={state} actions={actions} /> : null}
+      {state.step === 'about' ? showSignups ? <FleetSignups state={state} actions={actions} /> : fleet ? <FleetAboutStep state={state} actions={actions} /> : <AboutStep state={state} actions={actions} /> : null}
       {state.step === 'where' ? <WhereStep state={state} actions={actions} /> : null}
+      {state.step === 'papers' ? <PapersStep state={state} actions={actions} /> : null}
       {state.step === 'login' ? <LoginStep state={state} actions={actions} /> : null}
-      {state.step === 'done' ? <DoneStep state={state} actions={actions} /> : null}
+      {state.step === 'done' ? fleet ? <FleetDone state={state} actions={actions} /> : <DoneStep state={state} actions={actions} /> : null}
 
       {state.step !== 'done' ? (
         <div class="scr__foot">
@@ -136,7 +140,7 @@ function PhoneStep({ state, actions }: JoinScreenProps) {
   return (
     <>
       <h1 class="scr__title">{t('home.join.joinAs', { role: roleMeta(role, t).labelLower })}</h1>
-      <p class="scr__lede">{t(role.kind === 'vendor' ? 'home.join.phone.ledeStore' : 'home.join.phone.lede')}</p>
+      <p class="scr__lede">{t(role.kind === 'vendor' ? 'home.join.phone.ledeStore' : role.kind === 'fleet' ? 'home.join.phone.ledeFleet' : 'home.join.phone.lede')}</p>
 
       <Card>
         <div class="field">
@@ -360,6 +364,215 @@ function InterestForm({ country }: { country: OperatingCountry }) {
         {t('home.goBack')}
       </Button>
     </Card>
+  );
+}
+
+/* -------------------------------------------------------------- fleet: PIN -- */
+
+/**
+ * A FLEET'S PERSON CHOOSES THEIR PIN — the one the Fleet app opens with, the same PIN in every SeeBuyGet app. Asked here,
+ * straight after the code, because the papers are uploaded as this person; and the first time a PIN is chosen, the
+ * server asks for a recovery email behind it, confirmed by its own code, as every other door does.
+ */
+function PinStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
+  const role = state.role!;
+  const f = state.form;
+  const blocker = stepBlocker(role, 'pin', f, t) ?? (state.pinEmail && (!f.recoveryEmail.includes('@') || !/^\d{6}$/.test(f.recoveryCode)) ? t('home.block.recoveryEmail') : null);
+  return (
+    <>
+      <h1 class="scr__title">{t(state.pinEmail === 'reset' ? 'account.safety.resetTitle' : state.pinEmail ? 'home.fleet.pin.emailTitle' : 'home.fleet.pin.title')}</h1>
+      <p class="scr__lede">{t(state.pinEmail === 'reset' ? 'account.safety.resetLede' : state.pinEmail ? 'home.fleet.pin.emailLede' : 'home.fleet.pin.lede')}</p>
+
+      <Card>
+        <div class="field">
+          <span class="field__label">{t('home.fleet.pin.label')}</span>
+          <CodeBoxes id="fleet-pin" label={t('home.fleet.pin.label')} length={5} value={f.pin} onInput={(pin) => actions.setForm({ pin })} mask disabled={Boolean(state.pinEmail)} />
+        </div>
+        {!state.pinEmail ? <p class="card__note">{t('home.fleet.pin.note')}</p> : null}
+        {state.pinEmail ? (
+          <div class="field" style="margin-top:12px">
+            <EmailStep
+              id="fleet-recovery"
+              email={f.recoveryEmail}
+              code={f.recoveryCode}
+              onEmail={(recoveryEmail) => actions.setForm({ recoveryEmail, ...(f.contactEmail ? {} : { contactEmail: recoveryEmail }) })}
+              onCode={(recoveryCode) => actions.setForm({ recoveryCode })}
+              send={recovery.emailCode}
+              disabled={state.busy === 'pin'}
+            />
+          </div>
+        ) : null}
+      </Card>
+
+      <div class="scr__cta">
+        <Button onClick={() => void actions.choosePin()} disabled={Boolean(blocker)} busy={state.busy === 'pin'}>
+          {t('home.fleet.pin.cta')}
+        </Button>
+        {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------- fleet: what was signed up -- */
+
+/**
+ * SOMEBODY COMING BACK: the fleets this person signed up, where each stands, and — papers sent back — the reason and the
+ * way to send them again. Without it, a refused fleet could not be put right: the same company cannot sign up twice.
+ */
+function FleetSignups({ state, actions }: JoinScreenProps) {
+  const t = useT();
+  const items = state.fleetSignups ?? [];
+  return (
+    <>
+      <h1 class="scr__title">{t('home.fleet.mine.title')}</h1>
+      <p class="scr__lede">{t('home.fleet.mine.lede')}</p>
+      {items.map((s) => (
+        <Card key={s.did} title={s.companyName}>
+          <p class="card__note">{t(fleetSignupWords(s.status, Boolean(s.refused)))}</p>
+          {s.refused ? <Note tone="warn" icon="warning" title={t('home.fleet.mine.whyTitle')} detail={s.refused.reason} /> : null}
+          {s.status === 'DRAFT' ? (
+            <div class="crow" style="margin-top:10px">
+              <Button full={false} onClick={() => actions.resendPapers(s.did)}>
+                {t('home.fleet.mine.sendAgain')}
+              </Button>
+            </div>
+          ) : s.status === 'ACTIVE' ? (
+            <div class="crow" style="margin-top:10px">
+              <a class="btn btn--primary" href="/fleet/">
+                {t('home.fleet.mine.open')}
+              </a>
+            </div>
+          ) : null}
+        </Card>
+      ))}
+      <Button variant="link" onClick={actions.signUpAnother}>
+        {t('home.fleet.mine.another')}
+      </Button>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ fleet: about -- */
+
+/** What a member of staff would type into the console for a fleet they register — asked of the fleet itself. */
+function FleetAboutStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
+  const role = state.role!;
+  const f = state.form;
+  const blocker = stepBlocker(role, 'about', f, t);
+  const field = (id: string, label: string, key: 'displayName' | 'tradingName' | 'fullName' | 'nationalId' | 'businessRegistrationNo' | 'operatorLicence' | 'taxId' | 'contactEmail', more: Record<string, unknown> = {}) => (
+    <div class="field" style="margin-top:12px">
+      <label class="field__label" for={id}>
+        {label}
+      </label>
+      <input id={id} class="input" value={f[key]} onInput={(e) => actions.setForm({ [key]: e.currentTarget.value } as Partial<typeof f>)} {...more} />
+    </div>
+  );
+  return (
+    <>
+      <h1 class="scr__title">{t('home.fleet.about.title')}</h1>
+      <p class="scr__lede">{t('home.fleet.about.lede')}</p>
+
+      <Card title={t('home.fleet.about.company')}>
+        {field('fleet-name', t('home.fleet.about.companyName'), 'displayName', { placeholder: t('home.fleet.about.companyNamePh') })}
+        {field('fleet-trading', t('home.fleet.about.tradingName'), 'tradingName')}
+        {field('fleet-email', t('home.fleet.about.contactEmail'), 'contactEmail', { type: 'email', autocomplete: 'email', autocapitalize: 'none', spellcheck: false, placeholder: 'office@example.com' })}
+        <p class="card__note">{t('home.fleet.about.contactEmailNote')}</p>
+      </Card>
+
+      <Card title={t('home.fleet.about.numbers')}>
+        {field('fleet-reg', t('home.fleet.about.businessRegistrationNo'), 'businessRegistrationNo', { spellcheck: false })}
+        {field('fleet-licence', t('home.fleet.about.operatorLicence'), 'operatorLicence', { spellcheck: false })}
+        {field('fleet-tax', t('home.fleet.about.taxId'), 'taxId', { spellcheck: false })}
+        <p class="card__note">{t('home.fleet.about.numbersNote')}</p>
+      </Card>
+
+      <Card title={t('home.fleet.about.owner')}>
+        {field('fleet-owner', t('home.join.about.fullName'), 'fullName', { placeholder: t('home.join.about.fullNamePh') })}
+        {field('fleet-owner-id', t('home.join.about.idNumber'), 'nationalId', { spellcheck: false })}
+        <p class="card__note">{t('home.join.about.privacyNote')}</p>
+      </Card>
+
+      <div class="scr__cta">
+        <Button onClick={actions.advance} disabled={Boolean(blocker)}>
+          {t('home.continue')}
+        </Button>
+        {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
+      </div>
+    </>
+  );
+}
+
+/* ----------------------------------------------------------- fleet: papers -- */
+
+const PAPER_LABEL: Record<FleetPaper, MessageKey> = {
+  businessRegCertRef: 'home.fleet.papers.registration',
+  operatorLicenceRef: 'home.fleet.papers.licence',
+  ownerIdRef: 'home.fleet.papers.ownerId',
+  proofOfAddressRef: 'home.fleet.papers.address',
+};
+
+/** The four papers, each a photograph taken now. What SeeBuyGet staff look at before the fleet is approved. */
+function PapersStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
+  const role = state.role!;
+  const f = state.form;
+  const blocker = stepBlocker(role, 'papers', f, t);
+  const again = state.resendFor ? state.fleetSignups?.find((s) => s.did === state.resendFor) : undefined;
+  return (
+    <>
+      <h1 class="scr__title">{t(again ? 'home.fleet.papers.againTitle' : 'home.fleet.papers.title')}</h1>
+      <p class="scr__lede">{again ? t('home.fleet.papers.againLede', { name: again.companyName }) : t('home.fleet.papers.lede')}</p>
+      {again?.refused ? <Note tone="warn" icon="warning" title={t('home.fleet.mine.whyTitle')} detail={again.refused.reason} /> : null}
+
+      {FLEET_PAPERS.map(([key, kind]) => (
+        <Card key={key} label={t(PAPER_LABEL[key])}>
+          <p class="t-label">{t(PAPER_LABEL[key])}</p>
+          <PhotoField
+            id={`paper-${key}`}
+            value={f.papers[key]}
+            label={t('home.fleet.papers.take')}
+            upload={(file) => actions.uploadFleetPaper(kind, file)}
+            onCapture={(mediaId) => actions.setForm({ papers: { ...state.form.papers, [key]: mediaId } })}
+          />
+        </Card>
+      ))}
+
+      <div class="scr__cta">
+        <Button onClick={() => void actions.submitFleet()} disabled={Boolean(blocker)} busy={state.busy === 'submit'}>
+          {t(again ? 'home.fleet.papers.sendAgain' : 'home.fleet.papers.send')}
+        </Button>
+        {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
+      </div>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------- fleet: done -- */
+
+function FleetDone({ state, actions }: JoinScreenProps) {
+  const t = useT();
+  const done = state.fleetSignup;
+  return (
+    <>
+      <h1 class="scr__title">{t(state.resendFor ? 'home.fleet.done.againTitle' : 'home.fleet.done.title')}</h1>
+      <p class="scr__lede">{t('home.fleet.done.lede', { name: done?.companyName ?? state.form.displayName })}</p>
+      <Card title={t('home.join.done.whatNext')} tone="soft">
+        <Checklist
+          items={[
+            state.form.contactEmail ? t('home.fleet.done.next1', { email: state.form.contactEmail }) : t('home.fleet.done.next1Plain'),
+            t('home.fleet.done.next2'),
+            t('home.fleet.done.next3'),
+          ]}
+        />
+      </Card>
+      <p class="card__note">{t('home.fleet.done.comeBack')}</p>
+      <Button variant="link" onClick={actions.restart}>
+        {t('home.join.done.restart')}
+      </Button>
+    </>
   );
 }
 
@@ -632,9 +845,19 @@ function WhereStep({ state, actions }: JoinScreenProps) {
       <Card label={t('home.join.where.areaTitle')}>
         {/* Which country first: it narrows the areas below, and it is what decides who contracts them. */}
         <CountryField id="join-country" state={state} actions={actions} />
+        {/* A fleet's depot: the pin above, and the address its letters go to. No delivery area — that is a shop's. */}
+        {role.kind === 'fleet' ? (
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="depot">
+              {t('home.fleet.where.depotLabel')}
+            </label>
+            <input id="depot" class="input" value={f.landmark} onInput={(e) => actions.setForm({ landmark: e.currentTarget.value })} placeholder={t('home.fleet.where.depotPh')} />
+          </div>
+        ) : null}
         {/* Type-or-pick: existing network zones are SUGGESTIONS (datalist), but a shop opening in a brand-new
             area must be able to type it — a plain dropdown of existing zones would trap them (they cannot add
             an area that isn't already on the map). */}
+        {role.kind !== 'fleet' ? (
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="join-zone">
             {t('home.join.where.areaLabel')}
@@ -649,15 +872,16 @@ function WhereStep({ state, actions }: JoinScreenProps) {
             autocapitalize="characters"
           />
         </div>
-        {zones.length ? (
+        ) : null}
+        {zones.length && role.kind !== 'fleet' ? (
           <datalist id="join-zones">
             {zones.map((z) => (
               <option key={z} value={z} />
             ))}
           </datalist>
         ) : null}
-        <p class="card__note">{t('home.join.where.areaHint')}</p>
-        {role.id !== 'driver' ? (
+        {role.kind !== 'fleet' ? <p class="card__note">{t('home.join.where.areaHint')}</p> : null}
+        {role.id !== 'driver' && role.kind !== 'fleet' ? (
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="landmark">
               {t('home.join.where.landmarkLabel')}
@@ -781,7 +1005,10 @@ function DoneStep({ state, actions }: JoinScreenProps) {
                 : role.id === 'mdp'
                   ? // A hub sends its papers from the Hub app first: nobody checks what has not been sent.
                     [t('home.join.done.hubPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
-                  : [t('home.join.done.pending1'), t('home.join.done.pending2'), t('home.join.done.pending3')]
+                  : role.id === 'pudo'
+                    ? // …and so does a shop, from the Shop app: this list said "we check your details" and never what to send.
+                      [t('home.join.done.shopPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
+                    : [t('home.join.done.pending1'), t('home.join.done.pending2'), t('home.join.done.pending3')]
             }
           />
         </Card>
@@ -798,33 +1025,5 @@ function DoneStep({ state, actions }: JoinScreenProps) {
         {t('home.join.done.restart')}
       </Button>
     </>
-  );
-}
-
-/* ----------------------------------------------------------- invite-only -- */
-
-function InviteOnly({ state, actions }: JoinScreenProps) {
-  const t = useT();
-  const role = state.role!;
-  return (
-    <div>
-      <h1 class="scr__title">{t('home.join.invite.title', { role: roleMeta(role, t).label })}</h1>
-      <p class="scr__lede">{t('home.join.invite.lede')}</p>
-
-      <Card title={t('home.join.invite.whatYouGet')} tone="soft">
-        <Checklist items={[t('home.join.invite.get1'), t('home.join.invite.get2'), t('home.join.invite.get3')]} />
-      </Card>
-
-      <div class="scr__cta">
-        <a class="btn btn--primary btn--full" href={role.app}>
-          {t('home.join.invite.haveCode')}
-          <Icon name="chevronRight" size={20} class="btn__chev" />
-        </a>
-      </div>
-
-      <Button variant="link" onClick={() => actions.go('roles')}>
-        {t('home.join.invite.pickElse')}
-      </Button>
-    </div>
   );
 }

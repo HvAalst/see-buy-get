@@ -29960,6 +29960,88 @@
         }
       }
     },
+    "/v1/sbg/fleet/signups": {
+      "post": {
+        "operationId": "FleetSignup.signUp",
+        "summary": "",
+        "description": "Sign a fleet up: the record, the person as its first manager, and its papers — with SeeBuyGet to check.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetSignupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetSignupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/signups/mine": {
+      "get": {
+        "operationId": "FleetSignup.mine",
+        "summary": "",
+        "description": "The fleets this person signed up, and where each stands — read back on the front page after the PIN.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/signups/{did}/papers": {
+      "post": {
+        "operationId": "FleetSignup.sendAgain",
+        "summary": "",
+        "description": "Papers that came back, sent again — by a manager of that fleet, and only while they are back with the fleet.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetSignupPapersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FleetSignupView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -42188,6 +42270,10 @@
           },
           "createdAt": {
             "type": "string"
+          },
+          "signedUpAt": {
+            "type": "string",
+            "description": "WHEN IT SIGNED ITSELF UP on the front page (the user, 2026-10-23: \"a clear sign up form that can be checked by sbg\nstaff\"). Absent for a fleet staff registered. Such a fleet sent its own papers, so any one member of staff may\napprove them, and a refusal goes back to the fleet, which sends them again."
           }
         },
         "required": [
@@ -61795,6 +61881,168 @@
         },
         "required": [
           "text"
+        ]
+      },
+      "SignupPlaceDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "SignupNumbersDto": {
+        "type": "object",
+        "properties": {
+          "businessRegistrationNo": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "transportOperatorLicence": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "taxId": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "businessRegistrationNo",
+          "transportOperatorLicence",
+          "taxId"
+        ]
+      },
+      "FleetSignupPapersDto": {
+        "type": "object",
+        "properties": {
+          "businessRegCertRef": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "operatorLicenceRef": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "ownerIdRef": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "proofOfAddressRef": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "businessRegCertRef",
+          "operatorLicenceRef",
+          "ownerIdRef",
+          "proofOfAddressRef"
+        ]
+      },
+      "FleetSignupDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "tradingName": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "jurisdiction": {
+            "type": "string",
+            "description": "Country of incorporation: which SeeBuyGet company, if any, contracts with the fleet.",
+            "maxLength": 2
+          },
+          "contactEmail": {
+            "type": "string",
+            "description": "Where we write about the sign-up: received, sent back, active.",
+            "maxLength": 200
+          },
+          "ownerFullName": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "ownerNationalId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "depotAddress": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "location": {
+            "$ref": "#/components/schemas/SignupPlaceDto"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/SignupNumbersDto"
+          },
+          "papers": {
+            "$ref": "#/components/schemas/FleetSignupPapersDto"
+          }
+        },
+        "required": [
+          "phone",
+          "companyName",
+          "jurisdiction",
+          "contactEmail",
+          "ownerFullName",
+          "ownerNationalId",
+          "requirements",
+          "papers"
+        ]
+      },
+      "FleetSignupView": {
+        "type": "object",
+        "properties": {
+          "did": {
+            "type": "string"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "status": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "papersSentAt": {
+            "type": "string",
+            "description": "When its papers were sent, while they are with SeeBuyGet."
+          },
+          "refused": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "did",
+          "companyName",
+          "status",
+          "createdAt",
+          "refused"
         ]
       },
       "MilestoneTermDto": {

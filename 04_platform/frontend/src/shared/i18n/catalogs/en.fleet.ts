@@ -738,9 +738,9 @@ export const enFleet = {
   'fleet.readAloud': 'Read this aloud',
 
   // Sign-in screen.
-  'fleet.signin.aloud': 'Type your fleet sign-in code. SeeBuyGet gave it to your company when the fleet was activated.',
+  'fleet.signin.aloud': 'Type your fleet sign-in code, or sign in with your phone number and PIN. New fleet? Sign it up on the SeeBuyGet front page.',
   'fleet.signin.title': 'Open your fleet',
-  'fleet.signin.lede': 'Sign in with your fleet manager code.',
+  'fleet.signin.lede': 'Type your fleet’s code — or, without it, sign in with your phone number and PIN.',
   'fleet.signin.codeLabel': 'Sign-in code',
   'fleet.signin.next': 'Next',
   'fleet.signin.atCompany': 'Signing in to {company}',
@@ -750,12 +750,19 @@ export const enFleet = {
   // this is the same code again and try to type it here.
   'fleet.signin.pinNote': 'Your own PIN, not the company code — so the fleet can see who did what, and one person leaving does not change everybody else’s sign-in.',
   'fleet.signin.otherCompany': 'Different company',
-  'fleet.signin.forgot': 'Forgot the code? Sign in with your phone',
+  'fleet.signin.forgot': 'No code? Sign in with your phone number',
   'fleet.signin.forgotTitle': 'Find your fleet',
   'fleet.signin.forgotLede': 'Sign in with your phone and PIN, and choose the fleet you manage.',
   'fleet.signin.findFleets': 'Find my fleets',
   'fleet.signin.chooseFleet': 'Your fleets',
-  'fleet.signin.noFleets': 'This phone does not manage a fleet yet. Ask SeeBuyGet support to link you to your company.',
+  'fleet.signin.noFleets': 'This phone does not manage a fleet yet. Signing up a new fleet? Use “New here? Sign up” below. Joining one that is here already? Ask its office to add your number.',
+  // A fleet that signed itself up is on this list before it is active (the user, 2026-10-23). Only an active one opens.
+  'fleet.signin.stands.active': 'Active',
+  'fleet.signin.stands.draft': 'Signed up — its papers came back: send them again from the sign-up',
+  'fleet.signin.stands.pending': 'Signed up — its papers are with SeeBuyGet',
+  'fleet.signin.stands.approved': 'Papers approved — the bond is recorded next',
+  'fleet.signin.stands.suspended': 'Suspended',
+  'fleet.signin.stands.other': 'Not active yet',
   'fleet.signin.backToCode': 'Use the fleet code instead',
   'fleet.code.title': 'Fleet sign-in code',
   'fleet.code.note': 'It names your company at sign-in; each manager still signs in with their own phone and PIN. It never adds anyone to your fleet — you do that yourself, under Drivers.',

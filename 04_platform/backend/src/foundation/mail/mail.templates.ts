@@ -98,6 +98,8 @@ export interface MailParams {
   'staff-account-news': { what: string; next: string; when: string };
   'access-removed': { email: string; what: string; removedBy: string; when: string };
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
+  /** A fleet that signed itself up on the front page: its papers were received, approved, sent back with the reason, or it is active. */
+  'fleet-signup': { company: string; stage: 'received' | 'approved' | 'refused' | 'active'; reason?: string; when: string };
   'fleet-code-due': { company: string; days: number };
   'papers-due': { company: string; lapsed: string[]; due: string[] };
   /** Round 40 — the trail's head, once a day, to the auditor SeeBuyGet staff named. */
@@ -714,6 +716,76 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
       ],
       reason: 'You are getting this email because a SeeBuyGet sign-in for this address was removed.',
     }),
+  },
+
+  /*
+   * A FLEET THAT SIGNED ITSELF UP IS TOLD EACH STEP, on the one channel it has: until it is active it has no app to open,
+   * so an email is the only place a refusal's reason can reach it. Every step says what happens next, and whose it is.
+   */
+  'fleet-signup': {
+    title: 'Your fleet sign-up',
+    sentWhen: 'A fleet signs itself up on the front page; then when staff approve its papers, send them back with the reason, or record its bond (to the contact email it gave).',
+    wired: true,
+    sendLater: 72,
+    sample: { company: 'Kilima Logistics', stage: 'received', when: '2026-10-23T09:12:00Z' },
+    also: [
+      { key: 'approved', label: 'Papers approved', sample: { company: 'Kilima Logistics', stage: 'approved', when: '2026-10-24T11:30:00Z' } },
+      { key: 'refused', label: 'Papers sent back', sample: { company: 'Kilima Logistics', stage: 'refused', reason: 'The operator’s licence in the photo ran out in March. Send this year’s.', when: '2026-10-24T11:30:00Z' } },
+      { key: 'active', label: 'Fleet active', sample: { company: 'Kilima Logistics', stage: 'active', when: '2026-10-25T08:05:00Z' } },
+    ],
+    build: (p) => {
+      const reason = 'You are getting this email because this address was given when a fleet was signed up on SeeBuyGet.';
+      if (p.stage === 'received') {
+        return {
+          subject: `We have the papers for ${p.company}`,
+          preheader: 'SeeBuyGet staff check them. We write here when they have.',
+          blocks: [
+            { kind: 'heading', text: 'Your fleet is signed up' },
+            { kind: 'paragraph', text: `SeeBuyGet staff now check the papers and numbers you sent for ${p.company}. We write to this address when they have: approved, or what to put right.` },
+            { kind: 'facts', rows: [['Fleet', p.company], ['Sent', formatWhen(p.when)]] },
+            { kind: 'paragraph', text: 'After the papers, the refundable operating bond is recorded, and then the Fleet app opens for your fleet. You sign in to it with the phone number and PIN you signed up with.' },
+          ],
+          reason,
+        };
+      }
+      if (p.stage === 'approved') {
+        return {
+          subject: `The papers for ${p.company} are approved`,
+          preheader: 'Next: the operating bond. Then the Fleet app opens.',
+          blocks: [
+            { kind: 'heading', text: 'Your papers are approved' },
+            { kind: 'paragraph', text: `SeeBuyGet staff checked the papers for ${p.company}. One step is left: the refundable operating bond. SeeBuyGet contacts you about it, and when it is recorded your fleet is active.` },
+            { kind: 'facts', rows: [['Fleet', p.company], ['Approved', formatWhen(p.when)]] },
+          ],
+          reason,
+        };
+      }
+      if (p.stage === 'refused') {
+        return {
+          subject: `Something to put right for ${p.company}`,
+          preheader: p.reason ?? 'Your papers came back. Send them again from the front page.',
+          blocks: [
+            { kind: 'heading', text: 'Your papers came back' },
+            { kind: 'paragraph', text: `SeeBuyGet staff looked at the papers for ${p.company} and could not approve them. This is what they said:` },
+            { kind: 'warning', title: 'What needs putting right', text: p.reason ?? 'Open the sign-up to see the reason.' },
+            { kind: 'paragraph', text: 'Open the sign-up, sign in with your phone number and PIN, and send the papers again. Nothing else has to be typed again.' },
+            { kind: 'button', label: 'Send the papers again', href: `${appUrl('home')}?join=fleet` },
+          ],
+          reason,
+        };
+      }
+      return {
+        subject: `${p.company} is active on SeeBuyGet`,
+        preheader: 'Open the Fleet app with your phone number and PIN.',
+        blocks: [
+          { kind: 'heading', text: 'Your fleet is active' },
+          { kind: 'paragraph', text: `The bond is recorded and ${p.company} is active. Open the Fleet app and sign in with the phone number and PIN you signed up with: add your vehicles and your drivers, and you can take loads.` },
+          { kind: 'facts', rows: [['Fleet', p.company], ['Active since', formatWhen(p.when)]] },
+          { kind: 'button', label: 'Open the Fleet app', href: appUrl('fleet') },
+        ],
+        reason,
+      };
+    },
   },
 
   'fleet-code-issued': {

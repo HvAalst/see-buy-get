@@ -28,6 +28,8 @@ import {
   stepBlocker,
   vehicleClassFor,
   stepsFor,
+  fleetSignupBody,
+  fleetSignupWords,
   type JoinForm,
   type RoleSpec,
 } from './logic';
@@ -60,7 +62,7 @@ describe('roles', () => {
     expect(ROLES.length).toBe(5);
     for (const r of ROLES) {
       expect(r.app).toMatch(/^\/[a-z]+\/$/);
-      expect(['signup', 'vendor', 'invite']).toContain(r.kind);
+      expect(['signup', 'vendor', 'fleet']).toContain(r.kind);
       expect(roleMeta(r, t).promise.length).toBeGreaterThan(0);
     }
     // The three roles the backend's /auth/signup actually supports.
@@ -444,5 +446,67 @@ describe('reading the market series (FB4)', () => {
     expect(emptyRunPct({ movedKm: 0, deadheadKm: 0 })).toBeNull();
     // All deadhead and nothing delivered is a real, and damning, 100%.
     expect(emptyRunPct({ movedKm: 0, deadheadKm: 120 })).toBe(100);
+  });
+});
+
+/* The user, 2026-10-23: "the fleet app register is impossible. It gives a help page while it should give a clear sign up
+   form that can be checked by sbg staff." A fleet joins here now, like everybody else. */
+describe('a fleet signs itself up', () => {
+  const fleet = (over: Partial<JoinForm> = {}): JoinForm =>
+    filled({
+      pin: '48261',
+      displayName: 'Kilima Logistics Ltd',
+      fullName: 'Wanjiru Kilima',
+      nationalId: 'ID-77',
+      businessRegistrationNo: 'BR-1',
+      operatorLicence: 'TOL-1',
+      taxId: 'P051',
+      contactEmail: 'office@kilima.example',
+      zone: '',
+      landmark: 'Enterprise Road',
+      papers: { businessRegCertRef: 'm1', operatorLicenceRef: 'm2', ownerIdRef: 'm3', proofOfAddressRef: 'm4' },
+      ...over,
+    });
+
+  it('is a form like the others: the code, a PIN, the company, the depot, the papers — and no email-and-password step', () => {
+    expect(role('fleet').kind).toBe('fleet');
+    expect(stepsFor('fleet')).toEqual(['phone', 'code', 'pin', 'about', 'where', 'papers', 'done']);
+    expect(nextStep('fleet', 'code')).toBe('pin');
+  });
+
+  it('says the next thing to type, in the order the form asks it', () => {
+    const r = role('fleet');
+    expect(stepBlocker(r, 'pin', fleet({ pin: '482' }), t)).toBe(t('home.block.pin'));
+    expect(stepBlocker(r, 'pin', fleet(), t)).toBeNull();
+    expect(stepBlocker(r, 'about', fleet({ displayName: '' }), t)).toBe(t('home.block.nameFleet'));
+    expect(stepBlocker(r, 'about', fleet({ operatorLicence: ' ' }), t)).toBe(t('home.block.operatorLicence'));
+    expect(stepBlocker(r, 'about', fleet({ contactEmail: 'office' }), t)).toBe(t('home.block.contactEmail'));
+    expect(stepBlocker(r, 'about', fleet(), t)).toBeNull();
+    // A depot is a pin and a country; the network's delivery areas are a shop's question, not a fleet's.
+    expect(stepBlocker(r, 'where', fleet(), t)).toBeNull();
+    expect(stepBlocker(r, 'where', fleet({ location: null }), t)).toBe(t('home.block.location'));
+    expect(stepBlocker(r, 'papers', fleet({ papers: { ...fleet().papers, ownerIdRef: '' } }), t)).toBe(t('home.block.papers'));
+    expect(stepBlocker(r, 'papers', fleet(), t)).toBeNull();
+  });
+
+  it('sends what a member of staff would have typed into the console, and the four papers', () => {
+    expect(fleetSignupBody(fleet({ phone: '+254 700 111 222', country: 'ke', tradingName: '' }))).toEqual({
+      phone: '+254700111222',
+      companyName: 'Kilima Logistics Ltd',
+      jurisdiction: 'KE',
+      contactEmail: 'office@kilima.example',
+      ownerFullName: 'Wanjiru Kilima',
+      ownerNationalId: 'ID-77',
+      depotAddress: 'Enterprise Road',
+      location: { lat: -1.28, lng: 36.82 },
+      requirements: { businessRegistrationNo: 'BR-1', transportOperatorLicence: 'TOL-1', taxId: 'P051' },
+      papers: { businessRegCertRef: 'm1', operatorLicenceRef: 'm2', ownerIdRef: 'm3', proofOfAddressRef: 'm4' },
+    });
+  });
+
+  it('says where a sign-up stands in words, and a sent-back one says so', () => {
+    expect(fleetSignupWords('DRAFT', true)).toBe('home.fleet.status.refused');
+    expect(fleetSignupWords('KYC_PENDING', false)).toBe('home.fleet.status.pending');
+    expect(fleetSignupWords('ACTIVE', false)).toBe('home.fleet.status.active');
   });
 });

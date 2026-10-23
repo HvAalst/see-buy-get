@@ -288,6 +288,7 @@ export const en = {
   'common.close': 'Close',
   'common.back': 'Back',
   'common.allApps': 'All SeeBuyGet apps',
+  'common.signUp': 'New here? Sign up',
   'common.frontDoor': 'SeeBuyGet front page',
   'common.done': 'Done',
   'common.save': 'Save',

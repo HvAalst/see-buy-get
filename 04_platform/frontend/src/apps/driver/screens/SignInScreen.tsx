@@ -1,5 +1,5 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
-import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
+import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
@@ -193,6 +193,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
           </button>
         ) : null}
         <HelpLink app="driver" label="signin" />
+        <SignUpLink role="driver" />
         <AllAppsLink />
         <ReadAloud text={() => t('driver.signin.aloud')} label={t('driver.readAloud')} />
       </div>

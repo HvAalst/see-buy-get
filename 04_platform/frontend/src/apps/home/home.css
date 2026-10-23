@@ -343,3 +343,47 @@
   height: 22px;
   accent-color: var(--blue);
 }
+
+/* ------------------------------------------------------------ photo field -- */
+
+/* A fleet's four papers are photographed on the front page (the user, 2026-10-23): the shared PhotoField, styled as the
+   other apps style it. Without this the file input showed raw, and each preview at its full size. */
+.photo__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.photo__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--bd);
+  border-radius: var(--r-ctl);
+  background: var(--bg);
+  color: var(--tx2);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.photo__btn--done {
+  border-style: solid;
+  border-color: var(--ok);
+  background: var(--ok-light);
+  color: var(--ok);
+}
+
+.photo__preview {
+  display: block;
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: var(--r-ctl);
+  margin-bottom: 8px;
+}

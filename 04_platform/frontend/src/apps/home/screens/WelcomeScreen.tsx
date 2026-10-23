@@ -339,14 +339,16 @@ function Ladder() {
   );
 }
 
-/** One way in for each kind of reader, with its picture: the front door's join, or — a fleet office — writing to us. */
+/**
+ * One way in for each kind of reader, with its picture: the front door's join. A fleet office's went to the contact
+ * form, to write to us and wait; it signs itself up here like everybody else now (the user, 2026-10-23).
+ */
 function JoinLink({ role, onGo }: { role: RoleSpec; onGo: (e: JSX.TargetedMouseEvent<HTMLAnchorElement>) => void }) {
   const t = useT();
   const meta = roleMeta(role, t);
-  const label = role.kind === 'invite' ? t('front.earn.fleet') : role.id === 'vendor' ? t('front.earn.store') : t('home.landing.joinAs', { role: meta.labelLower });
-  const href = role.kind === 'invite' ? '/help/contact/?topic=joining&from=home' : `/?join=${role.id}`;
+  const label = role.id === 'vendor' ? t('front.earn.store') : t('home.landing.joinAs', { role: meta.labelLower });
   return (
-    <a class={`fr__join${role.kind === 'invite' ? ' fr__join--talk' : ''}`} href={href} onClick={role.kind === 'invite' ? undefined : onGo}>
+    <a class="fr__join" href={`/?join=${role.id}`} onClick={onGo}>
       <img src={`${IMG}for-${ROLE_IMG[role.id]}.svg`} width={44} height={33} alt="" loading="lazy" />
       <span>{label}</span>
     </a>

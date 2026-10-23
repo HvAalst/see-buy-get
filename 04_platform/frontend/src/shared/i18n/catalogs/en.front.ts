@@ -22,7 +22,7 @@ export const enFront = {
   'front.title': 'No address. Just a shop, *a code*, and a price you saw first.',
   'front.lede': 'Drop it at a SeeBuyGet shop near you. The receiver collects it at a shop near them, with a code. You pay at the counter, the price you saw first.',
   'front.seePrice': 'See the price',
-  'front.iRun': 'I run a shop or a bike',
+  'front.iRun': 'Sign me up',
   'front.trackLabel': 'Tracking key, from your receipt or the Send app',
   'front.trackGo': 'Track',
 
@@ -66,7 +66,6 @@ export const enFront = {
   'front.earn.sign': 'Parcels taken in here',
   'front.earn.lede': 'A SeeBuyGet shop earns on every parcel over its own counter. A rider or driver is paid per load. A sort hub earns on every parcel it sorts. You join on this site: your papers are checked before the first parcel, and kept up to date after.',
   'front.earn.store': 'Add it to my online store',
-  'front.earn.fleet': 'Fleet office? Talk to us',
   'front.board.title': 'Who earns what',
   'front.board.shop': 'Shop',
   'front.board.shopHow': 'A fee on every parcel taken in or handed out',

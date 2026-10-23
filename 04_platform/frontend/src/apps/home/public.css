@@ -677,11 +677,6 @@
   flex: none;
 }
 
-.fr__join--talk {
-  background: transparent;
-  border-style: dashed;
-}
-
 .fr__board {
   background: var(--p-board);
   color: #f3efe3;

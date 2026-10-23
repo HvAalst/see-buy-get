@@ -102,7 +102,7 @@ export const enHelp = {
   'help.which-sign-in.title': 'Which app, and what you sign in with',
   'help.which-sign-in.summary': 'Every app has its own sign-in, because the people using them hold different things.',
   'help.which-sign-in.step1': 'A shop or a hub: the email and password you signed up with. On a phone or browser new to it, also a code sent to its number, once.',
-  'help.which-sign-in.step2': 'A fleet: your company code, then your own phone number and PIN.',
+  'help.which-sign-in.step2': 'A fleet: your own phone number and PIN — with your company code, or without it.',
   'help.which-sign-in.step3': 'A driver: the phone number your fleet registered, and your PIN.',
   'help.which-sign-in.step4': 'A store: the email and password you created the store with. On a phone or browser new to it, also a code sent to its number, once.',
   'help.which-sign-in.step5': 'Sending or collecting a parcel: your phone number and a PIN you choose.',
@@ -181,7 +181,7 @@ export const enHelp = {
   'help.fleet-sign-in.step2': 'Type your phone number and your 5-digit PIN.',
   'help.fleet-sign-in.step3': 'A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.',
   'help.fleet-sign-in.step4': 'First time, or forgot your PIN? Tap “First time here, or forgot your PIN?”. We send a code to your phone; type it, then choose a PIN. The first time, you also add a recovery email.',
-  'help.fleet-sign-in.step5': 'Forgot the code? Tap “Forgot the code? Sign in with your phone”, type your phone and PIN, and pick your fleet from the list.',
+  'help.fleet-sign-in.step5': 'No code — or a fleet you signed up yourself? Tap “No code? Sign in with your phone number”, type your phone and PIN, and pick your fleet from the list. A fleet you signed up opens once SeeBuyGet has checked its papers and recorded its bond.',
   'help.fleet-sign-in.note1': 'Five wrong PINs lock the PIN until you verify your phone by code and choose a new one. Anybody who manages the fleet can see the code in the app.',
   'help.fleet-sign-in.note2': 'Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else.',
   // fleet-code

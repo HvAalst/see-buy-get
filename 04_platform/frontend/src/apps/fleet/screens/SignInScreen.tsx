@@ -1,9 +1,9 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
-import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
+import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { FleetActions } from '../useFleetApp';
 import { TroubleSheet } from '../../../shared/account/TroubleSheet';
@@ -15,6 +15,15 @@ import { fleetConfig } from '../api';
 
 // Built once: the doors a person uses before they are signed in.
 const recovery = recoveryApi(fleetConfig());
+
+/** Where a fleet stands, in words, on the list a phone and PIN find — only an active one opens. */
+const FLEET_STANDS: Record<string, MessageKey> = {
+  ACTIVE: 'fleet.signin.stands.active',
+  DRAFT: 'fleet.signin.stands.draft',
+  KYC_PENDING: 'fleet.signin.stands.pending',
+  APPROVED: 'fleet.signin.stands.approved',
+  SUSPENDED: 'fleet.signin.stands.suspended',
+};
 
 export interface SignInScreenProps {
   actions: FleetActions;
@@ -160,11 +169,12 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
         ) : (
           <Card title={t('fleet.signin.chooseFleet')}>
             <div class="rows">
+              {/* A fleet that signed itself up is listed before it is active — said in words, and not a door yet. */}
               {fleets.map((f) => (
-                <button key={f.did} type="button" class="row" disabled={busy} onClick={() => attempt(() => void actions.signInToFleet(f.did, phone, pin))}>
+                <button key={f.did} type="button" class="row" disabled={busy || f.status !== 'ACTIVE'} onClick={() => attempt(() => void actions.signInToFleet(f.did, phone, pin))}>
                   <span class="row__body">
                     <span class="row__t">{f.companyName}</span>
-                    <span class="row__s">{f.status}</span>
+                    <span class="row__s">{t(FLEET_STANDS[f.status] ?? 'fleet.signin.stands.other')}</span>
                   </span>
                 </button>
               ))}
@@ -265,6 +275,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           {t('account.trouble.link')}
         </button>
         <HelpLink app="fleet" label="signin" />
+        <SignUpLink role="fleet" />
         <AllAppsLink />
         <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />
       </div>

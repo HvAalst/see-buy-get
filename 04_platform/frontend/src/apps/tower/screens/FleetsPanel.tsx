@@ -146,6 +146,7 @@ function RegisterFleet({ state, actions }: { state: TowerState; actions: TowerAc
 
 const STEP_TAG: Record<FleetStep, { tone: string; key: MessageKey }> = {
   papers: { tone: 'warn', key: 'tower.fleets.step.papers' },
+  theirs: { tone: 'info', key: 'tower.fleets.step.theirs' },
   approve: { tone: 'warn', key: 'tower.fleets.step.approve' },
   colleague: { tone: 'info', key: 'tower.fleets.step.colleague' },
   bond: { tone: 'warn', key: 'tower.fleets.step.bond' },
@@ -184,6 +185,7 @@ function FleetRow({ row, state, actions }: { row: FleetSetupRow; state: TowerSta
             {row.jurisdiction ? ` · ${row.jurisdiction}` : ''}
           </div>
           {row.depotAddress ? <div class="ctbl__sub">{row.depotAddress}</div> : null}
+          {row.signedUpAt ? <div class="ctbl__sub">{t('tower.fleets.signedUp', { date: row.signedUpAt.slice(0, 10) })}</div> : null}
         </td>
         <td class="ctbl__sub">
           <span class="ctbl__lbl">{t('tower.fleets.col.numbers')}</span>
@@ -233,12 +235,26 @@ function FleetRow({ row, state, actions }: { row: FleetSetupRow; state: TowerSta
             </>
           ) : null}
 
+          {step === 'theirs' ? (
+            <>
+              {row.refused ? (
+                <p class="cerr">
+                  <b>{t('tower.fleets.sentBack', { by: row.refused.by ?? t('tower.fleets.aColleague') })}</b> {row.refused.reason}
+                </p>
+              ) : null}
+              <p class="chint">{t('tower.fleets.theirsHint')}</p>
+            </>
+          ) : null}
+
           {step === 'approve' || step === 'colleague' ? (
             <>
               {/* Open on the row: approving a fleet without having looked at its licence is a rubber stamp. */}
               <DocumentStrip refs={papersOf(row)} state={state} actions={actions} emptyKey="tower.fleets.nothingToSee" titleKey="tower.fleets.onRecord" />
               <p class="chint">
-                {t('tower.fleets.enteredBy', { by: row.papers?.enteredBy ?? t('tower.fleets.aColleague'), date: row.papers?.submittedAt.slice(0, 10) ?? '' })}{' '}
+                {/* Papers the fleet sent itself were entered by nobody here: one of us looks, and that is the second person. */}
+                {row.signedUpAt && !row.papers?.enteredBy
+                  ? t('tower.fleets.sentByFleet', { date: row.papers?.submittedAt.slice(0, 10) ?? '' })
+                  : t('tower.fleets.enteredBy', { by: row.papers?.enteredBy ?? t('tower.fleets.aColleague'), date: row.papers?.submittedAt.slice(0, 10) ?? '' })}{' '}
                 {step === 'colleague' ? t('tower.fleets.notYours') : ''}
               </p>
               <span class="twr-clear__act">

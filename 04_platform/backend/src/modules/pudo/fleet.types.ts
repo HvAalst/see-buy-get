@@ -115,6 +115,23 @@ export class FleetSetupRow {
   refused?: FleetKycRejection;
   /** The code its office signs in with, once it is active: staff pass it on. */
   loginCode?: string;
+  /** It signed itself up on the front page: its papers are its own to send, and to send again if they come back. */
+  signedUpAt?: string;
+}
+
+/**
+ * A FLEET'S SIGN-UP AS ITS OWN PERSON READS IT — the front page, after the PIN. Where it stands and, sent back, why;
+ * nothing else of the record (its code, its papers, the owner's details) travels here.
+ */
+export class FleetSignupView {
+  did: string;
+  companyName: string;
+  status: FleetManagerStatus;
+  createdAt: string;
+  /** When its papers were sent, while they are with SeeBuyGet. */
+  papersSentAt?: string;
+  /** Why its papers came back: the fleet sends them again. */
+  refused?: { reason: string; at: string };
 }
 
 export class FleetManager {
@@ -152,6 +169,12 @@ export class FleetManager {
   timeZone?: string;
   status: FleetManagerStatus;
   createdAt: string;
+  /**
+   * WHEN IT SIGNED ITSELF UP on the front page (the user, 2026-10-23: "a clear sign up form that can be checked by sbg
+   * staff"). Absent for a fleet staff registered. Such a fleet sent its own papers, so any one member of staff may
+   * approve them, and a refusal goes back to the fleet, which sends them again.
+   */
+  signedUpAt?: string;
 }
 
 /**

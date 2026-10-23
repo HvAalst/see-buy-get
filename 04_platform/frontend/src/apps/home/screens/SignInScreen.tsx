@@ -1,6 +1,6 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { Button, Icon, Pill, ReadAloud } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { useT, type MessageKey } from '../../../shared/i18n';
 import { ROLES, roleMeta } from '../logic';
 import type { HomeActions } from '../useHomeApp';
 
@@ -10,7 +10,7 @@ export interface SignInScreenProps {
 
 /**
  * The router for people who already have an account. Each app owns its own sign-in (they
- * use different credentials — email+password, a fleet code, a store secret), so this
+ * use different credentials — an email and password, or a phone number and PIN), so this
  * screen's job is only to send them to the right door and say what that door asks for.
  */
 export function SignInScreen({ actions }: SignInScreenProps) {
@@ -29,7 +29,7 @@ export function SignInScreen({ actions }: SignInScreenProps) {
             <span class="row__body">
               <span class="row__t">{roleMeta(r, t).name}</span>
               <span class="row__s">
-                {r.kind === 'vendor' ? t('home.signin.credVendor') : r.kind === 'invite' ? t('home.signin.credInvite') : t('home.signin.credSignup')}
+                {t(`home.signin.cred.${r.id}` as MessageKey)}
               </span>
             </span>
             <span class="row__end">

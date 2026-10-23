@@ -50,7 +50,7 @@ export const enPages = {
   'pages.for.shops.metaDescription': 'A SeeBuyGet shop takes in and hands out parcels at its counter and earns a fee on every one. What a shop needs, how it works, and how to join.',
   'pages.for.shops.title': 'Earn from parcels at your shop',
   'pages.for.shops.lede': 'A SeeBuyGet shop takes in parcels from senders and hands them out to receivers at its own counter. A SeeBuyGet shop earns a fee on every parcel it takes in or hands out.',
-  'pages.for.shops.step1': 'Sign the shop up on the SeeBuyGet site with its phone number, the owner’s details and the shop’s papers. It takes a few minutes.',
+  'pages.for.shops.step1': 'Sign the shop up on the SeeBuyGet site with its phone number and the owner’s details, then send the shop’s papers from the Shop app. It takes a few minutes.',
   'pages.for.shops.step2': 'SeeBuyGet checks the shop’s papers. Once they are approved, the shop takes parcels.',
   'pages.for.shops.step3': 'At the counter, the SeeBuyGet Shop app scans each parcel in, photographs it and gives it a slot on the shop’s shelves.',
   'pages.for.shops.step4': 'A receiver shows their code, and the shop hands the parcel over. What the shop earned is in the Shop app’s records.',

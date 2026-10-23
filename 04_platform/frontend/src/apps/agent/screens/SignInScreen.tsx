@@ -1,5 +1,5 @@
 import { HelpLink } from '../../../shared/guide/HelpLink';
-import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
+import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
@@ -150,6 +150,7 @@ function EmailAndPassword({ actions, error, busy, onStaff }: { actions: AgentAct
           {t('agent.signin.forgot')}
         </Button>
         <HelpLink app="agent" label="signin" />
+        <SignUpLink role="pudo" />
         <AllAppsLink />
         <ReadAloud text={() => t('agent.signin.spoken')} label={t('agent.readAloud')} />
       </div>

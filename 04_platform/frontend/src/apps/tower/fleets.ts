@@ -1,12 +1,12 @@
 import type { Translate } from '../../shared/i18n';
 
 /**
- * A FLEET IS SET UP BY STAFF — the console's side of it.
+ * A FLEET IS SET UP — the console's side of it.
  *
- * A shop, a courier and a hub sign themselves up; a fleet does not. It is registered here, its papers are put on
- * record here, somebody ELSE approves them, its bond is recorded, and only then is it active and has the code its
- * office signs in with. Until this screen there was nowhere to do any of it: the server took all four steps, the
- * seeder made them for the demo fleet, and a live server could have had no fleet at all.
+ * A fleet signs itself up on the front page with its four papers (the user, 2026-10-23), or is registered here by a
+ * member of staff, whose papers somebody ELSE then approves. Either way its bond is recorded here, and only then is it
+ * active. Until this screen there was nowhere to do any of it: the server took all four steps, the seeder made them for
+ * the demo fleet, and a live server could have had no fleet at all.
  *
  * Pure decisions only — what the next step is and whose, what a form is still missing — so that they can be tested
  * without a screen.
@@ -39,6 +39,8 @@ export interface FleetSetupRow {
   refused?: { reason: string; at: string; by?: string };
   /** The code its office signs in with, once it is active. */
   loginCode?: string;
+  /** It signed itself up on the front page: it sends its own papers, and sends them again if they come back. */
+  signedUpAt?: string;
 }
 
 /**
@@ -46,10 +48,13 @@ export interface FleetSetupRow {
  *
  * `colleague` is the one that matters: the member of staff who put the papers on record is shown that somebody else
  * approves them, and no button — a button the server will refuse is a way of finding the rule out by being told off.
+ *
+ * `theirs`: a fleet that signed itself up and whose papers came back. It sends them again from the front page — it was
+ * emailed the reason — so it waits on the fleet, not on us, and is not counted as waiting on anybody here.
  */
-export type FleetStep = 'papers' | 'approve' | 'colleague' | 'bond' | 'active' | 'suspended';
-export function fleetStep(row: Pick<FleetSetupRow, 'status' | 'papers'>): FleetStep {
-  if (row.status === 'DRAFT') return 'papers';
+export type FleetStep = 'papers' | 'theirs' | 'approve' | 'colleague' | 'bond' | 'active' | 'suspended';
+export function fleetStep(row: Pick<FleetSetupRow, 'status' | 'papers' | 'signedUpAt'>): FleetStep {
+  if (row.status === 'DRAFT') return row.signedUpAt ? 'theirs' : 'papers';
   if (row.status === 'KYC_PENDING') return row.papers?.enteredByMe ? 'colleague' : 'approve';
   if (row.status === 'APPROVED') return 'bond';
   if (row.status === 'ACTIVE') return 'active';

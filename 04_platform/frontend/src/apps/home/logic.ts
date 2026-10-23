@@ -18,8 +18,13 @@ export type JoinKind =
   | 'signup'
   /** POST /v1/sbg/vendors — self-serve, returns a store id + secret shown once. */
   | 'vendor'
-  /** Provisioned by SeeBuyGet operations; the app signs in with an issued code. */
-  | 'invite';
+  /**
+   * POST /v1/sbg/fleet/signups — the person who runs the fleet signs in as themselves (a code, a PIN) and sends the
+   * company's details and its four papers; staff check them before the Fleet app opens. It was `invite` — a fleet
+   * could only write to us and wait (the user, 2026-10-23: "it should give a clear sign up form that can be checked by
+   * sbg staff").
+   */
+  | 'fleet';
 
 export interface RoleSpec {
   id: 'pudo' | 'driver' | 'mdp' | 'vendor' | 'fleet';
@@ -40,7 +45,7 @@ export const ROLES: RoleSpec[] = [
   { id: 'driver', icon: 'truck', app: '/driver/', kind: 'signup' },
   { id: 'mdp', icon: 'grid', app: '/mdp/', kind: 'signup' },
   { id: 'vendor', icon: 'send', app: '/vendor/', kind: 'vendor' },
-  { id: 'fleet', icon: 'badge', app: '/fleet/', kind: 'invite' },
+  { id: 'fleet', icon: 'badge', app: '/fleet/', kind: 'fleet' },
 ];
 
 export function roleById(id: string): RoleSpec | undefined {
@@ -204,7 +209,31 @@ export interface JoinForm {
   openTo: string;
   /** The applicant declares a clean criminal record, and that SeeBuyGet may check it. */
   recordClear: boolean;
+  /*
+   * A FLEET'S ANSWERS. The person signs in first — the PIN they will open the Fleet app with, and, the first time a PIN
+   * is chosen, a recovery email confirmed by its code — then gives what a member of staff would have typed into the
+   * console for them: the company, its three numbers, an address to write to, and the four papers.
+   */
+  pin: string;
+  recoveryEmail: string;
+  recoveryCode: string;
+  tradingName: string;
+  contactEmail: string;
+  businessRegistrationNo: string;
+  operatorLicence: string;
+  taxId: string;
+  /** Each a photograph's id, uploaded while signed in as the person: '' until taken. */
+  papers: Record<FleetPaper, string>;
 }
+
+/** A fleet's four papers, in the order they are asked for, each with the kind of picture it is kept as. */
+export const FLEET_PAPERS = [
+  ['businessRegCertRef', 'kyc_registration'],
+  ['operatorLicenceRef', 'kyc_licence'],
+  ['ownerIdRef', 'kyc_id'],
+  ['proofOfAddressRef', 'kyc_address'],
+] as const;
+export type FleetPaper = (typeof FLEET_PAPERS)[number][0];
 
 /** The Android versions a shop is asked to choose from. */
 export const ANDROID_CHOICES = ['15', '14', '13', '12', '11', '10', 'older', 'none'] as const;
@@ -240,18 +269,30 @@ export const EMPTY_JOIN: JoinForm = {
   openFrom: '08:00',
   openTo: '18:00',
   recordClear: false,
+  pin: '',
+  recoveryEmail: '',
+  recoveryCode: '',
+  tradingName: '',
+  contactEmail: '',
+  businessRegistrationNo: '',
+  operatorLicence: '',
+  taxId: '',
+  papers: { businessRegCertRef: '', operatorLicenceRef: '', ownerIdRef: '', proofOfAddressRef: '' },
 };
 
 /**
  * The wizard's steps, per role. `vendor` checks its number too (round 40) but has no 'where' — and, like everybody
  * else, says how it signs in: a store is registered WITH its email and password, never with a secret as its way in.
  */
-export type JoinStep = 'phone' | 'code' | 'about' | 'where' | 'login' | 'done';
+export type JoinStep = 'phone' | 'code' | 'pin' | 'about' | 'where' | 'papers' | 'login' | 'done';
 
 export function stepsFor(kind: JoinKind): JoinStep[] {
   // Round 40 — a store's sign-in works only on its own phones and browsers, each confirmed by a code to its number:
   // the number is checked first, as a shop's and a hub's are. It has no 'where' (its country is asked in 'about').
   if (kind === 'vendor') return ['phone', 'code', 'about', 'login', 'done'];
+  // A fleet signs in as its person straight after the code — its papers are uploaded under that sign-in — and has no
+  // 'login' step: the PIN chosen here is how the Fleet app opens.
+  if (kind === 'fleet') return ['phone', 'code', 'pin', 'about', 'where', 'papers', 'done'];
   return ['phone', 'code', 'about', 'where', 'login', 'done'];
 }
 
@@ -275,9 +316,23 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       return phoneLooksValid(f.phone) ? null : t('home.block.phone');
     case 'code':
       return codeLooksValid(f.code) ? null : t('home.block.code');
+    case 'pin':
+      return /^\d{5}$/.test(f.pin) ? null : t('home.block.pin');
+    case 'papers':
+      return FLEET_PAPERS.every(([key]) => f.papers[key]) ? null : t('home.block.papers');
     case 'about':
       // A store never reaches the 'where' step, so its country is asked for here instead.
       if (role.kind === 'vendor') return !f.displayName.trim() ? t('home.block.nameStore') : !f.country.trim() ? t('home.block.country') : null;
+      if (role.kind === 'fleet') {
+        if (!f.displayName.trim()) return t('home.block.nameFleet');
+        if (!f.fullName.trim()) return t('home.block.fullName');
+        if (!f.nationalId.trim()) return t('home.block.idNumber');
+        if (!f.businessRegistrationNo.trim()) return t('home.block.businessRegistrationNo');
+        if (!f.operatorLicence.trim()) return t('home.block.operatorLicence');
+        if (!f.taxId.trim()) return t('home.block.taxId');
+        if (!f.contactEmail.includes('@')) return t('home.block.contactEmail');
+        return null;
+      }
       if (!f.displayName.trim()) return role.id === 'pudo' ? t('home.block.nameShop') : role.id === 'mdp' ? t('home.block.nameHub') : t('home.block.nameGeneric');
       if (role.id !== 'mdp' && !f.fullName.trim()) return t('home.block.fullName');
       if (role.id !== 'mdp' && !f.nationalId.trim()) return t('home.block.idNumber');
@@ -314,6 +369,8 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       // on screen beside it — rather than by the server at the end of a sign-up.
       if (notJoinable?.includes(f.country)) return t('home.block.countryNotActive');
       if (!f.location) return t('home.block.location');
+      // A fleet's depot is a pin and an address; the network's delivery areas are a shop's and a courier's question.
+      if (role.kind === 'fleet') return null;
       if (!f.zone.trim()) return t('home.block.zone');
       return null;
     case 'login':
@@ -417,6 +474,36 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
   };
 }
 
+/**
+ * What a fleet's sign-up sends: what a member of staff types into the console for a fleet they register, and the four
+ * papers. The phone is the one the person signed in with, which the server holds them to.
+ */
+export function fleetSignupBody(f: JoinForm): Record<string, unknown> {
+  return {
+    phone: normalizePhone(f.phone),
+    companyName: f.displayName.trim(),
+    ...(f.tradingName.trim() ? { tradingName: f.tradingName.trim() } : {}),
+    jurisdiction: f.country.trim().toUpperCase(),
+    contactEmail: f.contactEmail.trim(),
+    ownerFullName: f.fullName.trim(),
+    ownerNationalId: f.nationalId.trim(),
+    ...(f.landmark.trim() ? { depotAddress: f.landmark.trim() } : {}),
+    ...(f.location ? { location: f.location } : {}),
+    requirements: { businessRegistrationNo: f.businessRegistrationNo.trim(), transportOperatorLicence: f.operatorLicence.trim(), taxId: f.taxId.trim() },
+    papers: f.papers,
+  };
+}
+
+/** Where a fleet that signed itself up stands, as the front page says it to its person. */
+export type FleetSignupStatus = 'DRAFT' | 'KYC_PENDING' | 'APPROVED' | 'ACTIVE' | 'SUSPENDED';
+export function fleetSignupWords(status: FleetSignupStatus, refused: boolean): MessageKey {
+  if (status === 'DRAFT') return refused ? 'home.fleet.status.refused' : 'home.fleet.status.draft';
+  if (status === 'KYC_PENDING') return 'home.fleet.status.pending';
+  if (status === 'APPROVED') return 'home.fleet.status.approved';
+  if (status === 'ACTIVE') return 'home.fleet.status.active';
+  return 'home.fleet.status.suspended';
+}
+
 /* --------------------------------------------------------------- speaking -- */
 
 export function welcomeSpoken(t: Translate): string {
@@ -429,6 +516,10 @@ export function joinSpoken(role: RoleSpec, step: JoinStep, t: Translate): string
       return t('home.join.spoken.phone', { role: roleMeta(role, t).label });
     case 'code':
       return t('home.join.spoken.code');
+    case 'pin':
+      return t('home.join.spoken.pin');
+    case 'papers':
+      return t('home.join.spoken.papers');
     case 'about':
       return role.id === 'driver' ? t('home.join.spoken.aboutDriver') : t('home.join.spoken.aboutPlace');
     case 'where':

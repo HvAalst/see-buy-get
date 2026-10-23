@@ -10,6 +10,7 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
+import { FleetManagerService } from './fleet-manager.service';
 import { ConfirmDeviceDto } from './pudo.dto';
 import { OtpService } from './otp.service';
 import { ParcelService } from './parcel.service';
@@ -48,6 +49,7 @@ export class IdentityController {
     private readonly merchants: MerchantRatingService,
     private readonly emailCodes: EmailCodeService,
     private readonly recovery: AccountRecoveryService,
+    private readonly fleets: FleetManagerService,
   ) {}
 
   /**
@@ -249,6 +251,18 @@ export class IdentityController {
   @Post('switch')
   switch(@Body() dto: SwitchRoleDto, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
+    /*
+     * A FLEET OPENS ONLY ONCE IT IS ACTIVE, BY EVERY DOOR. The Fleet app's own sign-in refuses a fleet that is not
+     * (`requireSignInByDid`); this switch did not, so a fleet staff had only registered — and, once fleets could sign
+     * themselves up (2026-10-23), any fleet at all, a minute after signing up — was handed a manager's token before
+     * anybody had looked at its papers.
+     */
+    if (dto.role === 'fleet_manager') {
+      const link = person.roles.find((r) => r.role === 'fleet_manager' && r.status === 'active');
+      if (link && !this.fleets.isActive(link.entityDid)) {
+        throw new GlosError('AUTH_NOT_ACTIVE', 'Your fleet is not active yet: SeeBuyGet checks its papers and records its bond first');
+      }
+    }
     return this.persons.mintForRole(person, dto.role);
   }
 
