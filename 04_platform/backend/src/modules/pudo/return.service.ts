@@ -7,7 +7,7 @@ import { VendorService } from './vendor.service';
 import { RoutingService } from './routing.service';
 import { ShelfService } from './shelf.service';
 import { WalletGateService } from './wallet-gate.service';
-import { RETURN_OFFER_TTL_H, holdingFeeFor, measuredFactor } from './pudo.config';
+import { RETURN_OFFER_TTL_H, measuredFactor } from './pudo.config';
 import { ReturnOffer } from './pudo.types';
 
 /**
@@ -113,6 +113,10 @@ export class ReturnService {
     } catch {
       return null; // nowhere to send it back through — offering a return we cannot perform is worse than none
     }
+    // The shelf's half in the store's own money, beside the journey's. With no rate between the two moneys today there
+    // is no figure the store could be held to, so no offer — as with a journey that cannot be routed.
+    const held = this.holdingFor(parcelId, quote.currency, now);
+    if (held.billed === undefined) return null;
     const offer: ReturnOffer = {
       offerId: `ret_${randomBytes(8).toString('hex')}`,
       parcelId,
@@ -121,7 +125,7 @@ export class ReturnService {
       toAgentDid,
       declaredValue,
       returnCost: quote.locked.gross,
-      holdingCost: holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay }),
+      holdingCost: held.billed,
       currency: quote.currency,
       status: 'offered',
       offeredAt: new Date(now).toISOString(),
@@ -163,7 +167,10 @@ export class ReturnService {
     const vendor = this.vendors.get(vendorId);
     // What the shop is owed for the days it held the slot. The store is ending the situation, so the
     // store settles it — and this is the whole of the "recover from whoever ends it" rule in one line.
-    const holding = this.holdingOn(offer.parcelId, now);
+    const held = this.holdingFor(offer.parcelId, quote.currency, now);
+    if (held.billed === undefined) throw new GlosError('FX_REQUIRED', `No rate between ${held.owed.currency} and ${quote.currency} today — try again later`);
+    // What the store pays for the shelf, in its own money; the shop is paid what it is owed, in its own (below).
+    const holding = held.billed;
     const total = Math.round((quote.locked.gross + holding) * 100) / 100;
     // Checked BEFORE anything moves. The forward path can leave a parcel unpaid and block its label,
     // which is fine for a warehouse; here a store's "yes" that fails afterwards leaves a shop holding a
@@ -206,10 +213,10 @@ export class ReturnService {
     // The shop that held the slot is paid for it, and the store that just agreed to that is billed.
     // Both halves or neither: paying the shop out of a charge that never landed would be the network
     // quietly funding a store's return, which is not what anybody agreed to.
-    if (holding > 0) {
+    if (held.owed.amount > 0) {
       this.vendors.billShipment(vendorId, parcel.parcelId, holding);
-      this.gate.payLabour(offer.fromAgentDid, holding, parcel.parcelId, 'parcel', parcel.sellerEntityId);
-      parcel.holdingSettled = (parcel.holdingSettled ?? 0) + holding;
+      this.gate.payLabour(offer.fromAgentDid, held.owed.amount, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+      parcel.holdingSettled = (parcel.holdingSettled ?? 0) + held.owed.amount;
     }
 
     // The stranded one is closed and its slot handed back. This is the point of the whole feature: a
@@ -270,14 +277,20 @@ export class ReturnService {
     }
     // The holding meter is re-read here too, for the same reason the expiry is: a store's screen and
     // this service must never be able to disagree about what deciding nothing has cost so far.
-    if (offer.status === 'offered') offer.holdingCost = this.holdingOn(offer.parcelId, now);
+    if (offer.status === 'offered') offer.holdingCost = this.holdingFor(offer.parcelId, offer.currency, now).billed ?? offer.holdingCost;
     return offer;
   }
 
-  /** What the shop holding this parcel is owed for the slot, right now. Zero once it is settled. */
-  private holdingOn(parcelId: string, now: number): number {
-    const parcel = this.parcels.get(parcelId);
-    return holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
+  /**
+   * What the shop holding this parcel is owed for the slot right now, and what the store pays for it in `currency`.
+   *
+   * The shop is owed it in its own money (ParcelService.holdingOwed — the user, 2026-10-25); a store selling from
+   * another country pays the converted sum, at the buffered rate every converted price carries. Within one country
+   * the two are one figure. `billed` is undefined where no rate between the two moneys is known. Zero once settled.
+   */
+  private holdingFor(parcelId: string, currency: string, now: number): { owed: { amount: number; currency: string }; billed?: number } {
+    const owed = this.parcels.holdingOwed(this.parcels.get(parcelId), now);
+    return { owed, billed: this.parcels.inMoney(owed.amount, owed.currency, currency, true) };
   }
 
   private requireOpen(offerId: string, vendorId: string, now: number): ReturnOffer {

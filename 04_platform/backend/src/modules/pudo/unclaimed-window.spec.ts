@@ -88,6 +88,7 @@ describe('the collection window closing', () => {
   let unclaimed: UnclaimedService;
   let gate: WalletGateService;
   let entities: EntityService;
+  let fx: FxService;
 
   /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
   let photoOf: (vendorId: string) => string;
@@ -111,7 +112,8 @@ describe('the collection window closing', () => {
     photoOf = contentPhotos(moduleRef);
     entities = moduleRef.get(EntityService);
     entities.seed();
-    moduleRef.get(FxService).seed();
+    fx = moduleRef.get(FxService);
+    fx.seed();
     moduleRef.get(BooksService).reset();
     agents = moduleRef.get(AgentService);
     corridors = moduleRef.get(CorridorService);
@@ -449,17 +451,12 @@ describe('the collection window closing', () => {
       // The counter learns it at the LOOKUP, not after the box has changed hands — asking for money back
       // across a counter is the one conversation nobody wins.
       expect(parcels.collect(parcel.collectionCode!, to.did).holdingOwed).toBeCloseTo(owed, 2);
-      // Said in the parcel's own money: a counter can be handed a parcel another company sold.
-      p.currency = 'ETB';
-      expect(parcels.collect(parcel.collectionCode!, to.did).currency).toBe('ETB');
-      // …and the receiver's own app says the same figure in the same money, before they walk in (2026-10-25: it said
-      // the figure bare).
+      // Said in this shop's own money, which the receiver pays it in here — and the receiver's own app says the same
+      // figure in the same money before they walk in (2026-10-25: it said the figure bare).
+      expect(parcels.collect(parcel.collectionCode!, to.did).currency).toBe('KES');
       const told = parcels.consumerParcel(parcel.parcelId, parcel.receiverPhoneHash!);
       expect(told.holdingOwed).toBeCloseTo(owed, 2);
-      expect(told.holdingCurrency).toBe('ETB');
-      delete p.currency;
-      expect(parcels.collect(parcel.collectionCode!, to.did).currency).toBe('KES');
-      expect(parcels.consumerParcel(parcel.parcelId, parcel.receiverPhoneHash!).holdingCurrency).toBe('KES');
+      expect(told.holdingCurrency).toBe('KES');
       parcels.collectConfirm(parcel.parcelId, to.did, parcel.collectionCode!);
       expect(parcels.get(parcel.parcelId).holdingSettled).toBeCloseTo(owed, 2);
       expect(unclaimed.owed(parcel.parcelId)).toBe(0); // and the network does not then pay it again
@@ -478,6 +475,53 @@ describe('the collection window closing', () => {
       // Both halves or neither: the shop is paid, and the store that agreed to it is billed for it.
       expect(agents.balance(to.did)!).toBeCloseTo(shopBefore + owed, 2);
       expect(storeBefore - vendors.balanceOf(store.vendorId)).toBeCloseTo(offer.returnCost + owed, 2);
+    });
+
+    /*
+     * THE HOLDING SHOP'S MONEY (the user, 2026-10-25: a parcel sold in one country and held in another is charged in the
+     * holding shop's money). The daily rate is that shop's company's; the ceiling — never more than the journey cost —
+     * is the journey's price converted at today's rate; a store elsewhere pays the converted sum, the shop its own.
+     */
+    it('a parcel sold in another money is charged in the holding shop’s, its ceiling converted at today’s rate', () => {
+      const { parcel, to } = stranded();
+      const p = parcels.get(parcel.parcelId);
+      p.unclaimedAt = daysAgo(3);
+      const domestic = unclaimed.owed(parcel.parcelId);
+      expect(domestic).toBeGreaterThan(0);
+      p.currency = 'ETB'; // sold in birr, held on a Kenyan shelf
+      // The days run at the Kenyan company's rate, in shillings: what they cost at home.
+      expect(parcels.collect(parcel.collectionCode!, to.did)).toMatchObject({ holdingOwed: domestic, currency: 'KES' });
+      expect(parcels.consumerParcel(parcel.parcelId, parcel.receiverPhoneHash!)).toMatchObject({ holdingOwed: domestic, holdingCurrency: 'KES' });
+      // A journey that cost half the shelf, in birr: the ceiling is that, in shillings.
+      p.shipmentCost = Math.round((domestic / 2 / fx.convert(1, 'ETB', 'KES')) * 100) / 100;
+      const ceiling = fx.convert(p.shipmentCost, 'ETB', 'KES');
+      expect(ceiling).toBeLessThan(domestic); // the guard reads a ceiling that binds
+      expect(ceiling).not.toBeCloseTo(p.shipmentCost, 2); // …and one that was converted, not read as shillings
+      expect(parcels.holdingOwed(p)).toEqual({ amount: ceiling, currency: 'KES' });
+      expect(unclaimed.owed(parcel.parcelId)).toBe(ceiling);
+      expect(unclaimed.awaitingDisposal().find((r) => r.parcelId === parcel.parcelId)).toBeUndefined(); // not given up: no row
+    });
+
+    it('a store selling in another money pays the shelf converted, and the shop is paid its own', () => {
+      const { parcel, to, store } = stranded({ threshold: 10, value: 500, funds: 1_000_000 });
+      const p = parcels.get(parcel.parcelId);
+      p.unclaimedAt = daysAgo(3);
+      const owed = unclaimed.owed(parcel.parcelId); // shillings: the Kenyan shop's
+      // The journey home quoted in birr, as a store selling in birr would be quoted it.
+      const real = routing.quoteShipment.bind(routing);
+      jest.spyOn(routing, 'quoteShipment').mockImplementation((...a: Parameters<RoutingService['quoteShipment']>) => ({ ...real(...a), currency: 'ETB' }));
+      const offer = returns.offerFor(parcel.parcelId)!;
+      const billed = fx.convertForQuote(owed, 'KES', 'ETB');
+      expect(offer.currency).toBe('ETB');
+      expect(offer.holdingCost).toBeCloseTo(billed, 2);
+      expect(billed).not.toBeCloseTo(owed, 2); // the guard reads a conversion
+
+      const shopBefore = agents.balance(to.did)!;
+      const storeBefore = vendors.balanceOf(store.vendorId);
+      returns.accept(offer.offerId, store.vendorId);
+      expect(agents.balance(to.did)!).toBeCloseTo(shopBefore + owed, 2); // the shop: what it is owed, in shillings
+      expect(storeBefore - vendors.balanceOf(store.vendorId)).toBeCloseTo(offer.returnCost + billed, 2); // the store: in birr
+      expect(parcels.get(parcel.parcelId).holdingSettled).toBeCloseTo(owed, 2); // settled in the shop's money
     });
 
     it('shows the store a meter, not a fixed price, for the shelf half', () => {

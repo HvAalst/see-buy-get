@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/co
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes } from 'crypto';
 import { PersistentMap } from '../../foundation/store/persistent-map';
+import { FxService } from '../../foundation/money/fx.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -528,7 +529,7 @@ import { gs1_128SvgGroup, gs1_128Width, ssccHumanReadable, ssccSpaced } from '..
  *  counter, handover and sort screens work with, NOTHING personal — no phones or hashes, no handover
  *  secrets (collection code / OTP), no label or scan bodies, no dispute material. The raw record leaves
  *  only on owner-scoped or operator surfaces. */
-export function operationalParcelView(p: Parcel) {
+export function operationalParcelView(p: Parcel, holding?: { amount: number; currency: string }) {
   return {
     parcelId: p.parcelId,
     did: p.did,
@@ -584,9 +585,15 @@ export function operationalParcelView(p: Parcel) {
      * On the view rather than left to the caller, for the same reason `overdue` is: the counter about to
      * charge somebody and the screen that told them the number must not be able to disagree. Absent when
      * nothing is owed, so a list filtered on it cannot quietly include every parcel in the network.
+     *
+     * `holding` is the figure ParcelService.holdingOwed gives — in the holding shop's money, its ceiling converted —
+     * which the parcel list passes; alone, a parcel's own arithmetic, for a view built without the service.
      */
-    ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) > 0
-      ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) }
+    ...(p.unclaimedAt && (holding?.amount ?? holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay })) > 0
+      ? {
+          holdingOwed: holding?.amount ?? holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }),
+          ...(holding ? { holdingCurrency: holding.currency } : {}),
+        }
       : {}),
   };
 }
@@ -717,6 +724,8 @@ export class ParcelService implements OnApplicationBootstrap {
     @Optional() private readonly declarations?: SecurityDeclarationService,
     // Round 39 — the risk register: a corridor rated high takes parcels only in a sealed bag, and nothing at night.
     @Optional() private readonly risk?: RiskRegisterService,
+    // A holding fee is in the holding shop's money, its ceiling the journey's price converted at today's rate (2026-10-25).
+    @Optional() private readonly fx?: FxService,
   ) {
     // Registered here rather than called from the move: an account cannot leave a number without this being asked.
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -922,6 +931,38 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /**
+   * WHAT HOLDING THIS PARCEL HAS COST SO FAR, AND IN WHICH MONEY — the one figure the counter asks for, the receiver's
+   * app shows, a store's return offer carries and the network pays a shop on a write-off. Asked here by all of them, so
+   * no two can disagree in front of a customer.
+   *
+   * In the money of the shop that holds it (the user, 2026-10-25: a parcel sold in one country and held in another is
+   * charged in the HOLDING shop's money): the receiver pays at that counter, the shop is paid in it, and the daily rate
+   * is that shop's company's own. The ceiling — never more than the journey cost — is the journey's price converted
+   * into that money at today's rate. Within one country the two are one money and nothing is converted.
+   */
+  holdingOwed(parcel: Parcel, now: number = Date.now()): { amount: number; currency: string } {
+    const currency = this.holdingTermsOf(parcel).currency;
+    const ceiling = parcel.shipmentCost != null ? this.inMoney(parcel.shipmentCost, parcelCurrency(parcel), currency) : undefined;
+    return { amount: holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: ceiling, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay }), currency };
+  }
+
+  /**
+   * An amount in another money at today's rate. A limit between our own books (a holding fee's ceiling) is converted
+   * at the market rate; a sum somebody is CHARGED (a store paying a shop's holding fee in its own money) carries the
+   * buffer every converted price carries, the buyer bearing the movement (FxService). Undefined where no rate is
+   * known: a figure in the wrong money is worse than none (a holding fee then runs to its days alone).
+   */
+  inMoney(amount: number, from: string, to: string, charged = false): number | undefined {
+    if (from === to) return amount;
+    if (!this.fx) return undefined;
+    try {
+      return Math.round((charged ? this.fx.convertForQuote(amount, from, to) : this.fx.convert(amount, from, to)) * 100) / 100;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * The parcels a driver was handed OVER A COUNTER and has not yet delivered — not in a bag, scanned to their badge.
    * A bag or a freight load is found where those are kept (DispatchService.activeCargo); these were found nowhere,
    * so a driver holding five parcels counted as holding nothing.
@@ -1088,6 +1129,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // An account moved WITHOUT its PIN is not shown a code for the day in which the move can be undone — neither a
     // parcel's own, nor the one of somebody named to collect it. Asked of the account that is READING.
     const heldUntil = this.persons?.codesHeldUntil(who.personDid);
+    const holding = this.holdingOwed(p);
     const view: ConsumerParcelView = {
       parcelId: p.parcelId,
       did: p.did, // DT — the twin's stable id
@@ -1128,13 +1170,8 @@ export class ParcelService implements OnApplicationBootstrap {
             // It was sent to a number this account has moved off, and reached it because the number is still its own.
             // The sender does not know: the receiver is the one who can tell them.
             ...(Boolean(p.receiverPhoneHash) && p.receiverPhoneHash !== who.phoneHash && !TERMINAL_STATUSES.has(p.status) ? { sentToOldNumber: true } : {}),
-            ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) > 0
-              ? {
-                  holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }),
-                  // In the money the counter will ask for it in (collect), never a bare figure the receiver must guess.
-                  holdingCurrency: parcelCurrency(p),
-                }
-              : {}),
+            // The figure and the money the counter will ask for (collect) — never a bare figure the receiver must guess.
+            ...(p.unclaimedAt && holding.amount > 0 ? { holdingOwed: holding.amount, holdingCurrency: holding.currency } : {}),
           }
         : {}),
     };
@@ -2401,10 +2438,10 @@ export class ParcelService implements OnApplicationBootstrap {
     // What is owed comes back with the LOOKUP, not with the release. A shopkeeper who discovers a charge
     // only after the customer has the box in their hands has to ask for money back, which is the one
     // conversation across a counter that nobody wins.
-    const holdingOwed = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
-    // In the parcel's own money, as the price it is reckoned from: said beside the figure, for a counter that may be
-    // handed a parcel sold by another company.
-    return { parcel, binSlot: parcel.binSlot, ...(holdingOwed > 0 ? { holdingOwed, currency: parcelCurrency(parcel) } : {}) };
+    // In this shop's own money, said beside the figure: the receiver pays it here, and the shop keeps it (the user,
+    // 2026-10-25 — a counter may be handed a parcel another country's company sold).
+    const holding = this.holdingOwed(parcel);
+    return { parcel, binSlot: parcel.binSlot, ...(holding.amount > 0 ? { holdingOwed: holding.amount, currency: holding.currency } : {}) };
   }
 
   /**
@@ -2439,7 +2476,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // Settled BEFORE the status flips, while the clock still has an end to measure to. The receiver
     // pays the shop in cash at the counter and the shop keeps it, so nothing is posted — this records
     // that the debt is gone, which is what stops the network paying the shop for it a second time.
-    const holdingPaid = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
+    const holdingPaid = this.holdingOwed(parcel).amount;
     if (holdingPaid > 0) parcel.holdingSettled = (parcel.holdingSettled ?? 0) + holdingPaid;
 
     parcel.status = 'Delivered';

@@ -6,7 +6,7 @@ import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { ReturnService } from './return.service';
 import { WalletGateService } from './wallet-gate.service';
-import { EXTENSION_H, FREE_EXTENSIONS, UNCOLLECTED_H, holdingFeeFor } from './pudo.config';
+import { EXTENSION_H, FREE_EXTENSIONS, UNCOLLECTED_H } from './pudo.config';
 import { Parcel, ReceiverIntent, isCollectable } from './pudo.types';
 
 /** One line an operator can act on, for a parcel whose owner has given up their claim. */
@@ -23,8 +23,10 @@ export interface DisposalRow {
   heldDays: number;
   declaredValue?: number;
   owedToShop: number;
-  /** What `declaredValue` and `owedToShop` are in: the parcel's own money, as the counter says it (ParcelService.collect). */
+  /** What `owedToShop` is in: the holding shop's money, as the counter says it (ParcelService.holdingOwed). */
   currency: string;
+  /** What `declaredValue` is in: the parcel's own money — the goods were valued where they were sold. */
+  valueCurrency: string;
 }
 
 /**
@@ -89,7 +91,7 @@ export class UnclaimedService {
    */
   owed(parcelId: string, now: number = Date.now()): number {
     const parcel = this.parcels.get(parcelId);
-    return holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
+    return this.parcels.holdingOwed(parcel, now).amount;
   }
 
   /**
@@ -223,16 +225,20 @@ export class UnclaimedService {
     return this.parcels
       .list({ status: 'Unclaimed' })
       .filter((p) => p.relinquishedAt && !this.hasOpenOffer(p.parcelId))
-      .map((p) => ({
-        parcelId: p.parcelId,
-        agentDid: p.destAgentDid,
-        ...(p.destAgentDid && this.agents?.find(p.destAgentDid)?.shopName ? { shopName: this.agents.find(p.destAgentDid)!.shopName } : {}),
-        relinquishedAt: p.relinquishedAt!,
-        heldDays: Math.max(0, Math.floor((now - new Date(p.unclaimedAt ?? p.relinquishedAt!).getTime()) / 86_400_000)),
-        declaredValue: p.declaredValue,
-        owedToShop: holdingFeeFor({ unclaimedAt: p.unclaimedAt, now, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }),
-        currency: parcelCurrency(p),
-      }))
+      .map((p) => {
+        const holding = this.parcels.holdingOwed(p, now);
+        return {
+          parcelId: p.parcelId,
+          agentDid: p.destAgentDid,
+          ...(p.destAgentDid && this.agents?.find(p.destAgentDid)?.shopName ? { shopName: this.agents.find(p.destAgentDid)!.shopName } : {}),
+          relinquishedAt: p.relinquishedAt!,
+          heldDays: Math.max(0, Math.floor((now - new Date(p.unclaimedAt ?? p.relinquishedAt!).getTime()) / 86_400_000)),
+          declaredValue: p.declaredValue,
+          owedToShop: holding.amount,
+          currency: holding.currency,
+          valueCurrency: parcelCurrency(p),
+        };
+      })
       .sort((a, b) => a.relinquishedAt.localeCompare(b.relinquishedAt));
   }
 
@@ -257,7 +263,7 @@ export class UnclaimedService {
     // exactly as it does on the return path, which was the point of all of this.
     this.parcels.cancel(parcelId, by, reason?.trim() || 'disposed under local rules');
     // Said with its money, as the queue said it before the button was pressed.
-    return { parcelId, paidToShop, currency: parcelCurrency(parcel) };
+    return { parcelId, paidToShop, currency: this.parcels.holdingOwed(parcel, now).currency };
   }
 
   /**
@@ -268,7 +274,7 @@ export class UnclaimedService {
    * between that being true and it merely being said.
    */
   settleToShop(parcel: Parcel, now: number = Date.now()): number {
-    const owed = holdingFeeFor({ unclaimedAt: parcel.unclaimedAt, now, shipmentCost: parcel.shipmentCost, settled: parcel.holdingSettled, perDay: parcel.holdingFeePerDay });
+    const owed = this.parcels.holdingOwed(parcel, now).amount;
     if (owed <= 0 || !parcel.destAgentDid) return 0;
     this.gate.payLabour(parcel.destAgentDid, owed, parcel.parcelId, 'parcel', parcel.sellerEntityId);
     parcel.holdingSettled = (parcel.holdingSettled ?? 0) + owed;

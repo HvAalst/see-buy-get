@@ -141,7 +141,10 @@ export interface DisposalRow {
   agentDid?: string;
   /** The shop holding it, by name — resolved by the server, because a screen cannot name what it was not sent. */
   shopName?: string;
+  /** What `owedToShop` is in: the holding shop's money. */
   currency?: string;
+  /** What `declaredValue` is in: the parcel's own money, where it was sold — another, for a parcel from abroad. */
+  valueCurrency?: string;
 }
 
 /** A fortnight of shelf: past this, a real slot in a real shop has been dead for a long time. */
