@@ -8604,6 +8604,9 @@ describe('PUDO Light', () => {
     const done = deliver([{ kind: 'damaged', count: 3, photoRefs: [broken, broken] }, { kind: 'over', count: 1 }, { kind: 'short', count: 2 }]);
     expect(done.status).toBe('delivered');
     expect(done.proofOfDelivery?.exceptions).toEqual([{ kind: 'short', count: 2 }, { kind: 'over', count: 1 }, { kind: 'damaged', count: 3, photoRefs: [broken] }]);
+    // Damaged goods are not called intact: the unload report never says both.
+    expect(done.unloadReport?.confirmed).not.toContain('intact');
+    expect(done.unloadReport?.confirmed).toEqual(expect.arrayContaining(['correct_site', 'handed_over', 'gear_safe']));
     expect(media.get(broken)?.link).toEqual({ type: 'freight', id: f.freightId }); // the damage photo is kept with the load
     expect(heard).toEqual([expect.objectContaining({ freightId: f.freightId, posterDid: poster, exceptions: [{ kind: 'short', count: 2 }, { kind: 'over', count: 1 }, { kind: 'damaged', count: 3 }] })]);
     // The sender's Loads row (and so its system's load.delivered) carries it: the photographs counted, never handed out.
@@ -8612,6 +8615,24 @@ describe('PUDO Light', () => {
       { kind: 'over', count: 1, photos: 0 },
       { kind: 'damaged', count: 3, photos: 1 },
     ]);
+  });
+
+  it('D9: goods found damaged are not asked to be called intact — and goods found whole still are', () => {
+    const pickup = { lat: -1.86, lng: 36.36 };
+    const d = coupleTipper('RSV3', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Gravel', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 2000, packaging: 'loose' });
+    claimFreight(d.did, pickup, f.freightId);
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
+    const notIntact = requiredUnloadKeys().filter((k) => k !== 'intact');
+    expect(notIntact).toHaveLength(requiredUnloadKeys().length - 1);
+    expect(requiredUnloadKeys({ damaged: true })).toEqual(notIntact);
+    // Nothing found: "intact" is still asked.
+    expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: notIntact, receiverName: 'Peter Otieno', podPhotoId: photoBy(d.did) })).toThrow(/unload checklist/);
+    expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: notIntact, receiverName: 'Peter Otieno', podPhotoId: photoBy(d.did), exceptions: [{ kind: 'short', count: 2 }] })).toThrow(/unload checklist/);
+    // Damaged found: it is not.
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: notIntact, receiverName: 'Peter Otieno', podPhotoId: photoBy(d.did), exceptions: [{ kind: 'damaged', count: 1, photoRefs: [photoBy(d.did)] }] });
+    expect(done.status).toBe('delivered');
+    expect(done.unloadReport?.confirmed).toEqual(notIntact);
   });
 
   it('D9: a load whose note states no count still takes what the receiver found — nothing to count it against', () => {

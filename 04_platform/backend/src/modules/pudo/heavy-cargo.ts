@@ -62,8 +62,14 @@ export function unloadSafetyItems(): SafetyItem[] {
 export function requiredLoadKeys(ctx: CargoSafetyContext): string[] {
   return loadSafetyItems(ctx).map((i) => i.key);
 }
-export function requiredUnloadKeys(): string[] {
-  return unloadSafetyItems().map((i) => i.key);
+/**
+ * D9 — goods the receiver found DAMAGED at the handover are not "intact": the driver is not asked to say they are, and
+ * what was found is written on the note instead (DispatchService.receivingExceptionsOf). Every other item stands.
+ */
+export function requiredUnloadKeys(opts: { damaged?: boolean } = {}): string[] {
+  return unloadSafetyItems()
+    .filter((i) => !(opts.damaged && i.key === 'intact'))
+    .map((i) => i.key);
 }
 
 /** The confirmed-key subset that is still MISSING from what a checklist requires (empty = complete). */

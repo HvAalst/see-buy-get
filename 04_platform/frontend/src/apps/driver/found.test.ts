@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { countOf, FOUND_KEYS, FOUND_KINDS, foundBody, foundProblem, noneFound, type FoundForm } from './found';
+import { countOf, FOUND_KEYS, FOUND_KINDS, foundBody, foundProblem, noneFound, unloadItemsAfter, type FoundForm } from './found';
 
 /**
  * D9 — WHAT THE RECEIVER FOUND, on the Driver app: the server's own rules said before the tap (a whole count; a damaged line
@@ -39,6 +39,16 @@ describe('what the receiver found, at the door (D9)', () => {
       { kind: 'damaged', count: 2, photoRefs: ['med_d'] },
       { kind: 'wrong', count: 1, photoRefs: ['med_w'] },
     ]);
+  });
+
+  it('takes "Cargo intact" off the unload check once packages are written down as damaged — and only then', () => {
+    const items = [{ key: 'correct_site' }, { key: 'intact' }, { key: 'handed_over' }, { key: 'gear_safe' }];
+    const keys = (list: Array<{ key: string }>) => list.map((i) => i.key);
+    expect(keys(unloadItemsAfter(items, form({ damaged: '2' }, { damaged: 'med_1' }), true))).toEqual(['correct_site', 'handed_over', 'gear_safe']);
+    expect(keys(unloadItemsAfter(items, form({ short: '3' }), true))).toEqual(keys(items));
+    expect(keys(unloadItemsAfter(items, form({ damaged: '0' }), true))).toEqual(keys(items));
+    // Written, then the section closed: nothing found is sent, so "intact" is asked again.
+    expect(keys(unloadItemsAfter(items, form({ damaged: '2' }), false))).toEqual(keys(items));
   });
 
   it('has words for every kind and every photo', () => {

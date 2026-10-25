@@ -4,7 +4,7 @@ import { foundPhotos, foundWords } from '../../../shared/found';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SiteView } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
-import { dueLine, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundClosingHow, type InboundRow, type InboundState, type InboundView, type ReceivingPoint } from '../inbound';
+import { carrierLine, dueLine, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundClosingHow, type InboundRow, type InboundState, type InboundView, type ReceivingPoint } from '../inbound';
 import { mayAct } from '../logic';
 
 const STATE_TAG: Record<InboundState, string> = { booked: 'quiet', carrier: 'info', on_its_way: 'info', delivered: 'ok', withdrawn: 'quiet' };
@@ -301,7 +301,7 @@ function InboundLine({ row, children }: { row: InboundRow; children?: ComponentC
           </span>
         ) : null}
         {row.carrier && state !== 'delivered' && state !== 'withdrawn' ? (
-          <span class="crow__sub">{t('business.inbound.carrier', { who: [row.carrier.name, row.carrier.driverName, row.carrier.plate].filter(Boolean).join(' · ') })}</span>
+          <span class="crow__sub">{t('business.inbound.carrier', { who: carrierLine(row.carrier) })}</span>
         ) : null}
         {track ? (
           <span class="crow__sub">

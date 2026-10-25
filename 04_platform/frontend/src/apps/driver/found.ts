@@ -53,6 +53,15 @@ export function foundProblem(form: FoundForm, packages?: number): FoundProblem {
   return null;
 }
 
+/**
+ * The unload check as it stands once the receiver has said what they found: goods found damaged are not called intact —
+ * "Cargo intact" comes off, and the damage goes on the note instead. The server asks exactly the same (requiredUnloadKeys).
+ */
+export function unloadItemsAfter<T extends { key: string }>(items: readonly T[], form: FoundForm, open: boolean): T[] {
+  const damaged = open && (countOf(form.counts.damaged) ?? 0) > 0;
+  return items.filter((i) => !(damaged && i.key === 'intact'));
+}
+
 /** What the delivery sends: each kind with a count, in the note's order, with its photograph. Nothing when nothing was found. */
 export function foundBody(form: FoundForm): Array<{ kind: FoundKind; count: number; photoRefs?: string[] }> | undefined {
   const lines = FOUND_KINDS.flatMap((k) => {

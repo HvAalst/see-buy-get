@@ -147,6 +147,11 @@ export function trackingPathOf(row: Pick<InboundRow, 'trackingKey'>): string | n
   return row.trackingKey ? `/send/?track=${encodeURIComponent(row.trackingKey)}` : null;
 }
 
+/** Who is bringing it, as they would be met at the gate: the carrier, its driver, the vehicle — a name said once (an owner-driver is both). */
+export function carrierLine(carrier: NonNullable<InboundRow['carrier']>): string {
+  return [...new Set([carrier.name, carrier.driverName, carrier.plate].map((x) => x?.trim()).filter((x): x is string => Boolean(x)))].join(' · ');
+}
+
 /** "Tue 27 Oct" — a day as the place keeps it (YYYY-MM-DD): the same date wherever it is read. */
 export function dayLabel(day: string): string {
   return formatDate(`${day}T12:00:00Z`, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
 import { foundPhotos, foundWords } from '../../shared/found';
-import { codeOf, dayLabel, dueLine, inboundApi, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundDue } from './inbound';
+import { carrierLine, codeOf, dayLabel, dueLine, inboundApi, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundDue } from './inbound';
 import { loadGaps, sectionsFor } from './logic';
 
 describe('inbound, reading A, in the Business app', () => {
@@ -80,6 +80,11 @@ describe('inbound, reading A, in the Business app', () => {
     expect(said(due({ today: true, about: '13:00' }))).toBe('Expected today, about 13:00');
     expect(said(due({}))).toBe(`Expected ${day}`);
     expect(said(due({ about: '09:30' }))).toBe(`Expected ${day}, about 09:30`);
+  });
+
+  it('says who is bringing it once: an owner-driver is the carrier and the driver', () => {
+    expect(carrierLine({ name: 'Kamau 54', driverName: 'Kamau 54', plate: 'KDA 954W' })).toBe('Kamau 54 · KDA 954W');
+    expect(carrierLine({ name: 'Kilima Logistics', driverName: 'Amos K.' })).toBe('Kilima Logistics · Amos K.');
   });
 
   it('D10: names the place’s clock only where the reader’s own shows another time', () => {

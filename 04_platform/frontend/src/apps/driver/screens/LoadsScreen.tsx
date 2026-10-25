@@ -13,7 +13,7 @@ import { HeldSheet, HeldStrip } from './HeldStrip';
 import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, TamperSheet, type SealRead, type TamperTarget } from './SealSteps';
 import { InspectionSection } from './Inspection';
 import { FoundSection } from './Found';
-import { foundBody, foundProblem, noneFound, type FoundForm } from '../found';
+import { foundBody, foundProblem, noneFound, unloadItemsAfter, type FoundForm } from '../found';
 import { inspectionBody, inspectionReady, type InspectionLook } from '../inspection';
 import { heldLine } from '../../../shared/tamper';
 import { invoicePaperRef, keepPaper, keptPaper } from '../../../shared/keptPapers';
@@ -427,7 +427,9 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   }, [claim?.ref]);
 
   const isPickup = claim?.status === 'claimed';
-  const items = (isPickup ? claim?.loadChecklist : claim?.unloadChecklist) ?? [];
+  // D9 — goods the receiver found damaged are not called intact: that line comes off the unload check, and what was
+  // found goes on the note instead (the server asks the same).
+  const items = isPickup ? (claim?.loadChecklist ?? []) : unloadItemsAfter(claim?.unloadChecklist ?? [], found, foundOpen);
   const allChecked = items.length > 0 && items.every((i) => checked.includes(i.key));
   const photoOk = !isPickup || photoId.length > 0;
   const receiverOk = isPickup || receiver.trim().length >= 2;
@@ -532,7 +534,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}), ...(inspection ? { inspection } : {}) });
                 } else {
                   const exceptions = foundOpen ? foundBody(found) : undefined;
-                  void actions.deliverFreight(ref, { confirmed: checked, receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}) });
+                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}) });
                 }
                 onClose();
               }}

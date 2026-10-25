@@ -417,6 +417,7 @@ export const enDriver = {
   'driver.found.wrong': 'Packages that are not the goods on the note',
   'driver.found.damagedPhoto': 'Photo of what is damaged',
   'driver.found.wrongPhoto': 'Photo of the wrong goods (optional)',
+  'driver.found.notIntact': 'Damaged goods are not intact: “Cargo intact” comes off the unload check, and the damage goes on the note instead.',
   'driver.found.hint': 'It goes on the consignment note beside the receiver’s name, and the delivery still stands. The sender is told.',
   'driver.found.problem.count': 'Write a whole number of packages, or leave it empty.',
   'driver.found.problem.photo': 'Add a photo of what is damaged.',

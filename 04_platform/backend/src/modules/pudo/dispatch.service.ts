@@ -3082,8 +3082,10 @@ export class DispatchService {
     this.refuseIfHeld(f);
     // Held by an authority on the road, as the driver said: delivered once they have said it was let go.
     if (this.heldByAuthority(f)) throw new GlosError('INVALID_STATE', 'It is held by an authority, as you said: say it was let go before you deliver it');
-    // S33 — the unload gate: the unload checklist must be complete before the freight is marked delivered.
-    const missing = missingKeys(requiredUnloadKeys(), check?.confirmed);
+    // S33 — the unload gate: the unload checklist must be complete before the freight is marked delivered. D9 — goods
+    // found damaged at the handover are not asked to be called intact: what was found goes on the note instead.
+    const damagedFound = Boolean(check?.exceptions?.some((x) => x.kind === 'damaged' && x.count > 0));
+    const missing = missingKeys(requiredUnloadKeys({ damaged: damagedFound }), check?.confirmed);
     if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the unload checklist before delivery — ${missing.length} item(s) left`);
     // FP3 — proof of delivery. "Delivered" without a receiver's name and a photo of the goods as put down is the
     // driver's word against the sender's; with them it is box 24 of the consignment note. Both are required,
@@ -3113,7 +3115,8 @@ export class DispatchService {
     // moment a phone out of signal found one — and kept with the delivery.
     const timing = this.deliveryTimingOf(f, Date.parse(f.deliveredAt));
     if (timing) f.deliveryTiming = timing;
-    f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])], at: f.deliveredAt, by: driverDid };
+    // Never both: damaged goods found, and "intact" confirmed. The record says what was found.
+    f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])].filter((k) => !(exceptions.some((x) => x.kind === 'damaged') && k === 'intact')), at: f.deliveredAt, by: driverDid };
     const remarks = check?.remarks?.trim();
     f.proofOfDelivery = { receiverName: receiverName.slice(0, 120), photoRef: podPhotoId, ...(remarks ? { remarks: remarks.slice(0, 500) } : {}), ...(exceptions.length ? { exceptions } : {}), at: f.deliveredAt, by: driverDid };
     this.anchorCustody(f, 'delivered');
