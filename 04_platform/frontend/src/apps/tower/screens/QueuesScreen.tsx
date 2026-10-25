@@ -15,7 +15,6 @@ import {
   STALLED_REASON,
   documentsOf,
   missingWords,
-  money,
   shelfSlots,
   stuckDays,
   carrierBearsLine,
@@ -466,8 +465,8 @@ function DisposalRowView({ row, state, actions }: { row: DisposalRow; state: Tow
         {/* A NAME, not the DID this column used to print — the operator reads it to know whose shelf this is
             and who is owed. Where the server cannot name one, it says so rather than showing the key. */}
         <td class="ctbl__strong"><span class="ctbl__lbl">{t('tower.disposal.col.where')}</span>{row.shopName ?? t('tower.disposal.unknownShop')}</td>
-        <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.disposal.col.worth')}</span>{row.declaredValue != null ? money(row.declaredValue) : '—'}</td>
-        <td class="ctbl__num ctbl__strong"><span class="ctbl__lbl">{t('tower.disposal.col.owed')}</span>{money(row.owedToShop)}</td>
+        <td class="ctbl__num"><span class="ctbl__lbl">{t('tower.disposal.col.worth')}</span>{row.declaredValue != null ? amount(row.declaredValue, row.currency) : '—'}</td>
+        <td class="ctbl__num ctbl__strong"><span class="ctbl__lbl">{t('tower.disposal.col.owed')}</span>{amount(row.owedToShop, row.currency)}</td>
         <td><span class="ctbl__lbl">{t('tower.disposal.col.held')}</span>
           <div>{t('tower.wait.days', { n: row.heldDays })}</div>
           {long ? <span class="ctag ctag--warn">{t('tower.disposal.longHeld')}</span> : null}

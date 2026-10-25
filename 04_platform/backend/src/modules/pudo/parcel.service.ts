@@ -1129,7 +1129,11 @@ export class ParcelService implements OnApplicationBootstrap {
             // The sender does not know: the receiver is the one who can tell them.
             ...(Boolean(p.receiverPhoneHash) && p.receiverPhoneHash !== who.phoneHash && !TERMINAL_STATUSES.has(p.status) ? { sentToOldNumber: true } : {}),
             ...(p.unclaimedAt && holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) > 0
-              ? { holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }) }
+              ? {
+                  holdingOwed: holdingFeeFor({ unclaimedAt: p.unclaimedAt, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }),
+                  // In the money the counter will ask for it in (collect), never a bare figure the receiver must guess.
+                  holdingCurrency: parcelCurrency(p),
+                }
               : {}),
           }
         : {}),

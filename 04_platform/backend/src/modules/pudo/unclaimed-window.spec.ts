@@ -408,6 +408,9 @@ describe('the collection window closing', () => {
       // resolve a name it was never sent, so the server sends it.
       expect(row.shopName).toMatch(/^W Dest \d+$/);
       expect(row.shopName).not.toContain('did:');
+      // What the shop is owed, with its money — the console printed it bare, the screen expecting a currency the server
+      // never sent (2026-10-25). The parcel's own, as the counter says it.
+      expect(row.currency).toBe('KES');
     });
 
     it('lets a store that is standing ready to pay have it instead', () => {
@@ -449,8 +452,14 @@ describe('the collection window closing', () => {
       // Said in the parcel's own money: a counter can be handed a parcel another company sold.
       p.currency = 'ETB';
       expect(parcels.collect(parcel.collectionCode!, to.did).currency).toBe('ETB');
+      // …and the receiver's own app says the same figure in the same money, before they walk in (2026-10-25: it said
+      // the figure bare).
+      const told = parcels.consumerParcel(parcel.parcelId, parcel.receiverPhoneHash!);
+      expect(told.holdingOwed).toBeCloseTo(owed, 2);
+      expect(told.holdingCurrency).toBe('ETB');
       delete p.currency;
       expect(parcels.collect(parcel.collectionCode!, to.did).currency).toBe('KES');
+      expect(parcels.consumerParcel(parcel.parcelId, parcel.receiverPhoneHash!).holdingCurrency).toBe('KES');
       parcels.collectConfirm(parcel.parcelId, to.did, parcel.collectionCode!);
       expect(parcels.get(parcel.parcelId).holdingSettled).toBeCloseTo(owed, 2);
       expect(unclaimed.owed(parcel.parcelId)).toBe(0); // and the network does not then pay it again
@@ -508,8 +517,9 @@ describe('the collection window closing', () => {
       const before = agents.balance(to.did)!;
       const freeBefore = shelf.available(to.did);
 
-      const { paidToShop } = unclaimed.writeOff(parcel.parcelId, 'ops', 'disposed under KE rules');
+      const { paidToShop, currency } = unclaimed.writeOff(parcel.parcelId, 'ops', 'disposed under KE rules');
       expect(paidToShop).toBeCloseTo(owed, 2);
+      expect(currency).toBe('KES'); // said with its money, as the queue said it before the button
       expect(agents.balance(to.did)!).toBeCloseTo(before + owed, 2);
       expect(shelf.available(to.did)).toBe(freeBefore + 1); // and the slot finally comes back
       expect(gate).toBeDefined();

@@ -286,6 +286,8 @@ export interface ConsumerParcelView {
    *  person at the other end has come and what that is costing them is not the sender's business. */
   unclaimedAt?: string;
   holdingOwed?: number;
+  /** The money `holdingOwed` is in — the same the counter asks for it in. */
+  holdingCurrency?: string;
   extensionsUsed?: number;
   receiverResponse?: { choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine'; at: string; note?: string };
   collectProxy?: { name: string; code?: string };

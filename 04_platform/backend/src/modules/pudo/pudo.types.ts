@@ -868,6 +868,11 @@ export interface ConsumerParcelView {
   unclaimedAt?: string;
   /** What is owed for the shelf slot right now — the same figure the counter will ask for. */
   holdingOwed?: number;
+  /**
+   * The money `holdingOwed` is in — the parcel's own, as the counter says it (ParcelService.collect), so the screen
+   * that told the receiver and the counter that asks them cannot disagree. Present with `holdingOwed`.
+   */
+  holdingCurrency?: string;
   /** How many extensions are gone, so the app can say whether the next one is free. */
   extensionsUsed?: number;
   /** What they already answered, so a screen does not ask a question they have answered. */

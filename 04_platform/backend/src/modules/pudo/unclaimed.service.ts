@@ -1,7 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
-import { ParcelService } from './parcel.service';
+import { ParcelService, parcelCurrency } from './parcel.service';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { ReturnService } from './return.service';
@@ -23,6 +23,8 @@ export interface DisposalRow {
   heldDays: number;
   declaredValue?: number;
   owedToShop: number;
+  /** What `declaredValue` and `owedToShop` are in: the parcel's own money, as the counter says it (ParcelService.collect). */
+  currency: string;
 }
 
 /**
@@ -229,6 +231,7 @@ export class UnclaimedService {
         heldDays: Math.max(0, Math.floor((now - new Date(p.unclaimedAt ?? p.relinquishedAt!).getTime()) / 86_400_000)),
         declaredValue: p.declaredValue,
         owedToShop: holdingFeeFor({ unclaimedAt: p.unclaimedAt, now, shipmentCost: p.shipmentCost, settled: p.holdingSettled, perDay: p.holdingFeePerDay }),
+        currency: parcelCurrency(p),
       }))
       .sort((a, b) => a.relinquishedAt.localeCompare(b.relinquishedAt));
   }
@@ -241,7 +244,7 @@ export class UnclaimedService {
    * ended it, and the network absorbs it rather than letting a shortfall settle quietly on a shopkeeper
    * who did the work and had no say in any of it.
    */
-  writeOff(parcelId: string, by: string, reason?: string, now: number = Date.now()): { parcelId: string; paidToShop: number } {
+  writeOff(parcelId: string, by: string, reason?: string, now: number = Date.now()): { parcelId: string; paidToShop: number; currency: string } {
     const parcel = this.parcels.get(parcelId);
     if (!parcel.relinquishedAt) {
       throw new GlosError('INVALID_STATE', 'Only a parcel whose owner has given up their claim can be closed this way');
@@ -253,7 +256,8 @@ export class UnclaimedService {
     // cancel() releases the shelf slot and writes the terminal scan — the shop gets its slot back here
     // exactly as it does on the return path, which was the point of all of this.
     this.parcels.cancel(parcelId, by, reason?.trim() || 'disposed under local rules');
-    return { parcelId, paidToShop };
+    // Said with its money, as the queue said it before the button was pressed.
+    return { parcelId, paidToShop, currency: parcelCurrency(parcel) };
   }
 
   /**

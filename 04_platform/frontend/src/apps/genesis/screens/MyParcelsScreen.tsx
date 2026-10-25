@@ -244,7 +244,7 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
         <Card title={t('send.notice.title')}>
           <p class="card__note">
             {parcel.holdingOwed
-              ? t('send.notice.ledeCost', { zone: parcel.destZone, amount: parcel.holdingOwed.toFixed(2) })
+              ? t('send.notice.ledeCost', { zone: parcel.destZone, amount: formatMoney(parcel.holdingOwed, parcel.holdingCurrency) })
               : t('send.notice.lede', { zone: parcel.destZone })}
           </p>
 

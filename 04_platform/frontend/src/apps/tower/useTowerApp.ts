@@ -17,6 +17,7 @@ import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, c
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, HubApplication, RiderIdRow, StalledRow } from './queues';
+import { amount } from './queues';
 import type { RiskLevel, RiskRegisterView, RiskSubject, RiskThreat } from './risks';
 import type { SupportInbox, SupportStatus } from './messages';
 import { triggerDownloadBlob } from '../../shared/download';
@@ -1544,8 +1545,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
           return;
         }
-        const paid = narrow<{ paidToShop?: number }>(data)?.paidToShop ?? 0;
-        setState((s) => ({ ...s, busyId: null, openId: null, queueError: null, done: t('tower.disposal.closed', { parcel: parcelId, amount: paid.toFixed(2) }) }));
+        const closed = narrow<{ paidToShop?: number; currency?: string }>(data);
+        // With its money, as the queue said it before the button was pressed (2026-10-25: it said it bare).
+        setState((s) => ({ ...s, busyId: null, openId: null, queueError: null, done: t('tower.disposal.closed', { parcel: parcelId, amount: amount(closed?.paidToShop ?? 0, closed?.currency) }) }));
         await loadQueues(client);
       },
       /** Let a shop in, or refuse it — and a refusal carries the reason the applicant is shown. */
