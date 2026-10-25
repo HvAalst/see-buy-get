@@ -24,6 +24,9 @@
   --p-muted: #4b5170;
   --p-rule: #d9d5ca;
   --p-orange: var(--org);
+  /* The brand orange as TEXT on the paper: a shade darker, so a word in it reads at WCAG AA (3:1 for large text — the
+     bright one is 2.94 on this ground). Shapes and ticks keep the bright one. */
+  --p-orange-ink: #ef5d00;
   --p-sand: var(--sand);
   --p-stamp: #c8371f;
   --p-board: #1f2419;
@@ -303,7 +306,13 @@ html[data-help-theme='dark'] .pub--help .pbtn--primary {
 
 .fr__title em {
   font-style: normal;
-  color: var(--p-orange);
+  color: var(--p-orange-ink);
+}
+
+/* The header stays on top of the page: whatever is scrolled to — a section the menu's #earn or #track opens, a link
+   given focus from the keyboard — stops below it instead of under it (WCAG 2.4.11, focus not hidden). */
+html:has(.pub__top) {
+  scroll-padding-top: calc(4.25rem + var(--sa-t, 0px));
 }
 
 .fr__lede {

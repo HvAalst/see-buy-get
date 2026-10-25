@@ -28,7 +28,8 @@ export function PublicShell({
     <div class={`pub${help ? ' pub--help' : ''}`} data-theme={help ? theme ?? 'light' : undefined}>
       <header class="pub__top">
         <div class="pub__in pub__topin">
-          <a class="pub__logo" href="/">
+          {/* Named for a screen reader: on a phone the word beside the mark is hidden, and the mark alone says nothing. */}
+          <a class="pub__logo" href="/" aria-label={t('common.frontDoor')}>
             <img src="/img/brand-tile.svg" width={34} height={34} alt="" />
             <span>SeeBuyGet</span>
           </a>

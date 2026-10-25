@@ -153,7 +153,7 @@ describe('the help centre', () => {
       const html = renderToString(<HelpScreen page={page} />);
       expect(html, page.kind).toMatch(/<div class="pub pub--help"/);
       // The brand tile itself, never letters typed on a square.
-      expect(html, page.kind).toMatch(/<a class="pub__logo" href="\/"><img src="\/img\/brand-tile.svg"/);
+      expect(html, page.kind).toMatch(/<a class="pub__logo" href="\/" aria-label="SeeBuyGet front page"><img src="\/img\/brand-tile.svg"/);
       expect(html, page.kind).toMatch(/<a href="\/help\/" aria-current="page">/);
       expect(html, page.kind).toContain('class="pub__foot"');
       expect(html, page.kind).toContain('href="/help/contact/"');
