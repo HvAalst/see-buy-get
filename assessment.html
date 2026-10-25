@@ -112,7 +112,7 @@
 
 <!-- ─────────────────────────────────────────────────────── where it stands now -->
 <h2 id="now">Where it stands now</h2>
-<p class="lead">Checked against the code on 2026-10-25. What this page recommended without needing a decision is built. What was left needed a decision of yours: you answered the three that come first the same day, all as recommended, and they are being built in this order — the live view (built), the broken-down bike (built), inbound supply.</p>
+<p class="lead">Checked against the code on 2026-10-25. What this page recommended without needing a decision is built. What was left needed a decision of yours: you answered the three that come first the same day, all as recommended, and they are being built in this order — the live view (built), the broken-down bike (built), inbound supply (reading A built; reading B next).</p>
 <div class="grid">
   <div class="card"><span class="tag t-strong">Built since 2026-10-15</span><h3>What was done</h3><ul>
     <li>The two recommendations that needed no decision: who drives on which day, and a parcel running late is told (<a href="#built">below</a>).</li>
@@ -124,7 +124,7 @@
   <div class="card"><span class="tag t-strong">Your answers, 2026-10-25</span><h3>What was left to decide first</h3><ul>
     <li><b>One live view</b> (P4), “Console and fleet offices”: <b>built</b>. The console never refreshed by itself — a new sign-up, or a colleague's request to approve, sat unseen until somebody pressed Refresh. Now it and a fleet office's screens are told the moment something they show changes (<a href="#central">below</a>).</li>
     <li><b>Bags and parcels on a broken-down vehicle</b>, “Split by the road”: <b>built</b>. The couriers near a broken-down courier are told; one takes the bags and loose parcels over at the bike with the six digits, all or none, and the road is paid once — the first courier for the stretch driven, at the takeover; the second for the rest, on arrival. A fleet truck's bags now move with its loads (<a href="#fleet">below</a>).</li>
-    <li><b>Inbound supply</b>, “Yes, A then B”: being built on the recommendations for D1–D14 as written (<a href="#inbound">below</a>) — first a business sees and receives what is coming to its own sites (<b>its first step built</b>: what is coming in), then one hub breaks bulk into parcels. Hub opening hours, and a time booked at a dock two carriers share, come with it.</li>
+    <li><b>Inbound supply</b>, “Yes, A then B”: being built on the recommendations for D1–D14 as written (<a href="#inbound">below</a>) — first a business sees and receives what is coming to its own sites (<b>built</b>: what is coming in, and the receiving moment on the place’s own clock), then one hub breaks bulk into parcels. Hub opening hours, and a time booked at a dock two carriers share, come with it.</li>
   </ul></div>
   <div class="card"><span class="tag t-partial">Later</span><h3>What I would leave until after the first test</h3><ul>
     <li>An accounting export (the rest of P3), a reporting copy (P5), other carriers' feeds (P6).</li>
@@ -246,7 +246,8 @@
 
 <h3 style="margin-top:28px">Built so far</h3>
 <div class="grid">
-  <div class="card"><span class="tag t-strong">Built 2026-10-25</span><h3>Reading A, first step: what is coming in</h3><p>A business that receives goods at its own places has a <b>Coming in</b> screen. Each place of its own can receive, with a code (like <code>7KQ3-PX9M</code>) the business gives its suppliers itself. A supplier posting a load writes the code as “Deliver to”, and may add the receiver's order number; the load goes to that place by its name. The receiver sees it coming: its order number, who from, packages, weight, where it is, who is bringing it and when it is expected — never the price (D2, D7). Its bell says when it is coming, on its way, delivered, not delivered or withdrawn, and its own system hears the same (D14). The code names the place and opens nothing else; a new code retires the old.</p><p class="note">Next in reading A: the receiving moment — short, over, damaged or wrong noted at the handover, and what is short staying expected until the receiver closes it (D9).</p></div>
+  <div class="card"><span class="tag t-strong">Built 2026-10-25</span><h3>Reading A, first step: what is coming in</h3><p>A business that receives goods at its own places has a <b>Coming in</b> screen. Each place of its own can receive, with a code (like <code>7KQ3-PX9M</code>) the business gives its suppliers itself. A supplier posting a load writes the code as “Deliver to”, and may add the receiver's order number; the load goes to that place by its name. The receiver sees it coming: its order number, who from, packages, weight, where it is, who is bringing it and when it is expected — never the price (D2, D7). Its bell says when it is coming, on its way, delivered, not delivered or withdrawn, and its own system hears the same (D14). The code names the place and opens nothing else; a new code retires the old.</p></div>
+  <div class="card"><span class="tag t-strong">Built 2026-10-25</span><h3>Reading A, second step: the receiving moment</h3><p>At the door the driver writes down, with the receiver, what is not as the note says: packages <b>short</b>, <b>more</b> than the note says, <b>damaged</b> (always with a photo) or <b>not the goods</b> on the note. It is counted against the note's own count and goes in box 24 beside the receiver's name, frozen with the note (D9); goods found damaged are no longer ticked “Cargo intact”. The sender is told: its bell, its email, its Loads, its own system. The receiver's Coming in keeps what did not come, or came and is not the goods, under <b>Still expected</b> until one of its people closes it, “it came” or “not coming”. When a load is expected, and whether it is late, is read on the receiving place's own clock, named where the reader's clock is another (D10).</p><p class="note">Found while building it: a business cannot yet claim on a load from the Business app (only a shop at its counter can), and where the trade term puts the loss on the receiver, the receiving business is not yet the one recognised to claim. Next: reading B at one hub — its receiving hours and doors (D8), the fee per handling unit (D12), goods from abroad (D13).</p></div>
 </div>
 
 <h3 style="margin-top:28px">First: what "inbound" would mean for us</h3>
@@ -341,7 +342,7 @@
   <dl>
     <dt>Why it matters</dt><dd>The delivery signature on the note is the handover. A damage claim report is frozen at handover, later findings are notes beside it, and the sender has a copy. Each signed note is frozen and hashed in the archive. A partial delivery must leave the rest still expected, and a finished one must stay finished.</dd>
     <dt>Options</dt><dd><ul><li>Refuse the delivery when anything is wrong.</li><li>Accept with exceptions noted at the handover: short, over, damaged, wrong goods, with photos, on the same note.</li><li>Accept everything and file a claim later.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Accept with exceptions noted at handover. A damage report follows the rule we already have. What is short stays expected until the receiver closes it.</dd>
+    <dt>Recommendation</dt><dd class="rec">Accept with exceptions noted at handover. A damage report follows the rule we already have. What is short stays expected until the receiver closes it. <b>Built 2026-10-25</b> (Built so far, above).</dd>
   </dl>
 </div>
 
@@ -349,7 +350,7 @@
   <p class="q"><span class="num">D10</span>Whose clock decides "today" and "late" at a receiving place?</p>
   <dl>
     <dt>Why it matters</dt><dd>A fleet has its own time zone; a delivery window is read on the carrier's clock even where the door is in another zone. A receiving place in another country than its supplier has a third clock.</dd>
-    <dt>Recommendation</dt><dd class="rec">The receiving place's clock decides its own day and lateness. One clock per answer.</dd>
+    <dt>Recommendation</dt><dd class="rec">The receiving place's clock decides its own day and lateness. One clock per answer. <b>Built 2026-10-25</b> for what is coming in: the place's country's one clock; a place in a country of several clocks is not guessed at.</dd>
   </dl>
 </div>
 
