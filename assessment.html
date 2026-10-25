@@ -95,8 +95,9 @@
 <header>
   <h1>Logistics flow coordination — where we stand</h1>
   <p class="sub">How good SeeBuyGet is at organising deliveries, routes and inbound supply flows in real time across many places and shift patterns. What is built, what is thin, and what is missing. The longest part is about inbound supply: the decisions to make before anything is built.</p>
-  <p class="stamp">Assessed 2026-10-15 against the code on <code>main</code>. Read with <a href="progress.html">progress.html</a>, which tracks each item as it is built.</p>
+  <p class="stamp">Assessed 2026-10-15 against the code on <code>main</code>; brought up to date 2026-10-25, with what was built since marked where it stands. Read with <a href="progress.html">progress.html</a>, which tracks each item as it is built.</p>
   <nav class="toc" aria-label="On this page">
+    <a href="#now">Where it stands now</a>
     <a href="#verdict">The short answer</a>
     <a href="#areas">Area by area</a>
     <a href="#inbound">Inbound supply: the decisions</a>
@@ -109,6 +110,33 @@
   </nav>
 </header>
 
+<!-- ─────────────────────────────────────────────────────── where it stands now -->
+<h2 id="now">Where it stands now</h2>
+<p class="lead">Checked against the code on 2026-10-25. What this page recommended without needing a decision is built. What is left needs a decision of yours, and most of it is inbound supply.</p>
+<div class="grid">
+  <div class="card"><span class="tag t-strong">Built since 2026-10-15</span><h3>What was done</h3><ul>
+    <li>The two recommendations that needed no decision: who drives on which day, and a parcel running late is told (<a href="#built">below</a>).</li>
+    <li>Centralized data: lots that survive a restart, every record in Postgres, webhooks for every party (P1), an API for businesses and fleets (P2), and a shipper's own GS1 code on every package label (half of P3).</li>
+    <li>Fleet and assets: all six slices, and on 2026-10-25 a courier's own vehicle and the broken-down vehicle on the live map.</li>
+    <li>Planning across sites and shifts: all six, with your four answers. That also gave a fleet early and late shifts, and two drivers sharing a truck in a day.</li>
+    <li>The compendium check, all its rounds of answers, then the ISO 28000 check.</li>
+  </ul></div>
+  <div class="card"><span class="tag t-ask">Your decision</span><h3>What is left to decide first</h3><ul>
+    <li><b>Inbound supply</b>, D1–D14: nothing decided yet (<a href="#inbound">below</a>). Hub opening hours, and a time booked at a dock two carriers share, belong with it.</li>
+    <li><b>Bags and parcels on a broken-down vehicle.</b> A fleet's truck could pass its bags on with its loads, which changes nobody's pay. A courier's bike has no way to pass them on, and another courier taking them over changes who is paid for the road.</li>
+    <li><b>One live view</b> (P4). The console does not refresh by itself at all: staff press Refresh to see a new sign-up, or a colleague's request to approve. The fleet office's map asks again every 45 seconds.</li>
+  </ul></div>
+  <div class="card"><span class="tag t-partial">Later</span><h3>What I would leave until after the first test</h3><ul>
+    <li>An accounting export (the rest of P3), a reporting copy (P5), other carriers' feeds (P6).</li>
+    <li>Re-planning during the day, a timetable between hubs, a forecast from past orders.</li>
+    <li>Trailers and site equipment as assets, a count of bags by place, and moving orders off a truck to avoid a wait for a bay.</li>
+  </ul></div>
+  <div class="card"><span class="tag t-ask">Yours, not code</span><h3>Settings on the server</h3><ul>
+    <li>Real road distances in a fleet's day plan: a routing server of the operator's own (<code>GLOS_ROUTER_URL</code>).</li>
+    <li>The plan's AI adviser: an Anthropic key on the server. It has never answered for real.</li>
+  </ul></div>
+</div>
+
 <!-- ───────────────────────────────────────────────────────────── the verdict -->
 <h2 id="verdict">The short answer</h2>
 <p class="lead">We are strong at planning a fleet's day and at tracking who holds a parcel at every handover. Real-time handling is partial. Inbound supply flows, in the warehouse sense, are close to missing. What is missing there is decisions, not code.</p>
@@ -116,7 +144,7 @@
   <div class="card"><span class="tag t-strong">Strong</span><h3>Planning a fleet's day</h3><p>Orders from contract shippers or a spreadsheet are planned onto trucks by weight, driver hours, delivery windows and trips chained together. What does not fit goes to partner fleets, then the open board. Shippers are told when an order is left out or running late.</p></div>
   <div class="card"><span class="tag t-strong">Strong</span><h3>Many places, one custody record</h3><p>Shops, hubs, store docks and yards record every handover, so the network always knows who holds a parcel. Alarms fire for parcels never dropped off or never collected.</p></div>
   <div class="card"><span class="tag t-strong">Strong</span><h3>A driver's shift</h3><p>Start and end of shift with a chosen vehicle, the 13-hour limit and 9-hour rest said in advance, a snooze for new offers, and each fleet on its own clock.</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>Real time</h3><p>Positions from phones on shift, a map that updates every 45 seconds, push from a live server. Nothing re-plans during the day. A parcel's lateness was only measured after it arrived (now told as it happens, see the last section).</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>Real time</h3><p>Positions from phones on shift, a map that updates every 45 seconds, push from a live server. Nothing re-plans during the day. A parcel's lateness was only measured after it arrived (now told as it happens, see <a href="#built">Built from this assessment</a>).</p></div>
   <div class="card"><span class="tag t-partial">Partial</span><h3>Routes</h3><p>The order of stops is optimised. Distances are straight lines times 1.35 at one speed, except in a fleet's day plan, which can use real roads if the operator runs a routing server. No traffic.</p></div>
   <div class="card"><span class="tag t-partial">Partial</span><h3>Shift patterns</h3><p>Driver shifts are handled. The day plan counted every active driver, not who works that day (now a roster). A fleet's sites now keep shift patterns, loading bays and opening hours, and the plan says how many drivers each shift needs (see “Planning across sites and shifts”). Shops have opening hours; hubs have none, and no hub or shop has staff shifts.</p></div>
   <div class="card"><span class="tag t-missing">Missing</span><h3>Inbound supply</h3><p>No expected-arrival notices, no receiving appointments, no counting goods in against what was expected, no storage. A store's dock is outbound only, by design.</p></div>
@@ -203,9 +231,10 @@
         <li>Each fleet's own time zone. A plan's start hour and day length set by the office.</li>
         <li>Shops' weekly opening hours.</li>
       </ul></div>
-      <div><h4>What is missing</h4><ul>
-        <li>Different start times within one fleet (an early and a late shift), and two drivers sharing one truck in a day. The plan has one start and one length for every truck.</li>
-        <li>Staff shifts at shops and hubs. Hub opening hours.</li>
+      <div><h4>What was missing</h4><ul>
+        <li>Different start times within one fleet (an early and a late shift), and two drivers sharing one truck in a day: the plan had one start and one length for every truck. <b>Built 2026-10-17</b> as shifts at a site (<code>3a1e7df</code>, see <a href="#resources">Planning across sites and shifts</a>).</li>
+        <li>Staff shifts at shops and hubs: <b>left out</b> by your answer of 2026-10-17, drivers' shifts only.</li>
+        <li>Hub opening hours: still missing, with the inbound decisions (D8).</li>
       </ul></div>
     </div>
   </div>
@@ -371,7 +400,7 @@
 <div class="grid" id="built-cards">
   <div class="card"><span class="tag t-strong">Built</span><h3>Who drives on which day</h3>
     <p>On the plan board for a day, the office ticks who drives and saves. The plan counts those drivers instead of every active one and names them; where nobody has said, it says it counted everybody. A driver put on a day or taken off one is told, and sees their coming days under “Your fleet”.</p>
-    <ul><li>A planning fact only: no hours, no pay, and anybody can still start a shift.</li><li>Still open, a decision of its own: different start times within one fleet, and two drivers sharing a truck in a day.</li></ul>
+    <ul><li>A planning fact only: no hours, no pay, and anybody can still start a shift.</li><li>Built since, 2026-10-17: different start times within one fleet, and two drivers sharing a truck in a day, as a site's shifts (<code>3a1e7df</code>).</li></ul>
     <p class="note">Commit <code>83c5f84</code>.</p></div>
   <div class="card"><span class="tag t-strong">Built</span><h3>A parcel running late is told</h3>
     <p>A parcel is running late when the network holds it on its way and the time it was promised to be ready is more than two hours behind it. The receiver and a person who sent it are told once, in the app; a store hears on its systems. The tracking page, the parcel's screen and the list say it too.</p>
@@ -402,8 +431,8 @@
 <div class="card decision">
   <p class="q"><span class="num">P1</span>Signed webhooks for every party, on every handover</p>
   <dl>
-    <dt>What</dt><dd>Today only a store's systems hear, and only five events at the end of a journey. Every party with systems of its own — a store, a business, a fleet — would subscribe to what concerns it: taken in, loaded, at a hub, delivered, a problem reported, money settled. Signed, retried, in order, and readable back as a log, so their systems keep step with ours and nobody re-keys anything.</dd>
-    <dt>Decisions</dt><dd><ul><li>Which events, and what each may carry for whom (a fleet must not learn a store's prices; a store must not learn a driver's position).</li><li>How long failed deliveries are retried, and who is told when a subscriber stays down.</li></ul></dd>
+    <dt>What</dt><dd>Before: only a store's systems heard, and only five events at the end of a journey. Every party with systems of its own — a store, a business, a fleet — would subscribe to what concerns it: taken in, loaded, at a hub, delivered, a problem reported, money settled. Signed, retried, in order, and readable back as a log, so their systems keep step with ours and nobody re-keys anything.</dd>
+    <dt>Decisions</dt><dd><ul><li>Which events, and what each may carry for whom (a fleet must not learn a store's prices; a store must not learn a driver's position). <b>Your answers, rounds 9–11:</b> the store first; each party's system is told only what its own app shows it; a fleet's hears a load's money only where we pay the fleet, and where its vehicles are only when the fleet turns that on, with the driver told. <b>Built</b> (<code>5d8df21b</code>, <code>170f4831</code>, <code>64e2c10</code>).</li><li>How long failed deliveries are retried, and who is told when a subscriber stays down. <b>Built:</b> every message signed, tried again for about two days, readable back and sent again by hand; its owners or managers are told once a day while its system stays down.</li></ul></dd>
     <dt>Builds on</dt><dd>The store webhooks and their signing (vendor callbacks); the custody chain, which already records every handover as an event.</dd>
   </dl>
 </div>
@@ -421,7 +450,7 @@
   <p class="q"><span class="num">P3</span>Standards where they are cheap</p>
   <dl>
     <dt>What</dt><dd>An accounting export an ERP imports as it is — journal lines with accounts, not a ledger to retype — and GS1 serial shipping container codes (SSCC) on pallet labels, so a receiving warehouse scans our labels into its own system.</dd>
-    <dt>Decisions</dt><dd><ul><li>Which accounting systems the first customers use, per country (that decides the format).</li><li>Pallet codes wait on the load-carrier decision (the hub declares its carrier; see D11 above).</li></ul></dd>
+    <dt>Decisions</dt><dd><ul><li>Which accounting systems the first customers use, per country (that decides the format).</li><li>Pallet codes wait on the load-carrier decision (the hub declares its carrier; see D11 above). <b>Built since, for packages:</b> a shipper's own GS1 code (SSCC) on every package label beside ours, for stores and a forwarder's clients too, found by every scan box, and every label for thermal printers (<code>349349d</code>, <code>16c3959</code>, <code>89a8889</code>, <code>9404440</code>, <code>f5a8245</code>, <code>58a5e37</code>, <code>4876e12</code>).</li></ul></dd>
     <dt>Builds on</dt><dd>The double-entry books; the label service.</dd>
   </dl>
 </div>
@@ -570,6 +599,7 @@
   <div class="card"><span class="tag t-strong">Answered</span><h3>Your thirty-first answers, built</h3><p>Every evidence photo — at the counter, on a load, in the Send app — is one we hold, taken by whoever did that step, for it alone; anything else is refused by name before a step is written (<code>d22eec9</code>).</p></div>
   <div class="card"><span class="tag t-strong">Answered</span><h3>Your thirty-second answers, built</h3><p>A store parcel’s GS1 barcode finds its parcel at every scan box — the shop’s, the hub’s, the console’s — for whoever handles it now, and for nobody else (<code>58a5e37</code>).</p></div>
   <div class="card"><span class="tag t-strong">Answered</span><h3>Your thirty-third answers, built</h3><p>A business’s own system writes, reads and takes off the seals on its loads with its key, through the Business app’s own checks; a test key keeps nothing (<code>395c913</code>).</p></div>
+  <div class="card"><span class="tag t-strong">Then</span><h3>Against ISO 28000</h3><p>After the thirty-third answers, supply-chain security was checked point by point against ISO 28000/28001 (2026-10-20), and your answers on it were built through 2026-10-22. In full, with what is left there, on <a href="iso28000-gaps.html">iso28000-gaps.html</a>.</p></div>
   <div class="card"><span class="tag t-ask">Your choice</span><h3>What matters most</h3><p>The thirty gaps are built. What comes next is asked with my recommendations.</p></div>
 </div>
 </div>
