@@ -120,7 +120,7 @@ export const enDriver = {
   'driver.signin.why1': 'Nobody can drive as you with your badge alone',
   'driver.signin.why2': 'A new PIN signs out every other phone',
   'driver.signin.why3': 'Five wrong PINs lock it; a code opens it again',
-  'driver.signin.aloud': 'Type the phone number you are registered with, then your five digit PIN. First time here? Tap first time, and we send you a code.',
+  'driver.signin.aloud': 'Type the phone number you are registered with, then your five digit PIN. No PIN yet? Tap “Forgot your PIN?”, and we send you a code to choose one.',
 
   // Route screen (choose start + destination, then get offers).
   'driver.route.title': 'Where are you going?',

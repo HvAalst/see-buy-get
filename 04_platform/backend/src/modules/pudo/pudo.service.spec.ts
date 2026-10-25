@@ -1606,7 +1606,10 @@ describe('PUDO Light', () => {
         identity.createParcel({ receiverMobile: '+254700552011', originPudoDid: from.did, destPudoDid: to.did, dimensionsCm: dims, weightKg: 2, expectedTotal: shown.locked.gross, ...(near ? { near } : {}) } as never, asConsumer(sender.personDid));
       // Without "near me" the cheaper bicycle prices it: not the figure the sender agreed to.
       expect(() => send()).toThrow(/price is now/);
-      expect(send(W).parcel.parcelId).toBeTruthy();
+      const booked = send(W) as unknown as { parcel: { parcelId: string }; price: { total: number; currency?: string } };
+      expect(booked.parcel.parcelId).toBeTruthy();
+      // …and the receipt says the price in its money, never as a bare figure.
+      expect(booked.price).toMatchObject({ total: shown.locked.gross, currency: 'KES' });
     });
   });
 

@@ -38,6 +38,8 @@ export interface NetworkPoint {
   /** False: no new parcel can name this shop. It still hands out what it holds, so it is on the map — and is not offered here. */
   takesNew?: boolean;
   pricePerParcel: number;
+  /** The money its price is in: its company's. */
+  currency?: string;
   // REP1 — the PII-free public reputation: the aggregate + a cold-start flag (a mean of one review is noise,
   // so below the backend's floor `isNew` is true and the UI shows "New" instead of a headline average).
   rating?: { count: number; average: number; isNew?: boolean } | null;
@@ -64,6 +66,8 @@ export interface QuoteLegPrice {
 }
 
 export interface QuoteView {
+  /** The money the price is in: the selling company's. */
+  currency?: string;
   hops: QuoteHop[];
   /** Whether the transport was priced on the box the sender MEASURED or on the tier it was declared as.
    *  Absent from a quote taken before this existed, which reads as the tier — the honest answer for it. */
@@ -187,6 +191,8 @@ export interface ClassifyView {
 /** The locked price a mint returns — what the sender pays in cash at the drop-off shop. */
 export interface MintPrice {
   routeMode: 'locked' | 'flexible';
+  /** The money every figure here is in: the parcel's. */
+  currency?: string;
   /** The GROSS — the cash handed over at the drop-off shop, tax included. */
   total: number;
   transport?: number;

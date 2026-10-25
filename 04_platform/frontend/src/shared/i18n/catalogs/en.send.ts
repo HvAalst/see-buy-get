@@ -128,7 +128,7 @@ export const enSend = {
   'send.logic.dimsBlocker': 'Measure the parcel: length, width, height and weight',
   'send.logic.mintTake': 'Take the parcel to {shop} and show this label',
   'send.logic.mintPay': 'Pay {price} there — cash is fine',
-  'send.logic.mintReceiverSees': 'The receiver already sees it in their app',
+  'send.logic.mintReceiverSees': 'The receiver sees it in the SeeBuyGet app on their number — now, or as soon as they sign up',
   'send.logic.handling': '{price} handling',
   'send.logic.rated': 'rated {avg}',
   'send.logic.repNone': 'New — no ratings yet',
@@ -136,7 +136,7 @@ export const enSend = {
   'send.logic.repNewMany': 'New — {count} ratings so far',
   'send.logic.repRated': 'Rated {avg} by {count}',
   'send.logic.servingSince': 'Serving since {year}',
-  'send.logic.lockedSub': 'Rides the lowest-price bus on this route',
+  'send.logic.lockedSub': 'You pay this at the shop, when you drop it off',
   // "Includes VAT 16.00" — the price already contains it, so the wording must not read as an addition.
   'send.logic.taxLine': 'Includes {label} {amount}',
   'send.logic.taxDefault': 'tax',
@@ -163,6 +163,11 @@ export const enSend = {
   'send.logic.personalSend': 'Personal send',
 
   // Send wizard — step 1: measure the parcel.
+  // No shop at all on the network: said before anybody measures (2026-10-25).
+  'send.parcel.noShopsTitle': 'No SeeBuyGet shop is open yet',
+  'send.parcel.noShopsDetail': 'A parcel goes from one SeeBuyGet shop to another, and none is open yet. When one opens near you, its price shows here.',
+  'send.parcel.noShopsJoin': 'Run a shop? See how it joins',
+  'send.parcel.noShopsBlock': 'There is no shop to take it to yet.',
   'send.parcel.title': 'What are you sending?',
   'send.parcel.lede': 'Measure it — the size comes from the numbers, same as in any shop.',
   'send.parcel.measurements': 'Measurements',
@@ -188,7 +193,7 @@ export const enSend = {
   'send.point.ledeFrom': 'Show us where you are, then tap the shop you will take it to.',
   'send.point.ledeTo': 'Show us where the receiver is, then tap the shop they will collect it from.',
   'send.point.finding': 'Finding shops…',
-  'send.point.none': 'No shops are on the network here yet.',
+  'send.point.none': 'No SeeBuyGet shop is open yet.',
   'send.point.mapLabel': 'Map of {count, plural, one {# shop} other {# shops}}',
   'send.point.mapLabelHere': 'Map of {count, plural, one {# shop} other {# shops}}, with the place you marked',
   // Where, on the map or as an address (the user, 2026-10-25: three words were "nearly mission impossible for new
@@ -242,7 +247,7 @@ export const enSend = {
   'send.quote.nextTitle': 'What you do next',
   'send.quote.nextTake': 'Take the parcel to {shop}',
   'send.quote.nextPay': 'Pay there — cash is fine',
-  'send.quote.nextCode': 'You get a tracking code by message',
+  'send.quote.nextCode': 'At the counter you get the tracking key, and the code the receiver collects it with',
   'send.quote.book': 'Book this send',
   'send.quote.signIn': 'Sign in to book it',
   'send.quote.changeShop': 'Change the delivery shop',
@@ -279,7 +284,7 @@ export const enSend = {
   'send.done.openLabel': 'Open and print the label',
   'send.done.seeInParcels': 'See it in My parcels',
   'send.done.another': 'Send another parcel',
-  'send.done.aloud': 'Your label is ready. Take the parcel to {shop}, show the label, and pay {price} in cash. The receiver already sees it in their app.',
+  'send.done.aloud': 'Your label is ready. Take the parcel to {shop}, show the label, and pay {price} in cash. The receiver sees it in the SeeBuyGet app on their number.',
 
   // Track screen.
   'send.track.title': 'Where is my parcel?',

@@ -13,7 +13,7 @@ import { PersonService } from './person.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { ConfirmDeviceDto } from './pudo.dto';
 import { OtpService } from './otp.service';
-import { ParcelService } from './parcel.service';
+import { ParcelService, parcelCurrency } from './parcel.service';
 import { DispatchService } from './dispatch.service';
 import { CargoService } from './cargo.service';
 import { RoutingService } from './routing.service';
@@ -344,8 +344,9 @@ export class IdentityController {
       label,
       // `total` is the GROSS — the cash this sender hands over at the counter. `tax` names the part of it
       // that is not ours, because a person is entitled to see the tax they paid and, in most places, a
-      // receipt is required to say so. The platform's own three layers stay out of it: a buyer sees a price.
-      price: { routeMode: parcel.routeMode, total: parcel.shipmentCost, transport: parcel.transportCost, nodeFees: parcel.nodeFees, platformFee: parcel.platformFee, km: parcel.routeKm, ceiling: parcel.ceilingCost, tax: parcel.shipmentTax, taxLabel: parcel.taxLabel },
+      // receipt is required to say so. The platform's own three layers stay out of it: a buyer sees a price — in its
+      // money, said beside it (a sum is never said bare).
+      price: { routeMode: parcel.routeMode, currency: parcelCurrency(parcel), total: parcel.shipmentCost, transport: parcel.transportCost, nodeFees: parcel.nodeFees, platformFee: parcel.platformFee, km: parcel.routeKm, ceiling: parcel.ceilingCost, tax: parcel.shipmentTax, taxLabel: parcel.taxLabel },
       journey,
     };
   }

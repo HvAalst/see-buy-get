@@ -7,7 +7,7 @@
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { IconName } from '../../shared/ui/Icon';
 import { PIN_LENGTH } from '../../shared/account/pin';
-import type { MessageKey } from '../../shared/i18n';
+import { formatMoney, type MessageKey } from '../../shared/i18n';
 import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, RunningLate, TrackView, FreightTrackView } from './types';
 
 /**
@@ -75,18 +75,24 @@ export function dimsBlocker(d: DimsForm, t: Translate): string {
 }
 
 /** The done-screen instructions — what turns the minted label into a moving parcel. */
-export function mintChecklist(shopName: string, total: number, t: Translate): string[] {
+export function mintChecklist(shopName: string, total: number, currency: string | undefined, t: Translate): string[] {
   return [
     t('send.logic.mintTake', { shop: shopName }),
-    t('send.logic.mintPay', { price: money(total) }),
+    t('send.logic.mintPay', { price: money(total, currency) }),
     t('send.logic.mintReceiverSees'),
   ];
 }
 
 /* ------------------------------------------------------------------ money -- */
 
-export function money(v: number | null | undefined): string {
-  return (Number(v) || 0).toFixed(2);
+/**
+ * A sum, said with its money: "KES 3.80". Never bare — every company of ours keeps its own money, and "3.80" beside
+ * nothing reads as a unit this network does not have (2026-10-25: the price on "See the price" was said bare). The
+ * money is a required argument, so every place that says a sum has to say where its money comes from; undefined only
+ * where the answer truly has none, which then reads as the bare figure.
+ */
+export function money(v: number | null | undefined, currency: string | undefined): string {
+  return formatMoney(Number(v) || 0, currency);
 }
 
 /* ----------------------------------------------------------------- points -- */
@@ -120,7 +126,7 @@ export function pointDistance(p: NetworkPoint, near: GeoPoint | null | undefined
 export function pointLine(p: NetworkPoint, t: Translate): string {
   const bits = [t('send.zone', { zone: p.zone })];
   if (p.landmark) bits.push(p.landmark);
-  bits.push(t('send.logic.handling', { price: money(p.pricePerParcel) }));
+  bits.push(t('send.logic.handling', { price: money(p.pricePerParcel, p.currency) }));
   // REP1 — only a RELIABLE average on the compact row: not an unrated shop, and not a lone review (isNew).
   // The detail sheet carries the honest "New" wording; a crowded row just drops the chip.
   if (p.rating && p.rating.count && !p.rating.isNew) bits.push(t('send.logic.rated', { avg: p.rating.average.toFixed(1) }));
@@ -164,13 +170,13 @@ export function lockedPrice(q: QuoteView, t: Translate): { total: number; tax: n
  *  receipt; it belongs to the operator's console, not to the person at the counter. */
 export function taxLine(q: QuoteView, t: Translate): string | null {
   if (!(q.locked.tax > 0)) return null;
-  return t('send.logic.taxLine', { label: q.tax?.label || t('send.logic.taxDefault'), amount: money(q.locked.tax) });
+  return t('send.logic.taxLine', { label: q.tax?.label || t('send.logic.taxDefault'), amount: money(q.locked.tax, q.currency) });
 }
 
 /** The same line from a minted parcel's own price, which carries the tax it was SOLD with. */
-export function mintTaxLine(price: { tax?: number; taxLabel?: string }, t: Translate): string | null {
+export function mintTaxLine(price: { tax?: number; taxLabel?: string; currency?: string }, t: Translate): string | null {
   if (!(price.tax && price.tax > 0)) return null;
-  return t('send.logic.taxLine', { label: price.taxLabel || t('send.logic.taxDefault'), amount: money(price.tax) });
+  return t('send.logic.taxLine', { label: price.taxLabel || t('send.logic.taxDefault'), amount: money(price.tax, price.currency) });
 }
 
 /**
@@ -202,7 +208,7 @@ export function journeyLine(q: QuoteView): string {
 }
 
 export function quoteSummary(q: QuoteView, t: Translate): string {
-  return t('send.logic.quoteSummary', { km: Math.round(q.totalKm), stops: q.hops.length, price: money(q.locked.gross) });
+  return t('send.logic.quoteSummary', { km: Math.round(q.totalKm), stops: q.hops.length, price: money(q.locked.gross, q.currency) });
 }
 
 /* ------------------------------------------------------------------ track -- */
@@ -516,7 +522,7 @@ export function sendWorkLine(parcels: { sent: Array<{ status: string }>; receive
  */
 export function coverLine(q: QuoteView, t: Translate): string | null {
   const free = q.insurance?.freeLimit ?? 0;
-  if (free > 0) return t('send.logic.coverFree', { amount: money(free) });
+  if (free > 0) return t('send.logic.coverFree', { amount: money(free, q.currency) });
   return t('send.logic.coverNone');
 }
 

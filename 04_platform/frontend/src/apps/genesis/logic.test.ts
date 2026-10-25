@@ -151,6 +151,15 @@ describe('quote presentation', () => {
     expect(quoteSummary(taxed, t)).toContain('5.10');
   });
 
+  it('says every sum with its money — the price above all (2026-10-25: “3.80” was said bare on “See the price”)', () => {
+    const kes = quote({ currency: 'KES', locked: { transport: 2, base: 4, total: 4.4, tax: 0.7, gross: 5.1 }, tax: { ratePct: 0.16, label: 'VAT' } });
+    expect(money(5.1, 'KES')).toMatch(/KES\s?5\.10/);
+    expect(quoteSummary(kes, t)).toMatch(/KES\s?5\.10/);
+    expect(taxLine(kes, t)).toMatch(/Includes VAT KES\s?0\.70/);
+    expect(coverLine(quote({ currency: 'UGX', insurance: { premiumPct: 0.02, freeLimit: 5000 } }), t)).toContain('UGX');
+    expect(pointLine(point({ pricePerParcel: 1.5, currency: 'KES' }), t)).toMatch(/KES\s?1\.50/);
+  });
+
   it('names the tax inside the price, and says nothing at all when there is none', () => {
     // "Includes", never "plus" — the price already contains it. And a line reading zero is noise on a
     // receipt: an untaxed sale shows a price, full stop.
@@ -164,7 +173,7 @@ describe('quote presentation', () => {
   it('says what is covered — and says it plainly when nothing is', () => {
     // The only line on the price card about things going wrong, and it must speak in BOTH directions:
     // "we did not mention it" is not a thing anybody should discover after their parcel is broken.
-    expect(coverLine(quote({ insurance: { premiumPct: 0.02, freeLimit: 5000 } }), t)).toBe('Covered up to 5000.00 if it is damaged or lost');
+    expect(coverLine(quote({ insurance: { premiumPct: 0.02, freeLimit: 5000 } }), t)).toBe('Covered up to 5,000.00 if it is damaged or lost');
     expect(coverLine(quote({ insurance: { premiumPct: 0, freeLimit: 0 } }), t)).toBe('Not covered against damage or loss');
     expect(coverLine(quote(), t)).toBe('Not covered against damage or loss'); // a quote from before cover existed
   });
@@ -238,9 +247,10 @@ describe('dims (PG3)', () => {
   });
 
   it('mintChecklist tells the sender the three things that matter', () => {
-    const items = mintChecklist('Mama Njeri', 4.4, t);
+    const items = mintChecklist('Mama Njeri', 4.4, 'KES', t);
     expect(items[0]).toContain('Mama Njeri');
     expect(items[1]).toContain('4.40');
+    expect(items[1]).toContain('KES'); // the cash to hand over, in its money
     expect(items).toHaveLength(3);
   });
 });
@@ -325,7 +335,7 @@ describe('track', () => {
 
   it('stepTime falls back to the raw string on garbage', () => {
     expect(stepTime('not-a-date')).toBe('not-a-date');
-    expect(money(4.4)).toBe('4.40');
+    expect(money(4.4, undefined)).toBe('4.40');
   });
 
   it('the collect card shows only when a receiver can act, and the way link needs a pin', () => {

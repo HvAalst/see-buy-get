@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
@@ -52,12 +52,27 @@ function ParcelStep({ state, actions }: SendScreenProps) {
   const t = useT();
   const blocked = dimsBlocker(state.dims, t);
   const derived = state.derived;
+  // NO SHOP YET, SAID BEFORE ANYBODY MEASURES (2026-10-25: on the empty live network a newcomer measured a parcel and
+  // only then read "no shops"). The shops are asked for as this step opens; with none at all, the step says so first.
+  useEffect(() => {
+    if (state.pointsState === 'idle') void actions.loadPoints();
+  }, []);
+  const noShops = state.pointsState === 'ready' && state.points.length === 0;
 
   return (
     <div class="scr">
       <StepDots at={1} />
       <h1 class="scr__title">{t('send.parcel.title')}</h1>
       <p class="scr__lede">{t('send.parcel.lede')}</p>
+
+      {noShops ? (
+        <>
+          <Note tone="warn" icon="home" title={t('send.parcel.noShopsTitle')} detail={t('send.parcel.noShopsDetail')} />
+          <Button variant="link" full={false} onClick={() => location.assign('/for/shops/')}>
+            {t('send.parcel.noShopsJoin')}
+          </Button>
+        </>
+      ) : null}
 
       <Card label={t('send.parcel.measurements')}>
         <div class="dims">
@@ -109,10 +124,10 @@ function ParcelStep({ state, actions }: SendScreenProps) {
       </Card>
 
       <div class="scr__cta">
-        <Button busy={state.deriveBusy} disabled={Boolean(blocked) || Boolean(derived?.dedicated)} onClick={() => void actions.submitParcel()}>
+        <Button busy={state.deriveBusy} disabled={Boolean(blocked) || Boolean(derived?.dedicated) || noShops} onClick={() => void actions.submitParcel()}>
           {t('send.parcel.continue')}
         </Button>
-        {blocked ? <p class="hint" style="margin-top:8px">{blocked}</p> : null}
+        {blocked || noShops ? <p class="hint" style="margin-top:8px">{noShops ? t('send.parcel.noShopsBlock') : blocked}</p> : null}
       </div>
 
       <div class="scr__foot">
@@ -207,7 +222,10 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
         </Card>
       ) : null}
 
-      {/* How to say where: the map first, an address the other way (the user, 2026-10-25). */}
+      {/* How to say where: the map first, an address the other way (the user, 2026-10-25). With no shop at all there is
+          nothing to be near, and a map switch with no map under it is a broken screen: neither is offered. */}
+      {state.pointsState === 'ready' && state.points.length === 0 ? null : (
+      <>
       <div class="seg" role="group" aria-label={t('send.point.howAria')}>
         <button type="button" class={`seg__btn${how === 'map' ? ' seg__btn--on' : ''}`} aria-pressed={how === 'map'} onClick={() => setHow('map')}>
           <Icon name="pin" size={18} /> {t('send.point.byMap')}
@@ -260,6 +278,8 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
             </a>
           </p>
         </form>
+      )}
+      </>
       )}
 
       {points.length ? (
@@ -321,7 +341,7 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
  *  public profile the sender can weigh before committing. */
 function shopFacts(shop: NetworkPoint, away: string | null, t: Translate): string[] {
   return [
-    t('send.point.factHandle', { price: money(shop.pricePerParcel) }),
+    t('send.point.factHandle', { price: money(shop.pricePerParcel, shop.currency) }),
     away ? t('send.point.factAway', { dist: away }) : t('send.point.factZone', { zone: shop.zone }),
     shop.openState === 'open' ? t('send.point.openNow') : t('send.point.closedNow'),
     ...(shop.freeSlots != null ? [shop.freeSlots === 1 ? t('send.point.slotOne', { count: shop.freeSlots }) : t('send.point.slotMany', { count: shop.freeSlots })] : []),
@@ -395,7 +415,7 @@ function QuoteStep({ state, actions }: SendScreenProps) {
           <div class="prices">
             <div class="price price--lead">
               <span class="price__title">{t('send.quote.priceTitle')}</span>
-              <span class="price__total">{money(lockedPrice(q, t).total)}</span>
+              <span class="price__total">{money(lockedPrice(q, t).total, q.currency)}</span>
               <span class="price__sub">{lockedPrice(q, t).sub}</span>
               {/* The tax the price already contains — named, never added on at the end. Rendered only when
                   there is one, which today is nowhere: a line reading zero is noise on a receipt. */}
@@ -412,7 +432,7 @@ function QuoteStep({ state, actions }: SendScreenProps) {
 
           <Card label={t('send.quote.journey')}>
             <p class="t-body">{journeyLine(q)}</p>
-            <p class="card__note">{t('send.quote.about', { km: Math.round(q.totalKm), fees: money(q.nodeFees) })}</p>
+            <p class="card__note">{t('send.quote.about', { km: Math.round(q.totalKm), fees: money(q.nodeFees, q.currency) })}</p>
             {/* The tier is on the parcel step as a Pill, so without this the price looks like the tier's
                 price. It is not — the tier is what the network will HANDLE it as; the price follows the
                 centimetres. Said only when it is true, so it never becomes a line nobody reads. */}
@@ -508,7 +528,7 @@ function BookStep({ state, actions }: SendScreenProps) {
         {q ? (
           <div class="kv">
             <span>{t('send.youPay')}</span>
-            <b>{money(lockedPrice(q, t).total)}</b>
+            <b>{money(lockedPrice(q, t).total, q.currency)}</b>
           </div>
         ) : null}
         {q && taxLine(q, t) ? <p class="card__note">{taxLine(q, t)}</p> : null}
@@ -527,7 +547,7 @@ function BookStep({ state, actions }: SendScreenProps) {
         <Button variant="link" full={false} onClick={() => actions.backTo('quote')}>
           {t('send.book.backToPrice')}
         </Button>
-        <ReadAloud text={() => t('send.book.aloud', { price: q ? money(lockedPrice(q, t).total) : t('send.book.thePrice'), shop: from?.shopName ?? t('send.book.theShop') })} label={t('send.readAloud')} />
+        <ReadAloud text={() => t('send.book.aloud', { price: q ? money(lockedPrice(q, t).total, q.currency) : t('send.book.thePrice'), shop: from?.shopName ?? t('send.book.theShop') })} label={t('send.readAloud')} />
       </div>
     </div>
   );
@@ -559,7 +579,7 @@ function DoneStep({ state, actions }: SendScreenProps) {
       {svg ? <div class="labelbox" dangerouslySetInnerHTML={{ __html: svg }} /> : null}
 
       <Card title={t('send.done.nextTitle')}>
-        <Checklist items={mintChecklist(fromName, m.price.total, t)} />
+        <Checklist items={mintChecklist(fromName, m.price.total, m.price.currency, t)} />
       </Card>
 
       {m.journey ? (
@@ -585,7 +605,7 @@ function DoneStep({ state, actions }: SendScreenProps) {
         ) : null}
         <div class="kv">
           <span>{t('send.youPay')}</span>
-          <b>{money(m.price.total)}</b>
+          <b>{money(m.price.total, m.price.currency)}</b>
         </div>
         {/* From the PARCEL's own price, not from a fresh quote — this is a receipt, and it must show the
             tax this shipment was actually sold with even if the rate has moved since. */}
@@ -606,7 +626,7 @@ function DoneStep({ state, actions }: SendScreenProps) {
         <Button variant="link" full={false} onClick={actions.startAgain}>
           {t('send.done.another')}
         </Button>
-        <ReadAloud text={() => t('send.done.aloud', { shop: fromName, price: money(m.price.total) })} label={t('send.readAloud')} />
+        <ReadAloud text={() => t('send.done.aloud', { shop: fromName, price: money(m.price.total, m.price.currency) })} label={t('send.readAloud')} />
       </div>
     </div>
   );

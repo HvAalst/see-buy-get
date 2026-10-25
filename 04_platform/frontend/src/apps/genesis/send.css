@@ -74,9 +74,11 @@
 
 /* ---------------------------------------------------------- price cards -- */
 
+/* One price, the whole width: the second card (the dearest, "any carrier") went with PG3, and its empty column was
+   left beside the one price there is (2026-10-25). */
 .prices {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
