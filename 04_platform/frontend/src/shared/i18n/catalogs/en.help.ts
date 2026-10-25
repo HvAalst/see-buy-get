@@ -144,12 +144,12 @@ export const enHelp = {
   'help.hub-papers.note2': 'The owner sends them, signed in as the hub. The people who work its floor cannot send them, and nobody can send them for you.',
   // fleet-sign-in
   'help.fleet-sign-in.title': 'Sign in to the Fleet app',
-  'help.fleet-sign-in.summary': 'Two steps: the company code says which fleet, and your own phone and PIN say who you are.',
-  'help.fleet-sign-in.step1': 'Type the company code (it looks like FM-1A2B3C). The app shows the company name, so you know it is the right one.',
-  'help.fleet-sign-in.step2': 'Type your phone number and your 5-digit PIN.',
+  'help.fleet-sign-in.summary': 'Your own phone number and PIN open the Fleet app. If you manage more than one fleet, you choose which to open.',
+  'help.fleet-sign-in.step1': 'Type your phone number and your 5-digit PIN, and tap “Sign in”.',
+  'help.fleet-sign-in.step2': 'One fleet opens at once. If you manage more than one, pick it from the list. A fleet you signed up yourself opens once SeeBuyGet has checked its papers and recorded its bond; until then the list says where it stands.',
   'help.fleet-sign-in.step3': 'A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.',
   'help.fleet-sign-in.step4': 'Forgot your PIN, or have none yet? Tap “Forgot your PIN?”. We send a code to your phone; type it, then choose a PIN. The first time, you also add a recovery email.',
-  'help.fleet-sign-in.step5': 'No code — or a fleet you signed up yourself? Tap “No code? Sign in with your phone number”, type your phone and PIN, and pick your fleet from the list. A fleet you signed up opens once SeeBuyGet has checked its papers and recorded its bond.',
+  'help.fleet-sign-in.step5': 'Have your company’s sign-in code (it looks like FM-1A2B3C)? Tap “Have a fleet code? Use it” and type it: the app shows the company name, then asks for your phone and PIN.',
   'help.fleet-sign-in.note1': 'Five wrong PINs lock the PIN until you verify your phone by code and choose a new one. Anybody who manages the fleet can see the code in the app.',
   'help.fleet-sign-in.note2': 'Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else.',
   // driver-sign-in

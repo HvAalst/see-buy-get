@@ -33,7 +33,10 @@ export interface SignInScreenProps {
 }
 
 /**
- * Two steps: which fleet, then which person.
+ * THE PERSON FIRST (the user, 2026-10-25, asked whether the Fleet app should open on the phone and PIN as every other
+ * app does: yes). A phone and PIN find the fleets that person manages: one, and active, opens at once; several are
+ * listed, each with where it stands — a fleet that signed itself up is on the list before it is active. The fleet's
+ * code is the other way in: it names the fleet, then asks which person.
  *
  * It used to be one shared company code, and that code was the whole authentication. For a company
  * running twenty managers across as many depots that meant no record of who did what, no way to cut off
@@ -43,8 +46,7 @@ export interface SignInScreenProps {
  * company and a mistyped code is not blamed on the PIN two fields later. The person's phone and PIN are
  * the credential, checked by the identity spine that already counts wrong attempts and locks out.
  *
- * And because the code only NAMES the fleet, forgetting it must not lock anybody out: "Forgot the code?" asks
- * for the phone and PIN first and lists the fleets that person manages.
+ * And because the code only NAMES the fleet, nobody needs it to get in: the phone and PIN are the first door.
  *
  * A PIN can be CHOSEN here too — "Forgot your PIN?" (`ChoosePinSheet`). It could not: somebody
  * added to a fleet's office by their number had to go and choose a PIN in another app before this one would let
@@ -52,7 +54,8 @@ export interface SignInScreenProps {
  */
 export function SignInScreen({ actions, error, busy, company }: SignInScreenProps) {
   const t = useT();
-  const [mode, setMode] = useState<'code' | 'phone'>('code');
+  // The person first, as every other app opens (the user, 2026-10-25); the fleet's code is the other way in.
+  const [mode, setMode] = useState<'code' | 'phone'>('phone');
   const [code, setCode] = useState('');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
@@ -63,7 +66,17 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const again = useRef<() => void>(() => undefined);
   const confirming = isNewDevice(error) && closedFor !== error;
-  const findFleets = () => void actions.findMyFleets(phone, pin).then((found) => setFleets(found));
+  /**
+   * Their fleets, found by phone and PIN. One fleet, and active: it opens at once, as every other app opens on a phone
+   * and PIN. Several, or one not active yet: they are listed, each with where it stands.
+   */
+  const open = (p: string, n: string) =>
+    void actions.findMyFleets(p, n).then((found) => {
+      const only = found?.length === 1 ? found[0] : undefined;
+      if (only && only.status === 'ACTIVE') void actions.signInToFleet(only.did, p, n);
+      else setFleets(found);
+    });
+  const findFleets = () => open(phone, pin);
   const attempt = (what: () => void) => {
     again.current = what;
     what();
@@ -73,7 +86,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
     setChoosing(false);
     setPhone(p);
     setPin(n);
-    if (mode === 'phone') attempt(() => void actions.findMyFleets(p, n).then((found) => setFleets(found)));
+    if (mode === 'phone') attempt(() => open(p, n));
     else if (company) attempt(() => void actions.signIn(p, n));
   };
   const choosePin = (
@@ -150,8 +163,8 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
     return (
       <>
       <form class="scr" onSubmit={submit}>
-        <h1 class="scr__title">{t('fleet.signin.forgotTitle')}</h1>
-        <p class="scr__lede">{t('fleet.signin.forgotLede')}</p>
+        <h1 class="scr__title">{t('fleet.signin.title')}</h1>
+        <p class="scr__lede">{t('fleet.signin.phoneLede')}</p>
         {error && !confirming ? <ErrorNote error={error} /> : null}
 
         {fleets === null ? (
@@ -182,7 +195,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
         {fleets === null ? (
           <div class="scr__cta">
             <Button type="submit" disabled={!phone.trim() || !pin.trim()} busy={busy}>
-              {t('fleet.signin.findFleets')}
+              {t('fleet.signin.submit')}
             </Button>
           </div>
         ) : null}
@@ -196,12 +209,19 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           {t('fleet.signin.backToCode')}
         </Button>
 
+        {fleets === null ? (
+          <Card title={t('fleet.signin.canDoTitle')} tone="soft">
+            <Checklist items={[t('fleet.signin.can1'), t('fleet.signin.can2'), t('fleet.signin.can3')]} />
+          </Card>
+        ) : null}
+
         {/* The same foot as every sign-in screen: the PIN's own way back, then the rest. */}
         <div class="scr__foot">
           {fleets === null ? choosePin : null}
           <SignInHelp app="fleet" api={recovery} />
           <SignUpLink role="fleet" />
           <AllAppsLink />
+          <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />
         </div>
       </form>
       {sheets}
