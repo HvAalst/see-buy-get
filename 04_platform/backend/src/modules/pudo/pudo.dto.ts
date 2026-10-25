@@ -2575,6 +2575,14 @@ export class RegisterFreightDto {
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'A delivery day is YYYY-MM-DD' }) deliverOn?: string;
   /** P1b — the shipper's own number for an order under a contract. Used once per contract. */
   @IsOptional() @IsString() @MaxLength(60) orderRef?: string;
+  /**
+   * INBOUND, READING A — the receiving point: the code of a business's receiving point, as that business gave it. The load goes
+   * to that place (its name and where it is replace whatever destination was typed), and the business sees it among
+   * what is coming in — the logistics half, never the price.
+   */
+  @IsOptional() @IsString() @MaxLength(12) receivingPoint?: string;
+  /** The receiving business's own number for the order, when it gave one: a reference both sides understand. */
+  @IsOptional() @IsString() @MaxLength(60) receiverRef?: string;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

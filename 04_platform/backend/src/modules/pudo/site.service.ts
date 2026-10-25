@@ -40,6 +40,27 @@ export interface Site {
    * collect here. A place of its own only (a delivery place): a port's hours are the port's. Absent: it said neither.
    */
   loading?: SiteLoading;
+  /**
+   * INBOUND (reading A): this company receives goods here from its suppliers, who address a load to it by this code.
+   * Absent: it does not receive here through SeeBuyGet. See SiteService.openReceiving.
+   */
+  receiving?: { code: string; since: string; by: string };
+}
+
+/** Letters and digits nobody mistakes for one another on a phone or a delivery note: no I, L, O, 0 or 1. */
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+/** A receiving point's code: eight of them, written in two fours — "7KQ3-PX9M". */
+export function receivingCode(): string {
+  const bytes = randomBytes(8);
+  const chars = [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join('');
+  return `${chars.slice(0, 4)}-${chars.slice(4)}`;
+}
+
+/** A code as it compares: capitals, no spaces or dashes. Empty for something that cannot be one. */
+export function normalisedCode(code: string): string {
+  const plain = (code ?? '').toUpperCase().replace(/[\s-]/g, '');
+  return /^[A-Z0-9]{8}$/.test(plain) ? plain : '';
 }
 
 export interface SiteLoading {
@@ -166,6 +187,59 @@ export class SiteService {
     return this.list(entityId, 'delivery')
       .filter((s) => s.loading)
       .map((s) => ({ siteId: s.siteId, name: s.name, location: s.location, loading: s.loading! }));
+  }
+
+  /* ------------------------------------------------- inbound, reading A: receiving points -- */
+
+  /**
+   * A PLACE OF ITS OWN WHERE THIS COMPANY RECEIVES GOODS from its suppliers (assessment.html, inbound reading A; the
+   * user, 2026-10-25: "Yes, A then B"). Opening it gives the place a code; the company gives the code to its suppliers,
+   * who write it as "deliver to" when they post a load, and that load is among what the company sees coming in. The
+   * code NAMES the place and opens nothing (rule: an identifier opens nothing): whoever holds it learns the place's name
+   * and where it is, which a supplier needs to send anything there, and reads nothing else of the company's.
+   * Already open, it is left as it is.
+   */
+  openReceiving(entityId: string, siteId: string, by: string, now = Date.now()): Site {
+    const site = this.require(entityId, siteId);
+    if (site.kind !== 'delivery') throw new GlosError('INVALID_STATE', 'Goods are received at a place of your own — not at a port or a place of clearance');
+    if (site.receiving) return site;
+    return this.withCode(site, by, now);
+  }
+
+  /** A new code for a receiving point, when the old one went further than it should: the old one names nothing from now. */
+  newReceivingCode(entityId: string, siteId: string, by: string, now = Date.now()): Site {
+    const site = this.require(entityId, siteId);
+    if (!site.receiving) throw new GlosError('INVALID_STATE', `${site.name} does not receive goods through SeeBuyGet: open it first`);
+    return this.withCode(site, by, now);
+  }
+
+  /** It no longer receives here through us: the code names nothing. Loads already sent to it stay among what is coming. */
+  closeReceiving(entityId: string, siteId: string): Site {
+    const site = this.require(entityId, siteId);
+    const next: Site = { ...site };
+    delete next.receiving;
+    this.sites.set(siteId, next);
+    return next;
+  }
+
+  /** This company's receiving points, alphabetical. */
+  receivingPoints(entityId: string): Site[] {
+    return this.list(entityId, 'delivery').filter((s) => s.receiving);
+  }
+
+  /** The receiving point a code names — written as it was given, in any case, with or without its dash. */
+  byReceivingCode(code: string): Site | undefined {
+    const wanted = normalisedCode(code);
+    if (!wanted) return undefined;
+    return [...this.sites.values()].find((s) => s.receiving && normalisedCode(s.receiving.code) === wanted);
+  }
+
+  private withCode(site: Site, by: string, now: number): Site {
+    let code = receivingCode();
+    while (this.byReceivingCode(code)) code = receivingCode();
+    const next: Site = { ...site, receiving: { code, since: new Date(now).toISOString(), by } };
+    this.sites.set(site.siteId, next);
+    return next;
   }
 
   /** One site, and only to the company that saved it. Anyone else is told it does not exist. */

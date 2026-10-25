@@ -10,6 +10,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { BUSINESS_HOOK_EVENTS, type BusinessHookEvent, type BusinessSystemCounts, type BusinessSystemView } from './business-hook.types';
 import { BusinessService, type ActingMember } from './business.service';
 import { CompanyKeyService } from './company-key.service';
+import { InboundService } from './inbound.service';
 import { DispatchService } from './dispatch.service';
 import { PASSAGE_HOOK_EVENTS, type PassageKind } from './load-passage.types';
 import { NotificationService } from './notification.service';
@@ -80,6 +81,8 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly keyring?: CompanyKeyService,
+    // Inbound, reading A: the business a load is coming in to hears each step of it too, as its Coming in reads it.
+    @Optional() private readonly inbound?: InboundService,
   ) {}
 
   onModuleInit(): void {
@@ -109,6 +112,10 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
     this.events.subscribe<{ freightId?: string; reading?: unknown }>(GlosEvent.Pudo.FreightTempBreach, (e) => {
       if (e.payload?.freightId) this.relay('load.cold_chain_broken', String(e.payload.freightId), { reading: e.payload.reading });
     });
+    // Inbound, reading A: a load addressed to one of its receiving points — the first its system hears of it.
+    this.events.subscribe<{ freightId?: string }>(GlosEvent.Pudo.InboundAddressed, (e) => {
+      if (e.payload?.freightId) this.relayInbound('inbound.addressed', String(e.payload.freightId));
+    });
     this.timer = setInterval(() => void this.drain(), DRAIN_MS);
     this.timer.unref?.();
   }
@@ -134,6 +141,24 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
       const load = this.dispatch.postedBy(did).find((r) => r.freightId === freightId);
       if (load) this.enqueue(entity.entityId, event, { load, ...also });
     }
+    this.relayInbound(`inbound.${event.slice('load.'.length)}`, freightId, also);
+  }
+
+  /**
+   * INBOUND, READING A — one step of a load coming in, to the system of the business it is addressed to: exactly what its
+   * Coming in reads (InboundService.rowOf), never the load's price. Not to a business that also sent it: its Loads hear it.
+   */
+  relayInbound(event: string, freightId: string, also: Record<string, unknown> = {}): void {
+    if (!this.inbound) return;
+    let f;
+    try {
+      f = this.dispatch.requireFreightPublic(freightId);
+    } catch {
+      return;
+    }
+    const receiver = f.receiver ? this.entities.find(f.receiver.entityId) : undefined;
+    if (!receiver?.business || receiver.did === f.postedByDid || receiver.did === f.shipperDid) return;
+    this.enqueue(receiver.entityId, event, { inbound: this.inbound.rowOf(f), ...also });
   }
 
   private enqueue(entityId: string, event: string, data: Record<string, unknown>, now: number = Date.now()): BusinessHookMessage | undefined {

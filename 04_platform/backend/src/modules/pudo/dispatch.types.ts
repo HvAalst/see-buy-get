@@ -319,6 +319,15 @@ export class LoadInspection {
   by?: string;
 }
 
+/** The business goods are addressed to, at which of its receiving points — as it was when the load was posted. */
+export class InboundReceiver {
+  entityId: string;
+  siteId: string;
+  /** The business's name, and the place's: what the supplier was shown, and what goes on the note. */
+  name: string;
+  siteName: string;
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -561,6 +570,14 @@ export class Freight {
    * contract a number is used once: it is what makes uploading the same sheet twice harmless.
    */
   @ApiPropertyOptional() orderRef?: string;
+  /**
+   * INBOUND, READING A (assessment.html D1–D14; the user, 2026-10-25: "Yes, A then B"): the business these goods are
+   * for, at one of its receiving points — named by the code that business gave its supplier, and so seen by it among
+   * what is coming in. The receiver sees the logistics half of the load, never its price (D2, D7).
+   */
+  @ApiPropertyOptional({ type: () => InboundReceiver }) receiver?: InboundReceiver;
+  /** The receiver's own number for the order: a reference both sides understand (D2). Said only with a receiver. */
+  @ApiPropertyOptional() receiverRef?: string;
   /**
    * P3 — the truck and trip this order is on in the plan its fleet accepted for its day. A plan, not a fact about the
    * goods: it goes on a driver only when the office sends that trip out. Rewritten when the day is planned again.

@@ -1,4 +1,4 @@
-import { SiteService, SITE_KINDS } from './site.service';
+import { SiteService, SITE_KINDS, normalisedCode, receivingCode } from './site.service';
 
 /**
  * A place a company saves once and chooses afterwards.
@@ -70,5 +70,43 @@ describe('the places a company keeps', () => {
      * on it cannot say that.
      */
     expect([...SITE_KINDS]).toEqual(['port', 'clearance', 'delivery']);
+  });
+});
+
+describe('a place of its own where a company receives goods (inbound, reading A)', () => {
+  const fresh = () => new SiteService();
+  const yard = (sites: SiteService) => sites.declare('ent_jenga', { kind: 'delivery', name: 'Mombasa Road yard', location: { lat: -1.33, lng: 36.88 } }, 'Amina');
+
+  it('gives a code nobody mistakes on a phone, found again however it is written', () => {
+    for (let i = 0; i < 50; i += 1) expect(receivingCode()).toMatch(/^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$/);
+    const sites = fresh();
+    const open = sites.openReceiving('ent_jenga', yard(sites).siteId, 'Amina');
+    const code = open.receiving!.code;
+    for (const written of [code, code.toLowerCase(), code.replace('-', ''), ` ${code.replace('-', ' ')} `]) expect(sites.byReceivingCode(written)?.siteId).toBe(open.siteId);
+    expect(normalisedCode('ABC')).toBe('');
+    expect(sites.byReceivingCode('nonsense')).toBeUndefined();
+  });
+
+  it('keeps its code when opened again, retires it for a new one, and names nothing once closed', () => {
+    const sites = fresh();
+    const site = yard(sites);
+    const first = sites.openReceiving('ent_jenga', site.siteId, 'Amina').receiving!;
+    expect(sites.openReceiving('ent_jenga', site.siteId, 'Otieno').receiving).toEqual(first);
+    const second = sites.newReceivingCode('ent_jenga', site.siteId, 'Otieno').receiving!;
+    expect(second.code).not.toBe(first.code);
+    expect(sites.byReceivingCode(first.code)).toBeUndefined();
+    expect(sites.receivingPoints('ent_jenga').map((s) => s.siteId)).toEqual([site.siteId]);
+    sites.closeReceiving('ent_jenga', site.siteId);
+    expect(sites.byReceivingCode(second.code)).toBeUndefined();
+    expect(sites.receivingPoints('ent_jenga')).toEqual([]);
+    expect(() => sites.newReceivingCode('ent_jenga', site.siteId, 'Otieno')).toThrow(/does not receive goods through SeeBuyGet/);
+  });
+
+  it('is a company’s own: another company is told the place does not exist, and a port does not receive', () => {
+    const sites = fresh();
+    const site = yard(sites);
+    expect(() => sites.openReceiving('ent_other', site.siteId, 'X')).toThrow('No such place on your list');
+    const port = sites.declare('ent_jenga', { kind: 'port', name: 'Mombasa port', location: { lat: -4.04, lng: 39.66 } }, 'Amina');
+    expect(() => sites.openReceiving('ent_jenga', port.siteId, 'Amina')).toThrow(/place of your own/);
   });
 });

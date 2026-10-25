@@ -50,7 +50,7 @@ import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { BoardRow, Claimable, ClaimableKind, DeskNumber, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView } from './dispatch.types';
+import { BoardRow, Claimable, ClaimableKind, DeskNumber, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView, InboundReceiver } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { carrierReadsInvoice, CommercialInvoiceService, crossesBorder } from './commercial-invoice.service';
 import { inspectionAsked, INSPECTION_POINTS, requireInspection, type CarryingBody, type InspectionInput } from './seven-point';
@@ -536,7 +536,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -625,6 +625,9 @@ export class DispatchService {
       // P1 — and a contract order is settled under the contract, between the two of them, whoever placed it.
       ...(contract ? { contract, deliverOn: input.deliverOn } : {}),
       ...(contract && input.orderRef?.trim() ? { orderRef: input.orderRef.trim().slice(0, 60) } : {}),
+      // Inbound, reading A: the business it is for, at one of its receiving points, and its own number for the order.
+      ...(input.receiver ? { receiver: { ...input.receiver } } : {}),
+      ...(input.receiver && input.receiverRef?.trim() ? { receiverRef: input.receiverRef.trim().slice(0, 60) } : {}),
       fragile: input.fragile ?? false,
       bulk,
       packaging,
@@ -681,6 +684,8 @@ export class DispatchService {
     }
     // It is for the fleet the contract names, and for its own system: an order came in.
     if (contract) void this.events.publish(GlosEvent.Pudo.OrderPlaced, { freightId: freight.freightId, code: freight.code, fleetDid: contract.fleetDid }, { source: 'pudo' }).catch(() => undefined);
+    // Inbound, reading A: it is coming in to the business it is addressed to, whether or not anybody is pinged now.
+    if (freight.receiver) void this.events.publish(GlosEvent.Pudo.InboundAddressed, { freightId: freight.freightId, entityId: freight.receiver.entityId }, { source: 'pudo' }).catch(() => undefined);
     return freight;
   }
 

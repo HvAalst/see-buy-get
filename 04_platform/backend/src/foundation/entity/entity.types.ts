@@ -28,7 +28,7 @@ import { AMOUNT_KEYS, type AmountKey } from '../../modules/pudo/amount-keys';
 export type EntityKind = 'group' | 'sister' | 'partner' | 'business';
 
 /** What a business says it does. Its own claim: it decides which screens it is shown, never what it is allowed. */
-export const BUSINESS_ACTIVITIES = ['shipper', 'importer', 'expeditor', 'clearing_agent', 'depot'] as const;
+export const BUSINESS_ACTIVITIES = ['shipper', 'importer', 'expeditor', 'clearing_agent', 'depot', 'receiver'] as const;
 export type BusinessActivity = (typeof BUSINESS_ACTIVITIES)[number];
 
 /**

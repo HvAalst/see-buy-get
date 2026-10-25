@@ -3,7 +3,7 @@ import type { MessageKey, Translate } from '../../shared/i18n';
 import { arrivalWords, crossingWords, passageWords, type When } from '../../shared/passages';
 
 /** Where somebody is in the Business app. */
-export type Section = 'home' | 'loads' | 'runs' | 'contracts' | 'clients' | 'imports' | 'yard' | 'people' | 'details';
+export type Section = 'home' | 'loads' | 'runs' | 'contracts' | 'clients' | 'imports' | 'yard' | 'inbound' | 'people' | 'details';
 
 /**
  * WHICH SECTIONS A BUSINESS IS SHOWN — from what it says it does, never from what it is allowed.
@@ -25,6 +25,8 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
     ...(has('expeditor') ? (['clients'] as Section[]) : []),
     ...(has('importer') || has('clearing_agent') || has('expeditor') ? (['imports'] as Section[]) : []),
     ...(has('depot') ? (['yard'] as Section[]) : []),
+    // Inbound, reading A — a business receiving goods at its own places: what is coming in, and the codes its suppliers write.
+    ...(has('receiver') ? (['inbound'] as Section[]) : []),
     'people',
     'details',
   ];
@@ -104,12 +106,14 @@ export interface LoadForm {
   fromSiteId: string;
   toSiteId: string;
   weightKg: string;
+  /** Inbound, reading A: delivered to another business's receiving point, by the code it found — instead of a place of its own. */
+  receivingPoint?: string;
 }
 export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
   const gaps: Array<keyof LoadForm> = [];
   if (!form.description.trim()) gaps.push('description');
   if (!form.fromSiteId) gaps.push('fromSiteId');
-  if (!form.toSiteId) gaps.push('toSiteId');
+  if (!form.toSiteId && !form.receivingPoint) gaps.push('toSiteId');
   const kg = Number(form.weightKg);
   if (!(Number.isFinite(kg) && kg >= 1)) gaps.push('weightKg');
   return gaps;
@@ -288,7 +292,7 @@ export function digitsReady(value: string, length: number): boolean {
   return new RegExp(`^\\d{${length}}$`).test(value);
 }
 
-export const ACTIVITIES: BusinessActivity[] = ['shipper', 'importer', 'expeditor', 'clearing_agent', 'depot'];
+export const ACTIVITIES: BusinessActivity[] = ['shipper', 'importer', 'expeditor', 'clearing_agent', 'depot', 'receiver'];
 export const ROLES: MemberRole[] = ['owner', 'booker', 'finance', 'viewer'];
 
 /**

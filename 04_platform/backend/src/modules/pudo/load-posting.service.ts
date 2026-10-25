@@ -9,7 +9,9 @@ import { BusinessService } from './business.service';
 import { CarriageContractService, isDay } from './carriage-contract.service';
 import type { ContractRef } from './carriage-contract.types';
 import { DispatchService } from './dispatch.service';
-import type { Freight } from './dispatch.types';
+import type { Freight, InboundReceiver } from './dispatch.types';
+import { SiteService } from './site.service';
+import { EntityService } from '../../foundation/entity/entity.service';
 import type { RegisterFreightDto } from './pudo.dto';
 import { ShipperCodesService, clientCoder } from './shipper-codes.service';
 
@@ -31,6 +33,9 @@ export class LoadPostingService {
     @Optional() private readonly contracts?: CarriageContractService,
     @Optional() private readonly businesses?: BusinessService,
     @Optional() private readonly shipperCodes?: ShipperCodesService,
+    // Inbound, reading A: a load addressed to a business by the code of one of its receiving points.
+    @Optional() private readonly sites?: SiteService,
+    @Optional() private readonly entities?: EntityService,
   ) {}
 
   post(dto: RegisterFreightDto, actor: IntrospectionResult, checkOnly = false): Freight {
@@ -42,14 +47,20 @@ export class LoadPostingService {
     // CL1 — refuse a term this country has not switched on, before the load exists rather than after.
     this.requireActiveTerm(dto.incoterm, dto.pickupCountry, dto.destCountry);
     // B2 — a business's DID is shared by everybody in it, so the person who posted is kept by name as well.
-    const { forClientId, contractId, deliverOn, orderRef, ...load } = dto;
+    const { forClientId, contractId, deliverOn, orderRef, receivingPoint, receiverRef, ...load } = dto;
+    // Inbound, reading A: "deliver to" a business's receiving point — its place is where the load goes, by its own name.
+    const receiving = receivingPoint ? this.receivingPointOf(receivingPoint) : undefined;
+    if (receiving) {
+      load.destLabel = `${receiving.name} — ${receiving.siteName}`;
+      load.destLocation = { lat: receiving.location.lat, lng: receiving.location.lng };
+    }
     // GS1 — a business posting its OWN goods gives its packages SSCCs under its prefix, when it holds one. Asked before
     // the load exists, so a load is never posted with some packages coded and others not. A client's goods carry the
     // CLIENT's code (round 20: the prefix on the client's record), never the forwarder's.
     const coder = actor?.role === 'business' && actor.tenant ? (forClientId ? clientCoder(actor.tenant, forClientId) : actor.tenant) : undefined;
     this.shipperCodes?.assertCanIssue(coder, dto.packages);
     const posted = this.dispatch.registerFreight(
-      { ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
+      { ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
       Date.now(),
       checkOnly,
     );
@@ -59,6 +70,17 @@ export class LoadPostingService {
     this.businesses?.notePosted(posted.freightId, actor);
     this.shipperCodes?.issue(posted.freightId, coder, posted.packages);
     return posted;
+  }
+
+  /**
+   * The receiving point a "deliver to" code names, and the business it is: refused in words when it names none — a load
+   * is never sent to a place nobody could find, nor quietly posted without its receiver.
+   */
+  receivingPointOf(code: string): { receiver: InboundReceiver; name: string; siteName: string; location: { lat: number; lng: number } } {
+    const site = this.sites?.byReceivingCode(code);
+    const entity = site ? this.entities?.find(site.entityId) : undefined;
+    if (!site || !entity) throw new GlosError('INVALID_INPUT', `No receiving point has the code “${code.trim()}”. Check it with the business you are sending to: it gave you the code.`, { field: 'receivingPoint' });
+    return { receiver: { entityId: entity.entityId, siteId: site.siteId, name: entity.name, siteName: site.name }, name: entity.name, siteName: site.name, location: site.location };
   }
 
   /** The client an expeditor sends for — one of its own, or nobody's. */

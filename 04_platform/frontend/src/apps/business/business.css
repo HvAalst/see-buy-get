@@ -237,3 +237,15 @@
 .biz-papers__held {
   color: var(--dang);
 }
+
+/* Inbound, reading A: the code typed beside its button, and a receiving point's code shown to be read out. */
+.biz-deliverto {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.biz-inbound__code {
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}

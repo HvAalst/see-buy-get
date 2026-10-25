@@ -5,6 +5,7 @@ import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
 import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
+import { inboundApi, type InboundApi } from './inbound';
 import type { QuoteView } from '../../shared/quote';
 import type { ArrivalView, CrossingView, PassageView } from '../../shared/passages';
 import type { SealView } from '../../shared/seals';
@@ -65,7 +66,7 @@ export function pinLogin(phone: string, pin: string): Promise<Result<PersonAuth>
 
 /* ---------------------------------------------------------------- the person -- */
 
-export type BusinessActivity = 'shipper' | 'importer' | 'expeditor' | 'clearing_agent' | 'depot';
+export type BusinessActivity = 'shipper' | 'importer' | 'expeditor' | 'clearing_agent' | 'depot' | 'receiver';
 export type MemberRole = 'owner' | 'booker' | 'finance' | 'viewer';
 export type CheckState = 'unverified' | 'asked' | 'checking' | 'verified' | 'refused';
 
@@ -302,6 +303,9 @@ export interface NewLoad {
   deliverOn?: string;
   /** P1b — the business's own number for the order. Used once per contract. */
   orderRef?: string;
+  /** Inbound, reading A: to another business's receiving point, by the code it gave, and its own number for the order. */
+  receivingPoint?: string;
+  receiverRef?: string;
 }
 
 export interface BusinessClient {
@@ -310,6 +314,8 @@ export interface BusinessClient {
   shipping: AgentApi;
   /** The business's inbox: what a carrier or the network told it. Made once per session, so the bell reads it once. */
   notifications: NotificationsApi;
+  /** Inbound, reading A: its receiving points, and what is coming in to them. */
+  inbound: InboundApi;
   client: SeededAppClient;
   postLoad(load: NewLoad): Promise<Result<PostedLoad & { settlement?: string }>>;
   freightQuote(freightId: string): Promise<Result<{ quote: QuoteView | null }>>;
@@ -380,6 +386,7 @@ export function createBusinessClient(): BusinessClient {
     api: createOperatorApi(client.sbg),
     shipping: createAgentApi(client.sbg),
     notifications: createNotificationsApi(client.sbg),
+    inbound: inboundApi(client.sbg),
     client,
     postLoad: (load) => call((c) => c.POST('/v1/sbg/dispatch/freight' as never, { body: load } as never) as never),
     freightQuote: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/quote` as never, {} as never) as never),

@@ -3894,6 +3894,166 @@
         }
       }
     },
+    "/v1/sbg/business/me/inbound": {
+      "get": {
+        "operationId": "Inbound.comingIn",
+        "summary": "",
+        "description": "What is coming in to this business: its receiving points, and what is addressed to them.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboundView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/receiving": {
+      "get": {
+        "operationId": "Inbound.receivingPoints",
+        "summary": "",
+        "description": "Its receiving points, with the code each gives its suppliers.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReceivingPointView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/receiving/{siteId}": {
+      "post": {
+        "operationId": "Inbound.openReceiving",
+        "summary": "",
+        "description": "Receive goods at one of its own places: the place gets a code to give suppliers. Already receiving, it stays as it is.",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceivingPointView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "Inbound.closeReceiving",
+        "summary": "",
+        "description": "No longer receive at a place through SeeBuyGet: its code names nothing; what was already sent stays coming.",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReceivingPointView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/receiving/{siteId}/code": {
+      "post": {
+        "operationId": "Inbound.newCode",
+        "summary": "",
+        "description": "A new code for a receiving point, when the old one went further than it should: the old one names nothing from now.",
+        "parameters": [
+          {
+            "name": "siteId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceivingPointView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/receiving/{code}": {
+      "get": {
+        "operationId": "Inbound.named",
+        "summary": "",
+        "description": "WHAT A \"DELIVER TO\" CODE NAMES — for a business about to send there: the receiver's name, the place and where it is,\nwhich is what sending anything there needs, and nothing more (rule: an identifier opens nothing). Counted per caller,\nso the codes cannot be walked.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceivingPointNamed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/risk-register": {
       "get": {
         "operationId": "RiskRegister.register",
@@ -32325,6 +32485,664 @@
           "action"
         ]
       },
+      "GeoPoint": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number"
+          },
+          "lng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "ReceivingPointView": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "\"7KQ3-PX9M\": what the business gives its suppliers."
+          },
+          "since": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "siteId",
+          "name",
+          "code",
+          "since",
+          "by"
+        ]
+      },
+      "FreightTrackStep": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "ordered",
+              "claimed",
+              "in_transit",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "at"
+        ]
+      },
+      "FreightDeliveryAttempt": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "absent",
+              "refused",
+              "unreachable"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "at"
+        ]
+      },
+      "LoadOf": {
+        "type": "object",
+        "properties": {
+          "rootId": {
+            "type": "string",
+            "description": "The order as it was placed: the id and code of its first load."
+          },
+          "rootCode": {
+            "type": "string"
+          },
+          "no": {
+            "type": "number",
+            "description": "This load, and how many there are."
+          },
+          "of": {
+            "type": "number"
+          },
+          "orderKg": {
+            "type": "number",
+            "description": "What the whole order weighs."
+          },
+          "at": {
+            "type": "string",
+            "description": "When it was split, and by whom in the carrier's office."
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "rootId",
+          "rootCode",
+          "no",
+          "of",
+          "orderKg",
+          "at",
+          "by"
+        ]
+      },
+      "TrackLoad": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "ordered",
+              "claimed",
+              "in_transit",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "no": {
+            "type": "number"
+          },
+          "code": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "status",
+          "no",
+          "code",
+          "weightKg"
+        ]
+      },
+      "HeldOnTheWay": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "since"
+        ]
+      },
+      "PassageSeals": {
+        "type": "object",
+        "properties": {
+          "asTheyWere": {
+            "type": "boolean"
+          },
+          "resealed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LoadPassageView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "at_border",
+              "cleared_border",
+              "at_hub"
+            ]
+          },
+          "post": {
+            "type": "string"
+          },
+          "hub": {
+            "type": "string"
+          },
+          "waitedMin": {
+            "type": "number",
+            "description": "On clearing a border: minutes the load was at the post."
+          },
+          "seals": {
+            "$ref": "#/components/schemas/PassageSeals"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "at"
+        ]
+      },
+      "BorderWait": {
+        "type": "object",
+        "properties": {
+          "post": {
+            "type": "string",
+            "description": "The post it is for. Absent: the crossing as a whole, before the load is at one of its posts."
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "standard"
+            ]
+          },
+          "crossings": {
+            "type": "number",
+            "description": "Measured: over how many crossings."
+          },
+          "posts": {
+            "description": "Measured for the crossing as a whole: the posts the crossings were at.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "basis",
+          "from",
+          "to",
+          "hours"
+        ]
+      },
+      "LaneDriveView": {
+        "type": "object",
+        "properties": {
+          "basis": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "standard"
+            ]
+          },
+          "trips": {
+            "type": "number"
+          },
+          "lane": {
+            "type": "string",
+            "description": "Measured: the lane — `Nairobi → Kisumu`, or `KE → UG` where a town is not named."
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "towns",
+              "countries"
+            ]
+          },
+          "kmh": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "basis",
+          "kmh"
+        ]
+      },
+      "LoadCrossing": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ahead",
+              "at_post",
+              "cleared"
+            ]
+          },
+          "post": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "description": "At a post: since when."
+          },
+          "clearedAt": {
+            "type": "string",
+            "description": "Across: when, and after how long at the post."
+          },
+          "waitedMin": {
+            "type": "number"
+          },
+          "wait": {
+            "$ref": "#/components/schemas/BorderWait"
+          },
+          "expectedAt": {
+            "type": "string",
+            "description": "About when it is at its destination. Absent once delivered, or where its destination has no place on the map."
+          },
+          "drive": {
+            "description": "Round 21 — with it, the pace its drive is promised at and what that rests on.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LaneDriveView"
+              }
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "wait",
+          "from",
+          "to"
+        ]
+      },
+      "LoadArrival": {
+        "type": "object",
+        "properties": {
+          "drive": {
+            "$ref": "#/components/schemas/LaneDriveView"
+          },
+          "doorMin": {
+            "type": "number",
+            "description": "The minutes at the door added to a standard drive; absent on a measured one, whose trips already include them."
+          },
+          "expectedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "drive",
+          "expectedAt"
+        ]
+      },
+      "TrackSeal": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "on",
+              "replaced",
+              "broken"
+            ]
+          },
+          "number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "number"
+        ]
+      },
+      "InboundRow": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "freight"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "ordered",
+              "claimed",
+              "in_transit",
+              "delivered",
+              "cancelled"
+            ]
+          },
+          "carrier": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "driverName": {
+                "required": false,
+                "type": "string"
+              },
+              "plate": {
+                "required": false,
+                "type": "string"
+              },
+              "vehicleClass": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightTrackStep"
+            }
+          },
+          "attempts": {
+            "description": "The doors the driver stood at and could not hand over at, most recent last. Outcome and time only.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FreightDeliveryAttempt"
+            }
+          },
+          "cancelled": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "object"
+              }
+            }
+          },
+          "partOf": {
+            "description": "This is one load of an order that comes in several — and all of them, each with where it has got to.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadOf"
+              }
+            ]
+          },
+          "loads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackLoad"
+            }
+          },
+          "rejoined": {
+            "type": "boolean",
+            "description": "This load was put back together with the rest of its order: it is not coming on its own."
+          },
+          "expectedOn": {
+            "type": "string",
+            "description": "WHEN, for whoever is waiting at the door. The user, 2026-10-06: \"Day always, time once on its way.\"\n`expectedOn` — the day an order was placed for, from the moment it is ordered until it is delivered or withdrawn.\n`expectedAbout` — about when its carrier's plan has it at the door, and only once the goods are on the road:\nuntil then the day can be planned again, and this page is read by anybody holding the link, who is told nothing\nwhen it changes. Gone again after a door nobody answered — the plan's hour has passed."
+          },
+          "expectedAbout": {
+            "type": "string"
+          },
+          "late": {
+            "type": "string",
+            "description": "It is late, on its carrier's own clock: `day` the day it was expected has gone · `hour` it is on the road and\nthe hour above has passed. Without this the page went on saying \"expected\" of a day that was over.",
+            "enum": [
+              "hour",
+              "day"
+            ]
+          },
+          "on": {
+            "type": "string",
+            "description": "Where the goods travel: `board` a load a carrier took off the open board (absent means this) · `run` space\nbooked on a carrier's scheduled run, which leaves at `scheduledPickupAt` whether or not anybody else is aboard.",
+            "enum": [
+              "board",
+              "run"
+            ]
+          },
+          "heldOnTheWay": {
+            "description": "Held on the way by an authority, as its driver said: since when — never by whom, on a page anybody with the link reads.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldOnTheWay"
+              }
+            ]
+          },
+          "passages": {
+            "description": "Round 14 — what its driver said on the road: at a border post, cleared it, at a hub. No driver, no position.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LoadPassageView"
+            }
+          },
+          "crossing": {
+            "description": "Round 14 — crossing a border: where it has got to, the wait it is promised and what that rests on, when it is expected.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadCrossing"
+              }
+            ]
+          },
+          "arrival": {
+            "description": "Round 26 — in one country, on the road: when it is expected, and the pace that rests on. Absent where `expectedAbout` says the hour.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoadArrival"
+              }
+            ]
+          },
+          "seals": {
+            "description": "Round 15 — the seal numbers, so whoever receives it can look at the door; and whether each is on, replaced or broken.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackSeal"
+            }
+          },
+          "trackingKey": {
+            "type": "string",
+            "description": "The load's own tracking link, to open the whole of it."
+          },
+          "reference": {
+            "type": "string",
+            "description": "The receiver's own number for the order, as the supplier wrote it."
+          },
+          "packages": {
+            "type": "number"
+          },
+          "packaging": {
+            "type": "string"
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "site": {
+            "type": "object",
+            "properties": {
+              "siteId": {
+                "required": true,
+                "type": "string"
+              },
+              "name": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "from": {
+            "type": "string",
+            "description": "Who it is from: the business that sent it — or, sent by its forwarder, the client it was sent for."
+          },
+          "ref": {
+            "type": "string",
+            "description": "The human reference (FRT-018)."
+          },
+          "description": {
+            "type": "string"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "pickupLabel": {
+            "type": "string"
+          },
+          "destLabel": {
+            "type": "string"
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "scheduledPickupAt": {
+            "type": "string"
+          },
+          "receiverName": {
+            "type": "string",
+            "description": "Who took the goods in, once delivered — the name the driver recorded, as it stands on the consignment note."
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "carrier",
+          "steps",
+          "cancelled",
+          "freightId",
+          "site",
+          "from",
+          "ref",
+          "description",
+          "weightKg",
+          "pickupLabel",
+          "destLabel"
+        ]
+      },
+      "InboundView": {
+        "type": "object",
+        "properties": {
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceivingPointView"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InboundRow"
+            }
+          }
+        },
+        "required": [
+          "points",
+          "items"
+        ]
+      },
+      "ReceivingPointNamed": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "name": {
+            "type": "string"
+          },
+          "siteName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "name",
+          "siteName"
+        ]
+      },
       "RiskCellView": {
         "type": "object",
         "properties": {
@@ -32953,21 +33771,6 @@
           "mobile",
           "deviceImei",
           "requirements"
-        ]
-      },
-      "GeoPoint": {
-        "type": "object",
-        "properties": {
-          "lat": {
-            "type": "number"
-          },
-          "lng": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "lat",
-          "lng"
         ]
       },
       "ShelfConfig": {
@@ -43015,32 +43818,6 @@
           "by"
         ]
       },
-      "FreightDeliveryAttempt": {
-        "type": "object",
-        "properties": {
-          "outcome": {
-            "type": "string",
-            "enum": [
-              "absent",
-              "refused",
-              "unreachable"
-            ]
-          },
-          "note": {
-            "type": "string"
-          },
-          "at": {
-            "type": "string"
-          },
-          "by": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "outcome",
-          "at"
-        ]
-      },
       "FreightClaim": {
         "type": "object",
         "properties": {
@@ -43188,6 +43965,30 @@
           "fleetDid",
           "fleetName",
           "shipperName"
+        ]
+      },
+      "InboundReceiver": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "siteId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The business's name, and the place's: what the supplier was shown, and what goes on the note."
+          },
+          "siteName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "siteId",
+          "name",
+          "siteName"
         ]
       },
       "PlanHeld": {
@@ -43357,45 +44158,6 @@
         },
         "required": [
           "state",
-          "at",
-          "by"
-        ]
-      },
-      "LoadOf": {
-        "type": "object",
-        "properties": {
-          "rootId": {
-            "type": "string",
-            "description": "The order as it was placed: the id and code of its first load."
-          },
-          "rootCode": {
-            "type": "string"
-          },
-          "no": {
-            "type": "number",
-            "description": "This load, and how many there are."
-          },
-          "of": {
-            "type": "number"
-          },
-          "orderKg": {
-            "type": "number",
-            "description": "What the whole order weighs."
-          },
-          "at": {
-            "type": "string",
-            "description": "When it was split, and by whom in the carrier's office."
-          },
-          "by": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "rootId",
-          "rootCode",
-          "no",
-          "of",
-          "orderKg",
           "at",
           "by"
         ]
@@ -43994,6 +44756,18 @@
           "orderRef": {
             "type": "string",
             "description": "P1b — the SHIPPER's own number for this order (a webshop's order number). Kept apart from `externalOrderId`, which\nnames a shop order or a consignment and makes the consignee \"the buyer of order …, collecting at a shop\". Under one\ncontract a number is used once: it is what makes uploading the same sheet twice harmless."
+          },
+          "receiver": {
+            "description": "INBOUND, READING A (assessment.html D1–D14; the user, 2026-10-25: \"Yes, A then B\"): the business these goods are\nfor, at one of its receiving points — named by the code that business gave its supplier, and so seen by it among\nwhat is coming in. The receiver sees the logistics half of the load, never its price (D2, D7).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InboundReceiver"
+              }
+            ]
+          },
+          "receiverRef": {
+            "type": "string",
+            "description": "The receiver's own number for the order: a reference both sides understand (D2). Said only with a receiver."
           },
           "planned": {
             "description": "P3 — the truck and trip this order is on in the plan its fleet accepted for its day. A plan, not a fact about the\ngoods: it goes on a driver only when the office sends that trip out. Rewritten when the day is planned again.",
@@ -47164,6 +47938,16 @@
             "type": "string",
             "description": "P1b — the shipper's own number for an order under a contract. Used once per contract.",
             "maxLength": 60
+          },
+          "receivingPoint": {
+            "type": "string",
+            "description": "INBOUND, READING A — the receiving point: the code of a business's receiving point, as that business gave it. The load goes\nto that place (its name and where it is replace whatever destination was typed), and the business sees it among\nwhat is coming in — the logistics half, never the price.",
+            "maxLength": 12
+          },
+          "receiverRef": {
+            "type": "string",
+            "description": "The receiving business's own number for the order, when it gave one: a reference both sides understand.",
+            "maxLength": 60
           }
         },
         "required": [
@@ -48302,182 +49086,6 @@
           "since"
         ]
       },
-      "PassageSeals": {
-        "type": "object",
-        "properties": {
-          "asTheyWere": {
-            "type": "boolean"
-          },
-          "resealed": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "LoadPassageView": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "at_border",
-              "cleared_border",
-              "at_hub"
-            ]
-          },
-          "post": {
-            "type": "string"
-          },
-          "hub": {
-            "type": "string"
-          },
-          "waitedMin": {
-            "type": "number",
-            "description": "On clearing a border: minutes the load was at the post."
-          },
-          "seals": {
-            "$ref": "#/components/schemas/PassageSeals"
-          },
-          "at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "at"
-        ]
-      },
-      "BorderWait": {
-        "type": "object",
-        "properties": {
-          "post": {
-            "type": "string",
-            "description": "The post it is for. Absent: the crossing as a whole, before the load is at one of its posts."
-          },
-          "basis": {
-            "type": "string",
-            "enum": [
-              "measured",
-              "standard"
-            ]
-          },
-          "crossings": {
-            "type": "number",
-            "description": "Measured: over how many crossings."
-          },
-          "posts": {
-            "description": "Measured for the crossing as a whole: the posts the crossings were at.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "from": {
-            "type": "string"
-          },
-          "to": {
-            "type": "string"
-          },
-          "hours": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "basis",
-          "from",
-          "to",
-          "hours"
-        ]
-      },
-      "LaneDriveView": {
-        "type": "object",
-        "properties": {
-          "basis": {
-            "type": "string",
-            "enum": [
-              "measured",
-              "standard"
-            ]
-          },
-          "trips": {
-            "type": "number"
-          },
-          "lane": {
-            "type": "string",
-            "description": "Measured: the lane — `Nairobi → Kisumu`, or `KE → UG` where a town is not named."
-          },
-          "level": {
-            "type": "string",
-            "enum": [
-              "towns",
-              "countries"
-            ]
-          },
-          "kmh": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "basis",
-          "kmh"
-        ]
-      },
-      "LoadCrossing": {
-        "type": "object",
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": [
-              "ahead",
-              "at_post",
-              "cleared"
-            ]
-          },
-          "post": {
-            "type": "string"
-          },
-          "since": {
-            "type": "string",
-            "description": "At a post: since when."
-          },
-          "clearedAt": {
-            "type": "string",
-            "description": "Across: when, and after how long at the post."
-          },
-          "waitedMin": {
-            "type": "number"
-          },
-          "wait": {
-            "$ref": "#/components/schemas/BorderWait"
-          },
-          "expectedAt": {
-            "type": "string",
-            "description": "About when it is at its destination. Absent once delivered, or where its destination has no place on the map."
-          },
-          "drive": {
-            "description": "Round 21 — with it, the pace its drive is promised at and what that rests on.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/LaneDriveView"
-              }
-            ]
-          },
-          "from": {
-            "type": "string"
-          },
-          "to": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "state",
-          "wait",
-          "from",
-          "to"
-        ]
-      },
       "LoadSealView": {
         "type": "object",
         "properties": {
@@ -48626,25 +49234,6 @@
           "at",
           "minC",
           "maxC"
-        ]
-      },
-      "LoadArrival": {
-        "type": "object",
-        "properties": {
-          "drive": {
-            "$ref": "#/components/schemas/LaneDriveView"
-          },
-          "doorMin": {
-            "type": "number",
-            "description": "The minutes at the door added to a standard drive; absent on a measured one, whose trips already include them."
-          },
-          "expectedAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "drive",
-          "expectedAt"
         ]
       },
       "PostedFreightRow": {
@@ -52621,7 +53210,8 @@
                 "importer",
                 "expeditor",
                 "clearing_agent",
-                "depot"
+                "depot",
+                "receiver"
               ]
             }
           },
@@ -52825,7 +53415,8 @@
                 "importer",
                 "expeditor",
                 "clearing_agent",
-                "depot"
+                "depot",
+                "receiver"
               ]
             }
           },
@@ -52976,7 +53567,8 @@
                 "importer",
                 "expeditor",
                 "clearing_agent",
-                "depot"
+                "depot",
+                "receiver"
               ]
             }
           },
@@ -53222,7 +53814,8 @@
                 "importer",
                 "expeditor",
                 "clearing_agent",
-                "depot"
+                "depot",
+                "receiver"
               ]
             }
           },

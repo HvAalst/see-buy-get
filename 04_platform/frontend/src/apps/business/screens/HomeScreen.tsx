@@ -189,6 +189,7 @@ const GO: Record<Exclude<Section, 'home'>, { label: MessageKey; sub: MessageKey 
   clients: { label: 'business.nav.clients', sub: 'business.home.go.clients' },
   imports: { label: 'business.nav.imports', sub: 'business.home.go.imports' },
   yard: { label: 'business.nav.yard', sub: 'business.home.go.yard' },
+  inbound: { label: 'business.nav.inbound', sub: 'business.home.go.inbound' },
   people: { label: 'business.nav.people', sub: 'business.home.go.people' },
   details: { label: 'business.nav.details', sub: 'business.home.go.details' },
 };

@@ -184,6 +184,11 @@ export const NOTIFICATION_KINDS = [
    */
   'takeover_nearby',
   /**
+   * Inbound, reading A: a load addressed to one of a business's receiving points — coming in, on its way, delivered, not
+   * delivered, withdrawn — to that business's bell, by its own number for the order (the user, 2026-10-25: "Yes, A then B").
+   */
+  'inbound',
+  /**
    * Round 16 — a vehicle on a shift standing still longer than its fleet allows, away from anywhere it had reason to stop:
    * to its fleet's office, to call the driver. Never to a shipper: where a fleet's vehicles are is the fleet's.
    */

@@ -23,6 +23,7 @@ import { publicRequest } from '../../../lib/sbg';
 /** A price on a load, in the money the load was posted in — the figure alone only where no company of ours names one. */
 const priced = (amount: number, currency?: string): string => (currency ? quoteFigure({ amount, currency }) : amount.toLocaleString());
 import { SentFor } from './SentFor';
+import { codeOf, type ReceivingPointNamed } from '../inbound';
 import type { BusinessActions } from '../useBusinessApp';
 
 const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
@@ -37,8 +38,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
-type Form = LoadForm & { packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
-const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
+type Form = LoadForm & { receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
+const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -204,6 +205,23 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
   }, [client]);
   const offered = orderableContracts(contracts, form.deliverOn || nextDay());
   const contract = offered.find((c) => c.contractId === form.contractId) ?? null;
+  // Inbound, reading A: to another business's receiving point, by the code it gave — looked up before it is posted.
+  const [toReceiver, setToReceiver] = useState(false);
+  const [typedCode, setTypedCode] = useState('');
+  const [receiving, setReceiving] = useState<(ReceivingPointNamed & { code: string }) | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const lookUp = async () => {
+    const code = codeOf(typedCode);
+    setLookupError(null);
+    setReceiving(null);
+    setForm((prev) => ({ ...prev, receivingPoint: '' }));
+    if (!code) return setLookupError(t('business.loads.f.codeShape'));
+    if (!client) return;
+    const r = await client.inbound.named(code);
+    if (r.error || !r.data) return setLookupError(r.error?.detail || r.error?.title || null);
+    setReceiving({ ...r.data, code });
+    setForm((prev) => ({ ...prev, receivingPoint: code }));
+  };
 
   const submit = async (e: Event) => {
     e.preventDefault();
@@ -215,7 +233,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
     const r = (await client.api.sites(business.entityId)) as unknown as { data?: { sites?: SiteView[] }; error?: { detail?: string; title?: string } };
     const sites = r.data?.sites ?? [];
     const from = sites.find((s) => s.siteId === form.fromSiteId);
-    const to = sites.find((s) => s.siteId === form.toSiteId);
+    const to = receiving ? { name: `${receiving.name} — ${receiving.siteName}`, location: receiving.location } : sites.find((s) => s.siteId === form.toSiteId);
     if (!from || !to) {
       setBusy(false);
       return setError(t('business.loads.placeGone'));
@@ -241,6 +259,8 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(form.deliveryWindow.trim() ? { deliveryWindow: form.deliveryWindow.trim() } : {}),
       ...(form.pickupOn && !contract ? { scheduledPickupAt: new Date(`${form.pickupOn}T08:00:00`).toISOString() } : {}),
       ...(form.forClientId ? { forClientId: form.forClientId } : {}),
+      // To another business's receiving point: it sees the load coming in, and its own number for the order with it.
+      ...(receiving ? { receivingPoint: receiving.code, ...(form.receiverRef.trim() ? { receiverRef: form.receiverRef.trim() } : {}) } : {}),
       // Under a contract: the day it must arrive, and no pickup date of our own — the fleet plans when it collects.
       ...(contract ? { contractId: contract.contractId, deliverOn: form.deliverOn, ...(form.orderRef.trim() ? { orderRef: form.orderRef.trim() } : {}) } : {}),
     });
@@ -303,8 +323,45 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
             {gap('fromSiteId')}
           </div>
           <div>
-            <SitePicker kind="delivery" entityId={business.entityId} api={siteApi} value={form.toSiteId} onChange={(id) => setForm((prev) => ({ ...prev, toSiteId: id }))} label={t('business.loads.f.to')} addLabel={t('business.loads.f.addPlace')} />
-            {gap('toSiteId')}
+            {toReceiver ? (
+              <div class="cfield">
+                <span class="cfield__label">{t('business.loads.f.deliverTo')}</span>
+                <span class="biz-deliverto">
+                  <input class="cinput biz-code" maxLength={12} autocomplete="off" spellcheck={false} placeholder="7KQ3-PX9M" value={typedCode} onInput={(e) => setTypedCode((e.target as HTMLInputElement).value)} />
+                  <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!typedCode.trim()} onClick={() => void lookUp()}>
+                    {t('business.loads.f.findCode')}
+                  </button>
+                </span>
+                {receiving ? <span class="cnote">{t('business.loads.f.deliverToFound', { name: receiving.name, place: receiving.siteName })}</span> : <span class="chint">{t('business.loads.f.deliverToHint')}</span>}
+                {lookupError ? <span class="cerr">{lookupError}</span> : null}
+                {gap('toSiteId')}
+                {receiving ? (
+                  <label class="cfield">
+                    <span class="cfield__label">{t('business.loads.f.receiverRef', { name: receiving.name })}</span>
+                    <input class="cinput" maxLength={60} value={form.receiverRef} onInput={(e) => setForm((prev) => ({ ...prev, receiverRef: (e.target as HTMLInputElement).value }))} />
+                    <span class="chint">{t('business.loads.f.receiverRefHint')}</span>
+                  </label>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <SitePicker kind="delivery" entityId={business.entityId} api={siteApi} value={form.toSiteId} onChange={(id) => setForm((prev) => ({ ...prev, toSiteId: id }))} label={t('business.loads.f.to')} addLabel={t('business.loads.f.addPlace')} />
+                {gap('toSiteId')}
+              </>
+            )}
+            <label class="cfield--check">
+              <input
+                type="checkbox"
+                checked={toReceiver}
+                onChange={() => {
+                  setToReceiver((on) => !on);
+                  setReceiving(null);
+                  setLookupError(null);
+                  setForm((prev) => ({ ...prev, receivingPoint: '' }));
+                }}
+              />
+              <span>{t('business.loads.f.toReceiver')}</span>
+            </label>
           </div>
         </div>
         <div class="biz-two">

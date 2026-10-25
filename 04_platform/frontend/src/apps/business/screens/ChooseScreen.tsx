@@ -18,6 +18,7 @@ export const ACTIVITY_LABEL: Record<BusinessActivity, MessageKey> = {
   expeditor: 'business.activity.expeditor',
   clearing_agent: 'business.activity.clearing_agent',
   depot: 'business.activity.depot',
+  receiver: 'business.activity.receiver',
 };
 export const ACTIVITY_SUB: Record<BusinessActivity, MessageKey> = {
   shipper: 'business.activity.shipperSub',
@@ -25,6 +26,7 @@ export const ACTIVITY_SUB: Record<BusinessActivity, MessageKey> = {
   expeditor: 'business.activity.expeditorSub',
   clearing_agent: 'business.activity.clearing_agentSub',
   depot: 'business.activity.depotSub',
+  receiver: 'business.activity.receiverSub',
 };
 export const ROLE_LABEL: Record<'owner' | 'booker' | 'finance' | 'viewer', MessageKey> = {
   owner: 'business.role.owner',
