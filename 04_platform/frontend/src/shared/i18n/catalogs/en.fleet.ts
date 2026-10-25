@@ -1092,10 +1092,10 @@ export const enFleet = {
   'fleet.vehicles.deckHint':
     'How high the loading deck stands off the road, empty. We need it to answer low bridges: what matters under one is the load plus the deck it sits on, so a 2.90 m high-cube on a 1.30 m chassis is 4.20 m of vehicle. Leave it blank if you have not measured it — we will say we do not know rather than guess, and a guess is what puts a roof through a bridge.',
   'fleet.vehicles.pricePerKm': 'Price per km (public)',
-  'fleet.vehicles.pricePh': 'default if blank',
+  'fleet.vehicles.pricePh': 'blank: your country’s starting rate',
   'fleet.vehicles.factory': 'Factory / VIN (verifies)',
   'fleet.vehicles.baseFee': 'Freight base fee (optional)',
-  'fleet.vehicles.baseFeePh': 'default per class',
+  'fleet.vehicles.baseFeePh': 'blank: your country’s, for this class',
   'fleet.vehicles.multiplierRange': 'Price multiplier range (lowest, highest)',
   'fleet.vehicles.minMultiplierAria': 'Lowest price multiplier, times your price per km',
   'fleet.vehicles.minPh': '0.8',

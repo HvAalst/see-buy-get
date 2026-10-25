@@ -895,7 +895,7 @@ export const enTower = {
   /* WHAT IT COSTS TO PUT MONEY IN — the one knob on this screen that is not a lane and not a percentage.
      The hint has to carry the reasoning, because an operator setting this is deciding for every shop in
      the country and the shape of the fee is the argument for it. */
-  'tower.amounts.title': 'What a parcel costs and what each step pays',
+  'tower.amounts.title': 'What a parcel costs, what each step pays, and what the road starts from',
   'tower.amounts.noneOwn': 'All at the figures every company starts from',
   'tower.amounts.ownCount': '{n} of {of} set by this company',
   'tower.amounts.itsMoney': 'this company’s own money',
@@ -916,6 +916,14 @@ export const enTower = {
   'tower.amounts.h.releaseFee': 'Paid to the receiving shop when it is collected.',
   'tower.amounts.k.holdingFeePerDay': 'Holding a parcel, for each day',
   'tower.amounts.h.holdingFeePerDay': 'Owed once the free collection time has ended, and never more than the journey cost.',
+  // What the road starts from (the user, 2026-10-25: "each countries rate and individually the individuals can overrule
+  // with their own rate").
+  'tower.amounts.roadTitle': 'What the road starts from.',
+  'tower.amounts.roadHint': 'A vehicle registered in this country starts from these where its owner names no rate of their own, and its owner can change it any time. The public freight market prices every load picked up here at them.',
+  'tower.amounts.k.freightPerKm': 'A vehicle’s rate per kilometre',
+  'tower.amounts.h.freightPerKm': 'For every class of vehicle, empty run included.',
+  'tower.amounts.k.freightBaseFee': 'A truck’s loading fee',
+  'tower.amounts.h.freightBaseFee': 'Paid once per load. A smaller vehicle starts from its share of it: a van half, a car a fifth, a motorcycle eight parts in a hundred.',
   'tower.amounts.math': 'A parcel taken in at the counter brings in {price}. Sorting, shelving and handing it over pay out up to {out} of that.',
   'tower.amounts.mathOver': 'A parcel taken in at the counter brings in {price}, and sorting, shelving and handing it over pay out up to {out}: more than it brings in. Check which box each figure is in.',
   'tower.amounts.negative': '{field} cannot be less than nothing.',

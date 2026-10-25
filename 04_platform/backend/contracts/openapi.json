@@ -17320,7 +17320,7 @@
       "get": {
         "operationId": "Sbg.publicMarket",
         "summary": "",
-        "description": "FB3b — the open market, to anyone at all.\n\n@Public, and that is the feature. The people who most need to know what freight moves on a corridor are\nthe ones who do not yet own a truck to move it with: an operator deciding what body to buy, someone\nweighing up a move to another city (user, 2026-08-30). Requiring an account to answer that would put the\ndata behind exactly the door that keeps it from the people it is for.\n\nWhat is published is the WORK — bodies needed, equipment, weights, both distances, indicative money.\nWhat is not is WHERE any single load sits: a town, a pin rounded to about 5 km, and no code, shop name\nor description. Prices are the network's default rate card, and the response says so in `basis` rather\nthan leaving a client free to render them as offers.",
+        "description": "FB3b — the open market, to anyone at all.\n\n@Public, and that is the feature. The people who most need to know what freight moves on a corridor are\nthe ones who do not yet own a truck to move it with: an operator deciding what body to buy, someone\nweighing up a move to another city (user, 2026-08-30). Requiring an account to answer that would put the\ndata behind exactly the door that keeps it from the people it is for.\n\nWhat is published is the WORK — bodies needed, equipment, weights, both distances, indicative money.\nWhat is not is WHERE any single load sits: a town, a pin rounded to about 5 km, and no code, shop name\nor description. Prices are the rates of the company of the country each load is picked up in, in its money,\nand the response says so in `basis` rather than leaving a client free to render them as offers.",
         "parameters": [
           {
             "name": "lat",
@@ -37294,7 +37294,9 @@
               "releaseFee",
               "toteLoadFee",
               "mdpSortFee",
-              "holdingFeePerDay"
+              "holdingFeePerDay",
+              "freightPerKm",
+              "freightBaseFee"
             ]
           },
           "amount": {
@@ -47176,12 +47178,16 @@
           },
           "indicativeTotal": {
             "type": "number",
-            "description": "INDICATIVE ONLY, and named so. Computed at the network's default rate for a typical vehicle, because\n an anonymous caller has no vehicle whose rate card we could price against. What an actual operator\n earns is their own rate on their own corridor — this is the market's shape, not an offer."
+            "description": "INDICATIVE ONLY, and named so. Computed at the rates of the company of the country the load is picked up in,\n because an anonymous caller has no vehicle whose rate card we could price against. What an actual operator\n earns is their own rate on their own corridor — this is the market's shape, not an offer. Absent where no\n company of ours is in that country: there is no money such a figure could be in."
           },
           "indicativePerKm": {
             "type": "number",
             "nullable": true,
             "description": "Indicative earnings per TOTAL kilometre, empty run included. Null when it cannot be computed."
+          },
+          "currency": {
+            "type": "string",
+            "description": "The money both figures are in — that company's own. Present with them."
           }
         },
         "required": [
@@ -47208,7 +47214,7 @@
           },
           "basis": {
             "type": "string",
-            "description": "Said in the payload, not just in the docs: every price here is the network default applied to this\n load, so a client cannot render these numbers as an offer without stepping over the word."
+            "description": "Said in the payload, not just in the docs: every price here is the rate of the company of the country the load\n is picked up in, applied to this load, so a client cannot render these numbers as an offer without stepping over\n the word."
           }
         },
         "required": [

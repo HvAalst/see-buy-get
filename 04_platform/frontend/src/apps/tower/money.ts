@@ -205,7 +205,15 @@ export type AmountsForm = Record<AmountKey, string>;
  * handed to a driver, loaded, sorted, shelved, handed over — and last what waiting costs. The server's own order is
  * the order the figures were written in the code, which is nobody's way of thinking about a parcel.
  */
-export const AMOUNT_ORDER: AmountKey[] = ['wholesale', 'labourFee', 'handoverFee', 'toteLoadFee', 'mdpSortFee', 'shelvingFee', 'releaseFee', 'holdingFeePerDay'];
+export const AMOUNT_ORDER: AmountKey[] = ['wholesale', 'labourFee', 'handoverFee', 'toteLoadFee', 'mdpSortFee', 'shelvingFee', 'releaseFee', 'holdingFeePerDay', 'freightPerKm', 'freightBaseFee'];
+
+/**
+ * WHAT THE ROAD STARTS FROM — the last two on the list, under a heading of their own because they are not a parcel's
+ * (the user, 2026-10-25: "each countries rate and individually the individuals can overrule with their own rate"). A
+ * vehicle registered in this country starts from them where its owner names no rate, and the public market prices
+ * every load picked up here at them, in this company's money.
+ */
+export const ROAD_AMOUNTS: AmountKey[] = ['freightPerKm', 'freightBaseFee'];
 
 const amountRow = (pricing: Pick<EntityPricing, 'amounts'>, key: AmountKey): CompanyAmount | undefined => pricing.amounts.find((r) => r.key === key);
 
@@ -283,6 +291,8 @@ export const AMOUNT_LABEL: Record<AmountKey, MessageKey> = {
   shelvingFee: 'tower.amounts.k.shelvingFee',
   releaseFee: 'tower.amounts.k.releaseFee',
   holdingFeePerDay: 'tower.amounts.k.holdingFeePerDay',
+  freightPerKm: 'tower.amounts.k.freightPerKm',
+  freightBaseFee: 'tower.amounts.k.freightBaseFee',
 };
 
 export const AMOUNT_HINT: Record<AmountKey, MessageKey> = {
@@ -294,6 +304,8 @@ export const AMOUNT_HINT: Record<AmountKey, MessageKey> = {
   shelvingFee: 'tower.amounts.h.shelvingFee',
   releaseFee: 'tower.amounts.h.releaseFee',
   holdingFeePerDay: 'tower.amounts.h.holdingFeePerDay',
+  freightPerKm: 'tower.amounts.h.freightPerKm',
+  freightBaseFee: 'tower.amounts.h.freightBaseFee',
 };
 
 export function coverFormOf(row: LanePricing): CoverForm {

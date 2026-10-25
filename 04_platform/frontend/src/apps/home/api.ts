@@ -471,6 +471,8 @@ export interface MarketRow {
   scheduledPickupAt?: string;
   indicativeTotal?: number;
   indicativePerKm?: number | null;
+  /** The money both figures are in: that of the company in the country the load is picked up in. */
+  currency?: string;
 }
 
 export interface MarketView {

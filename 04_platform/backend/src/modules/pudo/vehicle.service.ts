@@ -1,5 +1,6 @@
 import { lapsedOf, offRoadLine, vehiclePapers } from './papers';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
@@ -9,7 +10,7 @@ import { Equipment } from './cargo.types';
 import { clampMultiplier } from './pricing';
 import { FleetManagerService } from './fleet-manager.service';
 import { MediaService } from './media.service';
-import { DEFAULT_PRICE_PER_KM } from './pudo.config';
+import { DEFAULT_PRICE_PER_KM, NETWORK_JURISDICTION } from './pudo.config';
 
 /** A reason a vehicle is off the road, in words — for now, or for `day` (YYYY-MM-DD, on the owner's clock) when asked. */
 export type OffRoadSource = (vehicle: Vehicle, at: { now: number; day?: string }) => string[];
@@ -31,7 +32,10 @@ interface RegisterVehicleInput {
   vehiclePhotoRefs?: string[]; // S26 — mediaIds of the vehicle body photos
   trailerPhotoRefs?: string[]; // S26 — mediaIds of a coupled trailer's photos
   managerDid?: string; // the fleet manager that owns this vehicle (must be ACTIVE)
-  pricePerKm?: number; // open-data transport rate (defaults if unset)
+  /** Where a courier's own vehicle works — set by the paths that make one, never by a form; it picks the country whose
+   *  rates the vehicle starts from (a fleet's vehicle starts from its fleet's company's). */
+  country?: string;
+  pricePerKm?: number; // the owner's own transport rate; unset, the country's company's starting rate
   equipment?: Equipment[]; // S32 — declared load/unload equipment (tail-lift, pallet jack, …) beyond the subtype baseline
   baseFee?: number; // S34 — flag-down fee (defaults per class)
   minMultiplier?: number; // S34 — the driver's price floor multiplier (default 0.8)
@@ -55,7 +59,23 @@ export class VehicleService {
   constructor(
     private readonly managers: FleetManagerService,
     private readonly media: MediaService,
+    // The rates a vehicle starts from: its country's company's list (2026-10-25). Optional for the specs built by hand.
+    @Optional() private readonly entities?: EntityService,
   ) {}
+
+  /**
+   * WHAT A VEHICLE'S RATE STARTS FROM where its owner names none of their own (the user, 2026-10-25: "each countries
+   * rate and individually the individuals can overrule with their own rate"): the list of the company that settles it
+   * — a fleet's company, or the company of the country a courier's vehicle works in — in that company's money. A
+   * smaller class starts from its share of the truck's loading fee, as the class defaults always were. With no company
+   * of ours behind it, the figures every company starts from.
+   */
+  private startingRates(input: Pick<RegisterVehicleInput, 'managerDid' | 'country'>): { perKm: number; truckBaseFee: number } {
+    const manager = input.managerDid ? this.managers.get(input.managerDid) : undefined;
+    const entityId = manager ? this.managers.entityIdOrNone(manager) : this.entities?.forJurisdiction(input.country ?? NETWORK_JURISDICTION)?.entityId;
+    const list = this.entities?.amountsFor(entityId);
+    return { perKm: list?.freightPerKm ?? DEFAULT_PRICE_PER_KM, truckBaseFee: list?.freightBaseFee ?? VEHICLE_SPEC.truck.defaultBaseFee };
+  }
 
   register(input: RegisterVehicleInput): Vehicle {
     const spec = VEHICLE_SPEC[input.vehicleClass];
@@ -69,6 +89,7 @@ export class VehicleService {
     const sub: TruckSubtypeSpec | undefined = input.truckSubtype ? TRUCK_SUBTYPE_CATALOG[input.truckSubtype] : undefined;
     const capacityKg = this.computeCapacity(input.vehicleClass, input.capacityKg, sub?.capacityKg);
     const docs = input.documents ?? {};
+    const starting = this.startingRates(input);
     const vehicle: Vehicle = {
       vehicleId: `veh_${randomBytes(7).toString('hex')}`,
       managerDid: input.managerDid,
@@ -84,10 +105,14 @@ export class VehicleService {
       // not be one, because a guessed deck would clear a load under a bridge on arithmetic about other
       // people's trucks. Absent leaves the hazard map answering HEIGHT_UNKNOWN, which is the truth.
       ...(input.deckM != null && input.deckM > 0 && input.deckM < 3 ? { deckM: Math.round(input.deckM * 100) / 100 } : {}),
-      pricePerKm: input.pricePerKm != null ? Math.round(input.pricePerKm * 1000) / 1000 : DEFAULT_PRICE_PER_KM,
-      // S34 — the pricing profile. Defaults are class-scaled (a bike's flag-down is cents, a truck's is dollars)
-      // with a sane [0.8, 1.5] corridor; a fleet may declare its own. Bounds are sanitised so min ≤ max ≤ 3.
-      baseFee: input.baseFee != null && input.baseFee >= 0 ? Math.round(input.baseFee * 100) / 100 : spec.defaultBaseFee,
+      // The owner's own rate where they name one; else the country's company's, which they can overrule any time (setPrice).
+      pricePerKm: input.pricePerKm != null ? Math.round(input.pricePerKm * 1000) / 1000 : Math.round(starting.perKm * 1000) / 1000,
+      // S34 — the pricing profile. Defaults are class-scaled (a bike's flag-down is a fraction of a truck's) with a
+      // sane [0.8, 1.5] corridor; a fleet may declare its own. Bounds are sanitised so min ≤ max ≤ 3.
+      baseFee:
+        input.baseFee != null && input.baseFee >= 0
+          ? Math.round(input.baseFee * 100) / 100
+          : Math.round(((spec.defaultBaseFee / VEHICLE_SPEC.truck.defaultBaseFee) * starting.truckBaseFee) * 100) / 100,
       minMultiplier: clampMultiplier(input.minMultiplier ?? DEFAULT_MIN_MULTIPLIER),
       maxMultiplier: Math.max(clampMultiplier(input.minMultiplier ?? DEFAULT_MIN_MULTIPLIER), clampMultiplier(input.maxMultiplier ?? DEFAULT_MAX_MULTIPLIER)),
       maxParcelKg: spec.maxParcelKg,

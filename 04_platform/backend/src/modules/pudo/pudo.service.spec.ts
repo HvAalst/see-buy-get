@@ -5663,6 +5663,25 @@ describe('PUDO Light', () => {
     expect(dispatch.remainingCapacity(d.did)).toBe(10_000); // released
   });
 
+  it('a vehicle with no rate of its own starts from its country’s company’s list; its own rate overrules (2026-10-25)', () => {
+    // The user, 2026-10-25: "each countries rate and individually the individuals can overrule with their own rate".
+    // Every vehicle started from one set of network figures, in no country's money.
+    entities.setAmounts(entities.requireForJurisdiction('KE').entityId, { freightPerKm: 85, freightBaseFee: 1200 }, 'Amina Otieno');
+    // A courier's own motorcycle, working in Kenya: the Kenyan company's rate, and its class's share of the truck's fee.
+    const moto = vehicles.register({ plate: 'KE-RATE-1', vehicleClass: 'motorcycle', ownerName: 'Y', country: 'KE' } as never);
+    expect(moto.pricePerKm).toBe(85);
+    expect(moto.baseFee).toBe(96); // 0.8 of a truck's 10, of 1200
+    const truck = vehicles.register({ plate: 'KE-RATE-2', vehicleClass: 'truck', truckSubtype: 'flatbed', ownerName: 'Y', country: 'KE' } as never);
+    expect([truck.pricePerKm, truck.baseFee]).toEqual([85, 1200]);
+    // The owner's own rate overrules — named at registration, or set afterwards.
+    const own = vehicles.register({ plate: 'KE-RATE-3', vehicleClass: 'truck', truckSubtype: 'flatbed', ownerName: 'Y', country: 'KE', pricePerKm: 70, baseFee: 900 } as never);
+    expect([own.pricePerKm, own.baseFee]).toEqual([70, 900]);
+    expect(vehicles.setPrice(truck.vehicleId, 90).pricePerKm).toBe(90);
+    // Where no company of ours is, the figures every company starts from.
+    const elsewhere = vehicles.register({ plate: 'NG-RATE-1', vehicleClass: 'truck', truckSubtype: 'flatbed', ownerName: 'Y', country: 'NG' } as never);
+    expect([elsewhere.pricePerKm, elsewhere.baseFee]).toEqual([0.08, 10]);
+  });
+
   // --- S34: dynamic freight pricing (priced offer → price lock + shipper billing → driver payout) ---
 
   it('S34: prices a freight offer, locks + bills the shipper at claim, pays the driver on delivery', () => {
@@ -6310,6 +6329,28 @@ describe('PUDO Light', () => {
     }
     // Against the same load the signed-out board says nothing about money at all.
     expect(dispatch.board({ from: here }).every((r) => r.price === undefined)).toBe(true);
+  });
+
+  it('FB3b: prices a load at the rates of its country’s company, in that money — and gives no figure where we have none', () => {
+    // The user, 2026-10-25: "each countries rate". The market priced every load at one set of network figures, in no
+    // country's money, and the front page drew them bare.
+    const here = { lat: -1.2, lng: 36.8 };
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: here, pickupLabel: 'A', destLabel: 'B', destLocation: { lat: -1.15, lng: 36.8 }, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80] });
+    const [before] = dispatch.publicMarket({ from: here });
+    expect(before.currency).toBe('KES'); // the Kenyan company's money, said with the figure
+    expect(before.indicativeTotal).toBeGreaterThan(0);
+    // Kenya's company sets its own road rates on its list: the market follows them, in shillings.
+    entities.setAmounts(entities.requireForJurisdiction('KE').entityId, { freightPerKm: 0.8, freightBaseFee: 100 }, 'Amina Otieno');
+    const [after] = dispatch.publicMarket({ from: here });
+    expect(after.currency).toBe('KES');
+    expect(after.indicativeTotal!).toBeGreaterThan(before.indicativeTotal! * 5); // ten times the rates: the guard reads them
+    // A load where no company of ours is: there is no money a figure could be in, so there is none.
+    const far = { lat: 9.06, lng: 7.49 };
+    dispatch.registerFreight({ description: 'Pallets', pickupLocation: far, pickupLabel: 'A', destLabel: 'B', destLocation: far, weightKg: 400, packaging: 'palletised', dimensionsCm: [120, 100, 80], pickupCountry: 'NG' });
+    const [nowhere] = dispatch.publicMarket({ from: far, radiusKm: 5 });
+    expect(nowhere.weightKg).toBe(400); // the work is still published
+    expect(nowhere.indicativeTotal).toBeUndefined();
+    expect(nowhere.currency).toBeUndefined();
   });
 
   it('FB3b: publishes the WORK and withholds the LOAD’s address', () => {
@@ -9585,7 +9626,8 @@ describe('PUDO Light', () => {
     const paidTo = (did: string) => gate.entries({ did, type: 'LABOR_PAYOUT' }).map((e) => e.amount).reverse();
 
     it('starts every company from today’s figures — and nothing changes until somebody sets one', () => {
-      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.2, holdingFeePerDay: 0.1 });
+      // …and what the road starts from (2026-10-25): a vehicle's rate per kilometre and a truck's loading fee.
+      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.2, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10 });
       expect(entities.amountsFor(KE())).toEqual({ ...DEFAULT_AMOUNTS, currency: 'KES' });
       // Nobody's company: the starting figures, in no money in particular.
       expect(entities.amountsFor(undefined)).toEqual({ ...DEFAULT_AMOUNTS, currency: undefined });

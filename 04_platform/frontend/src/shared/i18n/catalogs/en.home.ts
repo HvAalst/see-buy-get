@@ -602,7 +602,7 @@ export const enHome = {
   'home.market.shapeCount': '{n, plural, one {# load} other {# loads}} open right now',
   'home.market.shapeBody': '{body} · {n}',
   'home.market.basisTitle': 'These prices are indicative',
-  'home.market.basisDetail': 'Every figure here is the network’s standard rate applied to that load — not an offer, and not what any particular operator earns. A driver sees their own rate, on their own vehicle, when they sign in.',
+  'home.market.basisDetail': 'Every figure here is the standard rate of SeeBuyGet’s company in the country the load is picked up in, applied to that load, in that country’s money — not an offer, and not what any particular operator earns. A driver sees their own rate, on their own vehicle, when they sign in.',
   'home.market.work': '{body} · {kg} kg',
   'home.market.workGuessed': '{body} · {kg} kg — worked out from the weight alone',
   'home.market.corridor': '{from} → {to}',

@@ -884,12 +884,15 @@ export class MarketRow {
   loadedKm: number;
   totalKm: number;
   scheduledPickupAt?: string;
-  /** INDICATIVE ONLY, and named so. Computed at the network's default rate for a typical vehicle, because
-   *  an anonymous caller has no vehicle whose rate card we could price against. What an actual operator
-   *  earns is their own rate on their own corridor — this is the market's shape, not an offer. */
+  /** INDICATIVE ONLY, and named so. Computed at the rates of the company of the country the load is picked up in,
+   *  because an anonymous caller has no vehicle whose rate card we could price against. What an actual operator
+   *  earns is their own rate on their own corridor — this is the market's shape, not an offer. Absent where no
+   *  company of ours is in that country: there is no money such a figure could be in. */
   indicativeTotal?: number;
   /** Indicative earnings per TOTAL kilometre, empty run included. Null when it cannot be computed. */
   indicativePerKm?: number | null;
+  /** The money both figures are in — that company's own. Present with them. */
+  currency?: string;
 }
 
 /**
@@ -1099,9 +1102,10 @@ export class MarketResponse {
   @ApiProperty({ type: [MarketRow] })
   items: MarketRow[];
   total: number;
-  /** Said in the payload, not just in the docs: every price here is the network default applied to this
-   *  load, so a client cannot render these numbers as an offer without stepping over the word. */
-  basis: 'indicative-network-default';
+  /** Said in the payload, not just in the docs: every price here is the rate of the company of the country the load
+   *  is picked up in, applied to this load, so a client cannot render these numbers as an offer without stepping over
+   *  the word. */
+  basis: 'indicative-country-rates';
 }
 
 /** FB0c — how a load is taken: at the computed price, or at one agreed first. */

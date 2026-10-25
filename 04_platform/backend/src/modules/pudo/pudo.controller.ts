@@ -6627,14 +6627,14 @@ export class SbgController {
    *
    * What is published is the WORK — bodies needed, equipment, weights, both distances, indicative money.
    * What is not is WHERE any single load sits: a town, a pin rounded to about 5 km, and no code, shop name
-   * or description. Prices are the network's default rate card, and the response says so in `basis` rather
-   * than leaving a client free to render them as offers.
+   * or description. Prices are the rates of the company of the country each load is picked up in, in its money,
+   * and the response says so in `basis` rather than leaving a client free to render them as offers.
    */
   @Public()
   @Get('market')
   publicMarket(@Query() q: MarketQueryDto): MarketResponse {
     const items = this.dispatch.publicMarket({ from: { lat: Number(q.lat), lng: Number(q.lng) }, radiusKm: q.radiusKm });
-    return { items, total: items.length, basis: 'indicative-network-default' };
+    return { items, total: items.length, basis: 'indicative-country-rates' };
   }
 
   /**

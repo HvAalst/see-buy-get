@@ -1,3 +1,4 @@
+import { Fragment } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
@@ -6,6 +7,7 @@ import {
   AMOUNT_HINT,
   AMOUNT_LABEL,
   AMOUNT_ORDER,
+  ROAD_AMOUNTS,
   amountsFormError,
   amountsFormOf,
   amountsInForce,
@@ -242,22 +244,28 @@ function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: T
 
       <div class="twr-knobs">
         <p class="chint">{t('tower.amounts.hint', { currency: currency || t('tower.amounts.itsMoney') })}</p>
-        <div class="twr-knobs__row">
-          {AMOUNT_ORDER.map((key) => {
-            const row = pricing.amounts.find((r) => r.key === key);
-            return (
-              <section class="twr-knob" key={key}>
-                <Text
-                  label={currency ? t('tower.topupfee.inCurrency', { label: t(AMOUNT_LABEL[key]), currency }) : t(AMOUNT_LABEL[key])}
-                  value={form[key]}
-                  placeholder={row ? String(row.startsAt) : ''}
-                  hint={t(AMOUNT_HINT[key])}
-                  onInput={(v) => setForm({ ...form, [key]: v })}
-                />
-              </section>
-            );
-          })}
-        </div>
+        {[AMOUNT_ORDER.filter((key) => !ROAD_AMOUNTS.includes(key)), ROAD_AMOUNTS].map((keys, i) => (
+          <Fragment key={i}>
+            {/* The road's two figures are not a parcel's: they sit under a heading of their own (2026-10-25). */}
+            {i === 1 ? <p class="chint"><b>{t('tower.amounts.roadTitle')}</b> {t('tower.amounts.roadHint')}</p> : null}
+            <div class="twr-knobs__row">
+              {keys.map((key) => {
+                const row = pricing.amounts.find((r) => r.key === key);
+                return (
+                  <section class="twr-knob" key={key}>
+                    <Text
+                      label={currency ? t('tower.topupfee.inCurrency', { label: t(AMOUNT_LABEL[key]), currency }) : t(AMOUNT_LABEL[key])}
+                      value={form[key]}
+                      placeholder={row ? String(row.startsAt) : ''}
+                      hint={t(AMOUNT_HINT[key])}
+                      onInput={(v) => setForm({ ...form, [key]: v })}
+                    />
+                  </section>
+                );
+              })}
+            </div>
+          </Fragment>
+        ))}
         {/* Said before the button is pressed, in this company's own money: what one parcel brings in, and what its
             steps pay out. Loud only when the second is more than the first. */}
         <p class={math.over ? 'cerr' : 'chint'}>

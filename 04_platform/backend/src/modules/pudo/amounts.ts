@@ -1,4 +1,5 @@
-import { HANDOVER_FEE, HOLDING_FEE_PER_DAY, LABOUR_FEE, MDP_SORT_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
+import { DEFAULT_PRICE_PER_KM, HANDOVER_FEE, HOLDING_FEE_PER_DAY, LABOUR_FEE, MDP_SORT_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
+import { VEHICLE_SPEC } from './fleet.config';
 import { AMOUNT_KEYS, isAmountKey, type AmountKey } from './amount-keys';
 
 /**
@@ -15,6 +16,11 @@ import { AMOUNT_KEYS, isAmountKey, type AmountKey } from './amount-keys';
  * it, a hub by its own, a driver by the one that settles them. A parcel that crosses a border is shelved at the rate of
  * the country it is shelved in, in that country's money — the amount is a wage for work done there, not a share of a
  * price set somewhere else.
+ *
+ * AND WHAT THE ROAD STARTS FROM (the user, 2026-10-25: "each countries rate and individually the individuals can
+ * overrule with their own rate"). A rate per kilometre and a truck's loading fee: the public market prices a load at
+ * the rates of the company of the country it is picked up in, in its money, and a vehicle whose owner names no rate
+ * of its own starts from them (smaller classes from their share of the truck's fee). Its owner's own rate overrules.
  *
  * WHEN. The figure in force when the step is done. Two things are kept on the parcel instead, because they are taken
  * BACK later and must come back as they went: what the shop was charged at the counter and what it was paid for the
@@ -40,6 +46,8 @@ export const DEFAULT_AMOUNTS: Amounts = {
   toteLoadFee: TOTE_LOAD_FEE,
   mdpSortFee: MDP_SORT_FEE,
   holdingFeePerDay: HOLDING_FEE_PER_DAY,
+  freightPerKm: DEFAULT_PRICE_PER_KM,
+  freightBaseFee: VEHICLE_SPEC.truck.defaultBaseFee,
 };
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
@@ -75,6 +83,8 @@ export function amountsLine(amounts: Partial<Record<AmountKey, number | undefine
     toteLoadFee: 'bag-loading pay',
     mdpSortFee: 'sorting pay',
     holdingFeePerDay: 'holding per day',
+    freightPerKm: 'freight per km',
+    freightBaseFee: 'truck loading fee',
   };
   const said = keys.map((k) => `${words[k]} ${amounts[k] ?? '—'}`).join(', ');
   return currency ? `${said} (${currency})` : said;

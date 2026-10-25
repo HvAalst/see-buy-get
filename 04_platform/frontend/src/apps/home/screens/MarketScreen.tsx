@@ -1,5 +1,5 @@
 import { Button, Card, ErrorNote, Icon, Note, Pill, ReadAloud } from '../../../shared/ui';
-import { formatDate, useT, type Translate } from '../../../shared/i18n';
+import { formatDate, formatMoney, useT, type Translate } from '../../../shared/i18n';
 import { bodyWords, emptyRunPct, isThin, km, marketShape, marketWhere, marketWork, measuredPct, servedPct } from '../logic';
 import type { MarketRow } from '../api';
 import { MARKET_REACHES, type HomeActions, type HomeState, type MarketReach } from '../useHomeApp';
@@ -286,8 +286,9 @@ function MarketCard({ row }: { row: MarketRow }) {
       <span class="row__end mkt__money">
         {row.indicativeTotal != null ? (
           <>
-            <b class="mkt__amount">{row.indicativeTotal.toFixed(2)}</b>
-            <span class="mkt__perkm">{row.indicativePerKm != null ? t('home.market.perKm', { amount: row.indicativePerKm.toFixed(2) }) : t('home.market.perKmNone')}</span>
+            {/* In the money of the company where the load is picked up, which every figure here is priced at (2026-10-25). */}
+            <b class="mkt__amount">{formatMoney(row.indicativeTotal, row.currency)}</b>
+            <span class="mkt__perkm">{row.indicativePerKm != null ? t('home.market.perKm', { amount: formatMoney(row.indicativePerKm, row.currency) }) : t('home.market.perKmNone')}</span>
             <span class="mkt__indicative">{t('home.market.indicative')}</span>
           </>
         ) : (

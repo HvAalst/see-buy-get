@@ -46,7 +46,7 @@ import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE
 import { Router, ROUTER } from './router';
 import { groupOf, laneDrive, lanesOf, tripKmh, type LaneDrive, type LaneTrip } from './lane-times';
 import { handedAt } from './observed-at';
-import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -89,19 +89,21 @@ function round1(km: number): number {
  *
  * Every price a driver sees is computed against their own vehicle's baseFee, per-km rate and multiplier
  * corridor. A caller with no account has no such card, and the choice is between showing no money at all
- * and showing the network's own defaults. The defaults win, but only because they are LABELLED: the
- * response carries `basis: 'indicative-network-default'`, and the page says it in words.
+ * and showing the rates of the company of the load's country. Those win, but only because they are LABELLED:
+ * the response carries `basis: 'indicative-country-rates'`, and the page says it in words.
  *
  * Deliberately not a per-body rate table. The system holds no evidence that a flatbed's cost per kilometre
  * differs from a box body's, and inventing one would put a fabricated number under a page whose entire
  * purpose is to be the honest source somebody invests against.
  */
 const REFERENCE_PROFILE = {
-  baseFee: VEHICLE_SPEC.truck.defaultBaseFee,
-  ratePerKm: DEFAULT_PRICE_PER_KM,
   min: DEFAULT_MIN_MULTIPLIER,
   max: DEFAULT_MAX_MULTIPLIER,
 };
+// The MONEY in it is no longer the network's: one set of figures for every country was in no country's money. A load
+// is priced at the rates of the company of the country it is picked up in — its list's freightPerKm and
+// freightBaseFee, in its money (the user, 2026-10-25: "each countries rate") — and where no company of ours is,
+// there is no money a figure could be in, so there is none. The corridor around the rate is not money, and stays.
 
 /** Round a pin to ~0.05° (≈5 km) — enough to map the market, not enough to meet a load at its gate. */
 function coarsePoint(p: GeoPoint): GeoPoint {
@@ -1505,8 +1507,9 @@ export class DispatchService {
    * inventory of valuable goods with dates against them, and nothing about the investment question needs it.
    *
    * Money is INDICATIVE and says so in the payload. Every price on the driver's board is computed against
-   * that driver's own rate card; an anonymous caller has none, so this uses the network's defaults for a
-   * typical vehicle. It is the same computeFreightPrice the offer uses — the same arithmetic, a different
+   * that driver's own rate card; an anonymous caller has none, so this uses the rates of the company of the
+   * country the load is picked up in, in its money (2026-10-25 — it used the network's defaults, in no
+   * country's money). It is the same computeFreightPrice the offer uses — the same arithmetic, a different
    * rate card — so the public figure and a real offer can never diverge in method, only in whose rate it is.
    */
   publicMarket(input: { from: GeoPoint; radiusKm?: number }, now: number = Date.now()): MarketRow[] {
@@ -1520,13 +1523,18 @@ export class DispatchService {
       const deadheadKm = round1(this.router.roadKm(input.from, f.pickupLocation));
       if (radius != null && deadheadKm > radius) continue;
       const loadedKm = round1(f.destLocation ? this.router.roadKm(f.pickupLocation, f.destLocation) : 0);
-      const price = computeFreightPrice({
-        baseFee: REFERENCE_PROFILE.baseFee,
-        ratePerKm: REFERENCE_PROFILE.ratePerKm,
-        deadheadKm,
-        tripKm: loadedKm,
-        multiplier: freightMultiplier(new Date(now), { min: REFERENCE_PROFILE.min, max: REFERENCE_PROFILE.max }, this.market.factorFor(f.pickupLocation, now)),
-      });
+      // Whose rates: the company of the country the load is picked up in (unknown, the network's own, as everywhere).
+      const company = this.entities.forJurisdiction(f.pickupCountry ?? NETWORK_JURISDICTION);
+      const rates = company ? this.entities.amountsFor(company.entityId) : undefined;
+      const price = rates?.currency
+        ? computeFreightPrice({
+            baseFee: rates.freightBaseFee,
+            ratePerKm: rates.freightPerKm,
+            deadheadKm,
+            tripKm: loadedKm,
+            multiplier: freightMultiplier(new Date(now), { min: REFERENCE_PROFILE.min, max: REFERENCE_PROFILE.max }, this.market.factorFor(f.pickupLocation, now)),
+          })
+        : undefined;
       rows.push({
         area: nearestPlace(f.pickupLocation)?.name,
         destArea: f.destLocation ? nearestPlace(f.destLocation)?.name : undefined,
@@ -1542,8 +1550,7 @@ export class DispatchService {
         loadedKm,
         totalKm: round1(deadheadKm + loadedKm),
         scheduledPickupAt: f.scheduledPickupAt,
-        indicativeTotal: price.total,
-        indicativePerKm: earningsPerKm(price),
+        ...(price && rates?.currency ? { indicativeTotal: price.total, indicativePerKm: earningsPerKm(price), currency: rates.currency } : {}),
       });
     }
 

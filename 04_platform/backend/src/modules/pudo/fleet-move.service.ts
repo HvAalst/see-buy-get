@@ -272,7 +272,7 @@ export class FleetMoveService {
       return { driver: asked, asked: asked.courierAsk, ...(where.companyName ? { companyName: where.companyName } : {}) };
     }
     // Theirs, and nobody else's: no fleet, and the courier recorded as the one who owns and drives it.
-    const vehicle = this.vehicles.register({ plate: input.plate, vehicleClass: input.vehicleClass, managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid } as never);
+    const vehicle = this.vehicles.register({ plate: input.plate, vehicleClass: input.vehicleClass, managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country } as never);
     const rides = this.drivers.rideAlone(driverDid, country);
     // On their screen from the first morning: the vehicle list is a history, and they have none of their own yet.
     this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);
@@ -309,7 +309,7 @@ export class FleetMoveService {
     if (!this.drivers.courierCountries().some((c) => c.jurisdiction === ask.country)) {
       throw new GlosError('FORBIDDEN', `The network does not operate in ${ask.country} any more, so a courier cannot be registered there`);
     }
-    const vehicle = this.vehicles.register({ plate: ask.plate, vehicleClass: ask.vehicleClass, ...(ask.truckSubtype ? { truckSubtype: ask.truckSubtype } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid } as never);
+    const vehicle = this.vehicles.register({ plate: ask.plate, vehicleClass: ask.vehicleClass, ...(ask.truckSubtype ? { truckSubtype: ask.truckSubtype } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country: ask.country } as never);
     this.drivers.recordCourierCheck(driverDid, { idCopyRef: ask.idCopyRef, licenceCopyRef: ask.licenceCopyRef, at: ask.askedAt });
     this.drivers.rideAlone(driverDid, ask.country);
     this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);

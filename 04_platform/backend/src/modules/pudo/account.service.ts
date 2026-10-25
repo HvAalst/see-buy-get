@@ -728,7 +728,7 @@ export class AccountService implements OnApplicationBootstrap {
           throw new GlosError('CANNOT_COUPLE', `You are not licence-cleared for a ${wanted.vehicleClass}. Add it to what you can drive, or register a vehicle you are cleared for`);
         }
         // Theirs, and nobody else's: no fleet (whatever the form says), and the courier recorded as the one who drives it.
-        const vehicle = this.vehicles.register({ ...(profile.vehicle as object), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driver.did } as never);
+        const vehicle = this.vehicles.register({ ...(profile.vehicle as object), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driver.did, country: driver.jurisdiction } as never);
         this.fleet.claimOwnVehicle(driver.did, vehicle.vehicleId);
       }
       if (profile.kyc && driver.registry === 'heavy') this.drivers.submitKyc(driver.did, profile.kyc as never);

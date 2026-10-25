@@ -21,11 +21,10 @@ function allFiles(dir = ''): string[] {
 }
 
 /**
- * Said bare on purpose, each until a question is answered:
- * the front page's market shows a rate per kilometre from the network's own rate card, which is in no one country's
- * money — which money that card is in is the money model's question (progress.html, "Three money figures").
+ * Said bare on purpose, each until a question is answered. None now: the front page's market, the last (its rate card
+ * was in no one country's money), prices each load at its country's company's rates, in its money (2026-10-25).
  */
-const WAITING = ['apps/home/screens/MarketScreen.tsx:home.market.perKm'];
+const WAITING: string[] = [];
 
 describe('a sum of money said in words', () => {
   it('goes with its currency', () => {
