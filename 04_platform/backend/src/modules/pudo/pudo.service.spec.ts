@@ -8574,6 +8574,56 @@ describe('PUDO Light', () => {
     expect(dispatch.postedBy(d.did)).toEqual([]); // the driver posted nothing — the row below is the poster's
   });
 
+  it('D9: what the receiver found at the handover — counted against the note, a damaged line with its photo, refused whole before anything is written — lands beside their name and reaches the sender', () => {
+    const pickup = { lat: -1.86, lng: 36.36 };
+    const d = coupleFlatbedWithForklift('RSV', { min: 0.8, max: 1.5 }); // bagged: a flatbed with its own forklift
+    const poster = 'did:glos:poster-rsv';
+    const f = dispatch.registerFreight({ description: 'Cement, 40 bags', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 2000, packaging: 'bagged', packages: 40, postedByDid: poster });
+    claimFreight(d.did, pickup, f.freightId);
+    // The driver's own load says what the note counts, so the door can be counted against it.
+    expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)).toMatchObject({ packages: 40, packaging: 'bagged' });
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
+    const deliver = (exceptions: Array<{ kind: string; count: number; photoRefs?: string[] }>) => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Peter Otieno', podPhotoId: photoBy(d.did), exceptions });
+    // Each refusal says what to do, and leaves the load on the road.
+    expect(() => deliver([{ kind: 'lost', count: 1 }])).toThrow(/short, over, damaged or wrong/);
+    expect(() => deliver([{ kind: 'short', count: 2 }, { kind: 'short', count: 1 }])).toThrow(/once/);
+    expect(() => deliver([{ kind: 'short', count: 0 }])).toThrow(/one or more/);
+    expect(() => deliver([{ kind: 'short', count: 1.5 }])).toThrow(/one or more/);
+    expect(() => deliver([{ kind: 'damaged', count: 2 }])).toThrow(/photo of what is damaged/);
+    expect(() => deliver([{ kind: 'damaged', count: 2, photoRefs: ['med_not_ours'] }])).toThrow(/We do not hold that photo/);
+    expect(() => deliver([{ kind: 'short', count: 40 }])).toThrow(/none of them came/);
+    expect(() => deliver([{ kind: 'short', count: 38 }, { kind: 'wrong', count: 3 }])).toThrow(/count only what came/);
+    expect(() => deliver([{ kind: 'short', count: 38 }, { kind: 'damaged', count: 3, photoRefs: [photoBy(d.did)] }])).toThrow(/count only what came/);
+    expect(dispatch.listFreight({ status: 'in_transit' }).some((x) => x.freightId === f.freightId)).toBe(true);
+    const heard: unknown[] = [];
+    events.subscribe(GlosEvent.Pudo.FreightDelivered, (e) => {
+      heard.push(e.payload);
+    });
+    const broken = photoBy(d.did);
+    // Said in any order, kept in the note's: short, over, damaged, wrong — and one photograph sent twice is one.
+    const done = deliver([{ kind: 'damaged', count: 3, photoRefs: [broken, broken] }, { kind: 'over', count: 1 }, { kind: 'short', count: 2 }]);
+    expect(done.status).toBe('delivered');
+    expect(done.proofOfDelivery?.exceptions).toEqual([{ kind: 'short', count: 2 }, { kind: 'over', count: 1 }, { kind: 'damaged', count: 3, photoRefs: [broken] }]);
+    expect(media.get(broken)?.link).toEqual({ type: 'freight', id: f.freightId }); // the damage photo is kept with the load
+    expect(heard).toEqual([expect.objectContaining({ freightId: f.freightId, posterDid: poster, exceptions: [{ kind: 'short', count: 2 }, { kind: 'over', count: 1 }, { kind: 'damaged', count: 3 }] })]);
+    // The sender's Loads row (and so its system's load.delivered) carries it: the photographs counted, never handed out.
+    expect(dispatch.postedBy(poster).find((r) => r.freightId === f.freightId)?.exceptions).toEqual([
+      { kind: 'short', count: 2, photos: 0 },
+      { kind: 'over', count: 1, photos: 0 },
+      { kind: 'damaged', count: 3, photos: 1 },
+    ]);
+  });
+
+  it('D9: a load whose note states no count still takes what the receiver found — nothing to count it against', () => {
+    const pickup = { lat: -1.86, lng: 36.36 };
+    const d = coupleTipper('RSV2', { min: 0.8, max: 1.5 });
+    const f = dispatch.registerFreight({ description: 'Sand', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 2000, packaging: 'loose' });
+    claimFreight(d.did, pickup, f.freightId);
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
+    const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Peter Otieno', podPhotoId: photoBy(d.did), exceptions: [{ kind: 'short', count: 40 }] });
+    expect(done.proofOfDelivery?.exceptions).toEqual([{ kind: 'short', count: 40 }]);
+  });
+
   it('FP3: the sender may withdraw a claimed load before pickup — the charge comes back, the driver is told, and the job earns nothing', () => {
     const pickup = { lat: -1.2, lng: 36.8 };
     const t0 = new Date('2026-07-22T11:00:00').getTime();

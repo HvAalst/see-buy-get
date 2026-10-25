@@ -2,7 +2,8 @@ import type { OrderHandedOn } from './fleet-overflow.types';
 import type { DriverRostered } from './fleet-roster.service';
 import { ITEM_WORDS, type VehicleDefectDecided, type VehicleDefectReported, type VehicleServiceDue } from './vehicle-care.service';
 import { CAUSE_WORDS, type VehicleBreakdownResolved, type VehicleBrokeDown, type VehicleLoadsHandedOver } from './vehicle-breakdown.service';
-import type { DeliveryTiming, PlanLeftWhy } from './dispatch.types';
+import type { DeliveryTiming, PlanLeftWhy, ReceivingExceptionKind } from './dispatch.types';
+import { exceptionsInWords } from './receiving';
 import { UNCOLLECTED_H } from './pudo.config';
 import { runningLate } from './parcel.service';
 import { appUrl } from '../../foundation/mail/mail.templates';
@@ -401,7 +402,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // A carrier's accepted plan leaves an order on no vehicle — or has it on one after all. Its shipper is told.
     this.events.subscribe<OrderLeftOut>(GlosEvent.Pudo.OrderLeftOut, (e) => this.onOrderLeftOut(e.payload));
     // A load reached the other end: whoever sent it is told, as the shipper of a run always was.
-    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string }>(GlosEvent.Pudo.FreightDelivered, (e) => this.onFreightDelivered(e.payload));
+    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; exceptions?: Array<{ kind: ReceivingExceptionKind; count: number }> }>(GlosEvent.Pudo.FreightDelivered, (e) => this.onFreightDelivered(e.payload));
     // A carrier's plan for the day has an order outside the window its shipper asked for — or inside it after all.
     this.events.subscribe<OrderWindowPlanned>(GlosEvent.Pudo.OrderWindowPlanned, (e) => this.onOrderWindowPlanned(e.payload));
     this.events.subscribe<BookingGivenBack>(GlosEvent.Pudo.DepartureBookingCancelled, (e) => this.onBookingGivenBack(e.payload));
@@ -1084,12 +1085,12 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     return found;
   }
 
-  /** A load reached the other end. Whoever sent it hears it once, with who signed for it. */
-  private async onFreightDelivered(p: { freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; timing?: DeliveryTiming; orderedFor?: string }): Promise<void> {
+  /** A load reached the other end. Whoever sent it hears it once, with who signed for it — and (D9) what they found not as the note says. */
+  private async onFreightDelivered(p: { freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; exceptions?: Array<{ kind: ReceivingExceptionKind; count: number }>; timing?: DeliveryTiming; orderedFor?: string }): Promise<void> {
     if (!p.posterDid) return;
     const when = p.timing ? ` at ${p.timing.at}` : '';
     const goods = p.description ? `: ${p.description.replace(/\.+$/, '')}` : '';
-    await this.tell(p.posterDid, { kind: 'freight_delivered', title: `${p.code} was delivered`, body: `Handed over${when}${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.${againstWhatWasAsked(p.timing, p.orderedFor)}`, tag: `freight:${p.freightId}:delivered`, data: { freightId: p.freightId } });
+    await this.tell(p.posterDid, { kind: 'freight_delivered', title: `${p.code} was delivered`, body: `Handed over${when}${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.${againstWhatWasAsked(p.timing, p.orderedFor)}${p.exceptions?.length ? ` The receiver found ${exceptionsInWords(p.exceptions)}: it is on the consignment note.` : ''}`, tag: `freight:${p.freightId}:delivered`, data: { freightId: p.freightId } });
   }
 
   private async onOrderHandedOn(p: OrderHandedOn): Promise<void> {

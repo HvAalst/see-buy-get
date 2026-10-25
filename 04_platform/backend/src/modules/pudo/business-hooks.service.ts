@@ -116,6 +116,10 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
     this.events.subscribe<{ freightId?: string }>(GlosEvent.Pudo.InboundAddressed, (e) => {
       if (e.payload?.freightId) this.relayInbound('inbound.addressed', String(e.payload.freightId));
     });
+    // D9 — what was still expected of a delivered load, closed by one of its people: its own system hears it too.
+    this.events.subscribe<{ freightId?: string }>(GlosEvent.Pudo.InboundClosed, (e) => {
+      if (e.payload?.freightId) this.relayInbound('inbound.closed', String(e.payload.freightId));
+    });
     this.timer = setInterval(() => void this.drain(), DRAIN_MS);
     this.timer.unref?.();
   }

@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, DocumentButton, ErrorNote, Explainer, Icon, PhotoField, Pill, QrBlock, Sheet, PhoneField } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
+import { foundWords } from '../../../shared/found';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
@@ -129,6 +130,7 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         {f.scheduledPickupAt ? <span class="row__s">{formatDate(f.scheduledPickupAt)}</span> : null}
         {/* FP3 — what became of it: who signed for the goods, or that the shop withdrew it. */}
         {f.receiverName && f.deliveredAt ? <span class="row__s">{t('agent.freight.receivedBy', { name: f.receiverName, when: formatDate(f.deliveredAt) })}</span> : null}
+        {f.exceptions?.length ? <span class="row__s">{t('common.found.line', { found: foundWords(f.exceptions, t) })}</span> : null}
         {f.cancelledAt ? <span class="row__s">{t('agent.freight.cancelledLine', { when: formatDate(f.cancelledAt) })}</span> : null}
         {/* FP8 — a driver gave it back: the latest, with their reason, while the load is still looking for a carrier. */}
         {f.handBacks?.length && !f.pickedUpAt ? <span class="row__s">{t('agent.freight.handBackLine', { when: formatDate(f.handBacks[f.handBacks.length - 1].at), reason: f.handBacks[f.handBacks.length - 1].reason })}</span> : null}
@@ -176,6 +178,7 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       {load.maxSpend != null ? <p class="scr__lede">{t('agent.freight.budget', { amount: money(load.maxSpend, load.currency) })}</p> : null}
       {/* FP2 — the load's own document, from posting to delivery. */}
       {load.receiverName && load.deliveredAt ? <p class="scr__lede">{t('agent.freight.receivedBy', { name: load.receiverName, when: formatDate(load.deliveredAt) })}</p> : null}
+      {load.exceptions?.length ? <p class="scr__lede">{t('common.found.line', { found: foundWords(load.exceptions, t) })}</p> : null}
       {load.cancelledAt ? <p class="scr__lede">{t('agent.freight.cancelledLine', { when: formatDate(load.cancelledAt) })}</p> : null}
       {/* CL1 — the agreed term, and the one consequence of it a shop actually needs: who claims if the goods
           are damaged on the road. Said in words, because "CIF Mombasa" tells a clerk nothing on its own. */}

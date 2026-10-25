@@ -1,4 +1,4 @@
-import { clockAt, clocksOfCountry, isTimeZone, minutesOf, offsetAt, utcDay, zoneName, zonesOfCountry } from './fleet-clock';
+import { clockAt, clocksOfCountry, isTimeZone, minutesOf, momentAt, offsetAt, utcDay, zoneName, zonesOfCountry } from './fleet-clock';
 
 /**
  * A FLEET'S OWN CLOCK. What is pinned: a country's zones come from the platform and not from us, a country with
@@ -85,5 +85,18 @@ describe('a fleet’s own clock', () => {
     expect(zoneName('Europe/Amsterdam', at('2026-07-01T12:00:00Z'))).toBe('Central European Summer Time');
     expect(zoneName('Europe/Amsterdam', at('2026-12-01T12:00:00Z'))).toBe('Central European Standard Time');
     expect(zoneName('Not/AZone', at('2026-10-06T12:00:00Z'))).toBe('Not/AZone');
+  });
+
+  it('turns a clock time back into the moment it is — on a day the clocks change too', () => {
+    expect(momentAt('2026-10-06', 10 * 60 + 40, 'Africa/Nairobi')).toBe(at('2026-10-06T07:40:00Z'));
+    expect(momentAt('2026-07-01', 14 * 60, 'Europe/Amsterdam')).toBe(at('2026-07-01T12:00:00Z'));
+    expect(momentAt('2026-12-01', 14 * 60, 'Europe/Amsterdam')).toBe(at('2026-12-01T13:00:00Z'));
+    // 29 March 2026, Amsterdam: half past one is still winter time, noon is summer time.
+    expect(momentAt('2026-03-29', 90, 'Europe/Amsterdam')).toBe(at('2026-03-29T00:30:00Z'));
+    expect(momentAt('2026-03-29', 12 * 60, 'Europe/Amsterdam')).toBe(at('2026-03-29T10:00:00Z'));
+    // Read back on the same clock, it is the day and the time it was asked for.
+    for (const [day, minutes, zone] of [['2026-10-26', 0, 'Africa/Nairobi'], ['2026-10-26', 1439, 'Africa/Kigali'], ['2026-10-25', 12 * 60, 'Europe/Amsterdam'], ['2026-03-30', 8 * 60, 'Europe/Amsterdam']] as const) {
+      expect(clockAt(momentAt(day, minutes, zone), zone)).toMatchObject({ day, minutes });
+    }
   });
 });

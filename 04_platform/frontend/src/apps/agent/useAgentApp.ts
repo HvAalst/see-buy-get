@@ -80,6 +80,8 @@ export interface PostedFreight {
   pickedUpAt?: string;
   deliveredAt?: string;
   receiverName?: string;
+  /** D9 — what the receiver found not as the note says, at the handover. */
+  exceptions?: import('../../shared/found').FoundLine[];
   cancelledAt?: string;
   /** True while the shop may still withdraw it: before the goods are on a truck. */
   canCancel: boolean;

@@ -115,3 +115,13 @@ export function zoneName(zone: string, now: number): string {
     return zone;
   }
 }
+
+/**
+ * THE MOMENT a zone's clock shows `minutes` into `day` — clockAt the other way round. Read twice, so that on a day the
+ * clocks change it still lands on the hour it says.
+ */
+export function momentAt(day: string, minutes: number, zone: string): number {
+  const wall = Date.parse(`${day}T00:00:00Z`) + minutes * 60_000;
+  const first = wall - offsetAt(wall, zone) * 60_000;
+  return wall - offsetAt(first, zone) * 60_000;
+}

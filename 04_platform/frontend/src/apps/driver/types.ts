@@ -269,6 +269,9 @@ export interface Claimable {
   pickupLabel: string;
   destLabel: string;
   weightKg: number;
+  /** D9 — how many packages the note says, and of what: what the receiver counts against at the door. */
+  packages?: number;
+  packaging?: string;
   fragile?: boolean;
   bulk?: boolean;
   status?: string; // S32b — freight status (claimed | in_transit | …) drives the pickup/deliver control

@@ -12,6 +12,8 @@ import { PassageSheet, PassageStrip } from './PassageStrip';
 import { HeldSheet, HeldStrip } from './HeldStrip';
 import { BrokenSealSheet, DeliverySeals, PickupSeals, pickupSealsReady, TamperSheet, type SealRead, type TamperTarget } from './SealSteps';
 import { InspectionSection } from './Inspection';
+import { FoundSection } from './Found';
+import { foundBody, foundProblem, noneFound, type FoundForm } from '../found';
 import { inspectionBody, inspectionReady, type InspectionLook } from '../inspection';
 import { heldLine } from '../../../shared/tamper';
 import { invoicePaperRef, keepPaper, keptPaper } from '../../../shared/keptPapers';
@@ -390,6 +392,9 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   const [receiver, setReceiver] = useState('');
   const [podId, setPodId] = useState('');
   const [remarks, setRemarks] = useState('');
+  // D9 — what the receiver found not as the note says: short, over, damaged, wrong — beside their name on the note.
+  const [foundOpen, setFoundOpen] = useState(false);
+  const [found, setFound] = useState<FoundForm>(noneFound);
   // FP3b — the other ending at the door: nobody there, refused, or unreachable.
   const [failing, setFailing] = useState(false);
   const [failure, setFailure] = useState<'absent' | 'refused' | 'unreachable'>('absent');
@@ -414,6 +419,8 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
     setReceiver('');
     setPodId('');
     setRemarks('');
+    setFoundOpen(false);
+    setFound(noneFound());
     setFailing(false);
     setFailure('absent');
     setFailNote('');
@@ -429,6 +436,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   const doorOk = sealsAtDoor !== 'not_as_on_the_note' || Boolean(claim?.doorReported);
   const sealsOk = !claim ? true : isPickup ? pickupSealsReady(claim, sealReads) : !claim.seals?.length || (sealsAtDoor !== null && doorOk);
   const inspectionOk = !isPickup || inspectionReady(claim, looks);
+  const foundWrong = !isPickup && foundOpen ? foundProblem(found, claim?.packages) : null;
   const held = claim?.held;
   const busy = claim ? state.busy === `freight:${claim.ref}` : false;
 
@@ -499,6 +507,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   disabled={busy}
                 />
               </div>
+              <FoundSection claim={claim} open={foundOpen} setOpen={setFoundOpen} form={found} setForm={setFound} actions={actions} busy={busy} />
               <DeliverySeals claim={claim} value={sealsAtDoor} onChange={setSealsAtDoor} busy={busy} onReport={() => onTamper({ claim, finding: 'seal_not_as_on_the_note' })} />
               <div class="field" style="margin-top:14px">
                 <label class="field__label" for={`rem-${claim.ref}`}>
@@ -513,7 +522,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
             <Button
               chevron={false}
               busy={busy}
-              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk}
+              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk || foundWrong !== null}
               onClick={() => {
                 const ref = claim.ref;
                 if (isPickup) {
@@ -521,8 +530,10 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   const seals = (claim.seals ?? []).filter((s) => s.state === 'on').map((s) => ({ sealId: s.sealId, number: sealReads[s.sealId]?.number.trim() ?? '', photoRef: sealReads[s.sealId]?.photoRef ?? '' }));
                   const inspection = inspectionBody(claim, looks);
                   void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}), ...(inspection ? { inspection } : {}) });
-                } else
-                  void actions.deliverFreight(ref, { confirmed: checked, receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}) });
+                } else {
+                  const exceptions = foundOpen ? foundBody(found) : undefined;
+                  void actions.deliverFreight(ref, { confirmed: checked, receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}) });
+                }
                 onClose();
               }}
             >
@@ -542,6 +553,16 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               <p class="hint" style="margin-top:8px">{t(isPickup ? 'driver.seal.readAll' : doorOk ? 'driver.seal.doorAsk' : 'driver.tamper.doorFirst')}</p>
             ) : !inspectionOk ? (
               <p class="hint" style="margin-top:8px">{t('driver.inspection.doAll')}</p>
+            ) : foundWrong ? (
+              <p class="hint" style="margin-top:8px">
+                {foundWrong.kind === 'count'
+                  ? t('driver.found.problem.count')
+                  : foundWrong.kind === 'photo'
+                    ? t('driver.found.problem.photo')
+                    : foundWrong.kind === 'none_came'
+                      ? t('driver.found.problem.noneCame', { n: foundWrong.packages })
+                      : t('driver.found.problem.moreThanCame', { came: foundWrong.came })}
+              </p>
             ) : null}
           </div>
           {/* Round 35 — the wrap cut, the load opened, at the gate or at the door: held where it is, operations told. */}

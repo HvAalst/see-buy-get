@@ -167,6 +167,7 @@ export const GlosEvent = {
     OrderHandedOn: 'pudo.order_handed_on', // P4 — orders moved between a fleet and its partners; the other office is told
     OrderPlaced: 'pudo.order_placed', // an order came in under a fleet's contract — from its shipper, or a sheet the office uploaded
     InboundAddressed: 'pudo.inbound_addressed', // a load posted to a business's receiving point: it is coming in to them (inbound, reading A)
+    InboundClosed: 'pudo.inbound_closed', // the receiver closed what was still expected of a delivered load: it came after all, or is not coming (D9)
     OrderChanged: 'pudo.order_changed', // the office changed an order in a way nothing else says: pinned where it goes, took it back off the board
     DayPlanAccepted: 'pudo.day_plan_accepted', // a fleet office accepted its plan for a day
     DepartureBookingCancelled: 'pudo.departure_booking_cancelled', // a shipper gave the space back; it is for sale again

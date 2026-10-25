@@ -3914,6 +3914,45 @@
         }
       }
     },
+    "/v1/sbg/business/me/inbound/{freightId}/close": {
+      "post": {
+        "operationId": "Inbound.closeExpected",
+        "summary": "",
+        "description": "D9 — close what is still expected of a delivered load: it came after all, or it is not coming. One of its people; a\nviewer reads it. Answers with the load as Coming in reads it now.",
+        "parameters": [
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseInboundDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboundRow"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/receiving": {
       "get": {
         "operationId": "Inbound.receivingPoints",
@@ -32879,6 +32918,95 @@
           "number"
         ]
       },
+      "ReceivingExceptionView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "short",
+              "over",
+              "damaged",
+              "wrong"
+            ]
+          },
+          "count": {
+            "type": "number"
+          },
+          "photos": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "count",
+          "photos"
+        ]
+      },
+      "InboundClosed": {
+        "type": "object",
+        "properties": {
+          "how": {
+            "type": "string",
+            "enum": [
+              "came",
+              "not_coming"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "how",
+          "at",
+          "by"
+        ]
+      },
+      "InboundDue": {
+        "type": "object",
+        "properties": {
+          "about": {
+            "type": "string",
+            "description": "About when there, HH:MM — once it is on the road and something says the hour."
+          },
+          "late": {
+            "type": "string",
+            "description": "Late there: `day` — its day has gone · `hour` — it is on the road and its hour has passed.",
+            "enum": [
+              "day",
+              "hour"
+            ]
+          },
+          "zone": {
+            "type": "string",
+            "description": "The place's clock, and its name: Africa/Nairobi, \"East Africa Time\"."
+          },
+          "zoneName": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string",
+            "description": "The day it is expected there, YYYY-MM-DD."
+          },
+          "today": {
+            "type": "boolean",
+            "description": "That day is today there."
+          }
+        },
+        "required": [
+          "zone",
+          "zoneName",
+          "day",
+          "today"
+        ]
+      },
       "InboundRow": {
         "type": "object",
         "properties": {
@@ -33040,6 +33168,28 @@
           "packaging": {
             "type": "string"
           },
+          "exceptions": {
+            "description": "D9 — what the receiver found not as the note says, at the handover: as it stands on the note.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceivingExceptionView"
+            }
+          },
+          "stillExpected": {
+            "type": "number",
+            "description": "D9 — packages still expected after the handover (short, and not the goods): until the receiver closes them, then 0."
+          },
+          "closed": {
+            "$ref": "#/components/schemas/InboundClosed"
+          },
+          "due": {
+            "description": "D10 — when and whether late, on the receiving place's own clock. Where it is given it is the row's one answer: the\ncarrier's own reading (`late`, `expectedAbout`) is left off. Absent where nothing says a day, or the place's clock is\nnot known (a country of several clocks): the carrier's reading stands, as the tracking link shows it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InboundDue"
+              }
+            ]
+          },
           "freightId": {
             "type": "string"
           },
@@ -33122,6 +33272,25 @@
         "required": [
           "points",
           "items"
+        ]
+      },
+      "CloseInboundDto": {
+        "type": "object",
+        "properties": {
+          "how": {
+            "type": "string",
+            "enum": [
+              "came",
+              "not_coming"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "how"
         ]
       },
       "ReceivingPointNamed": {
@@ -43818,6 +43987,65 @@
           "by"
         ]
       },
+      "ReceivingException": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "short",
+              "over",
+              "damaged",
+              "wrong"
+            ]
+          },
+          "photoRefs": {
+            "description": "Photographs of it, taken at the door: at least one of damaged goods.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "count": {
+            "type": "number",
+            "description": "How many packages."
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ]
+      },
+      "ProofOfDelivery": {
+        "type": "object",
+        "properties": {
+          "photoRef": {
+            "type": "string"
+          },
+          "remarks": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "exceptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceivingException"
+            }
+          },
+          "receiverName": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "receiverName",
+          "at"
+        ]
+      },
       "FreightClaim": {
         "type": "object",
         "properties": {
@@ -44614,29 +44842,12 @@
             }
           },
           "proofOfDelivery": {
-            "type": "object",
-            "properties": {
-              "receiverName": {
-                "required": true,
-                "type": "string"
-              },
-              "photoRef": {
-                "required": false,
-                "type": "string"
-              },
-              "remarks": {
-                "required": false,
-                "type": "string"
-              },
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "by": {
-                "required": false,
-                "type": "string"
+            "description": "FP3 — proof of delivery: box 24 of the consignment note (ProofOfDelivery).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProofOfDelivery"
               }
-            }
+            ]
           },
           "reservations": {
             "type": "object",
@@ -45241,7 +45452,6 @@
           "cargoClass",
           "natureCode",
           "carriage",
-          "proofOfDelivery",
           "reservations",
           "cancellation",
           "windowTold",
@@ -46640,44 +46850,6 @@
         "required": [
           "by",
           "at"
-        ]
-      },
-      "ProofOfDelivery": {
-        "type": "object",
-        "properties": {
-          "receiverName": {
-            "type": "string",
-            "description": "Who took the goods, in their own name. Two characters minimum — \"x\" is not a receiver."
-          },
-          "photoRef": {
-            "type": "string",
-            "description": "A photograph of the goods as put down. A mediaId, adopted from the driver’s own upload."
-          },
-          "remarks": {
-            "type": "string",
-            "description": "Anything the driver wants on the record — a reservation, a remark, a note about the state."
-          },
-          "confirmed": {
-            "description": "The unload checklist keys they confirmed.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "at": {
-            "type": "string"
-          },
-          "by": {
-            "type": "string",
-            "description": "Who tapped it — the driver at the door, or the office closing a run off a bad signal."
-          }
-        },
-        "required": [
-          "receiverName",
-          "photoRef",
-          "confirmed",
-          "at",
-          "by"
         ]
       },
       "LoadSafety": {
@@ -49341,6 +49513,13 @@
           "orderRef": {
             "type": "string"
           },
+          "exceptions": {
+            "description": "D9 — what the receiver found not as the note says, at the handover: on the note beside their name.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceivingExceptionView"
+            }
+          },
           "noteId": {
             "type": "string",
             "description": "Its consignment note's id in the archive, once a copy is kept there (from taking over on): what its links hang on."
@@ -49679,6 +49858,37 @@
           }
         }
       },
+      "ReceivingExceptionDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "short",
+              "over",
+              "damaged",
+              "wrong"
+            ]
+          },
+          "count": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "photoRefs": {
+            "description": "Photos the driver uploaded as `pod`, of this: at least one of damaged goods.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ]
+      },
       "SealReadDto": {
         "type": "object",
         "properties": {
@@ -49747,6 +49957,13 @@
           "remarks": {
             "type": "string",
             "maxLength": 500
+          },
+          "exceptions": {
+            "description": "D9 — at delivery: what the receiver found not as the note says — short, over, damaged, wrong — one line of each at most.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceivingExceptionDto"
+            }
           },
           "seals": {
             "description": "Round 15 — at pickup: each seal's number as read off the door, with its close-up.",

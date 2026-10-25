@@ -8,6 +8,7 @@ import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { BusinessHookService } from '../src/modules/pudo/business-hooks.service';
 import { EventBus } from '../src/foundation/events/event-bus.service';
 import { GlosEvent } from '../src/foundation/events/glos-events';
+import { requiredUnloadKeys } from '../src/modules/pudo/heavy-cargo';
 
 /**
  * INBOUND SUPPLY, READING A, over the wire (assessment.html D1–D14; the user, 2026-10-25: "Yes, A then B"). A business
@@ -49,6 +50,21 @@ describe('inbound, reading A: what is coming in to a business’s own sites', ()
     };
     return { token, entityId, join };
   }
+
+  async function aDriver(name: string): Promise<{ did: string; token: string }> {
+    seq += 1;
+    const u = `${tag}${seq}`;
+    const r = await http().post('/v1/sbg/drivers/onboard').set(bearer(setupKey)).send({ displayName: name, fullName: `${name} Truck`, nationalId: `DRV-I-${u}`, mobile: `+2547${String(Date.now()).slice(-6)}${seq}`, licenceClasses: ['truck'], licenceNumber: `DL-${u}`, licenceExpiresAt: '2030-01-01' }).expect(201);
+    const token = (await http().post('/v1/auth/token').send({ role: 'driver', did: r.body.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
+    return { did: r.body.did as string, token };
+  }
+
+  /** A photograph taken by whoever holds `token`. */
+  const photo = async (token: string, kind: string) => {
+    seq += 1;
+    const dataUrl = `data:image/png;base64,${Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(`${kind}:${tag}:${seq}`)]).toString('base64')}`;
+    return (await http().post('/v1/sbg/media').set(bearer(token)).send({ kind, dataUrl }).expect(201)).body.mediaId as string;
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -180,6 +196,93 @@ describe('inbound, reading A: what is coming in to a business’s own sites', ()
       for (const l of landed) expect(l.raw).not.toMatch(/38000|maxSpend|lockedPrice|agreedPrice/);
       // The supplier's own system, had it one, hears its load as load.*: the receiver's never hears the supplier's view.
       expect(landed.some((l) => l.event.startsWith('load.'))).toBe(false);
+    } finally {
+      await new Promise<void>((r) => system.close(() => r()));
+    }
+  });
+
+  it('the receiving moment (D9): what the receiver found goes on the note, and what did not come stays expected until one of its people closes it', async () => {
+    const landed: Array<{ event: string; raw: string }> = [];
+    const system: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        landed.push({ event: String(req.headers['x-sbg-event']), raw: Buffer.concat(chunks).toString() });
+        res.writeHead(200);
+        res.end();
+      });
+    });
+    await new Promise<void>((r) => system.listen(0, '127.0.0.1', r));
+    try {
+      const a = system.address();
+      const origin = `http://127.0.0.1:${typeof a === 'object' && a ? a.port : 0}`;
+      const yard = await aBusiness('Bidii Stores', ['receiver']);
+      const viewer = await yard.join('viewer');
+      const supplier = await aBusiness('Simba Cement', ['shipper']);
+      await http().put('/v1/sbg/business/me/system').set(bearer(yard.token)).send({ url: `${origin}/hooks` }).expect(200);
+      const site = (await http().post(`/v1/sbg/entities/${yard.entityId}/sites`).set(bearer(yard.token)).send({ kind: 'delivery', name: 'Ruiru yard', location: { lat: -1.15, lng: 36.96 } }).expect(201)).body;
+      const point = (await http().post(`/v1/sbg/business/me/receiving/${site.siteId}`).set(bearer(yard.token)).expect(201)).body;
+      const posted = (
+        await http()
+          .post('/v1/sbg/dispatch/freight')
+          .set(bearer(supplier.token))
+          .send({ description: 'Cement, 40 bags', pickupLocation: { lat: -1.42, lng: 36.95 }, pickupLabel: 'Athi River works', destLabel: 'x', weightKg: 2000, packaging: 'bagged', packages: 40, pickupCountry: 'KE', destCountry: 'KE', receivingPoint: point.code, receiverRef: 'BS-9' })
+          .expect(201)
+      ).body;
+
+      // On the road with a driver of ours (the haul to here is pinned elsewhere): the driver's load says what the note counts.
+      const driver = await aDriver('Kamau');
+      const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
+      store.set(posted.freightId, { ...store.get(posted.freightId), status: 'in_transit', claimedBy: driver.did, claimedAt: new Date().toISOString(), pickedUpAt: new Date().toISOString() });
+      const claim = (await http().get(`/v1/sbg/fleet/drivers/${driver.did}/claims`).set(bearer(driver.token)).expect(200)).body.claims.find((c: { ref: string }) => c.ref === posted.freightId);
+      expect(claim).toMatchObject({ packages: 40, packaging: 'bagged' });
+
+      // At the door, with the receiver. The wire refuses what cannot be a count or a kind; the service, what the note cannot hold.
+      const deliver = async (exceptions: unknown, status: number) => {
+        const podPhotoId = await photo(driver.token, 'pod');
+        return (await http().post(`/v1/sbg/dispatch/freight/${posted.freightId}/deliver`).set(bearer(driver.token)).send({ driverDid: driver.did, confirmed: requiredUnloadKeys(), receiverName: 'Grace at the yard', podPhotoId, remarks: 'Two bags split at the seam', exceptions }).expect(status)).body;
+      };
+      await deliver([{ kind: 'short', count: 0 }], 400);
+      await deliver([{ kind: 'lost', count: 1 }], 400);
+      expect((await deliver([{ kind: 'short', count: 40 }], 400)).message).toMatch(/none of them came/);
+      expect((await deliver([{ kind: 'damaged', count: 2 }], 400)).message).toMatch(/photo of what is damaged/);
+      const broken = await photo(driver.token, 'pod');
+      await deliver([{ kind: 'short', count: 3 }, { kind: 'damaged', count: 2, photoRefs: [broken] }], 201);
+      await app.get(BusinessHookService).drain();
+
+      // The note: box 24 beside the receiver's name, the photograph in box 5 — as frozen at the signature.
+      const note = (await http().get(`/v1/sbg/dispatch/freight/${posted.freightId}/consignment-note`).set(bearer(supplier.token)).expect(200)).body;
+      expect(note.confirmations.consignee).toMatchObject({ by: 'Grace at the yard', reservations: 'Received with reservations: 3 packages short, 2 packages damaged' });
+      expect(note.documents).toEqual(expect.arrayContaining([`Photo of the goods found damaged at delivery (${broken})`]));
+      expect(note.consignee).toMatchObject({ name: `Bidii Stores ${tag}`, address: 'Ruiru yard, by its receiving code — their order BS-9' });
+      // The sender's own Loads row says it, the photographs counted.
+      const mine = (await http().get('/v1/sbg/dispatch/posted').set(bearer(supplier.token)).expect(200)).body;
+      const row = (mine.items ?? mine).find((r: { freightId: string }) => r.freightId === posted.freightId);
+      expect(row.exceptions).toEqual([{ kind: 'short', count: 3, photos: 0 }, { kind: 'damaged', count: 2, photos: 1 }]);
+
+      // Coming in: delivered, and 3 still expected — among what is coming, until closed.
+      const coming = (await http().get('/v1/sbg/business/me/inbound').set(bearer(viewer)).expect(200)).body.items[0];
+      expect(coming).toMatchObject({ freightId: posted.freightId, status: 'delivered', receiverName: 'Grace at the yard', exceptions: [{ kind: 'short', count: 3, photos: 0 }, { kind: 'damaged', count: 2, photos: 1 }], stillExpected: 3 });
+      expect(JSON.stringify(coming)).not.toContain(broken);
+      // The bell said so; the receiver's system heard it with the delivery.
+      const bell = (await http().get('/v1/sbg/notifications/inbox').set(bearer(yard.token)).expect(200)).body;
+      const told = ((bell.items ?? bell) as Array<{ kind: string; title: string; body: string }>).find((n) => n.kind === 'inbound' && /delivered/.test(n.title));
+      expect(told).toMatchObject({ title: 'Order BS-9 was delivered, not all as the note says', body: expect.stringContaining('3 packages stay expected until you close them under Coming in') });
+      const deliveredHook = landed.find((l) => l.event === 'inbound.delivered');
+      expect(JSON.parse(deliveredHook!.raw).data.inbound).toMatchObject({ stillExpected: 3, exceptions: [{ kind: 'short', count: 3 }, { kind: 'damaged', count: 2 }] });
+
+      // Closing it: one of its people — not a viewer, not staff, not the supplier.
+      const close = (token: string, body: Record<string, unknown>) => http().post(`/v1/sbg/business/me/inbound/${posted.freightId}/close`).set(bearer(token)).send(body);
+      await close(viewer, { how: 'came' }).expect(403);
+      expect((await close(setupKey, { how: 'came' }).expect(403)).body.message).toMatch(/A business keeps its own receiving points/);
+      await close(supplier.token, { how: 'came' }).expect(404);
+      await close(yard.token, { how: 'lost' }).expect(400);
+      const closed = (await close(yard.token, { how: 'came', note: 'On the Tuesday truck' }).expect(201)).body;
+      expect(closed).toMatchObject({ stillExpected: 0, closed: { how: 'came', note: 'On the Tuesday truck', by: 'Bidii Stores Owner' } });
+      await close(yard.token, { how: 'not_coming' }).expect(400);
+      await app.get(BusinessHookService).drain();
+      expect(landed.map((l) => l.event)).toEqual(['inbound.addressed', 'inbound.delivered', 'inbound.closed']);
+      expect(JSON.parse(landed[2].raw).data.inbound).toMatchObject({ stillExpected: 0, closed: { how: 'came' } });
     } finally {
       await new Promise<void>((r) => system.close(() => r()));
     }

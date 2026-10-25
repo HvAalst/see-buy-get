@@ -468,6 +468,12 @@ export const en = {
   'common.instructions.call': 'Call {phone}',
   'common.instructions.amended': 'Added {when}: {text}',
   'common.instructions.none': 'No instructions from the sender.',
+  // D9 — what the receiver found at the handover, said one way in every app that shows it (shared/found.ts).
+  'common.found.short': '{n, plural, one {# package} other {# packages}} short',
+  'common.found.over': '{n, plural, one {# package} other {# packages}} more than the note says',
+  'common.found.damaged': '{n, plural, one {# package} other {# packages}} damaged',
+  'common.found.wrong': '{n, plural, one {# package} other {# packages}} not the goods on the note',
+  'common.found.line': 'The receiver found {found}',
   'account.password.title': 'Change your password',
   'account.password.email': 'Email you sign in with',
   'account.password.current': 'Current password',

@@ -17,6 +17,7 @@ import { TRUCK_SUBTYPES } from './fleet.config';
 import { CARRIER_PAPER_KINDS } from './papers';
 import { SITE_KINDS, type SiteKind } from './site.service';
 import { PACKAGING, type Packaging } from './packaging';
+import { RECEIVING_EXCEPTIONS, type ReceivingExceptionKind } from './dispatch.types';
 import { MEDIA_KINDS, MediaKind } from './media.types';
 import { CONSTRAINT_KINDS, ConstraintKind } from './route-constraint.types';
 import { NOTE_STAGES } from './note-archive.types';
@@ -2774,6 +2775,14 @@ export class InspectionPointDto {
   @IsString() @MaxLength(80) photoRef!: string;
 }
 
+/** D9 — one thing the receiver found at the handover not as the note says: how many packages, and photographs of it. */
+export class ReceivingExceptionDto {
+  @ApiProperty({ enum: RECEIVING_EXCEPTIONS }) @IsIn(RECEIVING_EXCEPTIONS) kind!: ReceivingExceptionKind;
+  @IsInt() @Min(1) @Max(100_000) count!: number;
+  /** Photos the driver uploaded as `pod`, of this: at least one of damaged goods. */
+  @IsOptional() @IsArray() @ArrayMaxSize(4) @IsString({ each: true }) @MaxLength(80, { each: true }) photoRefs?: string[];
+}
+
 export class FreightActionDto {
   @IsOptional() @IsString() driverDid?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) confirmed?: string[];
@@ -2784,6 +2793,8 @@ export class FreightActionDto {
   @IsOptional() @IsString() @MaxLength(120) receiverName?: string;
   @IsOptional() @IsString() podPhotoId?: string;
   @IsOptional() @IsString() @MaxLength(500) remarks?: string;
+  /** D9 — at delivery: what the receiver found not as the note says — short, over, damaged, wrong — one line of each at most. */
+  @IsOptional() @IsArray() @ArrayMaxSize(4) @ValidateNested({ each: true }) @Type(() => ReceivingExceptionDto) exceptions?: ReceivingExceptionDto[];
   /** Round 15 — at pickup: each seal's number as read off the door, with its close-up. */
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_SEALS) @ValidateNested({ each: true }) @Type(() => SealReadDto) seals?: SealReadDto[];
   /** Round 15 — at delivery, with the receiver: the seals as the note says, or not. */

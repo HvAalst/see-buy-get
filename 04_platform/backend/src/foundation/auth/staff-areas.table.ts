@@ -12,6 +12,7 @@ export type StaffArea = 'support' | 'vetting' | 'money' | 'admin' | 'any' | 'non
 export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'DELETE sbg/business/me/receiving/:siteId': 'none',
   'GET sbg/business/me/inbound': 'none',
+  'POST sbg/business/me/inbound/:freightId/close': 'none',
   'GET sbg/business/me/receiving': 'none',
   'GET sbg/receiving/:code': 'none',
   'POST sbg/business/me/receiving/:siteId': 'none',

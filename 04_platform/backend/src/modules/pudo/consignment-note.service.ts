@@ -26,6 +26,7 @@ import { CommercialInvoiceService } from './commercial-invoice.service';
 import { ShipperCodesService } from './shipper-codes.service';
 import { noteFingerprint } from './note-archive.types';
 import { retentionFor, retentionWords } from './retention';
+import { exceptionsInWords } from './receiving';
 
 /**
  * Builds the consignment note for a load from what the network knows (see consignment-note.types.ts), renders it as
@@ -147,6 +148,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.tempReadings?.length) documents.push(`Temperature log, ${f.tempReadings.length} reading(s)`);
     if (f.unloadReport) documents.push(`Unload report, ${f.unloadReport.confirmed.length} item(s) confirmed`);
     if (f.proofOfDelivery?.photoRef) documents.push(`Photo of the goods as delivered (${f.proofOfDelivery.photoRef})`);
+    // D9 — the photographs of what the receiver found at delivery: the damaged goods, always; the wrong ones, where taken.
+    for (const x of f.proofOfDelivery?.exceptions ?? []) if (x.photoRefs?.length) documents.push(`Photo${x.photoRefs.length === 1 ? '' : 's'} of the goods found ${x.kind} at delivery (${x.photoRefs.join(', ')})`);
     const instructions: string[] = [];
     if (band) instructions.push(`Keep between ${band.minC} °C and ${band.maxC} °C`);
     if (f.fragile) instructions.push('Fragile — handle with care');
@@ -221,7 +224,7 @@ export class ConsignmentNoteService implements OnModuleInit {
         sender: { by: agentConfirmation(f.postedByName, agent, sender), at: f.createdAt, how: 'Confirmed electronically at posting' },
         ...(f.pickedUpAt && carrier ? { carrier: { by: carrier.driverName ?? carrier.name, at: f.pickedUpAt, how: `Confirmed electronically at taking over, after the load-safety check${noSignal(f.pickupReceivedAt)}` } } : {}),
         ...(f.proofOfDelivery
-          ? { consignee: { by: f.proofOfDelivery.receiverName, at: f.proofOfDelivery.at, how: `${f.proofOfDelivery.photoRef ? 'Received in person; name recorded by the driver at delivery, with a photo of the goods as delivered' : 'Received in person; name recorded by the driver at delivery'}${noSignal(f.deliveryReceivedAt)}`, ...(f.proofOfDelivery.remarks ? { remarks: `Receiver’s remarks: ${f.proofOfDelivery.remarks}` } : {}) } }
+          ? { consignee: { by: f.proofOfDelivery.receiverName, at: f.proofOfDelivery.at, how: `${f.proofOfDelivery.photoRef ? 'Received in person; name recorded by the driver at delivery, with a photo of the goods as delivered' : 'Received in person; name recorded by the driver at delivery'}${noSignal(f.deliveryReceivedAt)}`, ...(f.proofOfDelivery.remarks ? { remarks: `Receiver’s remarks: ${f.proofOfDelivery.remarks}` } : {}), ...(f.proofOfDelivery.exceptions?.length ? { reservations: `Received with reservations: ${exceptionsInWords(f.proofOfDelivery.exceptions)}` } : {}) } }
           : f.deliveredAt
             ? { consignee: { by: 'Receiver — confirmation not recorded', at: f.deliveredAt, how: 'Delivery recorded by the carrier with the unload report; the receiver’s own confirmation is not yet part of this note' } }
             : {}),
@@ -372,6 +375,10 @@ export class ConsignmentNoteService implements OnModuleInit {
         ...(parties.consignee.country ? { country: countryName(parties.consignee.country) } : {}),
       };
     }
+    // Inbound, reading A: addressed by the receiver's own code — the business and its place, as the supplier was shown them.
+    if (f.receiver) {
+      return { name: f.receiver.name, address: `${f.receiver.siteName}, by its receiving code${f.receiverRef ? ` — their order ${f.receiverRef}` : ''}`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
+    }
     if (f.externalOrderId || f.buyerPhoneHash) {
       // A buyer: known to the network by a verified phone, never printed here. Delivery is to the shop they chose.
       return { name: f.externalOrderId ? `The buyer of order ${f.externalOrderId}` : 'The buyer', address: `Collects at ${f.destLabel}`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
@@ -485,6 +492,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       destination: f.destLabel,
       deliveredAt: f.deliveredAt ?? new Date().toISOString(),
       ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
+      ...(f.proofOfDelivery?.exceptions?.length ? { reservations: exceptionsInWords(f.proofOfDelivery.exceptions) } : {}),
       carrier: note.carrier?.name ?? 'the carrier',
       ...(note.carrier?.driverName ? { driver: note.carrier.driverName } : {}),
       ...(note.carriage.amount != null ? { amount: note.carriage.amount, currency: note.carriage.currency ?? NETWORK_CURRENCY } : {}),
@@ -503,7 +511,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     const list = (xs: string[]) => (xs.length ? xs.map((x) => `<div>${e(x)}</div>`).join('') : '<span class="empty">None</span>');
     const box = (no: number | string, label: string, body: string, cls = '') => `<div class="box ${cls}"><div class="box__h"><span class="no">${no}</span>${e(label)}</div><div class="box__b">${body}</div></div>`;
     const conf = (c: ConsignmentNote['confirmations']['sender'] | undefined, missing: string) =>
-      c ? `<b>${e(c.by)}</b><br>${e(when(c.at))}<br><span class="how">${e(c.how)}</span>${c.remarks ? `<br>${e(c.remarks)}` : ''}` : `<span class="empty">${e(missing)}</span>`;
+      c ? `<b>${e(c.by)}</b><br>${e(when(c.at))}<br><span class="how">${e(c.how)}</span>${c.reservations ? `<br><b>${e(c.reservations)}</b>` : ''}${c.remarks ? `<br>${e(c.remarks)}` : ''}` : `<span class="empty">${e(missing)}</span>`;
     const cancelledLine = n.cancelled ? `Cancelled by the ${n.cancelled.by} ${when(n.cancelled.at)} — ${n.cancelled.reason}` : '';
     // Box 24 before delivery: every failed attempt, then the honest gap. After: the confirmation, then the claim.
     const box24missing = n.cancelled ? cancelledLine : n.attempts.length ? `Not yet delivered — ${n.attempts.length} attempt(s), see box 18` : 'Not yet delivered';

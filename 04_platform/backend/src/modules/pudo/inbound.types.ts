@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { FreightTrackView } from './dispatch.types';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { FreightTrackView, ReceivingExceptionView } from './dispatch.types';
 import { GeoPoint } from './pudo.types';
 
 /**
@@ -10,6 +11,10 @@ import { GeoPoint } from './pudo.types';
  * WHAT THE RECEIVER SEES (D2, D5, D7): the logistics half — its own number for the order, who it is from, how many
  * packages of what and how heavy, when it leaves and when it is expected, where it is now and who is bringing it, as the
  * load's own tracking link shows anybody who holds it. Never a price, never the supplier's contacts.
+ *
+ * THE RECEIVING MOMENT (D9): what the receiver found at the handover not as the note says — short, over, damaged, wrong —
+ * written on the note beside its name; and what did not come, or came and is not the goods, stays expected here until
+ * the receiver closes it. ITS CLOCK (D10): when a load is expected and whether it is late is read on the place's own.
  */
 
 /** One of a business's receiving points: the place, and the code its suppliers write. */
@@ -30,6 +35,33 @@ export class ReceivingPointNamed {
   @ApiProperty({ type: GeoPoint }) location: GeoPoint;
 }
 
+/** D9 — how the receiver closes what was still expected of a load: it came after all, or it is not coming. */
+export const INBOUND_CLOSINGS = ['came', 'not_coming'] as const;
+export type InboundClosingHow = (typeof INBOUND_CLOSINGS)[number];
+
+/** D9 — what was still expected of a load, closed by the receiver: how, its words, when, and which of its people. */
+export class InboundClosed {
+  @ApiProperty({ enum: INBOUND_CLOSINGS }) how: InboundClosingHow;
+  @ApiPropertyOptional() note?: string;
+  at: string;
+  by: string;
+}
+
+/** D10 — when a load coming in is expected, and whether it is late, read on the receiving place's own clock. */
+export class InboundDue {
+  /** The place's clock, and its name: Africa/Nairobi, "East Africa Time". */
+  zone: string;
+  zoneName: string;
+  /** The day it is expected there, YYYY-MM-DD. */
+  day: string;
+  /** About when there, HH:MM — once it is on the road and something says the hour. */
+  @ApiPropertyOptional() about?: string;
+  /** That day is today there. */
+  today: boolean;
+  /** Late there: `day` — its day has gone · `hour` — it is on the road and its hour has passed. */
+  @ApiPropertyOptional({ enum: ['day', 'hour'] }) late?: 'day' | 'hour';
+}
+
 /** A load coming in to one of the business's receiving points — the tracking link's view, and the receiver's own facts. */
 export class InboundRow extends FreightTrackView {
   freightId: string;
@@ -43,6 +75,17 @@ export class InboundRow extends FreightTrackView {
   from: string;
   @ApiPropertyOptional() packages?: number;
   @ApiPropertyOptional() packaging?: string;
+  /** D9 — what the receiver found not as the note says, at the handover: as it stands on the note. */
+  @ApiPropertyOptional({ type: [ReceivingExceptionView] }) exceptions?: ReceivingExceptionView[];
+  /** D9 — packages still expected after the handover (short, and not the goods): until the receiver closes them, then 0. */
+  @ApiPropertyOptional() stillExpected?: number;
+  @ApiPropertyOptional({ type: InboundClosed }) closed?: InboundClosed;
+  /**
+   * D10 — when and whether late, on the receiving place's own clock. Where it is given it is the row's one answer: the
+   * carrier's own reading (`late`, `expectedAbout`) is left off. Absent where nothing says a day, or the place's clock is
+   * not known (a country of several clocks): the carrier's reading stands, as the tracking link shows it.
+   */
+  @ApiPropertyOptional({ type: InboundDue }) due?: InboundDue;
 }
 
 /** What is coming in to a business: its receiving points, and what is addressed to them — coming first, then the last fortnight's. */
@@ -51,3 +94,8 @@ export class InboundView {
   @ApiProperty({ type: [InboundRow] }) items: InboundRow[];
 }
 
+/** D9 — close what is still expected of a load: it came after all, or it is not coming; with a line of the receiver's words. */
+export class CloseInboundDto {
+  @ApiProperty({ enum: INBOUND_CLOSINGS }) @IsIn(INBOUND_CLOSINGS) how!: InboundClosingHow;
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+}

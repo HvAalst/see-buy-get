@@ -273,6 +273,49 @@ export class FreightClaim {
   paidTo?: { kind: 'vendor' | 'between_parties'; id?: string };
 }
 
+/**
+ * D9 (assessment.html; the user, 2026-10-25: "Yes, A then B") — WHAT THE RECEIVER FOUND AT THE HANDOVER that is not as
+ * the note says. The delivery is accepted, and what was not right is written on the same note, beside the receiver's
+ * name, at the moment of the signature — as the CMR has the consignee's reservations at delivery (art. 30). Counted in
+ * packages, the handling units the note counts (D5), never item lines:
+ *   short   — fewer packages came than the note says
+ *   over    — more came than the note says
+ *   damaged — came damaged; with a photograph, always
+ *   wrong   — came, and are not the goods the note describes
+ * The receiver's own words go where they always went: the remarks beside the name.
+ */
+export const RECEIVING_EXCEPTIONS = ['short', 'over', 'damaged', 'wrong'] as const;
+export type ReceivingExceptionKind = (typeof RECEIVING_EXCEPTIONS)[number];
+
+export class ReceivingException {
+  @ApiProperty({ enum: RECEIVING_EXCEPTIONS }) kind: ReceivingExceptionKind;
+  /** How many packages. */
+  count: number;
+  /** Photographs of it, taken at the door: at least one of damaged goods. */
+  @ApiPropertyOptional({ type: [String] }) photoRefs?: string[];
+}
+
+/** The same, as a party to the load reads it: how many photographs are on the note, never their references. */
+export class ReceivingExceptionView {
+  @ApiProperty({ enum: RECEIVING_EXCEPTIONS }) kind: ReceivingExceptionKind;
+  count: number;
+  photos: number;
+}
+
+/**
+ * FP3 — proof of delivery, box 24 of the consignment note: who took the goods in, the driver's photo of them as put down,
+ * what the receiver said about them — and (D9) what the receiver found not as the note says. Without it "delivered" is
+ * only the driver's word.
+ */
+export class ProofOfDelivery {
+  receiverName: string;
+  @ApiPropertyOptional() photoRef?: string;
+  @ApiPropertyOptional() remarks?: string;
+  at: string;
+  @ApiPropertyOptional() by?: string;
+  @ApiPropertyOptional({ type: [ReceivingException] }) exceptions?: ReceivingException[];
+}
+
 /** A bulk/dedicated freight job (sugar/cement, or a P4+ order diverted out of the PUDO network) — trucks
  *  only, never via MDP. Same marketplace as totes. */
 /**
@@ -436,9 +479,8 @@ export class Freight {
    * `carriage`, as the note's carrier box says.
    */
   @ApiPropertyOptional({ type: () => [FreightReload] }) reloads?: FreightReload[];
-  /** FP3 — proof of delivery: who took the goods in, the driver's photo of them as put down, and what the receiver
-   *  said about them. This is box 24 of the consignment note; without it "delivered" is only the driver's word. */
-  @ApiPropertyOptional() proofOfDelivery?: { receiverName: string; photoRef?: string; remarks?: string; at: string; by?: string };
+  /** FP3 — proof of delivery: box 24 of the consignment note (ProofOfDelivery). */
+  @ApiPropertyOptional({ type: ProofOfDelivery }) proofOfDelivery?: ProofOfDelivery;
   /** FP3 — the carrier's reservations about the goods as handed over at taking over (box 18): a torn sack, a
    *  short count, a wet pallet. Written by the driver at pickup, before the goods are theirs to answer for. */
   @ApiPropertyOptional() reservations?: { note: string; at: string; by?: string };
@@ -1230,6 +1272,8 @@ export class PostedFreightRow {
   deliveredAt?: string;
   /** FP3 — who signed for the goods (box 24), once delivered. */
   receiverName?: string;
+  /** D9 — what the receiver found not as the note says, at the handover: on the note beside their name. */
+  @ApiPropertyOptional({ type: [ReceivingExceptionView] }) exceptions?: ReceivingExceptionView[];
   cancelledAt?: string;
   /** Its consignment note's id in the archive, once a copy is kept there (from taking over on): what its links hang on. */
   @ApiPropertyOptional() noteId?: string;
@@ -1417,6 +1461,9 @@ export class Claimable {
    */
   destLocation?: GeoPoint;
   weightKg: number;
+  /** D9 — how many packages the note says, and of what: what the receiver counts against at the door. Absent: not stated. */
+  @ApiPropertyOptional() packages?: number;
+  @ApiPropertyOptional({ enum: PACKAGING }) packaging?: Packaging;
   fragile: boolean;
   bulk: boolean;
   /** S32b — the underlying tote/freight status (available | claimed | in_transit | …). Lets the driver app

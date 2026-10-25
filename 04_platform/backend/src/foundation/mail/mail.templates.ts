@@ -128,7 +128,7 @@ export interface MailParams {
   'company-paper-decided': { company: string; paper: string; outcome: 'dismissed' | 'struck'; reason: string; effect: string };
   'order-on-its-way': { store: string; orderRef?: string; shop: string; trackingUrl: string };
   'ready-for-collection': { shop: string; address?: string; collectBy: string; openUrl?: string };
-  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
+  'freight-delivered': { code: string; description: string; destination: string; deliveredAt: string; carrier: string; driver?: string; receiverName?: string; /** D9 — what the receiver found not as the note says, in words. */ reservations?: string; amount?: number; currency?: string; noteNumber: string; /** A link that opens the note with nobody signed in, and when it stops. */ noteUrl?: string; noteUntil?: string; /** It goes to one of a BUSINESS's people: its name, and whether they posted the load or are an owner told in the poster's place. */ business?: { name: string; as: 'poster' | 'owner' } };
   /** A code to an address: to confirm it is theirs, to get back into the account, or to undo a number change. */
   'email-code': { code: string; minutes: number; why: 'confirm' | 'recover' | 'undo' };
   /** Something happened to the way somebody signs in. Always sent; cannot be turned off. */
@@ -1334,6 +1334,7 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
             ['Load', p.code],
             ['Delivered', formatWhen(p.deliveredAt)],
             ...(p.receiverName ? [['Received by', p.receiverName] as [string, string]] : []),
+            ...(p.reservations ? [['The receiver found', p.reservations] as [string, string]] : []),
             ['Carrier', p.carrier],
             ...(p.amount != null ? [[p.business ? 'Price agreed' : 'Carriage charges', `${p.amount.toFixed(2)} ${p.currency ?? ''}`.trim()] as [string, string]] : []),
             ['Consignment note', p.noteNumber],

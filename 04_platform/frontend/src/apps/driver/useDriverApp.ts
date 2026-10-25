@@ -1823,7 +1823,7 @@ export function useDriverApp() {
   /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered), with the confirmed
    *  unload-checklist keys. */
   const deliverFreight = useCallback(
-    async (ref: string, check: { confirmed: string[]; receiverName: string; podPhotoId: string; remarks?: string; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note" }) => {
+    async (ref: string, check: { confirmed: string[]; receiverName: string; podPhotoId: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note" }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {

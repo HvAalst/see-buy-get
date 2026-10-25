@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -6,7 +6,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { BusinessService } from './business.service';
 import { InboundService } from './inbound.service';
-import { InboundView, ReceivingPointNamed, ReceivingPointView } from './inbound.types';
+import { CloseInboundDto, InboundRow, InboundView, ReceivingPointNamed, ReceivingPointView } from './inbound.types';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { SiteService } from './site.service';
 
@@ -29,6 +29,17 @@ export class InboundController {
   @Get('business/me/inbound')
   comingIn(@Actor() actor: IntrospectionResult): InboundView {
     return this.inbound.comingTo(this.own(actor).entity.entityId);
+  }
+
+  /**
+   * D9 — close what is still expected of a delivered load: it came after all, or it is not coming. One of its people; a
+   * viewer reads it. Answers with the load as Coming in reads it now.
+   */
+  @Roles('business')
+  @Post('business/me/inbound/:freightId/close')
+  closeExpected(@Param('freightId') freightId: string, @Body() dto: CloseInboundDto, @Actor() actor: IntrospectionResult): InboundRow {
+    const acting = this.own(actor);
+    return this.inbound.close(acting.entity.entityId, freightId, { how: dto.how, note: dto.note }, { name: acting.member.name, ...(acting.member.personDid ? { did: acting.member.personDid } : {}) });
   }
 
   /** Its receiving points, with the code each gives its suppliers. */

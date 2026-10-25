@@ -1,7 +1,7 @@
 ﻿import type { PlannedOn } from './fleet-plan.types';
 import { DEFAULT_DAY_START } from './fleet-plan.types';
 import { FleetManagerService } from './fleet-manager.service';
-import { clockAt, minutesOf, utcDay } from './fleet-clock';
+import { clockAt, minutesOf, momentAt, utcDay } from './fleet-clock';
 import { windowOf, windowWords } from './delivery-window';
 import type { ContractRef } from './carriage-contract.types';
 import type { ClientRef } from './business-client.types';
@@ -50,6 +50,8 @@ import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
+import { RECEIVING_EXCEPTIONS, type ReceivingException, type ReceivingExceptionKind } from './dispatch.types';
+import { exceptionViewsOf } from './receiving';
 import { BoardRow, Claimable, ClaimableKind, DeskNumber, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView, InboundReceiver } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
 import { carrierReadsInvoice, CommercialInvoiceService, crossesBorder } from './commercial-invoice.service';
@@ -1728,6 +1730,8 @@ export class DispatchService {
         pickedUpAt: f.pickedUpAt,
         deliveredAt: f.deliveredAt,
         receiverName: f.proofOfDelivery?.receiverName,
+        // D9 — what the receiver found not as the note says, at the handover.
+        ...(f.proofOfDelivery?.exceptions?.length ? { exceptions: exceptionViewsOf(f) } : {}),
         cancelledAt: f.cancelledAt,
         canCancel: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed',
         ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts } : {}),
@@ -2027,6 +2031,22 @@ export class DispatchService {
   }
 
   /* --------------------------------------------------------- on the carrier's own clock -- */
+
+  /**
+   * D10 — WHEN A LOAD ON THE ROAD IS EXPECTED AT THE DOOR, as a moment any clock can read: the hour its carrier's plan
+   * has it there (on the carrier's clock, on the day it was ordered for), else when its drive or its border crossing
+   * says. Nothing before it is on the road, while an authority holds it, or once the plan's hour is no longer said.
+   */
+  expectedAtOf(f: Freight, now: number = Date.now()): number | undefined {
+    if (f.status !== 'in_transit') return undefined;
+    const hour = planHourOf(f);
+    const minutes = minutesOf(hour);
+    const zone = hour ? this.zoneOfCarrier(f) : undefined;
+    if (zone && f.deliverOn && minutes !== undefined) return momentAt(f.deliverOn, minutes, zone);
+    const facts = this.passageFacts(f, now);
+    const at = facts.arrival?.expectedAt ?? facts.crossing?.expectedAt;
+    return at && Number.isFinite(Date.parse(at)) ? Date.parse(at) : undefined;
+  }
 
   /** The time zone of the fleet that must carry an order — the clock its day, its plan and its deliveries are read on. */
   private zoneOfCarrier(f: Freight): string | undefined {
@@ -3054,7 +3074,7 @@ export class DispatchService {
     void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy }, { source: 'pudo' }).catch(() => undefined);
     return f;
   }
-  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; sealsAtDelivery?: SealsAtDelivery; observedAt?: string }, now: number = Date.now()): Freight {
+  deliverFreight(freightId: string, driverDid?: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: ReadonlyArray<{ kind: string; count: number; photoRefs?: string[] }>; sealsAtDelivery?: SealsAtDelivery; observedAt?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
@@ -3073,6 +3093,8 @@ export class DispatchService {
     const podPhotoId = check?.podPhotoId;
     if (!podPhotoId) throw new GlosError('DELIVERY_PHOTO_REQUIRED', 'Attach a photo of the goods as delivered');
     this.media.requireHeld(podPhotoId, driverDid, { type: 'freight', id: f.freightId }, 'podPhotoId'); // round 31
+    // D9 — what the receiver found not as the note says: read whole, and refused, before anything is written.
+    const exceptions = this.receivingExceptionsOf(f, check?.exceptions, driverDid);
     // Round 35 — seals not as the note says: operations is told before the receiver takes the goods, so it is reported
     // first (with its photograph), and the load is held until operations releases it.
     if (check?.sealsAtDelivery === 'not_as_on_the_note' && !this.tamper?.reportedAt(f.freightId, 'delivery')) {
@@ -3093,10 +3115,11 @@ export class DispatchService {
     if (timing) f.deliveryTiming = timing;
     f.unloadReport = { confirmed: [...new Set(check?.confirmed ?? [])], at: f.deliveredAt, by: driverDid };
     const remarks = check?.remarks?.trim();
-    f.proofOfDelivery = { receiverName: receiverName.slice(0, 120), photoRef: podPhotoId, ...(remarks ? { remarks: remarks.slice(0, 500) } : {}), at: f.deliveredAt, by: driverDid };
+    f.proofOfDelivery = { receiverName: receiverName.slice(0, 120), photoRef: podPhotoId, ...(remarks ? { remarks: remarks.slice(0, 500) } : {}), ...(exceptions.length ? { exceptions } : {}), at: f.deliveredAt, by: driverDid };
     this.anchorCustody(f, 'delivered');
     // Same adopt-not-link rule as the securement photo (S29): only the driver's own, unattached upload is taken.
     this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
+    for (const ref of exceptions.flatMap((x) => x.photoRefs ?? [])) this.media.adopt(ref, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     // S34 — pay the driver their LOCKED earning on delivery, exactly once. A system-level ledger outflow
     // (drivers hold no agent wallet). A legacy/bulletin freight claimed before pricing (no lockedPrice) is skipped.
     // B2 — never for a haul settled between the parties: the shipper pays the carrier, and a payable on our books
@@ -3117,9 +3140,39 @@ export class DispatchService {
     const sender = f.postedByDid ?? (f.shipperDid && this.vendors.has(f.shipperDid) ? this.vendors.get(f.shipperDid).did : f.shipperDid);
     const posterDid = sender && sender !== f.contract?.fleetDid && sender !== f.claimedBy ? sender : undefined;
     void this.events
-      .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName, ...(timing ? { timing, orderedFor: f.deliverOn } : {}) }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName, ...(exceptions.length ? { exceptions: exceptions.map(({ kind, count }) => ({ kind, count })) } : {}), ...(timing ? { timing, orderedFor: f.deliverOn } : {}) }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
+  }
+
+  /**
+   * D9 — WHAT THE RECEIVER FOUND AT THE HANDOVER, read whole before the delivery is written: one line of each kind at
+   * most, counted in packages; a damaged line with a photograph the driver took of it, of this load and nothing else.
+   * Against the note's own count where it states one: none of them come is nothing handed over — a door, not a delivery —
+   * and nothing can be damaged or wrong that did not come. Kept in one order, whatever order they were said in.
+   */
+  private receivingExceptionsOf(f: Freight, lines: ReadonlyArray<{ kind: string; count: number; photoRefs?: string[] }> | undefined, driverDid: string | undefined): ReceivingException[] {
+    if (!lines?.length) return [];
+    const said = new Map<ReceivingExceptionKind, ReceivingException>();
+    for (const line of lines) {
+      const kind = line.kind as ReceivingExceptionKind;
+      if (!RECEIVING_EXCEPTIONS.includes(kind)) throw new GlosError('INVALID_INPUT', 'Say what was not as the note says: short, over, damaged or wrong', { field: 'exceptions' });
+      if (said.has(kind)) throw new GlosError('INVALID_INPUT', `Say “${kind}” once, with how many packages`, { field: 'exceptions' });
+      if (!Number.isInteger(line.count) || line.count < 1) throw new GlosError('INVALID_INPUT', `Count the packages ${kind}: one or more`, { field: 'exceptions' });
+      const photos = [...new Set((line.photoRefs ?? []).filter((r) => typeof r === 'string' && r.length > 0))];
+      if (kind === 'damaged' && !photos.length) throw new GlosError('PHOTO_REQUIRED', 'Take a photo of what is damaged: it goes on the note with the count', { field: 'exceptions' });
+      for (const ref of photos) this.media.requireHeld(ref, driverDid, { type: 'freight', id: f.freightId }, 'exceptions');
+      said.set(kind, { kind, count: line.count, ...(photos.length ? { photoRefs: photos } : {}) });
+    }
+    const count = (k: ReceivingExceptionKind) => said.get(k)?.count ?? 0;
+    if (f.packages) {
+      if (count('short') >= f.packages) throw new GlosError('INVALID_INPUT', `The note says ${f.packages} packages. If none of them came, nothing was handed over: say so at the door instead of delivering`, { field: 'exceptions' });
+      const came = f.packages - count('short') + count('over');
+      for (const k of ['damaged', 'wrong'] as const) {
+        if (count(k) > came) throw new GlosError('INVALID_INPUT', `${count(k)} ${k}, and ${came} came: count only what came`, { field: 'exceptions' });
+      }
+    }
+    return RECEIVING_EXCEPTIONS.flatMap((k) => (said.has(k) ? [said.get(k)!] : []));
   }
 
   /**
@@ -3269,7 +3322,7 @@ export class DispatchService {
       // No cover stated is no award at all: the queue shows the stated cover, or that there is nothing to award.
       awardCap: cover,
       capBasis: cover > 0 ? 'free-limit' : 'none',
-      evidence: [f.loadSafety?.securementPhotoRef, ...(f.inspection?.points.map((p) => p.photoRef) ?? []), f.proofOfDelivery?.photoRef, c.photoRef].filter((x): x is string => Boolean(x)),
+      evidence: [f.loadSafety?.securementPhotoRef, ...(f.inspection?.points.map((p) => p.photoRef) ?? []), f.proofOfDelivery?.photoRef, ...(f.proofOfDelivery?.exceptions?.flatMap((x) => x.photoRefs ?? []) ?? []), c.photoRef].filter((x): x is string => Boolean(x)),
       attempts: f.deliveryAttempts?.length ?? 0,
       ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
     };
@@ -3860,7 +3913,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

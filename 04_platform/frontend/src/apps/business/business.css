@@ -249,3 +249,17 @@
   font-size: 15px;
   letter-spacing: 0.08em;
 }
+
+/* D9: closing what is still expected of a load — a line for the records beside its two buttons. */
+.biz-inbound__close {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.biz-inbound__close .cinput {
+  flex: 1 1 220px;
+  min-width: 0;
+}

@@ -27,6 +27,8 @@ export interface NoteConfirmation {
   how: string;
   /** What the confirming party said about the goods, in their words as the driver recorded them (box 24). */
   remarks?: string;
+  /** D9 — what the receiver found not as the note says, at the handover: their reservations, beside their name (box 24). */
+  reservations?: string;
 }
 
 export interface ConsignmentNote {

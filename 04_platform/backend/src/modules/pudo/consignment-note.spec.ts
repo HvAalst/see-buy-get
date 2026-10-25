@@ -203,4 +203,29 @@ describe('the consignment note', () => {
     // A container the note knows nothing about adds nothing, rather than an empty line.
     expect(service.build(base({ externalOrderId: 'IMP-404' })).documents).not.toContain(undefined);
   });
+
+  it('D9: what the receiver found at the handover is written in box 24 beside their name, with its photographs in box 5', () => {
+    const delivered = { status: 'delivered' as const, pickedUpAt: '2026-09-14T09:00:00Z', deliveredAt: '2026-09-14T12:00:00Z', packages: 400 };
+    const pod = { receiverName: 'Peter Otieno', photoRef: 'med_pod', at: '2026-09-14T12:00:00Z', by: 'did:drv:amos' };
+    // Nothing found: box 24 is the signature as it always was, with no reservations line.
+    const clean = service.build(base({ ...delivered, proofOfDelivery: pod }));
+    expect(clean.confirmations.consignee?.reservations).toBeUndefined();
+    const n = service.build(
+      base({
+        ...delivered,
+        proofOfDelivery: { ...pod, remarks: 'Bags split at the seam', exceptions: [{ kind: 'short', count: 3 }, { kind: 'damaged', count: 2, photoRefs: ['med_d1', 'med_d2'] }, { kind: 'wrong', count: 1, photoRefs: ['med_w1'] }] },
+      }),
+    );
+    expect(n.confirmations.consignee).toMatchObject({ by: 'Peter Otieno', reservations: 'Received with reservations: 3 packages short, 2 packages damaged, 1 package not the goods the note describes', remarks: 'Receiver’s remarks: Bags split at the seam' });
+    expect(n.documents).toEqual(expect.arrayContaining(['Photos of the goods found damaged at delivery (med_d1, med_d2)', 'Photo of the goods found wrong at delivery (med_w1)']));
+    // Printed in box 24, after the signature.
+    const html = service.htmlFor(n);
+    const box24 = html.slice(html.indexOf('Goods received — signature and stamp of the consignee'));
+    expect(box24).toContain('Received with reservations: 3 packages short, 2 packages damaged, 1 package not the goods the note describes');
+  });
+
+  it('inbound, reading A: a load sent to a receiving point names its business and place in box 2, by its code — not as the sender named it', () => {
+    const n = service.build(base({ destLabel: 'Jenga Builders — Mombasa Road yard', receiver: { entityId: 'ent_jenga', siteId: 'site_1', name: 'Jenga Builders', siteName: 'Mombasa Road yard' }, receiverRef: 'PO-7781' }));
+    expect(n.consignee).toEqual({ name: 'Jenga Builders', address: 'Mombasa Road yard, by its receiving code — their order PO-7781', country: 'Kenya' });
+  });
 });

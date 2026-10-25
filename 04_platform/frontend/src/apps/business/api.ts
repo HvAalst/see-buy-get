@@ -210,6 +210,8 @@ export interface PostedLoad {
   pickedUpAt?: string;
   deliveredAt?: string;
   receiverName?: string;
+  /** D9 — what the receiver found not as the note says, at the handover. */
+  exceptions?: import('../../shared/found').FoundLine[];
   cancelledAt?: string;
   /** Its consignment note in the archive, once a copy is kept there (from taking over on): what its links hang on. */
   noteId?: string;

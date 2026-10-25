@@ -1,8 +1,10 @@
+import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useState } from 'preact/hooks';
+import { foundPhotos, foundWords } from '../../../shared/found';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SiteView } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
-import { inboundState, inboundTitle, trackingPathOf, type InboundRow, type InboundState, type InboundView, type ReceivingPoint } from '../inbound';
+import { dueLine, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundClosingHow, type InboundRow, type InboundState, type InboundView, type ReceivingPoint } from '../inbound';
 import { mayAct } from '../logic';
 
 const STATE_TAG: Record<InboundState, string> = { booked: 'quiet', carrier: 'info', on_its_way: 'info', delivered: 'ok', withdrawn: 'quiet' };
@@ -11,6 +13,10 @@ const STATE_TAG: Record<InboundState, string> = { booked: 'quiet', carrier: 'inf
  * COMING IN (inbound, reading A; the user, 2026-10-25: "Yes, A then B"). Which of the business's own places receive
  * goods, with the code each gives its suppliers — and what its suppliers have sent there: its own number for the order,
  * who from, how much, where it is now and who brings it. Never a price: that is between it and its supplier.
+ *
+ * D9 — a load delivered not all as the note says shows what was found at the handover, and what did not come (or came and
+ * is not the goods) stays under "Still expected" until one of its people closes it. D10 — when a load is expected, and
+ * whether it is late, is said on the receiving place's own clock, named where the reader's clock is another.
  */
 export function InboundScreen({ business, client }: { business: BusinessView; client: BusinessClient | null }) {
   const t = useT();
@@ -20,6 +26,9 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // D9 — closing what is still expected of one load: which, how, and a line for the business's own records.
+  const [closing, setClosing] = useState<{ freightId: string; how: InboundClosingHow } | null>(null);
+  const [closeNote, setCloseNote] = useState('');
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -33,15 +42,19 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
     void load();
   }, [load]);
 
-  const act = async (key: string, fn: () => Promise<{ error?: { detail?: string; title: string } | null }>, note: string) => {
+  const act = async (key: string, fn: () => Promise<{ error?: { detail?: string; title: string } | null }>, note: string): Promise<boolean> => {
     setBusy(key);
     setError(null);
     setDone(null);
     const r = await fn();
     setBusy(null);
-    if (r.error) return setError(r.error.detail || r.error.title);
+    if (r.error) {
+      setError(r.error.detail || r.error.title);
+      return false;
+    }
     setDone(note);
     await load();
+    return true;
   };
 
   const pointOf = (siteId: string): ReceivingPoint | undefined => view?.points.find((p) => p.siteId === siteId);
@@ -58,8 +71,20 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
     }
   };
 
-  const coming = (view?.items ?? []).filter((r) => inboundState(r) !== 'delivered' && inboundState(r) !== 'withdrawn');
-  const past = (view?.items ?? []).filter((r) => inboundState(r) === 'delivered' || inboundState(r) === 'withdrawn');
+  const closeExpected = async (row: InboundRow, how: InboundClosingHow) => {
+    const title = inboundTitle(row);
+    const what = title.kind === 'order' ? t('business.inbound.order', { ref: title.text }) : title.text;
+    const ok = await act(`close:${row.freightId}`, () => client!.inbound.closeExpected(row.freightId, how, closeNote.trim() || undefined), t(how === 'came' ? 'business.inbound.closedCame' : 'business.inbound.closedNotComing', { what }));
+    if (ok) {
+      setClosing(null);
+      setCloseNote('');
+    }
+  };
+
+  const items = view?.items ?? [];
+  const coming = items.filter((r) => inboundState(r) !== 'delivered' && inboundState(r) !== 'withdrawn');
+  const still = items.filter(isStillExpected);
+  const past = items.filter((r) => (inboundState(r) === 'delivered' || inboundState(r) === 'withdrawn') && !isStillExpected(r));
 
   return (
     <>
@@ -137,24 +162,88 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
         ) : coming.length === 0 ? (
           <p class="cons__empty">{t(view.points.length ? 'business.inbound.noneComing' : 'business.inbound.noneYet')}</p>
         ) : (
-          <div class="crows">{coming.map((r) => <InboundLine key={r.freightId} row={r} />)}</div>
+          <div class="crows">
+            {coming.map((r) => (
+              <InboundLine key={r.freightId} row={r} />
+            ))}
+          </div>
         )}
       </section>
+
+      {still.length ? (
+        <section class="cons__panel">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('business.inbound.stillTitle')}</span>
+            <span class="cons__panelt">{still.length}</span>
+          </div>
+          <p class="chint">{t('business.inbound.stillHint')}</p>
+          <div class="crows">
+            {still.map((r) => (
+              <InboundLine key={r.freightId} row={r}>
+                {works ? (
+                  closing?.freightId === r.freightId ? (
+                    <span class="biz-inbound__close">
+                      <input class="cinput" maxLength={300} aria-label={t('business.inbound.closeNote')} placeholder={t('business.inbound.closeNote')} value={closeNote} onInput={(e) => setCloseNote((e.target as HTMLInputElement).value)} />
+                      <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy !== null} onClick={() => void closeExpected(r, closing.how)}>
+                        {t(closing.how === 'came' ? 'business.inbound.closeCame' : 'business.inbound.closeNotComing')}
+                      </button>
+                      <button
+                        type="button"
+                        class="cbtn cbtn--ghost cbtn--sm"
+                        onClick={() => {
+                          setClosing(null);
+                          setCloseNote('');
+                        }}
+                      >
+                        {t('business.inbound.back')}
+                      </button>
+                    </span>
+                  ) : (
+                    <span class="twr-panelend">
+                      {(['came', 'not_coming'] as const).map((how) => (
+                        <button
+                          key={how}
+                          type="button"
+                          class="cbtn cbtn--ghost cbtn--sm"
+                          disabled={busy !== null}
+                          onClick={() => {
+                            setClosing({ freightId: r.freightId, how });
+                            setCloseNote('');
+                          }}
+                        >
+                          {t(how === 'came' ? 'business.inbound.came' : 'business.inbound.notComing')}
+                        </button>
+                      ))}
+                    </span>
+                  )
+                ) : null}
+              </InboundLine>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {past.length ? (
         <section class="cons__panel">
           <div class="cons__panelhead">
             <span class="cons__panelt">{t('business.inbound.pastTitle')}</span>
           </div>
-          <div class="crows">{past.map((r) => <InboundLine key={r.freightId} row={r} />)}</div>
+          <div class="crows">
+            {past.map((r) => (
+              <InboundLine key={r.freightId} row={r} />
+            ))}
+          </div>
         </section>
       ) : null}
     </>
   );
 }
 
-/** One load coming in: its name, who from and how much, where it stands and when, who brings it, and its tracking page. */
-function InboundLine({ row }: { row: InboundRow }) {
+/**
+ * One load coming in: its name, who from and how much, where it stands and when, who brings it, and its tracking page —
+ * and, delivered, what was found at the handover, what is still expected, and who closed it.
+ */
+function InboundLine({ row, children }: { row: InboundRow; children?: ComponentChildren }) {
   const t = useT();
   const state = inboundState(row);
   const title = inboundTitle(row);
@@ -167,6 +256,9 @@ function InboundLine({ row }: { row: InboundRow }) {
     t('business.inbound.to', { place: row.site.name }),
   ].filter(Boolean);
   const delivered = row.steps.find((s) => s.status === 'delivered')?.at;
+  // D10 — on the place's own clock where the row says it; the place's clock named where the reader's is another.
+  const due = row.due ? dueLine(row.due) : null;
+  const dueText = due && row.due ? (sameClockAs(row.due.zone) ? t(due.key, due.params) : t('business.inbound.due.onClock', { when: t(due.key, due.params), clock: row.due.zoneName })) : null;
   const when =
     state === 'delivered' && delivered
       ? row.receiverName
@@ -174,26 +266,40 @@ function InboundLine({ row }: { row: InboundRow }) {
         : t('business.inbound.delivered', { when: hour(delivered) })
       : state === 'withdrawn'
         ? t('business.inbound.withdrawn')
-        : row.late
-          ? t('business.inbound.late')
-          : row.expectedAbout
-            ? t('business.inbound.expectedAbout', { when: row.expectedAbout })
-            : row.expectedOn
-              ? t('business.inbound.expectedOn', { day: day(row.expectedOn) })
-              : row.scheduledPickupAt && state === 'booked'
-                ? t('business.inbound.leaves', { when: hour(row.scheduledPickupAt) })
-                : t(state === 'booked' ? 'business.inbound.waitingCarrier' : state === 'carrier' ? 'business.inbound.collecting' : 'business.inbound.onItsWay');
+        : dueText
+          ? dueText
+          : row.late
+            ? t('business.inbound.late')
+            : row.expectedAbout
+              ? t('business.inbound.expectedAbout', { when: row.expectedAbout })
+              : row.expectedOn
+                ? t('business.inbound.expectedOn', { day: day(row.expectedOn) })
+                : row.scheduledPickupAt && state === 'booked'
+                  ? t('business.inbound.leaves', { when: hour(row.scheduledPickupAt) })
+                  : t(state === 'booked' ? 'business.inbound.waitingCarrier' : state === 'carrier' ? 'business.inbound.collecting' : 'business.inbound.onItsWay');
+  const late = state !== 'delivered' && state !== 'withdrawn' && Boolean(row.due ? row.due.late : row.late);
+  const found = foundWords(row.exceptions, t);
+  const photos = foundPhotos(row.exceptions);
+  const still = isStillExpected(row);
   const track = trackingPathOf(row);
   return (
     <div class="crow">
       <span class="crow__body">
         <span class="crow__top">
           <span class="crow__name">{title.kind === 'order' ? t('business.inbound.order', { ref: title.text }) : title.text}</span>
-          <span class={`ctag ctag--${row.late && state !== 'delivered' ? 'warn' : STATE_TAG[state]}`}>{t(`business.inbound.state.${state}` as never)}</span>
+          <span class={`ctag ctag--${late || still ? 'warn' : STATE_TAG[state]}`}>{still ? t('business.inbound.stillLine', { n: row.stillExpected ?? 0 }) : t(`business.inbound.state.${state}` as never)}</span>
         </span>
         <span class="crow__sub">{what.join(' · ')}</span>
         {title.kind === 'order' ? <span class="crow__sub">{row.description}</span> : null}
         <span class="crow__sub">{when}</span>
+        {/* D9 — what was found at the handover, as the note has it beside the receiver's name. */}
+        {found ? <span class="crow__sub">{photos ? t('business.inbound.foundWithPhotos', { found, n: photos }) : t('business.inbound.found', { found })}</span> : null}
+        {row.closed ? (
+          <span class="crow__sub">
+            {t(row.closed.how === 'came' ? 'business.inbound.closedLineCame' : 'business.inbound.closedLineNotComing', { when: formatDate(row.closed.at, { day: 'numeric', month: 'short' }), who: row.closed.by })}
+            {row.closed.note ? ` — ${row.closed.note}` : ''}
+          </span>
+        ) : null}
         {row.carrier && state !== 'delivered' && state !== 'withdrawn' ? (
           <span class="crow__sub">{t('business.inbound.carrier', { who: [row.carrier.name, row.carrier.driverName, row.carrier.plate].filter(Boolean).join(' · ') })}</span>
         ) : null}
@@ -204,6 +310,7 @@ function InboundLine({ row }: { row: InboundRow }) {
             </a>
           </span>
         ) : null}
+        {children}
       </span>
     </div>
   );

@@ -1,6 +1,7 @@
 import { PhoneField } from '../../../shared/ui';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
+import { foundWords } from '../../../shared/found';
 import { quoteFigure, quoteTone, type QuoteView } from '../../../shared/quote';
 import { ConsoleDetail } from '../../tower/ConsoleDetail';
 import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
@@ -611,6 +612,13 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
                 {handed ? ` ${handed.full}` : ''}
                 {handed ? <span class="chint"> {t('business.loads.done.clock')}</span> : null}
               </dd>
+            </div>
+          ) : null}
+          {/* D9 — what the receiver found at the handover, as the note has it beside their name. */}
+          {row.exceptions?.length ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.loads.fact.found')}</dt>
+              <dd class="cons__factv">{foundWords(row.exceptions, t)}</dd>
             </div>
           ) : null}
           {row.trackingUrl ? (
