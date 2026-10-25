@@ -85,6 +85,26 @@ export const enPages = {
   'pages.for.drivers.a3': 'Report it in the Driver app. The load is marked as held, SeeBuyGet operations are told, and the driver is shown the country’s desk number to call.',
   'pages.for.drivers.cta': 'Sign up to drive',
 
+  // Fleet offices (/for/fleets/) — a fleet signs itself up on the front page since 2026-10-23.
+  'pages.for.fleets.metaTitle': 'Run a fleet office — SeeBuyGet',
+  'pages.for.fleets.metaDescription': 'A SeeBuyGet fleet office takes orders from shippers, plans which vehicle takes which, and puts each load on a driver. How it works, what you need, and how to join.',
+  'pages.for.fleets.title': 'Run your vehicles and drivers on the network',
+  'pages.for.fleets.lede': 'A SeeBuyGet fleet office runs vehicles and drivers on the network. In the SeeBuyGet Fleet app it takes orders from shippers, plans which vehicle takes which, and puts each load on a driver.',
+  'pages.for.fleets.step1': 'Sign the fleet up on the SeeBuyGet site with the phone number of the person who runs it, a PIN you choose, the company’s registration, transport operator’s licence and tax numbers, and its depot.',
+  'pages.for.fleets.step2': 'Send a photograph of each of the four papers. SeeBuyGet staff read them against what was typed, and email the company when they have been checked.',
+  'pages.for.fleets.step3': 'Once the papers are approved, SeeBuyGet contacts the fleet about its refundable operating bond. When the bond is recorded, the fleet is active.',
+  'pages.for.fleets.step4': 'Open the SeeBuyGet Fleet app with your phone number and PIN: take drivers on, plan which vehicle takes which orders, and put loads on drivers.',
+  'pages.for.fleets.need1': 'Four papers: the certificate of business registration, the transport operator’s licence, the owner’s ID and proof of the company’s address.',
+  'pages.for.fleets.need2': 'A refundable operating bond, recorded once the papers are approved.',
+  'pages.for.fleets.need3': 'A phone or a laptop for the SeeBuyGet Fleet app. Each person in the fleet office signs in with their own phone number and PIN.',
+  'pages.for.fleets.q1': 'How does a driver join a SeeBuyGet fleet?',
+  'pages.for.fleets.a1': 'The fleet office adds a new driver in the SeeBuyGet Fleet app. A driver who is already on SeeBuyGet joins a fleet only when it offers them a place and they say yes in the Driver app.',
+  'pages.for.fleets.q2': 'What does a SeeBuyGet fleet do with orders its own vehicles cannot take?',
+  'pages.for.fleets.a2': 'It offers them to the fleets it works with first. What no partner takes can go on the open freight board, where any carrier on SeeBuyGet may take it.',
+  'pages.for.fleets.q3': 'Does SeeBuyGet handle payments between a shipper and a fleet?',
+  'pages.for.fleets.a3': 'No. A price between a shipper and a fleet is a quotation in SeeBuyGet; the payment is between the two of them.',
+  'pages.for.fleets.cta': 'Sign up your fleet',
+
   // Sort hubs (/for/hubs/).
   'pages.for.hubs.metaTitle': 'Run a sort hub — SeeBuyGet',
   'pages.for.hubs.metaDescription': 'A SeeBuyGet sort hub sorts parcels between routes in sealed bags and earns a fee on every parcel it sorts. How it works, what you need, and how to join.',

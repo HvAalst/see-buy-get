@@ -5,7 +5,7 @@ import type { HelpRole } from './help';
  * THE PAGES WRITTEN TO BE QUOTED — /about/ and /for/<who>/ (the user, 2026-10-22: "a marketing page for agentic search
  * optimization"). Built into HTML at build time, one address each, every word in the catalog (en.pages.ts).
  */
-export type Audience = 'shops' | 'drivers' | 'hubs' | 'stores' | 'business';
+export type Audience = 'shops' | 'drivers' | 'fleets' | 'hubs' | 'stores' | 'business';
 export type Notice = 'privacy' | 'cookies';
 export type InfoPage = { kind: 'about' } | { kind: 'for'; who: Audience } | { kind: 'notice'; which: Notice };
 
@@ -32,6 +32,8 @@ export interface AudienceSpec {
 export const AUDIENCES: readonly AudienceSpec[] = [
   { who: 'shops', join: '/?join=pudo', help: 'shop', steps: 4, needs: 3, questions: 3, label: 'home.role.pudo.label', blurb: 'home.role.pudo.blurb' },
   { who: 'drivers', join: '/?join=driver', help: 'driver', steps: 4, needs: 3, questions: 3, label: 'home.role.driver.label', blurb: 'home.role.driver.promise' },
+  // A fleet signs itself up on the front page since 2026-10-23, and had no page of its own to be found by.
+  { who: 'fleets', join: '/?join=fleet', help: 'fleet', steps: 4, needs: 3, questions: 3, label: 'home.role.fleet.label', blurb: 'home.role.fleet.blurb' },
   { who: 'hubs', join: '/?join=mdp', help: 'hub', steps: 4, needs: 2, questions: 2, label: 'home.role.mdp.label', blurb: 'home.role.mdp.blurb' },
   { who: 'stores', join: '/?join=vendor', help: 'store', steps: 4, needs: 3, questions: 3, label: 'home.role.vendor.label', blurb: 'home.role.vendor.blurb' },
   { who: 'business', join: '/business/', help: 'business', steps: 4, needs: 2, questions: 2, label: 'pages.for.business.title', blurb: 'pages.for.business.lede' },

@@ -88,7 +88,7 @@ writeFileSync(
     `- [Front page](${abs('/')}): how it works, the network's live figures, who it is for, questions and answers`,
     `- [Send or track a parcel](${abs('/send/')}): prices, booking and tracking by tracking code`,
     `- [SeeBuyGet at a glance](${abs('/about/')}): what it is, how a parcel travels, where it runs, how prices are set, how parcels are kept safe`,
-    `- [For shops](${abs('/for/shops/')}), [for drivers](${abs('/for/drivers/')}), [for sort hubs](${abs('/for/hubs/')}), [for online stores](${abs('/for/stores/')}), [for businesses](${abs('/for/business/')}): how each works, what is needed, questions and answers`,
+    `- [For shops](${abs('/for/shops/')}), [for drivers](${abs('/for/drivers/')}), [for fleet offices](${abs('/for/fleets/')}), [for sort hubs](${abs('/for/hubs/')}), [for online stores](${abs('/for/stores/')}), [for businesses](${abs('/for/business/')}): how each works, what is needed, questions and answers`,
     `- [Your data at SeeBuyGet](${abs('/privacy/')}): what is kept, how it is protected, who sees it, which other companies handle it, how long it is kept and what you can do`,
     `- [Cookies](${abs('/cookies/')}): SeeBuyGet sets none; what its apps keep in your browser instead`,
     `- [Help](${abs('/help/')}): how each app works, signing in, codes and PINs — one page per article — and how to write to us`,

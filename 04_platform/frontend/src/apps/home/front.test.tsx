@@ -5,6 +5,8 @@ import { enFront } from '../../shared/i18n/catalogs/en.front';
 import { PublicShell, Marked } from './screens/PublicShell';
 import { WelcomeScreen } from './screens/WelcomeScreen';
 import type { HomeActions } from './useHomeApp';
+import { RolesScreen } from './screens/RolesScreen';
+import { ROLES, roleMeta } from './logic';
 
 /*
  * THE FRONT PAGE, RESTYLED. What is held to here: the page as it is built (no network, no device) states nothing the
@@ -61,5 +63,18 @@ describe('the front page', () => {
   it('draws the marked phrase in orange without cutting it out of its sentence', () => {
     expect(renderToString(<Marked text="No address. Just a shop, *a code*, and a price." />)).toBe('No address. Just a shop, <em>a code</em>, and a price.');
     expect(enFront['front.title'].match(/\*/g)).toHaveLength(2);
+  });
+});
+
+/*
+ * "WHAT ARE YOU?" — the cards "Sign me up" leads to. What is held to here: every kind of account is offered — each one
+ * the front page signs up itself, and a business, which signs up in its own app (2026-10-25: the one kind it left out).
+ */
+describe('what are you?', () => {
+  it('offers every kind of account, and a business opens the Business app to sign up in', () => {
+    const html = renderToString(<RolesScreen actions={{} as HomeActions} />);
+    for (const r of ROLES) expect(html, r.id).toContain(roleMeta(r, t).label);
+    expect(html).toContain(t('home.role.business.label'));
+    expect(html).toContain('href="/business/"');
   });
 });

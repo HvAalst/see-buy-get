@@ -179,6 +179,10 @@ export const enHome = {
   'home.role.fleet.appNoun': 'fleet office',
   'home.role.fleet.blurb': 'Run vehicles and drivers on the network.',
   'home.role.fleet.promise': 'Dispatch, shifts and cargo in one console.',
+  // A business signs up in its own app, so its card on "What are you?" opens the Business app (2026-10-25).
+  'home.role.business.label': 'A business',
+  'home.role.business.blurb': 'Shippers, importers, expeditors, clearing agents and container yards.',
+  'home.role.business.promise': 'Post loads, order under contracts, keep every consignment note.',
 
   // Welcome screen (the front door).
   'home.welcome.title': 'Parcels, without an address',
