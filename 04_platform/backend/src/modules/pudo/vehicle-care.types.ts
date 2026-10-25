@@ -149,10 +149,13 @@ export class ServiceRecord {
 export const BREAKDOWN_CAUSES = ['engine', 'tyre', 'electrical', 'brakes', 'fuel', 'accident', 'other'] as const;
 export type BreakdownCause = (typeof BREAKDOWN_CAUSES)[number];
 
-/** A load that was in the vehicle, or on its way to be collected by it, when it broke down. */
+/**
+ * A load that was in the vehicle, or on its way to be collected by it, when it broke down — an order, a run booking, a
+ * bag (on the vehicle, or claimed and still to collect), or a parcel a shop handed the driver loose.
+ */
 export class BreakdownLoad {
-  @ApiProperty({ enum: ['freight', 'booking'] }) kind: 'freight' | 'booking';
-  /** The order's id, or the run booking's. */
+  @ApiProperty({ enum: ['freight', 'booking', 'bag', 'parcel'] }) kind: 'freight' | 'booking' | 'bag' | 'parcel';
+  /** The order's id, the run booking's, the bag's code, or the parcel's id. */
   id: string;
   /** What the office calls it: the order's code, or what the booking said it was. */
   label: string;
@@ -209,6 +212,8 @@ export class VehicleBreakdown {
   /** Its loads, taken over by other vehicles of the fleet. */
   @ApiProperty({ type: [BreakdownHandover] }) handovers: BreakdownHandover[];
   @ApiProperty({ enum: ['open', 'resolved'] }) status: 'open' | 'resolved';
+  /** A courier's own vehicle with bags or parcels aboard: how many couriers on a shift near it were told, to come and take them on. */
+  @ApiPropertyOptional() couriersTold?: number;
   @ApiPropertyOptional({ enum: ['back_on_road', 'workshop'] }) outcome?: 'back_on_road' | 'workshop';
   @ApiPropertyOptional() resolvedBy?: string;
   @ApiPropertyOptional() resolvedAt?: string;
@@ -217,7 +222,7 @@ export class VehicleBreakdown {
 
 /** One load a rescuing driver would take over: what it is, whether it is aboard or still to collect, and its weight. */
 export class TakeOverLoad {
-  @ApiProperty({ enum: ['freight', 'booking'] }) kind: 'freight' | 'booking';
+  @ApiProperty({ enum: ['freight', 'booking', 'bag', 'parcel'] }) kind: 'freight' | 'booking' | 'bag' | 'parcel';
   label: string;
   @ApiProperty({ enum: ['aboard', 'to_collect'] }) state: 'aboard' | 'to_collect';
   weightKg: number;
@@ -232,6 +237,8 @@ export class BreakdownToTakeOver {
   @ApiPropertyOptional() driverName?: string;
   reportedAt: string;
   @ApiPropertyOptional({ type: GeoPoint }) location?: GeoPoint;
+  /** A courier's, seen by another courier: how far from where their phone last said they were, in a straight line. */
+  @ApiPropertyOptional() km?: number;
   @ApiProperty({ type: [TakeOverLoad] }) loads: TakeOverLoad[];
   totalKg: number;
 }

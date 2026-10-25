@@ -847,12 +847,12 @@ function OnShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         <Button variant="link" full={false} onClick={() => setBreakdownOpen(true)}>
           {t('driver.brk.open')}
         </Button>
-        <TakeOverLink actions={actions} />
+        <TakeOverLink actions={actions} courier={!state.driver?.managerDid} />
         <Button variant="link" full={false} danger onClick={() => setConfirm('end')}>
           {t('driver.home.endMyShift')}
         </Button>
         <ReportDefectSheet open={defectOpen} actions={actions} onClose={() => setDefectOpen(false)} />
-        <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} />
+        <BreakdownSheet open={breakdownOpen} actions={actions} onClose={() => setBreakdownOpen(false)} courier={!state.driver?.managerDid} />
       </Card>
 
       {band ? (

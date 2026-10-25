@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
@@ -16,6 +16,17 @@ import { dayWords } from './upkeep-words';
 import { VehicleService } from './vehicle.service';
 import { BreakdownCause, BreakdownHandover, BreakdownLoad, BreakdownTaker, BreakdownToTakeOver, TakeOverResult, VehicleBreakdown } from './vehicle-care.types';
 import { whenSeen } from './observed-at';
+import { ToteService } from './tote.service';
+import { ParcelService } from './parcel.service';
+import { WalletGateService } from './wallet-gate.service';
+import { roadPartAt } from './pricing';
+import { haversineKm } from './geo';
+
+/**
+ * How near a courier on a shift must be to be told another courier broke down with bags and parcels to take over, and
+ * to see it among theirs to take: a ride across town, not across the country.
+ */
+export const TAKEOVER_NEAR_KM = 25;
 
 /** What broke, as the line every refusal, notice and screen says. */
 export const CAUSE_WORDS: Record<BreakdownCause, string> = {
@@ -54,11 +65,20 @@ export interface VehicleBrokeDown {
   /** "16 Oct 2026 at 14:05", on the fleet's clock. */
   when: string;
   tell: BreakdownTell[];
+  /**
+   * A courier's vehicle broke down with bags or parcels aboard: the couriers on a shift near it, told so one of them can
+   * come and take them over — and what there is to take.
+   */
+  nearby?: Array<{ driverDid: string; km: number }>;
+  toTakeOver?: { bags: number; parcels: number };
 }
 
-/** A breakdown's loads taken over, for the notices: the office, the two drivers, and the shippers of what moved. */
+/**
+ * A breakdown's loads taken over, for the notices: the office, the two drivers, and the shippers of what moved. No fleet
+ * where a courier's bags and parcels went on with another courier.
+ */
 export interface VehicleLoadsHandedOver {
-  fleetDid: string;
+  fleetDid?: string;
   /** Loads moved while aboard, and runs that went on: their notes are frozen with the reload on them. */
   reloadedFreightIds: string[];
   reloadedDepartureIds: string[];
@@ -74,8 +94,14 @@ export interface VehicleLoadsHandedOver {
   tell: BreakdownTell[];
 }
 
-/** A load as a breakdown reads it: what to tell about it, and what it weighs. */
-type Load = BreakdownTell & { id: string; shipperDid?: string; weightKg: number };
+/**
+ * A load as a breakdown reads it: what to tell about it, and what it weighs. A bag, or a parcel a shop handed the driver,
+ * has no shipper to tell here — its receiver hears by the parcel's own running-late rule — and moves the same way.
+ */
+type Load = Omit<BreakdownTell, 'kind' | 'shipperDid'> & { kind: BreakdownLoad['kind']; id: string; shipperDid?: string; weightKg: number };
+
+/** What of a breakdown's loads a courier takes over from another courier: bags and loose parcels. A load stays with its carrier. */
+const ROAD_GOODS: ReadonlySet<BreakdownLoad['kind']> = new Set(['bag', 'parcel']);
 
 /** A breakdown resolved, for the notices: the driver who reported it, and the shippers of what is still aboard. */
 export interface VehicleBreakdownResolved {
@@ -111,6 +137,11 @@ export class VehicleBreakdownService {
     private readonly departures: DepartureService,
     private readonly media: MediaService,
     private readonly events: EventBus,
+    // Bags and loose parcels move in a takeover, and a bag's road is paid in parts (the user, 2026-10-25: "Split by the
+    // road"). Optional so a service built by hand for its loads alone keeps compiling; without them, loads move alone.
+    @Optional() private readonly totes?: ToteService,
+    @Optional() private readonly parcels?: ParcelService,
+    @Optional() private readonly gate?: WalletGateService,
   ) {
     // Registered here rather than on module start, so a service built by hand in a test reads the same gate.
     this.vehicles.addOffRoadSource((v) => this.openOf(v.vehicleId).map((b) => this.line(v, b)));
@@ -139,6 +170,10 @@ export class VehicleBreakdownService {
     const location = fromPhone ? { lat: input.lat!, lng: input.lng! } : shift?.location;
     const locatedAt = fromPhone ? new Date(seen.at).toISOString() : shift?.lastLocatedAt;
     const loads = shift ? this.loadsOf(v, shift.driverDid) : [];
+    // A COURIER'S vehicle with bags or parcels aboard: the couriers on a shift near it are told, so that one of them can
+    // come and take them on (a fleet's go to another of its own vehicles, which its office arranges).
+    const goods = loads.filter((l) => ROAD_GOODS.has(l.kind));
+    const nearby = !v.managerDid && goods.length && location && shift ? this.couriersNear(location, shift.driverDid) : [];
     const breakdown: VehicleBreakdown & { photoRef?: string } = {
       breakdownId: `brk_${randomBytes(6).toString('hex')}`,
       vehicleId,
@@ -158,6 +193,7 @@ export class VehicleBreakdownService {
       stillAboard: [],
       handovers: [],
       status: 'open',
+      ...(!v.managerDid && goods.length ? { couriersTold: nearby.length } : {}),
     };
     // The photograph becomes the vehicle's record, as a defect's does.
     if (input.photoRef && who.byDid && this.media.adopt(input.photoRef, who.byDid, { type: 'vehicle', id: vehicleId }, 'defect')) {
@@ -172,6 +208,8 @@ export class VehicleBreakdownService {
       breakdown: publicBreakdown(breakdown),
       when: this.when(v, breakdown.reportedAt),
       tell: tellsOf(loads),
+      ...(nearby.length ? { nearby } : {}),
+      ...(!v.managerDid && goods.length ? { toTakeOver: { bags: goods.filter((l) => l.kind === 'bag').length, parcels: goods.filter((l) => l.kind === 'parcel').length } } : {}),
     };
     void this.events.publish(GlosEvent.Pudo.VehicleBrokeDown, told, { source: 'pudo' }).catch(() => undefined);
     return this.view(breakdown);
@@ -207,6 +245,7 @@ export class VehicleBreakdownService {
   toTakeOver(takerDid: string): BreakdownToTakeOver[] {
     const shift = this.fleet.activeForDriver(takerDid);
     const mine = shift ? this.vehicles.get(shift.vehicleId) : undefined;
+    if (mine && !mine.managerDid) return this.courierTakeOvers(takerDid, mine.vehicleId, shift!.location);
     if (!mine?.managerDid) return [];
     return this.all()
       .filter((b) => b.vehicleId !== mine.vehicleId && b.driverDid && b.driverDid !== takerDid)
@@ -224,6 +263,44 @@ export class VehicleBreakdownService {
         loads: loads.map((l) => ({ kind: l.kind, label: l.label, state: l.state, weightKg: l.weightKg })),
         totalKg: Math.round(loads.reduce((n, l) => n + l.weightKg, 0) * 100) / 100,
       }));
+  }
+
+  /**
+   * WHAT A COURIER COMING FOR ANOTHER'S BAGS SEES (the user, 2026-10-25: "Split by the road"): couriers' vehicles broken
+   * down within TAKEOVER_NEAR_KM of where this courier's phone last said it was, with bags or parcels still with the
+   * courier they broke down under — nearest first, and how far. Only what is still to be done: not one back on the road.
+   * Nothing while this courier's phone has not said where it is: "near" needs a where.
+   */
+  private courierTakeOvers(takerDid: string, ownVehicleId: string, at: { lat: number; lng: number } | undefined): BreakdownToTakeOver[] {
+    if (!at) return [];
+    return this.all()
+      .filter((b) => (b.status === 'open' || b.outcome === 'workshop') && b.vehicleId !== ownVehicleId && b.driverDid && b.driverDid !== takerDid && b.location)
+      .map((b) => ({ b, v: this.vehicles.get(b.vehicleId), km: Math.round(haversineKm(at, b.location!) * 10) / 10 }))
+      .filter(({ v, km }) => !v.managerDid && km <= TAKEOVER_NEAR_KM)
+      .map(({ b, v, km }) => ({ b, v, km, loads: this.stillWith(v, b).filter((l) => ROAD_GOODS.has(l.kind)) }))
+      .filter(({ loads }) => loads.length > 0)
+      .sort((x, y) => x.km - y.km)
+      .map(({ b, v, km, loads }) => ({
+        breakdownId: b.breakdownId,
+        vehicleId: v.vehicleId,
+        plate: v.plate,
+        ...(b.driverName ? { driverName: b.driverName } : {}),
+        reportedAt: b.reportedAt,
+        location: { ...b.location! },
+        km,
+        loads: loads.map((l) => ({ kind: l.kind, label: l.label, state: l.state, weightKg: l.weightKg })),
+        totalKg: Math.round(loads.reduce((n, l) => n + l.weightKg, 0) * 100) / 100,
+      }));
+  }
+
+  /** The couriers on a shift near a place, out in a vehicle fit for the road — not the one asking — nearest first. */
+  private couriersNear(point: { lat: number; lng: number }, exceptDid: string): Array<{ driverDid: string; km: number }> {
+    return this.fleet
+      .onShiftNear(point, TAKEOVER_NEAR_KM)
+      .map((vehicleId) => ({ vehicleId, shift: this.fleet.activeForVehicle(vehicleId) }))
+      .filter(({ vehicleId, shift }) => shift && shift.location && shift.driverDid !== exceptDid && !this.vehicles.get(vehicleId).managerDid && this.vehicles.isUsable(vehicleId))
+      .map(({ shift }) => ({ driverDid: shift!.driverDid, km: Math.round(haversineKm(shift!.location!, point) * 10) / 10 }))
+      .sort((x, y) => x.km - y.km);
   }
 
   /** The fleet's drivers out in another vehicle now that is on the road, who could take a breakdown's loads — and the room each has. */
@@ -273,14 +350,27 @@ export class VehicleBreakdownService {
     const shift = this.fleet.activeForDriver(takerDid);
     if (!shift) throw new GlosError('INVALID_STATE', notOnShift);
     const to = this.vehicles.get(shift.vehicleId);
-    if (!v.managerDid || to.managerDid !== v.managerDid) throw new GlosError('FORBIDDEN', `${v.plate} is not one of your fleet's vehicles: its loads stay with the fleet that carries them`);
+    // A fleet's vehicle hands over to another of the same fleet's. A COURIER's own goes on with another courier, out in
+    // their own vehicle (the user, 2026-10-25): its bags and parcels — a load stays with the carrier its note names.
+    const courier = !v.managerDid;
+    if (courier ? Boolean(to.managerDid) : to.managerDid !== v.managerDid) {
+      throw new GlosError('FORBIDDEN', courier ? `${v.plate} is a courier's own: its bags and parcels go on with another courier, out in their own vehicle` : `${v.plate} is not one of your fleet's vehicles: its loads stay with the fleet that carries them`);
+    }
     if (to.vehicleId === v.vehicleId) throw new GlosError('INVALID_INPUT', `${to.plate} is the vehicle that broke down`);
     if (!this.vehicles.isUsable(to.vehicleId)) throw new GlosError('INVALID_STATE', `${to.plate} is off the road: ${this.vehicles.offRoadReasons(to.vehicleId).join('; ') || to.status}`);
-    const loads = this.stillWith(v, b);
+    const loads = this.stillWith(v, b).filter((l) => !courier || ROAD_GOODS.has(l.kind));
     if (!loads.length) throw new GlosError('INVALID_STATE', `Nothing of ${v.plate}'s is left to hand over`);
     const taker = this.drivers.get(takerDid);
     const bookings = loads.filter((l) => l.kind === 'booking');
-    this.dispatch.assertCanTakeLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), takerDid, bookings.reduce((n, l) => n + l.weightKg, 0));
+    const goodsKg = loads.filter((l) => ROAD_GOODS.has(l.kind)).reduce((n, l) => n + l.weightKg, 0);
+    this.dispatch.assertCanTakeLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), takerDid, bookings.reduce((n, l) => n + l.weightKg, 0) + goodsKg);
+    // Bags take a space each in the hold, whatever they weigh.
+    const bags = loads.filter((l) => l.kind === 'bag').length;
+    const spaces = bags ? this.dispatch.remainingTotes(takerDid) : 0;
+    if (bags > spaces) {
+      const room = spaces === 0 ? 'no room for another bag' : `room for ${spaces === 1 ? 'one more bag' : `${spaces} more bags`}`;
+      throw new GlosError('CAPACITY_EXCEEDED', `${to.plate} has ${room} — there ${bags === 1 ? 'is one' : `are ${bags}`} to take over`);
+    }
     for (const departureId of new Set(bookings.map((l) => l.departureId!))) this.departures.continueOn(departureId, to.vehicleId, { did: takerDid, name: taker.displayName });
     return { v, to, taker: { did: taker.did, displayName: taker.displayName }, loads };
   }
@@ -293,6 +383,7 @@ export class VehicleBreakdownService {
     this.dispatch.moveLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), taker.did, { fromPlate: v.plate, toDriverName: taker.displayName, breakdownId: b.breakdownId, proof: how.proof, by: how.by, ...(location ? { location } : {}) }, now);
     const runs = [...new Set(loads.filter((l) => l.kind === 'booking').map((l) => l.departureId!))];
     for (const departureId of runs) this.departures.continueOn(departureId, to.vehicleId, { did: taker.did, name: taker.displayName }, { breakdownId: b.breakdownId, proof: how.proof, by: how.by, ...(location ? { location } : {}), at: new Date(now).toISOString() });
+    this.moveRoadGoods(b, v, taker.did, loads, location, now);
     const handover: BreakdownHandover = {
       at: new Date(now).toISOString(),
       toDriverName: taker.displayName,
@@ -303,7 +394,7 @@ export class VehicleBreakdownService {
       ...(how.location ? { location: { lat: how.location.lat, lng: how.location.lng } } : {}),
     };
     const told: VehicleLoadsHandedOver = {
-      fleetDid: v.managerDid!,
+      ...(v.managerDid ? { fleetDid: v.managerDid } : {}),
       reloadedFreightIds: loads.filter((l) => l.kind === 'freight' && l.state === 'aboard').map((l) => l.id),
       reloadedDepartureIds: runs,
       carrier: this.carrierOf(v, b.driverName),
@@ -318,6 +409,33 @@ export class VehicleBreakdownService {
     };
     void this.events.publish(GlosEvent.Pudo.VehicleLoadsHandedOver, told, { source: 'pudo' }).catch(() => undefined);
     return { breakdownId: b.breakdownId, fromPlate: v.plate, toPlate: to.plate, moved: handover.loads };
+  }
+
+  /**
+   * BAGS AND LOOSE PARCELS GO ON with the driver who took them over. Each bag is the other's now — on their vehicle, or
+   * theirs to collect — and every parcel in it, and every parcel a shop handed the first driver, changes hands in its
+   * chain of custody, saying how. THE ROAD IS PAID ONCE (the user, 2026-10-25: "Split by the road"): for a bag on the
+   * vehicle with a road to pay, the stretch the first driver drove — the trip less what is left from where it was taken
+   * over — is paid them now, and kept on the bag; whoever arrives with it is paid the rest. Where nobody's phone said
+   * where, that stretch is not measured and not paid, and the bag says so.
+   */
+  private moveRoadGoods(b: VehicleBreakdown, v: Vehicle, takerDid: string, loads: Load[], location: { lat: number; lng: number } | undefined, now: number): void {
+    const goods = loads.filter((l) => ROAD_GOODS.has(l.kind));
+    if (!goods.length || !this.totes || !this.parcels) return;
+    const giverDid = b.driverDid!;
+    const giver = b.driverName ?? 'the driver';
+    const badgeId = this.drivers.get(takerDid).badgeId;
+    const at = new Date(now).toISOString();
+    const codes = new Set(goods.filter((l) => l.kind === 'bag').map((l) => l.id));
+    for (const tote of this.dispatch.bagsWith(giverDid).filter((t) => codes.has(t.code))) {
+      const owed = tote.status === 'in_transit' && tote.haul && tote.haul.road > 0 ? roadPartAt(tote.haul, location ? this.dispatch.bagRoadLeftKm(tote, location) : undefined) : undefined;
+      const part = owed ? { driverDid: giverDid, amount: owed.amount, leftKm: owed.leftKm, at, breakdownId: b.breakdownId, basis: owed.basis } : undefined;
+      this.totes.takeOver(tote.code, takerDid, badgeId, part);
+      if (part && part.amount > 0) this.gate?.driverPayout(giverDid, part.amount);
+      this.parcels.takenOverOnTheRoad(tote.parcels, { driverDid: takerDid }, `taken over in ${tote.code} from ${giver}, after ${v.plate} broke down`);
+    }
+    const loose = goods.filter((l) => l.kind === 'parcel').map((l) => l.id);
+    if (loose.length) this.parcels.takenOverOnTheRoad(loose, { driverDid: takerDid, ...(badgeId ? { badgeId } : {}) }, `taken over from ${giver}, after ${v.plate} broke down`);
   }
 
   /**
@@ -436,7 +554,17 @@ export class VehicleBreakdownService {
       weightKg: b.weightKg,
       ...(b.shipperDid ? { shipperDid: b.shipperDid } : {}),
     }));
-    return [...freight, ...bookings] as Load[];
+    // The driver's bags — on the vehicle, or claimed and still to collect — and the parcels a shop handed them loose.
+    // Nobody is told about these here: each parcel's receiver hears by its own running-late rule.
+    const bags = this.dispatch.bagsWith(driverDid).map((t) => ({
+      kind: 'bag' as const,
+      id: t.code,
+      label: t.code,
+      state: t.status === 'claimed' ? ('to_collect' as const) : ('aboard' as const),
+      weightKg: t.weightKg,
+    }));
+    const loose = (this.parcels?.onBusWith(this.drivers.get(driverDid).badgeId) ?? []).map((p) => ({ kind: 'parcel' as const, id: p.parcelId, label: p.parcelId, state: 'aboard' as const, weightKg: p.weightKg }));
+    return [...freight, ...bookings, ...bags, ...loose] as Load[];
   }
 
   /** Today's planned orders that were waiting for this vehicle, held in the plan's own words: their codes. */
@@ -481,7 +609,7 @@ export class VehicleBreakdownService {
 /** The parties to tell, each load once: only those somebody here can be told about. */
 function tellsOf(loads: Load[]): BreakdownTell[] {
   return loads
-    .filter((l) => l.shipperDid)
+    .filter((l): l is Load & { kind: BreakdownTell['kind'] } => Boolean(l.shipperDid) && (l.kind === 'freight' || l.kind === 'booking'))
     .map((l) => ({
       shipperDid: l.shipperDid!,
       kind: l.kind,

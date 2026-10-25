@@ -40981,6 +40981,40 @@
           "destZone"
         ]
       },
+      "ToteHaulPart": {
+        "type": "object",
+        "properties": {
+          "driverDid": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "description": "What it was paid: the road × the share of the trip this driver drove."
+          },
+          "leftKm": {
+            "type": "number",
+            "description": "How far the bag still had to go from where it was taken over — where the next stretch is measured from."
+          },
+          "at": {
+            "type": "string"
+          },
+          "breakdownId": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "object",
+            "description": "'measured' — where the takeover happened was known, so the stretch driven is. 'unmeasured' — nobody's phone said\nwhere: nothing is paid for the stretch, and that is kept here to be seen rather than rounded away."
+          }
+        },
+        "required": [
+          "driverDid",
+          "amount",
+          "leftKm",
+          "at",
+          "breakdownId",
+          "basis"
+        ]
+      },
       "ToteHaul": {
         "type": "object",
         "properties": {
@@ -41001,6 +41035,13 @@
           },
           "lockedAt": {
             "type": "string"
+          },
+          "parts": {
+            "description": "The road already paid to somebody who carried the bag part of the way and then could not — a vehicle broken down\non the road, the bag taken over by another driver (the user, 2026-10-25: \"Split by the road\"). The road is paid\nonce: each of these was paid at the takeover, and whoever arrives with the bag is paid what is left.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToteHaulPart"
+            }
           }
         },
         "required": [
@@ -59518,7 +59559,9 @@
             "type": "string",
             "enum": [
               "freight",
-              "booking"
+              "booking",
+              "bag",
+              "parcel"
             ]
           },
           "state": {
@@ -59533,7 +59576,7 @@
           },
           "id": {
             "type": "string",
-            "description": "The order's id, or the run booking's."
+            "description": "The order's id, the run booking's, the bag's code, or the parcel's id."
           },
           "label": {
             "type": "string",
@@ -59674,6 +59717,10 @@
               "open",
               "resolved"
             ]
+          },
+          "couriersTold": {
+            "type": "number",
+            "description": "A courier's own vehicle with bags or parcels aboard: how many couriers on a shift near it were told, to come and take them on."
           },
           "outcome": {
             "type": "string",
@@ -60019,7 +60066,9 @@
             "type": "string",
             "enum": [
               "freight",
-              "booking"
+              "booking",
+              "bag",
+              "parcel"
             ]
           },
           "state": {
@@ -60052,6 +60101,10 @@
           },
           "location": {
             "$ref": "#/components/schemas/GeoPoint"
+          },
+          "km": {
+            "type": "number",
+            "description": "A courier's, seen by another courier: how far from where their phone last said they were, in a straight line."
           },
           "loads": {
             "type": "array",

@@ -22,12 +22,21 @@ export const CAUSE_WORD: Record<Cause, MessageKey> = {
 };
 const CAUSES = Object.keys(CAUSE_WORD) as Cause[];
 
+/** How many couriers near a broken-down courier were told, in words: one, several, or nobody (and what that means). */
+export function couriersToldLine(n: number, t: (key: MessageKey, vars?: Record<string, string | number>) => string): string {
+  if (n === 0) return t('driver.brk.couriersNone');
+  return n === 1 ? t('driver.brk.couriersToldOne') : t('driver.brk.couriersToldMany', { n });
+}
+
 /**
  * THE VEHICLE HAS BROKEN DOWN, from the driver out in it: what happened, a photo if they can, and where they are — the
  * phone is asked as the sheet opens, and if it cannot say, the office gets the last known position. What comes back
  * says the office knows, and whether the shippers of what is aboard were told. The shift is the driver's to end.
+ *
+ * A COURIER has no office: theirs says it is reported, and — with bags or parcels aboard — how many couriers near them
+ * were told, so that one can come and take them on (the user, 2026-10-25: "Split by the road").
  */
-export function BreakdownSheet({ open, actions, onClose }: { open: boolean; actions: DriverActions; onClose: () => void }) {
+export function BreakdownSheet({ open, actions, onClose, courier = false }: { open: boolean; actions: DriverActions; onClose: () => void; courier?: boolean }) {
   const t = useT();
   const [cause, setCause] = useState<Cause | null>(null);
   const [note, setNote] = useState('');
@@ -88,9 +97,10 @@ export function BreakdownSheet({ open, actions, onClose }: { open: boolean; acti
         </>
       ) : done ? (
         <>
-          <Note tone="warn" icon="warning" title={t('driver.brk.toldTitle')} detail={t('driver.brk.toldDetail')} />
+          <Note tone="warn" icon="warning" title={t(courier ? 'driver.brk.toldTitleCourier' : 'driver.brk.toldTitle')} detail={t(courier ? 'driver.brk.toldDetailCourier' : 'driver.brk.toldDetail')} />
           {told ? <p class="t-body">{t('driver.brk.shippersTold', { n: told })}</p> : null}
-          {done.aboard.length ? <p class="hint">{t('driver.brk.keepShift')}</p> : null}
+          {done.couriersTold !== undefined ? <p class="t-body">{couriersToldLine(done.couriersTold, t)}</p> : null}
+          {done.aboard.length ? <p class="hint">{t(courier ? 'driver.brk.keepShiftCourier' : 'driver.brk.keepShift')}</p> : null}
           <Button chevron={false} onClick={close}>
             {t('driver.close')}
           </Button>
@@ -119,7 +129,7 @@ export function BreakdownSheet({ open, actions, onClose }: { open: boolean; acti
           <p class="hint">{t(finding === 'found' ? 'driver.brk.whereFound' : finding === 'none' ? 'driver.brk.whereNone' : 'driver.brk.whereAsking')}</p>
           <Note tone="danger" icon="warning" title={t('driver.brk.safety')} />
           <Button chevron={false} busy={busy} disabled={busy || !cause || !note.trim()} onClick={() => void send()}>
-            {t('driver.brk.send')}
+            {t(courier ? 'driver.brk.sendCourier' : 'driver.brk.send')}
           </Button>
           <Button variant="link" onClick={close}>
             {t('driver.close')}
@@ -134,8 +144,11 @@ export function BreakdownSheet({ open, actions, onClose }: { open: boolean; acti
  * TAKE THE LOADS OVER from a broken-down vehicle of the driver's own fleet — shown only while there is one. The driver
  * picks it, sees what it carries, and types the six digits the other driver reads out from "Show my badge" (or scans
  * that badge): the two of them, at the vehicle together. Every load moves, or none does.
+ *
+ * A COURIER sees another courier's, broken down near them, with bags or parcels to take on — how far, nearest first — and
+ * is told that the road left on each bag is theirs when they hand it in (the user, 2026-10-25: "Split by the road").
  */
-export function TakeOverLink({ actions }: { actions: DriverActions }) {
+export function TakeOverLink({ actions, courier = false }: { actions: DriverActions; courier?: boolean }) {
   const t = useT();
   const [list, setList] = useState<TakeOverView[]>([]);
   const [open, setOpen] = useState(false);
@@ -153,12 +166,13 @@ export function TakeOverLink({ actions }: { actions: DriverActions }) {
   return (
     <>
       <Button variant="link" full={false} onClick={() => setOpen(true)}>
-        {t('driver.tko.open')}
+        {t(courier ? 'driver.tko.openCourier' : 'driver.tko.open')}
       </Button>
       <TakeOverSheet
         open={open}
         list={list}
         actions={actions}
+        courier={courier}
         onClose={() => {
           setOpen(false);
           void actions.loadTakeOvers().then(setList);
@@ -168,7 +182,7 @@ export function TakeOverLink({ actions }: { actions: DriverActions }) {
   );
 }
 
-function TakeOverSheet({ open, list, actions, onClose }: { open: boolean; list: TakeOverView[]; actions: DriverActions; onClose: () => void }) {
+function TakeOverSheet({ open, list, actions, onClose, courier }: { open: boolean; list: TakeOverView[]; actions: DriverActions; onClose: () => void; courier: boolean }) {
   const t = useT();
   const [pick, setPick] = useState<string | null>(null);
   const [pass, setPass] = useState('');
@@ -198,10 +212,10 @@ function TakeOverSheet({ open, list, actions, onClose }: { open: boolean; list: 
   };
 
   return (
-    <Sheet open={open} onClose={close} title={t('driver.tko.title')}>
+    <Sheet open={open} onClose={close} title={t(courier ? 'driver.tko.titleCourier' : 'driver.tko.title')}>
       {done ? (
         <>
-          <Note tone="ok" icon="check" title={t('driver.tko.doneTitle', { plate: done.toPlate })} detail={t('driver.tko.doneDetail', { list: done.moved.join(', '), from: done.fromPlate })} />
+          <Note tone="ok" icon="check" title={t('driver.tko.doneTitle', { plate: done.toPlate })} detail={t(courier ? 'driver.tko.doneDetailCourier' : 'driver.tko.doneDetail', { list: done.moved.join(', '), from: done.fromPlate })} />
           <Button chevron={false} onClick={close}>
             {t('driver.close')}
           </Button>
@@ -220,7 +234,11 @@ function TakeOverSheet({ open, list, actions, onClose }: { open: boolean; list: 
           ) : null}
           {chosen ? (
             <>
-              <p class="t-body">{t('driver.tko.what', { plate: chosen.plate })}</p>
+              <p class="t-body">
+                {chosen.km !== undefined
+                  ? t('driver.tko.whatNear', { who: chosen.driverName ?? chosen.plate, km: chosen.km.toLocaleString() })
+                  : t('driver.tko.what', { plate: chosen.plate })}
+              </p>
               <ul class="rows">
                 {chosen.loads.map((l) => (
                   <li key={l.label} class="row row--static">
@@ -233,6 +251,7 @@ function TakeOverSheet({ open, list, actions, onClose }: { open: boolean; list: 
               </ul>
               <ScanField id="tko-pass" expect="badge" label={t('driver.tko.passLabel', { who: chosen.driverName ?? '' })} value={pass} onValue={setPass} placeholder="123456" />
               <p class="hint">{t('driver.tko.passHint')}</p>
+              {chosen.loads.some((l) => l.kind === 'bag') ? <p class="hint">{t('driver.tko.payRoad')}</p> : null}
               <Button chevron={false} busy={busy} disabled={busy || pass.replace(/\s/g, '').length < 6} onClick={() => void send()}>
                 {t('driver.tko.send', { kg: chosen.totalKg.toLocaleString() })}
               </Button>

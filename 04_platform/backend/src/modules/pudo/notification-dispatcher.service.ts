@@ -1625,6 +1625,20 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         data: { vehicleId: b.vehicleId, breakdownId: b.breakdownId, ...(b.location ? { lat: b.location.lat, lng: b.location.lng } : {}) },
       });
     }
+    // A COURIER broke down with bags or parcels aboard: the couriers on a shift near it hear it, so one can go and take
+    // them on (the user, 2026-10-25: "Split by the road"). Said by what there is and how far — never who the parcels are for.
+    if (p.toTakeOver && b.location) {
+      const what = [p.toTakeOver.bags ? (p.toTakeOver.bags === 1 ? 'one bag' : `${p.toTakeOver.bags} bags`) : '', p.toTakeOver.parcels ? (p.toTakeOver.parcels === 1 ? 'one parcel' : `${p.toTakeOver.parcels} parcels`) : ''].filter(Boolean).join(' and ');
+      for (const n of p.nearby ?? []) {
+        await this.tell(n.driverDid, {
+          kind: 'takeover_nearby',
+          title: `A courier broke down ${n.km} km from you`,
+          body: `${b.driverName ?? 'They'} ${b.driverName ? 'has' : 'have'} ${what} to take on. Go to them, and take them over with the six digits on their phone: the road that is left is yours, paid when you hand each bag in.`,
+          tag: `takeover:${b.breakdownId}`,
+          data: { breakdownId: b.breakdownId, lat: b.location.lat, lng: b.location.lng },
+        });
+      }
+    }
     for (const s of p.tell) {
       await this.tell(s.shipperDid, {
         kind: 'freight_problem',
@@ -1681,7 +1695,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onLoadsHandedOver(p: VehicleLoadsHandedOver): Promise<void> {
     const h = p.handover;
     const what = h.loads.join(', ');
-    if (h.proof === 'pass') {
+    if (!p.fleetDid) {
+      // A COURIER's bags and parcels, gone on with another courier: no office to tell. The courier they were with keeps
+      // a line of it in their bell — what went, with whom, and that the road they drove is theirs.
+      await this.tell(p.fromDriverDid, {
+        kind: 'vehicle_breakdown',
+        title: `Your bags and parcels went on with ${h.toDriverName}`,
+        body: `${what}, taken over at ${p.fromPlate}${h.location ? ` (${h.location.lat.toFixed(5)}, ${h.location.lng.toFixed(5)})` : ''}. The road you drove with each bag is paid to you now; ${h.toDriverName} is paid the rest when they hand it in.`,
+        tag: `breakdown:${p.breakdownId}:handover`,
+        data: { breakdownId: p.breakdownId },
+      });
+    } else if (h.proof === 'pass') {
       await this.tell(p.fleetDid, {
         kind: 'vehicle_breakdown',
         title: `${p.fromPlate}'s loads are on ${h.toPlate} now`,

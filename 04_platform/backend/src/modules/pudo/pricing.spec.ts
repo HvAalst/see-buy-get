@@ -1,4 +1,4 @@
-import { clampMultiplier, computeFreightPrice, computeToteHaul, distanceSplit, earningsPerKm, freightMultiplier, shipperCharge, type PriceBreakdown } from './pricing';
+import { clampMultiplier, computeFreightPrice, computeToteHaul, distanceSplit, earningsPerKm, freightMultiplier, roadLeftToPay, roadPartAt, shipperCharge, type PriceBreakdown } from './pricing';
 import { BAG_CAPACITY_UNITS, SIZE_TRANSPORT_FACTOR, SIZE_UNITS, bagShare, withPlatformFee } from './pudo.config';
 import { ParcelService } from './parcel.service';
 
@@ -270,5 +270,26 @@ describe('freight pricing (S34)', () => {
       expect(shipperCharge(100)).toBe(withPlatformFee(100));
       expect(shipperCharge(100)).toBeGreaterThan(100);
     });
+  });
+});
+
+describe('a bag’s road, split at a takeover (the user, 2026-10-25: "Split by the road")', () => {
+  const haul = { tripKm: 40, road: 200 };
+  it('pays the first driver the stretch they drove: the trip less what is left from where it was taken over', () => {
+    expect(roadPartAt(haul, 30)).toEqual({ amount: 50, leftKm: 30, basis: 'measured' });
+    expect(roadPartAt(haul, 0)).toEqual({ amount: 200, leftKm: 0, basis: 'measured' });
+  });
+  it('measures a second takeover from where the first left it, and never pays the road twice', () => {
+    const parts = [{ amount: 50, leftKm: 30 }];
+    expect(roadPartAt({ ...haul, parts }, 10)).toEqual({ amount: 100, leftKm: 10, basis: 'measured' });
+    expect(roadLeftToPay({ ...haul, parts: [...parts, { amount: 100, leftKm: 10 }] })).toBe(50);
+    // Whatever the arithmetic says, never more than is left of the road.
+    expect(roadPartAt({ tripKm: 40, road: 200, parts: [{ amount: 190, leftKm: 30 }] }, 0).amount).toBe(10);
+  });
+  it('pays nothing for a stretch that went no nearer, or that nobody could place — and says which', () => {
+    expect(roadPartAt(haul, 55)).toEqual({ amount: 0, leftKm: 40, basis: 'measured' });
+    expect(roadPartAt(haul, undefined)).toEqual({ amount: 0, leftKm: 40, basis: 'unmeasured' });
+    expect(roadPartAt({ tripKm: 0, road: 0 }, 5)).toEqual({ amount: 0, leftKm: 0, basis: 'unmeasured' });
+    expect(roadLeftToPay(haul)).toBe(200);
   });
 });

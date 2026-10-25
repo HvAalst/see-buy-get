@@ -27,6 +27,7 @@ import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
 import { FINDING_WORDS } from './tamper.types';
+import { roadLeftToPay } from './pricing';
 
 /**
  * MdpService — Main Distribution Point hubs + the tote-bag sort flow (Compendium Ch 17).
@@ -704,7 +705,9 @@ export class MdpService {
    */
   private payHaul(tote: Tote, driverDid?: string): void {
     if (!driverDid || !tote.haul || !(tote.haul.road > 0)) return;
-    this.gate.driverPayout(driverDid, tote.haul.road);
+    // The road is paid once: a stretch already paid to a driver it was taken over from on the way is not paid again.
+    const left = roadLeftToPay(tote.haul);
+    if (left > 0) this.gate.driverPayout(driverDid, left);
   }
 
   /**

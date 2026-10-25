@@ -2890,6 +2890,20 @@ export class DispatchService {
     return this.totes.list().filter((t) => (t.claimedBy === driverDid && (t.status === 'claimed' || t.status === 'in_transit')) || (t.carriedBy === driverDid && t.status === 'in_transit'));
   }
 
+  /** The bags a driver holds — claimed for them, or on their vehicle — for a breakdown to say what is aboard and move it. */
+  bagsWith(driverDid: string): Tote[] {
+    return this.bagsHeldBy(driverDid);
+  }
+
+  /**
+   * How far a bag still has to go from a point on the road to where it is bound, by the same road measure its haul was
+   * priced on — what a takeover splits its road by. Undefined where its destination cannot be placed.
+   */
+  bagRoadLeftKm(tote: Tote, at: GeoPoint): number | undefined {
+    const to = this.destinationPlace(tote);
+    return to ? this.router.roadKm(at, to.loc) : undefined;
+  }
+
   /**
    * Would this driver take a load HERE, given what they said about their day?
    *

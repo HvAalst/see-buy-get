@@ -973,6 +973,23 @@ export class ParcelService implements OnApplicationBootstrap {
     return [...this.parcels.values()].filter((p) => p.status === 'On_Bus' && p.driverBadgeId === badgeId && !p.toteId);
   }
 
+  /**
+   * TAKEN OVER ON THE ROAD (VehicleBreakdownService): the parcels a shop handed a driver, and those in the bags they
+   * carried, go on with the driver who took them over at the broken-down vehicle. The chain of hands says so — a new
+   * holder from now, and how — so a damage claim later knows who held each one when; a loose parcel moves to the new
+   * driver's badge, where their counter will find it.
+   */
+  takenOverOnTheRoad(parcelIds: readonly string[], to: { driverDid: string; badgeId?: string }, note: string): void {
+    const step = stepNow();
+    for (const parcelId of parcelIds) {
+      const parcel = this.parcels.get(parcelId);
+      if (!parcel) continue;
+      this.handTo(parcel, 'driver', to.driverDid, note, step);
+      if (parcel.status === 'On_Bus' && !parcel.toteId && to.badgeId) parcel.driverBadgeId = to.badgeId;
+      this.parcels.set(parcelId, parcel);
+    }
+  }
+
   /** DT — mint the shipment's stable GLOS identity (the digital twin's DID) at parcel creation. Anchored +
    *  resolvable; the reusable sticker parcelId is the human handle, this is the shipment's global id. */
   private mintShipmentDid(parcelId: string, direction: ParcelDirection): string {

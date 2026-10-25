@@ -179,6 +179,11 @@ export const NOTIFICATION_KINDS = [
    */
   'vehicle_breakdown',
   /**
+   * A courier broke down with bags or parcels aboard: to the couriers on a shift near it, to go and take them on — by
+   * what there is and how far, never who it is for (the user, 2026-10-25: "Split by the road").
+   */
+  'takeover_nearby',
+  /**
    * Round 16 — a vehicle on a shift standing still longer than its fleet allows, away from anywhere it had reason to stop:
    * to its fleet's office, to call the driver. Never to a shipper: where a fleet's vehicles are is the fleet's.
    */

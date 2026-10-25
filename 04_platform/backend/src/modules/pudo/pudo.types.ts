@@ -561,6 +561,28 @@ export class ToteHaul {
    */
   basis: 'measured' | 'unresolved';
   lockedAt: string;
+  /**
+   * The road already paid to somebody who carried the bag part of the way and then could not — a vehicle broken down
+   * on the road, the bag taken over by another driver (the user, 2026-10-25: "Split by the road"). The road is paid
+   * once: each of these was paid at the takeover, and whoever arrives with the bag is paid what is left.
+   */
+  parts?: ToteHaulPart[];
+}
+
+/** One stretch of a bag's road, paid to the driver who drove it before the bag was taken over from them. */
+export class ToteHaulPart {
+  driverDid: string;
+  /** What it was paid: the road × the share of the trip this driver drove. */
+  amount: number;
+  /** How far the bag still had to go from where it was taken over — where the next stretch is measured from. */
+  leftKm: number;
+  at: string;
+  breakdownId: string;
+  /**
+   * 'measured' — where the takeover happened was known, so the stretch driven is. 'unmeasured' — nobody's phone said
+   * where: nothing is paid for the stretch, and that is kept here to be seen rather than rounded away.
+   */
+  basis: 'measured' | 'unmeasured';
 }
 
 export type ConsignmentStatus = 'open' | 'posted';

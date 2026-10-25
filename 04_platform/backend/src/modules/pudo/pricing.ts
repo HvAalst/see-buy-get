@@ -128,6 +128,33 @@ export function computeToteHaul(input: { ratePerKm: number; tripKm: number; unit
 }
 
 /**
+ * A BAG'S ROAD, SPLIT AT A TAKEOVER (the user, 2026-10-25: "Split by the road"). A driver who carried a bag part of the
+ * way and broke down is paid for the stretch they drove; whoever takes it on is paid the rest when it arrives. The road
+ * is paid once, so the parts never add up to more than it.
+ *
+ * The stretch driven is measured from what was LEFT: the trip's length where the bag was taken on (the whole trip at
+ * the start, or what was left at the takeover before), less what is left from where it is taken over now. Nothing for a
+ * stretch that went no nearer — a driver who went the wrong way drove nothing of this road. `leftKm` unknown (nobody's
+ * phone said where) pays nothing for the stretch, and says so.
+ */
+export function roadPartAt(haul: { tripKm: number; road: number; parts?: Array<{ amount: number; leftKm: number }> }, leftKm: number | undefined): { amount: number; leftKm: number; basis: 'measured' | 'unmeasured' } {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const parts = haul.parts ?? [];
+  const fromKm = parts.length ? parts[parts.length - 1].leftKm : haul.tripKm;
+  if (leftKm === undefined || !Number.isFinite(leftKm) || !(haul.tripKm > 0)) return { amount: 0, leftKm: fromKm, basis: 'unmeasured' };
+  const left = Math.max(0, Math.min(fromKm, leftKm));
+  const paid = parts.reduce((n, p) => n + p.amount, 0);
+  const amount = round2(Math.max(0, Math.min(haul.road - paid, (haul.road * (fromKm - left)) / haul.tripKm)));
+  return { amount, leftKm: round2(left), basis: 'measured' };
+}
+
+/** What a bag's road still owes whoever arrives with it: the road less every part already paid on the way. */
+export function roadLeftToPay(haul: { road: number; parts?: Array<{ amount: number }> }): number {
+  const paid = (haul.parts ?? []).reduce((n, p) => n + p.amount, 0);
+  return Math.max(0, Math.round((haul.road - paid) * 100) / 100);
+}
+
+/**
  * What the SHIPPER pays = the driver's earning + the platform's take. The driver receives `driverTotal`.
  *
  * `pct` is the SELLING SISTER's rate for the dedicated lane — the same three-layer stack the parcel side

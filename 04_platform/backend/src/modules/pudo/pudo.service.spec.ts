@@ -115,12 +115,15 @@ import { FundingPayerRegistrar } from './funding-payers';
 import { SandboxFundingRail } from '../../foundation/funding/sandbox-funding-rail.adapter';
 import { FUNDING_RAIL } from '../../foundation/funding/funding.types';
 import { GlosEvent } from '../../foundation/events/glos-events';
+import { TAKEOVER_NEAR_KM, VehicleBreakdownService, type VehicleBrokeDown } from './vehicle-breakdown.service';
+import type { GeoPoint } from './pudo.types';
 import { contentPhotos, evidencePhotos } from '../../../test/content-photo';
 
 describe('PUDO Light', () => {
   let agents: AgentService;
   let gate: WalletGateService;
   let corridors: CorridorService;
+  let departures: DepartureService;
   let parcels: ParcelService;
   let media: MediaService;
   let monitor: MonitorService;
@@ -239,6 +242,7 @@ describe('PUDO Light', () => {
     controller = moduleRef.get(SbgController);
     identity = moduleRef.get(IdentityController);
     managers = moduleRef.get(FleetManagerService);
+    departures = moduleRef.get(DepartureService);
     accounts = moduleRef.get(AccountService);
     otp = moduleRef.get(OtpService);
     persons = moduleRef.get(PersonService);
@@ -4262,6 +4266,214 @@ describe('PUDO Light', () => {
       expect(totes.requireByCode(bag.code).haul).toBeDefined();
       totes.unclaim(bag.code);
       expect(totes.requireByCode(bag.code).haul).toBeUndefined();
+    });
+
+    /*
+     * A COURIER'S BIKE BROKEN DOWN WITH THE BAG ABOARD (the user, 2026-10-25: "Split by the road"). The couriers on a
+     * shift near it are told; one comes, and with the six digits on the first courier's phone takes the bag — and any
+     * parcel a shop handed them — on. The road is paid once: the stretch the first drove, at the takeover; the rest to
+     * whoever hands the bag in.
+     */
+    describe('a courier’s bike broken down with a bag aboard', () => {
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const payouts = (did: string) => gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === did).map((e) => e.amount);
+      const along = (a: GeoPoint, b: GeoPoint, f: number): GeoPoint => ({ lat: a.lat + (b.lat - a.lat) * f, lng: a.lng + (b.lng - a.lng) * f });
+      const breakdownsOf = () => new VehicleBreakdownService(vehicles, managers, fleet, drivers, dispatch, departures, media, events, totes, parcels, gate);
+      function aCourier(tag: string, at?: GeoPoint, toteCapacity = 4) {
+        const c = drivers.register({ displayName: `Rescuer ${tag}`, fullName: `R ${tag}`, nationalId: `DRV-RESC-${tag}`, mobile: `+2549333${tag}`, licenceClasses: ['bike'] });
+        const bike = vehicles.register({ plate: `RS-${tag}`, vehicleClass: 'bike', ownerName: 'R', pricePerKm: 0.1, toteCapacity });
+        fleet.couple(c.did, bike.vehicleId);
+        if (at) fleet.reportLocation(c.did, at);
+        return c;
+      }
+      /** A bag claimed and loaded by a courier, on its way from `origin` to `dest`. */
+      function onTheRoad(tag: string) {
+        const dest = onboardAgent(`Rescue Dest ${tag}`, 'SouthTown', 50);
+        agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+        const { origin, d, bag } = bagRun(tag, { destinationNodeId: dest.did, parcels: 2 });
+        const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+        dispatch.claim(offer.offerId);
+        closeForTest(bag.code);
+        mdps.loadBag(bag.code, drivers.get(d.did).badgeId!);
+        takenForTest(bag.code);
+        const haul = totes.requireByCode(bag.code).haul!;
+        return { origin, dest: agents.get(dest.did), d, bag, road: haul.road, bikeId: fleet.activeForDriver(d.did)!.vehicleId };
+      }
+
+      it('tells the couriers near it, one takes the bag on with the six digits, and each is paid the road they drove', () => {
+        const { origin, dest, d, bag, road, bikeId } = onTheRoad('BK1');
+        const where = along(origin.location, dest.location, 0.5);
+        fleet.reportLocation(d.did, where);
+        const near = aCourier('BK1N', along(where, dest.location, 0.1));
+        const far = aCourier('BK1F', { lat: where.lat + 1, lng: where.lng });
+        // A fleet's truck on a shift right beside it: its office arranges its own work, and a courier's bags are a courier's.
+        const fleetCo = managers.register({ companyName: 'Nearby Fleet', contactPhone: '+254800777003', ownerFullName: 'O O', ownerNationalId: 'MGR-RESC-3', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-R3', transportOperatorLicence: 'TOL-R3', taxId: 'TAX-R3' } });
+        managers.submitKyc(fleetCo.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+        managers.decideKyc(fleetCo.did, true);
+        managers.recordBond(fleetCo.did);
+        const beside = drivers.register({ displayName: 'Beside', fullName: 'B', nationalId: 'DRV-RESC-BES', mobile: '+254933390', licenceClasses: ['truck'], licenceNumber: 'L-RESC-BES', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: fleetCo.did });
+        drivers.submitKyc(beside.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+        drivers.decideKyc(beside.did, true);
+        const besideTruck = vehicles.register({ plate: 'RT-BES', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 5000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: fleetCo.did } as never);
+        fleet.couple(beside.did, besideTruck.vehicleId);
+        fleet.reportLocation(beside.did, where);
+        const told: VehicleBrokeDown[] = [];
+        events.subscribe<VehicleBrokeDown>(GlosEvent.Pudo.VehicleBrokeDown, (e) => {
+          told.push(e.payload);
+        });
+        const breakdowns = breakdownsOf();
+
+        const b = breakdowns.report(bikeId, { by: 'H BK1', byDid: d.did }, { cause: 'tyre', note: 'A puncture on the bypass', lat: where.lat, lng: where.lng });
+        // Told: the courier near, never the one across the country; what there is to take, never who it is for.
+        expect(b.couriersTold).toBe(1);
+        expect(told[0].nearby).toEqual([{ driverDid: near.did, km: expect.any(Number) }]);
+        expect(told[0].toTakeOver).toEqual({ bags: 1, parcels: 0 });
+        const [seen] = breakdowns.toTakeOver(near.did);
+        expect(seen).toMatchObject({ breakdownId: b.breakdownId, plate: 'HV-BK1', loads: [{ kind: 'bag', label: bag.code, state: 'aboard' }] });
+        expect(seen.km).toBeLessThan(TAKEOVER_NEAR_KM);
+        expect(breakdowns.toTakeOver(far.did)).toEqual([]);
+        expect(breakdowns.toTakeOver(beside.did)).toEqual([]);
+
+        // Their own code is not the other courier's.
+        expect(() => breakdowns.takeOverByPass(b.breakdownId, near.did, { pass: fleet.handoverPassFor(near.did)! })).toThrow(/That is not HBK1's code/);
+        const firstBefore = payouts(d.did).length;
+        const result = breakdowns.takeOverByPass(b.breakdownId, near.did, { pass: fleet.handoverPassFor(d.did)!, lat: where.lat, lng: where.lng });
+        expect(result.moved).toEqual([bag.code]);
+
+        const t = totes.requireByCode(bag.code);
+        expect(t.carriedBy).toBe(near.did);
+        const [part] = t.haul!.parts!;
+        expect(part).toMatchObject({ driverDid: d.did, basis: 'measured', breakdownId: b.breakdownId });
+        // Half the road: it broke down half way.
+        expect(part.amount).toBeCloseTo(road / 2, 1);
+        expect(payouts(d.did)).toHaveLength(firstBefore + 1);
+        expect(payouts(d.did)).toContain(part.amount);
+        // Every parcel in the bag is in the rescuer's hands now, and says how.
+        for (const pid of t.parcels) {
+          const custody = parcels.get(pid).custody!;
+          expect(custody[custody.length - 1]).toMatchObject({ holderKind: 'driver', holderId: near.did, note: `taken over in ${bag.code} from HBK1, after HV-BK1 broke down` });
+        }
+
+        // Handed in: the rescuer is paid what is left, and the road was paid once.
+        mdps.deliverBag(dest.did, bag.code, receivedAt(dest.did));
+        expect(payouts(near.did)).toEqual([round2(road - part.amount)]);
+        expect(round2(part.amount + payouts(near.did)[0])).toBe(road);
+        expect(breakdowns.toTakeOver(near.did)).toEqual([]);
+      });
+
+      it('a stretch nobody’s phone placed is not paid, and is kept as such: whoever hands the bag in is paid the whole road', () => {
+        const { dest, d, bag, road, bikeId } = onTheRoad('BK2');
+        const rescuer = aCourier('BK2R');
+        const breakdowns = breakdownsOf();
+        const b = breakdowns.report(bikeId, { by: 'H BK2', byDid: d.did }, { cause: 'engine', note: 'It will not start' });
+        // Nobody knows where it is: nobody near can be told.
+        expect(b.couriersTold).toBe(0);
+        const before = payouts(d.did);
+        breakdowns.takeOverByPass(b.breakdownId, rescuer.did, { pass: fleet.handoverPassFor(d.did)! });
+        expect(totes.requireByCode(bag.code).haul!.parts).toEqual([expect.objectContaining({ driverDid: d.did, amount: 0, basis: 'unmeasured' })]);
+        expect(payouts(d.did)).toEqual(before);
+        mdps.deliverBag(dest.did, bag.code, receivedAt(dest.did));
+        expect(payouts(rescuer.did)).toEqual([road]);
+      });
+
+      it('a parcel a shop handed the courier loose goes on too, on the rescuer’s badge', () => {
+        const { origin, d, bag, bikeId } = onTheRoad('BK3');
+        const corridor = corridors.addCorridor({ name: 'bk3', originZone: 'NorthTown', destZone: 'SouthTown' });
+        fleet.assignCorridor(d.did, corridor.corridorId);
+        parcels.accept({ agentDid: origin.did, parcelId: 'LOOSE-BK3', size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+        parcels.handover({ agentDid: origin.did, driverBadgeId: drivers.get(d.did).badgeId!, parcelIds: ['LOOSE-BK3'], acknowledgeShortShip: true, shortShipReason: 'one parcel loose' });
+        expect(parcels.get('LOOSE-BK3').status).toBe('On_Bus');
+        const where = { lat: -1.3, lng: 36.9 };
+        const rescuer = aCourier('BK3R', where);
+        const breakdowns = breakdownsOf();
+        const b = breakdowns.report(bikeId, { by: 'H BK3', byDid: d.did }, { cause: 'brakes', note: 'The front brake went', lat: where.lat, lng: where.lng });
+        expect(b.aboard.map((l) => `${l.kind}:${l.label}`).sort()).toEqual([`bag:${bag.code}`, 'parcel:LOOSE-BK3']);
+        breakdowns.takeOverByPass(b.breakdownId, rescuer.did, { pass: fleet.handoverPassFor(d.did)!, lat: where.lat, lng: where.lng });
+        const loose = parcels.get('LOOSE-BK3');
+        expect(loose.driverBadgeId).toBe(drivers.get(rescuer.did).badgeId);
+        expect(loose.custody![loose.custody!.length - 1]).toMatchObject({ holderKind: 'driver', holderId: rescuer.did });
+        expect(parcels.onBusWith(drivers.get(d.did).badgeId)).toEqual([]);
+      });
+
+      it('is refused, before anything moves, to a fleet’s driver and to a courier with no room for the bag', () => {
+        const { origin, dest, d, bag, bikeId } = onTheRoad('BK4');
+        const breakdowns = breakdownsOf();
+        const b = breakdowns.report(bikeId, { by: 'H BK4', byDid: d.did }, { cause: 'tyre', note: 'Flat' });
+        // A fleet's driver, out in a fleet's truck: a courier's bags go on with a courier.
+        const fleetCo = managers.register({ companyName: 'Rescue Fleet', contactPhone: '+254800777001', ownerFullName: 'O O', ownerNationalId: 'MGR-RESC-1', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-R1', transportOperatorLicence: 'TOL-R1', taxId: 'TAX-R1' } });
+        managers.submitKyc(fleetCo.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+        managers.decideKyc(fleetCo.did, true);
+        managers.recordBond(fleetCo.did);
+        const trucker = drivers.register({ displayName: 'Trucker', fullName: 'T', nationalId: 'DRV-RESC-T', mobile: '+254933300', licenceClasses: ['truck'], licenceNumber: 'L-RESC-T', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: fleetCo.did });
+        drivers.submitKyc(trucker.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+        drivers.decideKyc(trucker.did, true);
+        const truck = vehicles.register({ plate: 'RT-1', vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 5000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: fleetCo.did } as never);
+        fleet.couple(trucker.did, truck.vehicleId);
+        const pass = fleet.handoverPassFor(d.did)!;
+        expect(() => breakdowns.takeOverByPass(b.breakdownId, trucker.did, { pass })).toThrow("HV-BK4 is a courier's own: its bags and parcels go on with another courier, out in their own vehicle");
+        // A courier whose bike holds one bag, and holds one already.
+        const full = aCourier('BK4F', undefined, 1);
+        const extra = totes.register(origin.did);
+        totes.assign(extra.code, dest.did, 'Somewhere');
+        parcels.accept({ agentDid: origin.did, parcelId: 'EXTRA-BK4', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+        mdps.fillTote(extra.code, 'EXTRA-BK4');
+        dispatch.release(extra.code);
+        const [mine] = dispatch.suggest(full.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === extra.code);
+        dispatch.claim(mine.offerId);
+        expect(() => breakdowns.takeOverByPass(b.breakdownId, full.did, { pass })).toThrow('RS-BK4F has no room for another bag — there is one to take over');
+        // Nothing moved, nothing paid.
+        expect(totes.requireByCode(bag.code).carriedBy).toBe(d.did);
+        expect(totes.requireByCode(bag.code).haul!.parts).toBeUndefined();
+      });
+
+      it('a fleet truck’s bag goes on with it to another of the fleet’s trucks, and the road stays the fleet’s', () => {
+        const fleetCo = managers.register({ companyName: 'Bag Fleet', contactPhone: '+254800777002', ownerFullName: 'O O', ownerNationalId: 'MGR-RESC-2', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-R2', transportOperatorLicence: 'TOL-R2', taxId: 'TAX-R2' } });
+        managers.submitKyc(fleetCo.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+        managers.decideKyc(fleetCo.did, true);
+        managers.recordBond(fleetCo.did);
+        const aTrucker = (tag: string) => {
+          const t = drivers.register({ displayName: `Trucker ${tag}`, fullName: `T ${tag}`, nationalId: `DRV-RESC-${tag}`, mobile: `+25493340${tag}`, licenceClasses: ['truck'], licenceNumber: `L-RESC-${tag}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true, managerDid: fleetCo.did });
+          drivers.submitKyc(t.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+          drivers.decideKyc(t.did, true);
+          const truck = vehicles.register({ plate: `RT-${tag}`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 5000, ownerName: 'X', baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, toteCapacity: 6, managerDid: fleetCo.did } as never);
+          fleet.couple(t.did, truck.vehicleId);
+          return { t, truck };
+        };
+        const first = aTrucker('51');
+        const second = aTrucker('52');
+        const origin = onboardAgent('Fleet Bag Origin', 'NorthTown', 50);
+        const dest = onboardAgent('Fleet Bag Dest', 'SouthTown', 50);
+        agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+        const bag = totes.register(origin.did);
+        totes.assign(bag.code, dest.did, 'Fleet Bag Dest');
+        parcels.accept({ agentDid: origin.did, parcelId: 'FLEET-BAG-1', size: 'M', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) });
+        mdps.fillTote(bag.code, 'FLEET-BAG-1');
+        dispatch.release(bag.code);
+        const [offer] = dispatch.suggest(first.t.did, { from: origin.location, to: agents.get(dest.did).location }).filter((o) => o.ref === bag.code);
+        dispatch.claim(offer.offerId);
+        closeForTest(bag.code);
+        mdps.loadBag(bag.code, drivers.get(first.t.did).badgeId!);
+        takenForTest(bag.code);
+        const where = along(origin.location, agents.get(dest.did).location, 0.5);
+
+        const breakdowns = breakdownsOf();
+        // A courier riding past: a fleet's own breakdown is its office's to arrange, and no courier is told of it.
+        const passing = aCourier('51C', where);
+        const told: VehicleBrokeDown[] = [];
+        events.subscribe<VehicleBrokeDown>(GlosEvent.Pudo.VehicleBrokeDown, (e) => {
+          told.push(e.payload);
+        });
+        const b = breakdowns.report(first.truck.vehicleId, { by: 'Trucker 51', byDid: first.t.did }, { cause: 'engine', note: 'Overheated', lat: where.lat, lng: where.lng });
+        expect(b.couriersTold).toBeUndefined();
+        expect(told[0].nearby).toBeUndefined();
+        expect(told[0].toTakeOver).toBeUndefined();
+        expect(breakdowns.toTakeOver(passing.did)).toEqual([]);
+        expect(breakdowns.toTakeOver(second.t.did)).toEqual([expect.objectContaining({ loads: [expect.objectContaining({ kind: 'bag', label: bag.code })] })]);
+        breakdowns.takeOverByPass(b.breakdownId, second.t.did, { pass: fleet.handoverPassFor(first.t.did)!, lat: where.lat, lng: where.lng });
+        const t = totes.requireByCode(bag.code);
+        expect(t.carriedBy).toBe(second.t.did);
+        expect(t.haul!.parts).toEqual([expect.objectContaining({ driverDid: first.t.did, basis: 'measured' })]);
+      });
     });
   });
 

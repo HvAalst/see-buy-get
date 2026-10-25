@@ -52,6 +52,8 @@ const KIND_ICON: Record<string, IconName> = {
   vehicle_defect: 'warning',
   vehicle_service: 'warning',
   vehicle_breakdown: 'warning',
+  // A courier near you broke down with bags to take on.
+  takeover_nearby: 'truck',
   // A vehicle on a shift standing still longer than its fleet allows, away from any reason to.
   vehicle_standstill: 'clock',
   // A phone on a shift that has said nothing longer than its fleet allows.

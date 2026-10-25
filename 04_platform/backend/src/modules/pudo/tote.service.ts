@@ -3,7 +3,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { BAG_CAPACITY_UNITS, SIZE_UNITS, SIZE_WEIGHT_KG, TOTE_CODE_PREFIX } from './pudo.config';
-import { ParcelSize, Tote, ToteHaul } from './pudo.types';
+import { ParcelSize, Tote, ToteHaul, ToteHaulPart } from './pudo.types';
 import type { Step } from './observed-at';
 import type { UnitHold } from './tamper.types';
 
@@ -183,6 +183,24 @@ export class ToteService {
   lockHaul(code: string, haul: ToteHaul): Tote {
     const tote = this.requireByCode(code);
     tote.haul = haul;
+    return this.save(tote);
+  }
+
+  /**
+   * TAKEN OVER ON THE ROAD: a bag with a driver whose vehicle broke down goes on with another (VehicleBreakdownService).
+   * A bag on their vehicle is on the other's now; one they had claimed and not yet collected is the other's to collect.
+   * The stretch of road the first driver drove, already paid them, is kept on its haul — the rest is paid on arrival.
+   */
+  takeOver(code: string, toDriverDid: string, toBadgeId: string | undefined, part?: ToteHaulPart): Tote {
+    const tote = this.requireByCode(code);
+    if (tote.status !== 'claimed' && tote.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}: nobody is carrying it`);
+    if (tote.status === 'claimed') tote.claimedBy = toDriverDid;
+    else {
+      tote.carriedBy = toDriverDid;
+      if (tote.claimedBy) tote.claimedBy = toDriverDid;
+      if (toBadgeId) tote.locationId = `bus:${toBadgeId}`;
+    }
+    if (part && tote.haul) tote.haul = { ...tote.haul, parts: [...(tote.haul.parts ?? []), part] };
     return this.save(tote);
   }
 
