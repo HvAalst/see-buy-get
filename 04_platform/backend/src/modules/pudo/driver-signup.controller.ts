@@ -1,5 +1,6 @@
 import { Body, Controller, Optional, Post } from '@nestjs/common';
 import { AgreementService } from '../../foundation/documents/agreement.service';
+import { countryOfPhone } from '../../foundation/countries/catalogue';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -25,7 +26,8 @@ export class DriverSignupController {
   signUp(@Body() dto: DriverSignupDto, @Actor() actor: IntrospectionResult): { did: string; entityStatus?: string } {
     const personDid = actor?.personDid ?? actor?.did;
     if (!personDid) throw new GlosError('FORBIDDEN', 'Sign in first');
-    this.agreements?.assertFor(actor, dto.agreement, 'drivers/signups');
+    const country = (dto.profile as { driver?: { jurisdiction?: string } })?.driver?.jurisdiction ?? countryOfPhone(dto.phone);
+    this.agreements?.assertFor(actor, dto.agreement, 'drivers/signups', country);
     return this.accounts.signUpDriver(personDid, dto.phone, dto.profile);
   }
 }

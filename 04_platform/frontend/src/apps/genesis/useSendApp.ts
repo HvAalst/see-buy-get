@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type { AgreementNumbers } from '../../shared/documents/documents';
+import type { Agreement } from '../../shared/documents/documents';
 import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import { asksForEmail, isPinReset } from '../../shared/account/recovery';
@@ -99,7 +99,7 @@ export interface SendState {
   authCode: string; // the 6-digit OTP
   authPin: string; // the 4-digit PIN
   /** The versions of the terms of use, the data notice and the cookie statement agreed to on the sign-up (2026-10-25). */
-  authAgreement: AgreementNumbers | null;
+  authAgreement: Agreement | null;
   authBusy: boolean;
   authError: SbgError | null;
   authDevCode: string | null; // sandbox convenience: the OTP echoed back, shown as a hint
@@ -591,7 +591,7 @@ export function useSendApp() {
   const setAuthPhone = useCallback((v: string) => setState((s) => ({ ...s, authPhone: v, phoneKnown: false, authError: null })), []);
   const setAuthCode = useCallback((v: string) => setState((s) => ({ ...s, authCode: v, authError: null })), []);
   const setAuthPin = useCallback((v: string) => setState((s) => ({ ...s, authPin: v, authError: null })), []);
-  const setAuthAgreement = useCallback((v: AgreementNumbers | null) => setState((s) => ({ ...s, authAgreement: v, authError: null })), []);
+  const setAuthAgreement = useCallback((v: Agreement | null) => setState((s) => ({ ...s, authAgreement: v, authError: null })), []);
   const setAuthEmail = useCallback((v: string) => setState((s) => ({ ...s, authEmail: v, authError: null })), []);
   const setAuthEmailCode = useCallback((v: string) => setState((s) => ({ ...s, authEmailCode: v, authError: null })), []);
   // A navigation bumps the auth epoch so any in-flight request bails out instead of clobbering the step.

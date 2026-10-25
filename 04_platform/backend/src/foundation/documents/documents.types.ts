@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { IsBoolean, IsObject, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
 
 /**
  * WHAT SOMEBODY AGREES TO WHEN THEY SIGN UP, KEPT AS TEXT STAFF WRITE (the user, 2026-10-25: "every sign up needs an
@@ -12,6 +12,12 @@ import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength, Vali
  * two people every change of consequence here takes. Every version is kept, with who wrote it, who published it and
  * when, so what anybody agreed to can be read back word for word. A published version that asks something new of
  * people is marked so, and everybody who agreed to an earlier one is asked again before they go on.
+ *
+ * GENERAL, AND EACH COUNTRY'S OWN (the user, 2026-10-25: "every country needs it's specific adjustments, so there will
+ * be the general terms of use, global, and specific terms of use"). Every document has a global line, which everybody
+ * agrees to; a country may have a line of its own for any of them, which everybody there agrees to AS WELL — the
+ * adjustments its law asks for, on top of the general text, never instead of it. A country with none has the general
+ * text alone. A line is named by its KEY: `terms` for the general terms of use, `terms@KE` for Kenya's own.
  */
 
 /** The documents a sign-up agrees to: the terms of use, what happens to their data (use and keeping), and cookies. */
@@ -20,6 +26,16 @@ export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
 /** Where each is read on the public site. */
 export const DOCUMENT_PATHS: Record<DocumentKind, string> = { terms: '/terms/', privacy: '/privacy/', cookies: '/cookies/' };
+
+/** A line's key: `terms`, or `terms@KE` for Kenya's own. */
+export function documentKey(kind: DocumentKind, country?: string): string {
+  return country ? `${kind}@${country.toUpperCase()}` : kind;
+}
+
+/** Where a line is read on the public site: the general text at its page, a country's own with `?country=`. */
+export function documentPath(kind: DocumentKind, country?: string): string {
+  return country ? `${DOCUMENT_PATHS[kind]}?country=${country.toUpperCase()}` : DOCUMENT_PATHS[kind];
+}
 
 export const DOCUMENT_STATES = ['proposed', 'published', 'declined'] as const;
 export type DocumentState = (typeof DOCUMENT_STATES)[number];
@@ -32,7 +48,9 @@ export const MAX_CHANGE_NOTE = 1_000;
 export class DocumentVersion {
   @ApiProperty() versionId: string;
   @ApiProperty({ enum: DOCUMENT_KINDS }) kind: DocumentKind;
-  /** 1, 2, 3 … in the order they were published. A proposal has none until it is published. */
+  /** The country whose own line this is. Absent: the general text, everybody's. */
+  @ApiPropertyOptional() country?: string;
+  /** 1, 2, 3 … in the order they were published, per line. A proposal has none until it is published. */
   @ApiPropertyOptional() number?: number;
   @ApiProperty() title: string;
   /**
@@ -45,7 +63,7 @@ export class DocumentVersion {
   /** Everybody who agreed to an earlier version is asked to agree to this one before they go on. */
   @ApiProperty() askAgain: boolean;
   @ApiProperty({ enum: DOCUMENT_STATES }) status: DocumentState;
-  /** The published version this one was written from. A proposal over a version that is no longer current is refused. */
+  /** The published version this one was written from — none for a country's first. Refused if it is no longer current. */
   @ApiPropertyOptional() basedOn?: string;
   @ApiProperty() writtenBy: string;
   @ApiProperty() writtenAt: string;
@@ -62,9 +80,12 @@ export class DocumentVersion {
   @ApiPropertyOptional() agreed?: number;
 }
 
-/** A published version, as anybody may read it: the text, its number and date, and what changed. Never who wrote it. */
+/** A published version, as anybody reads it: the text, its number and date, and what changed. Never who wrote it. */
 export class PublishedDocument {
+  @ApiProperty() key: string;
   @ApiProperty({ enum: DOCUMENT_KINDS }) kind: DocumentKind;
+  /** The country whose own line it is; absent for the general text. */
+  @ApiPropertyOptional() country?: string;
   @ApiProperty() number: number;
   @ApiProperty() title: string;
   @ApiProperty() body: string;
@@ -86,7 +107,10 @@ export class PublishedVersionLine {
 
 /** One document in the set a sign-up agrees to: the version shown now, and the oldest one that still counts. */
 export class AgreementDocument {
+  /** `terms`, or `terms@KE` for a country's own: what the agreement names it by. */
+  @ApiProperty() key: string;
   @ApiProperty({ enum: DOCUMENT_KINDS }) kind: DocumentKind;
+  @ApiPropertyOptional() country?: string;
   @ApiProperty() title: string;
   /** The version to read and agree to. */
   @ApiProperty() number: number;
@@ -97,14 +121,22 @@ export class AgreementDocument {
 }
 
 export class AgreementSet {
+  /** The country whose own documents are in the set, if any. */
+  @ApiPropertyOptional() country?: string;
   @ApiProperty({ type: [AgreementDocument] }) documents: AgreementDocument[];
 }
 
-/** The versions somebody read and agreed to, by number — sent with a sign-up, or after signing in when asked again. */
+/**
+ * The versions somebody read and agreed to, by key (`terms`, `terms@KE` …) — sent with a sign-up, or after signing in
+ * when asked again. `country` is the one the form showed the documents for; each door checks the versions against the
+ * country the sign-up is really in.
+ */
 export class AgreementDto {
-  @IsInt() @Min(1) terms!: number;
-  @IsInt() @Min(1) privacy!: number;
-  @IsInt() @Min(1) cookies!: number;
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'integer' }, example: { terms: 1, privacy: 1, cookies: 1, 'terms@KE': 1 } })
+  @IsObject()
+  versions!: Record<string, number>;
+  @ApiPropertyOptional()
+  @IsOptional() @IsString() @MaxLength(2) country?: string;
 }
 
 /** For the sign-up bodies that carry it. */
@@ -113,6 +145,8 @@ export class WithAgreement {
 }
 
 export class ProposeDocumentDto {
+  /** A country's own line; absent for the general text. */
+  @IsOptional() @IsString() @MaxLength(2) country?: string;
   @IsString() @MinLength(1) @MaxLength(MAX_DOCUMENT_TITLE) title!: string;
   @IsString() @MinLength(1) @MaxLength(MAX_DOCUMENT_BODY) body!: string;
   @IsString() @MinLength(1) @MaxLength(MAX_CHANGE_NOTE) changeNote!: string;
@@ -126,11 +160,13 @@ export class DecideDocumentDto {
   @IsOptional() @IsString() @MaxLength(120) by?: string;
 }
 
-/** Where somebody stands with the set: whether they must agree before going on, and what they last agreed to. */
+/** Where somebody stands with the set: whether they must agree before going on, and what they agreed to. */
 export class MyAgreement {
   @ApiProperty() needed: boolean;
+  /** The country whose own documents were asked: the one this sign-in works in. */
+  @ApiPropertyOptional() country?: string;
   @ApiProperty({ type: [AgreementDocument] }) documents: AgreementDocument[];
-  /** What they agreed to last, and when. Absent: nothing yet. */
+  /** When they last agreed to anything, and the latest version of each line they agreed to. Absent: nothing yet. */
   @ApiPropertyOptional() agreedAt?: string;
-  @ApiPropertyOptional() agreed?: Record<string, number>;
+  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'integer' } }) agreed?: Record<string, number>;
 }

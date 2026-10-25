@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import type { NotificationsApi } from '../../lib/sbg';
+import { useT } from '../i18n';
 import { usePush } from '../usePush';
 import { whenLine, type InboxItem } from '../push';
 import { Button } from './Button';
@@ -92,7 +93,12 @@ const KIND_ICON: Record<string, IconName> = {
   order_late: 'clock',
   // Five wrong PINs locked the way they sign in — somebody may know their number.
   security: 'lock',
+  // A new version of the terms of use, the data notice or the cookie statement (2026-10-25): what changed, read there.
+  terms_updated: 'scale',
 };
+
+/** Notices whose link is a public page to read — the terms, the data notice, cookies — offered as a link once opened. */
+const READ_THERE = new Set(['terms_updated']);
 
 /**
  * The notification centre (N2b), living in the TopBar's `end` slot. The bell carries an unread badge;
@@ -216,8 +222,10 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
  * phone screen and the next one cut in half by the bottom of the sheet.
  */
 function NotificationRow({ item, onRead }: { item: InboxItem; onRead?: () => void }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const unread = !item.readAt;
+  const readThere = open && READ_THERE.has(item.kind) && item.link?.startsWith('/') ? item.link : null;
   return (
     <li>
       <button
@@ -239,6 +247,11 @@ function NotificationRow({ item, onRead }: { item: InboxItem; onRead?: () => voi
         </span>
         {unread ? <span class="nitem__dot" aria-label="unread" /> : null}
       </button>
+      {readThere ? (
+        <a class="nitem__more" href={readThere} target="_blank" rel="noopener noreferrer">
+          {t('notify.readIt')}
+        </a>
+      ) : null}
     </li>
   );
 }

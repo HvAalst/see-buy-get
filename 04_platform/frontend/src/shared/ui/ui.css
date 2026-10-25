@@ -751,6 +751,14 @@
   font-size: 14px;
   color: var(--tx3);
 }
+/* A notice about a page to read (a new version of the terms): the page, under the opened notice, in line with its text. */
+.nitem__more {
+  display: inline-block;
+  margin: 0 0 8px 42px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--blue);
+}
 .nitem__dot {
   flex: none;
   width: 10px;

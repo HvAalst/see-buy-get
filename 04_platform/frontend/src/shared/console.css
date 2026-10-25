@@ -1909,3 +1909,42 @@
   font-size: var(--c-fs-sm);
   color: var(--tx3);
 }
+
+/*
+ * TERMS AND NOTICES IN GROUPS — the general texts, then each country's own (2026-10-25). Named like the rail's groups:
+ * small and above the panels in them, so the 18px panel titles stay the distinction between documents.
+ */
+.docs__group {
+  margin-top: 28px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+.docs__grouplede {
+  margin-top: 4px;
+  max-width: 78ch;
+  color: var(--tx2);
+  font-size: var(--c-fs);
+}
+
+.docs__countryname {
+  margin-top: 18px;
+  font-size: var(--c-fs);
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.docs__pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px var(--c-gap);
+  margin: 8px 0 12px;
+}
+
+.docs__pick > * {
+  flex: 1 1 220px;
+  min-width: 0;
+}

@@ -53,7 +53,7 @@ export function createOperatorApi(sbg: SbgClient) {
      * written by one member of staff and published by a different one, or declined with a reason.
      */
     documents: () => sbg.request((c) => c.GET('/v1/sbg/documents', {})),
-    proposeDocument: (kind: string, body: { title: string; body: string; changeNote: string; askAgain: boolean; by?: string }) =>
+    proposeDocument: (kind: string, body: { title: string; body: string; changeNote: string; askAgain: boolean; country?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/documents/{kind}/versions', { params: { path: { kind } }, body })),
     publishDocument: (versionId: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/documents/versions/{versionId}/publish', { params: { path: { versionId } }, body: { ...(by ? { by } : {}) } })),

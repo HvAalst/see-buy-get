@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'preact/hooks';
 import { AgreementBlock } from '../../../shared/documents/Agreement';
-import type { AgreementNumbers } from '../../../shared/documents/documents';
+import type { Agreement } from '../../../shared/documents/documents';
+import { countryOfNumber } from '../../../shared/phone/dial';
 import { Button, Card, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, Note, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgConfig, SbgError } from '../../../lib/sbg';
@@ -63,7 +64,7 @@ export function StaffSignIn({
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
   // A first PIN is where a colleague's own account is made: they agree for themselves, never as the shop (2026-10-25).
-  const [agreement, setAgreement] = useState<AgreementNumbers | null>(null);
+  const [agreement, setAgreement] = useState<Agreement | null>(null);
   const [emailReset, setEmailReset] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
@@ -263,7 +264,7 @@ export function StaffSignIn({
             {step === 'pin' ? <PinGuessHint pin={pin} /> : null}
           </div>
         ) : null}
-        {step === 'pin' ? <AgreementBlock agreed={agreement} onChange={setAgreement} /> : null}
+        {step === 'pin' ? <AgreementBlock agreed={agreement} onChange={setAgreement} countries={[countryOfNumber(phone)]} /> : null}
         {step === 'code' ? (
           <div class="field">
             <span class="field__label">{t('agent.staff.code')}</span>

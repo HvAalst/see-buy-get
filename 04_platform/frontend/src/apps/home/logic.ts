@@ -7,7 +7,7 @@
  */
 
 import type { IconName } from '../../shared/ui/Icon';
-import type { AgreementNumbers } from '../../shared/documents/documents';
+import type { Agreement, AgreementHere } from '../../shared/documents/documents';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { THIN_MARKET_LOADS } from '../../shared/market';
 import { pinGuessable } from '../../shared/account/pin';
@@ -235,7 +235,12 @@ export interface JoinForm {
   /** Each a photograph's id, uploaded while signed in as the person: '' until taken. */
   papers: Record<FleetPaper, string>;
   /** The versions of the terms of use, the data notice and the cookie statement agreed to, as on screen (2026-10-25). */
-  agreement: AgreementNumbers | null;
+  agreement: Agreement | null;
+  /**
+   * A fleet's, made under the person signed in at the PIN: what the fleet's country asks that their agreement does not
+   * cover yet — a country with documents of its own they have not read. `covered` when nothing; null until checked.
+   */
+  agreementHere: AgreementHere;
 }
 
 /** A fleet's four papers, in the order they are asked for, each with the kind of picture it is kept as. */
@@ -292,6 +297,7 @@ export const EMPTY_JOIN: JoinForm = {
   taxId: '',
   papers: { businessRegCertRef: '', operatorLicenceRef: '', ownerIdRef: '', proofOfAddressRef: '' },
   agreement: null,
+  agreementHere: null,
 };
 
 /**
@@ -514,7 +520,8 @@ export function fleetSignupBody(f: JoinForm): Record<string, unknown> {
     ...(f.location ? { location: f.location } : {}),
     requirements: { businessRegistrationNo: f.businessRegistrationNo.trim(), transportOperatorLicence: f.operatorLicence.trim(), taxId: f.taxId.trim() },
     papers: f.papers,
-    ...(f.agreement ? { agreement: f.agreement } : {}),
+    // What the person agreed to at the PIN counts where it covers the fleet's country; where it did not, it was asked again.
+    ...(f.agreementHere && f.agreementHere !== 'covered' ? { agreement: f.agreementHere } : {}),
   };
 }
 

@@ -51,7 +51,7 @@ import { ImportService } from './import.service';
 import { AgentFinderResponse, ClearanceOffer, ClearanceRecordResponse, ContainerBoxView, ImportDetail, ImportRow, KnownPaper } from './import.types';
 import { CompanyReadinessService } from '../../foundation/entity/company-readiness.service';
 import type { Entity } from '../../foundation/entity/entity.types';
-import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/catalogue';
+import { COUNTRY_CATALOGUE, catalogueEntry, countryOfPhone } from '../../foundation/countries/catalogue';
 import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
@@ -149,7 +149,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
-import { classifySize, measuredFactor, NETWORK_CURRENCY, SIZE_WEIGHT_KG } from './pudo.config';
+import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { EntityAdminView, OperatorAccountView, StaffAccountList, StaffInvited, StaffProposalView, EntityChanges, EntityPricing } from '../../foundation/entity/entity.types';
 import { EntityAdminService } from '../../foundation/entity/entity-admin.service';
@@ -414,9 +414,12 @@ export class SbgController {
   @Post('auth/signup')
   signup(@Body() dto: SignupDto) {
     // EVERY SIGN-UP AGREES (the user, 2026-10-25) — refused before the account or the shop is made.
-    const agreed = this.agreements?.require(dto.agreement);
+    // …to the general documents and to those of the country it signs up in.
+    const profile = dto.profile as { agent?: { country?: string }; mdp?: { country?: string }; driver?: { jurisdiction?: string } } | undefined;
+    const country = catalogueEntry(profile?.agent?.country ?? profile?.mdp?.country ?? profile?.driver?.jurisdiction)?.code ?? countryOfPhone(dto.phone, dto.agreement?.country);
+    const agreed = this.agreements?.require(dto.agreement, country);
     const made = this.accounts.signup(dto);
-    if (agreed) this.agreements?.record(`account:${made.did}`, agreed, 'auth/signup');
+    if (agreed) this.agreements?.record(`account:${made.did}`, agreed, 'auth/signup', country);
     return made;
   }
 
@@ -3223,7 +3226,8 @@ export class SbgController {
   @Post('vendors')
   registerVendor(@Body() dto: RegisterVendorDto) {
     // EVERY SIGN-UP AGREES (the user, 2026-10-25), a store's through its own system included — refused before it is made.
-    const agreed = this.agreements?.require(dto.agreement);
+    const country = catalogueEntry(dto.country)?.code ?? NETWORK_JURISDICTION;
+    const agreed = this.agreements?.require(dto.agreement, country);
     const { email, password, agreement: _agreement, ...store } = dto;
     // A store may bring its own signing secret (its shop system may already have one). It is a machine's credential,
     // and for a store with no account yet it still opens the console: so it is long, or it is ours — never "1234".
@@ -3236,7 +3240,7 @@ export class SbgController {
     // number has an account (otp.service.ts) — and making the store gives it one.
     const phoneVerified = withAccount ? Boolean(this.accounts.assertVerifiedPhone(dto.ownerPhone)) : false;
     const vendor = this.vendors.register(store);
-    if (agreed) this.agreements?.record(`account:${vendor.did}`, agreed, 'vendors');
+    if (agreed) this.agreements?.record(`account:${vendor.did}`, agreed, 'vendors', country);
     // S20: if the operator gave a phone, link this store to their person identity — same human, one account.
     if (dto.ownerPhone) this.persons.tryAttachRole(dto.ownerPhone, 'vendor', vendor.did);
     if (!withAccount) return vendor;

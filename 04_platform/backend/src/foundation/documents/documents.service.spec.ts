@@ -31,6 +31,11 @@ describe('the documents a sign-up agrees to', () => {
       // The agreement itself is now something that is kept, and the notice says so.
       expect(documents.current('privacy').body).toContain('which versions of its terms of use, of this page and of the cookie statement you agreed to');
       expect(documents.current('cookies').body).toContain('SeeBuyGet sets no cookies');
+      // A country's own, and a new version told in the app: what the system does, said where people read it.
+      expect(documents.current('terms').body).toContain('## A country’s own terms');
+      expect(documents.current('terms').body).toContain('When a new version is published, you are told in your SeeBuyGet app');
+      expect(documents.current('privacy').body).toContain('The notices in your SeeBuyGet app');
+      for (const kind of ['privacy', 'cookies'] as const) expect(documents.current(kind).body).toContain('## When this page changes');
     });
 
     it('never inserts over what somebody published, and never twice', () => {
@@ -80,11 +85,21 @@ describe('the documents a sign-up agrees to', () => {
       store.set('dv_since', { ...documents.current('terms'), versionId: 'dv_since', number: 2, source: undefined });
       expect(() => documents.publish(written.versionId, brian)).toThrow(/Version 2 was published after this was written/);
     });
+
+    it('tells whoever listens of each version published — and a listener that fails takes nothing back', () => {
+      const told: number[] = [];
+      documents.whenPublished(() => {
+        throw new Error('a bell that is down');
+      });
+      documents.whenPublished((v) => told.push(v.number!));
+      expect(documents.publish(propose().versionId, brian).number).toBe(2);
+      expect(told).toEqual([2]);
+    });
   });
 
   describe('what a sign-up agrees to', () => {
     it('is the current version of each, and asks again only after a version that says so', () => {
-      expect(documents.agreementSet().map((d) => [d.kind, d.number, d.since])).toEqual([
+      expect(documents.agreementSet().map((d) => [d.key, d.number, d.since])).toEqual([
         ['terms', 1, 1],
         ['privacy', 1, 1],
         ['cookies', 1, 1],
@@ -100,7 +115,7 @@ describe('the documents a sign-up agrees to', () => {
     it('reads back publicly without who wrote it, and lists the history newest first', () => {
       documents.publish(propose({ changeNote: 'Clearer words', askAgain: false }).versionId, brian);
       const view = documents.publicView(documents.current('terms'));
-      expect(view).toMatchObject({ kind: 'terms', number: 2, changeNote: 'Clearer words', path: '/terms/' });
+      expect(view).toMatchObject({ key: 'terms', kind: 'terms', number: 2, changeNote: 'Clearer words', path: '/terms/' });
       expect(view).not.toHaveProperty('writtenBy');
       expect(view).not.toHaveProperty('decidedBy');
       expect(documents.publicHistory('terms').map((l) => l.number)).toEqual([2, 1]);
@@ -116,6 +131,10 @@ describe('who agreed to what', () => {
   let documents: DocumentsService;
   let agreements: AgreementService;
   const ALL = { terms: 1, privacy: 1, cookies: 1 };
+  const amina = { name: 'A', key: 'operator:a' };
+  const brian = { name: 'B', key: 'operator:b' };
+  const publish = (kind: 'terms' | 'privacy' | 'cookies', body: string, askAgain: boolean, country?: string) =>
+    documents.publish(documents.propose(kind, { title: country ? `Terms of use for ${country}` : 'Terms of use', body, changeNote: 'A change', askAgain, country }, amina).versionId, brian);
 
   beforeEach(() => {
     documents = new DocumentsService();
@@ -125,29 +144,27 @@ describe('who agreed to what', () => {
 
   it('refuses a sign-up that did not agree, agreed to a version that does not exist, or to one a later version replaced', () => {
     expect(() => agreements.require(undefined)).toThrow(/Read and agree/);
-    expect(() => agreements.require({ terms: 1, privacy: 1 })).toThrow(/Read and agree to the cookie statement first/);
-    expect(() => agreements.require({ ...ALL, terms: 2 })).toThrow(/terms of use/);
-    expect(agreements.require(ALL)).toEqual(ALL);
-    const v2 = documents.propose('privacy', { title: 'Your data at SeeBuyGet', body: 'Something new is kept', changeNote: 'New', askAgain: true }, { name: 'A', key: 'operator:a' });
-    documents.publish(v2.versionId, { name: 'B', key: 'operator:b' });
-    expect(() => agreements.require(ALL)).toThrow(/A new version of what happens to your data was published while you were reading/);
-    expect(agreements.require({ ...ALL, privacy: 2 })).toEqual({ ...ALL, privacy: 2 });
+    expect(() => agreements.require({ versions: { terms: 1, privacy: 1 } })).toThrow(/Read and agree to the cookie statement first/);
+    expect(() => agreements.require({ versions: { ...ALL, terms: 2 } })).toThrow(/terms of use/);
+    expect(agreements.require({ versions: ALL })).toEqual(ALL);
+    publish('privacy', 'Something new is kept', true);
+    expect(() => agreements.require({ versions: ALL })).toThrow(/A new version of what happens to your data was published while you were reading/);
+    expect(agreements.require({ versions: { ...ALL, privacy: 2 } })).toEqual({ ...ALL, privacy: 2 });
   });
 
   it('asks again after signing in only when a version since asks everybody to', () => {
     const me = ['person:did:me'];
-    expect(agreements.needed(me)).toBe(true);
-    agreements.record(me[0], agreements.require(ALL), 'identity/enroll');
-    expect(agreements.needed(me)).toBe(false);
-    const quiet = documents.propose('terms', { title: 'Terms of use', body: 'Clearer', changeNote: 'Wording', askAgain: false }, { name: 'A', key: 'operator:a' });
-    documents.publish(quiet.versionId, { name: 'B', key: 'operator:b' });
-    expect(agreements.needed(me)).toBe(false);
-    const loud = documents.propose('terms', { title: 'Terms of use', body: 'A new rule', changeNote: 'Rule', askAgain: true }, { name: 'A', key: 'operator:a' });
-    documents.publish(loud.versionId, { name: 'B', key: 'operator:b' });
-    expect(agreements.needed(me)).toBe(true);
-    agreements.record(me[0], agreements.require({ ...ALL, terms: 3 }), 'app:driver');
-    expect(agreements.needed(me)).toBe(false);
-    // Kept, every one of them, in order.
+    const set = () => documents.agreementSet();
+    expect(agreements.needed(me, set())).toBe(true);
+    agreements.record(me[0], agreements.require({ versions: ALL }), 'identity/enroll');
+    expect(agreements.needed(me, set())).toBe(false);
+    publish('terms', 'Clearer', false);
+    expect(agreements.needed(me, set())).toBe(false);
+    publish('terms', 'A new rule', true);
+    expect(agreements.needed(me, set())).toBe(true);
+    agreements.record(me[0], agreements.require({ versions: { ...ALL, terms: 3 } }), 'app:driver');
+    expect(agreements.needed(me, set())).toBe(false);
+    // Kept, every one of them: the highest each agreed to, counted.
     expect(agreements.countsFor('terms')).toEqual({ 3: 1 });
   });
 
@@ -172,8 +189,59 @@ describe('who agreed to what', () => {
   it('lets a sign-up under somebody signed in go on with their agreement when it is current, and asks for one when it is not', () => {
     const person = { active: true, role: 'consumer' as const, did: 'did:p', personDid: 'did:p' };
     expect(() => agreements.assertFor(person, undefined, 'fleet/signups')).toThrow(/Read and agree/);
-    agreements.assertFor(person, ALL, 'fleet/signups');
-    expect(agreements.needed(['person:did:p'])).toBe(false);
+    agreements.assertFor(person, { versions: ALL }, 'fleet/signups');
+    expect(agreements.needed(['person:did:p'], documents.agreementSet())).toBe(false);
     expect(() => agreements.assertFor(person, undefined, 'drivers/signups')).not.toThrow();
+  });
+
+  /**
+   * GENERAL, AND EACH COUNTRY'S OWN (the user, 2026-10-25: "every country needs it's specific adjustments, so there will be
+   * the general terms of use, global, and specific terms of use"). Somebody in a country agrees to both.
+   */
+  describe('a country’s own documents, on top of the general ones', () => {
+    it('are in the set only for that country, and only once one is published', () => {
+      expect(documents.agreementSet('KE').map((d) => d.key)).toEqual(['terms', 'privacy', 'cookies']);
+      const first = documents.propose('terms', { title: 'Terms of use for Kenya', body: 'What Kenyan law adds', changeNote: 'First', askAgain: false, country: 'ke' }, amina);
+      // A country's first version is agreed to by everybody there, whatever the writer ticked.
+      expect(first).toMatchObject({ country: 'KE', askAgain: true });
+      expect(first.basedOn).toBeUndefined();
+      expect(documents.agreementSet('KE').map((d) => d.key)).toEqual(['terms', 'privacy', 'cookies']);
+      documents.publish(first.versionId, brian);
+      expect(documents.agreementSet('KE').map((d) => d.key)).toEqual(['terms', 'privacy', 'cookies', 'terms@KE']);
+      expect(documents.agreementSet('KE')[3]).toMatchObject({ number: 1, since: 1, path: '/terms/?country=KE', country: 'KE' });
+      // Uganda reads the general text alone; the general text is numbered on its own.
+      expect(documents.agreementSet('UG').map((d) => d.key)).toEqual(['terms', 'privacy', 'cookies']);
+      expect(documents.current('terms').number).toBe(1);
+      expect(documents.countries()).toEqual(['KE']);
+      expect(() => documents.propose('terms', { title: 'x', body: 'y', changeNote: 'z', askAgain: false, country: 'ZZ' }, amina)).toThrow(/not a country/);
+    });
+
+    it('asks everybody there when the country publishes its own — and keeps what they agreed to when they move between countries', () => {
+      const me = ['person:did:me'];
+      agreements.record(me[0], agreements.require({ versions: ALL }, 'KE'), 'identity/enroll', 'KE');
+      expect(agreements.needed(me, documents.agreementSet('KE'))).toBe(false);
+      publish('terms', 'What Kenyan law adds', false, 'KE');
+      expect(agreements.needed(me, documents.agreementSet('KE'))).toBe(true);
+      expect(() => agreements.require({ versions: ALL }, 'KE')).toThrow(/Read and agree to the terms of use for Kenya first/);
+      agreements.record(me[0], agreements.require({ versions: { ...ALL, 'terms@KE': 1 } }, 'KE'), 'app:consumer', 'KE');
+      expect(agreements.needed(me, documents.agreementSet('KE'))).toBe(false);
+      // In Uganda, what they agreed to in general still counts; Kenya's does not come into it.
+      expect(agreements.needed(me, documents.agreementSet('UG'))).toBe(false);
+      expect(agreements.personsIn('KE')).toEqual(['did:me']);
+    });
+
+    it('lets a sign-up in a country go on when they agreed to its documents already, whatever its form sent', () => {
+      const person = { active: true, role: 'consumer' as const, did: 'did:p', personDid: 'did:p' };
+      publish('terms', 'What Kenyan law adds', false, 'KE');
+      agreements.record('person:did:p', agreements.require({ versions: { ...ALL, 'terms@KE': 1 } }, 'KE'), 'identity/enroll', 'KE');
+      // A form that showed another country's set: nothing is asked of them in Kenya, so it does not hold them up.
+      expect(() => agreements.assertFor(person, { versions: ALL }, 'fleet/signups', 'KE')).not.toThrow();
+      // One that is asked of somebody who never read Kenya's is still refused.
+      const other = { ...person, did: 'did:o', personDid: 'did:o' };
+      agreements.record('person:did:o', ALL, 'identity/enroll', 'UG');
+      expect(() => agreements.assertFor(other, { versions: ALL }, 'fleet/signups', 'KE')).toThrow(/terms of use for Kenya/);
+      agreements.assertFor(other, { versions: { ...ALL, 'terms@KE': 1 } }, 'fleet/signups', 'KE');
+      expect(agreements.needed(['person:did:o'], documents.agreementSet('KE'))).toBe(false);
+    });
   });
 });

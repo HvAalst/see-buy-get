@@ -1,5 +1,7 @@
 import { useState } from 'preact/hooks';
 import { BrandMark, Icon } from '../../../shared/ui';
+import { AgreementCheck } from '../../../shared/documents/Agreement';
+import type { AgreementHere } from '../../../shared/documents/documents';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { publicRequest } from '../../../lib/sbg';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
@@ -137,6 +139,8 @@ function NewBusinessForm({ state, actions, onCancel }: { state: BusinessState; a
   const [form, setForm] = useState<NewBusiness>({ name: '', country: '', registrationNo: '', taxNo: '', activities: [], yourName: '' });
   const [tried, setTried] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What the business's country asks the person to agree to that they have not yet (2026-10-25): settled before it is sent.
+  const [agreement, setAgreement] = useState<AgreementHere>(null);
   const gaps = newBusinessGaps(form);
   const toggle = (a: BusinessActivity) => setForm((f) => ({ ...f, activities: f.activities.includes(a) ? f.activities.filter((x) => x !== a) : [...f.activities, a] }));
 
@@ -144,7 +148,11 @@ function NewBusinessForm({ state, actions, onCancel }: { state: BusinessState; a
     e.preventDefault();
     setTried(true);
     if (gaps.length) return;
-    const refused = await actions.create({ ...form, taxNo: form.taxNo?.trim() || undefined });
+    if (!agreement) {
+      setError(t('agreement.needed'));
+      return;
+    }
+    const refused = await actions.create({ ...form, taxNo: form.taxNo?.trim() || undefined, ...(agreement !== 'covered' ? { agreement } : {}) });
     setError(refused ? refused.detail || refused.title : null);
   };
 
@@ -197,6 +205,8 @@ function NewBusinessForm({ state, actions, onCancel }: { state: BusinessState; a
         <span class="chint">{t('business.new.yourNameHint')}</span>
         {gap('yourName')}
       </label>
+
+      <AgreementCheck read={actions.readAgreement} country={form.country} value={agreement} onChange={setAgreement} />
 
       <p class="cnote">{t('business.new.checkNote')}</p>
       {error ? <p class="cerr">{error}</p> : null}

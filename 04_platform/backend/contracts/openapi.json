@@ -30144,7 +30144,16 @@
     "/v1/sbg/agreement": {
       "get": {
         "operationId": "Documents.agreementSet",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "country",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -30163,12 +30172,20 @@
       "get": {
         "operationId": "Documents.document",
         "summary": "",
-        "description": "A document as it reads now.",
+        "description": "A document as it reads now: the general text, or `?country=` a country's own.",
         "parameters": [
           {
             "name": "kind",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
+            "required": false,
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -30188,16 +30205,46 @@
         }
       }
     },
-    "/v1/sbg/documents/{kind}/history": {
+    "/v1/sbg/documents/{kind}/countries": {
       "get": {
-        "operationId": "Documents.documentHistory",
+        "operationId": "Documents.documentCountries",
         "summary": "",
-        "description": "Every published version of a document, newest first: its number, date and what changed.",
+        "description": "The countries with a version of their own of this document, published: where the general page sends a reader on.",
         "parameters": [
           {
             "name": "kind",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/documents/{kind}/history": {
+      "get": {
+        "operationId": "Documents.documentHistory",
+        "summary": "",
+        "description": "Every published version of a line, newest first: its number, date and what changed.",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
+            "required": false,
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -30231,6 +30278,14 @@
             "schema": {
               "type": "number"
             }
+          },
+          {
+            "name": "country",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -30250,7 +30305,16 @@
     "/v1/sbg/agreement/mine": {
       "get": {
         "operationId": "Documents.myAgreement",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "country",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -30267,7 +30331,7 @@
       "post": {
         "operationId": "Documents.agree",
         "summary": "",
-        "description": "AGREE, after signing in — asked of somebody another person signed up (a fleet's driver, a counter colleague), and\nof everybody when a version published since asks them to agree again.",
+        "description": "AGREE, after signing in — asked of somebody another person signed up (a fleet's driver, a counter colleague), of\neverybody when a version published since asks them to agree again, and of everybody in a country that publishes\ndocuments of its own.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -30308,7 +30372,7 @@
       "post": {
         "operationId": "Documents.propose",
         "summary": "",
-        "description": "Write a new version. It changes nothing until a different member of staff publishes it.",
+        "description": "Write a new version — of the general text, or (`country`) of a country's own. It changes nothing until a different member of staff publishes it.",
         "parameters": [
           {
             "name": "kind",
@@ -30347,7 +30411,7 @@
       "post": {
         "operationId": "Documents.publish",
         "summary": "",
-        "description": "The second person publishes it: from now on it is what everybody reads, and agrees to.",
+        "description": "The second person publishes it: from now on it is what everybody it concerns reads, and agrees to — and they are told.",
         "parameters": [
           {
             "name": "versionId",
@@ -32540,23 +32604,25 @@
       "AgreementDto": {
         "type": "object",
         "properties": {
-          "terms": {
-            "type": "number",
-            "minimum": 1
+          "versions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "example": {
+              "terms": 1,
+              "privacy": 1,
+              "cookies": 1,
+              "terms@KE": 1
+            }
           },
-          "privacy": {
-            "type": "number",
-            "minimum": 1
-          },
-          "cookies": {
-            "type": "number",
-            "minimum": 1
+          "country": {
+            "type": "string",
+            "maxLength": 2
           }
         },
         "required": [
-          "terms",
-          "privacy",
-          "cookies"
+          "versions"
         ]
       },
       "SignupDto": {
@@ -62548,6 +62614,10 @@
       "AgreementDocument": {
         "type": "object",
         "properties": {
+          "key": {
+            "type": "string",
+            "description": "`terms`, or `terms@KE` for a country's own: what the agreement names it by."
+          },
           "kind": {
             "type": "string",
             "enum": [
@@ -62555,6 +62625,9 @@
               "privacy",
               "cookies"
             ]
+          },
+          "country": {
+            "type": "string"
           },
           "title": {
             "type": "string"
@@ -62575,6 +62648,7 @@
           }
         },
         "required": [
+          "key",
           "kind",
           "title",
           "number",
@@ -62586,6 +62660,10 @@
       "AgreementSet": {
         "type": "object",
         "properties": {
+          "country": {
+            "type": "string",
+            "description": "The country whose own documents are in the set, if any."
+          },
           "documents": {
             "type": "array",
             "items": {
@@ -62600,6 +62678,9 @@
       "PublishedDocument": {
         "type": "object",
         "properties": {
+          "key": {
+            "type": "string"
+          },
           "kind": {
             "type": "string",
             "enum": [
@@ -62607,6 +62688,10 @@
               "privacy",
               "cookies"
             ]
+          },
+          "country": {
+            "type": "string",
+            "description": "The country whose own line it is; absent for the general text."
           },
           "number": {
             "type": "number"
@@ -62632,6 +62717,7 @@
           }
         },
         "required": [
+          "key",
           "kind",
           "number",
           "title",
@@ -62648,6 +62734,10 @@
           "needed": {
             "type": "boolean"
           },
+          "country": {
+            "type": "string",
+            "description": "The country whose own documents were asked: the one this sign-in works in."
+          },
           "documents": {
             "type": "array",
             "items": {
@@ -62656,10 +62746,13 @@
           },
           "agreedAt": {
             "type": "string",
-            "description": "What they agreed to last, and when. Absent: nothing yet."
+            "description": "When they last agreed to anything, and the latest version of each line they agreed to. Absent: nothing yet."
           },
           "agreed": {
-            "type": "object"
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
           }
         },
         "required": [
@@ -62670,6 +62763,11 @@
       "ProposeDocumentDto": {
         "type": "object",
         "properties": {
+          "country": {
+            "type": "string",
+            "description": "A country's own line; absent for the general text.",
+            "maxLength": 2
+          },
           "title": {
             "type": "string",
             "minLength": 1,
@@ -62715,9 +62813,13 @@
               "cookies"
             ]
           },
+          "country": {
+            "type": "string",
+            "description": "The country whose own line this is. Absent: the general text, everybody's."
+          },
           "number": {
             "type": "number",
-            "description": "1, 2, 3 … in the order they were published. A proposal has none until it is published."
+            "description": "1, 2, 3 … in the order they were published, per line. A proposal has none until it is published."
           },
           "title": {
             "type": "string"
@@ -62744,7 +62846,7 @@
           },
           "basedOn": {
             "type": "string",
-            "description": "The published version this one was written from. A proposal over a version that is no longer current is refused."
+            "description": "The published version this one was written from — none for a country's first. Refused if it is no longer current."
           },
           "writtenBy": {
             "type": "string"

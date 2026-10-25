@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import type { AgreementNumbers } from '../../shared/documents/documents';
-import type { SbgError } from '../../lib/sbg';
+import type { Agreement, MyAgreement } from '../../shared/documents/documents';
+import type { Result, SbgError } from '../../lib/sbg';
 import { isNewDevice } from '../../shared/account/pin';
 import { isPinReset } from '../../shared/account/recovery';
 import {
@@ -46,7 +46,7 @@ export interface BusinessState {
   email: string;
   emailCode: string;
   /** The versions of the terms of use, the data notice and the cookie statement agreed to when the PIN is chosen (2026-10-25). */
-  agreement: AgreementNumbers | null;
+  agreement: Agreement | null;
   /** The email step is "confirm it is you" (a PIN replaced on a new device), not "an email for getting back in" (a first PIN). */
   emailReset: boolean;
   busy: boolean;
@@ -91,6 +91,8 @@ export interface BusinessActions {
   accept: (memberId: string) => Promise<void>;
   decline: (memberId: string) => Promise<void>;
   create: (form: NewBusiness) => Promise<SbgError | null>;
+  /** Where the person stands with what `country` asks them to agree to: read before a business is set up there. */
+  readAgreement: (country: string) => Promise<Result<MyAgreement>>;
   backToList: () => Promise<void>;
   go: (section: Section) => void;
   /** Read the business again — after anything that changes what it says about itself or where its check stands. */
@@ -261,6 +263,8 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       enterBusiness(r.data.business);
       return null;
     },
+
+    readAgreement: (country) => person.current.myAgreement(country),
 
     backToList: async () => {
       clearBusinessSession();

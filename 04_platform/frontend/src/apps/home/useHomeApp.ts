@@ -582,6 +582,8 @@ export function useHomeApp() {
   const submitFleet = useCallback(async () => {
     const { role, form, person, resendFor } = stateRef.current;
     if (!role || !person || stepBlocker(role, 'papers', form, t)) return;
+    // A new fleet waits for what its country asks to be settled: covered by what they agreed to, or agreed to here.
+    if (!resendFor && !form.agreementHere) return;
     await run('submit', async () => {
       const r = resendFor ? await sendPapersAgain(person, resendFor, form.papers) : await signUpFleet(person, fleetSignupBody(form));
       if (r.error || !r.data) {

@@ -54,3 +54,22 @@ export function catalogueEntry(code?: string): CatalogueCountry | undefined {
 export function isCatalogued(code?: string): boolean {
   return Boolean(catalogueEntry(code));
 }
+
+/**
+ * THE COUNTRY A PHONE NUMBER BELONGS TO, by its dialling code — or nothing where the code is shared (+1, +7, +44) and
+ * nothing settles which. `named` is the country a form showed beside the number: taken when its code is the number's.
+ * A hint for what somebody signing up agrees to (2026-10-25), never a check of who they are.
+ */
+export function countryOfPhone(phone: string | undefined, named?: string): string | undefined {
+  const p = (phone ?? '').replace(/[^\d+]/g, '');
+  if (!p.startsWith('+')) return undefined;
+  const claimed = catalogueEntry(named);
+  if (claimed && p.startsWith(claimed.dialCode)) return claimed.code;
+  let best: CatalogueCountry[] = [];
+  for (const c of COUNTRY_CATALOGUE) {
+    if (!p.startsWith(c.dialCode)) continue;
+    if (!best.length || c.dialCode.length > best[0].dialCode.length) best = [c];
+    else if (c.dialCode.length === best[0].dialCode.length) best.push(c);
+  }
+  return best.length === 1 ? best[0].code : undefined;
+}

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Optional, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AgreementService } from '../../foundation/documents/agreement.service';
+import { countryOfPhone } from '../../foundation/countries/catalogue';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { EmailCodeService } from './email-code.service';
@@ -77,7 +78,9 @@ export class IdentityController {
      * driver, a PIN being replaced — is asked in their app instead, when they have not agreed to what counts now.
      */
     const signingUp = verified && !this.persons.findByPhone(dto.phone);
-    const agreed = this.agreements && (signingUp || dto.agreement) ? this.agreements.require(dto.agreement) : undefined;
+    // The country is the number's: what a person with a Kenyan number agrees to includes Kenya's own documents.
+    const country = countryOfPhone(dto.phone, dto.agreement?.country);
+    const agreed = this.agreements && (signingUp || dto.agreement) ? this.agreements.require(dto.agreement, country) : undefined;
     /*
      * A PIN IS CHOSEN WITH A RECOVERY EMAIL BEHIND IT — the user, 2026-10-01: "we need an email for account
      * recovery and safety." The PIN is what makes this an account somebody can be locked out of, or have taken
@@ -120,7 +123,7 @@ export class IdentityController {
       }
     }
     const { person, isNew, token, device } = this.persons.enroll(dto.phone, verified, dto.pin, dto.device);
-    if (agreed) this.agreements?.recordIfNew([`person:${person.personDid}`], agreed, 'identity/enroll');
+    if (agreed) this.agreements?.recordIfNew([`person:${person.personDid}`], agreed, 'identity/enroll', country);
     if (needsEmail) {
       this.persons.setEmail(person.personDid, dto.email as string);
       this.emailCodes.consume(dto.email as string);

@@ -55,7 +55,7 @@ const filled = (over: Partial<JoinForm> = {}): JoinForm => ({
   openTo: '19:00',
   recordClear: true,
   // Every sign-up agrees to the terms of use, the data notice and the cookie statement (2026-10-25).
-  agreement: { terms: 1, privacy: 1, cookies: 1 },
+  agreement: { versions: { terms: 1, privacy: 1, cookies: 1 }, country: 'KE' },
   ...over,
 });
 
@@ -272,7 +272,7 @@ describe('stepBlocker', () => {
   });
 
   it('a store’s account is an email and a password of at least eight characters', () => {
-    const store = { ...EMPTY_JOIN, displayName: 'Nairobi Threads', country: 'KE', email: 'orders@threads.example', agreement: { terms: 1, privacy: 1, cookies: 1 } };
+    const store = { ...EMPTY_JOIN, displayName: 'Nairobi Threads', country: 'KE', email: 'orders@threads.example', agreement: { versions: { terms: 1, privacy: 1, cookies: 1 }, country: 'KE' } };
     expect(stepBlocker(role('vendor'), 'login', { ...store, email: 'orders' }, t)).toContain('email');
     // Seven is enough for nobody: the server's floor is eight wherever a password is chosen.
     expect(stepBlocker(role('vendor'), 'login', { ...store, password: '1234567' }, t)).toContain('8 characters');
@@ -495,7 +495,8 @@ describe('a fleet signs itself up', () => {
   });
 
   it('sends what a member of staff would have typed into the console, and the four papers', () => {
-    expect(fleetSignupBody(fleet({ phone: '+254 700 111 222', country: 'ke', tradingName: '' }))).toEqual({
+    const here = { versions: { terms: 1, privacy: 1, cookies: 1, 'terms@KE': 1 }, country: 'KE' };
+    expect(fleetSignupBody(fleet({ phone: '+254 700 111 222', country: 'ke', tradingName: '', agreementHere: here }))).toEqual({
       phone: '+254700111222',
       companyName: 'Kilima Logistics Ltd',
       jurisdiction: 'KE',
@@ -506,9 +507,12 @@ describe('a fleet signs itself up', () => {
       location: { lat: -1.28, lng: 36.82 },
       requirements: { businessRegistrationNo: 'BR-1', transportOperatorLicence: 'TOL-1', taxId: 'P051' },
       papers: { businessRegCertRef: 'm1', operatorLicenceRef: 'm2', ownerIdRef: 'm3', proofOfAddressRef: 'm4' },
-      // What the person agreed to on the PIN step goes with it: the server keeps it, or asks for it if it is not current.
-      agreement: { terms: 1, privacy: 1, cookies: 1 },
+      // What the fleet's country asked that the person's agreement at the PIN did not cover: Kenya's own, here.
+      agreement: here,
     });
+    // Covered by what they agreed to already: nothing is sent, and nothing is asked.
+    expect(fleetSignupBody(fleet({ agreementHere: 'covered' }))).not.toHaveProperty('agreement');
+    expect(fleetSignupBody(fleet({ agreementHere: null }))).not.toHaveProperty('agreement');
   });
 
   it('says where a sign-up stands in words, and a sent-back one says so', () => {

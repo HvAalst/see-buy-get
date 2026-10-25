@@ -46,6 +46,9 @@ export const NOTIFICATION_KINDS = [
   'claim_decided',
   /** Their country was lowered: what stops for them there from today, and what does not (CountryNoticeService). */
   'country_changed',
+  /** 2026-10-25 — a new version of the terms of use, the data notice or the cookie statement: what changed, and whether
+   *  they will be asked to agree to it (DocumentNoticeService). */
+  'terms_updated',
   /** Round 39 — where they work was rated for a threat in the risk register: what a high rating asks of them from now. */
   'risk_rated',
   /**

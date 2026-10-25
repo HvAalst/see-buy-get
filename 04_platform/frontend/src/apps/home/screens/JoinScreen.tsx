@@ -1,13 +1,14 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { EmailStep } from '../../../shared/account/EmailStep';
-import { AgreementBlock } from '../../../shared/documents/Agreement';
+import { AgreementBlock, AgreementCheck } from '../../../shared/documents/Agreement';
+import { countryOfNumber } from '../../../shared/phone/dial';
 import { toPlaceWords } from '../../../shared/placewords';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { duplicateField, isIdentityDocument, type DuplicateField } from '../../../shared/duplicate';
 import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
 import { recoveryApi } from '../../../shared/account/recovery';
-import { homeConfig } from '../api';
+import { homeConfig, myAgreement } from '../api';
 
 import { ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
@@ -397,8 +398,9 @@ function PinStep({ state, actions }: JoinScreenProps) {
             />
           </div>
         ) : null}
-        {/* Where the person's account is made: everybody signing up agrees here (2026-10-25). */}
-        <AgreementBlock agreed={f.agreement} onChange={(agreement) => actions.setForm({ agreement })} />
+        {/* Where the person's account is made: everybody signing up agrees here (2026-10-25) — to the general documents,
+            their phone's country's own, and (a driver, who chose it already) the own of the country they drive in. */}
+        <AgreementBlock agreed={f.agreement} onChange={(agreement) => actions.setForm({ agreement })} countries={[countryOfNumber(f.phone), driver ? f.country : undefined]} />
       </Card>
 
       <div class="scr__cta">
@@ -516,7 +518,8 @@ function PapersStep({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
   const f = state.form;
-  const blocker = stepBlocker(role, 'papers', f, t);
+  // A new fleet waits for what its country asks to be settled (AgreementCheck below); papers sent again carry none.
+  const blocker = stepBlocker(role, 'papers', f, t) ?? (!state.resendFor && !f.agreementHere ? t('agreement.needed') : null);
   const again = state.resendFor ? state.fleetSignups?.find((s) => s.did === state.resendFor) : undefined;
   return (
     <>
@@ -536,6 +539,11 @@ function PapersStep({ state, actions }: JoinScreenProps) {
           />
         </Card>
       ))}
+
+      {/* The person agreed at their PIN, for their phone's country: the fleet's may ask more (2026-10-25). */}
+      {!state.resendFor && state.person ? (
+        <AgreementCheck read={(country) => myAgreement(state.person!, country)} country={f.country} value={f.agreementHere} onChange={(agreementHere) => actions.setForm({ agreementHere })} />
+      ) : null}
 
       <div class="scr__cta">
         <Button onClick={() => void actions.submitFleet()} disabled={Boolean(blocker)} busy={state.busy === 'submit'}>
@@ -959,8 +967,8 @@ function LoginStep({ state, actions }: JoinScreenProps) {
             placeholder={t('home.join.login.passwordPh')}
           />
         </div>
-        {/* Where the account is made: everybody signing up agrees here (2026-10-25). */}
-        <AgreementBlock agreed={f.agreement} onChange={(agreement) => actions.setForm({ agreement })} />
+        {/* Where the account is made: everybody signing up agrees here (2026-10-25) — with its country's own documents. */}
+        <AgreementBlock agreed={f.agreement} onChange={(agreement) => actions.setForm({ agreement })} countries={[f.country]} />
       </Card>
 
       <div class="scr__cta">

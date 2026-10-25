@@ -59,7 +59,12 @@ describe('agreeing to the terms, over the wire', () => {
   });
 
   let person = '';
+  let duka = '';
   const PHONE = `+2547${tag}1`;
+
+  /** What somebody's bell says about the documents they agreed to, newest first. */
+  const bell = async (token: string) =>
+    ((await must(http().get('/v1/sbg/notifications/inbox').set(bearer(token)), 200)).items as Array<{ kind: string; title: string; body: string; link?: string; data?: Record<string, unknown> }>).filter((n) => n.kind === 'terms_updated');
 
   it('2 · nobody signs up without agreeing — and a refusal costs them nothing: the same confirmed number agrees and goes on', async () => {
     const code = (await must(http().post('/v1/sbg/auth/phone/request').send({ phone: PHONE }))).code as string;
@@ -69,7 +74,7 @@ describe('agreeing to the terms, over the wire', () => {
     const body = { phone: PHONE, pin: '48261', email, emailCode: mailed };
     expect(await refused(http().post('/v1/sbg/identity/enroll').send(body))).toEqual([400, 'AGREEMENT_REQUIRED', 'agreement']);
     // A version that does not exist is not one anybody read.
-    expect(await refused(http().post('/v1/sbg/identity/enroll').send({ ...body, agreement: { terms: 2, privacy: 1, cookies: 1 } }))).toEqual([400, 'AGREEMENT_REQUIRED', 'agreement']);
+    expect(await refused(http().post('/v1/sbg/identity/enroll').send({ ...body, agreement: { versions: { terms: 2, privacy: 1, cookies: 1 } } }))).toEqual([400, 'AGREEMENT_REQUIRED', 'agreement']);
     const enrolled = await must(http().post('/v1/sbg/identity/enroll').send({ ...body, ...AGREED }));
     person = enrolled.token.access_token;
     expect(await must(http().get('/v1/sbg/agreement/mine').set(bearer(person)), 200)).toMatchObject({ needed: false, agreed: { terms: 1, privacy: 1, cookies: 1 } });
@@ -87,7 +92,9 @@ describe('agreeing to the terms, over the wire', () => {
     };
     expect(await refused(http().post('/v1/sbg/auth/signup').send(shop))).toEqual([400, 'AGREEMENT_REQUIRED', 'agreement']);
     const made = await must(http().post('/v1/sbg/auth/signup').send({ ...shop, ...AGREED }));
-    expect(await must(http().get('/v1/sbg/agreement/mine').set(bearer(made.token.access_token)), 200)).toMatchObject({ needed: false });
+    duka = made.token.access_token;
+    // The shop stands in Kenya: what it agreed to is kept for Kenya.
+    expect(await must(http().get('/v1/sbg/agreement/mine').set(bearer(duka)), 200)).toMatchObject({ needed: false, country: 'KE' });
     expect(await refused(http().post('/v1/sbg/vendors').send({ name: `Store ${tag}` }))).toEqual([400, 'AGREEMENT_REQUIRED', 'agreement']);
     await must(http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Store ${tag}` }));
   });
@@ -134,10 +141,15 @@ describe('agreeing to the terms, over the wire', () => {
     expect((await must(http().get('/v1/sbg/documents/terms/history'), 200)).items.map((l: { number: number }) => l.number)).toEqual([2, 1]);
     expect((await must(http().get('/v1/sbg/documents/terms/versions/1'), 200)).body).toBe(terms.body);
 
+    // Everybody with an account is told, in the bell of the app they use: what changed, and that they will be asked.
+    for (const token of [person, duka]) {
+      expect((await bell(token))[0]).toMatchObject({ title: 'Terms of use: a new version', body: 'A new rule. You are asked to agree to it the next time you open the app.', link: '/terms/', data: { key: 'terms', number: 2, askAgain: true } });
+    }
+
     // The person who agreed to version 1 is asked again — and the old version will not do.
     expect(await must(http().get('/v1/sbg/agreement/mine').set(bearer(person)), 200)).toMatchObject({ needed: true });
     expect(await refused(http().post('/v1/sbg/agreement/mine').set(bearer(person)).send(AGREED.agreement))).toEqual([400, 'AGREEMENT_REQUIRED', 'agreement']);
-    const now = await must(http().post('/v1/sbg/agreement/mine').set(bearer(person)).send({ ...AGREED.agreement, terms: 2 }));
+    const now = await must(http().post('/v1/sbg/agreement/mine').set(bearer(person)).send({ versions: { ...AGREED.agreement.versions, terms: 2 } }));
     expect(now).toMatchObject({ needed: false, agreed: { terms: 2 } });
     // A sign-up from here on agrees to version 2.
     expect(await refused(http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Late store ${tag}` }))).toEqual([400, 'AGREEMENT_REQUIRED', 'agreement']);
@@ -149,9 +161,63 @@ describe('agreeing to the terms, over the wire', () => {
     await must(http().post(`/v1/sbg/documents/versions/${proposal.versionId}/publish`).set(bearer(amina)).send({}));
     expect((await must(http().get('/v1/sbg/agreement'), 200)).documents.find((d: { kind: string }) => d.kind === 'cookies')).toMatchObject({ number: 2, since: 1 });
     expect(await must(http().get('/v1/sbg/agreement/mine').set(bearer(person)), 200)).toMatchObject({ needed: false });
+    // Told all the same — with nothing to do.
+    expect((await bell(person))[0]).toMatchObject({ title: 'Cookies: a new version', body: 'Computers too. Nothing to do: it is there to read.', link: '/cookies/' });
     // Declining takes a reason, kept with the version.
     const another = await must(http().post('/v1/sbg/documents/privacy/versions').set(bearer(amina)).send({ title: 'Your data at SeeBuyGet', body: 'Too short', changeNote: 'Trying', askAgain: true }));
     expect((await refused(http().post(`/v1/sbg/documents/versions/${another.versionId}/decline`).set(bearer(brian)).send({}))).slice(0, 2)).toEqual([400, 'REASON_REQUIRED']);
     expect(await must(http().post(`/v1/sbg/documents/versions/${another.versionId}/decline`).set(bearer(brian)).send({ reason: 'It leaves out what is kept' }))).toMatchObject({ status: 'declined', reason: 'It leaves out what is kept' });
+  });
+
+  /**
+   * GENERAL, AND EACH COUNTRY'S OWN (the user, 2026-10-25: "every country needs it's specific adjustments, so there will
+   * be the general terms of use, global, and specific terms of use"): Kenya's own terms, on top of the general ones.
+   */
+  it('6 · a country writes its own terms: everybody there is told and asked to agree to both — and a sign-up elsewhere is not', async () => {
+    const GENERAL = { terms: 2, privacy: 1, cookies: 1 };
+    const keys = async (query = '') => ((await must(http().get(`/v1/sbg/agreement${query}`), 200)).documents as Array<{ key: string }>).map((d) => d.key);
+    expect(await keys('?country=KE')).toEqual(['terms', 'privacy', 'cookies']);
+
+    const proposal = await must(
+      http()
+        .post('/v1/sbg/documents/terms/versions')
+        .set(bearer(amina))
+        .send({ country: 'ke', title: 'Terms of use — Kenya', body: '## What Kenyan law adds\n\n- The Data Protection Act, 2019, applies to what is kept.', changeNote: 'What Kenyan law adds to the general terms', askAgain: false }),
+    );
+    // A country's first version is agreed to by everybody there, whatever was ticked.
+    expect(proposal).toMatchObject({ status: 'proposed', country: 'KE', askAgain: true });
+    expect(await keys('?country=KE')).toEqual(['terms', 'privacy', 'cookies']);
+    await must(http().post(`/v1/sbg/documents/versions/${proposal.versionId}/publish`).set(bearer(brian)).send({}));
+
+    // Read by anybody: Kenya's set has four; Uganda's, and the general, three. The general text is untouched.
+    expect(await keys('?country=KE')).toEqual(['terms', 'privacy', 'cookies', 'terms@KE']);
+    expect(await keys('?country=UG')).toEqual(['terms', 'privacy', 'cookies']);
+    expect(await keys()).toEqual(['terms', 'privacy', 'cookies']);
+    expect(await must(http().get('/v1/sbg/documents/terms?country=KE'), 200)).toMatchObject({ key: 'terms@KE', country: 'KE', number: 1, path: '/terms/?country=KE' });
+    expect((await must(http().get('/v1/sbg/documents/terms'), 200)).number).toBe(2);
+    expect((await must(http().get('/v1/sbg/documents/terms/countries'), 200)).items).toEqual([{ country: 'KE', name: 'Kenya', number: 1, publishedAt: expect.any(String), path: '/terms/?country=KE' }]);
+    expect((await must(http().get('/v1/sbg/documents/terms/history?country=KE'), 200)).items.map((l: { number: number }) => l.number)).toEqual([1]);
+    expect((await refused(http().get('/v1/sbg/documents/privacy?country=KE')))[0]).toBe(404);
+    expect((await refused(http().get('/v1/sbg/documents/terms?country=XX')))[0]).toBe(400);
+
+    // Staff read it as a line of its own, beside the general ones.
+    const lines = (await must(http().get('/v1/sbg/documents').set(bearer(amina)), 200)).items as Array<{ key: string; country?: string; current?: { number: number } }>;
+    expect(lines.map((l) => l.key)).toEqual(['terms', 'privacy', 'cookies', 'terms@KE']);
+
+    // Everybody in Kenya is told: the person (a Kenyan number), and the shop that stands there.
+    for (const token of [person, duka]) {
+      expect((await bell(token))[0]).toMatchObject({ title: 'Terms of use — Kenya: a new version', link: '/terms/?country=KE', data: { key: 'terms@KE', number: 1, askAgain: true } });
+    }
+    // And asked to agree, to Kenya's on top of what they agreed to already.
+    expect(await must(http().get('/v1/sbg/agreement/mine').set(bearer(person)), 200)).toMatchObject({ needed: true, country: 'KE' });
+    const [status, code] = await refused(http().post('/v1/sbg/agreement/mine').set(bearer(person)).send({ versions: GENERAL }));
+    expect([status, code]).toEqual([400, 'AGREEMENT_REQUIRED']);
+    expect(await must(http().post('/v1/sbg/agreement/mine').set(bearer(person)).send({ versions: { ...GENERAL, 'terms@KE': 1 } }))).toMatchObject({ needed: false, country: 'KE', agreed: { terms: 2, 'terms@KE': 1 } });
+    expect(await must(http().get('/v1/sbg/agreement/mine').set(bearer(duka)), 200)).toMatchObject({ needed: true, country: 'KE' });
+
+    // A store signing up in Kenya agrees to Kenya's too; one in Uganda, to the general text alone.
+    expect(await refused(http().post('/v1/sbg/vendors').send({ agreement: { versions: GENERAL }, name: `Kenyan store ${tag}`, country: 'KE' }))).toEqual([400, 'AGREEMENT_REQUIRED', 'agreement']);
+    await must(http().post('/v1/sbg/vendors').send({ agreement: { versions: { ...GENERAL, 'terms@KE': 1 } }, name: `Kenyan store ${tag}`, country: 'KE' }));
+    await must(http().post('/v1/sbg/vendors').send({ agreement: { versions: GENERAL }, name: `Ugandan store ${tag}`, country: 'UG' }));
   });
 });

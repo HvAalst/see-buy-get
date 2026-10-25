@@ -59,7 +59,7 @@ export class FleetSignupController {
       throw new GlosError('FORBIDDEN', 'Sign a fleet up with the phone number you signed in with', { field: 'phone' });
     }
     if (!dto.contactEmail?.includes('@')) throw new GlosError('EMAIL_INVALID', 'Give an email address for the company: we write to it when your papers have been checked', { field: 'contactEmail' });
-    this.agreements?.assertFor(actor, dto.agreement, 'fleet/signups');
+    this.agreements?.assertFor(actor, dto.agreement, 'fleet/signups', dto.jurisdiction);
     const waiting = this.signupsOf(person.roles).filter((s) => s.status === 'DRAFT' || s.status === 'KYC_PENDING');
     if (waiting.length >= MAX_WAITING_SIGNUPS) {
       throw new GlosError('INVALID_STATE', `You already have ${waiting.length} fleets waiting for SeeBuyGet. Wait for one to be checked before signing up another.`);

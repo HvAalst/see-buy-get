@@ -1,5 +1,5 @@
 import { makeConfig, publicDownload, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
-import type { AgreementNumbers } from '../../shared/documents/documents';
+import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { DocumentLinkView, LinkAnswer } from '../../shared/archive/documentLink';
 import type { ReportLinkAnswer, ReportLinkView } from '../../shared/damage/damageReport';
 import type { ProofAnswer } from '../../lib/sbg/personas/archive';
@@ -108,7 +108,7 @@ export interface PersonSession {
  * door the Business app and the Send app use. The device key is kept for the number, so the Fleet app on this browser
  * is a device the PIN already works on.
  */
-export async function enrollPerson(phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: AgreementNumbers | null): Promise<Result<PersonSession>> {
+export async function enrollPerson(phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: Agreement | null): Promise<Result<PersonSession>> {
   const r = await publicRequest<{ token: { access_token: string }; device?: string }>(homeConfig(), '/v1/sbg/identity/enroll', {
     body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) },
   });
@@ -139,8 +139,16 @@ export interface FleetSignupView {
 }
 
 /** A driver, made under the person's own sign-in: the same profile the email door took. */
-export function signUpDriver(session: PersonSession, body: { phone: string; profile: unknown; agreement?: AgreementNumbers }): Promise<Result<{ did: string; entityStatus?: string }>> {
+export function signUpDriver(session: PersonSession, body: { phone: string; profile: unknown; agreement?: Agreement }): Promise<Result<{ did: string; entityStatus?: string }>> {
   return publicRequest<{ did: string; entityStatus?: string }>(homeConfig(), '/v1/sbg/drivers/signups', { body, bearer: session.token });
+}
+
+/**
+ * Where the person signed in stands with what `country` asks them to agree to — before a fleet is signed up there under
+ * their sign-in: a country with documents of its own they have not read is asked first.
+ */
+export function myAgreement(session: PersonSession, country: string): Promise<Result<MyAgreement>> {
+  return publicRequest<MyAgreement>(homeConfig(), `/v1/sbg/agreement/mine?country=${encodeURIComponent(country)}`, { bearer: session.token });
 }
 
 export function signUpFleet(session: PersonSession, body: Record<string, unknown>): Promise<Result<FleetSignupView>> {
@@ -168,7 +176,7 @@ export interface VendorRegisteredView {
 }
 
 /** A store is registered WITH its account: the email and password its people sign in to the Store app with. */
-export function registerStore(body: { name: string; country?: string; address?: string; email: string; password: string; ownerPhone: string; agreement?: AgreementNumbers }): Promise<Result<VendorRegisteredView>> {
+export function registerStore(body: { name: string; country?: string; address?: string; email: string; password: string; ownerPhone: string; agreement?: Agreement }): Promise<Result<VendorRegisteredView>> {
   return publicRequest<VendorRegisteredView>(homeConfig(), '/v1/sbg/vendors', { body });
 }
 

@@ -1,5 +1,5 @@
 import type { SystemMessage, SystemView } from './system';
-import type { AgreementNumbers } from '../../shared/documents/documents';
+import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { Gs1DisputeView } from './gs1Dispute';
 import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
 import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
@@ -51,7 +51,7 @@ export interface PersonAuth {
 }
 
 /** A verified phone, a new PIN, and — the first time — a confirmed recovery email behind it. */
-export async function enroll(phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: AgreementNumbers | null): Promise<Result<PersonAuth>> {
+export async function enroll(phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: Agreement | null): Promise<Result<PersonAuth>> {
   const r = await publicRequest<PersonAuth & { device?: string }>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) } });
   // The code was typed on this device: it is handed the key the PIN is asked with from now on.
   saveDeviceKey(phone, r.data?.device);
@@ -119,6 +119,8 @@ export interface NewBusiness {
   taxNo?: string;
   activities: BusinessActivity[];
   yourName: string;
+  /** Asked only where the business's country asks what the person did not agree to yet (its own documents). */
+  agreement?: Agreement;
 }
 
 /** The person's own session: which businesses they are in, setting one up, saying yes or no to an invitation. */
@@ -126,6 +128,8 @@ export interface PersonClient {
   client: SeededAppClient;
   mine(): Promise<Result<{ items: Membership[] }>>;
   create(input: NewBusiness): Promise<Result<BusinessSession>>;
+  /** Where the person stands with what a country asks them to agree to — before a business is set up there. */
+  myAgreement(country: string): Promise<Result<MyAgreement>>;
   accept(memberId: string): Promise<Result<Membership>>;
   decline(memberId: string): Promise<Result<{ declined: true }>>;
   open(entityId: string): Promise<Result<BusinessSession>>;
@@ -138,6 +142,7 @@ export function createPersonClient(): PersonClient {
     client,
     mine: () => call((c) => c.GET('/v1/sbg/business/mine' as never, {} as never) as never),
     create: (input) => call((c) => c.POST('/v1/sbg/business' as never, { body: input } as never) as never),
+    myAgreement: (country) => call((c) => c.GET('/v1/sbg/agreement/mine' as never, { params: { query: { country } } } as never) as never),
     accept: (memberId) => call((c) => c.POST(`/v1/sbg/business/invitations/${encodeURIComponent(memberId)}/accept` as never, {} as never) as never),
     decline: (memberId) => call((c) => c.POST(`/v1/sbg/business/invitations/${encodeURIComponent(memberId)}/decline` as never, {} as never) as never),
     open: (entityId) => call((c) => c.POST(`/v1/sbg/business/${encodeURIComponent(entityId)}/session` as never, {} as never) as never),

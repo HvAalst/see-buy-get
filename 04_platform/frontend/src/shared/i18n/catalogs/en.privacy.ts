@@ -16,6 +16,12 @@ export const enPrivacy = {
   'pages.notice.current': 'Read the current version',
   'pages.notice.loading': 'Loading…',
   'pages.notice.unavailable': 'This page could not be loaded just now. It needs signal: try again in a moment.',
+  // A country's own, on top of the general text (the user, 2026-10-25: "general terms of use, global, and specific").
+  'pages.notice.countriesTitle': 'What a country adds',
+  'pages.notice.countriesLede': 'Where a country’s law asks for more, that country has a text of its own as well. There, both apply.',
+  'pages.notice.forCountry': 'What {country} adds to the general text. In {country}, both apply.',
+  'pages.notice.general': 'Read the general text',
+  'pages.notice.noneForCountry': '{country} has no text of its own here: the general one applies there, as everywhere.',
 
   // Terms of use (/terms/).
   'pages.terms.metaTitle': 'Terms of use — SeeBuyGet',

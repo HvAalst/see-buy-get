@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { AgreementBlock } from '../../../shared/documents/Agreement';
+import { countryOfNumber } from '../../../shared/phone/dial';
 import { BrandMark, CodeBoxes, PhoneField } from '../../../shared/ui';
 import { AllAppsLink, frontDoorLink } from '../../../shared/ui/AllAppsLink';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -115,7 +116,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
             </div>
           ) : null}
           {/* Choosing a first PIN is where the person's account is made: everybody signing up agrees here (2026-10-25). */}
-          {step === 'pin' ? <AgreementBlock agreed={state.agreement} onChange={(agreement) => actions.set({ agreement })} /> : null}
+          {step === 'pin' ? <AgreementBlock agreed={state.agreement} onChange={(agreement) => actions.set({ agreement })} countries={[countryOfNumber(state.phone)]} /> : null}
 
           {step === 'code' ? (
             <div class="cfield">

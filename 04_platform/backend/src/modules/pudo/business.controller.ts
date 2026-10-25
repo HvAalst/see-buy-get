@@ -50,7 +50,7 @@ export class BusinessController {
   @Post('business')
   create(@Body() dto: CreateBusinessDto, @Actor() actor: IntrospectionResult): BusinessSession {
     const personDid = personOf(actor);
-    this.agreements?.assertFor(actor, dto.agreement, 'business');
+    this.agreements?.assertFor(actor, dto.agreement, 'business', dto.country);
     const { entity } = this.businesses.create(personDid, dto);
     return this.businesses.session(personDid, entity.entityId);
   }

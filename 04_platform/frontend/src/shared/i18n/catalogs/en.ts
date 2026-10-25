@@ -115,9 +115,14 @@ export const en = {
   'agreement.about.terms': 'What SeeBuyGet does and does not do, and what each side can expect',
   'agreement.about.privacy': 'What is kept about you, who sees it, and for how long',
   'agreement.about.cookies': 'What is kept in your browser: SeeBuyGet sets no cookies',
+  // A country's own, on top of the general text (the user, 2026-10-25: "general terms of use, global, and specific").
+  'agreement.aboutCountry': 'What {country} adds, on top of the general text',
+  'agreement.check.lede': 'Signing up in {country} means agreeing to these too. What you have not agreed to yet is marked new.',
+  'agreement.gate.country': '{country} now has documents of its own, on top of the general ones. They are marked new: read them, and agree to go on.',
   'agreement.read': 'Read',
   'agreement.hide': 'Close',
   'agreement.newVersion': 'new version',
+  'agreement.newDocument': 'new',
   'agreement.version': 'Version {number}, published {date}',
   'agreement.changed': 'What changed: {note}',
   'agreement.tick': 'I have read these and I agree to them.',
@@ -130,6 +135,8 @@ export const en = {
   'agreement.gate.changed': 'Something you agreed to has a new version that asks you to agree again. It is marked new: read what changed, and agree to go on.',
   'agreement.gate.agree': 'Agree and go on',
   'agreement.gate.signOut': 'Not now: sign out',
+  // The bell: a notice about a new version of what people agreed to links to the text itself.
+  'notify.readIt': 'Read it',
   // COMING (2026-10-25) — an account signed up before SeeBuyGet opened in its country (shared/opening).
   'opening.title': 'SeeBuyGet is not open in {country} yet',
   'opening.hub': 'Your hub is signed up. Its floor opens the day SeeBuyGet opens here: nothing is received, sorted or loaded until then. You are told that day, by email.',
