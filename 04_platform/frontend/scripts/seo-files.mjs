@@ -89,6 +89,7 @@ writeFileSync(
     `- [Send or track a parcel](${abs('/send/')}): prices, booking and tracking by tracking code`,
     `- [SeeBuyGet at a glance](${abs('/about/')}): what it is, how a parcel travels, where it runs, how prices are set, how parcels are kept safe`,
     `- [For shops](${abs('/for/shops/')}), [for drivers](${abs('/for/drivers/')}), [for fleet offices](${abs('/for/fleets/')}), [for sort hubs](${abs('/for/hubs/')}), [for online stores](${abs('/for/stores/')}), [for businesses](${abs('/for/business/')}): how each works, what is needed, questions and answers`,
+    `- [Terms of use](${abs('/terms/')}): the agreement every sign-up makes — who you agree with, your account, what SeeBuyGet does and does not do, and how the terms change`,
     `- [Your data at SeeBuyGet](${abs('/privacy/')}): what is kept, how it is protected, who sees it, which other companies handle it, how long it is kept and what you can do`,
     `- [Cookies](${abs('/cookies/')}): SeeBuyGet sets none; what its apps keep in your browser instead`,
     `- [Help](${abs('/help/')}): how each app works, signing in, codes and PINs — one page per article — and how to write to us`,
@@ -144,6 +145,7 @@ const HELP_ARTICLE = /<article\b[^>]*\bclass="hc__article"[^>]*>([\s\S]*?)<\/art
 const wanted = [
   ['/about/', ARTICLE],
   ...['shops', 'drivers', 'hubs', 'stores', 'business'].map((w) => [`/for/${w}/`, ARTICLE]),
+  ['/terms/', ARTICLE],
   ['/privacy/', ARTICLE],
   ['/cookies/', ARTICLE],
   ...found.filter((p) => /^\/help\/[a-z0-9-]+\/$/.test(p) && p !== '/help/contact/').map((p) => [p, HELP_ARTICLE]),

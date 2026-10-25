@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * NEED TO KNOW, over the wire (the ISO 28000 check: "Any shop can read any parcel's history"). A parcel's number opened
@@ -61,7 +62,7 @@ describe('a parcel’s history is read by the shops it belongs to', () => {
     const north = await aShop(`North NTK ${tag}`, `NtkNorth${tag}`);
     const south = await aShop(`South NTK ${tag}`, `NtkSouth${tag}`);
     const east = await aShop(`East NTK ${tag}`, `NtkEast${tag}`);
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `NTK Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `NTK Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const storeToken = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     const funded = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(storeToken).send({ amount: 5000 }).expect(201);
     await http().post(`/v1/rails/funding/${funded.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 5000 }).expect(201);

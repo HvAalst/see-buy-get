@@ -10,6 +10,7 @@ import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleCareService } from '../src/modules/pudo/vehicle-care.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { requiredLoadKeys } from '../src/modules/pudo/heavy-cargo';
+import { AGREED } from './agreed';
 
 /**
  * A VEHICLE'S UPKEEP — through the booted application, over HTTP. The unit spec proves the rules on the real services;
@@ -48,7 +49,7 @@ describe('a vehicle’s upkeep, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `care${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const bike = app.get(VehicleService).register({ plate: `CARE-${digits()}`, vehicleClass: 'bike', capacityKg: 30, ownerName: 'Njeri Rider', ownerDriverDid: did } as never);
     return { did, token: session.body.token.access_token as string, vehicleId: bike.vehicleId };
@@ -125,7 +126,7 @@ describe('a vehicle’s upkeep, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `chk${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const plate = `CHK ${n.slice(-3)}T`;
     const truck = app.get(VehicleService).register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Check Fleet', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);
@@ -144,7 +145,7 @@ describe('a vehicle’s upkeep, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `rsc${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const plate = `RSC ${n.slice(-3)}T`;
     const truck = app.get(VehicleService).register({ plate, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Check Fleet', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: fleetDid } as never);

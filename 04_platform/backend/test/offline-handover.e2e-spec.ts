@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
+import { AGREED } from './agreed';
 
 /**
  * A HANDOVER DONE WITH NO SIGNAL KEEPS ITS TIME, over the wire (round 22, the user: "Offline handovers keep their time";
@@ -47,7 +48,7 @@ describe('a handover done with no signal keeps its time, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `offline-${tag}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     const biz = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Rift Millers ${tag}`, country: 'KE', registrationNo: `OFF-${tag}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
     const onboarded = await http().post('/v1/sbg/drivers/onboard').set(bearer(setupKey)).send({ displayName: 'Wanjiru', fullName: 'Wanjiru Truck', nationalId: `DRV-O-${tag}`, mobile: `+2547${String(Date.now()).slice(-6)}9`, licenceClasses: ['truck'], licenceNumber: `DL-O-${tag}`, licenceExpiresAt: '2030-01-01' }).expect(201);
     const driver = { did: onboarded.body.did as string, token: (await http().post('/v1/auth/token').send({ role: 'driver', did: onboarded.body.did, type: 'client_credentials' }).expect(201)).body.access_token as string };

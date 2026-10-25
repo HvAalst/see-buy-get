@@ -7,6 +7,7 @@ import { FleetService, MIN_REST_HOURS } from '../src/modules/pudo/fleet.service'
 import { MonitorService } from '../src/modules/pudo/monitor.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { VehicleCareService } from '../src/modules/pudo/vehicle-care.service';
+import { AGREED } from './agreed';
 
 /**
  * A READING AND A SHIFT'S END KEEP THEIR TIME, over the wire (round 24, the user: "Readings keep their time"; a too-warm
@@ -49,7 +50,7 @@ describe('a reading and a shift’s end keep their time, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `rdg${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const bike = app.get(VehicleService).register({ plate: `RDG-${digits()}`, vehicleClass: 'bike', capacityKg: 30, ownerName: 'Achieng Reefer', ownerDriverDid: did } as never);
     return { did, token: session.body.token.access_token as string, vehicleId: bike.vehicleId };
@@ -62,7 +63,7 @@ describe('a reading and a shift’s end keep their time, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `rdg-biz-${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     const biz = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Highland Dairy ${digits()}`, country: 'KE', registrationNo: `RDG-${digits()}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
     const { freightId, code } = (await http().post('/v1/sbg/dispatch/freight').set(bearer(biz)).send({ description: 'Fresh milk, chilled', pickupLocation: { lat: -1.31, lng: 36.84 }, pickupLabel: 'Highland dairy', destLabel: 'Nakuru cold store', destLocation: { lat: -0.3, lng: 36.08 }, weightKg: 300, packaging: 'palletised', natureCode: 'FOP' }).expect(201)).body;
     // On the road since three hours ago, with this driver.

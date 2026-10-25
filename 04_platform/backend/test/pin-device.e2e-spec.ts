@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { OtpService } from '../src/modules/pudo/otp.service';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 import { EmailCodeService } from '../src/modules/pudo/email-code.service';
+import { AGREED } from './agreed';
 
 /**
  * A PIN WORKS ONLY ON A DEVICE A CODE TO THE PHONE CONFIRMED — through the booted application (the user, 2026-10-11:
@@ -50,7 +51,7 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
     await typeTheCode(phone);
     const email = `pd${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const made = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin, email, emailCode: mailed.body.code }).expect(201)).body as { token: { access_token: string }; device: string; personId: string };
+    const made = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin, email, emailCode: mailed.body.code }).expect(201)).body as { token: { access_token: string }; device: string; personId: string };
     return { ...made, email };
   };
   const login = (body: Record<string, unknown>) => http().post('/v1/sbg/identity/login').send(body);
@@ -64,18 +65,18 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
     await typeTheCode(phone);
     const email = `pd${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const choose = (pin: string) => http().post('/v1/sbg/identity/enroll').send({ phone, pin, email, emailCode: mailed.body.code });
+    const choose = (pin: string) => http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin, email, emailCode: mailed.body.code });
     // Four was the length of a PIN. It is the length of a mobile-money PIN and a bank card's — not of this one.
     for (const pin of ['2468', '246890', 'abcde', '']) expect([pin, await said(choose(pin))]).toEqual([pin, '400 PIN_INVALID']);
     for (const pin of ['12345', '00000', '13579', '12312', '02580']) expect([pin, await said(choose(pin))]).toEqual([pin, '400 PIN_GUESSABLE']);
     // Said BEFORE an email is asked for: a PIN that will not do is not found out a step later, on a screen with no
     // PIN field on it. A PIN that will do, and no email yet, is asked for the email.
-    const withoutEmail = (pin: string) => http().post('/v1/sbg/identity/enroll').send({ phone, pin });
+    const withoutEmail = (pin: string) => http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin });
     expect(await said(withoutEmail('12345'))).toBe('400 PIN_GUESSABLE');
     expect(await said(withoutEmail('2468'))).toBe('400 PIN_INVALID');
     expect(await said(withoutEmail(PIN))).toBe('400 FIELD_REQUIRED');
     // …but not before the phone: somebody who has not typed the code is told that, whatever PIN they sent.
-    expect(await said(http().post('/v1/sbg/identity/enroll').send({ phone: `+2547${digits()}0`, pin: '12345' }))).toBe('400 PHONE_NOT_VERIFIED');
+    expect(await said(http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone: `+2547${digits()}0`, pin: '12345' }))).toBe('400 PHONE_NOT_VERIFIED');
     // None of those spent the code: the person chooses again and is in.
     const chosen = await choose(PIN).expect(201);
     expect(chosen.body.device).toMatch(/^dvc_[0-9a-f]{64}$/);
@@ -179,7 +180,7 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
     await typeTheCode(lost);
     const email = `pd-lost-${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const theirs = (await http().post('/v1/sbg/identity/enroll').send({ phone: lost, pin: PIN, email, emailCode: mailed.body.code }).expect(201)).body;
+    const theirs = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone: lost, pin: PIN, email, emailCode: mailed.body.code }).expect(201)).body;
     const found = `+2541${digits()}0`;
     await typeTheCode(found);
     // (An address, like a number, is sent one code a minute; that minute is not what is proved here.)
@@ -200,7 +201,7 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
 
     // Forgotten, ON A DEVICE THE PIN WORKED ON: the code to the number again, and a new PIN.
     await typeTheCode(phone);
-    const again = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '73914', device: tablet }).expect(201)).body;
+    const again = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '73914', device: tablet }).expect(201)).body;
     expect(again.personId).toBe(before.personId);
     // It works on the device that did it — a new key, because every key from before went with the old PIN.
     for (const device of [before.device, tablet]) expect(await said(login({ phone, pin: '73914', device }))).toBe('403 DEVICE_NOT_KNOWN');
@@ -217,7 +218,7 @@ describe('a PIN works only on a device a code to the phone confirmed, over the w
   it('a PIN replaced on a phone or browser it NEVER worked on needs the code to the recovery email as well', async () => {
     const phone = `+2547${digits()}0`;
     const before = await signUp(phone);
-    const replace = (body: Record<string, unknown>) => http().post('/v1/sbg/identity/enroll').send({ phone, pin: '73914', ...body });
+    const replace = (body: Record<string, unknown>) => http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '73914', ...body });
     const refused = async (r: request.Test) => {
       const answer = await r;
       return `${answer.status} ${answer.body.code} ${answer.body.params?.field ?? ''} ${answer.body.params?.why ?? ''}`.trim();

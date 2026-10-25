@@ -52,56 +52,68 @@ describe('the pages written to be quoted', () => {
 });
 
 /*
- * YOUR DATA, AND COOKIES (/privacy/, /cookies/) — what the system does with personal data today. Held to here: every
- * sentence each section counts is in the catalog, and no more; the page claims none of what the system does not do; and
- * "SeeBuyGet sets no cookies" stays true of the code itself.
+ * THE TERMS OF USE, YOUR DATA, AND COOKIES (/terms/, /privacy/, /cookies/) — written by staff in the console and read from
+ * the server (the user, 2026-10-25). Held to here: every address means one page; a page draws the published text with
+ * its version, and the way to write to us; the first versions inserted with the system claim nothing the system does
+ * not do; and "SeeBuyGet sets no cookies" stays true of the code itself.
  */
-describe('your data, and cookies', () => {
+describe('the terms of use, your data, and cookies', () => {
   const NOTICE_KINDS = Object.keys(NOTICES) as Notice[];
-  const words = (which: Notice) => NOTICES[which].sections.flatMap((s) => range(s.items).map((i) => t(noticeKey(which, `${s.id}.${i}`))));
+  /** The first versions, as the server inserts them on a new server (backend/src/foundation/documents/documents.seed.ts). */
+  const seeds = readFileSync(join('..', 'backend', 'src', 'foundation', 'documents', 'documents.seed.ts'), 'utf8');
 
   it('reads their addresses', () => {
+    expect(infoPageOf('/terms/')).toEqual({ kind: 'notice', which: 'terms' });
     expect(infoPageOf('/privacy/')).toEqual({ kind: 'notice', which: 'privacy' });
     expect(infoPageOf('/cookies')).toEqual({ kind: 'notice', which: 'cookies' });
     expect(infoPageOf('/privacy/more/')).toBeNull();
   });
 
-  it('has every sentence each section counts, and no sentence it does not', () => {
+  it('has, for each, what a search result says and the title to show before the text arrives', () => {
     for (const which of NOTICE_KINDS) {
-      for (const part of ['metaTitle', 'metaDescription', 'title', 'lede', 'other']) expect(t(noticeKey(which, part)), `${which}.${part}`).not.toMatch(/^pages\./);
-      for (const s of NOTICES[which].sections) {
-        expect(t(noticeKey(which, `${s.id}.title`)), `${which}.${s.id}.title`).not.toMatch(/^pages\./);
-        for (const i of range(s.items)) expect(t(noticeKey(which, `${s.id}.${i}`)), `${which}.${s.id}.${i}`).not.toMatch(/^pages\./);
-        expect(t(noticeKey(which, `${s.id}.${s.items + 1}`)), `${which}.${s.id} counts too few`).toMatch(/^pages\./);
-      }
+      for (const part of ['metaTitle', 'metaDescription', 'title']) expect(t(noticeKey(which, part)), `${which}.${part}`).not.toMatch(/^pages\./);
     }
   });
 
-  it('draws each page whole, with the way to write to us about your data — the other notice is in the site’s foot', () => {
-    for (const which of NOTICE_KINDS) {
-      const html = renderToString(<InfoScreen page={{ kind: 'notice', which }} />);
-      const count = NOTICES[which].sections.reduce((n, s) => n + s.items, 0);
-      expect((html.match(/<li>/g) ?? []).length, which).toBe(count);
-      expect(html, which).toContain('href="/help/contact/?topic=privacy"');
-      // Once, in the foot right below — not again in the page (the user, 2026-10-23: "double links").
-      expect(html, which).not.toContain(`href="${NOTICES[NOTICES[which].other].path}"`);
-      expect(renderToString(<PublicShell>{null}</PublicShell>), which).toContain(`href="${NOTICES[NOTICES[which].other].path}"`);
+  it('draws the published text with its version and what changed — and the way to write to us; the three are in the foot', () => {
+    const body = ['Opening words.', '', '## Who you agree with', '', '- One line.', '- [Your data](/privacy/)'].join('\n');
+    const doc = { kind: 'terms' as const, number: 2, title: 'Terms of use', body, publishedAt: '2026-10-25T09:00:00.000Z', changeNote: 'A clearer line', askAgain: false, path: '/terms/' };
+    (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url: '/terms/', towns: [], documents: { terms: doc } };
+    try {
+      const html = renderToString(<InfoScreen page={{ kind: 'notice', which: 'terms' }} />);
+      expect(html).toContain('<h1 class="land__title">Terms of use</h1>');
+      expect(html).toContain('<h2>Who you agree with</h2>');
+      expect((html.match(/<li>/g) ?? []).length).toBe(2);
+      expect(html).toContain('href="/privacy/"');
+      expect(html).toMatch(/Version 2, published/);
+      expect(html).toContain('What changed in this version: A clearer line');
+      expect(html).toContain('href="/help/contact/?topic=privacy"');
+    } finally {
+      delete (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__;
     }
+    const foot = renderToString(<PublicShell>{null}</PublicShell>);
+    for (const which of NOTICE_KINDS) expect(foot, which).toContain(`href="${NOTICES[which].path}"`);
   });
 
-  it('claims nothing the system does not do: signing out does not clear a phone, not everything is encrypted, an account closes only as the system closes it', () => {
-    const all = NOTICE_KINDS.flatMap(words).join('\n');
-    expect(all).not.toMatch(/sign(ing)? out (removes|clears|deletes|wipes|erases)/i);
-    expect(all).not.toMatch(/(all|every(thing)?)( of)?( your| personal)? data is encrypted|everything is encrypted/i);
-    expect(all).not.toMatch(/(you can|to) (delete|close) your account (in|from|under)/i);
-    expect(all).not.toMatch(/download (all )?your (personal )?data/i);
-    expect(all).not.toMatch(/never (stored|kept)|we never keep/i);
-    // And the things it must say, because the system does them.
-    // Closing is offered only after four years without a sign-in, and removes personal details only (2026-10-22).
-    expect(all).toMatch(/four years without a sign-in can be closed by its owner/);
-    expect(all).not.toMatch(/close (it|your account) (at )?any ?time|delete everything/i);
-    expect(all).toMatch(/Some things stay after signing out/);
-    expect(all).toMatch(/without that extra encryption/);
+  it('starts every new server with first versions that claim nothing the system does not do', () => {
+    // The guard read the three: the terms' own heading, the data notice's, the cookie statement's.
+    expect(seeds).toContain('## Who you agree with');
+    expect(seeds).toContain('## How long it is kept');
+    expect(seeds).toContain('## No cookies, no tracking');
+    expect(seeds).not.toMatch(/sign(ing)? out (removes|clears|deletes|wipes|erases)/i);
+    expect(seeds).not.toMatch(/(all|every(thing)?)( of)?( your| personal)? data is encrypted|everything is encrypted/i);
+    expect(seeds).not.toMatch(/(you can|to) (delete|close) your account (in|from|under)/i);
+    expect(seeds).not.toMatch(/download (all )?your (personal )?data/i);
+    expect(seeds).not.toMatch(/never (stored|kept)|we never keep/i);
+    // And the things they must say, because the system does them.
+    expect(seeds).toMatch(/four years without a sign-in can be closed by its owner/);
+    expect(seeds).not.toMatch(/close (it|your account) (at )?any ?time|delete everything/i);
+    expect(seeds).toMatch(/Some things stay after signing out/);
+    expect(seeds).toMatch(/without that extra encryption/);
+    // The terms promise no cover and no payment of anybody's money: SeeBuyGet insures nothing, and quotes, never pays.
+    expect(seeds).toMatch(/SeeBuyGet insures nothing/);
+    expect(seeds).toMatch(/SeeBuyGet does not handle payments between businesses/);
+    expect(seeds).not.toMatch(/SeeBuyGet (will )?(pays?|refunds?|compensates?) (you|the)/i);
   });
 
   it('keeps "SeeBuyGet sets no cookies" true of the code: no app writes one, no server route sets one, no page loads a script from elsewhere', () => {

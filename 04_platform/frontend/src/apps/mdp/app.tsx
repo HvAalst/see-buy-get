@@ -1,4 +1,5 @@
 import type { SbgClient } from '../../lib/sbg';
+import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
 import type { StaffAtCounter } from '../agent/staff';
@@ -104,6 +105,8 @@ export function App() {
 
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={mdpConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
       <Toasts state={state} actions={actions} />
+      {/* What they agreed to, asked again when a version since asks it, or first when somebody else signed them up (2026-10-25). */}
+      <AgreementGate sbg={state.phase === 'ready' ? sbg : null} onSignOut={actions.signOut} />
       <FeedbackFlash />
     </div>
     </ParcelFinderContext.Provider>

@@ -1,4 +1,5 @@
 import { makeConfig, publicDownload, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
+import type { AgreementNumbers } from '../../shared/documents/documents';
 import type { DocumentLinkView, LinkAnswer } from '../../shared/archive/documentLink';
 import type { ReportLinkAnswer, ReportLinkView } from '../../shared/damage/damageReport';
 import type { ProofAnswer } from '../../lib/sbg/personas/archive';
@@ -107,9 +108,9 @@ export interface PersonSession {
  * door the Business app and the Send app use. The device key is kept for the number, so the Fleet app on this browser
  * is a device the PIN already works on.
  */
-export async function enrollPerson(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<PersonSession>> {
+export async function enrollPerson(phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: AgreementNumbers | null): Promise<Result<PersonSession>> {
   const r = await publicRequest<{ token: { access_token: string }; device?: string }>(homeConfig(), '/v1/sbg/identity/enroll', {
-    body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) },
+    body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) },
   });
   if (r.error || !r.data) return { data: null, error: r.error, status: r.status };
   saveDeviceKey(phone, r.data.device);
@@ -138,7 +139,7 @@ export interface FleetSignupView {
 }
 
 /** A driver, made under the person's own sign-in: the same profile the email door took. */
-export function signUpDriver(session: PersonSession, body: { phone: string; profile: unknown }): Promise<Result<{ did: string; entityStatus?: string }>> {
+export function signUpDriver(session: PersonSession, body: { phone: string; profile: unknown; agreement?: AgreementNumbers }): Promise<Result<{ did: string; entityStatus?: string }>> {
   return publicRequest<{ did: string; entityStatus?: string }>(homeConfig(), '/v1/sbg/drivers/signups', { body, bearer: session.token });
 }
 
@@ -167,7 +168,7 @@ export interface VendorRegisteredView {
 }
 
 /** A store is registered WITH its account: the email and password its people sign in to the Store app with. */
-export function registerStore(body: { name: string; country?: string; address?: string; email: string; password: string; ownerPhone: string }): Promise<Result<VendorRegisteredView>> {
+export function registerStore(body: { name: string; country?: string; address?: string; email: string; password: string; ownerPhone: string; agreement?: AgreementNumbers }): Promise<Result<VendorRegisteredView>> {
   return publicRequest<VendorRegisteredView>(homeConfig(), '/v1/sbg/vendors', { body });
 }
 

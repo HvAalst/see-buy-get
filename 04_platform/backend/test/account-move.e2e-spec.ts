@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { OtpService } from '../src/modules/pudo/otp.service';
+import { AGREED } from './agreed';
 
 /**
  * TWO MEMBERS OF STAFF MOVE AN ACCOUNT, OVER THE WIRE — as the guards and the route roles see it.
@@ -52,7 +53,7 @@ describe('two members of staff move an account, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `mv-${tag}-${(seq += 1)}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
     return { phone, token: enrolled.body.token.access_token, device: enrolled.body.device };
   }
   /** A number somebody holds: confirmed by its code, as the app does before asking. */

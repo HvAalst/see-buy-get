@@ -5,9 +5,10 @@ import { loadHelpPage } from './lazyScreens';
 import { t } from '../../shared/i18n';
 import { FAQ } from './screens/WelcomeScreen';
 import type { TownPage } from './api';
+import type { PublishedDocument } from '../../shared/documents/documents';
 import { townSlugFromPath } from './prerendered';
 import { CONTACT_PATH, HELP_PATH, articlePath, helpPageOf } from './help';
-import { ABOUT_PATH, AUDIENCES, NOTICES, forPath, infoPageOf, noticeKey, pageKey, range, type InfoPage } from './pages';
+import { ABOUT_PATH, AUDIENCES, NOTICES, forPath, infoPageOf, noticeKey, pageKey, range, type InfoPage, type Notice } from './pages';
 import { GUIDE_APPS, siteArticleById, siteArticles, type PublicApp } from '../../shared/guide/articles';
 
 type HeadElement = { type: string; props: Record<string, string> };
@@ -45,17 +46,39 @@ function loadTowns(): Promise<TownPage[]> {
   return townsOnce;
 }
 
+/**
+ * The terms of use, the data notice and the cookie statement as published now — fetched ONCE, like the towns, so their
+ * pages are built with the words in them. A build that cannot reach the server builds them empty: the browser fetches.
+ */
+let documentsOnce: Promise<Partial<Record<Notice, PublishedDocument>>> | null = null;
+function loadDocuments(): Promise<Partial<Record<Notice, PublishedDocument>>> {
+  documentsOnce ??= Promise.all(
+    (Object.keys(NOTICES) as Notice[]).map((which) =>
+      fetch(`${API}/v1/sbg/documents/${which}`, { signal: AbortSignal.timeout(8000) })
+        .then((r) => (r.ok ? (r.json() as Promise<PublishedDocument>) : null))
+        .catch(() => null)
+        .then((doc) => [which, doc] as const),
+    ),
+  ).then((pairs) => {
+    const found = Object.fromEntries(pairs.filter(([, doc]) => doc)) as Partial<Record<Notice, PublishedDocument>>;
+    if (Object.keys(found).length < pairs.length) console.warn(`[prerender] could not read every document from ${API} — their pages fetch them in the browser`);
+    return found;
+  });
+  return documentsOnce;
+}
+
 export async function prerender(data: { url: string }): Promise<{
   html: string;
   links?: Set<string>;
-  data: { towns: TownPage[] };
+  data: { towns: TownPage[]; documents: Partial<Record<Notice, PublishedDocument>> };
   head: { lang: string; title: string; elements: Set<HeadElement> };
 }> {
   const towns = await loadTowns();
+  const documents = await loadDocuments();
   // The help page's code is fetched on demand in the browser (lazyScreens.ts); here it is brought in before rendering.
   await loadHelpPage();
   const url = data.url || '/';
-  (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url, towns };
+  (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url, towns, documents };
   const html = renderToString(<App />);
 
   const slug = townSlugFromPath(url);
@@ -67,9 +90,9 @@ export async function prerender(data: { url: string }): Promise<{
     html,
     // From the front page, every town page and the help — and from the help, every article and writing to us. The
     // plugin renders each of them in turn.
-    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, ...AUDIENCES.map((a) => forPath(a.who)), NOTICES.privacy.path, NOTICES.cookies.path]) } : {}),
+    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, ...AUDIENCES.map((a) => forPath(a.who)), NOTICES.terms.path, NOTICES.privacy.path, NOTICES.cookies.path]) } : {}),
     ...(help?.kind === 'index' ? { links: new Set([...siteArticles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
-    data: { towns },
+    data: { towns, documents },
     head: { lang: 'en', ...head },
   };
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import type { AgreementNumbers } from '../../shared/documents/documents';
 import type { SbgError } from '../../lib/sbg';
 import { isNewDevice } from '../../shared/account/pin';
 import { isPinReset } from '../../shared/account/recovery';
@@ -44,6 +45,8 @@ export interface BusinessState {
   devCode: string;
   email: string;
   emailCode: string;
+  /** The versions of the terms of use, the data notice and the cookie statement agreed to when the PIN is chosen (2026-10-25). */
+  agreement: AgreementNumbers | null;
   /** The email step is "confirm it is you" (a PIN replaced on a new device), not "an email for getting back in" (a first PIN). */
   emailReset: boolean;
   busy: boolean;
@@ -65,6 +68,7 @@ const INITIAL: BusinessState = {
   devCode: '',
   email: '',
   emailCode: '',
+  agreement: null,
   emailReset: false,
   busy: false,
   error: null,
@@ -75,7 +79,7 @@ const INITIAL: BusinessState = {
 };
 
 export interface BusinessActions {
-  set: (patch: Partial<Pick<BusinessState, 'phone' | 'pin' | 'code' | 'email' | 'emailCode'>>) => void;
+  set: (patch: Partial<Pick<BusinessState, 'phone' | 'pin' | 'code' | 'email' | 'emailCode' | 'agreement'>>) => void;
   setStep: (step: SignInStep) => void;
   forgetPhone: () => void;
   submitLogin: () => Promise<void>;
@@ -219,7 +223,7 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       const s = stateRef.current;
       patch({ busy: true, error: null });
       const withEmail = s.step === 'email' ? { email: s.email.trim(), code: s.emailCode } : undefined;
-      const r = await enroll(s.phone.trim(), s.pin, withEmail);
+      const r = await enroll(s.phone.trim(), s.pin, withEmail, s.agreement);
       if (r.error || !r.data) {
         const field = (r.error?.params as { field?: string } | undefined)?.field;
         // A first PIN wants a recovery address; a PIN replaced on a device it never worked on wants the one on the account.

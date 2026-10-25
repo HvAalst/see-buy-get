@@ -62,6 +62,8 @@ export const SCREEN_ROLES: Partial<Record<Screen, readonly StaffRole[]>> = {
   pictures: ['admin'],
   connections: ['admin'],
   staffreads: ['admin'],
+  // What everybody agrees to at sign-up: administration writes and publishes it.
+  documents: ['admin'],
   // Round 39 — rating a corridor or hub changes what the network asks there: administration's.
   risks: ['admin'],
   companies: ['admin'],

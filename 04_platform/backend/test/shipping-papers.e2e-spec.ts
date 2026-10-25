@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { isSscc } from '../src/foundation/gs1/gs1';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { AGREED } from './agreed';
 
 /**
  * A SHIPPER'S PAPERS — through the booted application, over HTTP: its GS1 company prefix, the SSCCs its packages get,
@@ -39,7 +40,7 @@ describe('a shipper’s papers, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `papers-${n}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
     const made = await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${n}`, country: 'KE', registrationNo: `REG-PAP-${n}`, activities: ['shipper'], yourName: 'Achieng' }).expect(201);
     return { token: made.body.token.access_token, entityId: made.body.business.entityId };
   }

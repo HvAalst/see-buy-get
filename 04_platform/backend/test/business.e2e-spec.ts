@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { EventBus } from '../src/foundation/events/event-bus.service';
 import { GlosEvent } from '../src/foundation/events/glos-events';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { AGREED } from './agreed';
 
 /**
  * B1 — A CUSTOMER'S BUSINESS, OVER THE WIRE: as the guards, the route roles and the live membership check see it.
@@ -30,7 +31,7 @@ describe('a customer’s business, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `biz-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
     return { phone, token: enrolled.body.token.access_token, email, personDid: enrolled.body.personId };
   }
 

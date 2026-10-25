@@ -34,7 +34,7 @@ import { holds, rolesOf, type StaffRole } from './staffRoles';
 import { resolveBaseUrl } from '../../lib/sbg';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
-export type Screen = 'network' | 'pilot' | 'stores' | 'cases' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections' | 'staffreads' | 'risks' | 'messages';
+export type Screen = 'network' | 'pilot' | 'stores' | 'cases' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections' | 'staffreads' | 'risks' | 'messages' | 'documents';
 
 export interface TowerState {
   phase: Phase;

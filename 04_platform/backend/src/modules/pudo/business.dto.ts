@@ -1,11 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { AgreementDto } from '../../foundation/documents/documents.types';
 import { BUSINESS_ACTIVITIES } from '../../foundation/entity/entity.types';
 import { BUSINESS_MEMBER_ROLES } from './business.types';
 
 /** B1 — set up a business, as the person signed in. */
 export class CreateBusinessDto {
   @IsString() @MaxLength(120) name!: string;
+  /** The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25). */
+  @IsOptional() @ValidateNested() @Type(() => AgreementDto) agreement?: AgreementDto;
   /** Two letters, from the country catalogue. */
   @IsString() @MaxLength(2) country!: string;
   @IsString() @MaxLength(60) registrationNo!: string;

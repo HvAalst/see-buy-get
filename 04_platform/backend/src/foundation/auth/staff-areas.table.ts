@@ -66,6 +66,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/account/close': 'none',
   // A company administrator's own sign-in, asked by the console when a tab comes back — not a staff door.
   'GET sbg/entities/admins/me': 'none',
+  // 2026-10-25 — what somebody agreed to is their own; the documents are read by any staff, written by admin.
+  'GET sbg/agreement/mine': 'none',
+  'GET sbg/documents': 'any',
   'GET sbg/agents': 'any',
   'GET sbg/agents/:did': 'any',
   'GET sbg/agents/:did/bag-plan': 'support',
@@ -432,6 +435,10 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/agents/:did/deposit': 'vetting',
   'POST sbg/agents/:did/hours': 'support',
   'POST sbg/agents/:did/kyc-decision': 'vetting',
+  'POST sbg/agreement/mine': 'none',
+  'POST sbg/documents/:kind/versions': 'admin',
+  'POST sbg/documents/versions/:versionId/decline': 'admin',
+  'POST sbg/documents/versions/:versionId/publish': 'admin',
   'POST sbg/ops/anchors/auditor': 'admin',
   'POST sbg/ops/anchors/auditor/decide': 'admin',
   'POST sbg/ops/anchors/check': 'admin',

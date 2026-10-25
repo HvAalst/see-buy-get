@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { AGREED } from './agreed';
 
 /**
  * TWO PEOPLE SAY ONE NATIONAL ID IS THEIRS, OVER THE WIRE — as the guards and the route roles see it.
@@ -46,7 +47,7 @@ describe('two people say one national ID is theirs, over the wire', () => {
     const phone = await aVerifiedNumber();
     const email = `idd-${tag}-${(seq += 1)}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
     const driver = await http().post('/v1/sbg/drivers/onboard').set(bearer(setupKey)).send({ displayName: `Rider ${seq}`, fullName: `Rider ${seq}`, nationalId, mobile: phone, licenceClasses: ['bike'] }).expect(201);
     return { phone, token: enrolled.body.token.access_token, did: driver.body.did };
   }

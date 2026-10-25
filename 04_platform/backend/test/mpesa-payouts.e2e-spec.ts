@@ -7,6 +7,7 @@ import { ACCOUNT_CODES } from '../src/foundation/books/books.types';
 import { EntityService } from '../src/foundation/entity/entity.service';
 import { MPESA_PAYOUT_RAIL, MpesaPayoutRail } from '../src/foundation/payouts/mpesa-payout-rail.adapter';
 import { WalletGateService } from '../src/modules/pudo/wallet-gate.service';
+import { AGREED } from './agreed';
 
 /**
  * PAYING OUT BY M-PESA — through the booted application, over HTTP, against a stand-in Daraja.
@@ -64,7 +65,7 @@ describe('paying out by M-Pesa, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `b2c${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const token = (await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201)).body.token.access_token as string;
     const number = `07${digits()}2`;
     const sent = (await http().post('/v1/sbg/payout-number/code').set(bearer(token)).send({ phone: number }).expect(201)).body;

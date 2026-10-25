@@ -48,6 +48,17 @@ export function createOperatorApi(sbg: SbgClient) {
     trail: (ref: string) => sbg.request((c) => c.GET('/v1/sbg/ops/trail/{ref}', { params: { path: { ref } } })),
     /** What staff opened: each record a member of staff read by its name or number, who, when, how many times. */
     staffReads: (query: { by?: string; record?: string }) => sbg.request((c) => c.GET('/v1/sbg/staff-reads', { params: { query } })),
+    /**
+     * 2026-10-25 — the terms of use, the data notice and the cookie statement every sign-up agrees to: every version,
+     * written by one member of staff and published by a different one, or declined with a reason.
+     */
+    documents: () => sbg.request((c) => c.GET('/v1/sbg/documents', {})),
+    proposeDocument: (kind: string, body: { title: string; body: string; changeNote: string; askAgain: boolean; by?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/documents/{kind}/versions', { params: { path: { kind } }, body })),
+    publishDocument: (versionId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/documents/versions/{versionId}/publish', { params: { path: { versionId } }, body: { ...(by ? { by } : {}) } })),
+    declineDocument: (versionId: string, reason: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/documents/versions/{versionId}/decline', { params: { path: { versionId } }, body: { reason, ...(by ? { by } : {}) } })),
     /** Round 40 — the trail anchored outside our database: the auditor, a change waiting, the days kept; and an auditor's copy checked. */
     trailAnchors: () => sbg.request((c) => c.GET('/v1/sbg/ops/anchors', {})),
     /** What people wrote from the help's "Write to us": open (sorted), answered or closed; an answer by email; closing one. */

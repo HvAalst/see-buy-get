@@ -6,6 +6,7 @@ import { OutboxSmsSender } from '../src/foundation/sms/outbox-sms.sender';
 import { PersonService } from '../src/modules/pudo/person.service';
 import { EmailCodeService } from '../src/modules/pudo/email-code.service';
 import { MailService } from '../src/foundation/mail/mail.service';
+import { AGREED } from './agreed';
 
 /**
  * THE REVIEW CODE, over the wire, as the live server answers (the user, 2026-10-22: "feature flag the twillio requirement
@@ -74,7 +75,7 @@ describe('the review code, over the wire', () => {
     const made = await live(() =>
       http()
         .post('/v1/sbg/auth/signup')
-        .send({ role: 'mdp', email, password, phone, profile: { mdp: { name: `Review Sort ${u}`, zones: [`RZ${u}`], country: 'KE', location: { lat: -1.25, lng: 36.85 } } } }),
+        .send({ ...AGREED, role: 'mdp', email, password, phone, profile: { mdp: { name: `Review Sort ${u}`, zones: [`RZ${u}`], country: 'KE', location: { lat: -1.25, lng: 36.85 } } } }),
     );
     expect(made.status).toBe(201);
     expect(made.body.device).toMatch(/^dvc_/);
@@ -98,7 +99,7 @@ describe('the review code, over the wire', () => {
     await live(() => typeCode(phone, '000000').expect(201));
     const email = `review.${u}@store.example`;
     const password = 'duka-la-nguo-2026';
-    const store = await live(() => http().post('/v1/sbg/vendors').send({ name: `Review Duka ${u}`, country: 'KE', email, password, ownerPhone: phone }));
+    const store = await live(() => http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Review Duka ${u}`, country: 'KE', email, password, ownerPhone: phone }));
     expect(store.status).toBe(201);
     // Read before the store's person was made: the store keeps its number, and this browser.
     expect(store.body.device).toMatch(/^dvc_/);
@@ -115,7 +116,7 @@ describe('the review code, over the wire', () => {
     await live(() => typeCode(phone, '000000').expect(201));
     const emailAsked = await live(() => http().post('/v1/sbg/identity/email/request').send({ email: mail }));
     expect([emailAsked.status, emailAsked.body]).toEqual([201, { sent: false, review: true, code: '000000' }]);
-    const enrolled = await live(() => http().post('/v1/sbg/identity/enroll').send({ phone, pin: '27493', email: mail, emailCode: '000000' }));
+    const enrolled = await live(() => http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '27493', email: mail, emailCode: '000000' }));
     expect([enrolled.status, enrolled.body.code, enrolled.body.detail]).toEqual([201, undefined, undefined]);
     expect(enrolled.body).toMatchObject({ isNew: true, token: { access_token: expect.any(String) }, device: expect.stringMatching(/^dvc_/) });
 
@@ -146,7 +147,7 @@ describe('the review code, over the wire', () => {
     await live(() => typeCode(phone, '000000').expect(201));
     // Somebody else signs up with the number in the half hour the verification lasts.
     app.get(PersonService).attachRole(phone, 'consumer', '');
-    const enroll = await live(() => http().post('/v1/sbg/identity/enroll').send({ phone }));
+    const enroll = await live(() => http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone }));
     expect(enroll.body.code).toBe('PHONE_NOT_VERIFIED');
     expect(enroll.body.token).toBeUndefined();
   });

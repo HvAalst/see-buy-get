@@ -9,6 +9,7 @@ import { staffOf } from './staff-of';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessService } from './business.service';
+import { AgreementService } from '../../foundation/documents/agreement.service';
 import { AnyMember, BusinessMemberGuard } from './business-member.guard';
 import { ApproveBusinessDto, ArchiveClientDto, BusinessClientDto, BusinessGs1Dto, UpdateBusinessClientDto, CreateBusinessDto, InviteMemberDto, MemberRoleDto, RefuseBusinessDto, UpdateBusinessDto } from './business.dto';
 import { BusinessMemberView, BusinessMembershipList, BusinessMembershipView, BusinessSession, BusinessStaffList, BusinessStaffRow, BusinessView } from './business.types';
@@ -32,6 +33,8 @@ export class BusinessController {
     private readonly clients: BusinessClientService,
     @Optional() private readonly hooks?: BusinessHookService,
     @Optional() private readonly codes?: ShipperCodesService,
+    // 2026-10-25 — the person setting a business up has agreed to what counts now, or agrees with this.
+    @Optional() private readonly agreements?: AgreementService,
   ) {}
 
   /** Round 20 — a client as the forwarder reads it: with the GS1 prefix entered for it, and how many codes are left. */
@@ -47,6 +50,7 @@ export class BusinessController {
   @Post('business')
   create(@Body() dto: CreateBusinessDto, @Actor() actor: IntrospectionResult): BusinessSession {
     const personDid = personOf(actor);
+    this.agreements?.assertFor(actor, dto.agreement, 'business');
     const { entity } = this.businesses.create(personDid, dto);
     return this.businesses.session(personDid, entity.entityId);
   }

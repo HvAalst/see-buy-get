@@ -195,7 +195,7 @@ const SIBLING_DIRS = Object.values(APPS)
  * HTML, kept when it is first opened), the help's words and screen, the fonts only the app screens use, and the build's
  * own pre-rendering code. See `runtimeCaching` below.
  */
-const ROOT_ON_DEMAND = ['help/**', 'towns/**', 'for/**', 'about/**', 'privacy/**', 'cookies/**', 'help.html', 'assets/en.help-*', 'assets/HelpScreen-*', 'assets/prerenderEntry-*', 'assets/inter-*', 'assets/bricolage-grotesque-latin-wdth-*'];
+const ROOT_ON_DEMAND = ['help/**', 'towns/**', 'for/**', 'about/**', 'terms/**', 'privacy/**', 'cookies/**', 'help.html', 'assets/en.help-*', 'assets/HelpScreen-*', 'assets/prerenderEntry-*', 'assets/inter-*', 'assets/bricolage-grotesque-latin-wdth-*'];
 const APP_DIR = resolve(ROOT, 'src/apps', APP_ID);
 
 /**
@@ -347,7 +347,7 @@ function installablePlugins(): PluginOption[] {
           ? {
               runtimeCaching: [
                 {
-                  urlPattern: ({ request, url }: { request: Request; url: URL }) => request.mode === 'navigate' && /^\/(help|towns|for|about|privacy|cookies)(\/|$)/.test(url.pathname),
+                  urlPattern: ({ request, url }: { request: Request; url: URL }) => request.mode === 'navigate' && /^\/(help|towns|for|about|terms|privacy|cookies)(\/|$)/.test(url.pathname),
                   handler: 'NetworkFirst' as const,
                   options: { cacheName: 'sbg-pages', networkTimeoutSeconds: 6, expiration: { maxEntries: 40, maxAgeSeconds: 30 * 24 * 3600 } },
                 },
@@ -366,7 +366,7 @@ function installablePlugins(): PluginOption[] {
          * /driver/ before that app is cached renders the LANDING page at the driver's URL.
          */
         // The pages kept on demand (above) are their own finished HTML: never answered with the front page's shell.
-        navigateFallbackDenylist: [/^\/v1\//, ...(IS_ROOT ? SIBLING_DIRS.map((d) => new RegExp(`^/${d}/`)) : []), ...(IS_ROOT ? [/^\/(help|towns|for|about|privacy|cookies)(\/|$)/] : [])],
+        navigateFallbackDenylist: [/^\/v1\//, ...(IS_ROOT ? SIBLING_DIRS.map((d) => new RegExp(`^/${d}/`)) : []), ...(IS_ROOT ? [/^\/(help|towns|for|about|terms|privacy|cookies)(\/|$)/] : [])],
       },
 
       // Keep the service worker out of dev (also avoids writing an ungitignored dev-dist/).

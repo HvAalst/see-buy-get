@@ -65,6 +65,7 @@ const SAY: Record<string, string> = {
   'error.phone_not_served': 'We cannot send a code to a number in that country yet.',
   'error.sms_not_sent': 'We could not send the code just now. Try again in a little while.',
   'error.country_not_open': 'SeeBuyGet is not open in this country yet. This starts the day it opens.',
+  'error.agreement': 'Read and agree to the terms first.',
   'error.verify_phone': 'Verify your phone first — we will send you a code.',
   'error.verify_email': 'Confirm your email first — type the code we sent to it.',
   'error.bag_full': 'That bag is full.',
@@ -105,7 +106,7 @@ const OVERRIDE: Record<string, string> = {
  * Refusals whose one useful fact only the server has — how long a lock has left to run. Its sentence was written
  * for the person reading it and IS the message; the shared line could only say "for now".
  */
-const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED', 'PARCEL_LOST', 'COUNTRY_NOT_OPEN']);
+const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED', 'PARCEL_LOST', 'COUNTRY_NOT_OPEN', 'AGREEMENT_REQUIRED']);
 
 export function errorSentence(error: SbgError): string {
   if (SERVER_SAYS.has(error.code) && error.detail?.trim()) return error.detail.trim();

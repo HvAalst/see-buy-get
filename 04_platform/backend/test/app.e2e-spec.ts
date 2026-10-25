@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { contentPhotoOver, hubPhotoOver, photoOver, shopPhotoOver } from './content-photo';
 import { declared } from './declared';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
+import { AGREED } from './agreed';
 
 describe('GLOS backend (e2e)', () => {
   let app: INestApplication;
@@ -754,7 +755,7 @@ describe('GLOS backend (e2e)', () => {
     const driver = await request(http).post('/v1/sbg/drivers').set(auth).send({ driverDid: 'did:glos:invan', name: 'Joe', corridorId: corridor.body.corridorId }).expect(201);
 
     // Vendor onboarding + the shipment webhook.
-    const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ name: 'ACME Store', callbackUrl: 'https://acme.example/hook' }).expect(201);
+    const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ ...AGREED, name: 'ACME Store', callbackUrl: 'https://acme.example/hook' }).expect(201);
     expect(vendor.body.secret).toMatch(/^whsec_/); // issued exactly once, at registration
     // The store pays in and mints its own order, signed in as itself: staff do neither in a store's name.
     const acme = await asStore(vendor.body);
@@ -857,7 +858,7 @@ describe('GLOS backend (e2e)', () => {
     }
     const origin = await onboard('MDP Origin', 'NorthTown');
     const dest = await onboard('MDP Dest', 'EastTown');
-    const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ name: 'HubShop' }).expect(201);
+    const vendor = await request(http).post('/v1/sbg/vendors').set(auth).send({ ...AGREED, name: 'HubShop' }).expect(201);
     const hubShop = await asStore(vendor.body);
     await fund(`/v1/sbg/vendors/${vendor.body.vendorId}/top-up`, 50, hubShop, auth); // prepay the daughter co
 
@@ -1344,10 +1345,10 @@ describe('GLOS backend (e2e)', () => {
       await request(http).post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
       return phone;
     };
-    const made = (await request(http).post('/v1/sbg/vendors').send({ name: `Desk Store ${u}`, ownerPhone: await verified(OWNER), callbackUrl: 'https://desk.example/hook', address: 'Biashara St 12', email, password: 'vitenge-vya-pwani-8' }).expect(201)).body;
+    const made = (await request(http).post('/v1/sbg/vendors').send({ ...AGREED, name: `Desk Store ${u}`, ownerPhone: await verified(OWNER), callbackUrl: 'https://desk.example/hook', address: 'Biashara St 12', email, password: 'vitenge-vya-pwani-8' }).expect(201)).body;
     const store = { Authorization: `Bearer ${made.token.access_token}` };
     // Another store, signed in as itself: no more staff than the first.
-    const rival = (await request(http).post('/v1/sbg/vendors').send({ name: `Rival Store ${u}`, email: `rival.${u}@store.example`, password: 'vitenge-vya-bara-9', ownerPhone: await verified(`+25472${u}88`) }).expect(201)).body;
+    const rival = (await request(http).post('/v1/sbg/vendors').send({ ...AGREED, name: `Rival Store ${u}`, email: `rival.${u}@store.example`, password: 'vitenge-vya-bara-9', ownerPhone: await verified(`+25472${u}88`) }).expect(201)).body;
     const shop = { Authorization: `Bearer ${rival.token.access_token}` };
 
     // THE LIST: staff's, and nobody else's.
@@ -1394,7 +1395,7 @@ describe('GLOS backend (e2e)', () => {
     expect(typeof notFound.body.detail).toBe('string');
 
     // ValidationPipe failures normalize to VALIDATION_FAILED with the violations surfaced structurally.
-    const badBody = await request(http).post('/v1/sbg/vendors').set(auth).send({ callbackUrl: 123 }).expect(400);
+    const badBody = await request(http).post('/v1/sbg/vendors').set(auth).send({ ...AGREED, callbackUrl: 123 }).expect(400);
     expect(badBody.body.code).toBe('VALIDATION_FAILED');
     expect(Array.isArray(badBody.body.params.violations)).toBe(true);
   });

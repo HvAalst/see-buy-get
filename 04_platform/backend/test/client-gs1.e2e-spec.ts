@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { ssccOf } from '../src/foundation/gs1/gs1';
+import { AGREED } from './agreed';
 
 /**
  * A FORWARDER'S CLIENT'S OWN GS1 PREFIX, over the wire (round 20, the user: "A client's own GS1 prefix"; "The forwarder, on
@@ -39,7 +40,7 @@ describe('a forwarder’s client’s GS1 prefix, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `cgs1-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    return { phone, token: (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token };
+    return { phone, token: (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token };
   }
   let lastEntityId = '';
   async function aBusiness(name: string, activities: string[]): Promise<string> {

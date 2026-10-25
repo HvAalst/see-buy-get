@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { MAIL_SENDER, OutgoingMail } from '../src/foundation/mail/mail.types';
 import { OutgoingSms, SMS_SENDER } from '../src/foundation/sms/sms.types';
+import { AGREED } from './agreed';
 
 /**
  * SIGNING UP BEFORE A COUNTRY OPENS, over the wire (the user, 2026-10-25: "it would be good when shops, drivers/fleets,
@@ -120,7 +121,7 @@ describe('signing up before a country opens, over the wire', () => {
     const account = await must(
       http()
         .post('/v1/sbg/auth/signup')
-        .send({
+        .send({ ...AGREED,
           role: 'pudo',
           email: CHANDA,
           password: `chanda-${tag}-keeps-this-7`,

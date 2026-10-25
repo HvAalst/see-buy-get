@@ -11,6 +11,7 @@ import { FleetHookService } from '../src/modules/pudo/fleet-hooks.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * A FLEET'S OWN SYSTEM, TOLD OF ITS WORK, over the wire (the user, round 11: the events recommended; the money on each load
@@ -89,7 +90,7 @@ describe('a fleet’s own system, told of its work, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `sysdrv${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const token = session.body.token.access_token as string;
     const plate = `SYS ${n.slice(-3)}T`;

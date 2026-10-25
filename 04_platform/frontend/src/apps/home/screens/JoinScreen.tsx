@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { EmailStep } from '../../../shared/account/EmailStep';
+import { AgreementBlock } from '../../../shared/documents/Agreement';
 import { toPlaceWords } from '../../../shared/placewords';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { duplicateField, isIdentityDocument, type DuplicateField } from '../../../shared/duplicate';
@@ -396,6 +397,8 @@ function PinStep({ state, actions }: JoinScreenProps) {
             />
           </div>
         ) : null}
+        {/* Where the person's account is made: everybody signing up agrees here (2026-10-25). */}
+        <AgreementBlock agreed={f.agreement} onChange={(agreement) => actions.setForm({ agreement })} />
       </Card>
 
       <div class="scr__cta">
@@ -956,6 +959,8 @@ function LoginStep({ state, actions }: JoinScreenProps) {
             placeholder={t('home.join.login.passwordPh')}
           />
         </div>
+        {/* Where the account is made: everybody signing up agrees here (2026-10-25). */}
+        <AgreementBlock agreed={f.agreement} onChange={(agreement) => actions.setForm({ agreement })} />
       </Card>
 
       <div class="scr__cta">

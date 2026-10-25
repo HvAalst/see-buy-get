@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { ssccOf } from '../src/foundation/gs1/gs1';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { AGREED } from './agreed';
 
 /**
  * A LOAD FOUND BY WHAT WAS SCANNED, over the wire (round 19, the user: "A scan finds the load"; "Every scan box we
@@ -41,7 +42,7 @@ describe('a load found by what was scanned, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `find-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     return (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${tag}`, country: 'KE', registrationNo: `FIND-${tag}-${seq}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
   }
   async function aDriver(name: string): Promise<string> {

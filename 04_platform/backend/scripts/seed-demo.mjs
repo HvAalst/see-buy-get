@@ -45,6 +45,14 @@ async function req(method, path, { token, body } = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+/** EVERY SIGN-UP AGREES (2026-10-25): to the versions of the terms of use, the data notice and the cookie statement in force. */
+let agreedOnce;
+function agreed() {
+  agreedOnce ??= req('GET', '/v1/sbg/agreement').then((r) => ({ agreement: Object.fromEntries((r.data?.documents ?? []).map((d) => [d.kind, d.number])) }));
+  return agreedOnce;
+}
+
+
 /**
  * PUT MONEY IN THE WAY MONEY GETS IN — ask, then let the provider confirm it.
  *
@@ -145,7 +153,7 @@ async function ensureAccount(email, role, profile) {
     return need(await req('POST', '/v1/sbg/auth/login', { body: { email, password: PASSWORD } }), `login ${email}`);
   }
   const phone = await verifiedPhone();
-  const r = await req('POST', '/v1/sbg/auth/signup', { body: { role, email, password: PASSWORD, phone, profile } });
+  const r = await req('POST', '/v1/sbg/auth/signup', { body: { ...(await agreed()), role, email, password: PASSWORD, phone, profile } });
   return need(r, `signup ${email}`);
 }
 
@@ -331,7 +339,7 @@ const run = async () => {
     // A PIN is chosen with a confirmed recovery email behind it (the sandbox echoes the code it would mail).
     const mgrEmail = 'kilima.manager@sbg.test';
     const mgrCode = (await req('POST', '/v1/sbg/identity/email/request', { body: { email: mgrEmail } })).data?.code;
-    const enrolled = await req('POST', '/v1/sbg/identity/enroll', { body: { phone: mgr.contactPhone, pin: MGR_PIN, email: mgrEmail, emailCode: mgrCode } });
+    const enrolled = await req('POST', '/v1/sbg/identity/enroll', { body: { ...(await agreed()), phone: mgr.contactPhone, pin: MGR_PIN, email: mgrEmail, emailCode: mgrCode } });
     if (!enrolled.ok) {
       // Already enrolled from an earlier run — that is the idempotent case, not a failure.
       say(`  (fleet manager person already enrolled: ${mgr.contactPhone})`);
@@ -405,7 +413,7 @@ const run = async () => {
     need(await req('POST', '/v1/sbg/auth/phone/verify', { body: { phone, code: r1.data?.code } }), `${label} phone code`);
     const email = `${label}.driver@sbg.test`;
     const e1 = await req('POST', '/v1/sbg/identity/email/request', { body: { email } });
-    const enrolled = need(await req('POST', '/v1/sbg/identity/enroll', { body: { phone, pin: DRIVER_PIN, email, emailCode: e1.data?.code } }), `${label} PIN`);
+    const enrolled = need(await req('POST', '/v1/sbg/identity/enroll', { body: { ...(await agreed()), phone, pin: DRIVER_PIN, email, emailCode: e1.data?.code } }), `${label} PIN`);
     const session = need(await req('POST', '/v1/sbg/drivers/session', { body: { phone, pin: DRIVER_PIN, device: enrolled.device } }), `${label} sign-in`);
     return { phone, token: session.token?.access_token };
   };
@@ -657,6 +665,7 @@ const run = async () => {
     shop = need(
       await req('POST', '/v1/sbg/vendors', {
         body: {
+          ...(await agreed()),
           name: 'Nairobi Threads',
           country: 'KE',
           address: 'Biashara St 12',

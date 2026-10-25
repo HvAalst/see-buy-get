@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver, shipmentPhotoOver, shopPhotoOver } from './content-photo';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * EVERY LABEL FOR A THERMAL PRINTER, over the wire (round 27, the user: "Thermal labels (ZPL)"; "Every label we print").
@@ -62,7 +63,7 @@ describe('every label for a thermal printer, over the wire', () => {
 
   /** A store, signed in to its app — with money to ship, or none. */
   async function aStore(funded = true): Promise<{ id: string; token: { authorization: string } }> {
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Label Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Label Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const token = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     if (funded) {
       const asked = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(token).send({ amount: 5000 }).expect(201);
@@ -169,7 +170,7 @@ describe('every label for a thermal printer, over the wire', () => {
       await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
       const email = `zpl-${digits()}@example.com`;
       const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-      const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+      const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
       return (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${digits()}`, country: 'KE', registrationNo: `ZPL-${digits()}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
     };
     const biz = await owner('Jenga Bricks');

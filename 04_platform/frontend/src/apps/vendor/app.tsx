@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AccountMenu } from '../../shared/account/AccountMenu';
@@ -118,6 +119,8 @@ export function App() {
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} labels={false} />
 
       <Toasts state={state} actions={actions} />
+      {/* What they agreed to, asked again when a version since asks it, or first when somebody else signed them up (2026-10-25). */}
+      <AgreementGate sbg={state.phase === 'ready' ? sbg : null} onSignOut={actions.signOut} />
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} api={account} onSignOut={actions.signOut} onChangePassword={changePassword} devices={actions.storeDevices} />
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={vendorConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
     </div>

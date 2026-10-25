@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { OtpService } from '../src/modules/pudo/otp.service';
+import { AGREED } from './agreed';
 
 /**
  * THE ACCOUNT IS THE PERSON, AND EVERY APP CAN REACH IT.
@@ -55,9 +56,9 @@ describe('the account, reached from a role app', () => {
     // A PIN is chosen with a confirmed recovery email behind it: a code to the address, echoed here because this is a sandbox.
     const EMAIL = `njeri${PHONE.slice(-6)}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email: EMAIL });
-    await http().post('/v1/sbg/identity/enroll').send({ phone: PHONE, pin: '48261' }).expect(400); // no email, no PIN
+    await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone: PHONE, pin: '48261' }).expect(400); // no email, no PIN
     // The code was typed here: this is the device the PIN works on.
-    device = (await http().post('/v1/sbg/identity/enroll').send({ phone: PHONE, pin: PIN, email: EMAIL, emailCode: mailed.body.code }).expect(201)).body.device;
+    device = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone: PHONE, pin: PIN, email: EMAIL, emailCode: mailed.body.code }).expect(201)).body.device;
 
     const session = await http().post('/v1/sbg/drivers/session').send({ phone: PHONE, pin: PIN, device });
     driverToken = session.body.token.access_token;

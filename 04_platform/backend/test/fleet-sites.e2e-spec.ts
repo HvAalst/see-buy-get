@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { DriverService } from '../src/modules/pudo/driver.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
+import { AGREED } from './agreed';
 
 /**
  * A FLEET'S SITES — through the booted application, over HTTP. The unit spec proves the sites and the plan from each on
@@ -62,7 +63,7 @@ describe('a fleet’s sites, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `dock-${n}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
     const made = await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${n}`, country: 'KE', registrationNo: `REG-DOK-${n}`, activities: ['shipper'], yourName: 'Achieng' }).expect(201);
     return { token: made.body.token.access_token, entityId: made.body.business.entityId };
   }

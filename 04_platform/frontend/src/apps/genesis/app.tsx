@@ -1,4 +1,5 @@
 import { useRegisterSW } from 'virtual:pwa-register/preact';
+import { AgreementGate } from '../../shared/documents/Agreement';
 import { BottomNav, ConnectivityNote, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import type { SbgClient } from '../../lib/sbg';
@@ -66,6 +67,8 @@ export function App() {
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />
+      {/* What they agreed to, asked again when a version since asks it (2026-10-25). Only once signed in. */}
+      <AgreementGate sbg={state.identity ? sbg : null} onSignOut={() => actions.signOut()} />
     </div>
   );
 }

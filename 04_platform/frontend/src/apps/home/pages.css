@@ -91,3 +91,52 @@
   padding-left: 0;
   padding-right: 0;
 }
+
+/* The terms of use, your data, cookies: the text staff publish in the console (shared/documents/markdown.tsx). */
+.pg__md {
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+/* Two classes: the shared .md rules load in another sheet, and the page's own headings must win. */
+.md.pg__md h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--navy);
+  margin: 28px 0 8px;
+}
+
+.md.pg__md h3 {
+  font-size: 18px;
+  color: var(--navy);
+  margin: 20px 0 6px;
+}
+
+.md.pg__md ul,
+.md.pg__md ol {
+  display: grid;
+  gap: 8px;
+  padding-inline-start: 22px;
+}
+
+.md.pg__md li + li {
+  margin-top: 0;
+}
+
+.pg__old,
+.pg__changed {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: var(--tx2);
+}
+
+.pg__btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}

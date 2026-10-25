@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { AGREED } from './agreed';
 
 /**
  * A FLEET SIGNS ITSELF UP, AND STAFF CHECK IT — over the wire (the user, 2026-10-23: "the fleet app register is
@@ -43,7 +44,7 @@ describe('a fleet signs itself up, and staff check it, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `fleet-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body;
+    const enrolled = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body;
     return { phone, auth: bearer(enrolled.token.access_token as string), device: enrolled.device as string };
   }
   /** A photograph uploaded by whoever holds `auth`: its id. */
@@ -158,7 +159,7 @@ describe('a fleet signs itself up, and staff check it, over the wire', () => {
     const phone = `+2547${digits()}9`.slice(0, 13);
     const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
-    const auth = bearer((await http().post('/v1/sbg/identity/enroll').send({ phone }).expect(201)).body.token.access_token);
+    const auth = bearer((await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone }).expect(201)).body.token.access_token);
     const refused = await http().post('/v1/sbg/fleet/signups').set(auth).send({
       phone,
       companyName: 'No PIN Haulage',

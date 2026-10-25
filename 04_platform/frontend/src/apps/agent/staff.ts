@@ -1,4 +1,5 @@
 import { publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
+import type { AgreementNumbers } from '../../shared/documents/documents';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import type { Screen } from './useAgentApp';
 
@@ -53,9 +54,9 @@ export function staffDoors(config: SbgConfig) {
     codeTo: (phone: string) => publicRequest<{ sent: boolean; code?: string }>(config, '/v1/sbg/auth/phone/request', { body: { phone: phone.trim() } }),
     checkCode: (phone: string, code: string) => publicRequest<{ verified: boolean }>(config, '/v1/sbg/auth/phone/verify', { body: { phone: phone.trim(), code } }),
     /** A first PIN wants a recovery email behind it: the server asks, and the address and its code come on a second try. */
-    choosePin: async (phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<PersonSignIn>> => {
+    choosePin: async (phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: AgreementNumbers | null): Promise<Result<PersonSignIn>> => {
       const r = await publicRequest<PersonSignIn & { device?: string }>(config, '/v1/sbg/identity/enroll', {
-        body: { phone: phone.trim(), pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email.trim(), emailCode: recovery.code } : {}) },
+        body: { phone: phone.trim(), pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email.trim(), emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) },
       });
       // The code was typed on this phone: it is handed the key the PIN is asked with from now on.
       saveDeviceKey(phone, (r.data as { device?: string } | null)?.device);

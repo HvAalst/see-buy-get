@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { BusinessHookService } from '../src/modules/pudo/business-hooks.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { AGREED } from './agreed';
 
 /**
  * A LOAD AT A BORDER OR A HUB, over the wire (the user, round 14: "A load at a border or hub"; "The driver, by a tap";
@@ -31,7 +32,7 @@ describe('a load at a border or a hub, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `pass-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
     return { phone, token: enrolled.body.token.access_token };
   }
 

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Optional, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { AgreementService } from '../../foundation/documents/agreement.service';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { EmailCodeService } from './email-code.service';
@@ -50,6 +51,8 @@ export class IdentityController {
     private readonly emailCodes: EmailCodeService,
     private readonly recovery: AccountRecoveryService,
     private readonly fleets: FleetManagerService,
+    // 2026-10-25 — every sign-up agrees to the terms of use, the data notice and the cookie statement that count now.
+    @Optional() private readonly agreements?: AgreementService,
   ) {}
 
   /**
@@ -67,6 +70,14 @@ export class IdentityController {
     // the email step, typed an address and its code, and was only then told that 12345 will not do — on a screen
     // with no PIN field on it, and no way back to one but to start again with a minute's wait for a new code.
     if (verified && dto.pin !== undefined) this.persons.assertPin(dto.pin);
+    /*
+     * EVERY SIGN-UP AGREES (the user, 2026-10-25: "every sign up needs an agreement of terms of use, use of data,
+     * storage of data, cookie statement"). A phone new to SeeBuyGet is somebody signing up: refused without the versions
+     * that count now, before anything is made or the phone's confirmation spent. Somebody already here — a fleet's
+     * driver, a PIN being replaced — is asked in their app instead, when they have not agreed to what counts now.
+     */
+    const signingUp = verified && !this.persons.findByPhone(dto.phone);
+    const agreed = this.agreements && (signingUp || dto.agreement) ? this.agreements.require(dto.agreement) : undefined;
     /*
      * A PIN IS CHOSEN WITH A RECOVERY EMAIL BEHIND IT — the user, 2026-10-01: "we need an email for account
      * recovery and safety." The PIN is what makes this an account somebody can be locked out of, or have taken
@@ -109,6 +120,7 @@ export class IdentityController {
       }
     }
     const { person, isNew, token, device } = this.persons.enroll(dto.phone, verified, dto.pin, dto.device);
+    if (agreed) this.agreements?.recordIfNew([`person:${person.personDid}`], agreed, 'identity/enroll');
     if (needsEmail) {
       this.persons.setEmail(person.personDid, dto.email as string);
       this.emailCodes.consume(dto.email as string);

@@ -6,6 +6,7 @@ import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * THE TAMPER PROTOCOL, over the wire (round 35; the user, answering the ISO 28000/28001 check: "The tamper protocol" — a
@@ -52,7 +53,7 @@ describe('the tamper protocol, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `tamper-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const owner = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const owner = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
     const created = await http().post('/v1/sbg/business').set(bearer(owner)).send({ name: `Tamper Traders ${tag}`, country: 'KE', registrationNo: `TMP-${tag}`, activities: ['shipper'], yourName: 'Achieng Owner' }).expect(201);
     return bearer(created.body.token.access_token);
   }
@@ -188,7 +189,7 @@ describe('the tamper protocol, over the wire', () => {
   it('a parcel: its wrap cut at the shop that holds it and at the hub it stands at — set apart, into no bag, released by operations', async () => {
     const north = await aShop(`North TMP ${tag}`, `TmpNorth${tag}`);
     const south = await aShop(`South TMP ${tag}`, `TmpSouth${tag}`);
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Tamper Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Tamper Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const storeToken = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     const funded = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(storeToken).send({ amount: 5000 }).expect(201);
     await http().post(`/v1/rails/funding/${funded.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 5000 }).expect(201);

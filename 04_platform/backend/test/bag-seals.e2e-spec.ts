@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
 import { declared } from './declared';
 import { CorridorService } from '../src/modules/pudo/corridor.service';
+import { AGREED } from './agreed';
 
 /**
  * A BAG CLOSED ON OUR OWN SEAL, AND RECEIVED BY IT, over the wire (round 36; the user: "Receiving on our own seals"; "we
@@ -70,7 +71,7 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
   it('a shop’s coded seal read off the bag at the hub; the hub’s photographed bag found cut at the shop, held, released, received as found', async () => {
     const north = await aShop(`North BAG ${tag}`, `BagNorth${tag}`);
     const south = await aShop(`South BAG ${tag}`, `BagSouth${tag}`);
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Bag Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Bag Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const storeToken = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     const funded = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(storeToken).send({ amount: 5000 }).expect(201);
     await http().post(`/v1/rails/funding/${funded.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 5000 }).expect(201);
@@ -202,7 +203,7 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
   it('a driver takes a bag on its seal — loading it themselves, or reading it after a counter loaded it onto them — and it is received only then', async () => {
     const north = await aShop(`North TAKE ${tag}`, `TakeNorth${tag}`);
     const south = await aShop(`South TAKE ${tag}`, `TakeSouth${tag}`);
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Take Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Take Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const storeToken = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     const funded = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(storeToken).send({ amount: 5000 }).expect(201);
     await http().post(`/v1/rails/funding/${funded.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 5000 }).expect(201);

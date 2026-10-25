@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { ssccOf } from '../src/foundation/gs1/gs1';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * A STORE PARCEL'S SSCC FINDS ITS PARCEL, over the wire (round 32, the user: "A store parcel's SSCC at our counters";
@@ -67,7 +68,7 @@ describe('a store parcel’s SSCC finds its parcel, over the wire', () => {
     const south = await aShop(`South SSC ${tag}`, `SscSouth${tag}`);
     const other = await aShop(`Other SSC ${tag}`, `SscNorth${tag}`);
     await http().post('/v1/sbg/corridors').set(operator).send({ name: `SscNorth → SscSouth ${tag}`, originZone: `SscNorth${tag}`, destZone: `SscSouth${tag}` }).expect(201);
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `SSCC Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `SSCC Store ${tag}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const store = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     await fund(`/v1/sbg/vendors/${made.vendorId}/top-up`, store, 5000);
     const P = `62${String(Math.floor(Math.random() * 90_000) + 10_000)}`;

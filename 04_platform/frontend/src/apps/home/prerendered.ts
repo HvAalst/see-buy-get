@@ -1,4 +1,6 @@
 import type { TownPage } from './api';
+import type { PublishedDocument } from '../../shared/documents/documents';
+import type { Notice } from './pages';
 
 /**
  * WHAT THE BUILD KNEW — handed from the prerender to the browser so both draw the same first frame.
@@ -11,7 +13,7 @@ import type { TownPage } from './api';
  * real one and the data is in the page. Neither present — dev, or a server that was down at build time — is an
  * ordinary state: the screens fetch for themselves.
  */
-type BuildGlobals = { __SBG_PRERENDER__?: { url: string; towns: TownPage[] } };
+type BuildGlobals = { __SBG_PRERENDER__?: { url: string; towns: TownPage[]; documents?: Partial<Record<Notice, PublishedDocument>> } };
 
 export function prerenderedTowns(): TownPage[] {
   const g = (globalThis as BuildGlobals).__SBG_PRERENDER__;
@@ -22,6 +24,22 @@ export function prerenderedTowns(): TownPage[] {
     return Array.isArray(data?.towns) ? data!.towns : [];
   } catch {
     return [];
+  }
+}
+
+/**
+ * The terms of use, the data notice or the cookie statement as the build read it from the server — so the page a search
+ * engine reads has the words in it. The browser asks the server again: staff may have published since the build.
+ */
+export function prerenderedDocument(which: Notice): PublishedDocument | null {
+  const g = (globalThis as BuildGlobals).__SBG_PRERENDER__;
+  if (g) return g.documents?.[which] ?? null;
+  try {
+    const el = globalThis.document?.getElementById('prerender-data');
+    const data = el?.textContent ? (JSON.parse(el.textContent) as { documents?: Partial<Record<Notice, PublishedDocument>> }) : null;
+    return data?.documents?.[which] ?? null;
+  } catch {
+    return null;
   }
 }
 

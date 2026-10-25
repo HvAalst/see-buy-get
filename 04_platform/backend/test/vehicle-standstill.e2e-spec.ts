@@ -8,6 +8,7 @@ import { FleetHookService } from '../src/modules/pudo/fleet-hooks.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleStandstillService } from '../src/modules/pudo/vehicle-standstill.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
+import { AGREED } from './agreed';
 
 /**
  * A VEHICLE STANDING STILL, over the wire (the user, round 16: "A watch on stopped vehicles"; "The fleet's managers";
@@ -81,7 +82,7 @@ describe('a vehicle standing still, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `stldrv${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const token = session.body.token.access_token as string;
     const plate = `STL ${n.slice(-3)}T`;
@@ -154,7 +155,7 @@ describe('a vehicle standing still, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `stlbiz${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
     const biz = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Jenga Bricks ${tag}`, country: 'KE', registrationNo: `STL-${tag}`, activities: ['shipper'], yourName: 'Wanjiku Owner' }).expect(201)).body.token.access_token as string;
     await http().post('/v1/sbg/border-rules').set(bearer(operator)).send({ from: 'KE', to: 'UG', crossings: [{ name: 'Malaba', hours: '24 hours' }], cabotage: 'allowed' }).expect(201);
     const pickup = { lat: -1.33, lng: 36.87 };

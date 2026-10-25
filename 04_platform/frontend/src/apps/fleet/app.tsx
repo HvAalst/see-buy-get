@@ -1,4 +1,5 @@
 import { EarningsScreen } from './screens/EarningsScreen';
+import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { useState } from 'preact/hooks';
 import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
@@ -123,6 +124,8 @@ export function App() {
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />
 
       <Toasts state={state} actions={actions} />
+      {/* What they agreed to, asked again when a version since asks it, or first when somebody else signed them up (2026-10-25). */}
+      <AgreementGate sbg={state.phase === 'ready' ? sbg : null} onSignOut={actions.signOut} />
     </div>
   );
 }

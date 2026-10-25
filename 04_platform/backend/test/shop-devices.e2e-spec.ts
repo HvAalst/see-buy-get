@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { OutboxSmsSender } from '../src/foundation/sms/outbox-sms.sender';
+import { AGREED } from './agreed';
 
 /**
  * A SHOP'S SIGN-IN WORKS ONLY ON ITS OWN PHONES (the user, 2026-10-18: "who is at the counter") — over the wire.
@@ -41,7 +42,7 @@ describe('a shop’s own phones, over the wire', () => {
     const password = 'duka-la-kona-2026';
     const made = await http()
       .post('/v1/sbg/auth/signup')
-      .send({ role: 'pudo', email, password, phone, profile: { agent: { shopName: `Kona ${u}`, zone: `Z${u}`, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: HOURS, tue: HOURS, wed: HOURS, thu: HOURS, fri: HOURS, sat: HOURS, sun: null }, fullName: 'Kona Shop', nationalId: `ID-${u}`, mobile: phone, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } } } })
+      .send({ ...AGREED, role: 'pudo', email, password, phone, profile: { agent: { shopName: `Kona ${u}`, zone: `Z${u}`, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: HOURS, tue: HOURS, wed: HOURS, thu: HOURS, fri: HOURS, sat: HOURS, sun: null }, fullName: 'Kona Shop', nationalId: `ID-${u}`, mobile: phone, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } } } })
       .expect(201);
     const first = made.body.device as string;
     expect(first).toMatch(/^dvc_/);

@@ -6,6 +6,7 @@ import { shopPhotoOver } from './content-photo';
 import { declared } from './declared';
 import { FlagCaseService } from '../src/modules/pudo/flag-case.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
+import { AGREED } from './agreed';
 
 /**
  * LOST, DECLARED BY STAFF AFTER A SEARCH, over the wire (the user, 2026-10-18: "staff declare it"). A parcel in the
@@ -62,7 +63,7 @@ describe('a lost parcel, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `duka${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     return bearer(enrolled.body.token.access_token as string);
   }
 

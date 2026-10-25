@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { BORDER_DWELL_H, VEHICLE_SPEED_KMH } from '../src/modules/pudo/pudo.config';
 import { HeuristicRouter } from '../src/modules/pudo/router';
+import { AGREED } from './agreed';
 
 /**
  * THE PROMISE LEARNS THE ROAD, over the wire (round 21, the user: "The promise learns lanes"; "Five in 90 days"). A
@@ -41,7 +42,7 @@ describe('the promise learns the road, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `lane-${tag}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     const biz = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Lake Traders ${tag}`, country: 'KE', registrationNo: `LANE-${tag}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
     const post = async () =>
       (

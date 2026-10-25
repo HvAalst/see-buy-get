@@ -6,6 +6,7 @@ import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * THE API FOR A COMPANY'S OWN SYSTEMS, over the wire (the user, round 12: "An API for businesses and fleets"; "Post, send
@@ -46,7 +47,7 @@ describe('a company’s own system, with its key, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `api-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     return { phone, token: enrolled.body.token.access_token };
   }
 
@@ -161,7 +162,7 @@ describe('a company’s own system, with its key, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `apidrv${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const driverToken = session.body.token.access_token as string;
     const truck = app.get(VehicleService).register({ plate: `API ${n.slice(-3)}T`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: m.companyName, equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);

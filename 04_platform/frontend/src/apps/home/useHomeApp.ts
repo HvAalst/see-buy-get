@@ -513,7 +513,7 @@ export function useHomeApp() {
   const makeDriver = useCallback(async (person: PersonSession) => {
     const { role, form } = stateRef.current;
     if (!role) return;
-    const r = await signUpDriver(person, { phone: normalizePhone(form.phone), profile: (signupBody(role, form, deviceMarker()) as { profile: unknown }).profile });
+    const r = await signUpDriver(person, { phone: normalizePhone(form.phone), profile: (signupBody(role, form, deviceMarker()) as { profile: unknown }).profile, ...(form.agreement ? { agreement: form.agreement } : {}) });
     if (r.error || !r.data) {
       setState((s) => ({ ...s, error: r.error }));
       return;
@@ -540,7 +540,7 @@ export function useHomeApp() {
         return;
       }
       const phone = normalizePhone(form.phone);
-      const r = await enrollPerson(phone, form.pin, pinEmail ? { email: form.recoveryEmail.trim(), code: form.recoveryCode } : undefined);
+      const r = await enrollPerson(phone, form.pin, pinEmail ? { email: form.recoveryEmail.trim(), code: form.recoveryCode } : undefined, form.agreement);
       if (r.error || !r.data) {
         const field = (r.error?.params as { field?: string } | undefined)?.field;
         // Not an error: the server wants a recovery email behind a first PIN, or the account's own on a new device.
@@ -612,7 +612,7 @@ export function useHomeApp() {
       await run('submit', async () => {
         const email = form.email.trim().toLowerCase();
         // Round 40 — with the number checked in the first steps: new phones and browsers are confirmed by a code to it.
-        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined, address: form.storeAddress.trim() || undefined, email, password: form.password, ownerPhone: normalizePhone(form.phone) });
+        const r = await registerStore({ name: form.displayName.trim(), country: form.country.trim() || undefined, address: form.storeAddress.trim() || undefined, email, password: form.password, ownerPhone: normalizePhone(form.phone), ...(form.agreement ? { agreement: form.agreement } : {}) });
         if (r.error) {
           // The check of the number is spent or gone: back to it, rather than a button that can only say no.
           const reverify = r.error.code === 'PHONE_NOT_VERIFIED';

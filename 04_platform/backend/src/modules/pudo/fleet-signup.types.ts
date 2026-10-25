@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { AgreementDto } from '../../foundation/documents/documents.types';
 
 class SignupPlaceDto {
   @IsNumber() lat!: number;
@@ -27,6 +28,8 @@ export class FleetSignupPapersDto {
  */
 export class FleetSignupDto {
   @IsString() phone!: string;
+  /** The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25). */
+  @IsOptional() @ValidateNested() @Type(() => AgreementDto) agreement?: AgreementDto;
   @IsString() @MaxLength(120) companyName!: string;
   @IsOptional() @IsString() @MaxLength(120) tradingName?: string;
   /** Country of incorporation: which SeeBuyGet company, if any, contracts with the fleet. */

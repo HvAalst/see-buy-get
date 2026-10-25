@@ -6,6 +6,7 @@ import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { NoteArchiveService } from '../src/modules/pudo/note-archive.service';
 import { TamperService } from '../src/modules/pudo/tamper.service';
 import { LoadSealService } from '../src/modules/pudo/load-seal.service';
+import { AGREED } from './agreed';
 
 /**
  * THE TRAIL, over the wire (the ISO 28000 check: "anchor custody, loads, seals and the documents' fingerprints"). A load
@@ -48,7 +49,7 @@ describe('the trail, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `trail-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const owner = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const owner = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
     const created = await http().post('/v1/sbg/business').set(bearer(owner)).send({ name: `Trail Traders ${tag}`, country: 'KE', registrationNo: `TRL-${tag}`, activities: ['shipper'], yourName: 'Achieng Owner' }).expect(201);
     return bearer(created.body.token.access_token);
   }

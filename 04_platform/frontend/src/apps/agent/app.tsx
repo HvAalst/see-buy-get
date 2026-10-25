@@ -1,4 +1,5 @@
 import type { SbgClient } from '../../lib/sbg';
+import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, OutboxNote, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
 import { useMemo, useState } from 'preact/hooks';
@@ -145,6 +146,8 @@ export function App() {
       <LateTakeInSheet state={state} actions={actions} />
 
       <Toasts state={state} actions={actions} />
+      {/* What they agreed to, asked again when a version since asks it, or first when somebody else signed them up (2026-10-25). */}
+      <AgreementGate sbg={state.phase === 'ready' ? sbg : null} onSignOut={actions.signOut} />
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={agentConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
       <FeedbackFlash />
     </div>

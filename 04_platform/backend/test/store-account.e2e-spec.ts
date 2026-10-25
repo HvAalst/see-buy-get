@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
+import { AGREED } from './agreed';
 
 /**
  * A STORE HAS AN ACCOUNT OF ITS OWN — through the booted application (the user, 2026-10-09: "store needs a email and
@@ -54,20 +55,20 @@ describe('a store has an account of its own, over the wire', () => {
     const before = await stores();
 
     // An account that cannot be made leaves NO STORE behind it.
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email: 'not-an-address', password })).body.code).toBe('EMAIL_INVALID');
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${u}`, email: 'not-an-address', password })).body.code).toBe('EMAIL_INVALID');
     // Seven characters is one short of enough.
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password: 'seven-7' })).body.code).toBe('PASSWORD_TOO_SHORT');
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email })).body.code).toBe('PASSWORD_TOO_SHORT');
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, password })).body.code).toBe('EMAIL_INVALID');
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${u}`, email, password: 'seven-7' })).body.code).toBe('PASSWORD_TOO_SHORT');
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${u}`, email })).body.code).toBe('PASSWORD_TOO_SHORT');
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${u}`, password })).body.code).toBe('EMAIL_INVALID');
     // A password that is easy to guess, and a signing secret of its own choosing that is short, are refused the same way.
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka Bora ${u}`, email, password: 'DukaBora2026' })).body.code).toBe('PASSWORD_GUESSABLE');
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password, secret: '1234' })).body).toMatchObject({ code: 'VALIDATION_FAILED', params: { field: 'secret' } });
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka Bora ${u}`, email, password: 'DukaBora2026' })).body.code).toBe('PASSWORD_GUESSABLE');
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${u}`, email, password, secret: '1234' })).body).toMatchObject({ code: 'VALIDATION_FAILED', params: { field: 'secret' } });
     // Round 40 — and a number, verified by its code: none, or one never verified, makes no store either.
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password })).body).toMatchObject({ code: 'PHONE_REQUIRED', params: { field: 'ownerPhone' } });
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Duka ${u}`, email, password, ownerPhone: '+254711000999' })).body.code).toBe('PHONE_NOT_VERIFIED');
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${u}`, email, password })).body).toMatchObject({ code: 'PHONE_REQUIRED', params: { field: 'ownerPhone' } });
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka ${u}`, email, password, ownerPhone: '+254711000999' })).body.code).toBe('PHONE_NOT_VERIFIED');
     expect(await stores()).toBe(before);
 
-    const made = (await http().post('/v1/sbg/vendors').send({ name: `Duka Bora ${u}`, email: `  ${email.toUpperCase()} `, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Duka Bora ${u}`, email: `  ${email.toUpperCase()} `, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
     expect(made).toMatchObject({ name: `Duka Bora ${u}`, email });
     // The phone or browser that signed the store up is its first.
     expect(made.device).toBeTruthy();
@@ -77,7 +78,7 @@ describe('a store has an account of its own, over the wire', () => {
     expect(made.token?.access_token).toBeTruthy();
     await http().get(`/v1/sbg/vendors/${made.vendorId}/orders/stats`).set(bearer(made.token.access_token)).expect(200);
     // The address is taken: a second store cannot be registered on it, and none is left behind by trying.
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Another ${u}`, email, password })).body.code).toBe('DUPLICATE');
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Another ${u}`, email, password })).body.code).toBe('DUPLICATE');
     expect(await stores()).toBe(before + 1);
     // It is welcomed at that address, and told what its secret is now for.
     const [welcome] = app.get(OutboxMailSender).recent(email).filter((m) => m.template === 'welcome');
@@ -114,7 +115,7 @@ describe('a store has an account of its own, over the wire', () => {
     const u = digits();
     const email = `owner.${u}@kiosk.example`;
     const password = 'chai-na-mandazi-7';
-    const made = (await http().post('/v1/sbg/vendors').send({ name: `Kiosk ${u}`, email, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Kiosk ${u}`, email, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
     const device = made.device as string;
     const token = (await session(email, password, device).expect(201)).body.token.access_token as string;
     const rotate = (body: Record<string, unknown>, as = token) => http().post(`/v1/sbg/vendors/${made.vendorId}/secret/rotate`).set(bearer(as)).send(body);
@@ -173,7 +174,7 @@ describe('a store has an account of its own, over the wire', () => {
   it('a store that already exists sets its account up ITSELF, signed in the old way one last time — nobody sets it up for it', async () => {
     const u = digits();
     // Registered as stores were: a name, and a secret shown once.
-    const old = (await http().post('/v1/sbg/vendors').send({ name: `Mzee Store ${u}` }).expect(201)).body;
+    const old = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Mzee Store ${u}` }).expect(201)).body;
     expect(old.email).toBeUndefined();
     expect(old.token).toBeUndefined();
     const legacy = (await bySecret(old.vendorId, old.secret).expect(201)).body;
@@ -206,7 +207,7 @@ describe('a store has an account of its own, over the wire', () => {
     await setUp({ email, password }, pointed.body.access_token).expect(403);
     expect((await session(email, password)).body.code).toBe('AUTH_FAILED');
     // Not another store.
-    const other = (await http().post('/v1/sbg/vendors').send({ name: `Jirani ${u}` }).expect(201)).body;
+    const other = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Jirani ${u}` }).expect(201)).body;
     const otherToken = (await bySecret(other.vendorId, other.secret).expect(201)).body.token.access_token as string;
     await setUp({ email, password }, otherToken).expect(403);
     await http().post(`/v1/sbg/vendors/${old.vendorId}/account`).send({ email, password }).expect(401);
@@ -249,7 +250,7 @@ describe('a store has an account of its own, over the wire', () => {
     const password = 'duka-langu-2026';
     const made = await http()
       .post('/v1/sbg/auth/signup')
-      .send({ role: 'pudo', email, password, phone, profile: { agent: { shopName: `Mama ${u}`, zone: `Z${u}`, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: HOURS, tue: HOURS, wed: HOURS, thu: HOURS, fri: HOURS, sat: HOURS, sun: null }, fullName: 'Mama Shop', nationalId: `ID-${u}`, mobile: phone, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } } } })
+      .send({ ...AGREED, role: 'pudo', email, password, phone, profile: { agent: { shopName: `Mama ${u}`, zone: `Z${u}`, location: { lat: -1.2, lng: 36.8 }, landmark: 'x', shelf: { rows: 3, cols: 3 }, openingHours: { mon: HOURS, tue: HOURS, wed: HOURS, thu: HOURS, fri: HOURS, sat: HOURS, sun: null }, fullName: 'Mama Shop', nationalId: `ID-${u}`, mobile: phone, deviceImei: `IMEI-${u}`, requirements: { androidVersion: 13, reliablePower: true, tradingLicence: 'TL-1', criminalRecordClear: true } } } })
       .expect(201);
     // Her account is real, and signs her in to the Shop app.
     await http().post('/v1/sbg/auth/login').send({ email, password, device: made.body.device }).expect(201);
@@ -257,7 +258,7 @@ describe('a store has an account of its own, over the wire', () => {
     const refused = await session(email, password);
     expect(refused.body).toMatchObject({ code: 'AUTH_FAILED', detail: 'Wrong email or password' });
     // And a store cannot be signed up through the shops' door.
-    expect((await http().post('/v1/sbg/auth/signup').send({ role: 'vendor', email: `x.${u}@example.com`, password, phone, profile: {} })).status).toBe(400);
+    expect((await http().post('/v1/sbg/auth/signup').send({ ...AGREED, role: 'vendor', email: `x.${u}@example.com`, password, phone, profile: {} })).status).toBe(400);
   });
 
   // LAST IN THIS FILE ON PURPOSE: it uses up the door's tries for this caller, and every test above signs in.
@@ -265,7 +266,7 @@ describe('a store has an account of its own, over the wire', () => {
     const u = digits();
     const email = `guess.${u}@target.example`;
     const password = 'samaki-wa-kupaka-9';
-    const made = (await http().post('/v1/sbg/vendors').send({ name: `Target ${u}`, email, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Target ${u}`, email, password, ownerPhone: await verifiedPhone() }).expect(201)).body;
     const token = made.token.access_token as string;
 
     /* ---- the sign-in door: one wrong try each at twenty-one stores, never enough to lock any one of them ---- */

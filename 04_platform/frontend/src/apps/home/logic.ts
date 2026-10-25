@@ -7,6 +7,7 @@
  */
 
 import type { IconName } from '../../shared/ui/Icon';
+import type { AgreementNumbers } from '../../shared/documents/documents';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { THIN_MARKET_LOADS } from '../../shared/market';
 import { pinGuessable } from '../../shared/account/pin';
@@ -233,6 +234,8 @@ export interface JoinForm {
   taxId: string;
   /** Each a photograph's id, uploaded while signed in as the person: '' until taken. */
   papers: Record<FleetPaper, string>;
+  /** The versions of the terms of use, the data notice and the cookie statement agreed to, as on screen (2026-10-25). */
+  agreement: AgreementNumbers | null;
 }
 
 /** A fleet's four papers, in the order they are asked for, each with the kind of picture it is kept as. */
@@ -288,6 +291,7 @@ export const EMPTY_JOIN: JoinForm = {
   operatorLicence: '',
   taxId: '',
   papers: { businessRegCertRef: '', operatorLicenceRef: '', ownerIdRef: '', proofOfAddressRef: '' },
+  agreement: null,
 };
 
 /**
@@ -331,7 +335,9 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
     case 'pin':
       if (!/^\d{5}$/.test(f.pin)) return t('home.block.pin');
       // Too easy to guess: said before anything is sent — the server refuses the same PINs (2026-10-25).
-      return pinGuessable(f.pin) ? t('account.pin.guessable') : null;
+      if (pinGuessable(f.pin)) return t('account.pin.guessable');
+      // The PIN is where a person's account is made: every sign-up agrees first (2026-10-25).
+      return f.agreement ? null : t('agreement.needed');
     case 'papers':
       return FLEET_PAPERS.every(([key]) => f.papers[key]) ? null : t('home.block.papers');
     case 'about':
@@ -392,7 +398,8 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       // Eight, for everybody: the server's floor wherever a password is chosen. What it will not take for being easy
       // to guess is its own to say — the list of what people try first does not live in a web page.
       if (f.password.length < 8) return t('home.block.password');
-      return null;
+      // The email and password are where the account is made: every sign-up agrees first (2026-10-25).
+      return f.agreement ? null : t('agreement.needed');
     default:
       return null;
   }
@@ -413,7 +420,7 @@ const everyDay = (open: string, close: string) => Object.fromEntries(['mon', 'tu
  */
 export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): Record<string, unknown> {
   const phone = normalizePhone(f.phone);
-  const base = { role: role.id, email: f.email.trim().toLowerCase(), password: f.password, phone };
+  const base = { role: role.id, email: f.email.trim().toLowerCase(), password: f.password, phone, ...(f.agreement ? { agreement: f.agreement } : {}) };
 
   if (role.id === 'pudo') {
     return {
@@ -507,6 +514,7 @@ export function fleetSignupBody(f: JoinForm): Record<string, unknown> {
     ...(f.location ? { location: f.location } : {}),
     requirements: { businessRegistrationNo: f.businessRegistrationNo.trim(), transportOperatorLicence: f.operatorLicence.trim(), taxId: f.taxId.trim() },
     papers: f.papers,
+    ...(f.agreement ? { agreement: f.agreement } : {}),
   };
 }
 

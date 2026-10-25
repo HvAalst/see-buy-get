@@ -9,6 +9,7 @@ import { MailService } from '../src/foundation/mail/mail.service';
 import { OutboxMailSender } from '../src/foundation/mail/outbox-mail.sender';
 import { MAIL_TEMPLATES } from '../src/foundation/mail/mail.templates';
 import { FleetService } from '../src/modules/pudo/fleet.service';
+import { AGREED } from './agreed';
 
 /**
  * AN ACCOUNT MUTED BY ITS OWNER, OVER THE WIRE (the user, 2026-10-22: "an account can be muted by the user"; it rests,
@@ -124,7 +125,7 @@ describe('an account at rest — over the wire', () => {
   it('a muted owner’s store takes no new order, and their driver is offered no load — until they unmute', async () => {
     const shop = await anOwnedShop('Duka la Mpokeaji');
     const ownerPhone = `+2547${digits()}9`;
-    const store = (await http().post('/v1/sbg/vendors').send({ name: 'Mfano Online', country: 'KE', ownerPhone }).expect(201)).body as { vendorId: string; secret: string };
+    const store = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: 'Mfano Online', country: 'KE', ownerPhone }).expect(201)).body as { vendorId: string; secret: string };
     const storeToken = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: store.vendorId, secret: store.secret }).expect(201)).body.token.access_token);
     const persons = app.get(PersonService);
     const owner = persons.findByPhone(ownerPhone)!;

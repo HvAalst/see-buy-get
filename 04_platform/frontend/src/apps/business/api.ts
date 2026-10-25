@@ -1,4 +1,5 @@
 import type { SystemMessage, SystemView } from './system';
+import type { AgreementNumbers } from '../../shared/documents/documents';
 import type { Gs1DisputeView } from './gs1Dispute';
 import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
 import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
@@ -50,8 +51,8 @@ export interface PersonAuth {
 }
 
 /** A verified phone, a new PIN, and — the first time — a confirmed recovery email behind it. */
-export async function enroll(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<PersonAuth>> {
-  const r = await publicRequest<PersonAuth & { device?: string }>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+export async function enroll(phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: AgreementNumbers | null): Promise<Result<PersonAuth>> {
+  const r = await publicRequest<PersonAuth & { device?: string }>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) } });
   // The code was typed on this device: it is handed the key the PIN is asked with from now on.
   saveDeviceKey(phone, r.data?.device);
   return r;

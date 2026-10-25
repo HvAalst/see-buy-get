@@ -1,4 +1,5 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Optional, Post } from '@nestjs/common';
+import { AgreementService } from '../../foundation/documents/agreement.service';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -13,13 +14,18 @@ import { DriverSignupDto } from './driver-signup.types';
  */
 @Controller('sbg')
 export class DriverSignupController {
-  constructor(private readonly accounts: AccountService) {}
+  constructor(
+    private readonly accounts: AccountService,
+    // 2026-10-25 — the person signing up as a driver has agreed to what counts now, or agrees with this sign-up.
+    @Optional() private readonly agreements?: AgreementService,
+  ) {}
 
   @Roles('consumer')
   @Post('drivers/signups')
   signUp(@Body() dto: DriverSignupDto, @Actor() actor: IntrospectionResult): { did: string; entityStatus?: string } {
     const personDid = actor?.personDid ?? actor?.did;
     if (!personDid) throw new GlosError('FORBIDDEN', 'Sign in first');
+    this.agreements?.assertFor(actor, dto.agreement, 'drivers/signups');
     return this.accounts.signUpDriver(personDid, dto.phone, dto.profile);
   }
 }

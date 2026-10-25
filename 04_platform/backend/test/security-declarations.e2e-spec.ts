@@ -8,6 +8,7 @@ import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { MdpService } from '../src/modules/pudo/mdp.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { AGREED } from './agreed';
 
 /**
  * ROUND 39 — THE YEARLY SECURITY DECLARATION, OVER THE WIRE (the user: "At joining and yearly (Recommended)"). A shop, a
@@ -163,7 +164,7 @@ describe('the yearly security declaration — over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `decl${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: '48261', device: enrolled.body.device }).expect(201);
     const truck = app.get(VehicleService).register({ plate: `DCL ${n.slice(-3)}T`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Decl Haulage', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);
     await http().post(`/v1/sbg/fleet/drivers/${driver.did}/start-session`).set(bearer(session.body.token.access_token)).send({ vehicleId: truck.vehicleId, pin: '48261' }).expect(201);

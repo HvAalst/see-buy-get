@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
-import { useLocale, useT } from '../../../shared/i18n';
-import { prerenderedTowns } from '../prerendered';
+import { formatDate, useLocale, useT } from '../../../shared/i18n';
+import { Markdown } from '../../../shared/documents/markdown';
+import { fetchDocument, fetchDocumentHistory, type PublishedDocument, type PublishedVersionLine } from '../../../shared/documents/documents';
+import { prerenderedDocument, prerenderedTowns } from '../prerendered';
 import { CONTACT_PATH, HELP_PATH } from '../help';
-import { AUDIENCES, NOTICES, countriesOf, forPath, noticeKey, pageKey, range, type Audience, type InfoPage, type Notice } from '../pages';
+import { AUDIENCES, countriesOf, forPath, noticeKey, pageKey, range, type Audience, type InfoPage, type Notice } from '../pages';
 import '../pages.css';
 
 /**
@@ -16,31 +19,88 @@ export function InfoScreen({ page }: { page: InfoPage }) {
 }
 
 /**
- * YOUR DATA, OR COOKIES — what the system does, section by section, every sentence standing on its own. The way to
- * write to us about it chooses that topic; the other page is one tap away.
+ * THE TERMS OF USE, YOUR DATA, OR COOKIES — as staff published them in the console (the user, 2026-10-25), with which
+ * version it is and what changed. Built with the words the server had when the site was built, then read again: a
+ * version published since shows without a new release. Every earlier version can be read back, word for word. The way
+ * to write to us about it chooses the data topic; the other two documents are in the site's foot.
  */
 function NoticePage({ which }: { which: Notice }) {
   const t = useT();
-  const spec = NOTICES[which];
-  const k = (part: string) => t(noticeKey(which, part));
+  const [doc, setDoc] = useState<PublishedDocument | null>(() => prerenderedDocument(which));
+  const [failed, setFailed] = useState(false);
+  const [history, setHistory] = useState<PublishedVersionLine[] | null>(null);
+  const [current, setCurrent] = useState<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void fetchDocument(which).then((d) => {
+      if (!live) return;
+      if (d) {
+        setDoc(d);
+        setCurrent(d.number);
+      } else setFailed(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [which]);
+
+  const openVersion = (number: number) => {
+    void fetchDocument(which, number).then((d) => {
+      if (d) setDoc(d);
+    });
+  };
+  const showHistory = () => {
+    void fetchDocumentHistory(which).then((h) => setHistory(h ?? []));
+  };
+
+  const latest = current ?? doc?.number ?? null;
+  const old = doc && latest !== null && doc.number < latest;
   return (
     <article class="land pg">
       <header class="pg__head">
-        <h1 class="land__title">{k('title')}</h1>
-        <p class="land__lede">{k('lede')}</p>
-        <p class="pg__asof">{t('pages.notice.asOf')}</p>
+        <h1 class="land__title">{doc?.title ?? t(noticeKey(which, 'title'))}</h1>
+        {doc ? <p class="pg__asof">{t('pages.notice.version', { number: doc.number, date: formatDate(doc.publishedAt) })}</p> : null}
+        {old ? (
+          <p class="pg__old">
+            {t('pages.notice.reading', { number: doc.number, date: formatDate(doc.publishedAt) })}{' '}
+            <button type="button" class="land__link pg__btn" onClick={() => openVersion(latest)}>
+              {t('pages.notice.current')}
+            </button>
+          </p>
+        ) : null}
       </header>
 
-      {spec.sections.map((s) => (
-        <section key={s.id} class="land__sec">
-          <h2 class="land__h2">{k(`${s.id}.title`)}</h2>
-          <ul class="pg__list">
-            {range(s.items).map((i) => (
-              <li key={i}>{k(`${s.id}.${i}`)}</li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {doc ? <Markdown text={doc.body} class="md pg__md" /> : <p class="pg__asof">{t(failed ? 'pages.notice.unavailable' : 'pages.notice.loading')}</p>}
+
+      {doc && doc.number > 1 && doc.changeNote ? <p class="pg__changed">{t('pages.notice.changed', { note: doc.changeNote })}</p> : null}
+
+      <section class="land__sec pg__history">
+        {history === null ? (
+          <button type="button" class="land__link pg__btn" onClick={showHistory}>
+            {t('pages.notice.earlier')}
+            <Icon name="chevronDown" size={18} />
+          </button>
+        ) : (
+          <>
+            <h2 class="land__h2">{t('pages.notice.earlier')}</h2>
+            {history.length > 1 ? (
+              <ul class="pg__list">
+                {history.map((v) => (
+                  <li key={v.number}>
+                    <button type="button" class="land__link pg__btn" onClick={() => openVersion(v.number)}>
+                      {t('pages.notice.readVersion', { number: v.number })}
+                    </button>{' '}
+                    — {formatDate(v.publishedAt)}. {v.changeNote}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p class="pg__asof">{t('pages.notice.earlierNone')}</p>
+            )}
+          </>
+        )}
+      </section>
 
       <footer class="pg__foot">
         <p class="pg__links">

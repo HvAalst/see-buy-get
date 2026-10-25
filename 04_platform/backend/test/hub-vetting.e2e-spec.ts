@@ -6,6 +6,7 @@ import { NotificationService } from '../src/modules/pudo/notification.service';
 import { HandleDirectory } from '../src/modules/pudo/handle-directory.service';
 import { HandleService } from '../src/foundation/handle/handle.service';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * A HUB IS VETTED BEFORE IT WORKS (the ISO 28000 check: "hubs are not vetted at all") — through the booted application.
@@ -52,7 +53,7 @@ describe('a hub is vetted before it works, over the wire', () => {
     const signed = (
       await http()
         .post('/v1/sbg/auth/signup')
-        .send({ role: 'mdp', email: `ghala.${u}@depot.example`, password: 'mabati-na-misumari-4', phone: await aVerifiedNumber(u), profile: { mdp: { name, zones: [zone], country: 'KE', location: { lat: -1.3, lng: 36.9 } } } })
+        .send({ ...AGREED, role: 'mdp', email: `ghala.${u}@depot.example`, password: 'mabati-na-misumari-4', phone: await aVerifiedNumber(u), profile: { mdp: { name, zones: [zone], country: 'KE', location: { lat: -1.3, lng: 36.9 } } } })
         .expect(201)
     ).body;
     expect(signed.entityStatus).toBe('draft');

@@ -25,6 +25,8 @@ export const ERROR_CODES = {
   BAD_REQUEST: { status: 400, title: 'Bad request' },
   VALIDATION_FAILED: { status: 400, title: 'Some fields are invalid' },
   INVALID_INPUT: { status: 400, title: 'Invalid input' },
+  // 2026-10-25 — a sign-up that did not agree to the terms of use, the data notice and the cookie statement that count now.
+  AGREEMENT_REQUIRED: { status: 400, title: 'Read and agree to the terms first' },
   AMOUNT_INVALID: { status: 400, title: 'Amount is not valid' },
   // One nation's requirement asked of somebody in another (a KRA PIN outside Kenya): it does not apply there.
   NOT_IN_THIS_COUNTRY: { status: 400, title: 'Not asked in this country' },

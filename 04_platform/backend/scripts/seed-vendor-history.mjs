@@ -44,6 +44,14 @@ async function req(method, path, { token, body } = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+/** EVERY SIGN-UP AGREES (2026-10-25): to the versions of the terms of use, the data notice and the cookie statement in force. */
+let agreedOnce;
+function agreed() {
+  agreedOnce ??= req('GET', '/v1/sbg/agreement').then((r) => ({ agreement: Object.fromEntries((r.data?.documents ?? []).map((d) => [d.kind, d.number])) }));
+  return agreedOnce;
+}
+
+
 /**
  * PUT MONEY IN THE WAY MONEY GETS IN — ask, then let the provider confirm it.
  *
@@ -115,7 +123,7 @@ const run = async () => {
   }
   if (!tokV) {
     const name = known ? `Nairobi Threads ${stamp}` : 'Nairobi Threads';
-    const reg = need(await req('POST', '/v1/sbg/vendors', { body: { name, country: 'KE', address: 'Biashara St 12', location: { lat: -1.284, lng: 36.824 }, secret: VENDOR_SECRET } }), 'vendor register');
+    const reg = need(await req('POST', '/v1/sbg/vendors', { body: { ...(await agreed()), name, country: 'KE', address: 'Biashara St 12', location: { lat: -1.284, lng: 36.824 }, secret: VENDOR_SECRET } }), 'vendor register');
     const li = need(await req('POST', '/v1/sbg/vendors/login', { body: { vendorId: reg.vendorId, secret: VENDOR_SECRET } }), 'vendor login');
     vendorId = reg.vendorId;
     vendorName = name;
@@ -127,7 +135,7 @@ const run = async () => {
   const activate = async (label, zone, lat, lng) => {
     const email = `pudo-${label.replace(/\s+/g, '').toLowerCase()}-${stamp}@sbg.test`;
     const phone = await verifiedPhone();
-    const acct = need(await req('POST', '/v1/sbg/auth/signup', { body: { role: 'pudo', email, password: PASSWORD, phone, profile: agentProfile(label, zone, lat, lng) } }), `signup ${label}`);
+    const acct = need(await req('POST', '/v1/sbg/auth/signup', { body: { ...(await agreed()), role: 'pudo', email, password: PASSWORD, phone, profile: agentProfile(label, zone, lat, lng) } }), `signup ${label}`);
     const did = acct.did;
     const tok = acct.token.access_token;
     need(await req('POST', `/v1/sbg/agents/${encodeURIComponent(did)}/submit-kyc`, { token: tok, body: { idCopyRef: 'id.jpg', tradingLicenceRef: 'licence.jpg', shopPhotoRefs: ['shop.jpg'] } }), `kyc ${label}`);

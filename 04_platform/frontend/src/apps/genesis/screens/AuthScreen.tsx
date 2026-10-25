@@ -1,4 +1,5 @@
 import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
+import { AgreementBlock } from '../../../shared/documents/Agreement';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote, PhoneField as CountryPhoneField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { canPickContact } from '../../../shared/device';
@@ -199,11 +200,14 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
           </div>
           {/* Too easy to guess: said as it is typed, not after a round trip (2026-10-25). */}
           {pinGuessable(state.authPin) ? <p class="card__note" role="status">{t('account.pin.guessable')}</p> : null}
+          {/* Where the account is made: everybody signing up agrees here (2026-10-25). */}
+          <AgreementBlock agreed={state.authAgreement} onChange={actions.setAuthAgreement} />
         </Card>
         <div class="scr__cta">
-          <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={Boolean(pinBlocker(state.authPin, t))} busy={busy}>
+          <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={Boolean(pinBlocker(state.authPin, t)) || !state.authAgreement} busy={busy}>
             {t('send.auth.createAccount')}
           </Button>
+          {!pinBlocker(state.authPin, t) && !state.authAgreement ? <p class="hint" style="margin-top:8px">{t('agreement.needed')}</p> : null}
         </div>
         <div class="scr__foot">
           <Button variant="link" onClick={() => actions.authBack()}>{t('common.back')}</Button>

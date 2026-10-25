@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { ssccOf } from '../src/foundation/gs1/gs1';
 import { ShipperCodesService, vendorCoder } from '../src/modules/pudo/shipper-codes.service';
 import { contentPhotoOver, shipmentPhotoOver } from './content-photo';
+import { AGREED } from './agreed';
 
 /**
  * A STORE'S LABELS CARRY A GS1 CODE, over the wire (round 29, the user: "A store's labels carry a GS1 code"; "In the Store
@@ -64,7 +65,7 @@ describe('a store’s labels carry a GS1 code, over the wire', () => {
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount }).expect(201);
   };
   async function aStore(funded = true): Promise<{ id: string; token: { authorization: string } }> {
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `GS1 Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `GS1 Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const token = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     if (funded) await fund(`/v1/sbg/vendors/${made.vendorId}/top-up`, token, 5000);
     return { id: made.vendorId, token };
@@ -76,7 +77,7 @@ describe('a store’s labels carry a GS1 code, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `sg1-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     return (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${tag}`, country: 'KE', registrationNo: `SG1-${tag}-${seq}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
   }
   async function aStaff(name: string): Promise<string> {

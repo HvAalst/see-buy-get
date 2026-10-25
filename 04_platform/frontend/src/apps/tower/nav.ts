@@ -47,7 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     screens: ['messages', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'risks', 'imports', 'reports', 'support'],
   },
   { key: 'money', labelKey: 'tower.group.money', icon: 'wallet', screens: ['money'] },
-  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'pictures', 'connections', 'staffreads'] },
+  { key: 'setup', labelKey: 'tower.group.setup', icon: 'edit', screens: ['settings', 'companies', 'company', 'rates', 'corridors', 'borders', 'presence', 'documents', 'pictures', 'connections', 'staffreads'] },
 ];
 
 /**
@@ -92,6 +92,8 @@ export const SCREEN_META: Record<Screen, { labelKey: MessageKey; icon: IconName 
   pictures: { labelKey: 'tower.nav.pictures', icon: 'camera' },
   connections: { labelKey: 'tower.nav.connections', icon: 'repeat' },
   staffreads: { labelKey: 'tower.nav.staffreads', icon: 'lock' },
+  // 2026-10-25 — the terms of use, the data notice and the cookie statement: every version, published by two.
+  documents: { labelKey: 'tower.nav.documents', icon: 'edit' },
 };
 
 /** Which group a screen lives in. Every screen has exactly one home. */

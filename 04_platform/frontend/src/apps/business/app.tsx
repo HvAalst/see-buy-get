@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { AgreementGate } from '../../shared/documents/Agreement';
 import { HelpLink } from '../../shared/guide/HelpLink';
 import { BottomNav, BrandMark, Icon, NotificationBell } from '../../shared/ui';
 import { useT, type MessageKey } from '../../shared/i18n';
@@ -143,6 +144,8 @@ export function App() {
       )}
 
       <SettingsSheet open={settings} onClose={() => setSettings(false)} api={account} onSignOut={actions.signOut} />
+      {/* What they agreed to, asked again when a version since asks it (2026-10-25). */}
+      <AgreementGate sbg={client?.client.sbg ?? null} onSignOut={actions.signOut} />
     </div>
   );
 }

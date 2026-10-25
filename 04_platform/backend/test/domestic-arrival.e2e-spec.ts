@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { HANDOVER_BUFFER_H, VEHICLE_SPEED_KMH } from '../src/modules/pudo/pudo.config';
 import { HeuristicRouter } from '../src/modules/pudo/router';
+import { AGREED } from './agreed';
 
 /**
  * A LOAD IN ONE COUNTRY IS PROMISED A TIME, over the wire (round 26, the user: "A promise for a load in one country"; "The
@@ -46,7 +47,7 @@ describe('a load in one country is promised a time, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `arrival-${tag}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     const biz = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Rift Millers ${tag}`, country: 'KE', registrationNo: `ARR-${tag}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
     const onboarded = await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Mwangi', fullName: 'Mwangi Truck', nationalId: `DRV-ARR-${tag}`, mobile: `+2547${String(Date.now()).slice(-6)}4`, licenceClasses: ['truck'], licenceNumber: `DL-ARR-${tag}`, licenceExpiresAt: '2030-01-01' }).expect(201);
     const driver = { did: onboarded.body.did as string, token: (await http().post('/v1/auth/token').send({ role: 'driver', did: onboarded.body.did, type: 'client_credentials' }).expect(201)).body.access_token as string };
@@ -99,7 +100,7 @@ describe('a load in one country is promised a time, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `arrival2-${tag}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     const biz = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Lake Millers ${tag}`, country: 'KE', registrationNo: `ARR2-${tag}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
     const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
     const carriage = { vehicleId: 'veh_b', plate: 'KDB 261B', vehicleClass: 'truck', driverDid: 'did:glos:arr-driver', at: iso(Date.now()) };

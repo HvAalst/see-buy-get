@@ -123,7 +123,8 @@ export const enFront = {
   // The foot.
   'front.foot.colUse': 'Use SeeBuyGet',
   'front.foot.colHelp': 'Help',
-  'front.foot.colData': 'Your data',
+  'front.foot.colData': 'Terms and your data',
+  'front.foot.terms': 'Terms of use',
   'front.foot.write': 'Write to us',
   'front.foot.data': 'How we treat your data',
   'front.foot.cookies': 'Cookies',

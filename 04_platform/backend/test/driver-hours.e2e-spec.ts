@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { FleetService, MIN_REST_HOURS } from '../src/modules/pudo/fleet.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { NotificationDispatcher } from '../src/modules/pudo/notification-dispatcher.service';
+import { AGREED } from './agreed';
 
 /**
  * A DRIVER IS TOLD ABOUT THEIR HOURS — through the booted application, over HTTP.
@@ -45,7 +46,7 @@ describe('a driver’s hours, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `hrs${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     const bike = app.get(VehicleService).register({ plate: `HRS-${digits()}`, vehicleClass: 'bike', capacityKg: 30, ownerName: 'Njeri Rider', ownerDriverDid: did } as never);
     return { did, token: session.body.token.access_token as string, vehicleId: bike.vehicleId };

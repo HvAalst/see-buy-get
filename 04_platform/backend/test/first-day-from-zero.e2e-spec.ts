@@ -12,6 +12,7 @@ import { WebPushSender } from '../src/modules/pudo/web-push';
 import { publicKeyOf } from '../src/modules/pudo/vapid';
 import { aDevice, openAsBrowser } from '../src/modules/pudo/push.test-util';
 import { PilotService } from '../src/modules/pudo/pilot.service';
+import { AGREED } from './agreed';
 
 /**
  * THE FIRST DAY OF A NEW INSTALLATION, AS IT WOULD BE LIVE — from an empty server to a parcel collected.
@@ -240,7 +241,7 @@ describe('the first day of a new installation, as it would be live', () => {
     const account = await must(
       http()
         .post('/v1/sbg/auth/signup')
-        .send({
+        .send({ ...AGREED,
           role: 'pudo',
           email: `${slug}@shops.sbg-rehearsal.org`,
           password: `${slug}-keeps-this-to-itself-7`,
@@ -385,7 +386,7 @@ describe('the first day of a new installation, as it would be live', () => {
     await must(http().post('/v1/sbg/auth/phone/request').send({ phone }));
     await must(http().post('/v1/sbg/auth/phone/verify').send({ phone, code: codeIn(textTo(phone)) }));
     await must(http().post('/v1/sbg/identity/email/request').send({ email }));
-    const enrolled = await must(http().post('/v1/sbg/identity/enroll').send({ phone, pin, email, emailCode: codeMailedTo(email) }));
+    const enrolled = await must(http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin, email, emailCode: codeMailedTo(email) }));
     expect(enrolled.device).toBeTruthy();
     return enrolled.device as string;
   };

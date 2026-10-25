@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { AGREED } from './agreed';
 
 /**
  * A STORE'S MESSAGES TO ITS OWN SYSTEM, over the wire (the user, round 9: "Webhooks for every party", the store first).
@@ -46,7 +47,7 @@ describe('a store’s messages to its own system, over the wire', () => {
   });
 
   async function aStore(path: string): Promise<{ vendorId: string; auth: Record<string, string> }> {
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Store ${Math.random().toString(16).slice(2, 8)}`, callbackUrl: `${origin}${path}` }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Store ${Math.random().toString(16).slice(2, 8)}`, callbackUrl: `${origin}${path}` }).expect(201)).body;
     const signedIn = await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201);
     return { vendorId: made.vendorId, auth: { authorization: `Bearer ${signedIn.body.token.access_token}` } };
   }

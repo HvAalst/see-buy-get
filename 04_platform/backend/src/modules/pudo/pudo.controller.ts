@@ -55,6 +55,7 @@ import { COUNTRY_CATALOGUE, catalogueEntry } from '../../foundation/countries/ca
 import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
+import { AgreementService } from '../../foundation/documents/agreement.service';
 import { Roles, Scopes, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
@@ -317,6 +318,8 @@ export class SbgController {
     @Optional() private readonly standstill?: VehicleStandstillService,
     // Round 29 — a store's GS1 prefix disputed: the store is a party, as a business is.
     @Optional() private readonly gs1Disputes?: Gs1DisputeService,
+    // 2026-10-25 — every sign-up agrees to the terms of use, the data notice and the cookie statement that count now.
+    @Optional() private readonly agreements?: AgreementService,
   ) {}
 
   /**
@@ -410,7 +413,11 @@ export class SbgController {
   @RateLimit(120, 15 * 60)
   @Post('auth/signup')
   signup(@Body() dto: SignupDto) {
-    return this.accounts.signup(dto);
+    // EVERY SIGN-UP AGREES (the user, 2026-10-25) — refused before the account or the shop is made.
+    const agreed = this.agreements?.require(dto.agreement);
+    const made = this.accounts.signup(dto);
+    if (agreed) this.agreements?.record(`account:${made.did}`, agreed, 'auth/signup');
+    return made;
   }
 
   /**
@@ -3215,7 +3222,9 @@ export class SbgController {
   @RateLimit(20, 15 * 60)
   @Post('vendors')
   registerVendor(@Body() dto: RegisterVendorDto) {
-    const { email, password, ...store } = dto;
+    // EVERY SIGN-UP AGREES (the user, 2026-10-25), a store's through its own system included — refused before it is made.
+    const agreed = this.agreements?.require(dto.agreement);
+    const { email, password, agreement: _agreement, ...store } = dto;
     // A store may bring its own signing secret (its shop system may already have one). It is a machine's credential,
     // and for a store with no account yet it still opens the console: so it is long, or it is ours — never "1234".
     if (dto.secret !== undefined && dto.secret.length < 24) throw new GlosError('VALIDATION_FAILED', 'A signing secret you choose yourself needs at least 24 characters. Leave it out and one is made for you', { field: 'secret' });
@@ -3227,6 +3236,7 @@ export class SbgController {
     // number has an account (otp.service.ts) — and making the store gives it one.
     const phoneVerified = withAccount ? Boolean(this.accounts.assertVerifiedPhone(dto.ownerPhone)) : false;
     const vendor = this.vendors.register(store);
+    if (agreed) this.agreements?.record(`account:${vendor.did}`, agreed, 'vendors');
     // S20: if the operator gave a phone, link this store to their person identity — same human, one account.
     if (dto.ownerPhone) this.persons.tryAttachRole(dto.ownerPhone, 'vendor', vendor.did);
     if (!withAccount) return vendor;

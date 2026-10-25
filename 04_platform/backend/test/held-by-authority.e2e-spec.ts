@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { AGREED } from './agreed';
 
 /**
  * A LOAD HELD BY THE POLICE OR CUSTOMS, over the wire (the ISO 28000 check: "Held by police or customs as a state, with
@@ -40,7 +41,7 @@ describe('a load held by the police or customs, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `held-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const owner = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const owner = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
     const created = await http().post('/v1/sbg/business').set(bearer(owner)).send({ name: `Held Traders ${tag}`, country: 'KE', registrationNo: `HLD-${tag}`, activities: ['shipper'], yourName: 'Achieng Owner' }).expect(201);
     return bearer(created.body.token.access_token);
   }

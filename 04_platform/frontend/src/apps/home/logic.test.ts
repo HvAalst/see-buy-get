@@ -54,6 +54,8 @@ const filled = (over: Partial<JoinForm> = {}): JoinForm => ({
   openFrom: '07:30',
   openTo: '19:00',
   recordClear: true,
+  // Every sign-up agrees to the terms of use, the data notice and the cookie statement (2026-10-25).
+  agreement: { terms: 1, privacy: 1, cookies: 1 },
   ...over,
 });
 
@@ -131,6 +133,8 @@ describe('stepBlocker', () => {
     // Eight, for a shop as for everybody: seven is one short.
     expect(stepBlocker(shop, 'login', { ...filled(), password: '1234567' }, t)).toContain('8 characters');
     expect(stepBlocker(shop, 'login', filled(), t)).toBeNull();
+    // Where the account is made, nobody goes on without agreeing (2026-10-25).
+    expect(stepBlocker(shop, 'login', filled({ agreement: null }), t)).toBe(t('agreement.needed'));
   });
 
   it('a driver must say what they drive; a hub needs no personal ID', () => {
@@ -268,7 +272,7 @@ describe('stepBlocker', () => {
   });
 
   it('a store’s account is an email and a password of at least eight characters', () => {
-    const store = { ...EMPTY_JOIN, displayName: 'Nairobi Threads', country: 'KE', email: 'orders@threads.example' };
+    const store = { ...EMPTY_JOIN, displayName: 'Nairobi Threads', country: 'KE', email: 'orders@threads.example', agreement: { terms: 1, privacy: 1, cookies: 1 } };
     expect(stepBlocker(role('vendor'), 'login', { ...store, email: 'orders' }, t)).toContain('email');
     // Seven is enough for nobody: the server's floor is eight wherever a password is chosen.
     expect(stepBlocker(role('vendor'), 'login', { ...store, password: '1234567' }, t)).toContain('8 characters');
@@ -478,6 +482,7 @@ describe('a fleet signs itself up', () => {
     const r = role('fleet');
     expect(stepBlocker(r, 'pin', fleet({ pin: '482' }), t)).toBe(t('home.block.pin'));
     expect(stepBlocker(r, 'pin', fleet(), t)).toBeNull();
+    expect(stepBlocker(r, 'pin', fleet({ agreement: null }), t)).toBe(t('agreement.needed'));
     expect(stepBlocker(r, 'about', fleet({ displayName: '' }), t)).toBe(t('home.block.nameFleet'));
     expect(stepBlocker(r, 'about', fleet({ operatorLicence: ' ' }), t)).toBe(t('home.block.operatorLicence'));
     expect(stepBlocker(r, 'about', fleet({ contactEmail: 'office' }), t)).toBe(t('home.block.contactEmail'));
@@ -501,6 +506,8 @@ describe('a fleet signs itself up', () => {
       location: { lat: -1.28, lng: 36.82 },
       requirements: { businessRegistrationNo: 'BR-1', transportOperatorLicence: 'TOL-1', taxId: 'P051' },
       papers: { businessRegCertRef: 'm1', operatorLicenceRef: 'm2', ownerIdRef: 'm3', proofOfAddressRef: 'm4' },
+      // What the person agreed to on the PIN step goes with it: the server keeps it, or asks for it if it is not current.
+      agreement: { terms: 1, privacy: 1, cookies: 1 },
     });
   });
 
@@ -521,6 +528,7 @@ describe('a driver signs up with their PIN', () => {
     expect(nextStep('driver', 'where')).toBe('pin');
     expect(stepBlocker(role('driver'), 'pin', filled({ pin: '1234' }), t)).toBe(t('home.block.pin'));
     expect(stepBlocker(role('driver'), 'pin', filled({ pin: '48261' }), t)).toBeNull();
+    expect(stepBlocker(role('driver'), 'pin', filled({ pin: '48261', agreement: null }), t)).toBe(t('agreement.needed'));
   });
 
   it('still sends the profile the driver door has always taken', () => {

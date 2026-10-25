@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { OutboxSmsSender } from '../src/foundation/sms/outbox-sms.sender';
 import { AccountService } from '../src/modules/pudo/account.service';
+import { AGREED } from './agreed';
 
 /**
  * ROUND 40 — A HUB'S SIGN-IN BOUND TO ITS OWN PHONES, over the wire (the user: "Hubs and stores now"). A hub signs up with a
@@ -42,7 +43,7 @@ describe('a hub’s own phones, over the wire', () => {
     // Named with seven digits in it: a name is never read as a number.
     const made = await http()
       .post('/v1/sbg/auth/signup')
-      .send({ role: 'mdp', email, password, phone, profile: { mdp: { name: `${name} ${u}`, zones: [`HZ${u}`], country: 'KE', location: { lat: -1.25, lng: 36.85 } } } })
+      .send({ ...AGREED, role: 'mdp', email, password, phone, profile: { mdp: { name: `${name} ${u}`, zones: [`HZ${u}`], country: 'KE', location: { lat: -1.25, lng: 36.85 } } } })
       .expect(201);
     return { phone, email, password, made: made.body as { did: string; device?: string; token: { access_token: string } } };
   }

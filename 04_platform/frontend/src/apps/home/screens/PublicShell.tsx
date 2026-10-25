@@ -82,6 +82,7 @@ export function PublicShell({
             </div>
             <div class="pub__footcol">
               <h2 class="pub__footh">{t('front.foot.colData')}</h2>
+              <a href="/terms/">{t('front.foot.terms')}</a>
               <a href="/privacy/">{t('front.foot.data')}</a>
               <a href="/cookies/">{t('front.foot.cookies')}</a>
             </div>

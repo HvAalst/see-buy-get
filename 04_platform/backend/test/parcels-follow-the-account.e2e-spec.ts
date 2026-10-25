@@ -9,6 +9,7 @@ import { OtpService } from '../src/modules/pudo/otp.service';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { NUMBER_UNDO_MS } from '../src/modules/pudo/person.service';
+import { AGREED } from './agreed';
 
 /**
  * A PARCEL IS KEPT BY THE ACCOUNT, NOT BY THE NUMBER — through the booted application, over HTTP.
@@ -85,7 +86,7 @@ describe('a parcel is kept by the account, over the wire', () => {
     await confirm(phone);
     const email = `pfa${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     return enrolled.body.token.access_token as string;
   }
 
@@ -160,7 +161,7 @@ describe('a parcel is kept by the account, over the wire', () => {
     const answered = await mine('collection-response').send({ choice: 'coming' }).expect(201);
     expect(answered.body.parcel.parcelId).toBe(parcelId);
     // Delivered, and from a store: the two acts that come after the goods are in their hands.
-    const store = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `PFA Store ${digits()}` }).expect(201)).body.vendorId as string;
+    const store = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `PFA Store ${digits()}` }).expect(201)).body.vendorId as string;
     Object.assign(stored, { status: 'Delivered', vendorId: store });
     const theirs = await photoOver(app.getHttpServer(), bearer(token), 'pod');
     expect((await mine('pod').send({ photoRef: theirs }).expect(201)).body.podPhotoRef).toBe(theirs);
@@ -176,7 +177,7 @@ describe('a parcel is kept by the account, over the wire', () => {
     await confirm(OLD);
     const tryEmail = `pfa${digits()}@example.com`;
     const tryCode = (await http().post('/v1/sbg/identity/email/request').send({ email: tryEmail }).expect(201)).body.code as string;
-    const refusedSignUp = await http().post('/v1/sbg/identity/enroll').send({ phone: OLD, pin: PIN, email: tryEmail, emailCode: tryCode });
+    const refusedSignUp = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone: OLD, pin: PIN, email: tryEmail, emailCode: tryCode });
     expect(refusedSignUp.body).toMatchObject({ code: 'INVALID_STATE', message: expect.stringContaining('less than 7 days ago') });
 
     // THE HOLDER BLOCKS THEIR OLD NUMBER: it is free at once, and somebody else signs up with it.
@@ -240,7 +241,7 @@ describe('a parcel is kept by the account, over the wire', () => {
     const dest = await aShop('Buyer-side PFA', 'FollowSouth');
     // A store's order is routed when it is made, so the road between the two shops has to exist first.
     await http().post('/v1/sbg/corridors').set(operator).send({ name: 'FollowNorth → FollowSouth', originZone: 'FollowNorth', destZone: 'FollowSouth' }).expect(201);
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Follow Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Follow Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const store = made.vendorId as string;
     // The store pays in and sends its orders signed in as itself: staff do neither in a store's name.
     const asStore = { authorization: `Bearer ${(await http().post('/v1/sbg/vendors/login').send({ vendorId: store, secret: made.secret }).expect(201)).body.token.access_token}` };

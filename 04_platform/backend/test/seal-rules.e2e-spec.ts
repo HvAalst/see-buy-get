@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { EntityService } from '../src/foundation/entity/entity.service';
+import { AGREED } from './agreed';
 
 /**
  * WHERE A SEAL IS REQUIRED, EACH COUNTRY DECIDES (the user, round 38: "Each country decides") — through the booted
@@ -39,7 +40,7 @@ describe('a seal where the country requires one, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `seal-rule-${n}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
     const made = await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Seal Rule Goods ${n}`, country: 'KE', registrationNo: `REG-SR-${n}`, activities: ['shipper'], yourName: 'Achieng' }).expect(201);
     return made.body.token.access_token as string;
   }

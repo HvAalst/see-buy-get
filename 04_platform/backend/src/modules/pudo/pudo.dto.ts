@@ -9,6 +9,7 @@ import { INTEREST_KINDS, MAX_INTEREST_MESSAGE } from '../../foundation/interest/
 import { CLAIM_KINDS, DELAY_PLACES, GIVE_BACK_REASONS, RATE_BASES, RUN_CANCEL_REASONS, SETTLE_METHODS, SETTLE_WHEN, type DelayPlace, type GiveBackReason, type RunCancelReason } from './departure.types';
 import { PRESENCE_LEVELS, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { Type } from 'class-transformer';
+import { AgreementDto } from '../../foundation/documents/documents.types';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { MERCHANT_TAGS, MerchantTag } from './merchant-rating.service';
@@ -971,6 +972,8 @@ class ShippingPolicyDto {
 
 export class RegisterVendorDto {
   @IsString() name!: string;
+  /** The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25). */
+  @IsOptional() @ValidateNested() @Type(() => AgreementDto) agreement?: AgreementDto;
   @IsOptional() @IsString() callbackUrl?: string;
   @IsOptional() @IsString() secret?: string;
   @IsOptional() @ValidateNested() @Type(() => GeoDto) location?: GeoDto;
@@ -1832,6 +1835,8 @@ export class RemoveDriverDto {
 
 export class SignupDto {
   @IsIn(['pudo', 'driver', 'mdp']) role!: 'pudo' | 'driver' | 'mdp';
+  /** The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25). */
+  @IsOptional() @ValidateNested() @Type(() => AgreementDto) agreement?: AgreementDto;
   @IsString() email!: string;
   @IsString() password!: string;
   @IsString() phone!: string;
@@ -2102,6 +2107,8 @@ const PERSON_ROLES = ['consumer', 'driver', 'agent', 'mdp', 'fleet_manager', 've
 /** Enroll (or return) the consumer for an OTP-verified phone; optionally set the 4-digit PIN in one step. */
 export class EnrollDto {
   @IsString() phone!: string;
+  /** The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25). */
+  @IsOptional() @ValidateNested() @Type(() => AgreementDto) agreement?: AgreementDto;
   @IsOptional() @IsString() pin?: string;
   /**
    * The key this device already holds for this number, if it has one. A PIN replaced on a device the PIN already

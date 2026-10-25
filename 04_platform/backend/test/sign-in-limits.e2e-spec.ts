@@ -8,6 +8,7 @@ import { AccountService } from '../src/modules/pudo/account.service';
 import { VendorService } from '../src/modules/pudo/vendor.service';
 import { OperatorAccountService } from '../src/foundation/entity/operator-account.service';
 import { EntityAdminService } from '../src/foundation/entity/entity-admin.service';
+import { AGREED } from './agreed';
 
 /**
  * EVERY PASSWORD DOOR COUNTS ITS TRIES — through the booted application (the user, 2026-10-11: "the shop and hub need
@@ -48,6 +49,7 @@ describe('every password door counts its tries, over the wire', () => {
     return phone;
   };
   const shopBody = (u: string, email: string, password: string, phone: string) => ({
+    ...AGREED,
     role: 'pudo',
     email,
     password,
@@ -150,7 +152,7 @@ describe('every password door counts its tries, over the wire', () => {
     const email = `hub.${u}@depot.example`;
     const password = 'mabati-na-misumari-4';
     const phone = await aVerifiedNumber(u);
-    const signup = (pw: string) => http().post('/v1/sbg/auth/signup').send({ role: 'mdp', email, password: pw, phone, profile: { mdp: { name: `Ghala Kuu ${u}`, zones: [`H${u}`], country: 'KE', location: { lat: -1.3, lng: 36.9 } } } });
+    const signup = (pw: string) => http().post('/v1/sbg/auth/signup').send({ ...AGREED, role: 'mdp', email, password: pw, phone, profile: { mdp: { name: `Ghala Kuu ${u}`, zones: [`H${u}`], country: 'KE', location: { lat: -1.3, lng: 36.9 } } } });
     expect((await signup('GhalaKuu2026')).body.code).toBe('PASSWORD_GUESSABLE');
     await signup(password).expect(201);
     expect(await guess((pw) => login(email, pw), 5)).toEqual(FOUR_WRONG_THEN_LOCKED);
@@ -163,8 +165,8 @@ describe('every password door counts its tries, over the wire', () => {
     const u = digits();
     const email = `soko.${u}@store.example`;
     const password = 'vitenge-vya-pwani-8';
-    expect((await http().post('/v1/sbg/vendors').send({ name: `Soko Letu ${u}`, email, password: 'SokoLetu2026' })).body.code).toBe('PASSWORD_GUESSABLE');
-    const made = (await http().post('/v1/sbg/vendors').send({ name: `Soko Letu ${u}`, email, password, ownerPhone: await aVerifiedNumber(digits()) }).expect(201)).body;
+    expect((await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Soko Letu ${u}`, email, password: 'SokoLetu2026' })).body.code).toBe('PASSWORD_GUESSABLE');
+    const made = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Soko Letu ${u}`, email, password, ownerPhone: await aVerifiedNumber(digits()) }).expect(201)).body;
     const token = made.token.access_token as string;
     const rotate = (pw: string) => http().post(`/v1/sbg/vendors/${made.vendorId}/secret/rotate`).set(bearer(token)).send({ password: pw });
     // Two wrong at the sign-in and three from inside are five at one account.
@@ -180,7 +182,7 @@ describe('every password door counts its tries, over the wire', () => {
 
   it('a store’s old door — its ID and its signing secret — is counted the same way, and says so in its own words', async () => {
     const u = digits();
-    const old = (await http().post('/v1/sbg/vendors').send({ name: `Zamani ${u}` }).expect(201)).body;
+    const old = (await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Zamani ${u}` }).expect(201)).body;
     const bySecret = (secret: string) => http().post('/v1/sbg/vendors/login').send({ vendorId: old.vendorId, secret });
     await bySecret(old.secret).expect(201);
     expect(await guess(bySecret, 5)).toEqual(FOUR_WRONG_THEN_LOCKED);
@@ -246,7 +248,7 @@ describe('every password door counts its tries, over the wire', () => {
     const phone = await aVerifiedNumber(u);
     await http().post('/v1/sbg/auth/signup').send(shopBody(u, shop, 'mahindi-ya-kuchoma-3', phone)).expect(201);
     const store = `kazi.${u}@store.example`;
-    await http().post('/v1/sbg/vendors').send({ name: `Kazi Store ${u}`, email: store, password: 'mahindi-ya-kuchoma-3', ownerPhone: await aVerifiedNumber(digits()) }).expect(201);
+    await http().post('/v1/sbg/vendors').send({ ...AGREED, name: `Kazi Store ${u}`, email: store, password: 'mahindi-ya-kuchoma-3', ownerPhone: await aVerifiedNumber(digits()) }).expect(201);
     const staff = `kazi-${u}@sbg.test`;
     await http().post('/v1/sbg/operators').set(bearer(operator)).send({ email: staff, name: `Kazi ${u}` }).expect(201);
     const admin = `kazi.${u}@sbg-ke.example`;

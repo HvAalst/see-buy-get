@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { CONTENTS_PNG } from './content-photo';
+import { AGREED } from './agreed';
 
 /**
  * A BUSINESS'S KEY WRITES THE SEALS ON ITS LOADS, over the wire (round 33, the user: "A business's key writes seals").
@@ -39,7 +40,7 @@ describe('a business’s key writes the seals on its loads, over the wire', () =
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `seal-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string;
     const token = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${tag}`, country: 'KE', registrationNo: `SEAL-${tag}-${seq}`, activities: ['shipper'], yourName: 'Wanjiku Owner' }).expect(201)).body.token.access_token as string;
     const live = (await http().post('/v1/sbg/business/me/keys').set(bearer(token)).send({ mode: 'live', label: 'ERP' }).expect(201)).body.secret as string;
     const test = (await http().post('/v1/sbg/business/me/keys').set(bearer(token)).send({ mode: 'test', label: 'ERP sandbox' }).expect(201)).body.secret as string;

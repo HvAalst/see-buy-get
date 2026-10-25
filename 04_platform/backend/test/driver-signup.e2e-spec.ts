@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { MAX_DRIVER_REFUSALS_PER_DAY } from '../src/modules/pudo/account.service';
+import { AGREED } from './agreed';
 
 /**
  * A DRIVER SIGNS UP WITH THE PIN THEY WILL OPEN THE DRIVER APP WITH (the user, 2026-10-23). It used to be an email and a
@@ -40,12 +41,12 @@ describe('a driver signs up with their PIN, over the wire', () => {
     const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     if (!withPin) {
-      const bare = (await http().post('/v1/sbg/identity/enroll').send({ phone }).expect(201)).body;
+      const bare = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone }).expect(201)).body;
       return { phone, auth: bearer(bare.token.access_token as string), device: bare.device as string };
     }
     const email = `driver-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body;
+    const enrolled = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body;
     return { phone, auth: bearer(enrolled.token.access_token as string), device: enrolled.device as string };
   }
   /** What the front page sends for a courier on a bike: the same profile the email door took. */

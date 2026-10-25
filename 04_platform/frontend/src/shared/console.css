@@ -1743,3 +1743,169 @@
     display: none;
   }
 }
+
+/* ------------------------------------------- terms and notices (DocumentsScreen, 2026-10-25) -- */
+
+.docs__panel {
+  display: grid;
+  gap: 10px;
+}
+
+.docs__path {
+  font-size: var(--c-fs-sm);
+  color: var(--tx3);
+}
+
+.docs__line {
+  margin: 0;
+  font-size: var(--c-fs);
+  color: var(--tx2);
+}
+
+.docs__note {
+  margin: 0;
+  font-size: var(--c-fs-lg);
+  color: var(--tx);
+}
+
+.docs__pending,
+.docs__editor,
+.docs__view {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+}
+
+.docs__actions,
+.docs__decide,
+.docs__tabs,
+.docs__rowacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.docs__rowacts {
+  flex: none;
+  align-items: center;
+}
+
+.docs__reason {
+  min-width: 220px;
+  flex: 1;
+}
+
+.docs__toggle {
+  justify-self: start;
+}
+
+.docs__text {
+  min-height: 420px;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.docs__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--c-fs);
+}
+
+.docs__check input {
+  margin-top: 2px;
+}
+
+.docs__md {
+  max-height: 520px;
+  overflow: auto;
+}
+
+/* Track changes: a line added, a line taken out, and a changed line with its words struck and inserted. */
+.tdiff {
+  display: grid;
+  gap: 2px;
+  max-height: 520px;
+  overflow: auto;
+  font-size: var(--c-fs);
+  line-height: 1.5;
+}
+
+.tdiff__line {
+  margin: 0;
+  padding: 2px 8px;
+  border-left: 3px solid transparent;
+  white-space: pre-wrap;
+  color: var(--tx2);
+}
+
+.tdiff__line--added {
+  border-left-color: var(--ok);
+  background: var(--ok-light);
+}
+
+.tdiff__line--removed {
+  border-left-color: var(--dang);
+  background: color-mix(in srgb, var(--dang) 8%, transparent);
+}
+
+.tdiff__line--changed {
+  border-left-color: var(--tx3);
+  color: var(--tx);
+}
+
+.tdiff ins {
+  text-decoration: none;
+  background: var(--ok-light);
+  color: var(--ok);
+}
+
+.tdiff del {
+  color: var(--dang);
+  background: color-mix(in srgb, var(--dang) 8%, transparent);
+}
+
+/* The text staff write (shared/documents/markdown.tsx), as the console previews it. */
+.md {
+  font-size: var(--c-fs-lg);
+  line-height: 1.55;
+  color: var(--tx);
+}
+
+.md h2,
+.md h3,
+.md h4 {
+  margin: 16px 0 6px;
+  font-size: 16px;
+}
+
+.md p {
+  margin: 0 0 10px;
+}
+
+.md ul,
+.md ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.md ul {
+  list-style: disc;
+}
+
+.md ol {
+  list-style: decimal;
+}
+
+.tdiff__fold {
+  margin: 2px 0;
+  padding: 2px 8px;
+  font-size: var(--c-fs-sm);
+  color: var(--tx3);
+}

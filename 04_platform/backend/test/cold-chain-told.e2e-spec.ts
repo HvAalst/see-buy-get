@@ -8,6 +8,7 @@ import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { FleetHookService } from '../src/modules/pudo/fleet-hooks.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { NoteArchiveService } from '../src/modules/pudo/note-archive.service';
+import { AGREED } from './agreed';
 
 /**
  * A COLD CHAIN BROKEN IS TOLD, over the wire (round 25, the user: "A breach is told"; "The shipper and the fleet"). Until
@@ -61,7 +62,7 @@ describe('a cold chain broken is told, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `cold-${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     const biz = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Highland Dairy ${digits()}`, country: 'KE', registrationNo: `COLD-${digits()}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
     await http().put('/v1/sbg/business/me/system').set(bearer(biz)).send({ url: `${origin}/shipper` }).expect(200);
     return biz;

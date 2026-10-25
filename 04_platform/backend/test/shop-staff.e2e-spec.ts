@@ -8,6 +8,7 @@ import { shopPhotoOver } from './content-photo';
 import { AT_THE_COUNTER_KEY } from '../src/foundation/auth/at-the-counter';
 import { COUNTER_ACTS } from '../src/modules/pudo/shop-staff.service';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * THE PEOPLE AT A SHOP'S COUNTER, over the wire (the user, 2026-10-18: "who is at the counter" → staff sign in with their
@@ -63,7 +64,7 @@ describe('the people at a shop’s counter, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `kaunta${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     return bearer(enrolled.body.token.access_token as string);
   }
 
@@ -238,6 +239,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'GET sbg/conversations//', 'POST sbg/conversations//', 'GET sbg/conversations/:id/messages', 'POST sbg/conversations/:id/messages', 'GET sbg/conversations/:id/voice/:voiceId',
         'POST sbg/conversations/:id/voice', 'POST sbg/conversations/:id/read', 'POST sbg/conversations/:id/messages/:seq/report', 'POST sbg/conversations/:id/dispute-reports',
         'GET sbg/notifications/inbox', 'POST sbg/notifications/inbox/:id/read', 'POST sbg/notifications/inbox/read-all', 'POST sbg/notifications/subscribe', 'DELETE sbg/notifications/subscribe', 'POST sbg/notifications/test',
+        // 2026-10-25 — what a colleague at the counter agreed to is their own, read and agreed to under their own name
+        'GET sbg/agreement/mine', 'POST sbg/agreement/mine',
         // what everybody reads
         'GET sbg/border-rules', 'GET sbg/corridors', 'GET sbg/module-info', 'GET sbg/agents/:did/rating', 'GET sbg/agents', 'GET sbg/mdps', 'GET sbg/presence', 'GET sbg/presence/:jurisdiction',
         'GET sbg/route-constraints', 'GET sbg/route-constraints/route', 'GET sbg/field-observations/notice', 'GET sbg/field-observations', 'POST sbg/field-observations',

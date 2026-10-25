@@ -30141,6 +30141,286 @@
         }
       }
     },
+    "/v1/sbg/agreement": {
+      "get": {
+        "operationId": "Documents.agreementSet",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgreementSet"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/documents/{kind}": {
+      "get": {
+        "operationId": "Documents.document",
+        "summary": "",
+        "description": "A document as it reads now.",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedDocument"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/documents/{kind}/history": {
+      "get": {
+        "operationId": "Documents.documentHistory",
+        "summary": "",
+        "description": "Every published version of a document, newest first: its number, date and what changed.",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/documents/{kind}/versions/{number}": {
+      "get": {
+        "operationId": "Documents.documentVersion",
+        "summary": "",
+        "description": "One published version, word for word — what somebody agreed to, read back.",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "number",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishedDocument"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/agreement/mine": {
+      "get": {
+        "operationId": "Documents.myAgreement",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyAgreement"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Documents.agree",
+        "summary": "",
+        "description": "AGREE, after signing in — asked of somebody another person signed up (a fleet's driver, a counter colleague), and\nof everybody when a version published since asks them to agree again.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgreementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyAgreement"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/documents": {
+      "get": {
+        "operationId": "Documents.staffDocuments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/documents/{kind}/versions": {
+      "post": {
+        "operationId": "Documents.propose",
+        "summary": "",
+        "description": "Write a new version. It changes nothing until a different member of staff publishes it.",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersion"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/documents/versions/{versionId}/publish": {
+      "post": {
+        "operationId": "Documents.publish",
+        "summary": "",
+        "description": "The second person publishes it: from now on it is what everybody reads, and agrees to.",
+        "parameters": [
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersion"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/documents/versions/{versionId}/decline": {
+      "post": {
+        "operationId": "Documents.decline",
+        "summary": "",
+        "description": "Decline it — or, by its writer, withdraw it — with a reason that is kept.",
+        "parameters": [
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentVersion"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/settlement/module-info": {
       "get": {
         "operationId": "Sse.info",
@@ -32257,6 +32537,28 @@
           "code"
         ]
       },
+      "AgreementDto": {
+        "type": "object",
+        "properties": {
+          "terms": {
+            "type": "number",
+            "minimum": 1
+          },
+          "privacy": {
+            "type": "number",
+            "minimum": 1
+          },
+          "cookies": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "terms",
+          "privacy",
+          "cookies"
+        ]
+      },
       "SignupDto": {
         "type": "object",
         "properties": {
@@ -32266,6 +32568,14 @@
               "pudo",
               "driver",
               "mdp"
+            ]
+          },
+          "agreement": {
+            "description": "The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgreementDto"
+              }
             ]
           },
           "email": {
@@ -40190,6 +40500,14 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "agreement": {
+            "description": "The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgreementDto"
+              }
+            ]
           },
           "callbackUrl": {
             "type": "string"
@@ -49283,6 +49601,14 @@
           "phone": {
             "type": "string"
           },
+          "agreement": {
+            "description": "The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgreementDto"
+              }
+            ]
+          },
           "pin": {
             "type": "string"
           },
@@ -52148,6 +52474,14 @@
           "name": {
             "type": "string",
             "maxLength": 120
+          },
+          "agreement": {
+            "description": "The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgreementDto"
+              }
+            ]
           },
           "country": {
             "type": "string",
@@ -62088,6 +62422,14 @@
           "phone": {
             "type": "string"
           },
+          "agreement": {
+            "description": "The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgreementDto"
+              }
+            ]
+          },
           "companyName": {
             "type": "string",
             "maxLength": 120
@@ -62188,12 +62530,281 @@
           },
           "profile": {
             "type": "object"
+          },
+          "agreement": {
+            "description": "The versions of the terms of use, the data notice and the cookie statement read and agreed to (2026-10-25).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgreementDto"
+              }
+            ]
           }
         },
         "required": [
           "phone",
           "profile"
         ]
+      },
+      "AgreementDocument": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "terms",
+              "privacy",
+              "cookies"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "number": {
+            "type": "number",
+            "description": "The version to read and agree to."
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "since": {
+            "type": "number",
+            "description": "Somebody who agreed to this version or a later one is not asked again."
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "title",
+          "number",
+          "publishedAt",
+          "since",
+          "path"
+        ]
+      },
+      "AgreementSet": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgreementDocument"
+            }
+          }
+        },
+        "required": [
+          "documents"
+        ]
+      },
+      "PublishedDocument": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "terms",
+              "privacy",
+              "cookies"
+            ]
+          },
+          "number": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "changeNote": {
+            "type": "string"
+          },
+          "askAgain": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string",
+            "description": "Where it is read on the public site."
+          }
+        },
+        "required": [
+          "kind",
+          "number",
+          "title",
+          "body",
+          "publishedAt",
+          "changeNote",
+          "askAgain",
+          "path"
+        ]
+      },
+      "MyAgreement": {
+        "type": "object",
+        "properties": {
+          "needed": {
+            "type": "boolean"
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgreementDocument"
+            }
+          },
+          "agreedAt": {
+            "type": "string",
+            "description": "What they agreed to last, and when. Absent: nothing yet."
+          },
+          "agreed": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "needed",
+          "documents"
+        ]
+      },
+      "ProposeDocumentDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100000
+          },
+          "changeNote": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "askAgain": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": "string",
+            "description": "The typed name beside the shared key on a laptop; a named sign-in says it itself.",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "title",
+          "body",
+          "changeNote",
+          "askAgain"
+        ]
+      },
+      "DocumentVersion": {
+        "type": "object",
+        "properties": {
+          "versionId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "terms",
+              "privacy",
+              "cookies"
+            ]
+          },
+          "number": {
+            "type": "number",
+            "description": "1, 2, 3 … in the order they were published. A proposal has none until it is published."
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "The text, in plain Markdown: a paragraph per blank line, `## ` for a heading, `- ` or `1. ` for a list, `**bold**`,\nand `[words](/path)` or `[words](https://…)` for a link. Nothing else is read as anything but text."
+          },
+          "changeNote": {
+            "type": "string",
+            "description": "What changed and why, said by whoever wrote it — shown beside the version, to staff and on the public page."
+          },
+          "askAgain": {
+            "type": "boolean",
+            "description": "Everybody who agreed to an earlier version is asked to agree to this one before they go on."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "published",
+              "declined"
+            ]
+          },
+          "basedOn": {
+            "type": "string",
+            "description": "The published version this one was written from. A proposal over a version that is no longer current is refused."
+          },
+          "writtenBy": {
+            "type": "string"
+          },
+          "writtenAt": {
+            "type": "string"
+          },
+          "decidedBy": {
+            "type": "string",
+            "description": "Who published it, or declined it — and when, and (declined) why."
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "`seed`: inserted with the system as a first draft, never yet written by anybody at SeeBuyGet.",
+            "enum": [
+              "seed"
+            ]
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Said to whoever reads it: THEY wrote this one, so they cannot publish it."
+          },
+          "agreed": {
+            "type": "number",
+            "description": "How many people agreed to this version. Staff only."
+          }
+        },
+        "required": [
+          "versionId",
+          "kind",
+          "title",
+          "body",
+          "changeNote",
+          "askAgain",
+          "status",
+          "writtenBy",
+          "writtenAt"
+        ]
+      },
+      "DecideDocumentDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 120
+          }
+        }
       },
       "MilestoneTermDto": {
         "type": "object",

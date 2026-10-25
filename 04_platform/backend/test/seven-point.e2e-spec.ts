@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { AGREED } from './agreed';
 
 /**
  * ROUND 40 — THE 7-POINT INSPECTION, OVER THE WIRE (the user: "Cross-border closed loads"). A container or a closed body
@@ -34,7 +35,7 @@ describe('the 7-point inspection — over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `seven-${tag}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     biz = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `Border Goods ${tag}`, country: 'KE', registrationNo: `SEV-${tag}`, activities: ['shipper'], yourName: 'Owner' }).expect(201)).body.token.access_token as string;
     const onboarded = await http().post('/v1/sbg/drivers/onboard').set(bearer(setupKey)).send({ displayName: 'Kamau', fullName: 'Kamau Truck', nationalId: `DRV-7P-${tag}`, mobile: `+2547${String(Date.now()).slice(-6)}7`, licenceClasses: ['truck'], licenceNumber: `DL-7P-${tag}`, licenceExpiresAt: '2030-01-01', criminalRecordClear: true }).expect(201);
     // Vetted, as a driver is before a shift can start.

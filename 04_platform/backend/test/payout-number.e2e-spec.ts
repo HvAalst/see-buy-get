@@ -8,6 +8,7 @@ import { EntityService } from '../src/foundation/entity/entity.service';
 import { OutboxSmsSender } from '../src/foundation/sms/outbox-sms.sender';
 import { PayoutNumberService } from '../src/modules/pudo/payout-number.service';
 import { WalletGateService } from '../src/modules/pudo/wallet-gate.service';
+import { AGREED } from './agreed';
 
 /**
  * A PAYEE'S OWN PAYOUT NUMBER — through the booted application, over HTTP (the user, 2026-10-18: "for the countries
@@ -59,7 +60,7 @@ describe('a payee’s own payout number, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `pay${digits()}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
     return { did: onboarded.body.did as string, token: session.body.token.access_token as string };
   }

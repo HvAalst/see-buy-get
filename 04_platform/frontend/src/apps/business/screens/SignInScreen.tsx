@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { AgreementBlock } from '../../../shared/documents/Agreement';
 import { BrandMark, CodeBoxes, PhoneField } from '../../../shared/ui';
 import { AllAppsLink, frontDoorLink } from '../../../shared/ui/AllAppsLink';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -60,7 +61,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
     if (step === 'login' && phoneReady(state.phone) && digitsReady(state.pin, PIN_LENGTH)) void actions.submitLogin();
     else if (step === 'phone' && phoneReady(state.phone)) void actions.requestCode();
     else if (step === 'code' && digitsReady(state.code, 6)) void actions.submitCode();
-    else if (step === 'pin' && digitsReady(state.pin, PIN_LENGTH) && !pinGuessable(state.pin)) void actions.submitPin();
+    else if (step === 'pin' && digitsReady(state.pin, PIN_LENGTH) && !pinGuessable(state.pin) && state.agreement) void actions.submitPin();
     else if (step === 'email' && state.email.trim() && digitsReady(state.emailCode, 6)) void actions.submitPin();
   };
 
@@ -72,7 +73,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
         : step === 'code'
           ? digitsReady(state.code, 6)
           : step === 'pin'
-            ? digitsReady(state.pin, PIN_LENGTH) && !pinGuessable(state.pin)
+            ? digitsReady(state.pin, PIN_LENGTH) && !pinGuessable(state.pin) && Boolean(state.agreement)
             : Boolean(state.email.trim()) && digitsReady(state.emailCode, 6);
 
   return (
@@ -113,6 +114,8 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
               {step === 'pin' ? <PinGuessHint pin={state.pin} /> : null}
             </div>
           ) : null}
+          {/* Choosing a first PIN is where the person's account is made: everybody signing up agrees here (2026-10-25). */}
+          {step === 'pin' ? <AgreementBlock agreed={state.agreement} onChange={(agreement) => actions.set({ agreement })} /> : null}
 
           {step === 'code' ? (
             <div class="cfield">

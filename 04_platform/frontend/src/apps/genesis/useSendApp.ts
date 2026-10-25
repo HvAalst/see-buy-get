@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { AgreementNumbers } from '../../shared/documents/documents';
 import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
 import { isSignInRequired, narrow, type SbgError } from '../../lib/sbg';
 import { asksForEmail, isPinReset } from '../../shared/account/recovery';
@@ -97,6 +98,8 @@ export interface SendState {
   authReset: boolean;
   authCode: string; // the 6-digit OTP
   authPin: string; // the 4-digit PIN
+  /** The versions of the terms of use, the data notice and the cookie statement agreed to on the sign-up (2026-10-25). */
+  authAgreement: AgreementNumbers | null;
   authBusy: boolean;
   authError: SbgError | null;
   authDevCode: string | null; // sandbox convenience: the OTP echoed back, shown as a hint
@@ -190,6 +193,7 @@ const INITIAL: SendState = {
   authReset: false,
   authCode: '',
   authPin: '',
+  authAgreement: null,
   authBusy: false,
   authError: null,
   authDevCode: null,
@@ -587,6 +591,7 @@ export function useSendApp() {
   const setAuthPhone = useCallback((v: string) => setState((s) => ({ ...s, authPhone: v, phoneKnown: false, authError: null })), []);
   const setAuthCode = useCallback((v: string) => setState((s) => ({ ...s, authCode: v, authError: null })), []);
   const setAuthPin = useCallback((v: string) => setState((s) => ({ ...s, authPin: v, authError: null })), []);
+  const setAuthAgreement = useCallback((v: AgreementNumbers | null) => setState((s) => ({ ...s, authAgreement: v, authError: null })), []);
   const setAuthEmail = useCallback((v: string) => setState((s) => ({ ...s, authEmail: v, authError: null })), []);
   const setAuthEmailCode = useCallback((v: string) => setState((s) => ({ ...s, authEmailCode: v, authError: null })), []);
   // A navigation bumps the auth epoch so any in-flight request bails out instead of clobbering the step.
@@ -640,7 +645,7 @@ export function useSendApp() {
     // On the email step the address and its code ride along; before it, the server is asked whether it needs one.
     const onEmailStep = stateRef.current.authStep === 'email';
     const recovery = onEmailStep ? { email: stateRef.current.authEmail.trim(), code: stateRef.current.authEmailCode } : undefined;
-    const r = await enroll(phone, pin, stateRef.current.inviteToken ?? undefined, recovery);
+    const r = await enroll(phone, pin, stateRef.current.inviteToken ?? undefined, recovery, stateRef.current.authAgreement);
     if (epoch !== authEpoch.current) return;
     if (r.error) {
       // A FIRST PIN needs a recovery email. That is the next thing to fill in, not an error: the phone stays
@@ -1214,6 +1219,7 @@ export function useSendApp() {
       setAuthPhone,
       setAuthCode,
       setAuthPin,
+      setAuthAgreement,
       setAuthEmail,
       setAuthEmailCode,
       setAuthMode,

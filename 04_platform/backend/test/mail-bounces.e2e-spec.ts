@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { producerSignatureFor } from '../src/foundation/mail/mail-bounces';
 import { PROVIDER_EVENTS_PATH, readProviderEventsRaw } from '../src/foundation/mail/provider-events.raw';
+import { AGREED } from './agreed';
 
 /**
  * A BOUNCE NOTICE, OVER THE WIRE — through the booted app, started the way `main.ts` starts it: with the provider's
@@ -56,7 +57,7 @@ describe('a bounce notice from the mail provider, over the wire', () => {
     const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const person = (await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
+    const person = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token;
     const me = async () => (await http().get('/v1/sbg/account/me').set(bearer(person)).expect(200)).body;
     expect((await me()).emailBounced).toBeUndefined();
 

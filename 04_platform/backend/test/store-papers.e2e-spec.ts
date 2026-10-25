@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver } from './content-photo';
 import { declared } from './declared';
+import { AGREED } from './agreed';
 
 /**
  * A STORE PARCEL'S PAPERS ABROAD, over the wire (the user, round 13: per item "As shippers do"; the buyer "Address entered
@@ -62,7 +63,7 @@ describe('a store parcel’s papers abroad, over the wire', () => {
 
   /** A store, signed in to its app, with money to ship. */
   async function aStore(): Promise<{ id: string; token: { authorization: string } }> {
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Papers Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Papers Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const token = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     const asked = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(token).send({ amount: 5000 }).expect(201);
     await http().post(`/v1/rails/funding/${asked.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 5000 }).expect(201);

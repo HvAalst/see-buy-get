@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { CONTENTS_PNG } from './content-photo';
+import { AGREED } from './agreed';
 
 /**
  * A STORE'S CONTENT PHOTO, REALLY KEPT, over the wire (round 30, the user: "A store's content photo, really kept"; "It
@@ -58,7 +59,7 @@ describe('a store’s content photo, really kept, over the wire', () => {
     return did;
   }
   async function aStore(): Promise<{ id: string; token: { authorization: string } }> {
-    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ name: `Photo Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Photo Store ${digits()}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
     const token = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
     await fund(`/v1/sbg/vendors/${made.vendorId}/top-up`, token, 5000);
     return { id: made.vendorId, token };

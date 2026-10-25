@@ -6,10 +6,11 @@ import type { HelpRole } from './help';
  * optimization"). Built into HTML at build time, one address each, every word in the catalog (en.pages.ts).
  */
 export type Audience = 'shops' | 'drivers' | 'fleets' | 'hubs' | 'stores' | 'business';
-export type Notice = 'privacy' | 'cookies';
+export type Notice = 'terms' | 'privacy' | 'cookies';
 export type InfoPage = { kind: 'about' } | { kind: 'for'; who: Audience } | { kind: 'notice'; which: Notice };
 
 export const ABOUT_PATH = '/about/';
+export const TERMS_PATH = '/terms/';
 export const PRIVACY_PATH = '/privacy/';
 export const COOKIES_PATH = '/cookies/';
 export const forPath = (who: Audience) => `/for/${who}/`;
@@ -40,42 +41,22 @@ export const AUDIENCES: readonly AudienceSpec[] = [
 ];
 
 /**
- * YOUR DATA, AND COOKIES — what the system does with personal data today, section by section (en.privacy.ts). The
- * count of each section's sentences lives here, so the page, its plain-text copy and the test agree on them.
+ * THE TERMS OF USE, YOUR DATA, AND COOKIES — the three documents every sign-up agrees to. Their text is written by staff
+ * in the console and read from the server (shared/documents); only their addresses and search titles live here.
  */
-export const NOTICES: Record<Notice, { path: string; other: Notice; sections: ReadonlyArray<{ id: string; items: number }> }> = {
-  privacy: {
-    path: PRIVACY_PATH,
-    other: 'cookies',
-    sections: [
-      { id: 'keeps', items: 7 },
-      { id: 'never', items: 4 },
-      { id: 'protect', items: 7 },
-      { id: 'see', items: 7 },
-      { id: 'others', items: 10 },
-      { id: 'howLong', items: 11 },
-      { id: 'you', items: 7 },
-    ],
-  },
-  cookies: {
-    path: COOKIES_PATH,
-    other: 'privacy',
-    sections: [
-      { id: 'none', items: 3 },
-      { id: 'kept', items: 10 },
-      { id: 'out', items: 4 },
-      { id: 'maps', items: 1 },
-    ],
-  },
+export const NOTICES: Record<Notice, { path: string }> = {
+  terms: { path: TERMS_PATH },
+  privacy: { path: PRIVACY_PATH },
+  cookies: { path: COOKIES_PATH },
 };
 
-/** pages.<privacy|cookies>.<part>, typed. */
+/** pages.<terms|privacy|cookies>.<part>, typed. */
 export const noticeKey = (which: Notice, part: string) => `pages.${which}.${part}` as MessageKey;
 
 /** Which page an address is, or null. */
 export function infoPageOf(path: string): InfoPage | null {
   if (/^\/about\/?$/.test(path)) return { kind: 'about' };
-  const notice = /^\/(privacy|cookies)\/?$/.exec(path)?.[1];
+  const notice = /^\/(terms|privacy|cookies)\/?$/.exec(path)?.[1];
   if (notice) return { kind: 'notice', which: notice as Notice };
   const who = /^\/for\/([a-z]+)\/?$/.exec(path)?.[1];
   return who && AUDIENCES.some((a) => a.who === who) ? { kind: 'for', who: who as Audience } : null;

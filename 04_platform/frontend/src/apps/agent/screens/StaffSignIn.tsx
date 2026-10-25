@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'preact/hooks';
+import { AgreementBlock } from '../../../shared/documents/Agreement';
+import type { AgreementNumbers } from '../../../shared/documents/documents';
 import { Button, Card, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, Note, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgConfig, SbgError } from '../../../lib/sbg';
@@ -60,6 +62,8 @@ export function StaffSignIn({
   const [testCode, setTestCode] = useState('');
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
+  // A first PIN is where a colleague's own account is made: they agree for themselves, never as the shop (2026-10-25).
+  const [agreement, setAgreement] = useState<AgreementNumbers | null>(null);
   const [emailReset, setEmailReset] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
@@ -127,7 +131,7 @@ export function StaffSignIn({
   const choosePin = async () => {
     setBusy(true);
     setError(null);
-    const r = await doors.choosePin(phone, pin, step === 'email' ? { email, code: emailCode } : undefined);
+    const r = await doors.choosePin(phone, pin, step === 'email' ? { email, code: emailCode } : undefined, agreement);
     if (r.error || !r.data) {
       setBusy(false);
       if (step === 'pin' && asksForEmail(r.error)) {
@@ -180,11 +184,11 @@ export function StaffSignIn({
     if (step === 'login' && phone.trim() && pinReady(pin)) void login();
     else if (step === 'phone' && phone.trim()) void sendCode();
     else if (step === 'code' && code.length === 6) void checkCode();
-    else if ((step === 'pin' && pinReady(pin) && !pinGuessable(pin)) || (step === 'email' && email.trim() && emailCode.length === 6)) void choosePin();
+    else if ((step === 'pin' && pinReady(pin) && !pinGuessable(pin) && agreement) || (step === 'email' && email.trim() && emailCode.length === 6)) void choosePin();
   };
 
   const ready =
-    step === 'login' ? Boolean(phone.trim()) && pinReady(pin) : step === 'phone' ? Boolean(phone.trim()) : step === 'code' ? code.length === 6 : step === 'pin' ? pinReady(pin) && !pinGuessable(pin) : step === 'email' ? Boolean(email.trim()) && emailCode.length === 6 : false;
+    step === 'login' ? Boolean(phone.trim()) && pinReady(pin) : step === 'phone' ? Boolean(phone.trim()) : step === 'code' ? code.length === 6 : step === 'pin' ? pinReady(pin) && !pinGuessable(pin) && Boolean(agreement) : step === 'email' ? Boolean(email.trim()) && emailCode.length === 6 : false;
   const cta: MessageKey = step === 'login' ? 'agent.staff.loginCta' : step === 'phone' ? 'agent.staff.phoneCta' : step === 'code' ? 'agent.staff.codeCta' : step === 'pin' ? 'agent.staff.pinCta' : 'agent.staff.emailCta';
 
   if (step === 'places') {
@@ -259,6 +263,7 @@ export function StaffSignIn({
             {step === 'pin' ? <PinGuessHint pin={pin} /> : null}
           </div>
         ) : null}
+        {step === 'pin' ? <AgreementBlock agreed={agreement} onChange={setAgreement} /> : null}
         {step === 'code' ? (
           <div class="field">
             <span class="field__label">{t('agent.staff.code')}</span>

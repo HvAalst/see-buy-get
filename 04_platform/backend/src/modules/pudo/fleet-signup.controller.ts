@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Optional, Param, Post } from '@nestjs/common';
+import { AgreementService } from '../../foundation/documents/agreement.service';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -43,6 +44,8 @@ export class FleetSignupController {
     private readonly persons: PersonService,
     private readonly media: MediaService,
     @Optional() private readonly mail?: MailService,
+    // 2026-10-25 — the person signing the fleet up has agreed to what counts now, or agrees with this sign-up.
+    @Optional() private readonly agreements?: AgreementService,
   ) {}
 
   /** Sign a fleet up: the record, the person as its first manager, and its papers — with SeeBuyGet to check. */
@@ -56,6 +59,7 @@ export class FleetSignupController {
       throw new GlosError('FORBIDDEN', 'Sign a fleet up with the phone number you signed in with', { field: 'phone' });
     }
     if (!dto.contactEmail?.includes('@')) throw new GlosError('EMAIL_INVALID', 'Give an email address for the company: we write to it when your papers have been checked', { field: 'contactEmail' });
+    this.agreements?.assertFor(actor, dto.agreement, 'fleet/signups');
     const waiting = this.signupsOf(person.roles).filter((s) => s.status === 'DRAFT' || s.status === 'KYC_PENDING');
     if (waiting.length >= MAX_WAITING_SIGNUPS) {
       throw new GlosError('INVALID_STATE', `You already have ${waiting.length} fleets waiting for SeeBuyGet. Wait for one to be checked before signing up another.`);

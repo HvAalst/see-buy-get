@@ -8,6 +8,7 @@ import { EventBus } from '../src/foundation/events/event-bus.service';
 import { GlosEvent } from '../src/foundation/events/glos-events';
 import { BusinessHookService } from '../src/modules/pudo/business-hooks.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { AGREED } from './agreed';
 
 /**
  * A BUSINESS'S OWN SYSTEM, TOLD OF ITS LOADS, over the wire (the user, round 10: "Businesses first"; "Only what it sees in
@@ -34,7 +35,7 @@ describe('a business’s own system, told of its loads, over the wire', () => {
     await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
     const email = `sys-${tag}-${seq}@example.com`;
     const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
-    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201);
     return { phone, token: enrolled.body.token.access_token, email };
   }
 
