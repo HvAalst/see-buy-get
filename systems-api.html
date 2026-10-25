@@ -171,6 +171,7 @@
       <tr><td>instructions, contactName, contactPhone, deliveryWindow</td><td class="desc">What the driver needs at the door.</td></tr>
       <tr><td>contractId, deliverOn, orderRef</td><td class="desc">An order under a contract you linked with a fleet: the day it must arrive, your own order number (used once).</td></tr>
       <tr><td>forClientId</td><td class="desc">An expeditor sending for one of its own clients.</td></tr>
+      <tr><td>receivingPoint, receiverRef</td><td class="desc">To another business's own place, by the code it gave you for it (<code>7KQ3-PX9M</code>, written any way): its place becomes where the load goes, whatever <code>destLabel</code> and <code>destLocation</code> said, and a code that names no place is refused. That business sees the load coming in, with its own order number (<code>receiverRef</code>) — never your price.</td></tr>
       <tr><td>packages</td><td class="desc">How many; coded with your GS1 prefix where you hold one.</td></tr>
       <tr><td>commitMode</td><td class="desc"><code>negotiate</code> to agree a price before anyone commits — agreed by a person, in the app.</td></tr>
     </tbody>
@@ -287,6 +288,13 @@
     <li><b>A business</b> (Business details → <i>Your system</i>): a carrier took a load, gave it back, picked it up,
       could not hand it over, delivered it; it was cancelled; a problem reported, and decided. Each carries the load as
       your Loads screen shows it. Nothing about money.</li>
+    <li><b>A business receiving at its own places</b> (Coming in): <code>inbound.addressed</code> when a supplier posts a
+      load to one of your receiving points, then each step as it moves — <code>inbound.taken</code>,
+      <code>inbound.picked_up</code>, <code>inbound.delivery_failed</code>, <code>inbound.delivered</code>,
+      <code>inbound.cancelled</code> and the rest of the load steps, named <code>inbound.*</code>. Each carries
+      <code>inbound</code>: the load as your Coming in shows it — your order number as <code>reference</code>, who it is
+      <code>from</code>, the <code>site</code>, packages, weight, status, who is bringing it and when it is expected. Never the
+      price, which stays between you and your supplier. A load you sent yourself is told as <code>load.*</code>, once.</li>
     <li><b>A fleet</b> (Dashboard → <i>Your own system</i>): an order came in, changed, left your Orders, was cancelled; a
       load put on a driver, taken, given back, picked up, not handed over, delivered, withdrawn, a problem reported and
       decided; a vehicle broke down, how it ended, its loads moved; space booked on a run, given back, the run called
