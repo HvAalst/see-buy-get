@@ -1907,6 +1907,13 @@ export const enTowerQueues = {
   'tower.conn.sms.refusedWhy.trial': 'The Twilio account texts only numbers that were verified with it, until it is upgraded.',
   'tower.conn.sms.refusedWhy.unknown': 'It will not text for this account as it is set up. Check the credential, and what texts are sent from.',
   'tower.conn.sms.code': 'Twilio’s number for it: {code}.',
+  // The whole server's caps on texts (2026-10-25): every code costs money, and asking for them in bulk is an old fraud.
+  'tower.conn.sms.pausedHour': 'Texting is paused since {since}: {n} codes in the last hour reached the cap of {cap}, and {held, plural, one {# code was} other {# codes were}} not sent. It resumes by itself as the hour moves on. If this is real growth, raise GLOS_SMS_PER_HOUR on the server; if it is not, somebody may be asking for codes to run up the bill.',
+  'tower.conn.sms.pausedDay': 'Texting is paused since {since}: {n} codes in the last day reached the cap of {cap}, and {held, plural, one {# code was} other {# codes were}} not sent. It resumes by itself as the day moves on. If this is real growth, raise GLOS_SMS_PER_DAY on the server; if it is not, somebody may be asking for codes to run up the bill.',
+  'tower.conn.sms.failed.paused': 'The last code, at {when}, was not sent: texting was paused at its cap. The person was told codes are paused for a while.',
+  'tower.conn.tag.smsPaused': 'paused at its cap',
+  'tower.conn.fact.smsCap': 'Cap',
+  'tower.conn.fact.smsCapValue': '{hour} of {perHour} in the last hour · {day} of {perDay} in the last day',
   'tower.conn.sms.someFailed': 'Since this server started, {failed} of {n} could not be handed over.',
   'tower.conn.sms.where':
     'A code is texted through Twilio when the server is started, off a sandbox, with TWILIO_ACCOUNT_SID, a credential (TWILIO_API_KEY_SID with TWILIO_API_KEY_SECRET, or TWILIO_AUTH_TOKEN) and what texts are sent from (TWILIO_MESSAGING_SERVICE_SID, or TWILIO_FROM). None of them is shown, here or anywhere. A code is texted only to a number in a country that is switched on (Where we operate): there is no list beside it. Twilio keeps a list of its own, changed by hand in its console and not by us: switch on the same countries, and no others, under its SMS Geo Permissions. A text is sent once: when it cannot be handed over, the person is told, and asks again. No text has yet gone through the real provider: the first one should be watched here.',

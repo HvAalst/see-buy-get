@@ -76,7 +76,17 @@ export interface PushConnection {
   failed: number;
   last?: { at: string; ok: boolean };
 }
-export type SmsFailure = 'unreachable' | 'refused' | 'limit' | 'rejected' | 'failed';
+export type SmsFailure = 'unreachable' | 'refused' | 'limit' | 'rejected' | 'failed' | 'paused';
+/** The whole server's caps on texts, an hour and a day, and how near they are (2026-10-25). */
+export interface SmsCap {
+  perHour: number;
+  perDay: number;
+  lastHour: number;
+  lastDay: number;
+  pausedSince?: string;
+  pausedBy?: 'hour' | 'day';
+  held: number;
+}
 export type SmsProblem = 'no_account' | 'no_credential' | 'no_sender' | 'not_twilio' | 'sandbox';
 export interface SmsConnection {
   sends: boolean;
@@ -93,6 +103,8 @@ export interface SmsConnection {
   /** Not texted since the server started: the number's country is not switched on. */
   fenced: number;
   last?: { at: string; ok: boolean; failed?: SmsFailure; code?: string };
+  /** Absent from a server that predates it. */
+  cap?: SmsCap;
 }
 export interface Connections {
   router: RouterConnection;
@@ -308,6 +320,16 @@ export function smsSays(c: SmsConnection, sandbox: boolean, since: string, t: Tr
   }
   // A stand-in is said before anything the last text met: "handed to Twilio" would not be true of any of them.
   const standIn = c.standIn ? `${t('tower.conn.sms.standIn')} ` : '';
+  // PAUSED AT A CAP comes before anything else: nobody receives a code until it lifts, and staff decide whether it is
+  // growth (raise the cap) or somebody running up the bill.
+  if (c.cap?.pausedBy) {
+    const cap = c.cap;
+    return {
+      tone: 'danger',
+      tag: t('tower.conn.tag.smsPaused'),
+      line: standIn + t(cap.pausedBy === 'hour' ? 'tower.conn.sms.pausedHour' : 'tower.conn.sms.pausedDay', { since: momentWords(cap.pausedSince ?? ''), n: cap.pausedBy === 'hour' ? cap.lastHour : cap.lastDay, cap: cap.pausedBy === 'hour' ? cap.perHour : cap.perDay, held: cap.held }),
+    };
+  }
   if (!c.last) return { tone: 'info', tag: t('tower.conn.tag.unsent'), line: standIn + t('tower.conn.sms.unsent', { since: momentWords(since) }) };
   const when = momentWords(c.last.at);
   const earlier = c.failed > 0 ? ` ${t('tower.conn.sms.someFailed', { failed: c.failed, n: c.written })}` : '';
@@ -328,7 +350,15 @@ const SMS_FAILED = {
   rejected: { tone: 'info', tag: 'tower.conn.tag.smsRejected' },
   unreachable: { tone: 'warn', tag: 'tower.conn.tag.notSending' },
   failed: { tone: 'warn', tag: 'tower.conn.tag.notSending' },
+  // Our own cap: said by the pause itself above while it lasts; afterwards, the last text met it.
+  paused: { tone: 'warn', tag: 'tower.conn.tag.smsPaused' },
 } as const;
+
+/** The caps, as a fact: how many texts in the last hour and day, against each. */
+export function smsCapWords(c: SmsConnection, t: Translate): string {
+  if (!c.cap) return '—';
+  return t('tower.conn.fact.smsCapValue', { hour: c.cap.lastHour, perHour: c.cap.perHour, day: c.cap.lastDay, perDay: c.cap.perDay });
+}
 
 /**
  * What a refusal is about, from Twilio's own number for it — only the numbers whose meaning its error dictionary

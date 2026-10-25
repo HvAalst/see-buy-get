@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { adviserSays, bounceListenWords, checkSays, countWords, mailBounceWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, approvedSays, pushSays, refusedWhy, routerSays, smsCountryWords, smsRefusedWhy, smsSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection, type SmsConnection } from './connections';
+import { adviserSays, bounceListenWords, checkSays, countWords, mailBounceWords, mailAddressWords, mailAgainWords, mailSays, momentWords, plausible, approvedSays, pushSays, refusedWhy, routerSays, smsCapWords, smsCountryWords, smsRefusedWhy, smsSays, waitingWords, type AdviserConnection, type MailConnection, type PushConnection, type RouterConnection, type SmsConnection } from './connections';
 
 const since = '2026-10-06T06:00:00Z';
 const at = '2026-10-06T08:15:00Z';
@@ -304,6 +304,19 @@ describe('what this server is connected to', () => {
   });
 
   describe('the text that carries a code', () => {
+    it('says texting paused at its cap first, in red, with how many and what to do — and the cap as a fact', () => {
+      const cap = { perHour: 100, perDay: 500, lastHour: 100, lastDay: 140, held: 3, pausedBy: 'hour' as const, pausedSince: '2026-10-25T14:00:00' };
+      const s = smsSays(sms({ written: 140, last: { at: '2026-10-25T14:05:00', ok: false, failed: 'paused' }, cap }), false, '2026-10-25T08:00:00', t);
+      expect(s.tone).toBe('danger');
+      expect(s.tag).toBe(t('tower.conn.tag.smsPaused'));
+      expect(s.line).toContain('100 codes in the last hour reached the cap of 100');
+      expect(s.line).toContain('3 codes were not sent');
+      expect(s.line).toContain('GLOS_SMS_PER_HOUR');
+      expect(smsCapWords(sms({ cap: { ...cap, pausedBy: undefined, lastHour: 12, lastDay: 40 } }), t)).toBe('12 of 100 in the last hour · 40 of 500 in the last day');
+      // Lifted, the last text that met it is said like any other failure, in amber.
+      expect(smsSays(sms({ written: 2, failed: 0, last: { at: '2026-10-25T14:05:00', ok: false, failed: 'paused' }, cap: { ...cap, pausedBy: undefined } }), false, '2026-10-25T08:00:00', t).tone).toBe('warn');
+    });
+
     it('on a sandbox, kept is how it is meant to run: the code is shown on the screen that asked', () => {
       const s = smsSays(sms({ ...noSms, written: 4 }), true, since, t);
       expect([s.tone, s.tag]).toEqual(['info', 'Kept, not sent']);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
-import { adviserSays, bounceListenWords, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, smsCountryWords, smsSays, waitingWords, type Connections, type RouterCheck } from '../connections';
+import { adviserSays, bounceListenWords, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, smsCapWords, smsCountryWords, smsSays, waitingWords, type Connections, type RouterCheck } from '../connections';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -255,6 +255,13 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
                 <div class="cons__fact">
                   <dt class="cons__factk">{t('tower.conn.fact.smsFenced')}</dt>
                   <dd class="cons__factv">{view.sms.fenced}</dd>
+                </div>
+              ) : null}
+              {/* The caps count only texts that leave: an outbox costs nothing, so a sandbox has none to show. */}
+              {view.sms.sends && view.sms.cap ? (
+                <div class="cons__fact">
+                  <dt class="cons__factk">{t('tower.conn.fact.smsCap')}</dt>
+                  <dd class="cons__factv">{smsCapWords(view.sms, t)}</dd>
                 </div>
               ) : null}
             </dl>

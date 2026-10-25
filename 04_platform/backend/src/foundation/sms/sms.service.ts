@@ -76,6 +76,13 @@ export class SmsService {
   private failed = 0;
   private fenced = 0;
   private last?: SmsLast;
+  /** When each text of the last day was handed over, oldest first: what the overall caps count. In memory, like the rest. */
+  private sentAt: number[] = [];
+  /** Codes held back by a cap since this server started, and the pause now on, if one is. */
+  private held = 0;
+  private paused?: { since: string; by: 'hour' | 'day' };
+  /** Said once when a cap draws near, until texting falls back below it. */
+  private warned = false;
 
   constructor(
     @Inject(SMS_SENDER) private readonly sender: SmsSender,
@@ -114,8 +121,58 @@ export class SmsService {
     return false;
   }
 
+  /** The caps this server keeps: GLOS_SMS_PER_HOUR and GLOS_SMS_PER_DAY, or 100 and 500. */
+  caps(env: NodeJS.ProcessEnv = process.env): { perHour: number; perDay: number } {
+    const read = (value: string | undefined, fallback: number) => {
+      const n = Number(value?.trim());
+      return Number.isInteger(n) && n > 0 ? n : fallback;
+    };
+    return { perHour: read(env.GLOS_SMS_PER_HOUR, SMS_PER_HOUR), perDay: read(env.GLOS_SMS_PER_DAY, SMS_PER_DAY) };
+  }
+
+  /** Texts handed over in the last hour and the last day. Forgets anything older than a day as it counts. */
+  private counted(now: number): { lastHour: number; lastDay: number } {
+    this.sentAt = this.sentAt.filter((t) => t > now - DAY_MS);
+    return { lastHour: this.sentAt.filter((t) => t > now - HOUR_MS).length, lastDay: this.sentAt.length };
+  }
+
+  /**
+   * MAY ANOTHER TEXT LEAVE? Asked before each one, where it costs money: the outbox costs nothing and is not counted.
+   * At a cap it throws `paused` — the door gives the person their try back and says codes are paused for a while —
+   * and the first refusal of a pause is logged as the alarm it is. Below the cap again, texting resumes by itself.
+   */
+  private allow(now: number): void {
+    if (!this.sends()) return;
+    const { perHour, perDay } = this.caps();
+    const { lastHour, lastDay } = this.counted(now);
+    const by = lastHour >= perHour ? 'hour' : lastDay >= perDay ? 'day' : undefined;
+    if (by) {
+      this.held += 1;
+      if (!this.paused) {
+        this.paused = { since: new Date(now).toISOString(), by };
+        this.logger.error(
+          `Texting is PAUSED: ${lastHour} texts in the last hour and ${lastDay} in the last day reached the cap of ${perHour} an hour and ${perDay} a day. ` +
+            'If this is real growth, raise GLOS_SMS_PER_HOUR or GLOS_SMS_PER_DAY and restart; if it is not, somebody may be asking for codes to run up the bill.',
+        );
+      }
+      this.last = { at: new Date(now).toISOString(), ok: false, failed: 'paused' };
+      throw new SmsSendError('paused', `the cap of ${by === 'hour' ? `${perHour} texts an hour` : `${perDay} texts a day`} was reached`);
+    }
+    if (this.paused) {
+      this.logger.warn(`Texting resumed: ${lastHour} texts in the last hour, ${lastDay} in the last day — below the cap again.`);
+      this.paused = undefined;
+    }
+    const near = lastHour >= perHour * 0.8 || lastDay >= perDay * 0.8;
+    if (near && !this.warned) {
+      this.warned = true;
+      this.logger.warn(`Texting is near its cap: ${lastHour} of ${perHour} in the last hour, ${lastDay} of ${perDay} in the last day.`);
+    } else if (!near) this.warned = false;
+    this.sentAt.push(now);
+  }
+
   /** The code, texted. Throws an `SmsSendError` when it was not taken. `phone` is E.164. */
-  async sendCode(phone: string, code: string, minutes: number): Promise<void> {
+  async sendCode(phone: string, code: string, minutes: number, now = Date.now()): Promise<void> {
+    this.allow(now);
     this.written += 1;
     try {
       await this.sender.send({ to: phone, body: codeText(code, minutes) });
@@ -131,7 +188,8 @@ export class SmsService {
   }
 
   /** Tell the old payout number it was replaced. Throws an `SmsSendError` when it was not taken. `phone` is E.164. */
-  async sendPayoutNumberChanged(phone: string, newMasked: string): Promise<void> {
+  async sendPayoutNumberChanged(phone: string, newMasked: string, now = Date.now()): Promise<void> {
+    this.allow(now);
     this.written += 1;
     try {
       await this.sender.send({ to: phone, body: payoutNumberChangedText(newMasked) });
@@ -146,7 +204,7 @@ export class SmsService {
   }
 
   /** Where a text goes, for staff: the same reading of the environment that chose the sender when the server started. */
-  connection(): SmsConnection {
+  connection(now = Date.now()): SmsConnection {
     const given = twilioConfig();
     return {
       sends: this.sends(),
@@ -162,6 +220,21 @@ export class SmsService {
       failed: this.failed,
       fenced: this.fenced,
       ...(this.last ? { last: { ...this.last } } : {}),
+      cap: { ...this.caps(), ...this.counted(now), held: this.held, ...(this.paused ? { pausedSince: this.paused.since, pausedBy: this.paused.by } : {}) },
     };
   }
 }
+
+/** What the person who asked is told while texting is paused at a cap: not their fault, and not a minute's wait. */
+export const CODES_PAUSED = 'So many codes were asked for in the last while that texting them is paused. Try again later.';
+
+/** The words for a code that could not be texted: the pause's own when it was the cap, else the door's. */
+export function notSentWords(err: unknown, otherwise: string): string {
+  return err instanceof SmsSendError && err.kind === 'paused' ? CODES_PAUSED : otherwise;
+}
+
+/** The overall caps when the server is not told others: enough for a pilot's sign-ups, and a ceiling on a bill run up. */
+export const SMS_PER_HOUR = 100;
+export const SMS_PER_DAY = 500;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;

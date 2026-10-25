@@ -60950,7 +60950,8 @@
               "refused",
               "limit",
               "rejected",
-              "failed"
+              "failed",
+              "paused"
             ]
           },
           "code": {
@@ -60967,6 +60968,46 @@
         "required": [
           "at",
           "ok"
+        ]
+      },
+      "SmsCap": {
+        "type": "object",
+        "properties": {
+          "pausedSince": {
+            "type": "string",
+            "description": "Texting is paused: a cap was reached. Since when, and which. Absent: texts go."
+          },
+          "pausedBy": {
+            "type": "string",
+            "enum": [
+              "hour",
+              "day"
+            ]
+          },
+          "perHour": {
+            "type": "number"
+          },
+          "perDay": {
+            "type": "number"
+          },
+          "lastHour": {
+            "type": "number",
+            "description": "Texts handed to the provider in the last 60 minutes, and the last 24 hours."
+          },
+          "lastDay": {
+            "type": "number"
+          },
+          "held": {
+            "type": "number",
+            "description": "Codes not texted since this server started because a cap was reached."
+          }
+        },
+        "required": [
+          "perHour",
+          "perDay",
+          "lastHour",
+          "lastDay",
+          "held"
         ]
       },
       "SmsConnection": {
@@ -61002,6 +61043,14 @@
           "last": {
             "$ref": "#/components/schemas/SmsLast"
           },
+          "cap": {
+            "description": "The overall caps, and how near they are: texts handed over in the last hour and day, against each.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SmsCap"
+              }
+            ]
+          },
           "sends": {
             "type": "boolean",
             "description": "A text leaves this server for the provider. `false`: it is kept here instead, and no phone receives one."
@@ -61034,6 +61083,7 @@
           }
         },
         "required": [
+          "cap",
           "sends",
           "accountSet",
           "standIn",

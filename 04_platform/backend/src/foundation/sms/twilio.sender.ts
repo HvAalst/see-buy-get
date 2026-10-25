@@ -10,6 +10,8 @@ const WORDS: Record<SmsFailure, string> = {
   limit: 'the SMS provider asked us to slow down',
   rejected: 'the SMS provider cannot text this number',
   failed: 'the SMS provider answered with a fault',
+  // Never the provider's: this server's own cap (SmsService), said here only so every kind has its words.
+  paused: 'this server reached its own cap on texts',
 };
 
 /**

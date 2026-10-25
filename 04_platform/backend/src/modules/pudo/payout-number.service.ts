@@ -8,7 +8,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { payoutWayOf, type PayoutDestination, type PayoutDestinationRefusal, type PayoutWay } from '../../foundation/payouts/payout-ways';
 import { isSandbox } from '../../foundation/runtime/sandbox';
-import { SmsService } from '../../foundation/sms/sms.service';
+import { SmsService, notSentWords } from '../../foundation/sms/sms.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
@@ -93,10 +93,10 @@ export class PayoutNumberService implements OnModuleInit {
     try {
       // Handed to the sender whatever it is: a sandbox's keeps it, so what would have been texted can be read back.
       await this.sms?.sendCode(to, code, minutes);
-    } catch {
+    } catch (err) {
       this.pending.delete(payee.payeeId);
       this.giveBack(payee.payeeId);
-      throw new GlosError('SMS_NOT_SENT', 'The code could not be texted to that number. Try again in a minute.');
+      throw new GlosError('SMS_NOT_SENT', notSentWords(err, 'The code could not be texted to that number. Try again in a minute.'));
     }
     return { sent: texts, masked: maskMsisdn(msisdn), minutes, ...(isSandbox() ? { code } : {}) };
   }

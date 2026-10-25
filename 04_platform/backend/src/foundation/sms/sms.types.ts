@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
  * SMS — the seam between "this phone must be sent its code" and the service that texts it.
@@ -30,9 +30,10 @@ export interface OutgoingSms {
  * did not answer in time · `refused` — it will not send for this account as it is set up: the credential, the
  * sender, a country it was not allowed to text (the operator's) · `limit` — it is asking us to slow down (the
  * operator's) · `rejected` — it cannot text THIS number (the person's) · `failed` — it answered with a fault, or
- * with something that is not its answer.
+ * with something that is not its answer · `paused` — not asked at all: this server has texted as many as its own cap
+ * allows in the last hour or day (SmsService: a bill run up by codes asked for in bulk stops at the cap).
  */
-export const SMS_FAILURES = ['unreachable', 'refused', 'limit', 'rejected', 'failed'] as const;
+export const SMS_FAILURES = ['unreachable', 'refused', 'limit', 'rejected', 'failed', 'paused'] as const;
 export type SmsFailure = (typeof SMS_FAILURES)[number];
 
 /**
@@ -78,6 +79,24 @@ export class SmsLast {
 }
 
 /**
+ * HOW MANY TEXTS MAY LEAVE IN AN HOUR, AND IN A DAY — every one costs money, and "send me a code" is the button a fraud
+ * presses to run up the bill (numbers that earn per text received, asked for in bulk). Per number and per caller the
+ * doors already limit; this is the whole server's, set by GLOS_SMS_PER_HOUR and GLOS_SMS_PER_DAY.
+ */
+export class SmsCap {
+  perHour: number;
+  perDay: number;
+  /** Texts handed to the provider in the last 60 minutes, and the last 24 hours. */
+  lastHour: number;
+  lastDay: number;
+  /** Texting is paused: a cap was reached. Since when, and which. Absent: texts go. */
+  @ApiPropertyOptional() pausedSince?: string;
+  @ApiPropertyOptional({ enum: ['hour', 'day'] }) pausedBy?: 'hour' | 'day';
+  /** Codes not texted since this server started because a cap was reached. */
+  held: number;
+}
+
+/**
  * WHERE A TEXT GOES, as staff are shown it. `sends` is read off the sender this server was started with — nobody
  * types it, so it cannot say "sending" while the outbox is what is wired in. Nothing here is a number, the text of
  * a message, or a credential: each part is said as set or not set.
@@ -103,4 +122,7 @@ export class SmsConnection {
   /** Codes NOT texted since this server started because the number's country is not switched on. */
   fenced: number;
   @ApiPropertyOptional({ type: SmsLast }) last?: SmsLast;
+  /** The overall caps, and how near they are: texts handed over in the last hour and day, against each. */
+  @ApiProperty({ type: SmsCap }) cap: SmsCap;
 }
+

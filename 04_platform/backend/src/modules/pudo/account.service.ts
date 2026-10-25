@@ -4,7 +4,7 @@ import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/co
 import { GlosError } from '../../foundation/http/glos-error';
 import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'crypto';
 import { isSandbox } from '../../foundation/runtime/sandbox';
-import { SmsService } from '../../foundation/sms/sms.service';
+import { SmsService, notSentWords } from '../../foundation/sms/sms.service';
 import { DEVICE_UNUSED_DAYS, DeviceBook, type DeviceSeen, type KnownDevice } from './person-devices';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
@@ -382,9 +382,9 @@ export class AccountService implements OnApplicationBootstrap {
       this.deviceCodes.set(challenge, { email: account.email, code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
       try {
         await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
-      } catch {
+      } catch (err) {
         this.deviceCodes.delete(challenge);
-        return new GlosError('SMS_NOT_SENT', `The code to the ${party}’s number could not be texted. Try again in a minute.`);
+        return new GlosError('SMS_NOT_SENT', notSentWords(err, `The code to the ${party}’s number could not be texted. Try again in a minute.`));
       }
     }
     return new GlosError('DEVICE_NOT_KNOWN', `This phone or browser has not signed in to this ${party} before. A code went to the ${party}’s number ending ${ending}: type it here.`, {
@@ -410,8 +410,8 @@ export class AccountService implements OnApplicationBootstrap {
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     try {
       await this.sms?.sendCode(number, code, DEVICE_CODE_TTL_MS / 60_000);
-    } catch {
-      throw new GlosError('SMS_NOT_SENT', 'The code could not be texted. Try again in a minute.');
+    } catch (err) {
+      throw new GlosError('SMS_NOT_SENT', notSentWords(err, 'The code could not be texted. Try again in a minute.'));
     }
     Object.assign(asked, { code, phone: number, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
     const ending = number.replace(/\D/g, '').slice(-3);

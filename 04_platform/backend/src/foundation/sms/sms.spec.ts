@@ -4,7 +4,7 @@ import { createServer, IncomingMessage, Server, ServerResponse } from 'http';
 import { AddressInfo } from 'net';
 import { OutboxSmsSender } from './outbox-sms.sender';
 import { SmsModule, chooseSmsSender } from './sms.module';
-import { SmsService, codeText, smsMayGoTo } from './sms.service';
+import { CODES_PAUSED, SmsService, codeText, notSentWords, smsMayGoTo } from './sms.service';
 import { SMS_SENDER, SmsSendError } from './sms.types';
 import { TWILIO_API, readTwilioAnswer, toTwilioForm, twilioConfig } from './twilio';
 import { TwilioSmsSender } from './twilio.sender';
@@ -328,7 +328,7 @@ describe('the text that carries a code', () => {
       Object.assign(process.env, { TWILIO_ACCOUNT_SID: ACCOUNT, TWILIO_AUTH_TOKEN: TOKEN, TWILIO_FROM: '+15005550006', TWILIO_URL: url, SBG_PUBLIC_URL: 'https://app.seebuyget.example' });
       delete process.env.GLOS_ENV;
       const s = quiet(new SmsService(sender));
-      expect(s.connection()).toEqual({ sends: true, accountSet: true, credential: 'auth_token', sender: 'from', standIn: true, countries: [], written: 0, failed: 0, fenced: 0 });
+      expect(s.connection()).toEqual({ sends: true, accountSet: true, credential: 'auth_token', sender: 'from', standIn: true, countries: [], written: 0, failed: 0, fenced: 0, cap: { perHour: 100, perDay: 500, lastHour: 0, lastDay: 0, held: 0 } });
 
       await s.sendCode(PHONE, '482615', 10);
       expect(s.connection()).toMatchObject({ written: 1, failed: 0, last: { ok: true } });
@@ -366,6 +366,54 @@ describe('the text that carries a code', () => {
       expect(outbox.recent(PHONE)).toEqual([{ to: PHONE, body: expect.stringContaining('482615'), at: expect.any(String) }]);
       expect(outbox.recent('+254700000000')).toEqual([]);
       expect(s.connection()).toMatchObject({ sends: false, written: 1, failed: 0, last: { ok: true } });
+      // The outbox costs nothing: it is not counted against the caps.
+      expect(s.connection().cap).toMatchObject({ lastHour: 0, lastDay: 0, held: 0 });
+    });
+
+    /*
+     * A BILL RUN UP BY CODES ASKED FOR IN BULK STOPS AT A CAP (2026-10-25, before Twilio is wired): per number and per
+     * caller the doors already limit; this is the whole server's, an hour and a day, set by the environment.
+     */
+    it('pauses texting at the cap of an hour or a day — says so once, and resumes by itself below it', async () => {
+      const sent: string[] = [];
+      const logged: string[] = [];
+      const s = new SmsService({ send: async (sms) => void sent.push(sms.to) });
+      (s as unknown as { logger: { error: (m: string) => void; warn: (m: string) => void } }).logger = { error: (m) => logged.push(`error: ${m}`), warn: (m) => logged.push(`warn: ${m}`) };
+      const before = { ...process.env };
+      Object.assign(process.env, { GLOS_SMS_PER_HOUR: '2', GLOS_SMS_PER_DAY: '3' });
+      try {
+        const T = Date.UTC(2026, 9, 25, 12, 0, 0);
+        await s.sendCode(PHONE, '111111', 10, T);
+        await s.sendCode(PHONE, '222222', 10, T + 60_000);
+        const held = await s.sendCode(PHONE, '333333', 10, T + 120_000).then(() => undefined, (e: unknown) => e as SmsSendError);
+        expect([held?.kind, held?.message]).toEqual(['paused', 'the cap of 2 texts an hour was reached']);
+        expect(sent).toHaveLength(2);
+        // Said once, as the alarm it is — and a second refusal in the same pause adds nothing to the log.
+        await expect(s.sendCode(PHONE, '444444', 10, T + 180_000)).rejects.toMatchObject({ kind: 'paused' });
+        expect(logged.filter((l) => l.startsWith('error: Texting is PAUSED'))).toHaveLength(1);
+        expect(s.connection(T + 180_000)).toMatchObject({ last: { ok: false, failed: 'paused' }, cap: { perHour: 2, perDay: 3, lastHour: 2, lastDay: 2, held: 2, pausedBy: 'hour', pausedSince: new Date(T + 120_000).toISOString() } });
+
+        // An hour on, the hour has room again: it resumes, and says so. The day's cap is the next to stop it.
+        await s.sendCode(PHONE, '555555', 10, T + 3_700_000);
+        expect(logged.some((l) => l.startsWith('warn: Texting resumed'))).toBe(true);
+        expect(s.connection(T + 3_700_000).cap).not.toHaveProperty('pausedBy');
+        await expect(s.sendCode(PHONE, '666666', 10, T + 3_800_000)).rejects.toMatchObject({ kind: 'paused', message: 'the cap of 3 texts a day was reached' });
+        expect(s.connection(T + 3_800_000).cap).toMatchObject({ pausedBy: 'day', lastDay: 3 });
+        // A day after the first, it has room again.
+        await s.sendCode(PHONE, '777777', 10, T + 86_400_000 + 60_000);
+        expect(sent).toHaveLength(4);
+      } finally {
+        process.env = before;
+      }
+    });
+
+    it('reads its caps from the environment, and falls back to its own where they are missing or not whole numbers above nought', () => {
+      const s = new SmsService(new OutboxSmsSender());
+      expect(s.caps({})).toEqual({ perHour: 100, perDay: 500 });
+      expect(s.caps({ GLOS_SMS_PER_HOUR: '40', GLOS_SMS_PER_DAY: ' 900 ' })).toEqual({ perHour: 40, perDay: 900 });
+      expect(s.caps({ GLOS_SMS_PER_HOUR: '0', GLOS_SMS_PER_DAY: 'lots' })).toEqual({ perHour: 100, perDay: 500 });
+      expect(notSentWords(new SmsSendError('paused', 'cap'), 'otherwise')).toBe(CODES_PAUSED);
+      expect(notSentWords(new SmsSendError('failed', 'x'), 'otherwise')).toBe('otherwise');
     });
 
     /** The register every other screen asks how a country stands — here with the standings a test gives it. */

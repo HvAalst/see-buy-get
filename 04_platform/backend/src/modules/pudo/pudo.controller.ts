@@ -14,7 +14,7 @@ import { SiteService, SITE_BASIS, type Site } from './site.service';
 import { TransitAuthorityService, TRANSIT_BASIS } from './transit-authority.service';
 import { FieldObservationService, OBSERVATION_BASIS } from './field-observation.service';
 import { MailService } from '../../foundation/mail/mail.service';
-import { SmsService } from '../../foundation/sms/sms.service';
+import { SmsService, notSentWords } from '../../foundation/sms/sms.service';
 import { SmsSendError } from '../../foundation/sms/sms.types';
 import { appUrl } from '../../foundation/mail/mail.templates';
 import { InterestService } from '../../foundation/interest/interest.service';
@@ -396,7 +396,7 @@ export class SbgController {
       this.otp.notSent(dto.phone);
       // The one failure that is the person's: the provider cannot text that number. Everything else is ours.
       if (err instanceof SmsSendError && err.kind === 'rejected') throw new GlosError('PHONE_INVALID', 'We cannot send a text to that number. Check it, or use a mobile number.', { field: 'phone' });
-      throw new GlosError('SMS_NOT_SENT', CODE_NOT_SENT);
+      throw new GlosError('SMS_NOT_SENT', notSentWords(err, CODE_NOT_SENT), ...(err instanceof SmsSendError && err.kind === 'paused' ? [{ reason: 'paused' }] : []));
     }
     return isSandbox() ? issued : { sent: issued.sent };
   }
