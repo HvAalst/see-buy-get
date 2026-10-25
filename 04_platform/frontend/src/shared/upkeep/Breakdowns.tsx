@@ -1,15 +1,15 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, Pill, PlaceMap } from '../../../shared/ui';
-import { formatDate, useT } from '../../../shared/i18n';
-import type { Result, SbgClient } from '../../../lib/sbg';
-import { BREAKDOWN_CAUSES, CAUSE_WORD, careApi, whereWords, type BreakdownCause, type BreakdownTaker, type CareApi, type VehicleBreakdown, type VehicleCare } from '../care';
+import { useState } from 'preact/hooks';
+import { AuthImage, Button, ErrorNote, Pill, PlaceMap } from '../ui';
+import { formatDate, useT } from '../i18n';
+import type { Result } from '../../lib/sbg';
+import { BREAKDOWN_CAUSES, CAUSE_WORD, whereWords, type BreakdownCause, type BreakdownTaker, type CareApi, type VehicleCare } from './care';
 
 /**
  * A VEHICLE BROKEN DOWN, on its upkeep sheet: what happened, who was out in it, where (on a map), what was aboard and
  * which of today's trips were held — and the office's word on how it ended: back on the road, or into the workshop,
  * always with what was done.
  */
-export function OpenBreakdown({ care, api, act, busy }: { care: VehicleCare; api: CareApi; act: (call: () => Promise<Result<VehicleCare>>) => Promise<void>; busy: boolean }) {
+export function OpenBreakdown({ care, api, act, busy, office = true }: { care: VehicleCare; api: CareApi; act: (call: () => Promise<Result<VehicleCare>>) => Promise<void>; busy: boolean; /** A fleet's office: it may move the loads to another of its drivers. A courier's own vehicle has no office (2026-10-25). */ office?: boolean }) {
   const t = useT();
   // Open — or resolved, with loads still waiting with the driver it broke down under.
   const open = care.breakdowns.find((b) => b.status === 'open' || b.stillAboard.length > 0);
@@ -74,7 +74,7 @@ export function OpenBreakdown({ care, api, act, busy }: { care: VehicleCare; api
       {open.location ? <PlaceMap pins={[{ id: open.breakdownId, label: care.plate, point: open.location, tone: 'warn' }]} label={t('fleet.brk.mapAria', { plate: care.plate })} /> : null}
       {error ? <ErrorNote error={error as never} showDetail /> : null}
       {/* ITS LOADS, to another of the fleet's vehicles: usually the drivers do it between them, with the code; the office when they cannot. */}
-      {open.stillAboard.length ? (
+      {open.stillAboard.length && office ? (
         takers ? (
           <>
             <p class="field__label" style="margin-top:12px">
@@ -214,48 +214,5 @@ export function RecordBreakdown({ care, api, act, busy }: { care: VehicleCare; a
         </Button>
       )}
     </>
-  );
-}
-
-/**
- * BROKEN DOWN NOW, at the top of the office's vehicles: each one, where it is on a map, who is out with it and what
- * is aboard — a tap from its upkeep sheet, where the office says how it ended. Nothing at all when nothing is broken down.
- */
-export function BrokenDownCard({ sbg, fleetDid, reload, onOpen }: { sbg: SbgClient | null; fleetDid: string | undefined; reload: number; onOpen: (vehicleId: string) => void }) {
-  const t = useT();
-  const api = useMemo(() => (sbg ? careApi(sbg) : null), [sbg]);
-  const [list, setList] = useState<VehicleBreakdown[]>([]);
-  const [error, setError] = useState<unknown>(null);
-  useEffect(() => {
-    if (!api || !fleetDid) return;
-    void api.fleetBreakdowns(fleetDid).then((r) => (r.error || !r.data ? setError(r.error) : (setError(null), setList(r.data))));
-  }, [api, fleetDid, reload]);
-  if (error) return <ErrorNote error={error as never} />;
-  if (!list.length) return null;
-  const pins = list.filter((b) => b.location).map((b) => ({ id: b.vehicleId, label: b.plate, point: b.location!, tone: 'warn' as const }));
-  return (
-    <Card title={t('fleet.brk.cardTitle', { n: list.length })}>
-      {pins.length ? <PlaceMap pins={pins} onPick={onOpen} label={t('fleet.brk.cardMapAria', { n: pins.length })} /> : null}
-      <ul class="rows">
-        {list.map((b) => (
-          <li key={b.breakdownId} class="row row--static">
-            <span class="row__body">
-              <span class="row__t">{b.plate}</span>
-              <span class="row__s">
-                {t(CAUSE_WORD[b.cause])}: “{b.note}”
-              </span>
-              <span class="row__s">{t('fleet.brk.reported', { who: b.driverName ?? b.reportedBy, when: formatDate(b.reportedAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</span>
-              <span class="row__s">{whereWords(b, t)}</span>
-              {b.aboard.length ? <span class="row__s">{t('fleet.brk.aboard', { n: b.aboard.length, list: b.aboard.map((l) => l.label).join(', ') })}</span> : null}
-            </span>
-            <span class="row__end">
-              <Button variant="link" full={false} onClick={() => onOpen(b.vehicleId)}>
-                {t('fleet.vehicles.careBtn')}
-              </Button>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </Card>
   );
 }

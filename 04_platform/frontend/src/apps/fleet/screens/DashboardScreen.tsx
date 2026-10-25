@@ -7,7 +7,7 @@ import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient, SbgError } from '../../../lib/sbg';
 import { systemApi, systemSummary, type SystemView } from '../system';
 import { StandstillCard } from './StandstillCard';
-import { CAUSE_WORD, careApi, whereWords, type VehicleBreakdown } from '../care';
+import { CAUSE_WORD, careApi, whereWords, type VehicleBreakdown } from '../../../shared/upkeep/care';
 import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, stopDetail, vehicleDetail } from '../logic';
 import { vehicleWord } from '../../driver/vehicle-words';
 import type { PapersReport } from '../types';

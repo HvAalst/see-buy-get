@@ -1,6 +1,6 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { components } from '../../lib/sbg/schema';
-import type { MessageKey, Translate } from '../../shared/i18n';
+import type { MessageKey, Translate } from '../i18n';
 
 export type VehicleCare = components['schemas']['VehicleCareView'];
 export type OffRoadSpell = components['schemas']['OffRoadSpell'];

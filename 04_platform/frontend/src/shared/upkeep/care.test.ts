@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { t } from '../../shared/i18n';
+import { t } from '../i18n';
 import { BREAKDOWN_CAUSES, CAUSE_WORD, OFF_ROAD_REASONS, SERVICE_KINDS, SERVICE_STATE, SERVICE_WORD, dayLabel, localDay, planWords, spellBegun, spellSpan, whereWords } from './care';
-import { CAUSE_WORD as DRIVER_CAUSE_WORD } from '../driver/screens/Breakdown';
+import { CAUSE_WORD as DRIVER_CAUSE_WORD } from '../../apps/driver/screens/Breakdown';
 
 describe('a vehicle off the road, in words', () => {
   const today = '2026-10-15';
@@ -36,14 +36,15 @@ describe('an odometer reading, in words', () => {
     const { kmWords, SOURCE_WORD } = await import('./care');
     expect(kmWords(120400)).toMatch(/^120.400 km$/);
     expect(t(SOURCE_WORD.shift_start)).toBe('at a shift start');
-    expect(t(SOURCE_WORD.office)).toBe('by the office');
+    // Typed in by hand — by a fleet's office, or by a courier for their own vehicle (2026-10-25): never 'by the office' for them.
+    expect(t(SOURCE_WORD.office)).toBe('typed in');
   });
 });
 
 describe('a defect, in words', () => {
   it('names every item a check asks about and a driver can report, in both apps — never a code', async () => {
     const { DEFECT_WORD } = await import('./care');
-    const { ITEM_WORD } = await import('../driver/screens/VehicleCheck');
+    const { ITEM_WORD } = await import('../../apps/driver/screens/VehicleCheck');
     for (const [item, key] of Object.entries(DEFECT_WORD)) {
       expect(t(key)).not.toBe(key);
       expect(t(ITEM_WORD[item as keyof typeof ITEM_WORD])).not.toMatch(/^driver\./);

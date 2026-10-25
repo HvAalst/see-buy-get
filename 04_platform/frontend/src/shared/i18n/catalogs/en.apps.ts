@@ -11,6 +11,7 @@
 import { enAgent } from './en.agent';
 import { enDriver } from './en.driver';
 import { enFleet } from './en.fleet';
+import { enUpkeep } from './en.upkeep';
 import { enMdp } from './en.mdp';
 import { enVendor } from './en.vendor';
 import { enHome } from './en.home';
@@ -26,6 +27,7 @@ export const enApps = {
   ...enAgent,
   ...enDriver,
   ...enFleet,
+  ...enUpkeep,
   ...enMdp,
   ...enVendor,
   ...enHome,

@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
-import { AuthImage, Button, PhotoField, Pill } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
-import type { Result } from '../../../lib/sbg';
-import { SERVICE_KINDS, SERVICE_STATE, SERVICE_WORD, dayLabel, kmWords, planWords, type CareApi, type ServiceKind, type VehicleCare } from '../care';
+import { AuthImage, Button, PhotoField, Pill } from '../ui';
+import { useT } from '../i18n';
+import type { Result } from '../../lib/sbg';
+import { SERVICE_KINDS, SERVICE_STATE, SERVICE_WORD, dayLabel, kmWords, planWords, type CareApi, type ServiceKind, type VehicleCare } from './care';
 
 /**
  * A VEHICLE'S SERVICE, inside its upkeep sheet: when the next one is due and how that stands, how often (the usual for

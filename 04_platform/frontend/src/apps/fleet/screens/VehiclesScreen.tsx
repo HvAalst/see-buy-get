@@ -9,9 +9,9 @@ import { bodyPickerOptions, equipmentHelp, equipmentOptions, paperLine, paperLin
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
 import type { FleetActions, FleetState } from '../useFleetApp';
 import type { SbgClient } from '../../../lib/sbg';
-import { VehicleCareSheet } from './VehicleCare';
+import { VehicleCareSheet } from '../../../shared/upkeep/VehicleCare';
 import { UpkeepRulesCard } from './UpkeepRulesCard';
-import { BrokenDownCard } from './Breakdowns';
+import { BrokenDownCard } from './BrokenDownCard';
 
 /**
  * Capture pad (S26) — one (registration) or many (vehicle/trailer) photos. Each capture is downscaled,

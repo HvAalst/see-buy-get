@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { Card, ErrorNote } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgClient } from '../../../lib/sbg';
-import { careApi, type CareSettings } from '../care';
+import { careApi, type CareSettings } from '../../../shared/upkeep/care';
 
 /**
  * A FLEET'S UPKEEP RULES, for all its vehicles: whether a driver must check a vehicle before a shift, and whether a

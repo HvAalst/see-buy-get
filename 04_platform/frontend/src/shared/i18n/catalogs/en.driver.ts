@@ -184,6 +184,7 @@ export const enDriver = {
      ever drives it. Offered only for a vehicle no fleet owns — the server withholds the rest. */
   'driver.home.stickerOne': 'Show my {vehicle}’s sticker',
   'driver.home.stickerMany': 'Show a vehicle’s sticker',
+  'driver.home.upkeep': 'Upkeep of {plate}: readings, services, off the road',
   'driver.home.stickerTitle': 'The sticker for {plate}',
   'driver.home.stickerBody': 'Print this and put it on the dashboard, where it can be scanned from the driver’s seat. Anyone who scans it and is cleared for this vehicle can start a shift on it — so it belongs inside the cab, where a passer-by cannot reach it.',
   /* THE SAME STICKER ON SOMETHING RIDDEN. There is no cab to put it in and no driver's seat to scan it

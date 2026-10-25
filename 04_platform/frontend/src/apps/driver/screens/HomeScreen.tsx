@@ -155,6 +155,19 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   const vehicle = vehicleWord(namedClass, t);
   const rest = restSays(state.session.hours, t, (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' }));
   const [sticker, setSticker] = useState<RecentVehicleView | null>(null);
+  // A courier's own vehicle has the upkeep a fleet's office keeps for its own: off the road and back, readings,
+  // services, the daily check's defects and a breakdown's ending (2026-10-25 — the server had it all, no screen did).
+  const [careFor, setCareFor] = useState<RecentVehicleView | null>(null);
+  // The sheet and its words come when it is first opened (OwnUpkeep.tsx): most drivers never open it.
+  const [CareSheet, setCareSheet] = useState<(typeof import('./OwnUpkeep'))['VehicleCareSheet'] | null>(null);
+  const openCare = (v: RecentVehicleView) =>
+    void import('./OwnUpkeep').then(
+      (m) => {
+        setCareSheet(() => m.VehicleCareSheet);
+        setCareFor(v);
+      },
+      () => setCareFor(null), // no signal and not yet saved on the phone: the button simply waits for one
+    );
   const [printBlocked, setPrintBlocked] = useState(false);
   const stickerRidden = isRidden(sticker?.vehicleClass);
 
@@ -270,8 +283,16 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
               {t(mine.length === 1 ? 'driver.home.stickerOne' : 'driver.home.stickerMany', { vehicle })}
             </Button>
           ) : null}
+          {/* Its upkeep, for each vehicle that is the courier's own — the same sheet a fleet's office has. */}
+          {mine.map((v) => (
+            <Button key={`care-${v.vehicleId}`} variant="link" full={false} onClick={() => openCare(v)}>
+              {t('driver.home.upkeep', { plate: v.plate })}
+            </Button>
+          ))}
         </Card>
       ) : null}
+
+      {CareSheet ? <CareSheet vehicle={careFor} sbg={sbg ?? null} onClose={() => setCareFor(null)} onChanged={() => actions.refresh()} uploadPhoto={actions.uploadPhoto} office={false} /> : null}
 
       {sticker ? (
         <Sheet open onClose={() => setSticker(null)} title={t('driver.home.stickerTitle', { plate: sticker.plate })}>

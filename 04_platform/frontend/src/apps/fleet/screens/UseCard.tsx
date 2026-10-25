@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { shiftDay, useLines, weekEnding, type FleetUse, type SitesApi } from '../sites';
-import { localDay } from '../care';
+import { localDay } from '../../../shared/upkeep/care';
 
 /**
  * HOW THE VEHICLES WERE USED, a week at a time: the fleet, each site, and each vehicle — days out, hours on shift, what

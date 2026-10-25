@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { AuthImage, Button, ErrorNote, Note, Pill, Sheet } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
-import type { Result, SbgClient } from '../../../lib/sbg';
-import type { MediaKind } from '../../../lib/sbg/personas/media';
-import { DEFECT_WORD, OFF_ROAD_REASONS, REASON_WORD, SOURCE_WORD, careApi, kmWords, localDay, spellBegun, spellSpan, type OffRoadReason, type VehicleCare } from '../care';
-import { formatDate } from '../../../shared/i18n';
-import type { VehicleRow } from '../types';
+import { AuthImage, Button, ErrorNote, Note, Pill, Sheet } from '../ui';
+import { useT } from '../i18n';
+import type { Result, SbgClient } from '../../lib/sbg';
+import type { MediaKind } from '../../lib/sbg/personas/media';
+import { DEFECT_WORD, OFF_ROAD_REASONS, REASON_WORD, SOURCE_WORD, careApi, kmWords, localDay, spellBegun, spellSpan, type OffRoadReason, type VehicleCare } from './care';
+import { formatDate } from '../i18n';
 import { ServiceSection } from './ServiceSection';
 import { OpenBreakdown, RecordBreakdown } from './Breakdowns';
 
@@ -21,13 +20,17 @@ export function VehicleCareSheet({
   onClose,
   onChanged,
   uploadPhoto,
+  office = true,
 }: {
-  vehicle: VehicleRow | null;
+  /** A fleet's vehicle or a courier's own: the sheet reads only which, and its plate. */
+  vehicle: { vehicleId: string; plate: string } | null;
   sbg: SbgClient | null;
   onClose: () => void;
   onChanged: () => Promise<void> | void;
   /** For a job card's photograph. */
   uploadPhoto?: (kind: MediaKind, file: File) => Promise<string | null>;
+  /** A fleet's office (the default). False for a courier's own vehicle: nobody else's loads to move. */
+  office?: boolean;
 }) {
   const t = useT();
   const api = useMemo(() => (sbg ? careApi(sbg) : null), [sbg]);
@@ -90,7 +93,7 @@ export function VehicleCareSheet({
             <Note tone="warn" icon="warning" title={t('fleet.care.offRoad')} detail={care.offRoad.join(' · ')} />
           )}
           {care.inUse && !care.usable ? <p class="hint">{t('fleet.care.inUse')}</p> : null}
-          <OpenBreakdown care={care} api={api!} act={act} busy={busy} />
+          <OpenBreakdown care={care} api={api!} act={act} busy={busy} office={office} />
           {!care.usable && (spellNow || care.grounded) ? (
             <Button variant="outline" chevron={false} busy={busy} disabled={busy} onClick={() => void act(() => api!.backOnRoad(care.vehicleId))}>
               {t('fleet.care.backOnRoad')}
@@ -290,7 +293,7 @@ export function VehicleCareSheet({
         </>
       )}
       <Button variant="link" onClick={onClose}>
-        {t('fleet.vehicles.close')}
+        {t('common.close')}
       </Button>
     </Sheet>
   );
