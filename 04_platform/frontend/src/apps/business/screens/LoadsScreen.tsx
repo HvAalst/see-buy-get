@@ -16,6 +16,7 @@ import { heldByLine } from '../../../shared/heldByAuthority';
 /** A time on the road, as the shipper reads it: its day and hour. */
 const onRoad = (iso: string) => new Date(iso).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 import { NoteFile, NoteLinksPanel } from './LoadNote';
+import { LoadClaimPanel } from './LoadClaim';
 import { LoadPapers } from './LoadPapers';
 import { LoadSeals } from './LoadSeals';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
@@ -642,6 +643,9 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
         </div>
         {kept === 'not_yet' ? <p class="chint">{t('business.note.notYet')}</p> : null}
       </section>
+
+      {/* A problem with the goods delivered: the business's claim, where it is the one to make it (claim.ts). */}
+      {stage === 'delivered' ? <LoadClaimPanel row={row} client={client} act={act} onChanged={onChanged} /> : null}
 
       {/* The labels for its packages and, across a border, its commercial invoice — the business's own papers. */}
       {stage !== 'cancelled' ? <LoadPapers row={row} client={client} business={business} act={act} /> : null}

@@ -212,6 +212,11 @@ export interface PostedLoad {
   receiverName?: string;
   /** D9 — what the receiver found not as the note says, at the handover. */
   exceptions?: import('../../shared/found').FoundLine[];
+  /** FP3b/CL1 — a claim on the delivered goods: whether one may still be made, the one made, and who carries the risk. */
+  canClaim?: boolean;
+  claim?: import('./claim').LoadClaim;
+  incoterm?: string;
+  claimant?: 'sender' | 'receiver';
   cancelledAt?: string;
   /** Its consignment note in the archive, once a copy is kept there (from taking over on): what its links hang on. */
   noteId?: string;
@@ -379,6 +384,8 @@ export interface BusinessClient {
   removeSeal(freightId: string, sealId: string): Promise<Result<{ removed: true }>>;
   /** A photograph for a seal, taken here: its id, or null when it could not be sent. */
   sealPhoto(file: File): Promise<string | null>;
+  /** A photo of a problem with goods delivered, sent with a claim on them. */
+  claimPhoto(file: File): Promise<string | null>;
 }
 
 export function createBusinessClient(): BusinessClient {
@@ -450,6 +457,15 @@ export function createBusinessClient(): BusinessClient {
     seals: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, {} as never) as never),
     writeSeal: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, { body } as never) as never),
     removeSeal: (freightId, sealId) => call((c) => c.DELETE(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals/${encodeURIComponent(sealId)}` as never, {} as never) as never),
+    claimPhoto: async (file) => {
+      try {
+        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+        const r = await createOperatorApi(client.sbg).uploadMedia('dispute', dataUrl, thumbDataUrl);
+        return r.error ? null : ((r.data as { mediaId?: string } | undefined)?.mediaId ?? null);
+      } catch {
+        return null;
+      }
+    },
     sealPhoto: async (file) => {
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
