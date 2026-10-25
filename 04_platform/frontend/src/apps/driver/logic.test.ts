@@ -36,7 +36,6 @@ import {
   isFull,
   lastReadingBreached,
   minEarnFilter,
-  money,
   cash,
   perKmText,
   nodeOptions,
@@ -275,12 +274,6 @@ describe('spoken summaries', () => {
 
 describe('freight pricing (S34)', () => {
   const price: PriceBreakdown = { baseFee: 10, distanceKm: 12, ratePerKm: 0.5, multiplier: 1.15, effectiveRate: 0.575, total: 16.9 };
-
-  it('money is two decimals, no symbol, safe on nullish', () => {
-    expect(money(16.9)).toBe('16.90');
-    expect(money(undefined)).toBe('0.00');
-    expect(money(null)).toBe('0.00');
-  });
 
   it('writes money in the money the session names, and as the bare figure only where it names none', () => {
     // Every figure on the board, an offer, a load and the earnings was a bare number. The session now says the money

@@ -46,4 +46,19 @@ describe('a sum of money said in words', () => {
     // What waits is still there — once it is answered, take it off the list.
     for (const w of WAITING) expect(found, w).toContain(w);
   });
+
+  /*
+   * …AND A HELPER CANNOT SAY IT BARE EITHER (2026-10-25). The line above reads `amount: x.toFixed(`; a figure handed
+   * through an app's own money() slipped past it — the Send app's price on "See the price" was a bare "3.80". Each
+   * app's money() now demands the money, so a call that leaves it out does not compile.
+   */
+  it('goes through an app’s money() only with its money', () => {
+    const helpers = allFiles()
+      .filter((f) => /^apps\/[^/]+\/logic\.ts$/.test(f))
+      .map((f) => ({ f, src: readFileSync(join(SRC, f), 'utf8') }))
+      .filter(({ src }) => /export function money\(/.test(src));
+    // The guard read something: the four apps that have one.
+    expect(helpers.map(({ f }) => f).sort()).toEqual(['apps/agent/logic.ts', 'apps/genesis/logic.ts', 'apps/mdp/logic.ts', 'apps/vendor/logic.ts']);
+    for (const { f, src } of helpers) expect(src, f).toMatch(/export function money\(v: number \| null \| undefined, currency: string \| undefined\)/);
+  });
 });

@@ -108,6 +108,8 @@ export interface ChatThread {
   negotiable?: boolean;
   /** CV2 — the two may write down an off-platform settlement here. */
   settlesOffPlatform?: boolean;
+  /** The money every price in the thread is named in: the load's poster's (2026-10-25). Absent for a parcel's thread. */
+  currency?: string;
   lastSeq: number;
   unread: number;
   lastMessage?: ChatMessage;

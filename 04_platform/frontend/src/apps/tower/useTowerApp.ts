@@ -255,7 +255,12 @@ export interface DashboardView {
   agentsOnline?: number;
   agentsTotal?: number;
   agentRetention?: number;
+  /** The home money's float. */
   systemFloat?: number;
+  /** Every money's float, one figure each — never a total across them. */
+  floats?: Array<{ currency: string; amount: number }>;
+  /** The home money: what `systemFloat` is in. */
+  currency?: string;
   criticalAlerts?: number;
   statusMix?: Record<string, number>;
   flags?: FlagRow[];

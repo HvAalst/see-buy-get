@@ -28,6 +28,8 @@ describe('conversations about a load', () => {
         if (!loads[id]) throw new Error('not found');
         return loads[id];
       },
+      // The money a poster's budget is in: the Kenyan shop's.
+      posterCurrencyOf: (did?: string) => (did === 'did:shop' ? 'KES' : undefined),
       propose: jest.fn((input: { freightId: string; driverDid: string; price: number }) => {
         const p = { proposalId: `prp_${++n}`, freightId: input.freightId, driverDid: input.driverDid, price: input.price, status: 'open' };
         proposals.set(p.proposalId, p);
@@ -176,6 +178,8 @@ describe('conversations about a load', () => {
 
     it('says what a thread allows: a price where the load is negotiated, a settlement where the network does not pay', () => {
       expect(service.open('fr_neg', 'did:drv:amos')).toMatchObject({ negotiable: true, settlesOffPlatform: true });
+      // …and the money its prices are named in, said once on the thread: a price is never a bare figure (2026-10-25).
+      expect(service.open('fr_neg', 'did:drv:amos').currency).toBe('KES');
       expect(service.open('fr_paid', 'did:drv:amos')).toMatchObject({ negotiable: true, settlesOffPlatform: false });
       expect(service.open('fr_1', 'did:drv:amos')).toMatchObject({ negotiable: false, settlesOffPlatform: true });
     });

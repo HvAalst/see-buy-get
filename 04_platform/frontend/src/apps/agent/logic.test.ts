@@ -359,8 +359,8 @@ describe('priceBand', () => {
 
 describe('speaking', () => {
   it('money always carries two decimals', () => {
-    expect(money(5)).toBe('5.00');
-    expect(money(undefined)).toBe('0.00');
+    expect(money(5, undefined)).toBe('5.00');
+    expect(money(undefined, undefined)).toBe('0.00');
   });
 
   it('money says which money where the server named one', () => {

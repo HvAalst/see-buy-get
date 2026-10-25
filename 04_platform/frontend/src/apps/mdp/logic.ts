@@ -113,7 +113,7 @@ export function placeLine(sort: SortView, t: Translate): string {
 
 /** A fee with two decimals, in the money the server named for it (the hub’s company’s); bare where none is named —
  *  what the fee box holds. */
-export function money(v: number | null | undefined, currency?: string): string {
+export function money(v: number | null | undefined, currency: string | undefined): string {
   return cash(v, currency);
 }
 

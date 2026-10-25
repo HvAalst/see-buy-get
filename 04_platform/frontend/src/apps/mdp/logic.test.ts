@@ -168,7 +168,7 @@ describe('speaking', () => {
         fillPct: 10,
       }, t),
     ).toBe('Place parcel P-1 in bag BAG-2. 3 left to sort.');
-    expect(money(0.5)).toBe('0.50');
+    expect(money(0.5, undefined)).toBe('0.50');
     expect(money(0.5, 'KES')).toBe('KES 0.50');
   });
 });

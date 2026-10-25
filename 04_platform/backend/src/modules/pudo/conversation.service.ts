@@ -589,6 +589,7 @@ export class ConversationService {
       ...(counterpartName ? { counterpartName } : {}),
       negotiable: Boolean(thread.freightId) && this.negotiable(thread.freightId!),
       settlesOffPlatform: Boolean(thread.freightId) && this.settlesOffPlatform(thread.freightId!),
+      ...this.moneyOfThread(thread),
       shareable: Boolean(this.managerOf(thread.askerDid)),
       sharedWithManager: Boolean(thread.sharedWithManagerDid) && thread.sharedWithManagerDid === this.managerOf(thread.askerDid),
       lastSeq: thread.lastSeq,
@@ -634,6 +635,22 @@ export class ConversationService {
       return commitModeOf(this.dispatch.requireFreightPublic(freightId)) === 'negotiate';
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * The money a load's prices are named in, said once on the thread so a price in it is never a bare figure
+   * (2026-10-25): the poster's — the money its budget is in (DispatchService.posterCurrencyOf). Absent for a parcel's
+   * thread, which names no price, and where no company of ours settles the poster.
+   */
+  private moneyOfThread(thread: Conversation): { currency?: string } {
+    if (!thread.freightId) return {};
+    try {
+      const load = this.dispatch.requireFreightPublic(thread.freightId);
+      const currency = this.dispatch.posterCurrencyOf(load.postedByDid ?? load.shipperDid);
+      return currency ? { currency } : {};
+    } catch {
+      return {};
     }
   }
 

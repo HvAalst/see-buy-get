@@ -192,6 +192,7 @@ export const en = {
   // CV2 — the deal, in the conversation.
   'common.chat.deal.proposeTitle': 'Offer a price',
   'common.chat.deal.price': 'Your price',
+  'common.chat.deal.priceIn': 'Your price, in {currency}',
   'common.chat.deal.note': 'Why (optional)',
   'common.chat.deal.send': 'Send the offer',
   'common.chat.deal.needPosition': 'Your position is needed to offer a price. Open the market once so the app knows where you are.',
@@ -211,6 +212,7 @@ export const en = {
   'common.chat.deal.settleTitle': 'Write down how you will settle',
   'common.chat.deal.settleLede': 'For a load the network does not pay. This is a record of what the two of you agree. The network does not hold or move this money.',
   'common.chat.deal.amount': 'Amount',
+  'common.chat.deal.amountIn': 'Amount, in {currency}',
   'common.chat.deal.method': 'How',
   'common.chat.deal.when': 'When',
   'common.chat.deal.method.cash': 'cash',

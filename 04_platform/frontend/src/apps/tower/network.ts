@@ -24,6 +24,8 @@ export interface AgentRow {
   status?: string;
   /** Null where the network holds no money in that country — which is NOT a zero float. */
   balance?: number | null;
+  /** The money its float and its prices are in: its company's. */
+  currency?: string;
   /** What one parcel costs this shop's float, at its own company's price. */
   parcelPrice?: number;
   capacity?: number;

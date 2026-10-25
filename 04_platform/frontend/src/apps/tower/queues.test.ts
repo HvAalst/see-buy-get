@@ -7,6 +7,7 @@ import {
   CLAIM_SLOW_DAYS,
   DISPOSAL_LONG_DAYS,
   amount,
+  floatsLine,
   claimBlocker,
   freightCoverLine,
   reportRowWords,
@@ -88,6 +89,12 @@ describe('what a claim is covered for', () => {
       // dressed as money is a number pretending to be a currency somebody has to guess at.
       expect(amount(1000, 'KES')).toBe('1,000.00 KES');
       expect(amount(1000, undefined)).toBe('1,000.00');
+    });
+
+    it('says the network’s float in each money, one figure each — never one total across them (2026-10-25)', () => {
+      expect(floatsLine({ systemFloat: 1200, currency: 'KES', floats: [{ currency: 'KES', amount: 1200 }, { currency: 'UGX', amount: 40000 }] })).toBe('1,200.00 KES · 40,000.00 UGX');
+      // An answer from before the floats were sent: the home money's, with its money.
+      expect(floatsLine({ systemFloat: 1200, currency: 'KES' })).toBe('1,200.00 KES');
     });
 
     it('always states the shipping price as NOT a cap', () => {

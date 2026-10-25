@@ -362,11 +362,6 @@ export function offerSpoken(
 
 /* ---------------------------------------------------------------- pricing -- */
 
-/** Plain money, two decimals, no symbol — for a figure whose money nobody of ours can name. Write money through `cash`. */
-export function money(v: number | null | undefined): string {
-  return (Number(v) || 0).toFixed(2);
-}
-
 /**
  * MONEY AS THIS DRIVER READS IT: `cash(v, session.currency)` — in the money the session says everything priced for
  * them is in, that of the company that pays them; the bare price they agreed where no company of ours does. Shared

@@ -15,7 +15,7 @@ import type { CallbackRow, CheckoutRow, NetworkPoint, OrderRow, OriginOption, Pa
 /* ------------------------------------------------------------------ money -- */
 
 /** Two decimals, in the money the server named for the figure; bare where it named none — what a box holds. */
-export function money(v: number | null | undefined, currency?: string): string {
+export function money(v: number | null | undefined, currency: string | undefined): string {
   return cash(v, currency);
 }
 

@@ -216,6 +216,8 @@ export interface ConversationView {
   negotiable: boolean;
   /** CV2 — whether the two may record a settlement here: the network does not pay for this load. */
   settlesOffPlatform: boolean;
+  /** The money every price in the thread is named in: the load's poster's. Absent for a parcel's thread. */
+  currency?: string;
   lastSeq: number;
   unread: number;
   lastMessage?: MessageView;

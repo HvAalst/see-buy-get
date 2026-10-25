@@ -189,7 +189,7 @@ export function papersReady(papers: { idCopy: string; licence: string; shopFront
  * server named for it (the shop's company's, or the books a line was posted to). Without one, the bare number: what
  * a price box holds, and what is shown where nothing says which money it is.
  */
-export function money(v: number | null | undefined, currency?: string): string {
+export function money(v: number | null | undefined, currency: string | undefined): string {
   return cash(v, currency);
 }
 

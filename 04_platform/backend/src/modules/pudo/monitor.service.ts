@@ -181,7 +181,11 @@ export class MonitorService {
       agentsOnline: online,
       agentsTotal: allAgents.length,
       agentRetention: allAgents.length ? Math.round((active / allAgents.length) * 100) / 100 : 0,
+      // The home money's float, and — as finance() — every money's: a float said with no money is a number
+      // pretending to be money, and one country's float is not the network's (2026-10-25).
       systemFloat: this.gate.float(),
+      floats: this.gate.floats(),
+      currency: NETWORK_CURRENCY,
       criticalAlerts: flags.length,
       statusMix,
       flags,

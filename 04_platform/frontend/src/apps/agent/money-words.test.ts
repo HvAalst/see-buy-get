@@ -30,18 +30,18 @@ describe('the Shop app writes no figure of money bare', () => {
     expect(bare).toEqual([]);
   });
 
-  it('never calls money() without saying which money — except to fill an input, which takes the bare number', () => {
+  it('never calls money() without saying which money — and money() cannot be called without one', () => {
     const ONE_ARGUMENT = /\bmoney\([^,()]*(\([^()]*\))?[^,()]*\)/;
-    const INPUTS = ['HomeScreen.tsx: const [price, setPrice] = useState(money(state.agent?.pricePerParcel));'];
     const moneyless = shopFiles.flatMap((f) =>
       readFileSync(f, 'utf8')
         .split(/\r?\n/)
         .filter((line) => ONE_ARGUMENT.test(line))
         .map((line) => `${f.split(/[\\/]/).pop()}: ${line.trim()}`),
     );
-    expect(moneyless.filter((l) => !INPUTS.includes(l))).toEqual([]);
-    // The exception still exists, so it is not a reason kept for a line that is gone.
-    expect(moneyless).toEqual(INPUTS);
+    expect(moneyless).toEqual([]);
+    // Since 2026-10-25 the helper demands the money, so a call that leaves it out does not compile. The one place
+    // that had leaned on leaving it out — the price box's starting value — takes a plain number, as an input does.
+    expect(readFileSync(join(here, 'logic.ts'), 'utf8')).toMatch(/export function money\(v: number \| null \| undefined, currency: string \| undefined\)/);
   });
 
   it('and the Business app writes a load’s prices in the load’s money', () => {

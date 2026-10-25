@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type ConversationsApi } from '../../lib/sbg';
-import { formatDate, useT } from '../i18n';
+import { formatDate, formatMoney, useT } from '../i18n';
 import { Button, Card, Chip, ErrorNote, Icon, Note, Pill, Sheet } from '../ui';
 import {
   MAX_MESSAGE_CHARS,
@@ -43,7 +43,8 @@ function whenSent(at: string): string {
   return d.toDateString() === new Date().toDateString() ? time : `${formatDate(at)} ${time}`;
 }
 
-const money = (n: number) => n.toFixed(2);
+/** A price in a thread, said with the load's money — the thread names it once (2026-10-25). Bare only where none is known. */
+const money = (n: number, currency: string | undefined) => formatMoney(n, currency);
 
 /**
  * ONE CONVERSATION ABOUT ONE LOAD, in a sheet.
@@ -336,7 +337,7 @@ export function ConversationSheet({
       const status = m.proposal.status ?? 'open';
       return (
         <>
-          <b>{t('common.chat.deal.proposed', { amount: money(m.proposal.price) })}</b>
+          <b>{t('common.chat.deal.proposed', { amount: money(m.proposal.price, current?.currency) })}</b>
           <span style="margin-left:6px">
             <Pill tone={status === 'accepted' ? 'ok' : status === 'open' ? 'info' : 'idle'}>{t(`common.chat.deal.status.${status}` as 'common.chat.deal.status.open')}</Pill>
           </span>
@@ -345,14 +346,14 @@ export function ConversationSheet({
       );
     }
     if (m.kind === 'decision' && m.decision) {
-      return <b>{t(m.decision.decision === 'accepted' ? 'common.chat.deal.acceptedLine' : 'common.chat.deal.declinedLine', { amount: money(m.decision.price) })}</b>;
+      return <b>{t(m.decision.decision === 'accepted' ? 'common.chat.deal.acceptedLine' : 'common.chat.deal.declinedLine', { amount: money(m.decision.price, current?.currency) })}</b>;
     }
     if (m.kind === 'settlement' && m.settlement) {
       return (
         <>
           <b>
             {t('common.chat.deal.settleLine', {
-              amount: money(m.settlement.amount),
+              amount: money(m.settlement.amount, current?.currency),
               method: t(`common.chat.deal.method.${m.settlement.method}` as 'common.chat.deal.method.cash'),
               when: t(`common.chat.deal.when.${m.settlement.when}` as 'common.chat.deal.when.on_delivery'),
             })}
@@ -432,7 +433,7 @@ export function ConversationSheet({
                   <div style="margin-top:6px">
                     {confirmAccept === m.proposal.proposalId ? (
                       <>
-                        <p class="hint">{t('common.chat.deal.acceptConfirm', { amount: money(m.proposal.price) })}</p>
+                        <p class="hint">{t('common.chat.deal.acceptConfirm', { amount: money(m.proposal.price, current?.currency) })}</p>
                         <Button full={false} chevron={false} busy={busy === `accept:${m.proposal.proposalId}`} onClick={() => decide(m.proposal!.proposalId, 'accept')}>
                           {t('common.chat.deal.accept')}
                         </Button>
@@ -598,7 +599,7 @@ export function ConversationSheet({
                 <div style="margin-top:10px">
                   <div class="field">
                     <label class="field__label" for="deal-price">
-                      {t('common.chat.deal.price')}
+                      {current?.currency ? t('common.chat.deal.priceIn', { currency: current.currency }) : t('common.chat.deal.price')}
                     </label>
                     <input id="deal-price" class="input" type="number" inputMode="decimal" min="0" step="1" value={price} onInput={(e) => setPrice(e.currentTarget.value)} />
                   </div>
@@ -619,7 +620,7 @@ export function ConversationSheet({
                   <p class="hint">{t('common.chat.deal.settleLede')}</p>
                   <div class="field">
                     <label class="field__label" for="deal-amount">
-                      {t('common.chat.deal.amount')}
+                      {current?.currency ? t('common.chat.deal.amountIn', { currency: current.currency }) : t('common.chat.deal.amount')}
                     </label>
                     <input id="deal-amount" class="input" type="number" inputMode="decimal" min="0" step="1" value={amount} onInput={(e) => setAmount(e.currentTarget.value)} />
                   </div>
@@ -803,15 +804,15 @@ export function ConversationList({
   if (threads.length === 0) return cardTitle ? null : <p class="hint">{emptyText ?? t('common.chat.listEmpty')}</p>;
 
   /** The last message as one line — a deal card reads as what it did, not as an empty bubble. */
-  const preview = (m: ChatMessage): string => {
+  const preview = (m: ChatMessage, currency: string | undefined): string => {
     if (m.kind === 'quick' && m.quick) return t(`common.chat.quick.${m.quick}` as 'common.chat.quick.loaded');
-    if (m.kind === 'proposal' && m.proposal) return t('common.chat.deal.proposed', { amount: money(m.proposal.price) });
-    if (m.kind === 'decision' && m.decision) return t(m.decision.decision === 'accepted' ? 'common.chat.deal.acceptedLine' : 'common.chat.deal.declinedLine', { amount: money(m.decision.price) });
+    if (m.kind === 'proposal' && m.proposal) return t('common.chat.deal.proposed', { amount: money(m.proposal.price, currency) });
+    if (m.kind === 'decision' && m.decision) return t(m.decision.decision === 'accepted' ? 'common.chat.deal.acceptedLine' : 'common.chat.deal.declinedLine', { amount: money(m.decision.price, currency) });
     // The terms themselves, not the name of the form that wrote them: found in the browser pass, the list read
     // "Write down how you will settle" beside a settlement that had already been written down.
     if (m.kind === 'settlement' && m.settlement) {
       return t('common.chat.deal.settleLine', {
-        amount: money(m.settlement.amount),
+        amount: money(m.settlement.amount, currency),
         method: t(`common.chat.deal.method.${m.settlement.method}` as 'common.chat.deal.method.cash'),
         when: t(`common.chat.deal.when.${m.settlement.when}` as 'common.chat.deal.when.on_delivery'),
       });
@@ -834,7 +835,7 @@ export function ConversationList({
               {x.freightCode} · {x.counterpartName ?? t(counterpartKey(x))}
             </span>
             <span class="row__s">
-              {x.lastMessage ? `${x.lastMessage.mine && x.role !== 'manager' ? `${t('common.chat.you')}: ` : ''}${preview(x.lastMessage)}` : x.freightLabel}
+              {x.lastMessage ? `${x.lastMessage.mine && x.role !== 'manager' ? `${t('common.chat.you')}: ` : ''}${preview(x.lastMessage, x.currency)}` : x.freightLabel}
             </span>
           </span>
           <span class="row__end">

@@ -256,7 +256,7 @@ describe('speaking', () => {
   it('reads balance, motion and the unpaid nudge', () => {
     expect(ordersSummary(12.5, 3, 0, t)).toBe('Balance 12.50. 3 orders on the move.');
     expect(ordersSummary(0, 1, 1, t)).toContain('1 unpaid — top up to release it.');
-    expect(money(undefined)).toBe('0.00');
+    expect(money(undefined, undefined)).toBe('0.00');
   });
 
   it('says the balance in the store’s money where it has one', () => {

@@ -220,6 +220,12 @@ export function amount(n: number | undefined, currency: string | undefined): str
   return currency ? `${money(n)} ${currency}` : money(n);
 }
 
+/** Each money's float, one figure each ("1,200.00 KES · 40,000.00 UGX"); the home money's alone where that is all there is. */
+export function floatsLine(d: { floats?: Array<{ currency: string; amount: number }>; systemFloat?: number; currency?: string }): string {
+  if (d.floats?.length) return d.floats.map((f) => amount(f.amount, f.currency)).join(' · ');
+  return amount(d.systemFloat, d.currency);
+}
+
 /** The masthead's live line for the whole console: everything actually waiting on a person. */
 export function waitingLine(counts: { hazards: number | null; claims: number | null; disposal: number | null; approvals: number | null }, t: Translate): string {
   const known = [counts.hazards, counts.claims, counts.disposal, counts.approvals].filter((n): n is number => n !== null);

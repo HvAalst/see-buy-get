@@ -223,7 +223,8 @@ function Tile({ value, label, alert }: { value: number; label: string; alert?: b
 
 function PriceSheet({ open, onClose, state, actions }: { open: boolean; onClose: () => void; state: MdpState; actions: MdpActions }) {
   const t = useT();
-  const [price, setPrice] = useState(money(state.hub?.pricePerParcel));
+  // A number for the box to edit, not a sum said in words: no money beside it, no thousands separator.
+  const [price, setPrice] = useState((Number(state.hub?.pricePerParcel) || 0).toFixed(2));
   const value = Number(price);
   return (
     <Sheet open={open} onClose={onClose} title={t('mdp.home.feeSheetTitle')}>

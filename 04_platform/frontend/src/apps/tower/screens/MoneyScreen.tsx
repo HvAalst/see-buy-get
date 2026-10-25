@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
-import { amount, money } from '../queues';
+import { amount } from '../queues';
 import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, needsReceipt, payoutHow, payoutTone, payoutWho, waitsForRail, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { TaxInvoicesPanel } from './TaxInvoicesPanel';
@@ -469,7 +469,7 @@ function NetworkLedger({ state }: { state: TowerState }) {
                   <td class="ctbl__num ctbl__strong">
                     <span class="ctbl__lbl">{t('tower.money.col.amount')}</span>
                     {e.sign}
-                    {money(e.amount)} {e.currency ?? ''}
+                    {amount(e.amount, e.currency)}
                   </td>
                   <td class="ctbl__mono">
                     <span class="ctbl__lbl">{t('tower.money.col.ref')}</span>

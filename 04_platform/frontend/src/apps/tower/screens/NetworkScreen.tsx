@@ -20,7 +20,7 @@ import {
   slotsLabel,
   statusMixRows,
 } from '../network';
-import { money } from '../queues';
+import { amount, floatsLine } from '../queues';
 import { fleetSystemWords, type FleetSystemCounts } from '../fleets';
 import { linkWords, opensItself, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, waitingRoles, type StaffWaiting } from '../staff';
 import { holds, ROLE_WORDS, rolesOf, STAFF_ROLES, type StaffRole } from '../staffRoles';
@@ -82,7 +82,8 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
           label={t('tower.network.kpi.shopsOnline', { hours: AGENT_OFFLINE_H })}
           value={state.agents ? `${checkedIn(state.agents, now).online}/${checkedIn(state.agents, now).total}` : '—'}
         />
-        <Kpi label={t('tower.network.kpi.float')} value={d ? money(d.systemFloat) : '—'} />
+        {/* Each money's float, one figure each: "Money across shop floats" was the home money's alone, said bare. */}
+        <Kpi label={t('tower.network.kpi.float')} value={d ? floatsLine(d) : '—'} />
         <Kpi label={t('tower.network.kpi.active')} value={d ? `${Math.round((d.agentRetention ?? 0) * 100)}%` : '—'} />
       </div>
 
@@ -223,7 +224,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                     {/* A dash, never 0.00: no float rail is a different fact from an empty till. */}
                     <td class="ctbl__num">
                       <span class="ctbl__lbl">{t('tower.network.col.wallet')}</span>
-                      {row.balance == null ? '—' : money(row.balance)}
+                      {row.balance == null ? '—' : amount(row.balance, row.currency)}
                     </td>
                     <td class="ctbl__num">
                       <span class="ctbl__lbl">{t('tower.network.col.slots')}</span>
