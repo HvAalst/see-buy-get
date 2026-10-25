@@ -11,6 +11,7 @@ import {
   clearDid,
   createConsumerClient,
   enroll,
+  fetchPlace,
   fetchPoints,
   fetchQuote,
   fetchTrack,
@@ -35,7 +36,7 @@ import {
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { classifyParcel } from './api';
 import { cleanPhone, codeReady, followLanding, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
-import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, QuoteView, SwitchResult } from './types';
+import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult } from './types';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
 export type WizardStep = 'parcel' | 'from' | 'to' | 'quote' | 'book' | 'done';
@@ -366,6 +367,17 @@ export function useSendApp() {
 
   const pickFrom = useCallback((did: string) => {
     setState((s) => ({ ...s, fromDid: did, step: 'to', toDid: s.toDid === did ? null : s.toDid }));
+  }, []);
+
+  /**
+   * An address or a place typed to find the nearest shops, looked for in the countries the shops are in. Nothing is
+   * kept: the place only orders the list, on this phone (2026-10-25). Null where it is not found, or there is no signal.
+   */
+  const findPlace = useCallback(async (q: string): Promise<PlaceFound | null> => {
+    const countries = [...new Set(stateRef.current.points.map((p) => p.country).filter((c): c is string => Boolean(c)))];
+    const r = await fetchPlace(q, countries);
+    if (r.error || !r.data || r.data.confidence === 'fallback') return null;
+    return r.data;
   }, []);
 
   const pickTo = useCallback(
@@ -1164,6 +1176,7 @@ export function useSendApp() {
       setFragile,
       submitParcel,
       pickFrom,
+      findPlace,
       pickTo,
       retryQuote,
       backTo,

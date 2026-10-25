@@ -12293,10 +12293,18 @@
       "get": {
         "operationId": "Sbg.geocode",
         "summary": "",
-        "description": "Resolve a free-text place/area/landmark to a point — the agent's \"Address\" intake mode geocodes a\ntyped area, then ranks the network points nearest-first client-side.  for the same open-data\nreasoning as /quote + /network/points: a pure offline gazetteer lookup, no data read or written.\n`confidence` (exact | approx | fallback) lets the UI flag an approximate pin.",
+        "description": "Resolve a free-text address, place or landmark to a point — the Send app's and the counter's \"An address\", which\nthen rank the shops nearest-first client-side.  for the same open-data reasoning as /quote and\n/network/points: nothing of ours is read or written. `country` (ISO-3166 alpha-2, comma-separated) keeps an\naddress to where the shops are. `confidence` says a house found (exact) from a street or a town's middle (approx).\n\nAn address anywhere: a Nominatim-compatible service where GLOS_GEOCODER_URL is set, the offline gazetteer where it\nis not (AddressSearchService). WHAT NEITHER FINDS IS NOT FOUND (2026-10-25) — it used to come back as a stand-in\npoint near the middle of the network, which a screen then drew as a pin somewhere nobody said. Rate-limited per\ncaller, because the service behind it is somebody's to be asked politely.",
         "parameters": [
           {
             "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
             "required": true,
             "in": "query",
             "schema": {

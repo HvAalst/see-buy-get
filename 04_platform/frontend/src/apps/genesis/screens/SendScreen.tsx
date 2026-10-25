@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
+import type { GeoPoint } from '../../../shared/geo';
 import { cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
@@ -127,16 +128,67 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
   const t = useT();
   const from = kind === 'from';
   /**
-   * The three words are the address substitute: type (or repeat aloud) where you are —
-   * or where the receiver is — and the shops re-order nearest-first with distances.
-   * No street address anywhere in the flow.
+   * WHERE, SHOWN RATHER THAN SPELLED (the user, 2026-10-25: three words were "nearly mission impossible for new comers
+   * and they have no way to confirm if their guess is right. A map is the better option and a toggle for an address").
+   *
+   * On the map: tap where you are — or let the phone say — and the place is marked and the shops re-order nearest
+   * first. An address: typed, found, and marked on the same map, which can be tapped to correct it; a shop's three
+   * words, as on its sign, still work in that box. Either way the place only orders the list: a tapped point and the
+   * phone's position stay on the phone, and a typed address is looked up and kept with nobody.
    */
-  const [wordsText, setWordsText] = useState('');
+  const [how, setHow] = useState<'map' | 'address'>('map');
+  const [here, setHere] = useState<GeoPoint | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [addressText, setAddressText] = useState('');
+  const [finding, setFinding] = useState(false);
+  const [locating, setLocating] = useState(false);
   // G4 — the shop whose detail sheet is open (tapping a map pin previews it before committing). The list
   // rows still commit directly; the map is the "look before you leap" surface.
   const [openShop, setOpenShop] = useState<string | null>(null);
-  const near = fromPlaceWords(wordsText);
+  const near = here;
   const points = selectablePoints(state.points, from ? undefined : (state.fromDid ?? undefined), near);
+  const mark = (point: GeoPoint, words: string) => {
+    setHere(point);
+    setSaid(words);
+  };
+  /** The phone's own position — asked only when the button is pressed, and never sent anywhere. */
+  const useMine = () => {
+    if (!globalThis.navigator?.geolocation) {
+      setSaid(t('send.point.mineFailed'));
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        mark({ lat: pos.coords.latitude, lng: pos.coords.longitude }, t('send.point.mineFound'));
+      },
+      () => {
+        setLocating(false);
+        setSaid(t('send.point.mineFailed'));
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
+    );
+  };
+  const find = async () => {
+    const q = addressText.trim();
+    if (!q) return;
+    // A shop's three words, read off its sign: a place already, no lookup needed.
+    const words = fromPlaceWords(q);
+    if (words) {
+      mark(words, t('send.point.foundWords'));
+      return;
+    }
+    setFinding(true);
+    const found = await actions.findPlace(q);
+    setFinding(false);
+    if (!found) {
+      setSaid(t('send.point.notFound'));
+      return;
+    }
+    const where = found.matched ?? q;
+    mark(found.location, found.confidence === 'exact' ? t('send.point.foundExact', { where }) : t('send.point.foundApprox', { where }));
+  };
   const picked = from ? state.fromDid : state.toDid;
   const pick = (did: string) => (from ? actions.pickFrom(did) : actions.pickTo(did));
   const preview = openShop ? points.find((p) => p.did === openShop) ?? null : null;
@@ -155,34 +207,72 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
         </Card>
       ) : null}
 
+      {/* How to say where: the map first, an address the other way (the user, 2026-10-25). */}
+      <div class="seg" role="group" aria-label={t('send.point.howAria')}>
+        <button type="button" class={`seg__btn${how === 'map' ? ' seg__btn--on' : ''}`} aria-pressed={how === 'map'} onClick={() => setHow('map')}>
+          <Icon name="pin" size={18} /> {t('send.point.byMap')}
+        </button>
+        <button type="button" class={`seg__btn${how === 'address' ? ' seg__btn--on' : ''}`} aria-pressed={how === 'address'} onClick={() => setHow('address')}>
+          <Icon name="search" size={18} /> {t('send.point.byAddress')}
+        </button>
+      </div>
+
+      {how === 'map' ? (
+        <div class="send__where">
+          <p class="card__note">{from ? t('send.point.tapFrom') : t('send.point.tapTo')}</p>
+          {/* Only for the sender's own place: the receiver is not where this phone is. */}
+          {from ? (
+            <Button variant="outline" full={false} chevron={false} busy={locating} onClick={useMine}>
+              {t('send.point.useMine')}
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <form
+          class="send__where"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void find();
+          }}
+        >
+          <label class="field__label" for={`where-${kind}`}>
+            {from ? t('send.point.addressFrom') : t('send.point.addressTo')}
+          </label>
+          <div class="send__find">
+            <input
+              id={`where-${kind}`}
+              class="input"
+              value={addressText}
+              onInput={(e) => setAddressText(e.currentTarget.value)}
+              placeholder={t('send.point.addressPh')}
+              autocomplete="street-address"
+              enterkeyhint="search"
+            />
+            <Button type="submit" variant="outline" full={false} chevron={false} busy={finding} disabled={!addressText.trim()}>
+              {t('send.point.find')}
+            </Button>
+          </div>
+        </form>
+      )}
+
       {points.length ? (
         <PlaceMap
-          label={near ? t('send.point.mapLabelWords', { count: points.length }) : t('send.point.mapLabel', { count: points.length })}
+          label={near ? t('send.point.mapLabelHere', { count: points.length }) : t('send.point.mapLabel', { count: points.length })}
           pins={points.filter((p) => p.location && p.openState === 'open').map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
           selectedId={openShop ?? picked}
           onPick={setOpenShop}
           reference={near}
+          // Once a place is marked, the map frames it and the three shops nearest to it, close enough to check it is right.
+          nearest={3}
+          // A tap anywhere but a shop marks the place — the way to correct a found address, too.
+          onDrop={(p) => mark(p, t('send.point.markedTap'))}
         />
       ) : null}
-
-      <Card label={from ? t('send.point.wordsFrom') : t('send.point.wordsTo')}>
-        <input
-          class="input"
-          value={wordsText}
-          onInput={(e) => setWordsText(e.currentTarget.value)}
-          placeholder="goldfox calmriver blueowl"
-          autocapitalize="none"
-          autocomplete="off"
-          spellcheck={false}
-        />
-        <p class="card__note">
-          {near
-            ? t('send.point.wordsFound')
-            : wordsText.trim()
-              ? t('send.point.wordsNot')
-              : t('send.point.wordsEmpty')}
+      {said ? (
+        <p class="card__note" role="status">
+          {said}
         </p>
-      </Card>
+      ) : null}
 
       <div class="rows" role="list">
         {points.map((p) => (

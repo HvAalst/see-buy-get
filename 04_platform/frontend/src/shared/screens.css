@@ -293,6 +293,10 @@
   background: var(--bd-soft);
 }
 .seg__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   flex: 1;
   min-height: 40px;
   border-radius: calc(var(--r-ctl) - 4px);

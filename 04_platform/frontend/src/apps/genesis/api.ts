@@ -15,7 +15,7 @@ import {
   type SbgConfig,
   type SeededAppClient,
 } from '../../lib/sbg';
-import type { AuthResult, ClassifyView, NetworkPoint, ParcelSize, PersonRole, QuoteView, AnyTrackView } from './types';
+import type { AuthResult, ClassifyView, NetworkPoint, ParcelSize, PersonRole, PlaceFound, QuoteView, AnyTrackView } from './types';
 
 const APP_VERSION = '1.0.0';
 
@@ -31,6 +31,16 @@ export function sendConfig(): SbgConfig {
 
 export function fetchPoints(): Promise<Result<NetworkPoint[]>> {
   return publicRequest<NetworkPoint[]>(sendConfig(), '/v1/sbg/network/points');
+}
+
+/**
+ * An address or a place typed to find the nearest shops — looked for in `countries`, where the shops are. No account:
+ * a price is seen before anybody signs up. What is not found comes back as NOT_FOUND, never as a made-up point.
+ */
+export function fetchPlace(q: string, countries: string[] = []): Promise<Result<PlaceFound>> {
+  const params = new URLSearchParams({ q });
+  if (countries.length) params.set('country', countries.join(','));
+  return publicRequest<PlaceFound>(sendConfig(), `/v1/sbg/geocode?${params}`);
 }
 
 /**

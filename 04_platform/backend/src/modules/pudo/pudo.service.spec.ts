@@ -1457,12 +1457,14 @@ describe('PUDO Light', () => {
     expect(() => parcels.accept({ agentDid: origin.did, parcelId: 'QR-AD4', dimensionsCm: { l: 30, w: 20, h: 10 }, weightKg: 1.6, destZone: origin.zone, destPudoDid: origin.did, senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(origin.did) } as never)).toThrow(/shop taking it in/);
   });
 
-  it('intake redesign: the public geocode resolves a known place (for the Address → nearest-PUDO mode)', () => {
-    const g: any = controller.geocode('Westlands');
+  it('intake redesign: the public geocode resolves a known place (for the Address → nearest-PUDO mode)', async () => {
+    const g: any = await controller.geocode('Westlands');
     expect(typeof g.location.lat).toBe('number');
     expect(typeof g.location.lng).toBe('number');
     expect(g.confidence).toBe('exact');
-    expect(() => controller.geocode('')).toThrow(); // a blank query is refused
+    await expect(controller.geocode('')).rejects.toThrow(); // a blank query is refused
+    // What nothing finds is NOT FOUND — it came back as a stand-in point a screen drew as a pin (2026-10-25).
+    await expect(controller.geocode('12 Nowhere Lane, Atlantis')).rejects.toThrow(/No place found/);
   });
 
   it('PG1: a P4+ load is refused (no un-billable person freight) — nothing is registered', () => {

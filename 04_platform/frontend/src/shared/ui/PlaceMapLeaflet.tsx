@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { PlaceMapProps } from './PlaceMap';
+import { framedPoints, type PlaceMapProps } from './PlaceMap';
 
 /**
  * The real OpenStreetMap tile map — the online half of PlaceMap (G3a). Loaded LAZILY (PlaceMap imports
@@ -15,7 +15,7 @@ import type { PlaceMapProps } from './PlaceMap';
  */
 const NAIROBI: L.LatLngExpression = [-1.2864, 36.8172];
 
-export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label }: PlaceMapProps) {
+export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label, nearest }: PlaceMapProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -110,16 +110,18 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
 
     // Fit the view ONLY when the set of coordinates actually changed — never on a mere reselection or an
     // unrelated re-render — so the user's manual pan/zoom (and a tap-to-zoom) survives.
-    const sig = points
-      .map((p) => `${(p as [number, number])[0]},${(p as [number, number])[1]}`)
+    // A picker of shops near a marked place frames that place and its nearest shops, not the whole network (`nearest`).
+    const framed: Array<[number, number]> = reference && nearest ? framedPoints({ pins, reference, dropped, nearest }).map((p) => [p.lat, p.lng]) : (points as Array<[number, number]>);
+    const sig = framed
+      .map((p) => `${p[0]},${p[1]}`)
       .sort()
       .join('|');
     if (sig !== fittedSigRef.current) {
       fittedSigRef.current = sig;
-      if (points.length === 1) map.setView(points[0], 15);
-      else if (points.length > 1) map.fitBounds(L.latLngBounds(points), { padding: [36, 36], maxZoom: 16 });
+      if (framed.length === 1) map.setView(framed[0], 15);
+      else if (framed.length > 1) map.fitBounds(L.latLngBounds(framed), { padding: [36, 36], maxZoom: 16 });
     }
-  }, [pins, lines, selectedId, reference, dropped]);
+  }, [pins, lines, selectedId, reference, dropped, nearest]);
 
   return <div ref={hostRef} class="pmap-leaflet" role={onDrop ? 'button' : 'img'} aria-label={label} />;
 }

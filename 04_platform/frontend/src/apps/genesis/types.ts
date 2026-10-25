@@ -30,6 +30,8 @@ export interface NetworkPoint {
   did: string;
   shopName: string;
   zone: string;
+  /** ISO-3166 alpha-2 — where an address typed to find the nearest shops is looked for. */
+  country?: string;
   location?: { lat: number; lng: number };
   landmark?: string;
   openState: 'open' | 'closed';
@@ -343,4 +345,14 @@ export interface DisputeOutcome {
   currency?: string;
   /** Who the award goes to: the store that sold the shipment, or the sender who paid for it at a counter. */
   paidTo?: 'store' | 'sender';
+}
+
+/**
+ * An address or a place, found (GET /v1/sbg/geocode). A house is `exact`; a street, a suburb or a town is `approx`, its
+ * middle. What nothing finds is an error (NOT_FOUND), never a stand-in point.
+ */
+export interface PlaceFound {
+  location: { lat: number; lng: number };
+  confidence: 'exact' | 'approx' | 'fallback';
+  matched?: string;
 }

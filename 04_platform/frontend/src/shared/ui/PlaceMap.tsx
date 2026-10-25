@@ -1,6 +1,6 @@
 import type { JSX } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { GeoPoint } from '../geo';
+import { haversineKm, type GeoPoint } from '../geo';
 import { PlaceMapPlot } from './PlaceMapPlot';
 import { Icon } from './Icon';
 
@@ -59,6 +59,33 @@ export interface PlaceMapProps {
    * somebody opened ON PURPOSE to read — which is every reason to open one at all.
    */
   tall?: boolean;
+  /**
+   * With a marked place (`reference`): frame it and this many of the pins nearest to it, rather than every pin. For a
+   * picker of shops near a place, where the person has to SEE that the place is theirs (the user, 2026-10-25: a
+   * newcomer "has no way to confirm" a place on a map of the whole network). Unset, every pin is framed, as before.
+   */
+  nearest?: number;
+}
+
+/** How far a pin may be and still be framed with a marked place: past this, the place is shown alone, close up. */
+export const FRAME_NEAR_KM = 50;
+
+/**
+ * What the map's view is fitted to: every pin, the marked place and a dropped pin — or, with `nearest` and a marked
+ * place, that place and its `nearest` closest pins within FRAME_NEAR_KM. Pure, for the test; the markers drawn are
+ * all of them either way.
+ */
+export function framedPoints({ pins = [], reference, dropped, nearest }: Pick<PlaceMapProps, 'pins' | 'reference' | 'dropped' | 'nearest'>): GeoPoint[] {
+  if (reference && nearest && nearest > 0) {
+    const close = pins
+      .map((pin) => ({ point: pin.point, km: haversineKm(reference, pin.point) }))
+      .filter((p) => p.km <= FRAME_NEAR_KM)
+      .sort((a, b) => a.km - b.km)
+      .slice(0, nearest)
+      .map((p) => p.point);
+    return [reference, ...close, ...(dropped ? [dropped] : [])];
+  }
+  return [...pins.map((p) => p.point), ...(reference ? [reference] : []), ...(dropped ? [dropped] : [])];
 }
 
 export type MapMode = 'map' | 'plot';

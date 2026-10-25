@@ -429,3 +429,26 @@
   background: var(--blue-soft);
   color: var(--blue-dark);
 }
+
+/* Where: the map's instruction and "Use where I am", or the address and "Find it" — under the switch (2026-10-25). */
+.send__where {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.send__where > .btn {
+  align-self: flex-start;
+}
+
+.send__find {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.send__find > .input {
+  flex: 1;
+  min-width: 0;
+}

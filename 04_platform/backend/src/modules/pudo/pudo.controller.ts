@@ -167,7 +167,7 @@ import { ForthcomingService } from './forthcoming.service';
 import { DockService } from './dock.service';
 import { ApiKeyService } from './api-key.service';
 import { haversineKm } from './geo';
-import { GEOCODER, Geocoder } from './geocoder';
+import { AddressSearchService, GEOCODER, Geocoder } from './geocoder';
 import { CounterLogInterceptor } from './shop-staff.controller';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 import { PilotService } from './pilot.service';
@@ -277,6 +277,9 @@ export class SbgController {
     // A company's own entry: how to reach them. One card, read by every directory.
     private readonly contacts: ContactCardService,
     @Inject(GEOCODER) private readonly geocoder: Geocoder,
+    // An address anywhere the network runs: a Nominatim-compatible service where one is set, the gazetteer otherwise.
+    // Optional for the specs that build this controller by hand; app.boot.spec catches it missing from the module.
+    @Optional() private readonly places: AddressSearchService | null,
     private readonly interest: InterestService,
     private readonly departures: DepartureService,
     private readonly departureNotes: DepartureNoteService,
@@ -4048,16 +4051,25 @@ export class SbgController {
   }
 
   /**
-   * Resolve a free-text place/area/landmark to a point — the agent's "Address" intake mode geocodes a
-   * typed area, then ranks the network points nearest-first client-side. @Public for the same open-data
-   * reasoning as /quote + /network/points: a pure offline gazetteer lookup, no data read or written.
-   * `confidence` (exact | approx | fallback) lets the UI flag an approximate pin.
+   * Resolve a free-text address, place or landmark to a point — the Send app's and the counter's "An address", which
+   * then rank the shops nearest-first client-side. @Public for the same open-data reasoning as /quote and
+   * /network/points: nothing of ours is read or written. `country` (ISO-3166 alpha-2, comma-separated) keeps an
+   * address to where the shops are. `confidence` says a house found (exact) from a street or a town's middle (approx).
+   *
+   * An address anywhere: a Nominatim-compatible service where GLOS_GEOCODER_URL is set, the offline gazetteer where it
+   * is not (AddressSearchService). WHAT NEITHER FINDS IS NOT FOUND (2026-10-25) — it used to come back as a stand-in
+   * point near the middle of the network, which a screen then drew as a pin somewhere nobody said. Rate-limited per
+   * caller, because the service behind it is somebody's to be asked politely.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60)
   @Get('geocode')
-  geocode(@Query('q') q?: string) {
-    if (!q || !q.trim()) throw new GlosError('FIELD_REQUIRED', 'Enter a place or area to look up');
-    return this.geocoder.geocode(q);
+  async geocode(@Query('q') q?: string, @Query('country') country?: string) {
+    if (!q || !q.trim()) throw new GlosError('FIELD_REQUIRED', 'Enter an address or a place to look up');
+    const found = await (this.places ?? new AddressSearchService(this.geocoder)).search(q, (country ?? '').split(','));
+    if (!found) throw new GlosError('NOT_FOUND', 'No place found for that. Try a street and a town, or put a pin on the map');
+    return found;
   }
 
   /**
