@@ -14,6 +14,7 @@ import { IdDisputeCase } from './IdDisputeCase';
 import { settingsIdSays } from './idDispute';
 import { pinChangeBlocker } from './password';
 import { PIN_LENGTH } from './pin';
+import { PinGuessHint } from './PinGuessHint';
 import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, type PayoutNumberSaved } from './payoutNumber';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi, ClosingStanding } from './useAccount';
@@ -271,6 +272,7 @@ function PinForm({ api, own, onDone }: { api: AccountApi; own?: SettingsSheetPro
       <div class="field">
         <span class="field__label">{t('account.menu.newPin')}</span>
         <CodeBoxes id="acct-pin-new" label={t('account.menu.newPin')} length={PIN_LENGTH} value={next} onInput={setNext} disabled={busy} />
+        <PinGuessHint pin={next} />
       </div>
       {error ? <ErrorNote error={error} /> : null}
       <Button
