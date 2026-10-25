@@ -53,13 +53,30 @@
 (api_edge_cloudflare) {
 }
 
+# On every answer. Permissions-Policy: the camera (papers, parcels, codes to scan) and where the phone is (a driver's
+# shift, "near me") for our own pages, and nothing a page here never uses — no microphone, no payments, no USB.
+# Cross-Origin-Opener-Policy: a page opened from ours cannot reach back into it, nor ours into one we open.
+# NO Cross-Origin-Resource-Policy or -Embedder-Policy: stores load /embed/sbg-quote.js into their own pages, and map
+# tiles come from OpenStreetMap; either header would break one of them.
 (security_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(self), geolocation=(self), microphone=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), browsing-topics=()"
+		Cross-Origin-Opener-Policy same-origin
 		-Server
 	}
+}
+
+# WHAT A PAGE MAY LOAD AND RUN (2026-10-25: the web's own standard for keeping injected script out of a page that takes
+# a PIN). Scripts only from here — and the one inline script every public page has, the help's dark theme set before it
+# paints, allowed by its fingerprint (frontend/src/shared/content-policy.test.ts holds the two equal). Styles inline as
+# well: the pages are built with style attributes in them. Pictures from here, from the phone (data:, blob:) and map
+# tiles from OpenStreetMap. A frame only of our own (a document shown in place); nobody may frame a page of ours.
+(content_policy) {
+	header ?Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-vIi93nkmwlCKWtu5Odb9ZrYabDRMVQxM+fvKwaVytMI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org {$SBG_PUBLIC_URL}; font-src 'self'; connect-src 'self' https://tile.openstreetmap.org {$SBG_PUBLIC_URL}; media-src 'self' blob:; worker-src 'self'; manifest-src 'self'; frame-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+	header ?X-Frame-Options DENY
 }
 
 # Vite fingerprints everything under <app>/assets/, so those may be kept forever. Everything else — the pages, the
@@ -90,6 +107,7 @@ http://127.0.0.1:9180 {
 {$SBG_PUBLIC_URL} {
 	import tls_{$CADDY_EDGE}
 	import security_headers
+	import content_policy
 	encode zstd gzip
 
 	# The API. Same origin as the apps, so they need no CORS. It is told the visitor's address and nothing else
@@ -138,9 +156,9 @@ http://127.0.0.1:9180 {
 {$SBG_CONSOLE_URL} {
 	import tls_{$CADDY_EDGE}
 	import security_headers
+	import content_policy
 	header {
 		X-Robots-Tag "noindex, nofollow"
-		X-Frame-Options DENY
 	}
 
 	# A stranger outside the allow-list gets nothing that says a console is here. The first of the handles below, so
