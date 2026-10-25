@@ -14,6 +14,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import {
   clearCreds,
   createVendorClient,
+  fetchPlace,
   fetchPoints,
   purgeVendorTokens,
   readCreds,
@@ -41,6 +42,7 @@ import type {
   OrderRow,
   OrderStats,
   OriginOption,
+  PlaceFound,
   QuoteView, ReturnOfferView,
   SettlementRow,
   VendorFundingView,
@@ -693,6 +695,17 @@ export function useVendorApp() {
     }
     setState((s) => ({ ...s, points: r.data ?? [], pointsState: 'ready' }));
   }, [fail]);
+  /**
+   * The buyer's address — the one on the order — or a place near them, looked for in the countries the shops are in,
+   * to put the nearest shops first (2026-10-25: three words were a guess nobody could check). Null where it is not
+   * found, or there is no signal. Kept with nobody: the place only orders the list.
+   */
+  const findPlace = useCallback(async (q: string): Promise<PlaceFound | null> => {
+    const countries = [...new Set(stateRef.current.points.map((p) => p.country).filter((c): c is string => Boolean(c)))];
+    const r = await fetchPlace(q, countries);
+    if (r.error || !r.data || r.data.confidence === 'fallback') return null;
+    return r.data;
+  }, []);
   const loadPointsRef = useRef(loadPoints);
   useEffect(() => {
     loadPointsRef.current = loadPoints;
@@ -1359,6 +1372,7 @@ export function useVendorApp() {
       classify,
       toStep,
       pickDest,
+      findPlace,
       pickOrigin,
       submitMint,
       settleOrder,

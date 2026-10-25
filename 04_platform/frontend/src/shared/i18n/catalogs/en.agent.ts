@@ -1080,7 +1080,7 @@ export const enAgent = {
   'agent.toast.geoNotFound': 'Could not find that place — try a nearby area, or use the map.',
   'agent.toast.geoExact': 'Nearest shops to {where} first.',
   'agent.toast.geoApprox': 'Nearest shops near {where} first (approximate).',
-  'agent.toast.geoGuess': 'That place is not on our map — showing a best guess. Use the map if it looks off.',
+  'agent.toast.geoMarked': 'Marked on the map — the nearest shops are first.',
   'agent.toast.historyExported': 'History exported',
   'agent.toast.historyExportedDetail': 'Saved parcels.csv to your device.',
   'agent.toast.earningsExported': 'Earnings exported',

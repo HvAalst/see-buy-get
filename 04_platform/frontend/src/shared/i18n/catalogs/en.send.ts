@@ -209,7 +209,6 @@ export const enSend = {
   'send.point.addressFrom': 'Your address, or a place near you',
   'send.point.addressTo': 'The receiver’s address, or a place near them',
   'send.point.addressPh': 'e.g. 12 Moi Avenue, Nairobi',
-  'send.point.addressSource': 'Addresses are found with OpenStreetMap.',
   'send.point.find': 'Find it',
   'send.point.foundExact': 'Found {where}. It is marked on the map: tap the map to move it.',
   'send.point.foundApprox': 'Found near {where}. It is marked on the map: tap where it really is.',

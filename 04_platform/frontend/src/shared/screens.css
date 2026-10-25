@@ -285,6 +285,18 @@
 
 /* Segmented control — a two-or-more-way view toggle (e.g. Parcels | Earnings). One raised, on-brand pill
    marks the active view; the whole control is a single tablist. */
+/* A box and its button on one row: an address and "Find it" (the Send and Store apps, 2026-10-25). */
+.findrow {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.findrow > .input {
+  flex: 1;
+  min-width: 0;
+}
+
 .seg {
   display: flex;
   gap: 4px;

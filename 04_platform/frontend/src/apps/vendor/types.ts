@@ -251,6 +251,8 @@ export interface NetworkPoint {
   did: string;
   shopName: string;
   zone: string;
+  /** ISO-3166 alpha-2 — where an address typed to find the nearest shops is looked for. */
+  country?: string;
   location?: { lat: number; lng: number };
   landmark?: string;
   openState: 'open' | 'closed';
@@ -261,6 +263,13 @@ export interface NetworkPoint {
   currency?: string;
   rating?: { count: number; average: number } | null;
   freeSlots?: number;
+}
+
+/** An address or a place, found: `exact` a house, `approx` a street's or a town's middle. */
+export interface PlaceFound {
+  location: { lat: number; lng: number };
+  confidence: 'exact' | 'approx' | 'fallback';
+  matched?: string;
 }
 
 /**

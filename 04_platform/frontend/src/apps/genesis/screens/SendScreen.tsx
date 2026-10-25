@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
@@ -256,7 +256,7 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
           <label class="field__label" for={`where-${kind}`}>
             {from ? t('send.point.addressFrom') : t('send.point.addressTo')}
           </label>
-          <div class="send__find">
+          <div class="findrow">
             <input
               id={`where-${kind}`}
               class="input"
@@ -271,12 +271,7 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
             </Button>
           </div>
           {/* Where an address is found, credited as its keepers ask (the user, 2026-10-25: OpenStreetMap's service). */}
-          <p class="card__note">
-            {t('send.point.addressSource')}{' '}
-            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
-              © OpenStreetMap contributors
-            </a>
-          </p>
+          <OsmCredit />
         </form>
       )}
       </>

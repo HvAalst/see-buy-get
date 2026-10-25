@@ -16,7 +16,7 @@ import {
   type SbgConfig,
   type VendorApi,
 } from '../../lib/sbg';
-import type { NetworkPoint, VendorLoginView } from './types';
+import type { NetworkPoint, PlaceFound, VendorLoginView } from './types';
 
 const APP_VERSION = '1.0.0';
 
@@ -48,6 +48,16 @@ export const vendorForgot = (email: string) => sbgForgot(vendorConfig(), email);
 export const vendorReset = (token: string, password: string) => sbgReset(vendorConfig(), token, password);
 
 /** The public network directory — powers both pickers without a token. */
+/**
+ * The buyer's address, or a place near them, to put the nearest shops first — looked for in `countries`, where the
+ * shops are. What is not found comes back NOT_FOUND, never as a made-up point (2026-10-25).
+ */
+export function fetchPlace(q: string, countries: string[] = []): Promise<Result<PlaceFound>> {
+  const params = new URLSearchParams({ q });
+  if (countries.length) params.set('country', countries.join(','));
+  return publicRequest<PlaceFound>(vendorConfig(), `/v1/sbg/geocode?${params}`);
+}
+
 export function fetchPoints(): Promise<Result<NetworkPoint[]>> {
   return publicRequest<NetworkPoint[]>(vendorConfig(), '/v1/sbg/network/points');
 }

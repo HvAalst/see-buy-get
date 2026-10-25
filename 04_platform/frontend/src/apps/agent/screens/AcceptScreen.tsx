@@ -1,7 +1,7 @@
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
 import { useState } from 'preact/hooks';
-import { Button, Card, CheckGate, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, CheckGate, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
 import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
@@ -422,18 +422,23 @@ function DestinationCard({ state, actions }: { state: AgentState; actions: Agent
               {t('agent.accept.find')}
             </Button>
           </div>
-          {state.acceptGeoNote ? <p class="card__note">{state.acceptGeoNote}</p> : null}
+          {state.acceptGeoNote ? <p class="card__note" role="status">{state.acceptGeoNote}</p> : null}
+          <OsmCredit />
         </>
       ) : null}
 
-      {f.destMode === 'map' && mapPins.length ? (
+      {/* The map in both ways of picking (2026-10-25): "By area" had none, so a place found from a typed name could not
+          be checked by eye. Found, it closes in on the place and its three nearest shops, and a tap corrects it. */}
+      {mapPins.length ? (
         <div style="margin-top:10px">
           <PlaceMap
             label={t('agent.accept.mapLabel', { count: mapPins.length })}
             pins={mapPins}
             selectedId={f.destPudoDid || null}
             reference={near}
+            nearest={near ? 3 : undefined}
             onPick={(did) => { const p = points.find((x) => x.did === did); if (p) pick(p); }}
+            onDrop={f.destMode === 'address' ? actions.markDestNear : undefined}
           />
         </div>
       ) : null}

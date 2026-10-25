@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Info, Note, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Info, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
-import { distanceLabel, haversineKm } from '../../../shared/geo';
+import { distanceLabel, haversineKm, type GeoPoint } from '../../../shared/geo';
 import { PhotoField } from './PhotoField';
 import { PapersCard } from './PapersCard';
 import { papersGaps } from '../papers';
@@ -220,10 +220,40 @@ function ParcelStep({ state, actions }: MintScreenProps) {
 
 function DestStep({ state, actions }: MintScreenProps) {
   const t = useT();
-  /** The buyer's place, in three words — the no-address way to sort shops nearest-first. */
-  const [wordsText, setWordsText] = useState('');
+  /**
+   * WHERE THE BUYER IS, SHOWN RATHER THAN GUESSED (2026-10-25, as the Send app: three words were "nearly mission
+   * impossible for new comers and they have no way to confirm if their guess is right"). The address on the order —
+   * or a place near the buyer — is found and marked on the map, which can be tapped to correct it; a tap alone marks a
+   * place too, and a shop's three words still work in the box. The place only orders the shops; it is kept nowhere.
+   */
+  const [placeText, setPlaceText] = useState('');
+  const [here, setHere] = useState<GeoPoint | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
+  const [finding, setFinding] = useState(false);
   const [openShop, setOpenShop] = useState<string | null>(null);
-  const near = fromPlaceWords(wordsText);
+  const near = here;
+  const mark = (point: GeoPoint, words: string) => {
+    setHere(point);
+    setSaid(words);
+  };
+  const find = async () => {
+    const q = placeText.trim();
+    if (!q) return;
+    const words = fromPlaceWords(q);
+    if (words) {
+      mark(words, t('vendor.mint.foundWords'));
+      return;
+    }
+    setFinding(true);
+    const found = await actions.findPlace(q);
+    setFinding(false);
+    if (!found) {
+      setSaid(t('vendor.mint.notFound'));
+      return;
+    }
+    const where = found.matched ?? q;
+    mark(found.location, found.confidence === 'exact' ? t('vendor.mint.foundExact', { where }) : t('vendor.mint.foundApprox', { where }));
+  };
   const points = state.points
     .filter((p) => p.openState === 'open' && p.takesNew !== false)
     .sort((a, b) => {
@@ -245,6 +275,35 @@ function DestStep({ state, actions }: MintScreenProps) {
       {state.pointsState === 'loading' ? <p class="hint">{t('vendor.mint.findingShops')}</p> : null}
       {state.pointsState === 'error' && state.error ? <ErrorNote error={state.error} onRetry={() => void actions.loadPoints()} /> : null}
 
+      <Card label={t('vendor.mint.buyerPlace')}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void find();
+          }}
+        >
+          <div class="findrow">
+            <input
+              id="buyer-place"
+              class="input"
+              aria-label={t('vendor.mint.buyerPlace')}
+              value={placeText}
+              onInput={(e) => setPlaceText(e.currentTarget.value)}
+              placeholder={t('vendor.mint.buyerPlacePh')}
+              autocomplete="off"
+              enterkeyhint="search"
+            />
+            <Button type="submit" variant="outline" full={false} chevron={false} busy={finding} disabled={!placeText.trim()}>
+              {t('vendor.mint.findPlace')}
+            </Button>
+          </div>
+        </form>
+        <p class="card__note" role="status">
+          {said ?? t('vendor.mint.placeHint')}
+        </p>
+        <OsmCredit />
+      </Card>
+
       {points.length ? (
         <PlaceMap
           label={t('vendor.mint.mapCollection', { count: points.length })}
@@ -252,21 +311,12 @@ function DestStep({ state, actions }: MintScreenProps) {
           selectedId={openShop}
           onPick={setOpenShop}
           reference={near}
+          // Once the buyer's place is marked, the map frames it and the three shops nearest to it.
+          nearest={near ? 3 : undefined}
+          // A tap anywhere but a shop marks the buyer's place — the way to correct a found address, too.
+          onDrop={(p) => mark(p, t('vendor.mint.markedTap'))}
         />
       ) : null}
-
-      <Card label={t('vendor.mint.buyerPlaceWords')}>
-        <input
-          class="input"
-          value={wordsText}
-          onInput={(e) => setWordsText(e.currentTarget.value)}
-          placeholder="goldfox calmriver blueowl"
-          autocapitalize="none"
-          autocomplete="off"
-          spellcheck={false}
-        />
-        <p class="card__note">{near ? t('vendor.mint.wordsFound') : t('vendor.mint.wordsAsk')}</p>
-      </Card>
 
       <div class="rows" role="list">
         {points.map((p) => (

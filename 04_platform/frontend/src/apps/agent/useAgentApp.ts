@@ -1068,6 +1068,11 @@ export function useAgentApp() {
     setState((s) => ({ ...s, accept: { ...s.accept, destMode: mode }, acceptNear: null, acceptGeoNote: null }));
   }, []);
 
+  /** "By area", corrected by eye: a tap on the map marks the place the shops are ordered around (2026-10-25). */
+  const markDestNear = useCallback((point: GeoPoint) => {
+    setState((s) => ({ ...s, acceptNear: point, acceptGeoNote: t('agent.toast.geoMarked') }));
+  }, []);
+
   const pickDest = useCallback((point: { did: string; zone: string; shopName: string }) => {
     takeInStarted.current ??= Date.now();
     setState((s) => ({ ...s, accept: { ...s.accept, destPudoDid: point.did, destZone: point.zone, destShopName: point.shopName } }));
@@ -1080,12 +1085,14 @@ export function useAgentApp() {
    * could not place it at all.
    */
   const geocodePlace = useCallback(
-    async (q: string): Promise<GeocodeView | null> => {
+    async (q: string, countries: string[] = []): Promise<GeocodeView | null> => {
       const query = q.trim();
       if (!client || !query) return null;
-      const r = await client.api.geocode(query);
+      const r = await client.api.geocode(query, countries);
       if (r.error || !r.data) return null;
-      return narrow<GeocodeView>(r.data);
+      const found = narrow<GeocodeView>(r.data);
+      // A stand-in point for a name nobody found is not a place (the server says NOT_FOUND since 2026-10-25).
+      return found.confidence === 'fallback' ? null : found;
     },
     [client],
   );
@@ -1097,14 +1104,19 @@ export function useAgentApp() {
     if (!client || !q) return;
     const epoch = ++geocodeEpoch.current;
     setState((s) => ({ ...s, acceptGeoBusy: true, acceptGeoNote: null }));
-    const g = await geocodePlace(q);
+    // Looked for in the shop's own country: a walk-up at the counter cannot cross a border, and "Westlands" is also a
+    // suburb of Johannesburg.
+    // A record from before shops had a country leaves it out; the shop list, from the server, says it for every shop.
+    const { agent, acceptPoints } = stateRef.current;
+    const own = agent?.country ?? acceptPoints.find((p) => p.did === agent?.did)?.country;
+    const g = await geocodePlace(q, own ? [own] : []);
     if (epoch !== geocodeEpoch.current) return;
     if (!g) {
       setState((s) => ({ ...s, acceptGeoBusy: false, acceptGeoNote: t('agent.toast.geoNotFound') }));
       return;
     }
     const where = g.matched ?? q;
-    const note = g.confidence === 'exact' ? t('agent.toast.geoExact', { where }) : g.confidence === 'approx' ? t('agent.toast.geoApprox', { where }) : t('agent.toast.geoGuess');
+    const note = g.confidence === 'exact' ? t('agent.toast.geoExact', { where }) : t('agent.toast.geoApprox', { where });
     setState((s) => ({ ...s, acceptGeoBusy: false, acceptNear: g.location, acceptGeoNote: note }));
   }, [client, geocodePlace]);
   const setHandover = useCallback((p: Partial<AgentState['handover']>) => {
@@ -2450,6 +2462,7 @@ export function useAgentApp() {
       deriveSize,
       setAddress,
       setDestMode,
+      markDestNear,
       pickDest,
       geocodeAddress,
       geocodePlace,

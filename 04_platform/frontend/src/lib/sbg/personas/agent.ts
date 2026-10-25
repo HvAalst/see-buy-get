@@ -270,7 +270,7 @@ export function createAgentApi(sbg: SbgClient) {
     networkPoints: () => sbg.request((c) => c.GET('/v1/sbg/network/points')),
 
     /** Resolve a typed area/place to a point (the "Address" intake mode → rank the nearest PUDO). */
-    geocode: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
+    geocode: (q: string, countries: string[] = []) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q, ...(countries.length ? { country: countries.join(',') } : {}) } } })),
 
     /** Derive the size tier + cargo class from measured dims (shown live at the counter before accept). */
     classify: (l: number, w: number, h: number, kg: number) => sbg.request((c) => c.POST('/v1/sbg/size/classify', { body: { l, w, h, kg } })),

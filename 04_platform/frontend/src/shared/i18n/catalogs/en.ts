@@ -265,6 +265,8 @@ export const en = {
   'common.back': 'Back',
   'common.allApps': 'All SeeBuyGet apps',
   'common.signUp': 'New here? Sign up',
+  // Under every box an address is typed into to find shops (OsmCredit): OpenStreetMap's service, credited as it asks.
+  'common.addressesByOsm': 'Addresses are found with OpenStreetMap.',
   'common.frontDoor': 'SeeBuyGet front page',
   'common.done': 'Done',
   'common.save': 'Save',

@@ -444,13 +444,3 @@
   align-self: flex-start;
 }
 
-.send__find {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.send__find > .input {
-  flex: 1;
-  min-width: 0;
-}
