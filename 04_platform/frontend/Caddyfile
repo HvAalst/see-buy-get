@@ -108,7 +108,10 @@ http://127.0.0.1:9180 {
 	import tls_{$CADDY_EDGE}
 	import security_headers
 	import content_policy
-	encode zstd gzip
+	# Everything but the live view, which is written a few bytes at a time and must leave as it is written: compressed,
+	# it would wait in the compressor (the API's own answer already says no-transform; this says it here too).
+	@compressible not path /v1/sbg/live
+	encode @compressible zstd gzip
 
 	# The API. Same origin as the apps, so they need no CORS. It is told the visitor's address and nothing else
 	# (GLOS_TRUST_PROXY=1): whatever a visitor wrote in X-Forwarded-For themselves is dropped here.

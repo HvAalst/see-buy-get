@@ -8,7 +8,9 @@ import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
 import { perKmText } from '../../shared/money';
 import type { IconName } from '../../shared/ui/Icon';
-import { clearManager, createFleetClient, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
+import { clearManager, createFleetClient, fleetConfig, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
+import { LIVE_READ_GAP_MS, openLive, throttleReads } from '../../shared/live';
+import { tellScreens } from '../../shared/useLiveTick';
 import { EMPTY_DRIVER, EMPTY_LINE, EMPTY_RUN, EMPTY_VEHICLE, hazardArea, isHeavySelection, lineBlocker, runBlocker, type DriverForm, type LineForm, type RunForm, type VehicleForm } from './logic';
 import type { FleetEarningsSummary, FleetJobRow,
   DispatchView,
@@ -24,6 +26,9 @@ import type { FleetEarningsSummary, FleetJobRow,
 
 /** How often the dashboard’s map reads itself again while it is open and in front: a vehicle moves, a minute is long. */
 export const MAP_EVERY_MS = 45_000;
+
+/** ONE LIVE VIEW: what the live connection says that the console's sweep reads again (a vehicle moving is the map's alone, a notice the bell's). */
+export const SWEPT: ReadonlySet<string> = new Set(['changed', 'orders', 'loads', 'plan', 'vehicles', 'runs', 'cases']);
 import type { PaperView } from '../../shared/papers';
 import type { GiveBackReason } from '../../shared/giveBack';
 import { duplicateField, type DuplicateField } from '../../shared/duplicate';
@@ -362,6 +367,41 @@ export function useFleetApp() {
     refreshRef.current = refresh;
     stateRef.current = state;
   });
+
+  /* ---------------------------------------------------------- one live view */
+
+  // ONE LIVE VIEW (the user, 2026-10-25: "Console and fleet offices"). Signed in, the office listens (shared/live.ts) for
+  // what its own people do and each step of its orders, loads, runs, vehicles and plan — the console's sweep reads them
+  // again — a vehicle on a shift moving — the map reads again, while the dashboard is open and in front — and a notice in
+  // its bell, which the bell reads itself. At most once every LIVE_READ_GAP_MS; the screens that read their own lists
+  // are told too (shared/useLiveTick.ts). The 45-second map stays, for while the connection is down.
+  const signedIn = Boolean(client && managerDid) && state.phase === 'ready';
+  useEffect(() => {
+    if (!signedIn || !client) return;
+    const config = fleetConfig();
+    const pending = new Set<string>();
+    const reads = throttleReads(async () => {
+      const topics = [...pending];
+      pending.clear();
+      tellScreens(topics);
+      const s = stateRef.current;
+      if (topics.some((name) => SWEPT.has(name))) await refreshRef.current();
+      else if (topics.includes('map') && s.screen === 'dash' && (typeof document === 'undefined' || document.visibilityState === 'visible')) await refreshMapRef.current();
+    }, LIVE_READ_GAP_MS);
+    const live = openLive({
+      url: `${config.baseUrl.replace(/\/$/, '')}/v1/sbg/live`,
+      clientId: config.clientId,
+      token: () => client.client.session.getToken(),
+      onTopics: (topics) => {
+        for (const name of topics) pending.add(name);
+        reads.tell();
+      },
+    });
+    return () => {
+      live.close();
+      reads.stop();
+    };
+  }, [signedIn, client]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

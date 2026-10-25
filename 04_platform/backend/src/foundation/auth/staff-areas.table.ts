@@ -252,6 +252,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/imports/:importId/documents/:documentId/file': 'support',
   'GET sbg/imports/known-papers': 'support',
   'GET sbg/interest': 'admin',
+  'GET sbg/live': 'any',
   'GET sbg/lost-parcels': 'support',
   'GET sbg/market-pulse': 'any',
   'GET sbg/market/lane-carriers': 'any',

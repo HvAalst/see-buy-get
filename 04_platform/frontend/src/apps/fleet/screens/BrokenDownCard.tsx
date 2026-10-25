@@ -3,6 +3,10 @@ import { Button, Card, ErrorNote, PlaceMap } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgClient } from '../../../lib/sbg';
 import { CAUSE_WORD, careApi, whereWords, type VehicleBreakdown } from '../../../shared/upkeep/care';
+import { useLiveTick } from '../../../shared/useLiveTick';
+
+/** What the live connection says that moves this card. */
+const VEHICLES_LIVE = ['vehicles', 'changed'] as const;
 
 /**
  * BROKEN DOWN NOW, at the top of the office's vehicles: each one, where it is on a map, who is out with it and what
@@ -13,10 +17,12 @@ export function BrokenDownCard({ sbg, fleetDid, reload, onOpen }: { sbg: SbgClie
   const api = useMemo(() => (sbg ? careApi(sbg) : null), [sbg]);
   const [list, setList] = useState<VehicleBreakdown[]>([]);
   const [error, setError] = useState<unknown>(null);
+  // ONE LIVE VIEW: a vehicle broken down, its loads moved, or how it ended — read again when said.
+  const liveTick = useLiveTick(VEHICLES_LIVE);
   useEffect(() => {
     if (!api || !fleetDid) return;
     void api.fleetBreakdowns(fleetDid).then((r) => (r.error || !r.data ? setError(r.error) : (setError(null), setList(r.data))));
-  }, [api, fleetDid, reload]);
+  }, [api, fleetDid, reload, liveTick]);
   if (error) return <ErrorNote error={error as never} />;
   if (!list.length) return null;
   const pins = list.filter((b) => b.location).map((b) => ({ id: b.vehicleId, label: b.plate, point: b.location!, tone: 'warn' as const }));

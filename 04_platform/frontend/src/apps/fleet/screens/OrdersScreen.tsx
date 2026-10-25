@@ -9,6 +9,10 @@ import { OrderHandOn, PartnersCard } from './HandOn';
 import { RejoinOrder, SplitOrder } from './SplitOrder';
 import { PlanBoard } from './PlanBoard';
 import { OrderUpload } from './OrderUpload';
+import { useLiveTick } from '../../../shared/useLiveTick';
+
+/** What moves the orders list and the day's plan, said by the live connection. */
+const ORDERS_LIVE = ['changed', 'orders', 'loads', 'plan'] as const;
 
 const TAG_WORD: Record<ReturnType<typeof orderTag>, MessageKey> = {
   unplanned: 'fleet.orders.tag.unplanned',
@@ -74,6 +78,17 @@ export function OrdersScreen({ sbg, managerDid, who, onWide }: { sbg: SbgClient 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // ONE LIVE VIEW: an order in, changed or handed on, a load moving, the plan accepted, something the office's own
+  // people did — the list and the day's plan read again (each read once on opening above; this is every time after).
+  const liveTick = useLiveTick(ORDERS_LIVE);
+  useEffect(() => {
+    if (!liveTick) return;
+    void load();
+    void loadPlanState();
+    // Only when told: the reads on opening are the effects above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTick]);
 
   const now = new Date();
   const offered = (orders ?? []).filter((o) => o.role === 'offered' && o.status === 'ordered');

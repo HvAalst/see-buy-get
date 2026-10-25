@@ -13,7 +13,9 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../../shared/media';
 import { t } from '../../shared/i18n'; // plain t(): these strings are built at action time
-import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, mintOperatorToken, myCompanyAccount, myStaffAccount, readCreds, saveCreds, staffLogin, type TowerClient, type TowerCreds, type TwoStepSetup } from './api';
+import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, mintOperatorToken, myCompanyAccount, myStaffAccount, readCreds, saveCreds, staffLogin, towerConfig, type TowerClient, type TowerCreds, type TwoStepSetup } from './api';
+import { LIVE_READ_GAP_MS, openLive, throttleReads, type LiveState } from '../../shared/live';
+import { readsAgainLive } from './live';
 import type { ConstraintView } from './logic';
 import type { EntityPricing, EntityRow } from './money';
 import type { ApprovalRow, ClaimDecision, ClaimRow, DamageReportRow, DisposalRow, DriverApplication, FreightClaimRow, HubApplication, RiderIdRow, StalledRow } from './queues';
@@ -84,6 +86,11 @@ export interface TowerState {
   /** The last thing this session did, kept on screen until the next action replaces it. */
   done: string | null;
   readAt: number | null;
+  /**
+   * ONE LIVE VIEW (shared/live.ts): whether the console is being told of changes as they happen. Null before it has
+   * been open, and when it is not (the setup key alone, or refused) — then only Refresh reads again.
+   */
+  live: LiveState | null;
 
   /* ---- what each sister charges (the rates screen) ---- */
   entities: EntityRow[] | null;
@@ -441,6 +448,7 @@ const INITIAL: TowerState = {
   clearError: null,
   done: null,
   readAt: null,
+  live: null,
   entities: null,
   entityId: null,
   pricing: null,
@@ -1179,6 +1187,54 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     }
     else await loadHazards(client);
   }, [loadHazards, loadCases, loadQueues, loadNetwork, loadMoney, loadHelp, loadCorridors, loadReports, loadPresence, lookupParcel, loadPricing, loadPapers, state.screen, state.entityId, state.lookup, state.helpTopic]);
+
+  /*
+   * ONE LIVE VIEW (the user, 2026-10-25: "Console and fleet offices"). The console read its queues when it opened and
+   * when somebody pressed Refresh, never by itself: a new sign-up, or a colleague's request for a second approval, sat
+   * unseen until then. Now, signed in, it listens (shared/live.ts), and when told something changed it reads again
+   * what the rail counts and the screen that is open — at most once every LIVE_READ_GAP_MS, keeping what it shows
+   * while it reads. Refresh still reads at once.
+   */
+  const readAgainRef = useRef<() => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    readAgainRef.current = async () => {
+      const client = clientRef.current;
+      const who = stateRef.current.who;
+      if (!client || !who || who.setupOnly) return;
+      if (who.mode === 'operator') {
+        const roles = who.roles;
+        await Promise.all([
+          loadHazards(client, roles),
+          holds(roles, 'support') ? loadCases(client) : Promise.resolve(),
+          loadQueues(client, roles),
+          loadPapers(client, roles),
+          loadRisks(client, roles),
+          loadSupport(client, roles),
+        ]);
+      } else {
+        await loadExpiring(client);
+      }
+      if (readsAgainLive(stateRef.current.screen)) await refresh();
+    };
+  });
+  useEffect(() => {
+    if (state.phase !== 'ready' || !state.who || state.who.setupOnly) return;
+    const client = clientRef.current;
+    if (!client) return;
+    const config = towerConfig();
+    const reads = throttleReads(() => readAgainRef.current(), LIVE_READ_GAP_MS);
+    const live = openLive({
+      url: `${config.baseUrl.replace(/\/$/, '')}/v1/sbg/live`,
+      clientId: config.clientId,
+      token: () => client.client.session.getToken(),
+      onTopics: () => reads.tell(),
+      onState: (now) => setState((s) => (s.live === now ? s : { ...s, live: now === 'off' ? null : now })),
+    });
+    return () => {
+      live.close();
+      reads.stop();
+    };
+  }, [state.phase, state.who?.mode, state.who?.name, state.who?.setupOnly]);
 
   const open = useCallback((constraintId: string | null) => {
     setState((s) => ({ ...s, openId: constraintId, clearError: null }));

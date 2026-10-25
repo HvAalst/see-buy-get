@@ -8,6 +8,7 @@ import { PersistentMap } from '../../foundation/store/persistent-map';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PushConnection, PushKeys, PushLast } from './connections.types';
 import { OutboxPushSender } from './push-sender';
+import { LiveService } from './live.service';
 import {
   NotificationPayload,
   NotificationRecord,
@@ -73,6 +74,8 @@ export class NotificationService {
     @Inject(PUSH_SENDER) private readonly sender: PushSender,
     // Optional so a hand-built service keeps compiling: without it nobody is ever at rest.
     @Optional() private readonly rest?: RestingAccounts,
+    // Optional for the same reason: without it no screen is told its bell changed, and every bell still reads on opening.
+    @Optional() private readonly live?: LiveService,
   ) {}
 
   /** The `applicationServerKey` a browser needs to subscribe. Public by design — not a secret. */
@@ -192,6 +195,8 @@ export class NotificationService {
       createdAt: new Date().toISOString(),
     };
     this.inbox.set(record.id, record);
+    // A fleet office with its screens open sees the bell's count move now, not when it is next opened.
+    this.live?.toOwner(ownerDid);
     // AN ACCOUNT AT REST is not rung — it is in the inbox, where its owner can read it — unless it is about the
     // account's own safety, which reaches it wherever it is.
     if (payload.kind !== 'security' && this.rest?.isResting(ownerDid)) return record;
@@ -221,18 +226,23 @@ export class NotificationService {
       n.readAt = new Date().toISOString();
       if (by) n.readBy = by;
       this.inbox.set(id, n);
+      // Read by one manager is read for them all: the others' bells say so at once.
+      this.live?.toOwner(ownerDid);
     }
   }
 
   /** Mark every one of an owner's unread notifications read (the "mark all read" affordance). */
   markAllRead(ownerDid: string, by?: string): void {
     const now = new Date().toISOString();
+    let read = 0;
     for (const n of this.inbox.values()) {
       if (n.ownerDid === ownerDid && !n.readAt) {
         n.readAt = now;
         if (by) n.readBy = by;
         this.inbox.set(n.id, n);
+        read += 1;
       }
     }
+    if (read) this.live?.toOwner(ownerDid);
   }
 }

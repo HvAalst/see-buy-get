@@ -1,7 +1,8 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { NotificationsApi } from '../../lib/sbg';
 import { useT } from '../i18n';
 import { usePush } from '../usePush';
+import { useLiveTick } from '../useLiveTick';
 import { whenLine, type InboxItem } from '../push';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
@@ -97,6 +98,9 @@ const KIND_ICON: Record<string, IconName> = {
   terms_updated: 'scale',
 };
 
+/** What moves the bell in an app that listens: its own name, and nothing else. */
+const BELL_ONLY = ['bell'] as const;
+
 /** Notices whose link is a public page to read — the terms, the data notice, cookies — offered as a link once opened. */
 const READ_THERE = new Set(['terms_updated']);
 
@@ -113,6 +117,13 @@ export function NotificationBell({ api, shared }: NotificationBellProps) {
   const canMark = shared?.canMark ?? true;
   const [open, setOpen] = useState(false);
   const push = usePush(api);
+  // ONE LIVE VIEW: in an app that listens (a fleet office), a notice arriving or read elsewhere moves the badge now.
+  const bellTick = useLiveTick(BELL_ONLY);
+  useEffect(() => {
+    if (bellTick) void push.loadInbox();
+    // Only when told: loading on opening is usePush's own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bellTick]);
 
   const openSheet = () => {
     setOpen(true);

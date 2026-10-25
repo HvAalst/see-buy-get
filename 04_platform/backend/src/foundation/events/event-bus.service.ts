@@ -34,6 +34,8 @@ export class EventBus {
   private static readonly LOG_CAP = 10_000;
   private readonly logger = new Logger(EventBus.name);
   private readonly handlers = new Map<string, Set<EventHandler>>();
+  /** Handlers that hear every event, whatever its type: see subscribeAll. */
+  private readonly everyHandlers = new Set<EventHandler>();
   private readonly log: EventEnvelope[] = [];
   private readonly deadLetters: DeadLetter[] = [];
   private readonly als = new AsyncLocalStorage<TraceContext>();
@@ -52,6 +54,16 @@ export class EventBus {
     set.add(handler as EventHandler);
     this.handlers.set(type, set);
     return () => this.handlers.get(type)?.delete(handler as EventHandler);
+  }
+
+  /**
+   * Hear every event, whatever its type — for something that reacts to "a thing happened" rather than to what it was
+   * (the live view: a console told to look again). Delivered like any subscriber, retried and dead-lettered the same
+   * way. Returns an unsubscribe function.
+   */
+  subscribeAll(handler: EventHandler): () => void {
+    this.everyHandlers.add(handler);
+    return () => this.everyHandlers.delete(handler);
   }
 
   /**
@@ -75,7 +87,7 @@ export class EventBus {
     // long-running instance grows it without limit (one entry per publish, forever).
     if (this.log.length > EventBus.LOG_CAP) this.log.splice(0, this.log.length - EventBus.LOG_CAP);
 
-    const subscribers = Array.from(this.handlers.get(type) ?? []);
+    const subscribers = [...(this.handlers.get(type) ?? []), ...this.everyHandlers];
     await Promise.all(subscribers.map((handler) => this.deliver(handler, envelope)));
     return envelope;
   }

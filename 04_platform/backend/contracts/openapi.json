@@ -3876,6 +3876,24 @@
         }
       }
     },
+    "/v1/sbg/live": {
+      "get": {
+        "operationId": "Live.stream",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/risk-register": {
       "get": {
         "operationId": "RiskRegister.register",

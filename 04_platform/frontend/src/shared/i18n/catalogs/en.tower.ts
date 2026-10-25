@@ -90,6 +90,11 @@ export const enTower = {
   'tower.staff.resetApprove': 'Approve the reset',
   'tower.staff.resetAsked': 'Reset asked by {name}. A second member of staff approves it.',
   'tower.signOut': 'Sign out',
+  // ONE LIVE VIEW: whether the console is told of changes as they happen.
+  'tower.live.on': 'Live',
+  'tower.live.onHint': 'Lists and counts update by themselves as things change.',
+  'tower.live.back': 'Reconnecting…',
+  'tower.live.backHint': 'The live connection dropped. It is trying again; until then, Refresh reads now.',
   'tower.password.open': 'Change password',
   'tower.network.fleets.due': 'Code over 90 days old',
   'tower.password.onlyCompany': 'The setup key has no password to change here.',

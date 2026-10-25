@@ -246,6 +246,17 @@ export function App() {
               )}
             </span>
           ) : null}
+          {/* ONE LIVE VIEW: whether lists and counts are moving by themselves, or waiting for the connection to come
+              back. Nothing until it has opened once, so a console does not flash "reconnecting" as it starts. */}
+          {state.live === 'live' ? (
+            <span class="ctag ctag--ok" title={t('tower.live.onHint')}>
+              {t('tower.live.on')}
+            </span>
+          ) : state.live === 'connecting' ? (
+            <span class="ctag ctag--warn" title={t('tower.live.backHint')}>
+              {t('tower.live.back')}
+            </span>
+          ) : null}
         </div>
         {/*
           * ONE CONTROL, not six things along a line. What was here: "Signed in as X", the company, an

@@ -2,10 +2,14 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, ErrorNote, Note, OpenInMaps, Pill } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgClient } from '../../../lib/sbg';
+import { useLiveTick } from '../../../shared/useLiveTick';
 import { WATCH_CHOICES, caseLine, casesInOrder, minutesWords, outcomeWord, silenceLine, standstillApi, watchLine, type StandstillCase, type StandstillOutcome, type StandstillView, type WatchMinutes } from '../standstill';
 
 /** Read again every minute: a vehicle standing still is news while it stands, not when the screen is next opened. */
 const REFRESH_MS = 60_000;
+
+/** What the live connection says that moves this card: a case opened or closed, or something the office's people did. */
+const CASES_LIVE = ['cases', 'changed'] as const;
 
 /**
  * Round 16 — a vehicle standing still. Its office reads each case first on the dashboard: which vehicle, who drives it,
@@ -27,11 +31,13 @@ export function StandstillCard({ sbg, did }: { sbg: SbgClient | null; did?: stri
     if (!api) return;
     void api.view().then((r) => (r.data ? setView(r.data) : undefined));
   };
+  // ONE LIVE VIEW: a case opened or closed is said at once (the minute's turn stays, for while the connection is down).
+  const liveTick = useLiveTick(CASES_LIVE);
   useEffect(() => {
     load();
     const every = setInterval(load, REFRESH_MS);
     return () => clearInterval(every);
-  }, [sbg, did]);
+  }, [sbg, did, liveTick]);
 
   if (!api || !view) return null;
   const when = (iso: string) => formatDate(iso, { hour: '2-digit', minute: '2-digit' });

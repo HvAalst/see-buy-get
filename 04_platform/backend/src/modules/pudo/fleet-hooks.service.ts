@@ -20,6 +20,7 @@ import { PASSAGE_HOOK_EVENTS, type LoadPassageView } from './load-passage.types'
 import { NotificationService } from './notification.service';
 import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { VehicleService } from './vehicle.service';
+import { LiveService } from './live.service';
 
 /** How often waiting messages are sent. A system waiting on "picked up" wants seconds, not minutes. */
 const DRAIN_MS = Number(process.env.GLOS_CALLBACK_DRAIN_MS ?? 15_000);
@@ -125,6 +126,9 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly keyring?: CompanyKeyService,
+    // ONE LIVE VIEW (live.service.ts): the fleet's own screens are told of the same steps its system is, whether or not
+    // it has a system — each relay tells them before it asks whether there is an address to send to.
+    @Optional() private readonly live?: LiveService,
   ) {}
 
   onModuleInit(): void {
@@ -141,10 +145,12 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
     });
     // Round 16 — one of its vehicles standing still away from any stop: the case, as its dashboard shows it.
     this.events.subscribe<{ fleetDid?: string; case?: Record<string, unknown> }>(GlosEvent.Pudo.VehicleStandingStill, (e) => {
+      if (e.payload?.fleetDid && e.payload.case) this.live?.toFleet(e.payload.fleetDid, 'cases');
       if (e.payload?.fleetDid && e.payload.case && this.settings.get(e.payload.fleetDid)?.url) this.enqueue(e.payload.fleetDid, 'vehicle.standing_still', { case: e.payload.case });
     });
     // Round 17 — the phone on one of its vehicles gone silent: the case, with where it was last heard.
     this.events.subscribe<{ fleetDid?: string; case?: Record<string, unknown> }>(GlosEvent.Pudo.VehicleGoneSilent, (e) => {
+      if (e.payload?.fleetDid && e.payload.case) this.live?.toFleet(e.payload.fleetDid, 'cases');
       if (e.payload?.fleetDid && e.payload.case && this.settings.get(e.payload.fleetDid)?.url) this.enqueue(e.payload.fleetDid, 'vehicle.gone_silent', { case: e.payload.case });
     });
     // Round 15 — a seal on a load it carries found broken on the road: the seal goes with the load.
@@ -203,6 +209,7 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
     if (event === 'load.taken' && f.assignedBy && f.assignedBy.at === f.claimedAt) return;
     const backFor = event === 'load.handed_back' ? f.handBacks?.[f.handBacks.length - 1] : undefined;
     for (const fleetDid of this.fleetsOf(f, backFor?.carrierDid)) {
+      this.live?.toFleet(fleetDid, 'loads');
       if (!this.settings.get(fleetDid)?.url) continue;
       const order = this.orderOf(fleetDid, freightId);
       const load = this.loadOf(fleetDid, f);
@@ -228,6 +235,7 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
       const f = this.freight(freightId);
       if (!f) continue;
       for (const fleetDid of this.fleetsOf(f)) {
+        this.live?.toFleet(fleetDid, 'orders');
         if (!this.settings.get(fleetDid)?.url) continue;
         const before = this.seen.get(freightId)?.[fleetDid];
         const order = this.orderOf(fleetDid, freightId);
@@ -247,7 +255,9 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
 
   /** The day's plan as the office accepted it. Its orders' rows now carry their trucks; the plan said so, so they are not said again. */
   relayPlan(fleetDid: string | undefined, day: string | undefined): void {
-    if (!fleetDid || !day || !this.settings.get(fleetDid)?.url) return;
+    if (!fleetDid || !day) return;
+    this.live?.toFleet(fleetDid, 'plan');
+    if (!this.settings.get(fleetDid)?.url) return;
     const plan = this.plans.state(fleetDid, day).plan;
     if (!plan) return;
     this.enqueue(fleetDid, 'plan.accepted', { plan });
@@ -261,9 +271,11 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
 
   /** A breakdown of one of its vehicles, as its own screen reads it: what was aboard, who took what over, how it ended. */
   relayBreakdown(event: FleetHookEvent, fleetDid: string | undefined, breakdownId: string | undefined): void {
-    if (!fleetDid || !breakdownId || !this.settings.get(fleetDid)?.url) return;
+    if (!fleetDid || !breakdownId) return;
     const breakdown = this.breakdowns.viewOf(breakdownId);
     if (!breakdown || this.vehicleFleet(breakdown.vehicleId) !== fleetDid) return;
+    this.live?.toFleet(fleetDid, 'vehicles');
+    if (!this.settings.get(fleetDid)?.url) return;
     this.enqueue(fleetDid, event, { breakdown });
   }
 
@@ -272,9 +284,11 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
    * fleet's own price, settled between it and the shipper, and we never hold that money.
    */
   relayRun(event: FleetHookEvent, fleetDid: string | undefined, departureId: string | undefined, bookingId?: string): void {
-    if (!fleetDid || !departureId || !this.settings.get(fleetDid)?.url) return;
+    if (!fleetDid || !departureId) return;
     const run = this.departures.forFleet(fleetDid).find((d) => d.departureId === departureId);
     if (!run) return;
+    this.live?.toFleet(fleetDid, 'runs');
+    if (!this.settings.get(fleetDid)?.url) return;
     const booking = bookingId ? run.bookings.find((b) => b.bookingId === bookingId) : undefined;
     this.enqueue(fleetDid, event, { run: runOf(run), ...(booking ? { booking: bookingOf(booking) } : {}) });
   }
@@ -288,6 +302,8 @@ export class FleetHookService implements OnModuleInit, OnModuleDestroy {
     const driver = this.driver(driverDid);
     const fleetDid = driver?.managerDid;
     if (!driver || !fleetDid) return;
+    // Its own map moves with the vehicle, whether or not its system is told: the map is the office's own screen.
+    if (this.fleet.activeForDriver(driverDid)) this.live?.toFleet(fleetDid, 'map', now);
     const s = this.settings.get(fleetDid);
     if (!s?.url || !s.positions) return;
     const shift = this.fleet.activeForDriver(driverDid);
