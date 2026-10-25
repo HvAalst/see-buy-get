@@ -614,7 +614,7 @@ export class FleetService {
   overview(managerDid?: string, now: number = Date.now()): {
     vehicles: { total: number; active: number; inUse: number; byClass: Record<string, number> };
     drivers: { total: number; onShift: number; offShift: number; byStatus: Record<string, number> };
-    sessions: { active: number; todayHours: number; list: Array<{ driverDid: string; driverName: string; plate: string; vehicleClass: string; startedAt: string; hoursOnDuty: number; overLimit: boolean; location?: { lat: number; lng: number }; lastLocatedAt?: string }> };
+    sessions: { active: number; todayHours: number; list: Array<{ driverDid: string; driverName: string; vehicleId: string; plate: string; vehicleClass: string; startedAt: string; hoursOnDuty: number; overLimit: boolean; location?: { lat: number; lng: number }; lastLocatedAt?: string }> };
     /** FP8 — the limits every hours figure above is read against. */
     hours: { limit: number; rest: number };
     /** A position carries WHEN it was reported: a vehicle that went dark an hour ago must not read as moving. */
@@ -629,7 +629,7 @@ export class FleetService {
     const list = activeSessions.map((a) => {
       const d = this.drivers.get(a.driverDid);
       const v = this.vehicles.get(a.vehicleId);
-      return { driverDid: a.driverDid, driverName: d.displayName, plate: v.plate, vehicleClass: v.vehicleClass, startedAt: a.startedAt, hoursOnDuty: hoursOf(a), overLimit: hoursOf(a) > MAX_ON_DUTY_HOURS, location: a.location, ...(a.lastLocatedAt ? { lastLocatedAt: a.lastLocatedAt } : {}) };
+      return { driverDid: a.driverDid, driverName: d.displayName, vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, startedAt: a.startedAt, hoursOnDuty: hoursOf(a), overLimit: hoursOf(a) > MAX_ON_DUTY_HOURS, location: a.location, ...(a.lastLocatedAt ? { lastLocatedAt: a.lastLocatedAt } : {}) };
     });
     const todayHours = Math.round(all.filter((a) => new Date(a.startedAt).getTime() >= dayStart).reduce((s, a) => s + hoursOf(a), 0) * 100) / 100;
 

@@ -11,9 +11,10 @@ export interface PlaceMapPin {
   /**
    * A warning — something reported on a road — drawn as a red diamond, so it is told from a place without colour. A
    * stop — the place a line ends, somebody's next stop — drawn as a ring, under everything else, so a vehicle or a
-   * warning standing on top of it keeps its tap.
+   * warning standing on top of it keeps its tap. A vehicle that broke down — `down` — a dot like any vehicle, in the
+   * danger red: told from a hazard by its shape and from a vehicle on the move by its colour (2026-10-25).
    */
-  tone?: 'warn' | 'stop';
+  tone?: 'warn' | 'stop' | 'down';
 }
 
 /**

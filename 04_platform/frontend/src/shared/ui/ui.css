@@ -1587,6 +1587,11 @@
   transform: rotate(45deg);
 }
 
+/* A vehicle that broke down: a vehicle's dot, in the danger red (a hazard is a diamond). */
+.pmap__pin--down .pmap__dot {
+  background: var(--dang);
+}
+
 /* Where a line ends: a ring, as on the tiled map. */
 .pmap__pin--stop .pmap__dot,
 .pmap__pin--stop.pmap__pin--on .pmap__dot {
@@ -1778,6 +1783,16 @@
 }
 /* Selected, it stays what it is — a warning — and only grows. */
 .pmap-marker__dot--warn-on {
+  width: 18px;
+  height: 18px;
+  margin: -2px 0 0 -2px;
+}
+/* A vehicle that broke down: a vehicle's dot, in the danger red — a hazard is a diamond, a moving vehicle blue. */
+.pmap-marker__dot--down,
+.pmap-marker__dot--down-on {
+  background: var(--dang);
+}
+.pmap-marker__dot--down-on {
   width: 18px;
   height: 18px;
   margin: -2px 0 0 -2px;

@@ -158,6 +158,8 @@ export interface PositionRow {
 export interface SessionRow {
   driverDid?: string;
   driverName: string;
+  /** Which vehicle — so the map can tell one that broke down. */
+  vehicleId?: string;
   plate: string;
   vehicleClass: string;
   hoursOnDuty: number;

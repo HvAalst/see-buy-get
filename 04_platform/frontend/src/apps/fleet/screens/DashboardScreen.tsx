@@ -1,12 +1,13 @@
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useMemo } from 'preact/hooks';
 import { Button, Card, ErrorNote, ExplainerReset, Icon, Note, PhotoField, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient, SbgError } from '../../../lib/sbg';
 import { systemApi, systemSummary, type SystemView } from '../system';
 import { StandstillCard } from './StandstillCard';
+import { CAUSE_WORD, careApi, whereWords, type VehicleBreakdown } from '../care';
 import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, stopDetail, vehicleDetail } from '../logic';
 import { vehicleWord } from '../../driver/vehicle-words';
 import type { PapersReport } from '../types';
@@ -26,12 +27,27 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
   const d = state.dashboard;
   const sessions = d?.sessions.list ?? [];
   const cargo = d?.cargo.items ?? [];
-  const map = fleetMap(sessions, cargo, state.hazards, t);
-  const vehicles = map.pins.filter((p) => p.id.startsWith('v:'));
+  // What is broken down now, read with the map (its 45-second reading) — so the map the office watches all day says it.
+  const careRead = useMemo(() => (sbg ? careApi(sbg) : null), [sbg]);
+  const [broken, setBroken] = useState<VehicleBreakdown[]>([]);
+  useEffect(() => {
+    const fleetDid = state.manager?.did;
+    if (!careRead || !fleetDid) return;
+    void careRead.fleetBreakdowns(fleetDid).then((r) => {
+      if (!r.error && r.data) setBroken(r.data);
+    });
+  }, [careRead, state.manager?.did, state.mapReadAt]);
+  const map = fleetMap(sessions, cargo, state.hazards, t, Date.now(), broken);
+  const vehicles = map.pins.filter((p) => p.id.startsWith('v:') || p.id.startsWith('b:'));
+  const downCount = map.pins.filter((p) => p.tone === 'down').length;
   const pins = vehicles;
   const vehicle = picked?.startsWith('v:') ? vehicleDetail(picked.slice(2), sessions, cargo, d?.hours?.limit) : null;
   const hazard = picked?.startsWith('h:') ? state.hazards.find((h) => `h:${h.constraintId}` === picked) ?? null : null;
   const stop = picked?.startsWith('s:') ? stopDetail(picked.slice(2), sessions, cargo) : null;
+  // The vehicle a tapped dot is, broken down now, if it is.
+  const vehicleDown = vehicle?.session.vehicleId ? broken.find((b) => b.vehicleId === vehicle.session.vehicleId && b.status === 'open') ?? null : null;
+  // A broken-down vehicle with nobody on shift in it: what happened, where, and the way to its upkeep.
+  const downed = picked?.startsWith('b:') ? broken.find((b) => b.vehicleId === picked.slice(2)) ?? null : null;
   // A line belongs to its vehicle: tapping it opens the same sheet, which names the stop the line ends at.
   const mapProps = { pins: map.pins, lines: map.lines, selectedId: picked, onPick: (id: string) => setPicked(id.startsWith('n:') ? `v:${id.slice(2)}` : id) };
 
@@ -96,7 +112,7 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
           {...mapProps}
           label={pins.length === 1 ? t('fleet.dash.mapAriaOne', { count: pins.length }) : t('fleet.dash.mapAriaMany', { count: pins.length })}
         />
-        <MapKey lines={map.lines.length} hazards={state.hazards.length} readAt={state.mapReadAt} />
+        <MapKey lines={map.lines.length} hazards={state.hazards.length} down={downCount} readAt={state.mapReadAt} />
         {/* Its own control rather than a tap on the surface: the map underneath pans and zooms, and a
             surface that both moves under your finger and opens something is a surface that does the
             wrong one of those about half the time. */}
@@ -118,7 +134,7 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
               label={pins.length === 1 ? t('fleet.dash.mapAriaOne', { count: pins.length }) : t('fleet.dash.mapAriaMany', { count: pins.length })}
             />
             <p class="card__note">{pins.length === 0 ? t('fleet.dash.mapNoneNote') : t('fleet.dash.mapNote')}</p>
-            <MapKey lines={map.lines.length} hazards={state.hazards.length} readAt={state.mapReadAt} />
+            <MapKey lines={map.lines.length} hazards={state.hazards.length} down={downCount} readAt={state.mapReadAt} />
           </>
         ) : null}
       </Sheet>
@@ -134,6 +150,12 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
               {vehicle.hoursLeft != null ? ` · ${t('fleet.map.hoursLeft', { hours: hoursLabel(vehicle.hoursLeft) })}` : ''}
             </p>
             {vehicle.signal.kind === 'dark' ? <p class="hint">{t('fleet.map.dark', { age: ageWords(vehicle.signal.minutes) })}</p> : null}
+            {/* Broken down: what happened, first — the next stop below is where its loads were going, not where it is. */}
+            {vehicleDown ? (
+              <p class="t-body row__s--danger">
+                {t('fleet.map.brokenDown')} — {t(CAUSE_WORD[vehicleDown.cause])}: “{vehicleDown.note}”
+              </p>
+            ) : null}
             {vehicle.next ? <p class="t-body">{t(vehicle.next.what === 'pickup' ? 'fleet.map.nextPickup' : 'fleet.map.nextDrop', { place: vehicle.next.label })}</p> : null}
             {vehicle.loads.length === 0 ? (
               <p class="hint">{t('fleet.map.noLoad')}</p>
@@ -189,6 +211,24 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
             <p class="t-body">{t('fleet.map.hazardReported', { day: formatDate(hazard.reportedAt), agree: hazard.confirmations })}</p>
             {hazard.status === 'disputed' ? <p class="hint">{t('fleet.map.hazardDisputedDetail', { count: hazard.refutations })}</p> : null}
             <p class="hint">{t('fleet.map.hazardBasis')}</p>
+            <Button variant="link" onClick={() => setPicked(null)}>
+              {t('common.close')}
+            </Button>
+          </>
+        ) : null}
+      </Sheet>
+
+      <Sheet open={Boolean(downed)} onClose={() => setPicked(null)} title={downed ? `${downed.plate} · ${t('fleet.map.brokenDown')}` : ''}>
+        {downed ? (
+          <>
+            <p class="t-body">
+              {t(CAUSE_WORD[downed.cause])}: “{downed.note}”
+            </p>
+            <p class="hint">{t('fleet.brk.reported', { who: downed.driverName ?? downed.reportedBy, when: formatDate(downed.reportedAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</p>
+            <p class="hint">{whereWords(downed, t)}</p>
+            <Button variant="outline" chevron={false} onClick={() => { setPicked(null); actions.go('vehicles'); }}>
+              {t('fleet.map.downSheetOpen')}
+            </Button>
             <Button variant="link" onClick={() => setPicked(null)}>
               {t('common.close')}
             </Button>
@@ -570,11 +610,11 @@ function SystemCard({ sbg, did, onOpen }: { sbg: SbgClient | null; did?: string;
 }
 
 /** What the lines and the diamonds are, said where they are drawn — and when the map was read. */
-function MapKey({ lines, hazards, readAt }: { lines: number; hazards: number; readAt: string | null }) {
+function MapKey({ lines, hazards, down, readAt }: { lines: number; hazards: number; down: number; readAt: string | null }) {
   const t = useT();
   return (
     <p class="hint">
-      {[lines ? t('fleet.map.keyLines') : '', hazards ? t('fleet.map.keyHazards', { count: hazards }) : t('fleet.map.keyNoHazards'), readAt ? t('fleet.map.readAt', { time: formatDate(readAt, { hour: '2-digit', minute: '2-digit' }) }) : '']
+      {[down ? t('fleet.map.keyBrokenDown', { count: down }) : '', lines ? t('fleet.map.keyLines') : '', hazards ? t('fleet.map.keyHazards', { count: hazards }) : t('fleet.map.keyNoHazards'), readAt ? t('fleet.map.readAt', { time: formatDate(readAt, { hour: '2-digit', minute: '2-digit' }) }) : '']
         .filter(Boolean)
         .join(' ')}
     </p>

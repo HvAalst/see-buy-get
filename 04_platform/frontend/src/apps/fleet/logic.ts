@@ -212,21 +212,45 @@ export function vehiclePins(positions: PositionRow[], now: number = Date.now()):
  * for the place: a line that stops at nothing makes the reader guess where it goes. Pin ids say what they are: `v:` a
  * vehicle (its driver), `s:` a stop (its place, see stopKey), `h:` a hazard.
  */
+/** A vehicle broken down, as the live map reads it: which, where it was reported, and whether it still is. */
+export interface BrokenDownPin {
+  vehicleId: string;
+  plate: string;
+  status: 'open' | 'resolved';
+  location?: { lat: number; lng: number } | null;
+}
+
 export function fleetMap(
   sessions: SessionRow[],
   cargo: CargoRow[],
   hazards: HazardRow[],
   t: Translate,
   now: number = Date.now(),
-): { pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' | 'stop' }>; lines: Array<{ id: string; label: string; from: { lat: number; lng: number }; to: { lat: number; lng: number } }> } {
+  broken: BrokenDownPin[] = [],
+): { pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' | 'stop' | 'down' }>; lines: Array<{ id: string; label: string; from: { lat: number; lng: number }; to: { lat: number; lng: number } }> } {
   const placed = sessions.filter((s): s is SessionRow & { driverDid: string; location: { lat: number; lng: number } } => Boolean(s.driverDid && s.location));
-  const pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' | 'stop' }> = placed.map((s) => {
+  // BROKEN DOWN, ON THE LIVE MAP (2026-10-25: the office's vehicles screen said so; the map it watches all day did not).
+  // A vehicle on shift that broke down is a red dot labelled so, and draws no line: it is going nowhere until somebody
+  // takes its loads over. One with nobody on shift in it stands where it was reported.
+  const down = new Map(broken.filter((b) => b.status === 'open').map((b) => [b.vehicleId, b] as const));
+  const isDown = (s: SessionRow) => Boolean(s.vehicleId && down.has(s.vehicleId));
+  const pins: Array<{ id: string; label: string; point: { lat: number; lng: number }; tone?: 'warn' | 'stop' | 'down' }> = placed.map((s) => {
     const signal = signalState(s.lastLocatedAt, now);
-    return { id: `v:${s.driverDid}`, label: `${s.plate} · ${s.driverName}${signal.kind === 'dark' ? ` · no signal ${ageWords(signal.minutes)}` : ''}`, point: s.location };
+    const broke = isDown(s);
+    return {
+      id: `v:${s.driverDid}`,
+      label: `${s.plate} · ${s.driverName}${broke ? ` · ${t('fleet.map.brokenDown')}` : ''}${signal.kind === 'dark' ? ` · no signal ${ageWords(signal.minutes)}` : ''}`,
+      point: s.location,
+      ...(broke ? { tone: 'down' as const } : {}),
+    };
   });
+  const onShift = new Set(placed.map((s) => s.vehicleId).filter(Boolean));
+  for (const b of down.values()) {
+    if (!onShift.has(b.vehicleId) && b.location) pins.push({ id: `b:${b.vehicleId}`, label: `${b.plate} · ${t('fleet.map.brokenDown')}`, point: b.location, tone: 'down' });
+  }
   // Two vehicles heading for the same place share one ring.
   const ends = new Map<string, { label: string; point: { lat: number; lng: number } }>();
-  const lines = placed.flatMap((s) => {
+  const lines = placed.filter((s) => !isDown(s)).flatMap((s) => {
     const stop = nextStopOf(s.driverDid, s.location, cargo);
     if (!stop) return [];
     const key = stopKey(stop.location);

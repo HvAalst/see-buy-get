@@ -588,6 +588,28 @@ describe('the fleet map', () => {
     expect(stopDetail('-1.28500,36.83500', [sessions[2]], both)).toBeNull();
   });
 
+  it('marks a vehicle that broke down — on shift, a red dot that draws no line; with nobody in it, where it was reported (2026-10-25)', () => {
+    const withIds = sessions.map((s, i) => ({ ...s, vehicleId: `veh_${i}` }));
+    const broken = [
+      // Amos's bike, on shift: still his dot, now red, and going nowhere.
+      { vehicleId: 'veh_0', plate: 'KLM 002B', status: 'open' as const, location: { lat: -1.29, lng: 36.82 } },
+      // A van with nobody on shift in it: where it was reported.
+      { vehicleId: 'veh_9', plate: 'KBZ 900X', status: 'open' as const, location: { lat: -1.25, lng: 36.7 } },
+      // Over: not marked.
+      { vehicleId: 'veh_1', plate: 'KDA 100V', status: 'resolved' as const, location: { lat: -1.3, lng: 36.9 } },
+    ];
+    const { pins, lines } = fleetMap(withIds, cargo, [], t, NOW, broken);
+    const amos = pins.find((p) => p.id === 'v:did:a')!;
+    expect(amos).toMatchObject({ tone: 'down', label: 'KLM 002B · Amos K. · broken down' });
+    expect(pins.find((p) => p.id === 'v:did:b')).not.toHaveProperty('tone');
+    expect(pins.find((p) => p.id === 'b:veh_9')).toEqual({ id: 'b:veh_9', label: 'KBZ 900X · broken down', point: { lat: -1.25, lng: 36.7 }, tone: 'down' });
+    expect(pins.some((p) => p.id === 'b:veh_1')).toBe(false);
+    // Its line to the next stop is gone: until somebody takes its loads over, it is not heading anywhere.
+    expect(lines.some((l) => l.id === 'n:did:a')).toBe(false);
+    // Without a breakdown the same rows draw the line, so the line went for the breakdown and nothing else.
+    expect(fleetMap(withIds, cargo, [], t, NOW).lines.some((l) => l.id === 'n:did:a')).toBe(true);
+  });
+
   it('draws one line per vehicle to its NEAREST stop, and says it is a straight line, not the road', () => {
     const { lines } = fleetMap(sessions, cargo, hazards, t, NOW);
     // Amos has a drop far off and a pickup round the corner: the pickup is next.
