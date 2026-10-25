@@ -20,7 +20,7 @@ export type SbgErrorCode =
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
   | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'DEVICE_NOT_KNOWN' | 'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PASSWORD_LOCKED' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'DRIVER_PASS_NEEDED' | 'DRIVER_PASS_WRONG' | 'VEHICLE_CHECK_NEEDED' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
-  | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED' | 'SMS_NOT_SENT'
+  | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED' | 'SMS_NOT_SENT' | 'COUNTRY_NOT_OPEN'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'OFFLINE' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
 
@@ -110,6 +110,8 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   PHONE_NOT_SERVED: { icon: 'keypad', tone: 'warn', say: 'error.phone_not_served' },
   // The code could not be texted — the provider's bad minute, or ours. Nothing was counted: asking again is the answer.
   SMS_NOT_SENT: { icon: 'clock', tone: 'warn', say: 'error.sms_not_sent' },
+  // Signed up before the country opened (COMING, 2026-10-25): nothing wrong, only early. The detail names the country.
+  COUNTRY_NOT_OPEN: { icon: 'clock', tone: 'info', say: 'error.country_not_open' },
   PHONE_NOT_VERIFIED: { icon: 'keypad', tone: 'warn', say: 'error.verify_phone' },
   // Choosing a PIN needs a recovery email, proven by the code sent to it.
   EMAIL_NOT_VERIFIED: { icon: 'keypad', tone: 'warn', say: 'error.verify_email' },

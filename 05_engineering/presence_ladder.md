@@ -21,12 +21,13 @@ records custody and measures — it simply cannot spend.
 
 ## 2. The ladder
 
-Four levels, held **per jurisdiction, as data with an audit trail**. "We launched in Zambia" must be
+Five levels, held **per jurisdiction, as data with an audit trail**. "We launched in Zambia" must be
 a record with a person's name on it, not a deploy.
 
 | level | what runs | what is locked |
 |---|---|---|
 | **Observed** | geography, road constraints, the map | everything that transacts |
+| **Coming** (taking sign-ups, 2026-10-25) | sign-up of shops, hubs, stores, fleets and couriers; sign-up codes texted; papers checked by staff | everything that moves or transacts: no take-in, no hub floor, no shift, no run; the accounts are on no public map, count or price list |
 | **Matched** | identity, vetting, routes, **matching, custody, proof, measurement**, indicative pricing | all money: no Merchant of Record, no float we hold, no COD we touch, no claims fund, **no redeemable quote** |
 | **Partnered** | a local carrier or forwarder is the contracting party; we are their software | we hold nothing; our ledger records what is **owed**, never what is **held** |
 | **Established** | a sister company exists: MoR, float, tax, claims, payouts | nothing |
@@ -34,6 +35,14 @@ a record with a person's name on it, not a deploy.
 **Established is derived, never declared.** A jurisdiction may only stand at Established where a
 transacting entity actually exists for it. Asserting it without one is refused at the service, not
 reviewed later — that assertion is precisely the lie the whole design exists to prevent.
+
+**Coming is for a country that has not opened** (the user, 2026-10-25: "can preregister before a country goes
+live. Then we have those on the network immediately"). Two people switch a country to it, with no exchange rate
+needed yet: nothing is priced. The waiting list is told it can sign up, and told again the day it opens. On that
+day everybody registered there is told in their app and by email: whether they can start today, and which company
+they work with — or that none of ours handles money there yet (`CountryNoticeService.tellOpened`). A country that
+has opened (`openedAt`) is never Coming again: holding back work under "not open yet" would be a sentence that is
+not true. Lowering an open country is Observed, which stops new parcels and never what is finishing.
 
 **An unknown jurisdiction is Observed.** Never the home sister's capabilities, never a default that
 happens to be generous. A country nobody has recorded is a country we are not in.

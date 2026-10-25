@@ -11,6 +11,7 @@ import { CAUSE_WORD, careApi, whereWords, type VehicleBreakdown } from '../../..
 import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, stopDetail, vehicleDetail } from '../logic';
 import { vehicleWord } from '../../driver/vehicle-words';
 import type { PapersReport } from '../types';
+import { OpensSoonNote } from '../../../shared/opening/OpensSoonNote';
 import type { FleetActions, FleetState, OwnPaperKind, OwnPapers } from '../useFleetApp';
 
 export interface DashboardScreenProps {
@@ -54,6 +55,8 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {/* Signed up before its country opened (COMING, 2026-10-25): why no driver starts a shift yet, and when they will. */}
+      <OpensSoonNote country={d?.country} detail={t('opening.fleet')} />
       {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
       <DeclarationCard sbg={sbg ?? null} />
 

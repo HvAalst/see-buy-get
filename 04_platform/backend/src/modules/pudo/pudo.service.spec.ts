@@ -2335,7 +2335,7 @@ describe('PUDO Light', () => {
 
       // The network does not operate in the Netherlands → registering a Dutch store is refused outright, rather
       // than quietly settling its parcels through Nairobi. (Where we only match, it stands with no sister.)
-      expect(() => vendors.register({ name: 'Amsterdam Store', country: 'NL' })).toThrow(/does not operate in NL/);
+      expect(() => vendors.register({ name: 'Amsterdam Store', country: 'NL' })).toThrow(/does not take sign-ups in NL/);
     });
 
     it('names the sister owed each node fee on a quote', () => {
@@ -2360,7 +2360,7 @@ describe('PUDO Light', () => {
       // with no sister (cross-border.spec), and a country nobody recorded is still refused, in those words.
       expect(() =>
         managers.register({ companyName: 'Rotterdam Haulage', jurisdiction: 'NL', contactPhone: '+3180090', ownerFullName: 'N N', ownerNationalId: 'MGR-NL', location: { lat: 51.9, lng: 4.5 }, requirements: { businessRegistrationNo: 'BRN-NL', transportOperatorLicence: 'TOL-NL', taxId: 'TAX-NL' } }),
-      ).toThrow(/does not operate in NL/);
+      ).toThrow(/does not take sign-ups in NL/);
     });
 
     it('pays a fleet driver through their FLEET, and never asks where they live', () => {
@@ -2391,7 +2391,7 @@ describe('PUDO Light', () => {
       // stand with no sister (cross-border.spec); a country nobody recorded is still refused, in those words.
       expect(() =>
         drivers.register({ displayName: 'Nomad', fullName: 'N N', nationalId: 'DRV-NOMAD', mobile: '+3190001', licenceClasses: ['bike'], jurisdiction: 'NL' }),
-      ).toThrow(/does not operate in NL/);
+      ).toThrow(/does not take sign-ups in NL/);
     });
 
     it('lets a sister set its OWN margin, and refuses an implausible one', () => {
@@ -5984,6 +5984,23 @@ describe('PUDO Light', () => {
     expect(() => presence.set({ jurisdiction: 'MW', level: 'observed', incoterms: { origin: ['DDP'] } })).not.toThrow();
     // And a term that bills nobody is fine either way.
     expect(() => presence.set({ jurisdiction: 'MW', level: 'observed', incoterms: { destination: ['DAP'] } })).not.toThrow();
+  });
+
+  it('CL1: a change that does not name the terms keeps them — less one the new level cannot carry', () => {
+    // Found walking it, 2026-10-25: the console sends the terms only when its editor touched them, and a level or a
+    // note changed on its own wiped every term the country had.
+    presence.set({ jurisdiction: 'MW', level: 'observed', incoterms: { origin: ['FCA', 'CIF'], destination: ['DAP'] } });
+    presence.set({ jurisdiction: 'MW', level: 'observed', note: 'Only the note changes' });
+    expect(presence.resolve('MW').incoterms).toEqual({ origin: ['FCA', 'CIF'], destination: ['DAP'] });
+    // Raised by two people, with no word about the terms: still the same terms.
+    const raised = presence.propose({ jurisdiction: 'MW', level: 'matched', by: 'Amina Otieno' });
+    presence.approve(raised.proposal!.proposalId, 'Brian Kamau');
+    expect(presence.resolve('MW').incoterms).toEqual({ origin: ['FCA', 'CIF'], destination: ['DAP'] });
+    // Where the level CAN bill duty (Kenya, with its company), DDP stands; lowered to where it cannot, DDP goes with the
+    // lowering — which is never refused — and DAP stays.
+    presence.set({ jurisdiction: 'KE', level: 'established', incoterms: { origin: ['FCA'], destination: ['DAP', 'DDP'] } });
+    presence.set({ jurisdiction: 'KE', level: 'matched' });
+    expect(presence.resolve('KE').incoterms).toEqual({ origin: ['FCA'], destination: ['DAP'] });
   });
 
   it('CL1: who may claim follows the term — the C terms put a loss in transit on the RECEIVER', () => {

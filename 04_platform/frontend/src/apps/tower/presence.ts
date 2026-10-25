@@ -10,7 +10,8 @@ import type { MessageKey } from '../../shared/i18n';
  * "established" flag standing in for a company that was never registered.
  */
 
-export const PRESENCE_LEVELS = ['observed', 'matched', 'partnered', 'established'] as const;
+/** COMING (2026-10-25): taking sign-ups ahead of the day a country opens — nothing moves there yet. */
+export const PRESENCE_LEVELS = ['observed', 'coming', 'matched', 'partnered', 'established'] as const;
 export type PresenceLevel = (typeof PRESENCE_LEVELS)[number];
 
 /*
@@ -21,7 +22,7 @@ export type PresenceLevel = (typeof PRESENCE_LEVELS)[number];
  * on the server and forgetting this line means the console silently never shows it, which is exactly what
  * happened when fieldEvidence arrived. presence.test.ts now compares the two.
  */
-export const PRESENCE_CAPABILITIES = ['takeIn', 'merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts', 'fieldEvidence'] as const;
+export const PRESENCE_CAPABILITIES = ['takeIn', 'signUp', 'merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts', 'fieldEvidence'] as const;
 export type PresenceCapability = (typeof PRESENCE_CAPABILITIES)[number];
 
 export interface PresenceRow {
@@ -37,6 +38,8 @@ export interface PresenceRow {
   /** CA2 — the second person who approved the change that raised this country. */
   approvedBy?: string;
   setAt?: string;
+  /** When goods could first move here. A country that has opened is never "taking sign-ups" again. */
+  openedAt?: string;
   /** CA3/CA7 — the companies standing (or being prepared) in this country, and whether each is ready. */
   companies?: Array<{ entityId: string; name: string; kind: 'sister' | 'partner'; status: 'draft' | 'active'; ready: boolean }>;
   /** CL1 — the trade terms switched on here, per direction. Empty everywhere until somebody selects one. */
@@ -47,15 +50,17 @@ export interface PresenceRow {
 
 /** What each level grants before anyone overrides anything — the same table the server derives from. */
 export const LEVEL_DEFAULTS: Record<PresenceLevel, Record<PresenceCapability, boolean>> = {
-  observed: { takeIn: false, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
-  matched: { takeIn: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
-  partnered: { takeIn: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
+  observed: { takeIn: false, signUp: false, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
+  coming: { takeIn: false, signUp: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
+  matched: { takeIn: true, signUp: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
+  partnered: { takeIn: true, signUp: true, merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, fieldEvidence: false },
   // CL5 — off HERE too. No level grants it; only a deliberate override for a named country does.
-  established: { takeIn: true, merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true, fieldEvidence: false },
+  established: { takeIn: true, signUp: true, merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true, fieldEvidence: false },
 };
 
 export const LEVEL_LABEL: Record<PresenceLevel, MessageKey> = {
   observed: 'tower.presence.level.observed',
+  coming: 'tower.presence.level.coming',
   matched: 'tower.presence.level.matched',
   partnered: 'tower.presence.level.partnered',
   established: 'tower.presence.level.established',
@@ -63,6 +68,7 @@ export const LEVEL_LABEL: Record<PresenceLevel, MessageKey> = {
 
 export const CAPABILITY_LABEL: Record<PresenceCapability, MessageKey> = {
   takeIn: 'tower.presence.cap.takeIn',
+  signUp: 'tower.presence.cap.signUp',
   merchantOfRecord: 'tower.presence.cap.merchantOfRecord',
   holdFloat: 'tower.presence.cap.holdFloat',
   cashOnDelivery: 'tower.presence.cap.cashOnDelivery',
@@ -119,6 +125,8 @@ export function overridesOf(row: PresenceRow): Partial<Record<PresenceCapability
  * refuses to offer it rather than letting somebody press it and read a 400.
  */
 export function levelBlocker(row: PresenceRow, level: PresenceLevel): MessageKey | null {
+  // COMING is for a country that has not opened (2026-10-25) — the server refuses it too. Stopping new work is observed.
+  if (level === 'coming' && row.level !== 'coming' && (row.capabilities.takeIn || row.openedAt)) return 'tower.presence.comingAfterOpen';
   // CA3 — a company of ours still in draft may be proposed up to Established once its record is READY; the
   // approval switches it on. A draft that is not ready, or no company at all, is refused here first.
   if (level === 'established' && !row.hasEntity && !(row.companies ?? []).some((c) => c.kind === 'sister' && c.ready)) return 'tower.presence.needsCompany';
@@ -218,11 +226,12 @@ export function newCountryBlocker(form: NewCountryForm, rows: PresenceRow[], cat
   const country = catalogue.find((c) => c.code === code);
   if (!country) return 'tower.presence.badCode';
   const listed = rows.find((r) => r.jurisdiction === code);
-  if (form.level === 'established' || form.level === 'partnered') {
+  if (form.level === 'established' || form.level === 'partnered' || form.level === 'coming') {
     const blocked = levelBlocker(listed ?? { jurisdiction: code, level: 'observed', capabilities: { ...LEVEL_DEFAULTS.observed }, hasEntity: false, recorded: false }, form.level);
     if (blocked) return blocked;
   }
-  const switchingOn = form.level !== 'observed' && !listed?.capabilities.takeIn;
+  // Switching ON is what lets goods move, and so what is priced. Taking sign-ups (COMING) prices nothing: no rate needed yet.
+  const switchingOn = LEVEL_DEFAULTS[form.level].takeIn && !listed?.capabilities.takeIn;
   if (switchingOn && !country.priceable) return 'tower.presence.needsRate';
   return null;
 }

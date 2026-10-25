@@ -10,6 +10,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import { DidService } from '../../foundation/did/did.service';
 import { AgentService } from './agent.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { WalletGateService } from './wallet-gate.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
@@ -1315,6 +1316,8 @@ export class ParcelService implements OnApplicationBootstrap {
     if (promise === 'none') {
       // One refusal, in words about THIS shop and THIS country — not about daughter companies, and not
       // at the far end of a money path the shopkeeper cannot see.
+      // COMING (2026-10-25): the shop signed up before its country opened — said as that, and when it changes.
+      if (this.agents.notOpenYet(agent)) throw new GlosError('COUNTRY_NOT_OPEN', `SeeBuyGet is not open in ${catalogueEntry(country)?.name ?? country} yet: ${agent.shopName} takes parcels in from the day it opens`);
       throw new GlosError('FORBIDDEN', `Nothing can be taken in at ${agent.shopName}: the network does not operate in ${country} yet`);
     }
 

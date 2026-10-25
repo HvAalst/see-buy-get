@@ -82,6 +82,7 @@ export class PresenceService implements OnApplicationBootstrap {
       setBy: record?.setBy,
       approvedBy: record?.approvedBy,
       setAt: record?.setAt,
+      ...(record?.openedAt ? { openedAt: record.openedAt } : {}),
     };
   }
 
@@ -169,6 +170,13 @@ export class PresenceService implements OnApplicationBootstrap {
     incoterms?: { origin?: string[]; destination?: string[] };
   }): ResolvedPresence {
     const key = this.check(input.jurisdiction, input.level, input.overrides, false, input.incoterms);
+    const before = this.presences.get(key);
+    // The first day goods could move here, kept through every later change (see check: never COMING again).
+    const openedAt = before?.openedAt ?? (capabilitiesOf(input.level, input.overrides).takeIn ? new Date().toISOString() : undefined);
+    // CL1 — the trade terms are replaced only WHEN GIVEN. A change that leaves them out (a level, a note: the console sends
+    // them only when its editor touched them) used to wipe every term the country had, silently. They are kept now — less
+    // any the new level cannot carry, which a lowering takes away rather than waits on (see keptTerms).
+    const terms = input.incoterms ? normaliseTerms(input.incoterms) : before?.incoterms ? keptTerms(before.incoterms, capabilitiesOf(input.level, input.overrides)) : undefined;
     this.presences.set(key, {
       jurisdiction: key,
       level: input.level,
@@ -176,8 +184,9 @@ export class PresenceService implements OnApplicationBootstrap {
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
       ...(input.by?.trim() ? { setBy: input.by.trim() } : {}),
       ...(input.approvedBy?.trim() ? { approvedBy: input.approvedBy.trim() } : {}),
-      ...(input.incoterms ? { incoterms: normaliseTerms(input.incoterms) } : {}),
+      ...(terms ? { incoterms: terms } : {}),
       setAt: new Date().toISOString(),
+      ...(openedAt ? { openedAt } : {}),
     });
     return this.resolve(key);
   }
@@ -319,6 +328,11 @@ export class PresenceService implements OnApplicationBootstrap {
     if (!key) throw new GlosError('INVALID_INPUT', 'A presence needs the country it is about');
     // Only a country that exists may have a standing. Two letters are not a country.
     if (!catalogueEntry(key)) throw new GlosError('INVALID_INPUT', `${key} is not a country in the catalogue`);
+    // COMING (2026-10-25) is for a country that has not opened. Once goods have moved there, "not open yet" would hold
+    // back new shifts, hub floors and counters under a sentence that is not true: stopping new work is observed.
+    if (level === 'coming' && (this.resolve(key).capabilities.takeIn || this.presences.get(key)?.openedAt)) {
+      throw new GlosError('INVALID_STATE', `${catalogueEntry(key)!.name} has opened already, and taking sign-ups is for a country that has not. To stop new work there, lower it to observed.`);
+    }
     // Established and Partnered are what a real company MEANS. A proposal may name a company still in draft — the
     // approval activates it once its record is ready (CA3) — but a standing is never SET on one that is not active.
     const ours = proposing ? Boolean(this.entities.sisterRecordFor(key)) : this.hasTransactingEntity(key);
@@ -418,6 +432,7 @@ const REFUSAL: Record<PresenceCapability, string> = {
   claims: 'We cannot pay a claim in this country yet, so nothing here can be covered',
   tax: 'We do not collect tax in this country yet',
   payouts: 'We cannot pay out in this country yet',
+  signUp: 'SeeBuyGet does not take sign-ups in this country yet — leave your email and we write when it does',
   // CL5 — said as a fact about the law, not as a fault of the person holding the camera. They can still
   // record WHAT they were asked for; it is the photograph of the document we may not keep.
   fieldEvidence: 'We are not permitted to keep photographs of official documents in this country — say what happened and leave the paper out of it',
@@ -426,12 +441,22 @@ const REFUSAL: Record<PresenceCapability, string> = {
 /** How a standing reads inside a refusal, so the message names the state and not only the country. */
 const LEVEL_WORD: Record<PresenceLevel, string> = {
   observed: 'not operating',
+  coming: 'taking sign-ups, not open yet',
   matched: 'matching only',
   partnered: 'local partner',
   established: 'established',
 };
 
 /** CL1 — canonical codes, de-duplicated, unknown ones already refused by check(). Order is the catalogue's. */
+/**
+ * The terms a country keeps across a change that did not name them: all of them, less a term that puts the import and
+ * the duty on the seller where the new level neither collects tax nor pays out — the one rule a term is held to (check).
+ */
+function keptTerms(stored: { origin?: string[]; destination?: string[] }, can: PresenceCapabilities): { origin: string[]; destination: string[] } {
+  const terms = normaliseTerms(stored);
+  return { origin: terms.origin, destination: can.tax && can.payouts ? terms.destination : terms.destination.filter((code) => !putsDutyOnSeller(code)) };
+}
+
 function normaliseTerms(input: { origin?: string[]; destination?: string[] }): { origin: string[]; destination: string[] } {
   const clean = (list?: string[]) => [...new Set((list ?? []).map((c) => incotermEntry(c)?.code).filter((c): c is string => Boolean(c)))];
   return { origin: clean(input.origin), destination: clean(input.destination) };

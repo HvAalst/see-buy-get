@@ -32,6 +32,8 @@ export interface DriverRecord {
   /** FP4 — the licence's state today, and why no shift can start (the server's words) when it has lapsed. */
   papers?: Array<{ kind: 'insurance' | 'inspection' | 'licence'; state: 'ok' | 'due' | 'lapsed' | 'none'; expiresAt?: string; daysLeft?: number }>;
   offRoad?: string[];
+  /** COMING (2026-10-25): the name of the country they — or their fleet — signed up in before SeeBuyGet opened there. */
+  notOpenIn?: string;
   /** Present when a fleet employs them — whose office records their licence. Absent: they ride on their own. */
   managerDid?: string;
   /** The fleet's name, when a fleet employs them — what the account menu says they drive for. */

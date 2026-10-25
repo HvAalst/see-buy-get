@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, PhotoField, ReadAloud, Sheet } from '../../../shared/ui';
+import { OpensSoonNote } from '../../../shared/opening/OpensSoonNote';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import { bagLine, fillPercent, fillingBags, floorOpen, freeBags, homeSummary, hubPapersStep, money, swatchIndex, unsortedAt } from '../logic';
@@ -92,6 +93,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
+      {/* Signed up before its country opened (COMING, 2026-10-25): why the floor does nothing yet, and when it will. */}
+      <OpensSoonNote country={hub?.country} detail={t('opening.hub')} />
       {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
       {state.staff ? null : <DeclarationCard sbg={sbg ?? null} />}
 

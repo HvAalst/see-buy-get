@@ -202,8 +202,11 @@ export class WalletGateService {
     const lapsed = !held && this.agents.licenceStoppedFor(did);
     // The money side alone: what a parcel booked BEFORE the hold is judged by when it is handed in.
     const moneyOk = this.agents.canScan(did) && funded;
-    const ok = !held && !lapsed && moneyOk;
-    const code = ok ? null : held ? 'ID_HELD' : lapsed ? 'LICENCE_LAPSED' : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
+    // COMING (2026-10-25): approved before its country opens, and nothing is taken in until the day it does. Said first —
+    // no top-up, licence or ID opens a counter in a country that is not open yet.
+    const notOpen = this.agents.notOpenYet(this.agents.get(did));
+    const ok = !notOpen && !held && !lapsed && moneyOk;
+    const code = ok ? null : notOpen ? 'COUNTRY_NOT_OPEN' : held ? 'ID_HELD' : lapsed ? 'LICENCE_LAPSED' : !funded ? 'WALLET_INSUFFICIENT' : 'AGENT_LOCKED';
     const shortfall = funded ? 0 : Math.round((threshold - spendable) * 100) / 100;
     const used = this.agents.creditOwed(did);
     return {

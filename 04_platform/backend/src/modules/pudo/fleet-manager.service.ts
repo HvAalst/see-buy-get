@@ -112,8 +112,9 @@ export class FleetManagerService {
     // the one the shops were asked (P2): does the network operate here at all? Where it does and no sister
     // exists, the fleet stands with no entity, and the money gate (entityIdOf) refuses by name if money is asked.
     const jurisdiction = (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase();
-    if (!this.presence.can(jurisdiction, 'takeIn')) {
-      throw new GlosError('FORBIDDEN', `The network does not operate in ${jurisdiction} yet, so a fleet cannot register there`);
+    // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
+    if (!this.presence.can(jurisdiction, 'signUp')) {
+      throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${jurisdiction} yet, so a fleet cannot register there`);
     }
     const entity = this.entities.forJurisdiction(jurisdiction);
     const location = input.location ?? this.geocoder.geocode(input.depotAddress!).location;

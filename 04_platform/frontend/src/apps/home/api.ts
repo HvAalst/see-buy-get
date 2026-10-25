@@ -256,6 +256,8 @@ export interface OperatingCountry {
    * are not there yet" from "this form is broken", and a driver in the Netherlands read it as the second.
    */
   joinable?: boolean;
+  /** COMING (2026-10-25): sign-ups are taken, and nothing moves until the day it opens. */
+  coming?: boolean;
 }
 
 /**

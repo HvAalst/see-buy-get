@@ -3,6 +3,7 @@ import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
 import { CorridorService } from './corridor.service';
 import { GlosError } from '../../foundation/http/glos-error';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -134,7 +135,8 @@ export class MdpService {
     // Same question a shop answers: does the network operate here at all? Where we only match, a hub stands with
     // no sister behind it — it sorts and records custody, and nothing of ours is booked for the work.
     const country = requireCountryCode(input.country);
-    if (!this.presence.can(country, 'takeIn')) throw new GlosError('FORBIDDEN', `The network does not operate in ${country} yet, so a hub cannot register there`);
+    // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
+    if (!this.presence.can(country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${country} yet, so a hub cannot register there`);
     const entity = this.entities.forJurisdiction(country);
     // Real DID (S2) — an MDP worker is a first-class actor and their token binds to this, not to a
     // synthetic mdp_<hex> id. A pseudonymous operational profile makes it OperationalStore-resolvable
@@ -175,6 +177,11 @@ export class MdpService {
   working(mdpId: string): Mdp {
     const mdp = this.require(mdpId);
     if (!this.isApproved(mdp)) throw this.notApproved(mdp);
+    // COMING (2026-10-25): approved ahead of the day its country opens — the floor opens on that day.
+    const country = this.countryOf(mdp);
+    if (this.notOpenYet(mdp)) {
+      throw new GlosError('COUNTRY_NOT_OPEN', `SeeBuyGet is not open in ${catalogueEntry(country)?.name ?? country} yet: ${mdp.name} works from the day it opens`, { country });
+    }
     return mdp;
   }
 
@@ -265,8 +272,14 @@ export class MdpService {
 
   /** The hub that last-mile-serves a delivery zone (the regional sort centre for that zone). */
   mdpForZone(zone: string): Mdp | undefined {
-    // Only a hub that may work: one not yet approved is chosen for nothing, so nothing is routed to it.
-    return [...this.mdps.values()].find((m) => m.zones.includes(zone) && this.isApproved(m));
+    // Only a hub that may work: one not yet approved is chosen for nothing, so nothing is routed to it — nor one in a
+    // country not open yet, whose floor opens the day it does.
+    return [...this.mdps.values()].find((m) => m.zones.includes(zone) && this.isApproved(m) && !this.notOpenYet(m));
+  }
+
+  /** COMING (2026-10-25): signed up where SeeBuyGet takes sign-ups and is not open yet. Only COMING — see DriverService. */
+  notOpenYet(mdp: Mdp): boolean {
+    return this.presence.resolve(this.countryOf(mdp)).level === 'coming';
   }
 
   /** Register a fresh laminated tote into the pool at this MDP. */

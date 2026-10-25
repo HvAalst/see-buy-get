@@ -270,7 +270,8 @@ export class VendorService {
     // The presence decides whether a store may stand here, not the existence of a sister. Where we only match,
     // a store registers with no sister behind it: it posts freight and settles it with the carrier itself, and
     // every money path refuses by name (entityIdOf). Where the network does not operate at all, it is refused.
-    if (!this.presence.can(country, 'takeIn')) throw new GlosError('FORBIDDEN', `The network does not operate in ${country} yet, so a store cannot register there`);
+    // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
+    if (!this.presence.can(country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${country} yet, so a store cannot register there`);
     const entity = this.entities.forJurisdiction(country);
     // A real DID (S2 pattern — mdp got the same treatment): the vendorId stays the domain
     // key; the DID is what the vendors/login token binds to. No PII goes to the core.

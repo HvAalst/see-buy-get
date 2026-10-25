@@ -97,6 +97,17 @@ describe('who is waiting for a country the network has not reached', () => {
     expect(interest.byCountry()[0].notes[0].toldLevel).toBe('matched');
   });
 
+  it('keeps waiting somebody told only that the country is COMING — the opening tells them again, once', () => {
+    ask({ country: 'FR', email: 'a@x.fr' });
+    interest.told(interest.waitingFor('FR').map((n) => n.noteId), 'coming');
+    // Still waiting for the day it opens: counted, and on the list the opening reads.
+    expect(interest.waitingFor('FR')).toHaveLength(1);
+    expect(interest.byCountry()[0].waiting).toBe(1);
+    interest.told(interest.waitingFor('FR').map((n) => n.noteId), 'matched');
+    expect(interest.waitingFor('FR')).toHaveLength(0);
+    expect(interest.byCountry()[0].waiting).toBe(0);
+  });
+
   it('takes a note back outright — somebody withdrawing has withdrawn', () => {
     const note = ask();
     interest.withdraw(note.noteId);

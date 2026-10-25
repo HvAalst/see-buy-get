@@ -33,7 +33,7 @@ import { Body, Controller, Delete, Get, Header, Headers, HttpCode, Inject, Param
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
-import { PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
+import { LEVEL_DEFAULTS, PRESENCE_CAPABILITIES, PRESENCE_LEVELS, type PresenceCapability, type PresenceLevel } from '../../foundation/presence/presence.types';
 import { capabilitiesOf } from '../../foundation/presence/presence.service';
 import { countryImpactOf } from './country-impact';
 import { BorderRuleService } from './border-rules.service';
@@ -612,17 +612,35 @@ export class SbgController {
   @Public()
   @Get('countries')
   countries() {
-    return COUNTRY_CATALOGUE.map((c) => {
-      const sister = this.entities.forJurisdiction(c.code);
-      return {
-        country: c.code,
-        name: c.name,
-        ...(sister?.currency ? { currency: sister.currency } : {}),
-        settles: Boolean(sister),
-        ...(sister ? { settlesAs: sister.name } : {}),
-        joinable: this.presence.resolve(c.code).capabilities.takeIn,
-      };
-    });
+    return COUNTRY_CATALOGUE.map((c) => this.countryRow(c.code, c.name));
+  }
+
+  /**
+   * ONE COUNTRY, as the list says it — for an app to tell somebody who signed up there before it opened that it is not
+   * open yet (COMING, 2026-10-25), without reading every country to find their own.
+   */
+  @Public()
+  @Get('countries/:code')
+  country(@Param('code') code: string) {
+    const entry = catalogueEntry(code);
+    if (!entry) throw new GlosError('NOT_FOUND', `No such country: ${code}`);
+    return this.countryRow(entry.code, entry.name);
+  }
+
+  private countryRow(code: string, name: string) {
+    const sister = this.entities.forJurisdiction(code);
+    const can = this.presence.resolve(code).capabilities;
+    return {
+      country: code,
+      name,
+      ...(sister?.currency ? { currency: sister.currency } : {}),
+      settles: Boolean(sister),
+      ...(sister ? { settlesAs: sister.name } : {}),
+      // Sign-ups are taken where the network operates — and where it is COMING (2026-10-25): signed up now, at
+      // work the day it opens. `coming` says which of the two, so a form can say it before anybody signs up.
+      joinable: can.signUp,
+      ...(can.signUp && !can.takeIn ? { coming: true } : {}),
+    };
   }
 
   /**
@@ -814,7 +832,9 @@ export class SbgController {
   private requirePriceableSwitchOn(jurisdiction: string, level: string): void {
     const country = catalogueEntry(jurisdiction);
     if (!country) throw new GlosError('INVALID_INPUT', `${jurisdiction.toUpperCase()} is not a country in the catalogue`);
-    const switchingOn = !this.presence.can(country.code, 'takeIn') && level !== 'observed';
+    // Switching ON is the change that lets goods move — not one that only takes sign-ups (COMING, 2026-10-25), which
+    // prices nothing and so needs no exchange rate yet.
+    const switchingOn = !this.presence.can(country.code, 'takeIn') && Boolean(LEVEL_DEFAULTS[level as PresenceLevel]?.takeIn);
     if (switchingOn && !this.fx.point(country.currency)) {
       throw new GlosError('INVALID_STATE', `There is no exchange rate for ${country.currency} yet — put one on the rate book before switching ${country.name} on`);
     }
@@ -883,13 +903,21 @@ export class SbgController {
     const waiting = this.interest.waitingFor(proposal.jurisdiction);
     // A change that raises one thing may lower another (an override switched off beside a level going up).
     const before = { ...this.presence.resolve(proposal.jurisdiction).capabilities };
+    // Its FIRST opening: everybody registered there signed up while it was coming. A country opened again after being
+    // lowered was told what stopped at the time, and is not told it is new.
+    const firstOpening = !this.presence.resolve(proposal.jurisdiction).openedAt;
     const decided = this.presence.approve(proposalId, by, undefined, who.key);
     this.tellWhatStopped(proposal.jurisdiction, before);
 
-    if (waiting.length && this.presence.resolve(proposal.jurisdiction).capabilities.takeIn) {
-      const name = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;
-      const sister = this.entities.forJurisdiction(proposal.jurisdiction);
-      for (const note of waiting) {
+    const after = this.presence.resolve(proposal.jurisdiction).capabilities;
+    const name = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;
+    const sister = this.entities.forJurisdiction(proposal.jurisdiction);
+    const opened = after.takeIn && !before.takeIn && firstOpening;
+    if (waiting.length && after.takeIn) {
+      // Somebody who asked, was told it was coming, and then signed up hears about the opening once: as somebody
+      // registered there (below), which also says whether they can start today.
+      const registered = new Set(opened ? (this.countryNotice?.recipientsIn(proposal.jurisdiction) ?? []).map((r) => r.email?.trim().toLowerCase()).filter(Boolean) : []);
+      for (const note of waiting.filter((n) => !registered.has(n.email))) {
         void this.mail
           ?.send('country-open', { address: note.email }, { country: name, settles: Boolean(sister), ...(sister ? { company: sister.name } : {}), joinUrl: appUrl('home') })
           .catch(() => undefined);
@@ -897,7 +925,15 @@ export class SbgController {
       // Marked told so a later raise — matched to established — does not repeat the same sentence. The
       // second change deserves its own message, and that is a slice of its own, named in the doc.
       this.interest.told(waiting.map((n) => n.noteId), proposal.level);
+    } else if (after.signUp && !before.signUp) {
+      // COMING (the user, 2026-10-25): the people who asked can sign up now, and start the day it opens. Told once —
+      // the ones told before are left alone — and still waiting for the opening, which tells them again.
+      const fresh = waiting.filter((n) => !n.toldAt);
+      for (const note of fresh) void this.mail?.send('country-coming', { address: note.email }, { country: name, joinUrl: appUrl('home') }).catch(() => undefined);
+      this.interest.told(fresh.map((n) => n.noteId), 'coming');
     }
+    // OPENED: everybody who signed up while it was coming is told it is open, and whether they can start today.
+    if (opened) void this.countryNotice?.tellOpened({ jurisdiction: proposal.jurisdiction, level: proposal.level, ...(sister ? { company: sister.name } : {}) }).catch(() => undefined);
 
     return decided;
   }
@@ -3900,11 +3936,12 @@ export class SbgController {
     // nobody compares themselves against, keeps every rate as it always has.
     const inAskersMoney = <T,>(all: T[], moneyOf: (x: T) => string | undefined): T[] => (!type ? all : money ? all.filter((x) => moneyOf(x) === money) : []);
     const rowsFor = (t: string): Row[] => {
-      if (t === 'mdp') return inAskersMoney(this.mdps.approvedList(), (m) => this.mdps.currencyOf(m)).map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
+      if (t === 'mdp') return inAskersMoney(this.mdps.approvedList().filter((m) => !this.mdps.notOpenYet(m)), (m) => this.mdps.currencyOf(m)).map((m) => ({ id: m.mdpId, label: m.name, location: m.location, price: m.pricePerParcel }));
       if (t === 'vehicle') {
         return inAskersMoney(this.vehicles.list({ status: 'ACTIVE' }), (v) => this.drivers.rateCurrencyOf(v)).map((v) => ({ id: v.vehicleId, label: v.plate, price: v.pricePerKm }));
       }
-      const shops = this.agents.list().filter((a) => a.status === 'ACTIVE');
+      // Not a shop that signed up before its country opened: nobody can use it yet (COMING, 2026-10-25).
+      const shops = this.agents.list().filter((a) => a.status === 'ACTIVE' && !this.agents.notOpenYet(a));
       return inAskersMoney(shops, (a) => this.shopCurrency(a.did)).map((a) => ({ id: a.did, label: a.shopName, location: a.location, price: a.pricePerParcel }));
     };
     const forType = (t: string) => {
@@ -4143,7 +4180,8 @@ export class SbgController {
   @Get('network/points')
   networkPoints() {
     // A shop at rest — its owner muted the account — is off the map: receivers find it from their own parcel.
-    return this.agents.list().filter((a) => !this.agents.isResting(a.did)).map((a) => this.shopCard(a));
+    // Nor a shop in a country that is not open yet: it signed up ahead of the day (COMING, 2026-10-25).
+    return this.agents.list().filter((a) => !this.agents.isResting(a.did) && !this.agents.notOpenYet(a)).map((a) => this.shopCard(a));
   }
 
   /** A shop as anybody may see it: where it is, whether it is open, what it charges. Nothing it holds, owes or was asked for. */
@@ -5744,7 +5782,18 @@ export class SbgController {
     } catch {
       fleetName = undefined;
     }
-    return { ...driver, ...(fleetName ? { fleetName } : {}), rating, freightPaused: belowFloor(rating), papers: driverPapers(driver), offRoad: lapsedOf(driverPapers(driver)).map(offRoadLine) };
+    // COMING (2026-10-25): signed up — or their fleet did — where SeeBuyGet is not open yet. The country's name, so the app
+    // says why no shift starts, and when that changes.
+    const opens = this.drivers.notOpenYet(driver);
+    return {
+      ...driver,
+      ...(fleetName ? { fleetName } : {}),
+      rating,
+      freightPaused: belowFloor(rating),
+      papers: driverPapers(driver),
+      offRoad: lapsedOf(driverPapers(driver)).map(offRoadLine),
+      ...(opens ? { notOpenIn: catalogueEntry(opens)?.name ?? opens } : {}),
+    };
   }
 
   /**
@@ -7286,7 +7335,14 @@ export class SbgController {
     // (DriverService.rateCurrencyOf). Named once, here, for every figure the office's screens write. Absent for the
     // network's own view and for a fleet no company of ours settles.
     const currency = managerDid ? this.drivers.rateCurrencyOf({ managerDid }) : undefined;
-    return { managerDid: managerDid ?? null, ...overview, cargo: { ...cargo, items }, papers, ...(currency ? { currency } : {}) };
+    // The country the fleet stands in: its office says "not open yet" where it signed up before it opened (COMING, 2026-10-25).
+    let country: string | undefined;
+    try {
+      country = managerDid ? this.managers.get(managerDid).jurisdiction : undefined;
+    } catch {
+      country = undefined;
+    }
+    return { managerDid: managerDid ?? null, ...overview, cargo: { ...cargo, items }, papers, ...(currency ? { currency } : {}), ...(country ? { country } : {}) };
   }
 
   private driverNameOf(did: string): string {

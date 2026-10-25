@@ -145,6 +145,10 @@ export interface MailParams {
   'interest-received': { country: string; kind: string };
   /** Two members of staff switched that country on. Sent by the approval itself, not by anybody remembering. */
   'country-open': { country: string; settles: boolean; company?: string; joinUrl: string };
+  /** 2026-10-25 — a country somebody asked about takes sign-ups before it opens: they can sign up now, and start the day it opens. */
+  'country-coming': { country: string; joinUrl: string };
+  /** 2026-10-25 — a country people signed up in while it was coming is open: each told whether they can start today. */
+  'country-opened': { country: string; ready: boolean; company?: string; app: MailApp };
   /** B1 — SeeBuyGet checked a business, or refused to, with the reason. Sent to its owners by the decision itself. */
   'business-checked': { business: string; outcome: 'verified' | 'refused'; reason?: string; when: string };
   /** Round 10 — a business's own system has not taken our messages about its loads. To its owners, at most once a day. */
@@ -226,16 +230,17 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
     sample: { country: 'the Netherlands', kind: 'carrier' },
     build: (p) => ({
       subject: `Thanks — we have your note about ${p.country}`,
-      preheader: `We will write again the day SeeBuyGet is switched on in ${p.country}.`,
+      preheader: `We will write again the day you can sign up in ${p.country}, and the day it opens.`,
       blocks: [
         { kind: 'heading', text: 'Thank you' },
         { kind: 'paragraph', text: `You told us you would ${WOULD_BE[p.kind] ?? WOULD_BE.other} in ${p.country}, and why. That is the thing we could not work out on our own, and it is what the decision gets made on.` },
         { kind: 'paragraph', text: 'Countries are switched on one at a time, deliberately, by two members of SeeBuyGet staff. It means a company, a tax registration and a way to pay people — so it is not quick, and we will not pretend a date we do not have.' },
         {
           kind: 'paragraph',
-          text: `What we will do is write to you the day ${p.country} is switched on, and tell you which of two things it became: a country where a SeeBuyGet company contracts and pays you, or one where we match you with loads and you settle the money yourself with whoever you carry for.`,
+          // COMING (2026-10-25): sign-ups may open before the country does — then that is said first, and the opening after.
+          text: `What we will do is write to you the day you can sign up in ${p.country}. If sign-ups open before the country does, we write again the day it opens. Either way we tell you which of two things it became: a country where a SeeBuyGet company contracts and pays you, or one where we match you with loads and you settle the money yourself with whoever you carry for.`,
         },
-        { kind: 'paragraph', text: 'You do not need to do anything else, and you will not hear from us in between.' },
+        { kind: 'paragraph', text: 'You do not need to do anything else, and we write to you about nothing else.' },
       ],
       reason: 'You are getting this email because you asked to be told when SeeBuyGet reaches your country.',
     }),
@@ -272,6 +277,65 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: 'Register now', href: p.joinUrl },
       ],
       reason: 'You are getting this email because you asked to be told when SeeBuyGet reaches your country.',
+    }),
+  },
+
+  /*
+   * COMING (the user, 2026-10-25: "can preregister before a country goes live"). Not "we are here": the country is not
+   * open, and the mail says so before it says anything else — what it offers is the sign-up and the check of papers
+   * ahead of the day, so they can start on it.
+   */
+  'country-coming': {
+    title: 'Your country takes sign-ups (opening soon)',
+    sentWhen: 'Two members of staff mark a country somebody had asked about as coming: it takes sign-ups before it opens.',
+    wired: true,
+    // They asked to be told; late is still told.
+    sendLater: 72,
+    sample: { country: 'Uganda', joinUrl: 'https://seebuyget.com/' },
+    build: (p) => ({
+      subject: `SeeBuyGet is coming to ${p.country}: sign up now`,
+      preheader: 'It is not open yet. Sign up now and your papers are checked before the day it opens.',
+      blocks: [
+        { kind: 'heading', text: `SeeBuyGet is coming to ${p.country}` },
+        { kind: 'paragraph', text: 'You asked to be told. It is not open yet, but you can sign up now: your account is made and your papers are checked before the day it opens, so you can start on that day.' },
+        { kind: 'paragraph', text: 'We write again the day it opens.' },
+        { kind: 'button', label: 'Sign up now', href: p.joinUrl },
+      ],
+      reason: 'You are getting this email because you asked to be told when SeeBuyGet reaches your country.',
+    }),
+  },
+
+  /*
+   * THE DAY IT OPENS, to everybody who signed up while it was coming — whether they can start today, and who they
+   * work with there (or that nobody of ours handles the money yet, said as plainly as the waiting list is told).
+   */
+  'country-opened': {
+    title: 'Your country is open (signed up before it opened)',
+    sentWhen: 'A country people signed up in while it was coming is switched on — to everybody registered there who gave an email address. The apps say it in their inbox as well.',
+    wired: true,
+    sendLater: 72,
+    sample: { country: 'Uganda', ready: true, company: 'SeeBuyGet Uganda Ltd', app: 'agent' },
+    build: (p) => ({
+      subject: `SeeBuyGet is open in ${p.country} from today`,
+      preheader: p.ready ? 'You signed up before it opened: you can start today.' : 'Your sign-up is not finished yet: you start the day it is.',
+      blocks: [
+        { kind: 'heading', text: `SeeBuyGet is open in ${p.country}` },
+        {
+          kind: 'paragraph',
+          text: p.ready
+            ? 'You signed up before it opened, and your papers are checked: you can start today.'
+            : 'You signed up before it opened, and your sign-up is not finished yet: you start the day it is. What is left is said where you signed up.',
+        },
+        p.company
+          ? { kind: 'paragraph' as const, text: `${p.company} is the company you work with there.` }
+          : {
+              kind: 'warning' as const,
+              title: 'Work yes, money no — not yet',
+              text: `No SeeBuyGet company handles money in ${p.country} yet. What you earn is agreed and settled with whoever you work for. When a company is established there, that changes.`,
+            },
+        { kind: 'button', label: 'Open the app', href: appUrl(p.app) },
+      ],
+      reason: `You are getting this email because you are registered with SeeBuyGet in ${p.country}. It is about the service you use there, so it cannot be turned off.`,
     }),
   },
 

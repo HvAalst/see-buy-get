@@ -1636,7 +1636,7 @@ export const enTowerQueues = {
   'tower.interest.speaks': 'Speaks {languages} · settles in {currency}',
   'tower.interest.read': 'Read the {n}',
   'tower.interest.told': 'told when it became {level}',
-  'tower.interest.promise': 'Everyone here was promised one thing and nothing else: that we write to them the day their country is switched on, and say which of the two it became. Approving a change below sends that, to everybody still waiting in it.',
+  'tower.interest.promise': 'Everyone here was promised one thing and nothing else: that we write to them the day they can sign up in their country — again the day it opens, if sign-ups came first — and say which of the two it became. Approving a change below sends that, to everybody still waiting in it.',
 
   'tower.nav.connections': 'Connections',
   'tower.nav.staffreads': 'What staff opened',
@@ -1894,10 +1894,12 @@ export const enTowerQueues = {
   'tower.presence.col.may': 'May',
   'tower.presence.col.decided': 'Decided',
   'tower.presence.level.observed': 'Observed',
+  'tower.presence.level.coming': 'Taking sign-ups',
   'tower.presence.level.matched': 'Matching only',
   'tower.presence.level.partnered': 'Local partner',
   'tower.presence.level.established': 'Established',
   'tower.presence.cap.takeIn': 'take goods in',
+  'tower.presence.cap.signUp': 'take sign-ups',
   'tower.presence.cap.merchantOfRecord': 'charge customers',
   'tower.presence.cap.holdFloat': 'hold float',
   'tower.presence.cap.cashOnDelivery': 'handle cash',
@@ -1937,6 +1939,10 @@ export const enTowerQueues = {
   'tower.presence.f.countryPlaceholder': 'Choose from the list',
   'tower.presence.needCode': 'Which country? Choose it from the list.',
   'tower.presence.badCode': 'That is not a country in the catalogue.',
+  // COMING (2026-10-25) — said under the standing when it is chosen.
+  'tower.presence.comingHint':
+    'Shops, hubs, stores, fleets and couriers can sign up here and have their papers checked. Nothing moves until the country is opened. Whoever asked to be told hears that they can sign up now, and again on the day it opens.',
+  'tower.presence.comingAfterOpen': 'This country has opened already. Taking sign-ups is for a country that has not: to stop new work here, choose Observed.',
   'tower.presence.needsRate': 'The rate book has no exchange rate for this country’s money yet. Put one on the rate book first — the network cannot switch on a country it cannot price in.',
   'tower.presence.countryFacts': '{currency} · {dial} · drives on the {side}',
   'tower.presence.side.left': 'left',

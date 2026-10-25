@@ -124,7 +124,9 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   // drop the instruction to send it — the note below says it has been, and telling somebody to do what
   // they have just done reads as "it did not go through".
   const cardSent = reader !== null && Boolean(state.driver?.licenceRenewal);
-  const ready = canStartShift(state.driver?.status) && offRoad.length === 0 && !removed;
+  // Signed up before SeeBuyGet opened in their country: no shift until the day it does (the server refuses one too).
+  const notOpenIn = state.driver?.notOpenIn;
+  const ready = canStartShift(state.driver?.status) && offRoad.length === 0 && !removed && !notOpenIn;
   // THE PIN, asked at the start of a shift: that is where who-is-driving is written down, and an app left signed
   // in — in a cab, on a depot charger — is not proof of who is holding the phone.
   const [pinOpen, setPinOpen] = useState(false);
@@ -181,6 +183,7 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
         <Note tone="warn" icon="truck" title={t('driver.home.betweenTitle')} detail={`${removedLine(removed, formatDate(removed.at, { day: 'numeric', month: 'short' }), t)} ${removalWords(removed, t, Boolean(state.rideAlone?.offered))}`} />
       ) : null}
       {notice ? <Note tone="warn" icon="clock" title={t('driver.home.notActivated')} detail={notice} /> : null}
+      {notOpenIn ? <Note tone="info" icon="clock" title={t('opening.title', { country: notOpenIn })} detail={t('opening.driver')} /> : null}
       <Clearance state={state} actions={actions} />
       {offRoad.length ? (
         <Note tone="danger" icon="clock" title={t('driver.home.offRoadTitle')} detail={offRoad.join('. ') + '.' + (cardSent ? '' : ' ' + t(words.offRoad))} />

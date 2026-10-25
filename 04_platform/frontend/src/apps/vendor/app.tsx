@@ -18,6 +18,7 @@ import { MintScreen } from './screens/MintScreen';
 import { OrdersScreen, type OrdersScreenProps } from './screens/OrdersScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { StoreScreen } from './screens/StoreScreen';
+import { OpensSoonNote } from '../../shared/opening/OpensSoonNote';
 import { useVendorApp, type Screen, type VendorActions, type VendorState } from './useVendorApp';
 import '../../shared/screens.css';
 import './vendor.css';
@@ -109,6 +110,8 @@ export function App() {
         <ConnectivityNote stale={state.stale} />
         {/* Said above every screen until it is done: a store still signing in with its secret sets its account up. */}
         <AccountSetup state={state} actions={actions} />
+        {/* Signed up before its country opened (COMING, 2026-10-25): said above every screen, as nothing ships yet. */}
+        <OpensSoonNote country={state.vendor?.country} detail={t('opening.store')} />
         <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} client={sbg} />
       </main>
 

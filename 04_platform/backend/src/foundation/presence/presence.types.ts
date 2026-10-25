@@ -9,6 +9,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * operating system has them: one kernel everywhere, and privileged calls refused by name.
  *
  *   OBSERVED     we know the geography and nothing else. Nothing transacts.
+ *   COMING       shops, drivers, fleets, hubs and stores may sign up and have their papers checked, so they are
+ *                on the network the day it opens (the user, 2026-10-25: "can preregister before a country goes
+ *                live. Then we have those on the network immediately"). Codes are texted there for it. Nothing
+ *                else: nothing is taken in, nobody starts a shift, no hub sorts, nothing is listed to the public.
  *   MATCHED      identity, routes, matching, custody, proof, measurement — and no money of ours at all.
  *                Prices are indicative; a quote here cannot be redeemed, because redeeming one is a
  *                promise to perform and to be paid.
@@ -20,7 +24,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * the day a sister is registered we arrive with a year of measured leg times, earned reputations and
  * demand we counted rather than forecast.
  */
-export const PRESENCE_LEVELS = ['observed', 'matched', 'partnered', 'established'] as const;
+export const PRESENCE_LEVELS = ['observed', 'coming', 'matched', 'partnered', 'established'] as const;
 export type PresenceLevel = (typeof PRESENCE_LEVELS)[number];
 
 /**
@@ -30,7 +34,7 @@ export type PresenceLevel = (typeof PRESENCE_LEVELS)[number];
  * before it collects tax, and collect tax long before anybody will underwrite a claim there. A single
  * flag would force the slowest of them to hold back the rest.
  */
-export const PRESENCE_CAPABILITIES = ['merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts', 'takeIn', 'fieldEvidence'] as const;
+export const PRESENCE_CAPABILITIES = ['merchantOfRecord', 'holdFloat', 'cashOnDelivery', 'claims', 'tax', 'payouts', 'takeIn', 'signUp', 'fieldEvidence'] as const;
 export type PresenceCapability = (typeof PRESENCE_CAPABILITIES)[number];
 
 export class PresenceCapabilities {
@@ -49,6 +53,12 @@ export class PresenceCapabilities {
   @ApiProperty() payouts: boolean;
   /** May a shop here take goods into custody at all — and under whose promise? See `TakeInPromise`. */
   @ApiProperty() takeIn: boolean;
+  /**
+   * MAY A SHOP, A DRIVER, A FLEET, A HUB OR A STORE SIGN UP HERE — have its account and its papers checked?
+   * Everywhere the network operates, and in a country that is COMING: there before anything else is, so the
+   * ones who signed up are on the network the day it opens (the user, 2026-10-25). Codes are texted for it.
+   */
+  @ApiProperty() signUp: boolean;
   /**
    * CL5 — MAY WE HOLD A PHOTOGRAPH OF AN OFFICIAL DOCUMENT HERE?
    *
@@ -116,6 +126,11 @@ export class Presence {
   @ApiProperty() setAt: string;
   /** CL1 — the trade terms switched on here, per direction. Absent means none, which is the default. */
   @ApiPropertyOptional({ type: IncotermSets }) incoterms?: { origin?: string[]; destination?: string[] };
+  /**
+   * When goods could first move here — kept through every later change. A country that has opened is never COMING
+   * again (2026-10-25): "not open yet" would stop new work under a sentence that is not true. Lowering it is observed.
+   */
+  @ApiPropertyOptional() openedAt?: string;
 }
 
 /**
@@ -189,6 +204,8 @@ export class ResolvedPresence {
   /** CA2 — the second person who approved the change that raised this country. */
   @ApiPropertyOptional() approvedBy?: string;
   @ApiPropertyOptional() setAt?: string;
+  /** When goods could first move here, if they ever could since this was recorded. */
+  @ApiPropertyOptional() openedAt?: string;
 }
 
 /**
@@ -199,12 +216,14 @@ export class ResolvedPresence {
  * involved. What the take-in is PROMISED under is a separate question, answered per shipment.
  */
 export const LEVEL_DEFAULTS: Record<PresenceLevel, PresenceCapabilities> = {
-  observed: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: false, fieldEvidence: false },
-  matched: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: true, fieldEvidence: false },
+  observed: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: false, signUp: false, fieldEvidence: false },
+  // Signing up, and nothing else: the people are ready the day the country is switched on (2026-10-25).
+  coming: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: false, signUp: true, fieldEvidence: false },
+  matched: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: true, signUp: true, fieldEvidence: false },
   // A partner contracts and pays; we still hold nothing ourselves, and a payout here is the partner's
   // to make. What changes from `matched` is that somebody local IS answerable.
-  partnered: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: true, fieldEvidence: false },
+  partnered: { merchantOfRecord: false, holdFloat: false, cashOnDelivery: false, claims: false, tax: false, payouts: false, takeIn: true, signUp: true, fieldEvidence: false },
   // NOT even here. Being established in a country answers whether we may transact in it. It does not
   // answer whether that country's law lets us keep a photograph of one of its documents.
-  established: { merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true, takeIn: true, fieldEvidence: false },
+  established: { merchantOfRecord: true, holdFloat: true, cashOnDelivery: true, claims: true, tax: true, payouts: true, takeIn: true, signUp: true, fieldEvidence: false },
 };

@@ -148,6 +148,26 @@ const proposal = (over: Partial<PresenceProposalRow> = {}): PresenceProposalRow 
   ...over,
 });
 
+/**
+ * WHAT EACH LEVEL GRANTS, AS THE SERVER GRANTS IT. The console keeps its own copy to say what a move would change before
+ * it is pressed; a copy that drifted would show an operator a different consequence from the one the approval has.
+ * Read off the server's own table (COMING, 2026-10-25, added a level and a capability to both).
+ */
+describe('the console-s own copy of the level defaults', () => {
+  it('grants, level by level, exactly what the server grants', () => {
+    const source = readFileSync('../backend/src/foundation/presence/presence.types.ts', 'utf8');
+    const table = /export const LEVEL_DEFAULTS[^=]*=\s*\{([\s\S]*?)\r?\n\};/.exec(source)?.[1] ?? '';
+    const server: Record<string, Record<string, boolean>> = {};
+    for (const [, level, body] of table.matchAll(/^\s*(\w+): \{([^}]*)\}/gm)) {
+      server[level] = Object.fromEntries([...body.matchAll(/(\w+): (true|false)/g)].map(([, k, v]) => [k, v === 'true']));
+    }
+    // The guard read the table: every level, the coming one among them, each with every capability.
+    expect(Object.keys(server).sort()).toEqual(Object.keys(LEVEL_DEFAULTS).sort());
+    expect(server.coming?.signUp).toBe(true);
+    for (const [level, granted] of Object.entries(LEVEL_DEFAULTS)) expect(granted).toEqual(server[level]);
+  });
+});
+
 describe('CA1 — a country comes from the catalogue', () => {
   const form = (jurisdiction: string, level: PresenceRow['level'] = 'matched') => ({ jurisdiction, level, note: '' });
 
@@ -165,6 +185,22 @@ describe('CA1 — a country comes from the catalogue', () => {
     expect(newCountryBlocker(form('ZM', 'matched'), [row()], [catalogue({ priceable: false })])).toBeNull();
     // …and Partnered still needs a partner, whatever the rate book holds (CA7).
     expect(newCountryBlocker(form('ZM', 'partnered'), [row()], [catalogue({ priceable: false })])).toBe('tower.presence.needsPartner');
+  });
+
+  it('takes sign-ups (COMING) with no rate on the book: nothing is priced until the country is opened', () => {
+    expect(newCountryBlocker(form('ZM', 'coming'), [], [catalogue({ priceable: false })])).toBeNull();
+    // Opening it later is switching it on, and that needs the rate.
+    const coming = row({ level: 'coming', capabilities: { ...LEVEL_DEFAULTS.coming } });
+    expect(newCountryBlocker(form('ZM', 'matched'), [coming], [catalogue({ priceable: false })])).toBe('tower.presence.needsRate');
+    expect(levelEffect(row({ level: 'observed', capabilities: { ...LEVEL_DEFAULTS.observed } }), 'coming')).toEqual({ gained: ['signUp'], lost: [] });
+    expect(levelEffect(coming, 'matched')).toEqual({ gained: ['takeIn'], lost: [] });
+  });
+
+  it('never offers taking sign-ups for a country that has opened — open now, or opened and lowered since', () => {
+    expect(levelBlocker(row(), 'coming')).toBe('tower.presence.comingAfterOpen');
+    expect(levelBlocker(row({ level: 'observed', capabilities: { ...LEVEL_DEFAULTS.observed }, openedAt: '2026-10-01T08:00:00Z' }), 'coming')).toBe('tower.presence.comingAfterOpen');
+    expect(levelBlocker(row({ level: 'observed', capabilities: { ...LEVEL_DEFAULTS.observed } }), 'coming')).toBeNull();
+    expect(newCountryBlocker(form('ZM', 'coming'), [row()], [catalogue()])).toBe('tower.presence.comingAfterOpen');
   });
 
   it('names a country from the catalogue, and falls back to its code', () => {

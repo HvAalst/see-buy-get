@@ -110,6 +110,12 @@ export const en = {
   'common.searchOptions': 'Search the list…',
   'common.noMatches': 'Nothing in this list matches that.',
   'common.stop': 'Stop',
+  // COMING (2026-10-25) — an account signed up before SeeBuyGet opened in its country (shared/opening).
+  'opening.title': 'SeeBuyGet is not open in {country} yet',
+  'opening.hub': 'Your hub is signed up. Its floor opens the day SeeBuyGet opens here: nothing is received, sorted or loaded until then. You are told that day, by email.',
+  'opening.store': 'Your store is signed up. You can send parcels from the day SeeBuyGet opens here, and you are told that day.',
+  'opening.fleet': 'Your fleet is signed up. Your drivers start shifts the day SeeBuyGet opens here, and you are told that day.',
+  'opening.driver': 'You are signed up. Shifts start the day SeeBuyGet opens here, and you are told that day.',
 
   /* WHAT A TOP-UP COSTS, SAID BEFORE IT IS PAID (TopUpCostNote) — the shop's sheet and the store's, in
      the same words, because it is the same charge. Rendered at all only where a fee was actually decided.

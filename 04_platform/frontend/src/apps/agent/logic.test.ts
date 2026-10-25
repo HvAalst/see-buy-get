@@ -96,6 +96,15 @@ describe('gateNotice', () => {
     expect(n?.detail).toContain('ETB\u00a04.60');
   });
 
+  it('a shop signed up before its country opened is told so — as the day to wait for, never to top up', () => {
+    const n = gateNotice(agent({ status: 'ACTIVE' }), gate({ ok: false, code: 'COUNTRY_NOT_OPEN', balance: 0 }), t);
+    expect(n?.tone).toBe('info');
+    expect(n?.title).toBe('SeeBuyGet is not open in your country yet');
+    expect(n?.detail).toContain('Parcels start the day SeeBuyGet opens here');
+    expect(n?.detail).not.toMatch(/top up/i);
+    expect(homeSummary(agent({ status: 'ACTIVE' }), gate({ ok: false, code: 'COUNTRY_NOT_OPEN', balance: 0 }), t)).toContain('SeeBuyGet is not open in your country yet');
+  });
+
   it('canAccept follows the gate alone', () => {
     expect(canAccept(gate())).toBe(true);
     expect(canAccept(gate({ ok: false }))).toBe(false);

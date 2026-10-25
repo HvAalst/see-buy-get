@@ -207,6 +207,8 @@ export interface DashboardView {
   /** The money this fleet’s vehicles are priced in and its drivers are paid in: the company’s that settles its work.
    *  Absent where no company of ours does — its figures are then the bare numbers agreed. */
   currency?: string;
+  /** The country the fleet stands in, for its own office: where it is not open yet, the dashboard says so. */
+  country?: string;
 }
 
 /* ------------------------------------------------- FP1: the fleet's earnings register -- */

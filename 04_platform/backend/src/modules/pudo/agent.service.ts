@@ -117,6 +117,15 @@ export class AgentService {
     return Boolean(this.rest?.isResting(did));
   }
 
+  /**
+   * A shop that signed up where the network is COMING (2026-10-25): checked ahead of the day its country opens, and
+   * nobody's to find until then — not on the map, not in the town pages, not in the front page's counts. Only COMING:
+   * a country lowered later keeps its shops on the map, for whoever is collecting what is on their shelves.
+   */
+  notOpenYet(agent: Agent): boolean {
+    return this.presence.resolve(this.countryOf(agent)).level === 'coming';
+  }
+
   /** The sister this deployment's shops and hubs belong to — the fallback for pre-entity records. */
   homeEntityId(): string {
     return this.entities.requireForJurisdiction(NETWORK_JURISDICTION).entityId;
@@ -185,7 +194,8 @@ export class AgentService {
     // to break. A shop may now stand anywhere the network is allowed to take goods in, and whether its
     // money runs through a sister of ours is a SECOND question with its own answer.
     const country = requireCountryCode(input.country);
-    this.presence.require(country, 'takeIn');
+    // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
+    if (!this.presence.can(country, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${country} yet, so a shop cannot register there`);
     // Undefined where we are matching only. Every money path asks for it by name and refuses there;
     // nothing else needs it.
     const entity = this.entities.forJurisdiction(country);

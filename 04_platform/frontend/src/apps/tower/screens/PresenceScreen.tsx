@@ -364,6 +364,7 @@ function RecordCountry({ state, actions }: { state: TowerState; actions: TowerAc
           value={form.level}
           onChange={(v) => actions.setCountryForm({ level: v as PresenceLevel })}
           options={PRESENCE_LEVELS.map((option) => ({ value: option, label: t(LEVEL_LABEL[option]) }))}
+          hint={form.level === 'coming' ? t('tower.presence.comingHint') : undefined}
         />
         <label class="cfield">
           <span class="cfield__label">{t('tower.presence.f.note')}</span>
@@ -474,7 +475,7 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
           const why = levelBlocker(row, option);
           return { value: option, label: t(LEVEL_LABEL[option]), ...(why ? { disabled: true, sub: t(why) } : {}) };
         })}
-        hint={blocker ? t(blocker) : undefined}
+        hint={blocker ? t(blocker) : level === 'coming' && row.level !== 'coming' ? t('tower.presence.comingHint') : undefined}
       />
 
       <label class="cfield twr-presedit__note">

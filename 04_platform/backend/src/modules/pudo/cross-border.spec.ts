@@ -357,7 +357,7 @@ describe('crossing a border', () => {
     });
 
     it('still refuses a fleet where the network does not operate at all', () => {
-      expect(() => fleetIn('ZM')).toThrow(/does not operate in ZM/);
+      expect(() => fleetIn('ZM')).toThrow(/does not take sign-ups in ZM/);
     });
 
     it('never fails a delivery or an earnings screen for its driver — nothing of ours pays, so nothing is booked', () => {
@@ -385,12 +385,12 @@ describe('crossing a border', () => {
     });
 
     it('refuses a courier, a store and a hub where the network does not operate at all — before anything is kept', () => {
-      expect(() => drivers.register({ displayName: 'Z', fullName: 'Z', nationalId: 'NID-ZM-1', mobile: '+260977000111', licenceClasses: ['bike'], jurisdiction: 'ZM' } as never)).toThrow(/does not operate in ZM/);
+      expect(() => drivers.register({ displayName: 'Z', fullName: 'Z', nationalId: 'NID-ZM-1', mobile: '+260977000111', licenceClasses: ['bike'], jurisdiction: 'ZM' } as never)).toThrow(/does not take sign-ups in ZM/);
       // …and the refusal burned no fingerprint: the same person registers once the country is matched.
       presence.set({ jurisdiction: 'ZM', level: 'matched' });
       expect(drivers.register({ displayName: 'Z', fullName: 'Z', nationalId: 'NID-ZM-1', mobile: '+260977000111', licenceClasses: ['bike'], jurisdiction: 'ZM' } as never).entityId).toBeUndefined();
-      expect(() => vendors.register({ name: 'Lusaka Store', country: 'MW' })).toThrow(/does not operate in MW/);
-      expect(() => mdps.register({ name: 'Lilongwe Hub', zones: ['LL'], country: 'MW', location: DAR }, { approvedBy: 'staff' })).toThrow(/does not operate in MW/);
+      expect(() => vendors.register({ name: 'Lusaka Store', country: 'MW' })).toThrow(/does not take sign-ups in MW/);
+      expect(() => mdps.register({ name: 'Lilongwe Hub', zones: ['LL'], country: 'MW', location: DAR }, { approvedBy: 'staff' })).toThrow(/does not take sign-ups in MW/);
     });
 
     it('lets a store register with no till — every read answers, every money path refuses by name', () => {
@@ -494,7 +494,7 @@ describe('crossing a border', () => {
       // It used to say "No daughter company operates in TZ", which is a fact about our paperwork and not
       // about their application. The refusal now names what is true of that COUNTRY, and it is asked of
       // the presence rather than of the company register.
-      expect(() => shop('Dar Duka', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ')).toThrow(/does not operate in this country yet/);
+      expect(() => shop('Dar Duka', 'DarEsSalaam', { lat: -6.79, lng: 39.21 }, 'TZ')).toThrow(/does not take sign-ups in TZ yet, so a shop cannot register there/);
     });
 
     it('lets a shop stand where we MATCH but cannot bill, with no sister attached', () => {
@@ -890,6 +890,95 @@ describe('crossing a border', () => {
       expect(books.balance(ke, ACCOUNT_CODES.EXPENSE_PROVIDER_FEES)).toBe(0.6);
       expect(books.balance(ke, ACCOUNT_CODES.INTERCOMPANY, undefined, ke)).toBe(0);
       expect(books.journal({}).some((e) => e.kind === 'recharge-at-cost')).toBe(false);
+    });
+  });
+  /**
+   * PRE-REGISTRATION (the user, 2026-10-25: "it would be good when shops, drivers/fleets, hubs etc can preregister
+   * before a country goes live. Then we have those on the network immediately"). Two members of staff mark a country
+   * COMING: it takes sign-ups and their papers are checked, and nothing moves there until the day it opens.
+   */
+  describe('a country marked coming takes sign-ups, and holds the work until the day it opens', () => {
+    const LUSAKA = { lat: -15.39, lng: 28.32 };
+    const YEAR = 365 * 86_400_000;
+    let seqZ = 0;
+    const approvedShop = () => {
+      const s = shop('Cairo Road Duka', 'Lusaka', LUSAKA, 'ZM');
+      agents.submitKyc(s.did, { idCopyRef: 'i.jpg', tradingLicenceRef: 'l.jpg', shopPhotoRefs: ['s.jpg'] } as never);
+      agents.decideKyc(s.did, true, undefined, undefined, '2099-12-31');
+      return agents.get(s.did);
+    };
+    const approvedDriver = (extra: Record<string, unknown>) => {
+      seqZ += 1;
+      const d = drivers.register({
+        displayName: `Mwila ${seqZ}`, fullName: `Mwila B ${seqZ}`, nationalId: `NID-ZM-C${seqZ}`, mobile: `+26097700${seqZ}000`,
+        licenceClasses: ['truck'], licenceNumber: `L-ZM-${seqZ}`, licenceExpiresAt: new Date(Date.now() + YEAR).toISOString(), criminalRecordClear: true,
+        ...extra,
+      } as never);
+      drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+      drivers.decideKyc(d.did, true);
+      return drivers.get(d.did)!;
+    };
+    const activeFleet = () => {
+      seqZ += 1;
+      const m = managers.register({
+        companyName: `Lusaka Haulage ${seqZ}`, contactPhone: `+26097710${seqZ}000`, ownerFullName: 'Owner', ownerNationalId: `NID-ZM-F${seqZ}`, location: LUSAKA, jurisdiction: 'ZM',
+        requirements: { businessRegistrationNo: `BR-ZM-${seqZ}`, transportOperatorLicence: `TOL-ZM-${seqZ}`, taxId: `TAX-ZM-${seqZ}` },
+      } as never);
+      managers.submitKyc(m.did, { businessRegCertRef: 'r', operatorLicenceRef: 'l', ownerIdRef: 'i', proofOfAddressRef: 'p' });
+      managers.decideKyc(m.did, true);
+      return managers.recordBond(m.did);
+    };
+
+    it('takes a shop, a hub, a store, a fleet and a courier where it is coming — and none where nothing was decided', () => {
+      expect(() => shop('Cairo Road Duka', 'Lusaka', LUSAKA, 'ZM')).toThrow(/does not take sign-ups in ZM yet, so a shop cannot register there/);
+      presence.set({ jurisdiction: 'ZM', level: 'coming' });
+      expect(presence.resolve('ZM').capabilities).toMatchObject({ signUp: true, takeIn: false, payouts: false, merchantOfRecord: false });
+      expect(approvedShop()).toMatchObject({ country: 'ZM', status: 'ACTIVE' });
+      expect(mdps.countryOf(mdps.register({ name: 'Lusaka Sort', zones: ['LSK'], country: 'ZM', location: LUSAKA }, { approvedBy: 'staff' }))).toBe('ZM');
+      expect(vendors.register({ name: 'Kamwala Traders', country: 'ZM' }).country).toBe('ZM');
+      expect(activeFleet()).toMatchObject({ status: 'ACTIVE', jurisdiction: 'ZM' });
+      expect(approvedDriver({ jurisdiction: 'ZM' })).toMatchObject({ status: 'ACTIVE', jurisdiction: 'ZM' });
+    });
+
+    it('holds the work, said as the country not being open yet: no parcel taken in, no hub floor, no shift', () => {
+      presence.set({ jurisdiction: 'ZM', level: 'coming' });
+      const duka = approvedShop();
+      expect(gate.canTransact(duka.did)).toMatchObject({ ok: false, code: 'COUNTRY_NOT_OPEN' });
+      expect(agents.notOpenYet(duka)).toBe(true);
+      expect(() => parcels.accept({ parcelId: 'PUD-ZM-1', agentDid: duka.did, destZone: 'Ndola', size: 'M', senderMobile: '+260977111222', receiverMobile: '+260977333444', dropoffPhotoRef: photoBy(duka.did) } as never)).toThrow(
+        /SeeBuyGet is not open in Zambia yet: Cairo Road Duka takes parcels in from the day it opens/,
+      );
+      const hub = mdps.register({ name: 'Lusaka Sort', zones: ['LSK'], country: 'ZM', location: LUSAKA }, { approvedBy: 'staff' });
+      expect(() => mdps.working(hub.mdpId)).toThrow(/SeeBuyGet is not open in Zambia yet: Lusaka Sort works from the day it opens/);
+      // …and nothing is routed through it.
+      expect(mdps.mdpForZone('LSK')).toBeUndefined();
+      const courier = approvedDriver({ jurisdiction: 'ZM' });
+      const fleetDriver = approvedDriver({ managerDid: activeFleet().did });
+      for (const d of [courier, fleetDriver]) {
+        expect(drivers.canOperate(d.did)).toBe(false);
+        expect(drivers.offRoadReasons(d.did)).toContain('SeeBuyGet opens in Zambia soon: shifts start the day it opens');
+      }
+    });
+
+    it('opens all of it the day the country does — and a country lowered later never strands a driver mid-work', () => {
+      presence.set({ jurisdiction: 'ZM', level: 'coming' });
+      const duka = approvedShop();
+      const hub = mdps.register({ name: 'Lusaka Sort', zones: ['LSK'], country: 'ZM', location: LUSAKA }, { approvedBy: 'staff' });
+      const courier = approvedDriver({ jurisdiction: 'ZM' });
+      const fleetDriver = approvedDriver({ managerDid: activeFleet().did });
+
+      presence.set({ jurisdiction: 'ZM', level: 'matched' });
+      expect(gate.canTransact(duka.did).code).not.toBe('COUNTRY_NOT_OPEN');
+      expect(agents.notOpenYet(duka)).toBe(false);
+      expect(mdps.working(hub.mdpId).mdpId).toBe(hub.mdpId);
+      expect(mdps.mdpForZone('LSK')?.mdpId).toBe(hub.mdpId);
+      for (const d of [courier, fleetDriver]) {
+        expect(drivers.canOperate(d.did)).toBe(true);
+        expect(drivers.offRoadReasons(d.did)).toEqual([]);
+      }
+      // Only COMING holds the work: a country lowered stops new parcels by its own rules, and a driver finishing is not stopped.
+      presence.set({ jurisdiction: 'ZM', level: 'observed' });
+      expect(drivers.canOperate(courier.did)).toBe(true);
     });
   });
 });

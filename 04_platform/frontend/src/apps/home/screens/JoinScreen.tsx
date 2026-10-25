@@ -229,7 +229,7 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
         {countries.map((c) => (
           <option key={c.country} value={c.country}>
             {c.name} ({c.country})
-            {c.joinable === false ? ` · ${t('home.join.country.notHere')}` : c.settles === false ? ` · ${t('home.join.country.noMoney')}` : ''}
+            {c.joinable === false ? ` · ${t('home.join.country.notHere')}` : c.coming ? ` · ${t('home.join.country.comingTag')}` : c.settles === false ? ` · ${t('home.join.country.noMoney')}` : ''}
           </option>
         ))}
       </select>
@@ -261,6 +261,8 @@ function CountryField({ id, state, actions }: JoinScreenProps & { id: string }) 
           />
           <InterestForm country={chosenCountry} />
         </>
+      ) : chosenCountry.coming ? (
+        <Note tone="info" icon="clock" title={t('home.join.country.comingTitle', { name: chosenCountry.name })} detail={t('home.join.country.comingBody')} />
       ) : chosenCountry.settles === false ? (
         <Note
           tone="warn"

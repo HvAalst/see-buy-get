@@ -115,10 +115,13 @@ export class InterestService {
     return [...this.notes.values()];
   }
 
-  /** Everyone still waiting on this country — the ones a switch-on has not yet reached. */
+  /**
+   * Everyone still waiting on this country — the ones a switch-on has not yet reached. Somebody told only that it was
+   * COMING (2026-10-25: sign up now, start the day it opens) is still waiting for the opening, and is told again then.
+   */
   waitingFor(country: string): InterestNote[] {
     const code = country.trim().toUpperCase();
-    return this.list().filter((n) => n.country === code && !n.toldAt);
+    return this.list().filter((n) => n.country === code && (!n.toldAt || n.toldLevel === 'coming'));
   }
 
   /** Mark that a switch-on reached these people, so a later change does not tell them the same thing twice. */
@@ -152,7 +155,8 @@ export class InterestService {
           name: entry?.name ?? country,
           languages: entry?.languages ?? [],
           currency: entry?.currency ?? '',
-          waiting: notes.filter((n) => !n.toldAt).length,
+          // Told it was coming is still waiting for the opening (the same reading as waitingFor).
+          waiting: notes.filter((n) => !n.toldAt || n.toldLevel === 'coming').length,
           kinds,
           notes: [...notes].sort((a, b) => b.at.localeCompare(a.at)),
         };

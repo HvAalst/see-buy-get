@@ -89,6 +89,10 @@ export const enAgent = {
   'agent.driverIssue.roughHandling': 'Rough handling',
 
   // logic.ts sentence builders (each takes `t` and returns the finished string).
+  // COMING (2026-10-25) — a shop approved before SeeBuyGet opened in its country.
+  'agent.logic.gateNotOpenTitle': 'SeeBuyGet is not open in your country yet',
+  'agent.logic.gateNotOpenDetail':
+    'Your shop is signed up. Parcels start the day SeeBuyGet opens here, and you are told that day, in this app and by email. Until then nobody can choose your shop, and it is not on the map.',
   'agent.logic.gateLockedTitle': 'Account locked',
   'agent.logic.gateLockedDetail': 'Top up your wallet to start accepting parcels again.',
   'agent.logic.gateIdHeldTitle': 'No new parcel can be started here for now',

@@ -42,6 +42,9 @@ export const ERROR_CODES = {
   // A number in a country that is not switched on, so no code is texted to it. The number may be perfectly
   // good — which is why it is not PHONE_INVALID, whose sentence tells the person to check what they typed.
   PHONE_NOT_SERVED: { status: 400, title: 'We cannot send a code to a number in that country' },
+  // COMING (2026-10-25): signed up and checked ahead of the day the country opens. Not FORBIDDEN, whose sentence says
+  // the person may not: they may, from that day.
+  COUNTRY_NOT_OPEN: { status: 403, title: 'SeeBuyGet is not open in this country yet' },
   PHOTO_REQUIRED: { status: 400, title: 'A photo is required' },
   ADDRESS_REQUIRED: { status: 400, title: 'A location or address is required' },
   FIELD_REQUIRED: { status: 400, title: 'A required field is missing' },

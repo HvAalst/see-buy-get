@@ -17,6 +17,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { NETWORK_CURRENCY, NETWORK_JURISDICTION } from './pudo.config';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
 
 interface RegisterDriverInput {
   displayName: string; // shop-floor label (non-PII)
@@ -270,7 +271,8 @@ export class DriverService {
     // knowing where its suppliers' staff live. Asked before anything is fingerprinted, so a refusal costs nothing.
     const independent = !input.managerDid;
     const jurisdiction = independent ? (input.jurisdiction || NETWORK_JURISDICTION).toUpperCase() : undefined;
-    if (jurisdiction && !this.presence.can(jurisdiction, 'takeIn')) throw new GlosError('FORBIDDEN', `The network does not operate in ${jurisdiction} yet, so a courier cannot register there`);
+    // Signing up is taken where the network operates and where it is COMING (2026-10-25): the account and its papers ahead of the day it opens.
+    if (jurisdiction && !this.presence.can(jurisdiction, 'signUp')) throw new GlosError('FORBIDDEN', `SeeBuyGet does not take sign-ups in ${jurisdiction} yet, so a courier cannot register there`);
 
     // Heavy registry requires a real licence (number + expiry, not already expired).
     if (registry === 'heavy') {
@@ -530,14 +532,35 @@ export class DriverService {
     // The ID they registered with went to somebody else: nothing new until an ID of their own is on record.
     if (driver.idHold) return false;
     if (betweenFleets(driver)) return false;
+    if (this.notOpenYet(driver)) return false;
     return lapsedOf(driverPapers(driver, now)).length === 0;
+  }
+
+  /**
+   * COMING (the user, 2026-10-25: "can preregister before a country goes live"): a driver who signed up — or whose
+   * fleet did — where the network takes sign-ups and is not open yet. Checked and ready; no shift starts until the day
+   * it opens. Only COMING: a country lowered later stops new parcels, never a driver finishing what is aboard.
+   */
+  notOpenYet(driver: FleetDriver): string | undefined {
+    let country: string;
+    try {
+      country = (driver.managerDid ? (this.managers.get(driver.managerDid).jurisdiction ?? NETWORK_JURISDICTION) : (driver.jurisdiction ?? NETWORK_JURISDICTION)).toUpperCase();
+    } catch {
+      return undefined;
+    }
+    return this.presence.resolve(country).level === 'coming' ? country : undefined;
   }
 
   /** FP4 — why this driver cannot start a shift, in words. Empty when they can (status aside). */
   offRoadReasons(did: string, now: number = Date.now()): string[] {
     const driver = this.drivers.get(did);
     if (!driver) return [];
-    const papers = [...(driver.idHold ? [idHoldLine(driver.idHold.reference)] : []), ...lapsedOf(driverPapers(driver, now)).map(offRoadLine)];
+    const opens = this.notOpenYet(driver);
+    const papers = [
+      ...(opens ? [`SeeBuyGet opens in ${catalogueEntry(opens)?.name ?? opens} soon: shifts start the day it opens`] : []),
+      ...(driver.idHold ? [idHoldLine(driver.idHold.reference)] : []),
+      ...lapsedOf(driverPapers(driver, now)).map(offRoadLine),
+    ];
     if (!betweenFleets(driver)) return papers;
     const off = driver.removedFrom!;
     // Said as what happened: a driver who left is not told a fleet took them off.

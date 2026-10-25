@@ -4551,6 +4551,28 @@
         }
       }
     },
+    "/v1/sbg/countries/{code}": {
+      "get": {
+        "operationId": "Sbg.country",
+        "summary": "",
+        "description": "ONE COUNTRY, as the list says it — for an app to tell somebody who signed up there before it opened that it is not\nopen yet (COMING, 2026-10-25), without reading every country to find their own.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/visitor": {
       "get": {
         "operationId": "Sbg.visitor",
@@ -33039,6 +33061,7 @@
             "type": "string",
             "enum": [
               "observed",
+              "coming",
               "matched",
               "partnered",
               "established"
@@ -33056,6 +33079,7 @@
                 "tax",
                 "payouts",
                 "takeIn",
+                "signUp",
                 "fieldEvidence"
               ]
             }
@@ -33072,6 +33096,7 @@
                 "tax",
                 "payouts",
                 "takeIn",
+                "signUp",
                 "fieldEvidence"
               ]
             }
@@ -33174,6 +33199,7 @@
             "type": "string",
             "enum": [
               "observed",
+              "coming",
               "matched",
               "partnered",
               "established"
@@ -33198,6 +33224,7 @@
                 "tax",
                 "payouts",
                 "takeIn",
+                "signUp",
                 "fieldEvidence"
               ]
             }
@@ -33277,6 +33304,10 @@
             "type": "boolean",
             "description": "May a shop here take goods into custody at all — and under whose promise? See `TakeInPromise`."
           },
+          "signUp": {
+            "type": "boolean",
+            "description": "MAY A SHOP, A DRIVER, A FLEET, A HUB OR A STORE SIGN UP HERE — have its account and its papers checked?\nEverywhere the network operates, and in a country that is COMING: there before anything else is, so the\nones who signed up are on the network the day it opens (the user, 2026-10-25). Codes are texted for it."
+          },
           "fieldEvidence": {
             "type": "boolean",
             "description": "CL5 — MAY WE HOLD A PHOTOGRAPH OF AN OFFICIAL DOCUMENT HERE?\n\nThe only capability NO level grants. Every other one arrives with the level that earns it; this one\narrives only when somebody switches it on for a named country, which under CA2 is a proposal by one\nperson and an approval by a different one.\n\nThe user settled the question this slice was blocked on: \"cl5 is by default off because it's correct\nthat we cant just hold photographs of official documents.\" Quite so. A photograph of a customs entry\nor an inspection notice may itself be a controlled record in the jurisdiction it came from, and being\nESTABLISHED in a country is no answer to that — it is a different question, asked of a lawyer, about\nthat country. So the default is off at established too, and nothing but a deliberate act turns it on.\n\nTHIS IS THE FIRST OF TWO GATES. The second belongs to the person holding the camera, and neither\nsubstitutes for the other — see FieldObservationService."
@@ -33290,6 +33321,7 @@
           "tax",
           "payouts",
           "takeIn",
+          "signUp",
           "fieldEvidence"
         ]
       },
@@ -33306,6 +33338,7 @@
               "tax",
               "payouts",
               "takeIn",
+              "signUp",
               "fieldEvidence"
             ]
           },
@@ -33350,6 +33383,7 @@
             "type": "string",
             "enum": [
               "observed",
+              "coming",
               "matched",
               "partnered",
               "established"
@@ -33393,6 +33427,10 @@
           },
           "setAt": {
             "type": "string"
+          },
+          "openedAt": {
+            "type": "string",
+            "description": "When goods could first move here, if they ever could since this was recorded."
           }
         },
         "required": [
@@ -33412,6 +33450,7 @@
             "type": "string",
             "enum": [
               "observed",
+              "coming",
               "matched",
               "partnered",
               "established"
@@ -33819,6 +33858,7 @@
                 "tax",
                 "payouts",
                 "takeIn",
+                "signUp",
                 "fieldEvidence"
               ]
             }
@@ -33872,6 +33912,7 @@
                 "tax",
                 "payouts",
                 "takeIn",
+                "signUp",
                 "fieldEvidence"
               ]
             }

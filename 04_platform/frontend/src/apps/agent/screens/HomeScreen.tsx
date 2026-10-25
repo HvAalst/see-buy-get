@@ -183,7 +183,7 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       {staff ? null : <Papers state={state} actions={actions} />}
       {/* Round 38 — a new shop's custody cap: what it holds, the most it may now, how it grows. A live fact, never dismissed. */}
       <CapNote view={state.custodyCap} />
-      {gate ? <Note tone={gate.tone} icon={gate.tone === 'danger' ? 'lock' : 'wallet'} title={gate.title} detail={gate.detail} /> : null}
+      {gate ? <Note tone={gate.tone} icon={gate.tone === 'danger' ? 'lock' : gate.tone === 'info' ? 'clock' : 'wallet'} title={gate.title} detail={gate.detail} /> : null}
 
       {/* Quick actions — the counter jobs. */}
       <div class="rows" role="list">

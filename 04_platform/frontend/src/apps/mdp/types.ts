@@ -17,6 +17,8 @@ export interface MdpView {
   zones: string[];
   location?: { lat: number; lng: number };
   pricePerParcel: number;
+  /** The country it stands in. Absent on a hub registered before hubs said one: the network's home country. */
+  country?: string;
   /** The money the fee is in: the company’s that contracts the hub. Merged in by the controller. */
   currency?: string;
   /** Merged in by the controller: totes currently at this hub. */

@@ -79,7 +79,7 @@ export function termsBlock(terms: TakeInTerms | null, loadState: 'idle' | 'loadi
 /* ------------------------------------------------------------------- gate -- */
 
 export interface GateNotice {
-  tone: 'warn' | 'danger';
+  tone: 'info' | 'warn' | 'danger';
   title: string;
   detail: string;
 }
@@ -91,6 +91,8 @@ export interface GateNotice {
  */
 export function gateNotice(agent: Pick<AgentView, 'status' | 'kycRejection'> | null, gate: GateView | null, t: Translate): GateNotice | null {
   if (!agent || !gate || gate.ok) return null;
+  // COMING (2026-10-25): approved before its country opened. Nothing to put right — only the day to wait for, and it is told.
+  if (gate.code === 'COUNTRY_NOT_OPEN') return { tone: 'info', title: t('agent.logic.gateNotOpenTitle'), detail: t('agent.logic.gateNotOpenDetail') };
   // Held over its national ID: said as what it is. Topping up would not open the counter, so it must not be asked for.
   if (gate.code === 'ID_HELD') return { tone: 'danger', title: t('agent.logic.gateIdHeldTitle'), detail: t('agent.logic.gateIdHeldDetail') };
   // Round 40 — the trading licence lapsed and the grace is over: the same, and what ends it is the renewed licence.
@@ -728,7 +730,7 @@ export function homeSummary(agent: AgentView | null, gate: GateView | null, t: T
   if (!agent) return t('agent.logic.homeConnecting');
   const canScan = Boolean(gate?.ok);
   const bits = [t('agent.logic.homeWallet', { balance: money(agent.balance, agent.currency) })];
-  bits.push(canScan ? t('agent.logic.homeCanAccept') : t('agent.logic.homeTopUp'));
+  bits.push(canScan ? t('agent.logic.homeCanAccept') : gate?.code === 'COUNTRY_NOT_OPEN' ? t('agent.logic.gateNotOpenTitle') : t('agent.logic.homeTopUp'));
   if (agent.openState === 'closed') bits.push(t('agent.logic.homeClosed'));
   return bits.join(' ');
 }

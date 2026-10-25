@@ -484,6 +484,11 @@ export const enHome = {
   'home.join.country.choose': 'Choose a country',
   'home.join.country.noMoney': 'not active yet',
   'home.join.country.notHere': 'we are not here yet',
+  // COMING (2026-10-25): signing up before the country opens.
+  'home.join.country.comingTag': 'opening soon',
+  'home.join.country.comingTitle': 'SeeBuyGet opens in {name} soon',
+  'home.join.country.comingBody':
+    'You can sign up now. Your account is made and your papers are checked before the day it opens, so you can start on that day. Until then nothing moves here and nobody finds you on the map. You are told the day it opens, and who you work with there.',
   'home.join.country.note': 'This is the company you will be paid by, so it has to be where you really are.',
   /* A country the network MATCHES but does not stand in. The suffix in the list is not enough — money and
      responsibility are the whole difference, and somebody joining deserves to read it in full before they
@@ -515,7 +520,7 @@ export const enHome = {
   'home.join.interest.send': 'Send it',
   'home.join.interest.thanksTitle': 'Thank you — we have it',
   'home.join.interest.thanksBody':
-    'We will write to you the day {name} is switched on, and say which of two things it became: a country where a SeeBuyGet company contracts and pays you, or one where we match you with loads and the money stays between you and whoever you carry for. Countries are switched on deliberately, by two members of staff, so it may be a while — and you will not hear from us in between.',
+    'We will write to you the day you can sign up in {name} — and if sign-ups open before the country does, again the day it opens — and say which of two things it became: a country where a SeeBuyGet company contracts and pays you, or one where we match you with loads and the money stays between you and whoever you carry for. Countries are switched on deliberately, by two members of staff, so it may be a while — and we write to you about nothing else.',
 
   'home.join.country.unavailable': 'We could not load the countries just now — try again in a moment.',
   'home.join.about.fullName': 'Your full name',

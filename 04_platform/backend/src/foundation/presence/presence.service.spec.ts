@@ -180,13 +180,40 @@ describe('presence', () => {
     });
   });
 
+  /**
+   * COMING (the user, 2026-10-25: "can preregister before a country goes live"): sign-ups and nothing else, in a country
+   * that has not opened. Never again once it has: "not open yet" would hold back work under a sentence that is not true.
+   */
+  describe('a country taking sign-ups before it opens', () => {
+    it('takes sign-ups, texts codes and moves nothing — and asks a second person, as any gain does', () => {
+      const { proposal } = presence.propose({ jurisdiction: 'ZM', level: 'coming', note: 'Lusaka partners signing up', by: 'Amina' });
+      expect(proposal).toMatchObject({ status: 'pending', gains: ['signUp'] });
+      presence.approve(proposal!.proposalId, 'Brian');
+      expect(presence.resolve('ZM')).toMatchObject({ level: 'coming', capabilities: { signUp: true, takeIn: false, merchantOfRecord: false, payouts: false } });
+      expect(presence.resolve('ZM').openedAt).toBeUndefined();
+    });
+
+    it('refuses a country that has opened — and one that opened and was lowered since', () => {
+      presence.set({ jurisdiction: 'ZM', level: 'matched' });
+      const opened = presence.resolve('ZM').openedAt;
+      expect(opened).toBeDefined();
+      expect(() => presence.propose({ jurisdiction: 'ZM', level: 'coming', by: 'Amina' })).toThrow(/Zambia has opened already.*lower it to observed/);
+      // Lowered, it remembers the day it opened: still not "coming".
+      presence.set({ jurisdiction: 'ZM', level: 'observed' });
+      expect(presence.resolve('ZM').openedAt).toBe(opened);
+      expect(() => presence.set({ jurisdiction: 'ZM', level: 'coming' })).toThrow(/has opened already/);
+      // A country with a company of ours is open without anybody recording it.
+      expect(() => presence.propose({ jurisdiction: 'KE', level: 'coming', by: 'Amina' })).toThrow(/Kenya has opened already/);
+    });
+  });
+
   describe('CA2 — two people switch a country on', () => {
     const DAY = 86_400_000;
 
     it('holds a change that raises a country until a DIFFERENT person approves it', () => {
       const { proposal, applied } = presence.propose({ jurisdiction: 'ZM', level: 'matched', note: 'Lusaka partners ready', by: 'Amina' });
       expect(applied).toBeUndefined();
-      expect(proposal).toMatchObject({ jurisdiction: 'ZM', status: 'pending', proposedBy: 'Amina', gains: ['takeIn'] });
+      expect(proposal).toMatchObject({ jurisdiction: 'ZM', status: 'pending', proposedBy: 'Amina', gains: ['takeIn', 'signUp'] });
       // Nothing behaves differently yet.
       expect(presence.resolve('ZM').level).toBe('observed');
 

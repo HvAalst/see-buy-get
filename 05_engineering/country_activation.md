@@ -44,8 +44,9 @@ One entry per ISO-3166 country, shipped as data and read by everybody:
 - driving side
 - identity documents accepted for vetting
 
-A country moves **available → matched → partnered → established** (the ladder), and the catalogue is the only
-place a new code can come from. **No country may be switched on without its currency mapped and a rate on the
+A country moves **available → (coming) → matched → partnered → established** (the ladder), and the catalogue is the
+only place a new code can come from. Coming (2026-10-25) takes sign-ups ahead of the day it opens and prices
+nothing, so it needs no rate yet; opening it does (`presence_ladder.md` §2). **No country may be switched on without its currency mapped and a rate on the
 rate book** — we already refuse an unmapped currency at the quote (P4); this moves that refusal to the start,
 where a person is deciding, instead of the first price.
 
