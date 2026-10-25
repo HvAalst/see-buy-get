@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
@@ -490,15 +490,7 @@ function BookStep({ state, actions }: SendScreenProps) {
           <label class="field__label" for="rcv-phone">
             {t('send.book.phoneLabel')}
           </label>
-          <input
-            id="rcv-phone"
-            class="input"
-            type="tel"
-            inputMode="tel"
-            value={state.receiverMobile}
-            onInput={(e) => actions.setReceiver(e.currentTarget.value)}
-            placeholder="07…"
-          />
+          <PhoneField id="rcv-phone" value={state.receiverMobile} onInput={(v) => actions.setReceiver(v)} autoComplete="off" />
         </div>
         <Button variant="link" full={false} onClick={() => void actions.pickReceiverContact()}>
           {t('send.pickContacts')}

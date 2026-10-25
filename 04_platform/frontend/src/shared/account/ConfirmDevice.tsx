@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, CodeBoxes, ErrorNote, NeedsSignalNote } from '../ui';
+import { Button, Card, CodeBoxes, ErrorNote, NeedsSignalNote, PhoneField } from '../ui';
 import { useT, type MessageKey } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import type { DeviceAsk } from './shopDevice';
@@ -55,7 +55,7 @@ export function ConfirmDevice({
             <label class="field__label" for="device-phone">
               {t('account.bound.phone', { party: who })}
             </label>
-            <input id="device-phone" class="input" type="tel" inputMode="tel" autocomplete="tel" value={phone} onInput={(e) => setPhone(e.currentTarget.value)} placeholder="+254 712 345678" />
+            <PhoneField id="device-phone" value={phone} onInput={(v) => setPhone(v)} />
           </div>
         </Card>
         <Button type="submit" chevron={false} busy={busy} disabled={busy || !ok}>

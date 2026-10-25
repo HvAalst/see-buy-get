@@ -1,7 +1,7 @@
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect, useMemo } from 'preact/hooks';
-import { Button, Card, ErrorNote, ExplainerReset, Icon, Note, PhotoField, PlaceMap, Pill, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, ExplainerReset, Icon, Note, PhotoField, PlaceMap, Pill, ReadAloud, Sheet, PhoneField } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient, SbgError } from '../../../lib/sbg';
@@ -552,7 +552,7 @@ function FleetCodeCard({ actions }: DashboardScreenProps) {
           <label class="field__label" for="pin-phone">
             {t('fleet.signin.phoneLabel')}
           </label>
-          <input id="pin-phone" class="input input--mono" type="tel" autocomplete="username" value={phone} onInput={(e) => setPhone(e.currentTarget.value)} />
+          <PhoneField id="pin-phone" value={phone} onInput={(v) => setPhone(v)} autoComplete="username" inputClass="input input--mono" />
         </div>
         <div class="field">
           <label class="field__label" for="pin-current">

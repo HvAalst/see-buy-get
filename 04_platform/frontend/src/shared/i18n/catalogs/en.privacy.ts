@@ -63,6 +63,7 @@ export const enPrivacy = {
   'pages.privacy.others.7': 'When a payment to SeeBuyGet is made by M-Pesa, Safaricom receives the phone number and the amount.',
   'pages.privacy.others.8': 'When a dispatcher asks the SeeBuyGet fleet planning adviser something, the question and the loads it is about — plates, shipper names, places, weights and times, never a phone number — go to Claude, by Anthropic.',
   'pages.privacy.others.9': 'An address typed to find the nearest SeeBuyGet shops — yours, a receiver’s, or one a store or a shop types for its customer — is looked up on the SeeBuyGet server and by OpenStreetMap’s address service, which sees the address and the SeeBuyGet server’s internet address, not yours; it is kept with no account. A place tapped on the map, or your phone’s own position, stays on your phone.',
+  'pages.privacy.others.10': 'Cloudflare tells the SeeBuyGet server which country your internet address is in. It only chooses the first country code shown beside a phone number box, which you can change, and nothing keeps it.',
 
   'pages.privacy.howLong.title': 'How long it is kept',
   'pages.privacy.howLong.1': 'Photos of a hand-over are deleted 90 days after the parcel’s journey ends.',

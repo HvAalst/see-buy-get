@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
-import { Button, CodeBoxes, CodeCard, Note, RefusalNote, Sheet } from '../ui';
+import { Button, CodeBoxes, CodeCard, Note, RefusalNote, Sheet, PhoneField } from '../ui';
 import { useHelpWords, useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { EmailStep } from './EmailStep';
@@ -235,19 +235,15 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
         <label class="field__label" for="gone-phone">
           {t('account.trouble.newPhone')}
         </label>
-        <input
+        <PhoneField
           id="gone-phone"
-          class="input"
-          type="tel"
-          inputMode="tel"
           value={phone}
-          disabled={busy}
-          onInput={(e) => {
-            setPhone(e.currentTarget.value);
+          onInput={(v) => {
+            setPhone(v);
             setPhoneSent(false);
             setPhoneVerified(false);
           }}
-          placeholder="+2547…"
+          disabled={busy}
         />
       </div>
       <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void sendPhone()}>
@@ -340,25 +336,21 @@ function AskStaff({ api }: { api: RecoveryApi }) {
         <label class="field__label" for="staff-old">
           {t('account.move.oldPhone')}
         </label>
-        <input id="staff-old" class="input" type="tel" inputMode="tel" value={oldPhone} onInput={(e) => setOldPhone(e.currentTarget.value)} placeholder="+2547…" disabled={busy} />
+        <PhoneField id="staff-old" value={oldPhone} onInput={(v) => setOldPhone(v)} disabled={busy} />
       </div>
       <div class="field">
         <label class="field__label" for="staff-new">
           {t('account.move.newPhone')}
         </label>
-        <input
+        <PhoneField
           id="staff-new"
-          class="input"
-          type="tel"
-          inputMode="tel"
           value={phone}
-          disabled={busy}
-          onInput={(e) => {
-            setPhone(e.currentTarget.value);
+          onInput={(v) => {
+            setPhone(v);
             setPhoneSent(false);
             setPhoneVerified(false);
           }}
-          placeholder="+2547…"
+          disabled={busy}
         />
       </div>
       <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void sendPhone()}>
@@ -479,7 +471,7 @@ function Undo({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
             <label class="field__label" for="undo-phone">
               {t('account.trouble.oldPhone')}
             </label>
-            <input id="undo-phone" class="input" type="tel" inputMode="tel" value={phone} onInput={(e) => setPhone(e.currentTarget.value)} placeholder="+2547…" disabled={busy} />
+            <PhoneField id="undo-phone" value={phone} onInput={(v) => setPhone(v)} disabled={busy} />
           </div>
           <div class="field">
             <span class="field__label">{t('account.trouble.oldPin')}</span>

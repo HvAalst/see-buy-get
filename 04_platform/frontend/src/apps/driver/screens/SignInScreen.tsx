@@ -1,7 +1,7 @@
 import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, Note, ReadAloud, RefusalNote, PhoneField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
@@ -103,17 +103,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
       <label class="field__label" for="drv-phone">
         {t('driver.signin.phoneLabel')}
       </label>
-      <input
-        id="drv-phone"
-        class="input"
-        type="tel"
-        value={phone}
-        onInput={(e) => setPhone(e.currentTarget.value)}
-        placeholder="+2547…"
-        autocomplete="tel"
-        inputMode="tel"
-        disabled={busy || step === 'code' || step === 'email'}
-      />
+      <PhoneField id="drv-phone" value={phone} onInput={(v) => setPhone(v)} disabled={busy || step === 'code' || step === 'email'} />
     </div>
   );
 

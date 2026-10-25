@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, CodeBoxes, ErrorNote, Icon, Note, RefusalNote, Sheet } from '../ui';
+import { Button, CodeBoxes, ErrorNote, Icon, Note, RefusalNote, Sheet, PhoneField } from '../ui';
 import type { IconName } from '../ui/Icon';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
@@ -619,18 +619,14 @@ function PayoutForm({ api, onDone }: { api: AccountApi; onDone: (saved: PayoutNu
         <label class="field__label" for="acct-payout-phone">
           {t('account.payout.numberLabel')}
         </label>
-        <input
+        <PhoneField
           id="acct-payout-phone"
-          class="input"
-          type="tel"
-          inputMode="tel"
           value={phone}
-          disabled={busy}
-          placeholder="07XX XXX XXX"
-          onInput={(e) => {
-            setPhone(e.currentTarget.value);
+          onInput={(v) => {
+            setPhone(v);
             setSentTo('');
           }}
+          disabled={busy}
         />
       </div>
       <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void send()}>
@@ -700,19 +696,15 @@ function PhoneForm({ api, onDone }: { api: AccountApi; onDone: () => void }) {
         <label class="field__label" for="acct-new-phone">
           {t('account.settings.phoneNew')}
         </label>
-        <input
+        <PhoneField
           id="acct-new-phone"
-          class="input"
-          type="tel"
-          inputMode="tel"
           value={phone}
-          disabled={busy}
-          placeholder="+2547…"
-          onInput={(e) => {
-            setPhone(e.currentTarget.value);
+          onInput={(v) => {
+            setPhone(v);
             setSent(false);
             setVerified(false);
           }}
+          disabled={busy}
         />
       </div>
       <Button variant="outline" chevron={false} disabled={busy || !phone.trim()} onClick={() => void send()}>

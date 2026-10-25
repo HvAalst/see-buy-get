@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { BrandMark, CodeBoxes } from '../../../shared/ui';
+import { BrandMark, CodeBoxes, PhoneField } from '../../../shared/ui';
 import { AllAppsLink, frontDoorLink } from '../../../shared/ui/AllAppsLink';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { EmailStep } from '../../../shared/account/EmailStep';
@@ -101,15 +101,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
             ) : (
               <label class="cfield" style="margin-top:18px">
                 <span class="cfield__label">{t('business.signIn.phone')}</span>
-                <input
-                  class="cinput"
-                  type="tel"
-                  inputMode="tel"
-                  autocomplete="tel"
-                  value={state.phone}
-                  placeholder="+251 911 000 000"
-                  onInput={(e) => actions.set({ phone: (e.target as HTMLInputElement).value })}
-                />
+                <PhoneField id="biz-phone" value={state.phone} onInput={(v) => actions.set({ phone: v })} inputClass="cinput" />
               </label>
             )
           ) : null}

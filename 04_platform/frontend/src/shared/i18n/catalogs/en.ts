@@ -269,6 +269,8 @@ export const en = {
   'common.signUp': 'New here? Sign up',
   // Under every box an address is typed into to find shops (OsmCredit): OpenStreetMap's service, credited as it asks.
   'common.addressesByOsm': 'Addresses are found with OpenStreetMap.',
+  // The country code beside every phone number box (PhoneField).
+  'common.phone.country': 'Country code',
   'common.frontDoor': 'SeeBuyGet front page',
   'common.done': 'Done',
   'common.save': 'Save',

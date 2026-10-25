@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, ErrorNote, Icon, Note, Sheet } from '../../../shared/ui';
+import { Button, ErrorNote, Icon, Note, Sheet, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { actLine, canRemove, staffLine, type CounterActRow, type PeopleApi, type StaffRow } from '../people';
@@ -133,7 +133,7 @@ export function PeopleSheet({ open, onClose, api, words, statePrefix }: { open: 
             <label class="field__label" for="staff-phone">
               {t('agent.people.phoneLabel')}
             </label>
-            <input id="staff-phone" class="input" type="tel" inputMode="tel" placeholder="07XX XXX XXX" value={phone} disabled={busy} onInput={(e) => setPhone(e.currentTarget.value)} />
+            <PhoneField id="staff-phone" value={phone} onInput={(v) => setPhone(v)} disabled={busy} autoComplete="off" />
           </div>
           <Button chevron={false} busy={busy} disabled={!name.trim() || !phone.trim()} onClick={() => void add()}>
             {t('agent.people.add')}

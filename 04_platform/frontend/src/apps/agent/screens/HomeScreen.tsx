@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, NeedsSignalNote, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, NeedsSignalNote, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName, PhoneField } from '../../../shared/ui';
 import { capLine, type CustodyCapView } from '../../../shared/custodyCap';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
@@ -351,16 +351,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         <label class="field__label" for="topup-phone">
           {t('agent.home.topUpPhone')}
         </label>
-        <input
-          id="topup-phone"
-          class="input"
-          type="tel"
-          inputMode="tel"
-          autocomplete="tel"
-          placeholder="07xx xxx xxx"
-          value={phone}
-          onInput={(e) => setPhone(e.currentTarget.value)}
-        />
+        <PhoneField id="topup-phone" value={phone} onInput={(v) => setPhone(v)} />
         <p class="hint">{t('agent.home.topUpPhoneHint')}</p>
       </div>
       <NeedsSignalNote title={t('agent.home.topUpNeedsSignalTitle')} detail={t('agent.home.topUpNeedsSignalDetail')} />

@@ -1,3 +1,4 @@
+import { PhoneField } from '../../../shared/ui';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { publicRequest } from '../../../lib/sbg';
@@ -99,7 +100,13 @@ export function ClientsScreen({ business, client }: { business: BusinessView; ac
                 </label>
                 <label class="cfield">
                   <span class="cfield__label">{t('business.clients.f.contactPhone')}</span>
-                  <input class="cinput" type="tel" maxLength={32} value={form.contactPhone} onInput={(e) => setForm((prev) => ({ ...prev, contactPhone: (e.target as HTMLInputElement).value }))} />
+                  <PhoneField
+                    id="client-contact-phone"
+                    value={form.contactPhone}
+                    onInput={(v) => setForm((prev) => ({ ...prev, contactPhone: v }))}
+                    autoComplete="off"
+                    inputClass="cinput"
+                  />
                 </label>
               </div>
               <label class="cfield">

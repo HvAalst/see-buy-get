@@ -47,6 +47,7 @@ export { CodeBoxes, type CodeBoxesProps } from './CodeBoxes';
 export { CodeCard, type CodeCardProps } from './CodeCard';
 export { PlaceMap, type PlaceMapLine, type PlaceMapPin, type PlaceMapProps } from './PlaceMap';
 export { OsmCredit } from './OsmCredit';
+export { PhoneField, type PhoneFieldProps } from './PhoneField';
 export { PlacePicker, type PlaceNote, type PlacePickerProps } from './PlacePicker';
 export { QrBlock, type QrBlockProps } from './QrBlock';
 export { Scanner, type ScannerProps } from './Scanner';

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, CodeBoxes, ErrorNote, Note, RefusalNote, Sheet } from '../ui';
+import { Button, CodeBoxes, ErrorNote, Note, RefusalNote, Sheet, PhoneField } from '../ui';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { EmailStep } from './EmailStep';
@@ -109,7 +109,7 @@ export function ChoosePinSheet({ open, onClose, api, phone: typed, onChosen }: C
             <label class="field__label" for="choose-phone">
               {t('account.choosePin.phone')}
             </label>
-            <input id="choose-phone" class="input input--mono" type="tel" inputMode="tel" autocomplete="tel" value={phone} disabled={busy} onInput={(e) => setPhone(e.currentTarget.value)} placeholder="+2547…" />
+            <PhoneField id="choose-phone" value={phone} onInput={(v) => setPhone(v)} disabled={busy} inputClass="input input--mono" />
           </div>
           <Button chevron={false} busy={busy} disabled={number.replace(/\D/g, '').length < 9} onClick={() => void sendCode()}>
             {t('account.choosePin.sendCode')}

@@ -1,7 +1,7 @@
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
 import { useState } from 'preact/hooks';
-import { Button, Card, CheckGate, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, CheckGate, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
 import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
@@ -239,31 +239,13 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
           <label class="field__label" for="sender">
             {t('agent.accept.senderPhone')}
           </label>
-          <input
-            id="sender"
-            class="input"
-            type="tel"
-            inputMode="tel"
-            value={f.senderMobile}
-            onInput={(e) => actions.setAccept({ senderMobile: e.currentTarget.value })}
-            placeholder="07…"
-            autocomplete="off"
-          />
+          <PhoneField id="sender" value={f.senderMobile} onInput={(v) => actions.setAccept({ senderMobile: v })} autoComplete="off" />
         </div>
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="receiver">
             {t('agent.accept.receiverPhone')}
           </label>
-          <input
-            id="receiver"
-            class="input"
-            type="tel"
-            inputMode="tel"
-            value={f.receiverMobile}
-            onInput={(e) => actions.setAccept({ receiverMobile: e.currentTarget.value })}
-            placeholder="07…"
-            autocomplete="off"
-          />
+          <PhoneField id="receiver" value={f.receiverMobile} onInput={(v) => actions.setAccept({ receiverMobile: v })} autoComplete="off" />
         </div>
         <p class="card__note">{t('agent.accept.phonesNote')}</p>
       </Card>
@@ -596,7 +578,7 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
         <label class="field__label" for="freight-phone">
           {t('agent.accept.customerPhone')}
         </label>
-        <input id="freight-phone" class="input" type="tel" inputMode="tel" value={f.customerMobile} onInput={(e) => actions.setAccept({ customerMobile: e.currentTarget.value })} placeholder="07…" autocomplete="off" />
+        <PhoneField id="freight-phone" value={f.customerMobile} onInput={(v) => actions.setAccept({ customerMobile: v })} autoComplete="off" />
       </div>
       <p class="card__note">{t('agent.accept.customerPhoneNote')}</p>
 
@@ -613,7 +595,7 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
           <label class="field__label" for="freight-contact-phone">
             {t('agent.accept.contactPhone')}
           </label>
-          <input id="freight-contact-phone" class="input" type="tel" inputMode="tel" value={f.contactPhone} onInput={(e) => actions.setAccept({ contactPhone: e.currentTarget.value })} placeholder="07…" autocomplete="off" />
+          <PhoneField id="freight-contact-phone" value={f.contactPhone} onInput={(v) => actions.setAccept({ contactPhone: v })} autoComplete="off" />
         </div>
       </div>
       <div class="field" style="margin-top:12px">

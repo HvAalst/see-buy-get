@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, DocumentButton, ErrorNote, Explainer, Icon, PhotoField, Pill, QrBlock, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, DocumentButton, ErrorNote, Explainer, Icon, PhotoField, Pill, QrBlock, Sheet, PhoneField } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
@@ -568,7 +568,7 @@ function InstructionsSheet({ load, open, onClose, state, actions }: { load: Post
               <label class="field__label" for={`ic-phone-${load.freightId}`}>
                 {t('agent.accept.contactPhone')}
               </label>
-              <input id={`ic-phone-${load.freightId}`} class="input" type="tel" inputMode="tel" value={contactPhone} onInput={(e) => setContactPhone(e.currentTarget.value)} />
+              <PhoneField id={`ic-phone-${load.freightId}`} value={contactPhone} onInput={(v) => setContactPhone(v)} autoComplete="off" />
             </div>
           </div>
           <div class="field" style="margin-top:12px">

@@ -29,7 +29,7 @@ import { VehicleStandstillService } from './vehicle-standstill.service';
 import { boardDocId } from './note-archive.types';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { REVIEW_CODE_HELD, reviewCodeOn } from '../../foundation/runtime/review-code';
-import { Body, Controller, Delete, Get, Header, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Headers, HttpCode, Inject, Param, Patch, Post, Put, Query, Req, Res, StreamableFile, Optional, UseGuards, UseInterceptors } from '@nestjs/common';
 import { staffNetworkAllows } from '../../foundation/auth/staff-network';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
@@ -623,6 +623,23 @@ export class SbgController {
         joinable: this.presence.resolve(c.code).capabilities.takeIn,
       };
     });
+  }
+
+  /**
+   * WHERE THE VISITOR IS, AS FAR AS A PHONE NUMBER'S COUNTRY CODE GOES (the user, 2026-10-25: "use the country prefix
+   * based on geolocation for UX").
+   *
+   * Cloudflare, which carries the site, reads the country from the visitor's internet address and says it in
+   * CF-IPCountry. That is the first guess for the country code beside every phone number box — without asking the
+   * phone for its location, a permission prompt on the very first screen. A hint for a form, never a decision: the
+   * person changes it in one tap, nothing is kept, and nothing anywhere is allowed or refused by it. XX (unknown) and T1
+   * (Tor) are no country; without Cloudflare in front, the web server drops the header (Caddyfile), so the answer is empty.
+   */
+  @Public()
+  @Get('visitor')
+  visitor(@Headers('cf-ipcountry') read?: string): { country?: string } {
+    const country = catalogueEntry(read)?.code;
+    return country ? { country } : {};
   }
 
   /**

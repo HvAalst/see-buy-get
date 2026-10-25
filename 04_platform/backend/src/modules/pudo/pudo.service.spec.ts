@@ -1467,6 +1467,15 @@ describe('PUDO Light', () => {
     await expect(controller.geocode('12 Nowhere Lane, Atlantis')).rejects.toThrow(/No place found/);
   });
 
+  it('says the visitor’s country as Cloudflare read it — a phone number’s first country code — and none where it read none', () => {
+    expect(controller.visitor('ke')).toEqual({ country: 'KE' });
+    expect(controller.visitor('UG')).toEqual({ country: 'UG' });
+    // Cloudflare's "unknown" and "Tor", and no header at all (the web server drops it without Cloudflare in front).
+    expect(controller.visitor('XX')).toEqual({});
+    expect(controller.visitor('T1')).toEqual({});
+    expect(controller.visitor(undefined)).toEqual({});
+  });
+
   /*
    * WHICH CARRIERS PRICE A QUOTE (the user, 2026-10-25: "a quote price should be taken only from vehicles that can
    * carry that load, within the unified currency range and the asker should be able to filter quotations from 'near

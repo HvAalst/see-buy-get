@@ -1,7 +1,7 @@
 import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
 import { useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, ErrorNote, ReadAloud } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, ReadAloud, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { FleetActions } from '../useFleetApp';
@@ -129,15 +129,13 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
         <label class="field__label" for="mgr-phone">
           {t('fleet.signin.phoneLabel')}
         </label>
-        <input
+        <PhoneField
           id="mgr-phone"
-          class="input input--mono"
-          type="tel"
           value={phone}
-          onInput={(e) => setPhone(e.currentTarget.value)}
-          placeholder="+2547…"
-          autocomplete="username"
-          enterkeyhint="next"
+          onInput={(v) => setPhone(v)}
+          autoComplete="username"
+          inputClass="input input--mono"
+          enterKeyHint="next"
         />
       </div>
       <div class="field">

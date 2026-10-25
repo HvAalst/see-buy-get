@@ -1,5 +1,5 @@
 import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote, PhoneField as CountryPhoneField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { canPickContact } from '../../../shared/device';
 import { codeReady, phoneReady, pinBlocker } from '../logic';
@@ -66,17 +66,7 @@ function PhoneField({ id, state, actions, hint }: { id: string; state: SendState
   return (
     <div class="field">
       <label class="field__label" for={id}>{t('send.auth.yourPhone')}</label>
-      <input
-        id={id}
-        class="input"
-        type="tel"
-        inputMode="tel"
-        autocomplete="tel"
-        value={state.authPhone}
-        onInput={(e) => actions.setAuthPhone(e.currentTarget.value)}
-        placeholder="+254 700 000 000"
-        enterkeyhint={hint}
-      />
+      <CountryPhoneField id={id} value={state.authPhone} onInput={(v) => actions.setAuthPhone(v)} enterKeyHint={hint} />
       {canPickContact() ? (
         <Button variant="link" chevron={false} onClick={() => void actions.pickContact()}>{t('send.pickContacts')}</Button>
       ) : null}

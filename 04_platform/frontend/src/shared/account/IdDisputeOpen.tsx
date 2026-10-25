@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, CodeBoxes, RefusalNote } from '../ui';
+import { Button, CodeBoxes, RefusalNote, PhoneField } from '../ui';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { IdDisputeCase } from './IdDisputeCase';
@@ -84,19 +84,15 @@ export function IdDisputeOpen({ api, preset }: { api: RecoveryApi; preset?: { re
         <label class="field__label" for="idd-phone">
           {t('account.id.open.phone')}
         </label>
-        <input
+        <PhoneField
           id="idd-phone"
-          class="input"
-          type="tel"
-          inputMode="tel"
           value={phone}
-          disabled={busy}
-          onInput={(e) => {
-            setPhone(e.currentTarget.value);
+          onInput={(v) => {
+            setPhone(v);
             setSent(false);
             setVerified(false);
           }}
-          placeholder="+2547…"
+          disabled={busy}
         />
         <p class="hint">{t('account.id.open.phoneHint')}</p>
       </div>

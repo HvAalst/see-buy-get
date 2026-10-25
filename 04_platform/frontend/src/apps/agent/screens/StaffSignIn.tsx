@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'preact/hooks';
-import { Button, Card, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, Note } from '../../../shared/ui';
+import { Button, Card, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, Note, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgConfig, SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
@@ -249,7 +249,7 @@ export function StaffSignIn({
             <label class="field__label" for="staff-signin-phone">
               {t('agent.staff.phone')}
             </label>
-            <input id="staff-signin-phone" class="input" type="tel" inputMode="tel" autocomplete="tel" placeholder="07XX XXX XXX" value={phone} disabled={busy} onInput={(e) => setPhone(e.currentTarget.value)} />
+            <PhoneField id="staff-signin-phone" value={phone} onInput={(v) => setPhone(v)} disabled={busy} />
           </div>
         ) : null}
         {step === 'login' || step === 'pin' ? (

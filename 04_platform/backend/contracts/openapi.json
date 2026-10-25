@@ -4551,6 +4551,28 @@
         }
       }
     },
+    "/v1/sbg/visitor": {
+      "get": {
+        "operationId": "Sbg.visitor",
+        "summary": "",
+        "description": "WHERE THE VISITOR IS, AS FAR AS A PHONE NUMBER'S COUNTRY CODE GOES (the user, 2026-10-25: \"use the country prefix\nbased on geolocation for UX\").\n\nCloudflare, which carries the site, reads the country from the visitor's internet address and says it in\nCF-IPCountry. That is the first guess for the country code beside every phone number box — without asking the\nphone for its location, a permission prompt on the very first screen. A hint for a form, never a decision: the\nperson changes it in one tap, nothing is kept, and nothing anywhere is allowed or refused by it. XX (unknown) and T1\n(Tor) are no country; without Cloudflare in front, the web server drops the header (Caddyfile), so the answer is empty.",
+        "parameters": [
+          {
+            "name": "cf-ipcountry",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/countries/{code}/interest": {
       "post": {
         "operationId": "Sbg.registerInterest",

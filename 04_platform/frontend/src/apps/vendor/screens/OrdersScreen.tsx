@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, ExplainerReset, SelectionBar, Sheet, TopUpCostNote } from '../../../shared/ui';
+import { AuthImage, Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, ExplainerReset, SelectionBar, Sheet, TopUpCostNote, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
@@ -504,16 +504,7 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         <label class="field__label" for="vtopup-phone">
           {t('vendor.topup.phone')}
         </label>
-        <input
-          id="vtopup-phone"
-          class="input"
-          type="tel"
-          inputMode="tel"
-          autocomplete="tel"
-          placeholder="07xx xxx xxx"
-          value={phone}
-          onInput={(e) => setPhone(e.currentTarget.value)}
-        />
+        <PhoneField id="vtopup-phone" value={phone} onInput={(v) => setPhone(v)} />
         <p class="hint">{t('vendor.topup.phoneHint')}</p>
       </div>
       <Button chevron={false} busy={state.busy === 'topup'} disabled={!(value > 0)} onClick={() => void actions.topUp(value, phone.trim() || undefined)}>

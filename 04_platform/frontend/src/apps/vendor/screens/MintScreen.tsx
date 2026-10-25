@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Info, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Info, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { distanceLabel, haversineKm, type GeoPoint } from '../../../shared/geo';
@@ -168,7 +168,7 @@ function ParcelStep({ state, actions }: MintScreenProps) {
             <label class="field__label" for="buyer-mobile">
               {t('vendor.mint.buyerPhone')}
             </label>
-            <input id="buyer-mobile" class="input" type="tel" inputMode="tel" value={f.buyerMobile} onInput={(e) => actions.setForm({ buyerMobile: e.currentTarget.value })} placeholder="07…" />
+            <PhoneField id="buyer-mobile" value={f.buyerMobile} onInput={(v) => actions.setForm({ buyerMobile: v })} autoComplete="off" />
           </div>
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="order-ref">

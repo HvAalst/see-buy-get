@@ -1,3 +1,4 @@
+import { PhoneField } from '../../../shared/ui';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { quoteFigure, quoteTone, type QuoteView } from '../../../shared/quote';
@@ -380,7 +381,13 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
           </label>
           <label class="cfield">
             <span class="cfield__label">{t('business.loads.f.contactPhone')}</span>
-            <input class="cinput" type="tel" maxLength={32} value={form.contactPhone} onInput={(e) => setForm((prev) => ({ ...prev, contactPhone: (e.target as HTMLInputElement).value }))} />
+            <PhoneField
+              id="load-contact-phone"
+              value={form.contactPhone}
+              onInput={(v) => setForm((prev) => ({ ...prev, contactPhone: v }))}
+              autoComplete="off"
+              inputClass="cinput"
+            />
           </label>
         </div>
         <label class="cfield">

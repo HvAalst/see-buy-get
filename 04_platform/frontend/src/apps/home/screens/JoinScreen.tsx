@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { toPlaceWords } from '../../../shared/placewords';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -147,17 +147,7 @@ function PhoneStep({ state, actions }: JoinScreenProps) {
           <label class="field__label" for="phone">
             {t('home.join.phone.label')}
           </label>
-          <input
-            id="phone"
-            class="input"
-            type="tel"
-            inputMode="tel"
-            value={state.form.phone}
-            onInput={(e) => actions.setForm({ phone: e.currentTarget.value })}
-            placeholder="+254 700 000 000"
-            autocomplete="tel"
-            enterkeyhint="send"
-          />
+          <PhoneField id="phone" value={state.form.phone} onInput={(v) => actions.setForm({ phone: v })} enterKeyHint="send" />
         </div>
       </Card>
 

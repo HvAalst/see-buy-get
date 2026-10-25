@@ -1,4 +1,4 @@
-import { AuthImage, Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, RefusalNote, Sheet } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, Note, PhotoField, Pill, ReadAloud, RefusalNote, Sheet, PhoneField } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { DuplicateField } from '../../../shared/duplicate';
@@ -119,7 +119,7 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
             <label class="field__label" for="d-mobile">
               {t('fleet.drivers.mobile')}
             </label>
-            <input id="d-mobile" class="input" type="tel" inputMode="tel" value={f.mobile} onInput={(e) => actions.setDForm({ mobile: e.currentTarget.value })} placeholder="07…" />
+            <PhoneField id="d-mobile" value={f.mobile} onInput={(v) => actions.setDForm({ mobile: v })} autoComplete="off" />
           </div>
         </div>
         <div class="field" style="margin-top:12px">
@@ -197,17 +197,14 @@ export function DriversScreen({ state, actions }: DriversScreenProps) {
           <label class="field__label" for="offer-phone">
             {t('fleet.offers.phone')}
           </label>
-          <input
+          <PhoneField
             id="offer-phone"
-            class="input"
-            type="tel"
-            inputMode="tel"
             value={offerPhone}
-            onInput={(e) => {
-              setOfferPhone(e.currentTarget.value);
+            onInput={(v) => {
+              setOfferPhone(v);
               setOfferRefused(null);
             }}
-            placeholder="07…"
+            autoComplete="off"
           />
         </div>
         {offerRefused ? <RefusalNote error={offerRefused} /> : null}

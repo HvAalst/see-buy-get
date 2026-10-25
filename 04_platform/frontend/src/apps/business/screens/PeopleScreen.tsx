@@ -1,3 +1,4 @@
+import { PhoneField } from '../../../shared/ui';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { BusinessClient, BusinessView, MemberRole, MemberRow } from '../api';
@@ -160,7 +161,13 @@ export function PeopleScreen({ business, actions, client }: { business: Business
             <div class="biz-two">
               <label class="cfield">
                 <span class="cfield__label">{t('business.people.phone')}</span>
-                <input class="cinput" type="tel" inputMode="tel" value={form.phone} placeholder="+251 911 000 000" onInput={(e) => setForm((prev) => ({ ...prev, phone: (e.target as HTMLInputElement).value }))} />
+                <PhoneField
+                  id="people-phone"
+                  value={form.phone}
+                  onInput={(v) => setForm((prev) => ({ ...prev, phone: v }))}
+                  autoComplete="off"
+                  inputClass="cinput"
+                />
               </label>
               <label class="cfield">
                 <span class="cfield__label">{t('business.people.name')}</span>

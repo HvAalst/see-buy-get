@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { Button, ErrorNote } from '../ui';
+import { Button, ErrorNote, PhoneField } from '../ui';
 import { useT } from '../i18n';
 import { publicRequest, type SbgConfig, type SbgError } from '../../lib/sbg';
 
@@ -31,7 +31,7 @@ export function PhoneVerify({ config, verified, onVerified, label }: { config: S
         {label}
       </label>
       {error ? <ErrorNote error={error} /> : null}
-      <input id="verify-phone" class="input" type="tel" inputMode="tel" autocomplete="tel" value={phone} disabled={busy || Boolean(sent)} onInput={(e) => setPhone(e.currentTarget.value)} placeholder="+254 712 345678" />
+      <PhoneField id="verify-phone" value={phone} onInput={(v) => setPhone(v)} disabled={busy || Boolean(sent)} />
       {sent ? (
         <>
           <input id="verify-code" class="input" style="margin-top:8px" inputMode="numeric" autocomplete="one-time-code" maxLength={6} value={code} disabled={busy} onInput={(e) => setCode(e.currentTarget.value)} placeholder={t('account.phoneVerify.codePlaceholder')} />

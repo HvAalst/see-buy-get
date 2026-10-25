@@ -43,6 +43,16 @@
 	}
 }
 
+# What the API is told about the visitor's country (the first guess for a phone number's country code, GET
+# /v1/sbg/visitor). Behind Cloudflare it is Cloudflare's own reading (CF-IPCountry), passed on as it came; without
+# Cloudflare in front nobody's header is believed, so a CF-IPCountry a visitor wrote themselves is dropped here.
+(api_edge_direct) {
+	header_up -CF-IPCountry
+}
+
+(api_edge_cloudflare) {
+}
+
 (security_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -87,6 +97,7 @@ http://127.0.0.1:9180 {
 	handle /v1/* {
 		reverse_proxy api:3000 {
 			header_up X-Forwarded-For {client_ip}
+			import api_edge_{$CADDY_EDGE}
 		}
 	}
 
