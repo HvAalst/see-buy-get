@@ -533,6 +533,16 @@
   border-bottom: 1px solid var(--bd-soft);
 }
 
+/*
+ * A SHEET OPENED FROM THE TOP BAR — the bell, the account menu — lives in the bar's own layer: the bar is fixed, so it
+ * makes one, and that layer sits level with the tab bar, which comes later in the page and so was drawn over the
+ * sheet's last lines (a notice's "Read it", the end of the list). While a sheet is open in it, the bar rises above
+ * everything a sheet covers. A browser without :has() keeps the old order, nothing worse.
+ */
+.topbar:has(.sheet) {
+  z-index: 62;
+}
+
 .topbar__lead {
   display: flex;
   align-items: center;
