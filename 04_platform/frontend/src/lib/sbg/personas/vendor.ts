@@ -23,6 +23,9 @@ const asQuery = (m?: Measure): Record<string, string> =>
     ? { l: String(m.l), w: String(m.w), h: String(m.h), kg: String(m.kg) }
     : {};
 
+/** Fragile goods are priced only by the carriers that take them, at the mint as in the preview (2026-10-25). */
+const fragileQuery = (fragile?: boolean): { fragile?: string } => (fragile ? { fragile: 'true' } : {});
+
 /** The bookkeeping (ledger) register query params — all optional (no query = the whole book, newest-first). */
 export interface LedgerQuery {
   q?: string;
@@ -270,14 +273,14 @@ export function createVendorApi(sbg: SbgClient) {
      *  The MEASUREMENT rides along whenever the form has one, because the mint prices on it: a preview
      *  quoted from the size band would show a store one number and bill it another, and the store would
      *  be right to call that a bait. */
-    quote: (originDid: string, destDid: string, size: string, measure?: Measure) =>
-      sbg.request((c) => c.GET('/v1/sbg/quote', { params: { query: { origin: originDid, dest: destDid, size, ...asQuery(measure) } } })),
+    quote: (originDid: string, destDid: string, size: string, measure?: Measure, fragile?: boolean) =>
+      sbg.request((c) => c.GET('/v1/sbg/quote', { params: { query: { origin: originDid, dest: destDid, size, ...asQuery(measure), ...fragileQuery(fragile) } } })),
 
     /** Quote many drop-off candidates against the buyer's destination — the origin picker's
      *  prices. (Empty origin/dests: the S5a contract quirk marks the unused pair required.) */
-    quoteOrigins: (destDid: string, originDids: string[], size: string, measure?: Measure) =>
+    quoteOrigins: (destDid: string, originDids: string[], size: string, measure?: Measure, fragile?: boolean) =>
       sbg.request((c) =>
-        c.GET('/v1/sbg/quote/options', { params: { query: { origin: '', dest: destDid, origins: originDids.join(','), dests: '', size, ...asQuery(measure) } } }),
+        c.GET('/v1/sbg/quote/options', { params: { query: { origin: '', dest: destDid, origins: originDids.join(','), dests: '', size, ...asQuery(measure), ...fragileQuery(fragile) } } }),
       ),
   };
 }

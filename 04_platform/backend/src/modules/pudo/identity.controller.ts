@@ -306,7 +306,8 @@ export class IdentityController {
     const size = classifySize({ ...dto.dimensionsCm, kg: dto.weightKg });
     // ITEM 9 — a person sending from the app types real centimetres, so the transport is priced on what
     // the box measures rather than on the tier it lands in.
-    const quote = this.routing.quoteShipment(dto.originPudoDid, dto.destPudoDid, size, measuredFactor({ ...dto.dimensionsCm, kg: dto.weightKg }));
+    // Priced from the vehicles that can carry this parcel — near the sender where they asked — as the quote was.
+    const quote = this.routing.quoteShipment(dto.originPudoDid, dto.destPudoDid, size, measuredFactor({ ...dto.dimensionsCm, kg: dto.weightKg }), { kg: dto.weightKg, fragile: dto.fragile, ...(dto.near ? { near: dto.near } : {}) });
     // Fail closed on price drift: a consumer send is billed the LOCKED leg (createConsumerSend), so the
     // sender's consented total must match the fresh locked quote. If the market moved between the quote
     // and this mint, refuse with the new total so the app can re-confirm — never silently bill a

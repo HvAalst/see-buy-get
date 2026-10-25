@@ -386,7 +386,8 @@ export class EntityService implements OnApplicationBootstrap {
       }
       const n = Number(value);
       if (typeof value !== 'number' || !Number.isFinite(n) || n < 0) throw new GlosError('INVALID_INPUT', `${key} has to be an amount of money: a number, and not less than nothing`);
-      own[key] = Math.round(n * 100) / 100;
+      // A rate per kilometre keeps a third decimal, as a vehicle's own does (resolveAmounts); every other figure two.
+      own[key] = key === 'freightPerKm' ? Math.round(n * 1000) / 1000 : Math.round(n * 100) / 100;
     }
     const after = resolveAmounts(own);
     if (!(after.wholesale > 0)) {

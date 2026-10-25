@@ -28,7 +28,7 @@ import { DAMAGE_REPORT_STATEMENT } from './damage-report.types';
 import { canonicalJson } from './note-archive.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
 import { paysItself, REPORT_ONLY_NOTE, ParcelService, birthplaceOf, custodianOf, custodyAt, labelDate, ownershipOf } from './parcel.service';
-import { MAX_WORK_RADIUS_KM, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
+import { classifySize, MAX_WORK_RADIUS_KM, measuredFactor, OTP_MAX_ATTEMPTS, PICKUP_FEE, RELEASE_FEE, SHELVING_FEE, TOTE_LOAD_FEE, TRADE_CREDIT_LIMIT, TRADE_CREDIT_PARCELS, WHOLESALE } from './pudo.config';
 import { AMOUNT_KEYS, DEFAULT_AMOUNTS } from './amounts';
 import { ACCOUNT_CODES } from '../../foundation/books/books.types';
 import { CargoService } from './cargo.service';
@@ -1465,6 +1465,149 @@ describe('PUDO Light', () => {
     await expect(controller.geocode('')).rejects.toThrow(); // a blank query is refused
     // What nothing finds is NOT FOUND — it came back as a stand-in point a screen drew as a pin (2026-10-25).
     await expect(controller.geocode('12 Nowhere Lane, Atlantis')).rejects.toThrow(/No place found/);
+  });
+
+  /*
+   * WHICH CARRIERS PRICE A QUOTE (the user, 2026-10-25: "a quote price should be taken only from vehicles that can
+   * carry that load, within the unified currency range and the asker should be able to filter quotations from 'near
+   * me'"). Rates far below and above anything else on the network, so each assertion reads the vehicle it is about.
+   */
+  describe('which carriers price a quote', () => {
+    const W = { lat: -1.2673, lng: 36.8065 }; // Westlands
+    const lagos = { lat: 6.5244, lng: 3.3792 };
+    const mombasa = { lat: -4.0435, lng: 39.6682 };
+    let seq = 0;
+    /** A fleet in `country`, its depot in Mombasa: far from Westlands, so only a phone on shift puts its vehicles near. */
+    const fleetIn = (country: string) => {
+      seq += 1;
+      const m = managers.register({ companyName: `Quote Haulage ${seq}`, jurisdiction: country, contactPhone: `+25470095${String(seq).padStart(4, '0')}`, ownerFullName: 'Q Q', ownerNationalId: `MGR-QC-${seq}`, location: mombasa, requirements: { businessRegistrationNo: `BRN-QC${seq}`, transportOperatorLicence: `TOL-QC${seq}`, taxId: `TAX-QC${seq}` } } as never);
+      managers.submitKyc(m.did, { businessRegCertRef: 'r.jpg', operatorLicenceRef: 'l.jpg', ownerIdRef: 'i.jpg', proofOfAddressRef: 'a.jpg' });
+      managers.decideKyc(m.did, true);
+      managers.recordBond(m.did);
+      return m;
+    };
+    /** One of the fleet's drivers, on shift in `vehicle`, their phone saying they are at `at`. */
+    const onShiftAt = (managerDid: string, vehicle: { qr: string }, tag: string, at: { lat: number; lng: number }) => {
+      const d = drivers.register({ displayName: tag, fullName: `${tag} D`, nationalId: `DRV-QC-${tag}`, mobile: `+25470096${String(++seq).padStart(4, '0')}`, licenceClasses: ['bike'], managerDid });
+      fleet.startSession(d.did, vehicle.qr);
+      fleet.reportLocation(d.did, at);
+      return d;
+    };
+    function setUp(tag: string) {
+      const from = onboardAgent(`${tag} From`, 'NorthTown', 50);
+      const to = onboardAgent(`${tag} To`, 'NorthTown', 50);
+      const ke = fleetIn('KE');
+      // The cheapest on the network: a bicycle (20 kg a parcel at most, nothing fragile), at its depot.
+      const bike = vehicles.register({ plate: `${tag}-B`, vehicleClass: 'bike', ownerName: 'B', managerDid: ke.did, pricePerKm: 0.001 });
+      // The dearest: a car, which takes fragile goods.
+      const car = vehicles.register({ plate: `${tag}-C`, vehicleClass: 'car', ownerName: 'C', managerDid: ke.did, pricePerKm: 99 });
+      return { from, to, bike, car, ke };
+    }
+
+    it('only from vehicles that can carry this load: its weight, and fragile goods only where they are taken', () => {
+      const { from, to } = setUp('QCW');
+      expect(routing.quoteShipment(from.did, to.did, 'S', undefined, { kg: 2 }).perKm).toMatchObject({ from: 'carriers', min: 0.001, max: 99 });
+      // Too heavy for a bicycle: its rate is not the cheapest any more.
+      expect(routing.quoteShipment(from.did, to.did, 'M', undefined, { kg: 25 }).perKm.min).toBeGreaterThan(0.001);
+      // Fragile: the bicycle does not take it.
+      expect(routing.quoteShipment(from.did, to.did, 'S', undefined, { kg: 2, fragile: true }).perKm.min).toBeGreaterThan(0.001);
+    });
+
+    it('only rates in the quote’s own money — a rate in another money is never read as this one', () => {
+      const { from, to, ke } = setUp('QCM');
+      const quoteMax = () => routing.quoteShipment(from.did, to.did, 'S', undefined, { kg: 2 }).perKm.max;
+      expect(routing.quoteShipment(from.did, to.did, 'S', undefined, { kg: 2 }).currency).toBe('KES');
+      expect(quoteMax()).toBe(99);
+      // A Ugandan fleet's car at 999: Ugandan shillings, the money its company settles in — left out of a Kenyan quote.
+      entities.activate(entities.createCompany({ kind: 'sister', jurisdiction: 'UG', name: 'SeeBuyGet Uganda' }, 'Amina Otieno').entityId, 'Amina Otieno');
+      const ugCar = vehicles.register({ plate: 'QCM-U', vehicleClass: 'car', ownerName: 'U', managerDid: fleetIn('UG').did, pricePerKm: 999 });
+      expect(drivers.rateCurrencyOf(ugCar)).toBe('UGX');
+      expect(quoteMax()).toBe(99);
+      // The same figure in Kenyan shillings is read: the filter is the money, not the figure.
+      vehicles.register({ plate: 'QCM-K', vehicleClass: 'car', ownerName: 'K', managerDid: ke.did, pricePerKm: 999 });
+      expect(quoteMax()).toBe(999);
+    });
+
+    it('"near me": only the carriers near the asker — and, where none is, every one that can, said so', () => {
+      const { from, to, ke } = setUp('QCN');
+      const rider = vehicles.register({ plate: 'QCN-R', vehicleClass: 'bike', ownerName: 'R', managerDid: ke.did, pricePerKm: 0.002 });
+      onShiftAt(ke.did, rider, 'Rita', W);
+      // Near Westlands: the rider there, alone — not the cheaper bicycle at the depot in Mombasa.
+      expect(routing.quoteShipment(from.did, to.did, 'S', undefined, { kg: 2, near: W }).perKm).toEqual({ min: 0.002, max: 0.002, from: 'near', carriers: 1 });
+      // Near Lagos nobody can carry it: priced from every one that can, and the quote says nobody near was found.
+      expect(routing.quoteShipment(from.did, to.did, 'S', undefined, { kg: 2, near: lagos }).perKm).toMatchObject({ from: 'carriers', min: 0.001, nearWanted: true });
+    });
+
+    it('where no vehicle can carry it, the selling company’s own road rate — a quote always has a price', () => {
+      const { from, to } = setUp('QCC');
+      entities.setAmounts(entities.requireForJurisdiction('KE').entityId, { freightPerKm: 0.123 }, 'Amina Otieno');
+      expect(routing.quoteShipment(from.did, to.did, 'M', undefined, { kg: 50_000 }).perKm).toEqual({ min: 0.123, max: 0.123, from: 'company', carriers: 0 });
+    });
+
+    it('a store’s refund for a cheaper carrier is worked out only from a rate in the parcel’s own money', () => {
+      const origin = onboardAgent('QCR O', 'NorthTown', 50);
+      const dest = onboardAgent('QCR D', 'SouthTown', 50);
+      agents.get(dest.did).location = { lat: -1.05, lng: 36.95 }; // some way off, so the rate makes a difference
+      const corridor = corridors.addCorridor({ name: 'QCR', originZone: 'NorthTown', destZone: 'SouthTown' });
+      const ke = fleetIn('KE');
+      vehicles.register({ plate: 'QCR-DEAR', vehicleClass: 'bike', ownerName: 'D', managerDid: ke.did, pricePerKm: 99 });
+      vehicles.register({ plate: 'QCR-CHEAP', vehicleClass: 'bike', ownerName: 'C', managerDid: ke.did, pricePerKm: 5 });
+      const carrier = vehicles.register({ plate: 'QCR-RIDE', vehicleClass: 'bike', ownerName: 'R', managerDid: ke.did, pricePerKm: 30 });
+      const rider = drivers.register({ displayName: 'Ruth', fullName: 'Ruth R', nationalId: 'DRV-QCR', mobile: '+254700553100', licenceClasses: ['bike'], managerDid: ke.did });
+      fleet.couple(rider.did, carrier.vehicleId, corridor.corridorId);
+      const store = vendors.register({ name: 'QCR Co' });
+      vendors.topUp(store.vendorId, 100_000);
+      const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+      const mint = (ref: string) =>
+        parcels.createInbound({ vendorId: store.vendorId, externalOrderId: ref, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700553101', size: 'M', contentPhotoRef: photoOf(store.vendorId), shippingPolicy: store.shippingPolicy, routeMode: 'flexible', quote }).parcel;
+      const handOver = (parcelId: string) => {
+        parcels.intakeInbound(parcelId, origin.did);
+        parcels.handover({ agentDid: origin.did, driverBadgeId: rider.badgeId!, parcelIds: [parcelId] });
+      };
+
+      // Each parcel keeps the cheapest rate it was quoted at, in its own money.
+      const same = mint('QCR-1');
+      expect(same.lockedPerKm).toBe(quote.perKm.min);
+      expect(quote.perKm).toMatchObject({ min: 5, max: 99 });
+      // Carried by a Kenyan rider at 30 a kilometre: that rate is what it cost.
+      handOver(same.parcelId);
+      expect(parcels.get(same.parcelId).actualPerKm).toBe(30);
+
+      // The same ride, its rate in another money: not read as this parcel's — the cheapest it was quoted at stands in.
+      const other = mint('QCR-2');
+      const money = jest.spyOn(drivers, 'rateCurrencyOf').mockReturnValue('UGX');
+      handOver(other.parcelId);
+      money.mockRestore();
+      expect(parcels.get(other.parcelId).actualPerKm).toBeUndefined();
+      parcels.shelve(other.parcelId, dest.did);
+      parcels.collectConfirm(other.parcelId, dest.did, parcels.get(other.parcelId).collectionCode!);
+      expect(parcels.get(other.parcelId).actualCost).toBeCloseTo(quote.locked.gross, 1);
+      expect(parcels.get(other.parcelId).rebate).toBeCloseTo(quote.flexible.gross - quote.locked.gross, 1);
+    });
+
+    it('a fleet’s vehicles are near where its depot is, with nobody on shift', () => {
+      const { from, to } = setUp('QCD');
+      const nairobi = fleetIn('KE');
+      managers.get(nairobi.did).location = { lat: -1.2921, lng: 36.8219 };
+      vehicles.register({ plate: 'QCD-V', vehicleClass: 'van', ownerName: 'V', managerDid: nairobi.did, pricePerKm: 7 });
+      expect(routing.quoteShipment(from.did, to.did, 'S', undefined, { kg: 2, near: W }).perKm).toEqual({ min: 7, max: 7, from: 'near', carriers: 1 });
+    });
+
+    it('a send booked "near me" is charged the price it was shown, and one booked without it is asked to look again', () => {
+      const { from, to, ke } = setUp('QCB');
+      // Some way apart, so the kilometres — and so the rate — make a difference to the price.
+      agents.get(to.did).location = { lat: -1.05, lng: 36.95 };
+      const rider = vehicles.register({ plate: 'QCB-R', vehicleClass: 'bike', ownerName: 'R', managerDid: ke.did, pricePerKm: 0.5 });
+      onShiftAt(ke.did, rider, 'Rose', W);
+      const dims = { l: 20, w: 15, h: 10 };
+      const shown = routing.quoteShipment(from.did, to.did, classifySize({ ...dims, kg: 2 }), measuredFactor({ ...dims, kg: 2 }), { kg: 2, near: W });
+      const sender = enrollPerson('+254700552010');
+      const send = (near?: { lat: number; lng: number }) =>
+        identity.createParcel({ receiverMobile: '+254700552011', originPudoDid: from.did, destPudoDid: to.did, dimensionsCm: dims, weightKg: 2, expectedTotal: shown.locked.gross, ...(near ? { near } : {}) } as never, asConsumer(sender.personDid));
+      // Without "near me" the cheaper bicycle prices it: not the figure the sender agreed to.
+      expect(() => send()).toThrow(/price is now/);
+      expect(send(W).parcel.parcelId).toBeTruthy();
+    });
   });
 
   it('PG1: a P4+ load is refused (no un-billable person freight) — nothing is registered', () => {

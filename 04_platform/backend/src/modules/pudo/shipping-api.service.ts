@@ -240,7 +240,7 @@ export class ShippingApiService {
 
     // ITEM 9 — measured where measured. The same dims that derived the size price the transport, so the
     // public quote a buyer is shown is the one the mint will reproduce.
-    const { plan, quote } = this.routing.quoteWithPlan(from.agent.did, to.agent.did, size, input.dimensionsCm ? measuredFactor({ ...input.dimensionsCm, kg: weightKg }) : undefined);
+    const { plan, quote } = this.routing.quoteWithPlan(from.agent.did, to.agent.did, size, input.dimensionsCm ? measuredFactor({ ...input.dimensionsCm, kg: weightKg }) : undefined, { kg: weightKg });
     // A price is only worth holding for somebody we can recognise when they come back to claim it. An
     // anonymous quote is a calculation; a keyed one is a promise, and that difference is the honest reason
     // a key is worth having.
@@ -413,7 +413,7 @@ export class ShippingApiService {
       routeMode: input.routeMode,
       // THE HELD PRICE, when there is one. This line is the promise: the parcel is billed at the figure
       // the buyer was shown, not at the one the world has moved to since.
-      quote: held ? held.quote : this.routing.quoteShipment(origin.did, dest.did, quoted.parcel.size, input.dimensionsCm ? measuredFactor({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[quoted.parcel.size] }) : undefined),
+      quote: held ? held.quote : this.routing.quoteShipment(origin.did, dest.did, quoted.parcel.size, input.dimensionsCm ? measuredFactor({ ...input.dimensionsCm, kg: input.weightKg ?? SIZE_WEIGHT_KG[quoted.parcel.size] }) : undefined, { kg: input.weightKg ?? SIZE_WEIGHT_KG[quoted.parcel.size] }),
     });
     // Spent only now, because the shipment now exists. A mint that threw leaves the price held, so a
     // merchant can fix what was wrong and redeem the same promise rather than go back to the buyer with a

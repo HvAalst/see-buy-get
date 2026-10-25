@@ -1294,6 +1294,9 @@ export class ConsumerSendDto {
    *  server rejects with PRICE_CHANGED (carrying the fresh total) so the app can re-confirm — never
    *  silently bill a different amount than the one shown. */
   @IsOptional() @IsNumber() @Min(0) expectedTotal?: number;
+  /** Priced from the carriers near here, as the quote was when "near me" was asked for (2026-10-25) — so the price
+   *  checked at the mint is the one the sender was shown. */
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) near?: GeoDto;
 }
 
 export class IntakeDto {

@@ -74,7 +74,7 @@ import { VendorService } from './vendor.service';
 import { storeDeskOf, storeRowOf, type StoreDesk, type StoreRecord, type StoreRow, type StoreStanding } from './store-desk';
 import { ShelfService } from './shelf.service';
 import { DamageReportService } from './damage-report.service';
-import { RoutingService, publicQuote } from './routing.service';
+import { RoutingService, publicQuote, type QuoteCarriers } from './routing.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { ConsignmentService } from './consignment.service';
@@ -3766,15 +3766,31 @@ export class SbgController {
   @ApiQuery({ name: 'w', required: false })
   @ApiQuery({ name: 'h', required: false })
   @ApiQuery({ name: 'kg', required: false })
+  // Which carriers price it (the user, 2026-10-25): only those that can carry it — fragile goods only by those that
+  // take them — and, with `near` ("lat,lng"), only those near the asker.
+  @ApiQuery({ name: 'fragile', required: false })
+  @ApiQuery({ name: 'near', required: false, description: 'lat,lng — price from the carriers near here' })
   @Get('quote')
-  quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string) {
+  quote(@Query('origin') origin: string, @Query('dest') dest: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string, @Query('fragile') fragile?: string, @Query('near') near?: string) {
     if (!origin || !dest) throw new GlosError('FIELD_REQUIRED', 'origin and dest are required');
     const m = this.measuredFrom(l, w, h, kg);
     // `publicQuote`, not the raw quote: this endpoint is @Public(), and the raw shape carries the sister's
     // three rate layers, which were decided to be internal. A buyer sees a price; a merchant sees one fee.
     this.agents.assertNamedAtMint(origin);
     this.agents.assertNamedAtMint(dest);
-    return publicQuote(this.routing.quoteShipment(origin, dest, m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'), m?.factor));
+    return publicQuote(this.routing.quoteShipment(origin, dest, m?.size ?? ((size as 'S' | 'M' | 'L' | 'HEAVY') || 'M'), m?.factor, this.carriersFrom(kg, fragile, near)));
+  }
+
+  /** What a quote's query says about the parcel and the asker: its weight, whether it is fragile, where "near me" is. */
+  private carriersFrom(kg?: string, fragile?: string, near?: string): QuoteCarriers {
+    const weight = Number(kg);
+    const [lat, lng] = (near ?? '').split(',').map((n) => Number(n.trim()));
+    const placed = near && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+    return {
+      ...(kg && Number.isFinite(weight) && weight > 0 ? { kg: weight } : {}),
+      ...(fragile === 'true' || fragile === '1' ? { fragile: true } : {}),
+      ...(placed ? { near: { lat, lng } } : {}),
+    };
   }
 
   /**
@@ -3788,8 +3804,10 @@ export class SbgController {
   @ApiQuery({ name: 'w', required: false })
   @ApiQuery({ name: 'h', required: false })
   @ApiQuery({ name: 'kg', required: false })
+  // Fragile goods are priced only by the carriers that take them — at the mint as on the map.
+  @ApiQuery({ name: 'fragile', required: false })
   @Get('quote/options')
-  quoteOptions(@Query('origin') origin: string, @Query('dest') dest: string, @Query('origins') origins: string, @Query('dests') dests: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string) {
+  quoteOptions(@Query('origin') origin: string, @Query('dest') dest: string, @Query('origins') origins: string, @Query('dests') dests: string, @Query('size') size?: string, @Query('l') l?: string, @Query('w') w?: string, @Query('h') h?: string, @Query('kg') kg?: string, @Query('fragile') fragile?: string) {
     // ITEM 9 — the pins must price the parcel the SAME WAY the mint will. A map quoting bands beside a
     // mint quoting measurements would move the price between choosing a shop and paying for it, which
     // reads as a bait even though both numbers were honest.
@@ -3801,7 +3819,7 @@ export class SbgController {
     if (!list) throw new GlosError('FIELD_REQUIRED', 'provide origin+dests or dest+origins');
     const variable = origin ? 1 : 0; // which side varies → the `did` the pin represents
     return { options: list.filter(([a, b]) => a && b).map(([o, d]) => {
-      try { this.agents.assertNamedAtMint(o); this.agents.assertNamedAtMint(d); return { did: [o, d][variable], quote: publicQuote(this.routing.quoteShipment(o, d, sz, m?.factor)) }; }
+      try { this.agents.assertNamedAtMint(o); this.agents.assertNamedAtMint(d); return { did: [o, d][variable], quote: publicQuote(this.routing.quoteShipment(o, d, sz, m?.factor, this.carriersFrom(kg, fragile))) }; }
       catch (e) { return { did: [o, d][variable], error: e instanceof Error ? e.message : 'no route' }; }
     }) };
   }
@@ -3888,8 +3906,9 @@ export class SbgController {
     return {
       pudos: this.agents.list().filter((a) => a.status === 'ACTIVE').map((a) => ({ did: a.did, shopName: a.shopName, zone: a.zone, location: a.location, pricePerParcel: a.pricePerParcel })),
       mdps: this.mdps.list().map((m) => ({ mdpId: m.mdpId, name: m.name, zones: m.zones, location: m.location, pricePerParcel: m.pricePerParcel })),
-      vehicles: this.vehicles.list({ status: 'ACTIVE' }).map((v) => ({ vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, pricePerKm: v.pricePerKm })),
-      perKm: this.vehicles.priceRange(),
+      // Each rate with its money (the settling company's). No one cheapest-and-dearest across them: a range over two
+      // currencies is a number about nothing (2026-10-25).
+      vehicles: this.vehicles.list({ status: 'ACTIVE' }).map((v) => ({ vehicleId: v.vehicleId, plate: v.plate, vehicleClass: v.vehicleClass, pricePerKm: v.pricePerKm, currency: this.drivers.rateCurrencyOf(v) ?? null })),
     };
   }
 
@@ -4064,6 +4083,8 @@ export class SbgController {
   @Public()
   @UseGuards(RateLimitGuard)
   @RateLimit(60, 15 * 60)
+  // Optional and declared so: without it an address is looked for anywhere.
+  @ApiQuery({ name: 'country', required: false, description: 'ISO-3166 alpha-2 codes, comma-separated — where to look' })
   @Get('geocode')
   async geocode(@Query('q') q?: string, @Query('country') country?: string) {
     if (!q || !q.trim()) throw new GlosError('FIELD_REQUIRED', 'Enter an address or a place to look up');
@@ -4208,8 +4229,9 @@ export class SbgController {
           size,
           this.vendors.entityIdOf(vendor),
           measured,
+          { kg: weightKg, fragile: dto.fragile },
         )
-      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured);
+      : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured, { kg: weightKg, fragile: dto.fragile });
     // ROUND 13 — the same rule as the shipping API: a parcel crossing a border goes with its commercial invoice, checked
     // before the parcel exists; one staying inside a country needs none and is told so.
     if (dto.invoice && !quote.crossesBorder) throw new GlosError('INVALID_INPUT', 'This shipment does not cross a border, so it needs no commercial invoice', { field: 'invoice' });

@@ -51,9 +51,19 @@ export function fetchPlace(q: string, countries: string[] = []): Promise<Result<
  * priced by size band would therefore not merely mislead, it would make every send bounce on a price it
  * had itself quoted. The tier still rides along for the parts of the answer that are about the tier.
  */
-export function fetchQuote(originDid: string, destDid: string, size: ParcelSize, measure?: { l: number; w: number; h: number; kg: number }): Promise<Result<QuoteView>> {
+export function fetchQuote(
+  originDid: string,
+  destDid: string,
+  size: ParcelSize,
+  measure?: { l: number; w: number; h: number; kg: number },
+  // Which carriers price it (2026-10-25): fragile goods only those that take them, as the mint does; and, "near me",
+  // only those near `near` — the shop the parcel starts from, a public place, never where the phone is.
+  carriers: { fragile?: boolean; near?: { lat: number; lng: number } } = {},
+): Promise<Result<QuoteView>> {
   const q = new URLSearchParams({ origin: originDid, dest: destDid, size });
   if (measure) for (const [k, v] of Object.entries(measure)) q.set(k, String(v));
+  if (carriers.fragile) q.set('fragile', 'true');
+  if (carriers.near) q.set('near', `${carriers.near.lat},${carriers.near.lng}`);
   return publicRequest<QuoteView>(sendConfig(), `/v1/sbg/quote?${q.toString()}`);
 }
 

@@ -9,10 +9,11 @@ import { CorridorService } from './corridor.service';
 import { DriverService } from './driver.service';
 import { VehicleService } from './vehicle.service';
 import { CLASS_TO_CORRIDOR_VEHICLE } from './fleet.config';
-import { MAX_SNOOZE_MIN, MAX_WORK_RADIUS_KM } from './pudo.config';
+import { MAX_SNOOZE_MIN, MAX_WORK_RADIUS_KM, NEAR_LOCATED_H } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { Assignment, DeclaredLeg, DeclaredWork, ResolvedBadge } from './fleet.types';
 import { GeoPoint } from './pudo.types';
+import { haversineKm } from './geo';
 import { handedAt } from './observed-at';
 
 /** What a caller declares: the two ends, each named and pinned. */
@@ -752,6 +753,17 @@ export class FleetService {
 
   activeForDriver(driverDid: string): Assignment | undefined {
     return [...this.assignments.values()].find((a) => a.status === 'active' && a.driverDid === driverDid);
+  }
+
+  /**
+   * The vehicles on shift whose driver's phone placed them within `km` of a place in the last NEAR_LOCATED_H hours —
+   * the half of "near me" a phone can say (a quote's other half is a fleet's depot, VehicleService.basedNear).
+   */
+  onShiftNear(point: GeoPoint, km: number, now: number = Date.now()): string[] {
+    return [...this.assignments.values()]
+      .filter((a) => a.status === 'active' && a.location && a.lastLocatedAt && now - new Date(a.lastLocatedAt).getTime() <= NEAR_LOCATED_H * 3_600_000)
+      .filter((a) => haversineKm(a.location!, point) <= km)
+      .map((a) => a.vehicleId);
   }
 
   activeForVehicle(vehicleId: string): Assignment | undefined {

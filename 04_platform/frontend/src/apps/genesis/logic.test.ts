@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
   LADDER,
+  carriersLine,
+  carriersOf,
   cleanPhone,
   coverLine,
   disputeOutcomeWords,
@@ -179,6 +181,34 @@ describe('quote presentation', () => {
 
   it('quoteSummary speaks distance, stops and the price', () => {
     expect(quoteSummary(quote(), t)).toBe('12 kilometres across 3 stops. The price is 4.40.');
+  });
+});
+
+describe('which carriers set the price (2026-10-25)', () => {
+  const at = (over: Partial<QuoteView['perKm']>) => quote({ perKm: { min: 0.2, max: 0.5, ...over } });
+
+  it('says whose rates the price was taken from — near the shop, every carrier that can, or the standard rate', () => {
+    expect(carriersLine(at({ from: 'near', carriers: 3 }), 'Mama Njeri', t)).toBe('Priced by the cheapest of the 3 carriers near Mama Njeri that can carry it.');
+    expect(carriersLine(at({ from: 'near', carriers: 1 }), 'Mama Njeri', t)).toBe('Priced by the one carrier near Mama Njeri that can carry it.');
+    expect(carriersLine(at({ from: 'carriers', carriers: 12 }), 'Mama Njeri', t)).toBe('Priced by the cheapest of the 12 carriers that can carry it.');
+    expect(carriersLine(at({ from: 'company', carriers: 0 }), 'Mama Njeri', t)).toBe('No carrier can carry it yet, so the road is priced at the standard rate per kilometre.');
+  });
+
+  it('"near me" with nobody near: says so, and says the price came from further away', () => {
+    expect(carriersLine(at({ from: 'carriers', carriers: 4, nearWanted: true }), 'Mama Njeri', t)).toBe('No carrier near Mama Njeri can carry it yet, so it is priced by the cheapest of the 4 further away that can.');
+    expect(carriersLine(at({ from: 'company', carriers: 0, nearWanted: true }), 'Mama Njeri', t)).toBe('No carrier can carry it yet, so the road is priced at the standard rate per kilometre.');
+  });
+
+  it('a quote that does not say is not given words it did not have', () => {
+    expect(carriersLine(quote(), 'Mama Njeri', t)).toBeNull();
+  });
+
+  it('asks for what the booking will be charged on: fragile, and "near me" at the shop the parcel starts from', () => {
+    const shops = [point({ did: 'a', location: { lat: -1.28, lng: 36.82 } }), point({ did: 'b' })];
+    expect(carriersOf({ fragile: false, nearMe: false, fromDid: 'a', points: shops })).toEqual({});
+    expect(carriersOf({ fragile: true, nearMe: true, fromDid: 'a', points: shops })).toEqual({ fragile: true, near: { lat: -1.28, lng: 36.82 } });
+    // A shop with no place on record: "near me" has nowhere to be near.
+    expect(carriersOf({ fragile: false, nearMe: true, fromDid: 'b', points: shops })).toEqual({});
   });
 });
 

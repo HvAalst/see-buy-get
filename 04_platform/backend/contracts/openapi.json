@@ -11547,6 +11547,23 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "fragile",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "near",
+            "required": false,
+            "in": "query",
+            "description": "lat,lng — price from the carriers near here",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -11635,6 +11652,14 @@
           },
           {
             "name": "kg",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fragile",
             "required": false,
             "in": "query",
             "schema": {
@@ -12305,8 +12330,9 @@
           },
           {
             "name": "country",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "ISO-3166 alpha-2 codes, comma-separated — where to look",
             "schema": {
               "type": "string"
             }
@@ -39516,6 +39542,9 @@
           "actualPerKm": {
             "type": "number"
           },
+          "lockedPerKm": {
+            "type": "number"
+          },
           "buyerCharge": {
             "type": "number"
           },
@@ -49438,6 +49467,14 @@
             "type": "number",
             "description": "The locked total the sender consented to at the quote step. If the market moved before mint, the\n server rejects with PRICE_CHANGED (carrying the fresh total) so the app can re-confirm — never\n silently bill a different amount than the one shown.",
             "minimum": 0
+          },
+          "near": {
+            "description": "Priced from the carriers near here, as the quote was when \"near me\" was asked for (2026-10-25) — so the price\n checked at the mint is the one the sender was shown.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GeoDto"
+              }
+            ]
           }
         },
         "required": [

@@ -1,20 +1,33 @@
-﻿import { Inject, Injectable } from '@nestjs/common';
+﻿import { Inject, Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { CorridorService } from './corridor.service';
 import { MdpService } from './mdp.service';
 import { VehicleService } from './vehicle.service';
+import { FleetService } from './fleet.service';
+import { DriverService } from './driver.service';
+import type { Vehicle } from './fleet.types';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NEAR_CARRIER_KM, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/money/currency';
 import { FX_QUOTE_TTL_MIN, FxRate, FxService } from '../../foundation/money/fx.service';
 import { BorderCrossing, crossingsOn } from './country';
-import { ParcelFx, ParcelSize } from './pudo.types';
+import { GeoPoint, ParcelFx, ParcelSize } from './pudo.types';
+
+/**
+ * WHICH CARRIERS PRICE A QUOTE (the user, 2026-10-25). What the parcel weighs and whether it is fragile — only vehicles
+ * that may carry it price it — and, asked "near me", the place the asker stands: only carriers near it.
+ */
+export interface QuoteCarriers {
+  kg?: number;
+  fragile?: boolean;
+  near?: GeoPoint;
+}
 
 export interface NodePick {
   agentDid: string;
@@ -111,7 +124,14 @@ export interface ShipmentQuote {
    *  Stated rather than left to be inferred from the decimals — `ToteHaul.basis` set the precedent, and
    *  a merchant asking why two similar boxes priced differently deserves the answer inside the quote. */
   factorBasis: 'measured' | 'band';
-  perKm: { min: number; max: number };
+  /**
+   * The per-km rates the two prices were taken from, and WHOSE (the user, 2026-10-25: "a quote price should be taken
+   * only from vehicles that can carry that load, within the unified currency range and the asker should be able to
+   * filter quotations from 'near me'"): `near` — the vehicles near the asker that can carry it; `carriers` — every
+   * vehicle that can carry it, in the quote's money; `company` — none can yet, so the selling company's own road rate.
+   * `carriers` counts the vehicles; `nearWanted` says "near me" was asked for and nobody near can carry it yet.
+   */
+  perKm: { min: number; max: number; from: 'near' | 'carriers' | 'company'; carriers: number; nearWanted?: true };
   /** What the platform takes, as a fraction — the SUM of the seller's three layers. */
   platformFeePct: number;
   /**
@@ -219,7 +239,36 @@ export class RoutingService {
     private readonly presence: PresenceService,
     private readonly fx: FxService,
     @Inject(ROUTER) private readonly router: Router,
+    // Where carriers on shift are, for a quote asked "near me". Optional for the specs that build this by hand.
+    @Optional() private readonly fleet?: FleetService,
+    // What money each vehicle's rate is in (rateCurrencyOf). Without it no rate can be placed in a money, and a quote
+    // is priced at the selling company's own road rate — never at a rate read in the wrong money.
+    @Optional() private readonly drivers?: DriverService,
   ) {}
+
+  /**
+   * The per-km rates a parcel is priced from. Only vehicles that can carry THIS load, with their rate in the quote's
+   * money — the money of the company that settles the work done in the vehicle, the same answer every other place
+   * that compares rates gives (DriverService.rateCurrencyOf); a rate nobody can be said to be paid in is left out.
+   * "Near me", only those near the asker — and where nobody near can carry it yet, every one that can, said so.
+   * Where no vehicle can at all, the selling company's own road rate (its list's freightPerKm, 2026-10-25): a quote
+   * always has a price, and it is never a rate in another money.
+   */
+  private carrierRange(sellerId: string, currency: string, carriers: QuoteCarriers = {}): ShipmentQuote['perKm'] {
+    const range = (rates: number[], from: 'near' | 'carriers') => ({ min: Math.min(...rates), max: Math.max(...rates), from, carriers: rates.length });
+    const moneyOf = (v: Vehicle) => this.drivers?.rateCurrencyOf(v);
+    const fits = { currency, moneyOf, ...(carriers.kg != null ? { kg: carriers.kg } : {}), ...(carriers.fragile ? { fragile: true } : {}) };
+    if (carriers.near) {
+      const close = new Set([...(this.fleet?.onShiftNear(carriers.near, NEAR_CARRIER_KM) ?? []), ...this.vehicles.basedNear(carriers.near, NEAR_CARRIER_KM)]);
+      const near = this.vehicles.carrierRates({ ...fits, only: close });
+      if (near.length) return range(near, 'near');
+    }
+    const all = this.vehicles.carrierRates(fits);
+    const wanted = carriers.near ? { nearWanted: true as const } : {};
+    if (all.length) return { ...range(all, 'carriers'), ...wanted };
+    const own = this.entities.amountsFor(sellerId).freightPerKm;
+    return { min: own, max: own, from: 'company', carriers: 0, ...wanted };
+  }
 
   /**
    * Quote a shipment from the OPEN-DATA participant rates along the route: node fees (each PUDO + MDP's
@@ -227,9 +276,9 @@ export class RoutingService {
    * Two prices: `flexible` reserves the worst case (dearest carrier) so any passing vehicle can claim it
    * (the over-hold is rebated on delivery); `locked` is the cheapest carrier if the vendor commits the route.
    */
-  quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number): ShipmentQuote {
+  quoteShipment(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number, carriers: QuoteCarriers = {}): ShipmentQuote {
     this.doorFor(originAgentDid, destAgentDid);
-    return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, undefined, measured);
+    return this.quoteJourney(this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, undefined, measured, carriers);
   }
 
   /**
@@ -238,10 +287,10 @@ export class RoutingService {
    * A customer-facing answer needs both — a price and when they could collect it — and planning the same
    * route twice to get them is work a public endpoint should not be doing on a stranger's behalf.
    */
-  quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
+  quoteWithPlan(originAgentDid: string, destAgentDid: string, size: ParcelSize = 'M', measured?: number, carriers: QuoteCarriers = {}): { plan: ReturnType<RoutingService['planJourney']>; quote: ShipmentQuote } {
     this.doorFor(originAgentDid, destAgentDid);
     const plan =this.planJourney({ originAgentDid, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] });
-    return { plan, quote: this.quoteJourney(plan, size, undefined, measured) };
+    return { plan, quote: this.quoteJourney(plan, size, undefined, measured, carriers) };
   }
 
   /**
@@ -251,9 +300,9 @@ export class RoutingService {
    * a discount, it is the absence of work. `sellerEntityId` is the sister that sells the shipment (the
    * store's own), which is who the margin belongs to when there is no origin shop to take it from.
    */
-  quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string, measured?: number): ShipmentQuote {
+  quoteShipmentFrom(from: RouteEnd, destAgentDid: string, size: ParcelSize = 'M', sellerEntityId?: string, measured?: number, carriers: QuoteCarriers = {}): ShipmentQuote {
     this.doorFor(undefined, destAgentDid);
-    return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, sellerEntityId, measured);
+    return this.quoteJourney(this.planJourney({ from, destAgentDid, weightKg: SIZE_WEIGHT_KG[size] }), size, sellerEntityId, measured, carriers);
   }
 
   /**
@@ -269,7 +318,7 @@ export class RoutingService {
     this.presence.require(this.agents.countryOf(this.agents.get(destAgentDid)), 'takeIn');
   }
 
-  private quoteJourney(plan: ReturnType<RoutingService['planJourney']>, size: ParcelSize, sellerEntityId?: string, measured?: number): ShipmentQuote {
+  private quoteJourney(plan: ReturnType<RoutingService['planJourney']>, size: ParcelSize, sellerEntityId?: string, measured?: number, carriers: QuoteCarriers = {}): ShipmentQuote {
     // Each stop names the sister that will be owed its fee. Today they are all the same company, so the
     // quote reads as one entity's cost stack — but the fee is owed to a shop by a specific sister, and
     // writing that down now is what makes a cross-border route expressible later without a re-quote.
@@ -308,7 +357,9 @@ export class RoutingService {
     // declared as. The band is still derived from the same limit table, so nothing became under-declarable
     // that was not before — what changed is that a real measurement is no longer rounded up to a tier.
     const factor = measured ?? SIZE_TRANSPORT_FACTOR[size];
-    const { min, max } = this.vehicles.priceRange();
+    // From the vehicles that can carry THIS parcel, with their rates in the seller's money — near the asker where asked.
+    const perKm = this.carrierRange(sellerId, this.currencyOf(sellerId), carriers);
+    const { min, max } = perKm;
     /**
      * NO SURGE HERE, AND THAT IS A DECISION — user, 2026-09-06.
      *
@@ -406,7 +457,7 @@ export class RoutingService {
     };
     return {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
-      totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', perKm: { min, max }, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
+      totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', perKm, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
       flexible: leg(max), locked: leg(min),
     };
   }

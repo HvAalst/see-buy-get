@@ -52,12 +52,13 @@ export const DEFAULT_AMOUNTS: Amounts = {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-/** A company's list: its own figure where it has set one, the starting figure where it has not. */
+/** A company's list: its own figure where it has set one, the starting figure where it has not. A rate per kilometre
+ *  keeps a third decimal, as a vehicle's own does: in a money whose unit is large, a kilometre costs less than a cent. */
 export function resolveAmounts(own?: Partial<Record<string, number>>): Amounts {
   const out = { ...DEFAULT_AMOUNTS };
   for (const key of AMOUNT_KEYS) {
     const set = own?.[key];
-    if (typeof set === 'number' && Number.isFinite(set) && set >= 0) out[key] = round2(set);
+    if (typeof set === 'number' && Number.isFinite(set) && set >= 0) out[key] = key === 'freightPerKm' ? Math.round(set * 1000) / 1000 : round2(set);
   }
   return out;
 }

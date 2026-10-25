@@ -173,6 +173,29 @@ export function mintTaxLine(price: { tax?: number; taxLabel?: string }, t: Trans
   return t('send.logic.taxLine', { label: price.taxLabel || t('send.logic.taxDefault'), amount: money(price.tax) });
 }
 
+/**
+ * Which carriers set the price, in one sentence (2026-10-25: only vehicles that can carry this parcel, in the price's
+ * own money; "near me", only those near the shop it starts from). Null for a quote that does not say.
+ */
+export function carriersLine(q: QuoteView, shop: string, t: Translate): string | null {
+  const { from, carriers = 0, nearWanted } = q.perKm;
+  if (from === 'company') return t('send.logic.carriersStandard');
+  if (from === 'near') return carriers === 1 ? t('send.logic.carriersNearOne', { shop }) : t('send.logic.carriersNearMany', { shop, count: carriers });
+  if (from !== 'carriers') return null;
+  if (nearWanted) return carriers === 1 ? t('send.logic.carriersNoneNearOne', { shop }) : t('send.logic.carriersNoneNearMany', { shop, count: carriers });
+  return carriers === 1 ? t('send.logic.carriersAllOne') : t('send.logic.carriersAllMany', { count: carriers });
+}
+
+/**
+ * Which carriers a quote asks for, and so the booking: fragile goods only by those that take them, and "near me" only
+ * those near the shop the parcel starts from — a public place, so no position of the sender's leaves the phone. A
+ * shop with no place on record offers no "near me".
+ */
+export function carriersOf(s: { fragile: boolean; nearMe: boolean; fromDid: string | null; points: NetworkPoint[] }): { fragile?: boolean; near?: { lat: number; lng: number } } {
+  const near = s.nearMe ? s.points.find((p) => p.did === s.fromDid)?.location : undefined;
+  return { ...(s.fragile ? { fragile: true } : {}), ...(near ? { near: { lat: near.lat, lng: near.lng } } : {}) };
+}
+
 /** "Shop A → Central hub → Shop B" — the journey in names, not ids. */
 export function journeyLine(q: QuoteView): string {
   return q.hops.map((h) => h.label).join(' → ');

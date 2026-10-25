@@ -33,9 +33,11 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
   useEffect(() => {
     if (!hostRef.current || mapRef.current) return;
     const map = L.map(hostRef.current, { zoomControl: true, attributionControl: true }).setView(NAIROBI, 11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // OpenStreetMap's own tiles, at the one address it asks for now (the a/b/c ones are retired), credited with the link
+    // to its copyright page, as its tile policy asks — the addresses typed into the Send app are found in the same data.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '© OpenStreetMap contributors',
+      attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
     }).addTo(map);
     map.on('click', (e: L.LeafletMouseEvent) => onDropRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng }));
     layerRef.current = L.layerGroup().addTo(map);

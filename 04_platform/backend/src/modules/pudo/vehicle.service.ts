@@ -11,6 +11,8 @@ import { clampMultiplier } from './pricing';
 import { FleetManagerService } from './fleet-manager.service';
 import { MediaService } from './media.service';
 import { DEFAULT_PRICE_PER_KM, NETWORK_JURISDICTION } from './pudo.config';
+import { haversineKm } from './geo';
+import type { GeoPoint } from './pudo.types';
 
 /** A reason a vehicle is off the road, in words — for now, or for `day` (YYYY-MM-DD, on the owner's clock) when asked. */
 export type OffRoadSource = (vehicle: Vehicle, at: { now: number; day?: string }) => string[];
@@ -75,6 +77,39 @@ export class VehicleService {
     const entityId = manager ? this.managers.entityIdOrNone(manager) : this.entities?.forJurisdiction(input.country ?? NETWORK_JURISDICTION)?.entityId;
     const list = this.entities?.amountsFor(entityId);
     return { perKm: list?.freightPerKm ?? DEFAULT_PRICE_PER_KM, truckBaseFee: list?.freightBaseFee ?? VEHICLE_SPEC.truck.defaultBaseFee };
+  }
+
+  /**
+   * WHICH VEHICLES MAY PRICE A PARCEL (the user, 2026-10-25: "a quote price should be taken only from vehicles that can
+   * carry that load, within the unified currency range"). Active; able to take a parcel this heavy — its class's
+   * per-parcel limit and its own capacity — and fragile goods only where it takes them; and with its rate in
+   * `currency`, the quote's own money, as `moneyOf` says (DriverService.rateCurrencyOf: the settling company's): a
+   * rate in another money read as if it were this one would be a wrong price, not a cheap one, and a rate in no money
+   * anybody can name is left out. `only`, where given, narrows them to those vehicles (the ones near the asker).
+   */
+  carrierRates(q: { currency: string; moneyOf: (v: Vehicle) => string | undefined; kg?: number; fragile?: boolean; only?: ReadonlySet<string> }): number[] {
+    return [...this.vehicles.values()]
+      .filter((v) => v.status === 'ACTIVE' && (!q.only || q.only.has(v.vehicleId)))
+      .filter((v) => q.kg == null || (q.kg <= v.maxParcelKg && q.kg <= v.capacityKg))
+      .filter((v) => !q.fragile || v.allowsFragile)
+      .filter((v) => q.moneyOf(v) === q.currency)
+      .map((v) => v.pricePerKm)
+      .filter((rate) => Number.isFinite(rate) && rate >= 0);
+  }
+
+  /** The active vehicles of fleets whose depot stands within `km` of a place. */
+  basedNear(point: GeoPoint, km: number): string[] {
+    return [...this.vehicles.values()]
+      .filter((v) => v.status === 'ACTIVE' && v.managerDid)
+      .filter((v) => {
+        try {
+          const depot = this.managers.get(v.managerDid!).location;
+          return Boolean(depot) && haversineKm(depot, point) <= km;
+        } catch {
+          return false;
+        }
+      })
+      .map((v) => v.vehicleId);
   }
 
   register(input: RegisterVehicleInput): Vehicle {
@@ -279,16 +314,6 @@ export class VehicleService {
     const vehicle = this.require(vehicleId);
     vehicle.pricePerKm = Math.round(pricePerKm * 1000) / 1000;
     return vehicle;
-  }
-
-  /**
-   * The active fleet's per-km rate spread — the cheapest carrier (for the locked/affordable quote) and the
-   * dearest (for the flexible/any-carrier ceiling). Falls back to the default rate when no vehicle is active.
-   */
-  priceRange(): { min: number; max: number } {
-    const rates = [...this.vehicles.values()].filter((v) => v.status === 'ACTIVE').map((v) => v.pricePerKm);
-    if (!rates.length) return { min: DEFAULT_PRICE_PER_KM, max: DEFAULT_PRICE_PER_KM };
-    return { min: Math.min(...rates), max: Math.max(...rates) };
   }
 
   list(filter: { status?: Vehicle['status']; vehicleClass?: VehicleClass; managerDid?: string } = {}): Vehicle[] {

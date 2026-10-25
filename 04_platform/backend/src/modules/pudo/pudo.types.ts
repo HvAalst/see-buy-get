@@ -1083,7 +1083,8 @@ export class Parcel {
   ceilingProvision?: number;
   actualCost?: number; // the real GROSS once the carrier is known (drives the flexible rebate)
   rebate?: number; // refunded to the vendor after delivery (ceiling − actual) on a flexible parcel
-  actualPerKm?: number; // the delivering carrier's per-km rate (captured at handover, drives the rebate)
+  actualPerKm?: number; // the delivering carrier's per-km rate (captured at handover, drives the rebate) — only a rate in the parcel's own money
+  lockedPerKm?: number; // the cheapest carrier rate it was QUOTED at, in its own money: the rebate's rate where the carrier's is not known
   buyerCharge?: number; // what the checkout charged the buyer (REPORTED only — vendor's income)
   paidStatus?: 'unpaid' | 'ParcelPaid'; // prepaid gate — label issues only when ParcelPaid
   disputeReason?: string;

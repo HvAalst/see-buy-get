@@ -35,7 +35,7 @@ import {
 } from './api';
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { classifyParcel } from './api';
-import { cleanPhone, codeReady, followLanding, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
+import { carriersOf, cleanPhone, codeReady, followLanding, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
 import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult } from './types';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
@@ -63,6 +63,12 @@ export interface SendState {
   quote: QuoteView | null;
   quoteState: 'idle' | 'loading' | 'ready' | 'error';
   quoteError: SbgError | null;
+  /**
+   * "Near me" (the user, 2026-10-25: "the asker should be able to filter quotations from 'near me'"): price the road
+   * only from the carriers near the shop the parcel starts from. The booking sends the same, so it is charged the
+   * price it was shown.
+   */
+  nearMe: boolean;
   /** PG3: the booking half (signed-in only) — receiver + the mint result. */
   receiverMobile: string;
   mintBusy: boolean;
@@ -164,6 +170,7 @@ const INITIAL: SendState = {
   quote: null,
   quoteState: 'idle',
   quoteError: null,
+  nearMe: false,
   receiverMobile: '',
   mintBusy: false,
   mintError: null,
@@ -349,14 +356,15 @@ export function useSendApp() {
 
   const quoteEpoch = useRef(0);
 
-  const runQuote = useCallback(async (fromDid: string, toDid: string) => {
+  // `nearMe` is passed by the switch that has just changed it: the state ref only catches up after the next render.
+  const runQuote = useCallback(async (fromDid: string, toDid: string, nearMe: boolean = stateRef.current.nearMe) => {
     const size = stateRef.current.derived?.size;
     if (!size) return;
     const epoch = ++quoteEpoch.current;
     setState((s) => ({ ...s, step: 'quote', quote: null, quoteState: 'loading', quoteError: null }));
     // The same dims the tier was derived from, so the figure shown here is the figure the mint charges —
     // and, because the mint refuses a total it did not quote, the figure that lets the send go through.
-    const r = await fetchQuote(fromDid, toDid, size, parseDims(stateRef.current.dims) ?? undefined);
+    const r = await fetchQuote(fromDid, toDid, size, parseDims(stateRef.current.dims) ?? undefined, carriersOf({ ...stateRef.current, fromDid, nearMe }));
     if (epoch !== quoteEpoch.current) return;
     if (r.error) {
       setState((s) => ({ ...s, quoteState: 'error', quoteError: r.error }));
@@ -385,6 +393,15 @@ export function useSendApp() {
       setState((s) => ({ ...s, toDid: did }));
       const { fromDid } = stateRef.current;
       if (fromDid) void runQuote(fromDid, did);
+    },
+    [runQuote],
+  );
+
+  const setNearMe = useCallback(
+    (nearMe: boolean) => {
+      setState((s) => ({ ...s, nearMe, mintError: null }));
+      const { fromDid, toDid } = stateRef.current;
+      if (fromDid && toDid) void runQuote(fromDid, toDid, nearMe);
     },
     [runQuote],
   );
@@ -712,6 +729,7 @@ export function useSendApp() {
         quote: null,
         quoteState: 'idle',
         quoteError: null,
+        nearMe: false,
         receiverMobile: '',
         mintBusy: false,
         mintError: null,
@@ -755,6 +773,7 @@ export function useSendApp() {
    *  wizard lands on the label (their drop-off credential) and My Parcels refreshes underneath. */
   const submitMint = useCallback(async () => {
     const { dims, fragile, fromDid, toDid, receiverMobile, quote, points } = stateRef.current;
+    const { near } = carriersOf(stateRef.current);
     const parsed = parseDims(dims);
     const receiver = cleanPhone(receiverMobile);
     if (!client || !parsed || !fromDid || !toDid || !phoneReady(receiver)) return;
@@ -773,6 +792,7 @@ export function useSendApp() {
       dimensionsCm: { l: parsed.l, w: parsed.w, h: parsed.h },
       weightKg: parsed.kg,
       fragile: fragile || undefined,
+      ...(near ? { near } : {}),
       expectedTotal,
     });
     if (epoch !== mintEpoch.current) return; // the booking was abandoned (back / start again) — don't teleport
@@ -1178,6 +1198,7 @@ export function useSendApp() {
       pickFrom,
       findPlace,
       pickTo,
+      setNearMe,
       retryQuote,
       backTo,
       startAgain,

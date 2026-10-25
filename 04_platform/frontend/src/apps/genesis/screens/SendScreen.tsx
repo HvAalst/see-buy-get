@@ -3,7 +3,7 @@ import { Button, Card, Checklist, ErrorNote, Icon, Note, PlaceMap, Pill, ReadAlo
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
-import { cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
+import { carriersLine, cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -252,6 +252,13 @@ function PointStep({ state, actions, kind }: SendScreenProps & { kind: 'from' | 
               {t('send.point.find')}
             </Button>
           </div>
+          {/* Where an address is found, credited as its keepers ask (the user, 2026-10-25: OpenStreetMap's service). */}
+          <p class="card__note">
+            {t('send.point.addressSource')}{' '}
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
+              © OpenStreetMap contributors
+            </a>
+          </p>
         </form>
       )}
 
@@ -361,6 +368,20 @@ function QuoteStep({ state, actions }: SendScreenProps) {
       <StepDots at={4} />
       <h1 class="scr__title">{t('send.quote.title')}</h1>
 
+      {/* Which carriers set the price (the user, 2026-10-25: "the asker should be able to filter quotations from 'near
+          me'"): all that can carry it, or only those near the shop it starts from. Outside the price, so it stays put
+          while the price is asked again. A shop with no place on record offers no "near me". */}
+      {from?.location ? (
+        <div class="seg" role="group" aria-label={t('send.quote.carriersAria')}>
+          <button type="button" class={`seg__btn${state.nearMe ? '' : ' seg__btn--on'}`} aria-pressed={!state.nearMe} onClick={() => actions.setNearMe(false)}>
+            <Icon name="truck" size={18} /> {t('send.quote.allCarriers')}
+          </button>
+          <button type="button" class={`seg__btn${state.nearMe ? ' seg__btn--on' : ''}`} aria-pressed={state.nearMe} onClick={() => actions.setNearMe(true)}>
+            <Icon name="pin" size={18} /> {t('send.quote.nearMe')}
+          </button>
+        </div>
+      ) : null}
+
       {state.quoteState === 'loading' ? <p class="hint">{t('send.quote.working')}</p> : null}
       {state.quoteState === 'error' && state.quoteError ? <ErrorNote error={state.quoteError} onRetry={actions.retryQuote} /> : null}
 
@@ -383,6 +404,11 @@ function QuoteStep({ state, actions }: SendScreenProps) {
               {coverLine(q, t) ? <span class="price__sub">{coverLine(q, t)}</span> : null}
             </div>
           </div>
+          {carriersLine(q, from?.shopName ?? t('send.dropShop'), t) ? (
+            <p class="card__note" role="status">
+              {carriersLine(q, from?.shopName ?? t('send.dropShop'), t)}
+            </p>
+          ) : null}
 
           <Card label={t('send.quote.journey')}>
             <p class="t-body">{journeyLine(q)}</p>

@@ -62,7 +62,7 @@ export const enPrivacy = {
   'pages.privacy.others.6': 'The maps in SeeBuyGet apps are drawn from OpenStreetMap, which sees your internet address and the area on the screen.',
   'pages.privacy.others.7': 'When a payment to SeeBuyGet is made by M-Pesa, Safaricom receives the phone number and the amount.',
   'pages.privacy.others.8': 'When a dispatcher asks the SeeBuyGet fleet planning adviser something, the question and the loads it is about — plates, shipper names, places, weights and times, never a phone number — go to Claude, by Anthropic.',
-  'pages.privacy.others.9': 'An address typed to find the nearest SeeBuyGet shops — yours or a receiver’s — is looked up on the SeeBuyGet server and, where SeeBuyGet uses one, by an outside address service such as OpenStreetMap’s; it is kept with no account. A place tapped on the map, or your phone’s own position, stays on your phone.',
+  'pages.privacy.others.9': 'An address typed to find the nearest SeeBuyGet shops — yours or a receiver’s — is looked up on the SeeBuyGet server and by OpenStreetMap’s address service, which sees the address and the SeeBuyGet server’s internet address, not yours; it is kept with no account. A place tapped on the map, or your phone’s own position, stays on your phone.',
 
   'pages.privacy.howLong.title': 'How long it is kept',
   'pages.privacy.howLong.1': 'Photos of a hand-over are deleted 90 days after the parcel’s journey ends.',

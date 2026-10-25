@@ -85,6 +85,14 @@ export function classifySize(dims: { l: number; w: number; h: number; kg: number
 export const DEFAULT_PUDO_PRICE_PER_PARCEL = 0.5; // a PUDO agent's default handling fee per parcel
 export const DEFAULT_MDP_PRICE_PER_PARCEL = 0.3; // an MDP hub's default sort fee per parcel
 export const DEFAULT_PRICE_PER_KM = 0.08; // a vehicle's default transport rate per km
+/**
+ * "NEAR ME" FOR A QUOTE (the user, 2026-10-25: "the asker should be able to filter quotations from 'near me'"): the
+ * carriers within this many kilometres of the asker — on shift and placed there by their phone in the last
+ * NEAR_LOCATED_H hours, or of a fleet whose depot stands that close.
+ */
+export const NEAR_CARRIER_KM = 30;
+/** How old a phone's position may be and still say where a carrier is now. */
+export const NEAR_LOCATED_H = 3;
 export const PLATFORM_FEE_PCT = 0.02; // 2% daughter-co margin on top of provider costs
 export const DEFAULT_VENDOR_COUNTRY = 'KE'; // which country daughter company settles a vendor
 // The currency this network's money is denominated in, resolved from the country above rather than

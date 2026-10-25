@@ -73,7 +73,13 @@ export interface QuoteView {
   totalKm: number;
   nodeFees: number;
   size: ParcelSize;
-  perKm: { min: number; max: number };
+  /**
+   * The per-km rates the road was priced from (2026-10-25): only vehicles that can carry this parcel, in the quote's
+   * money. `from` says whose — the carriers near the asker, every carrier that can, or (none can yet) the country's
+   * own road rate — `carriers` how many, and `nearWanted` that "near me" was asked and nobody near can carry it yet.
+   * Absent `from` on a quote from before this, which reads as nothing to say.
+   */
+  perKm: { min: number; max: number; from?: 'near' | 'carriers' | 'company'; carriers?: number; nearWanted?: true };
   platformFeePct: number;
   /** The tax the selling sister charges, and the authority it collects under. The one part of a price
    *  breakdown that is nobody's secret — unlike the platform's three rate layers, which never leave the

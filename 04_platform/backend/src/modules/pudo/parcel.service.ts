@@ -1546,7 +1546,10 @@ export class ParcelService implements OnApplicationBootstrap {
       parcel.driverBadgeId = badgeId;
       parcel.shortShippedAt = undefined; // it made the bus after all — clear any earlier short-ship marker
       parcel.shortShipReason = undefined;
-      if (fleet && parcel.actualPerKm == null) parcel.actualPerKm = fleet.vehicle.pricePerKm; // the real carrier rate → flexible rebate
+      // The real carrier rate → the flexible rebate. Only a rate in the parcel's own money (the settling company's,
+      // DriverService.rateCurrencyOf): a Ugandan van's shillings read as a Kenyan parcel's would refund nothing, and
+      // the other way round nearly everything. Another money: the rate the parcel was quoted at stands in.
+      if (fleet && parcel.actualPerKm == null && this.drivers?.rateCurrencyOf(fleet.vehicle) === parcelCurrency(parcel)) parcel.actualPerKm = fleet.vehicle.pricePerKm;
       const step = this.stepAt(parcel, input.observedAt);
       parcel.handedToBusAt = step.at;
       loadKg += parcel.weightKg;
@@ -1921,6 +1924,7 @@ export class ParcelService implements OnApplicationBootstrap {
       subtotal: input.subtotal,
       routeMode,
       routeKm: quote.totalKm,
+      lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
       transportCost: chosen.transport,
       platformFee,
@@ -2058,6 +2062,7 @@ export class ParcelService implements OnApplicationBootstrap {
       trackingKey,
       routeMode,
       routeKm: quote.totalKm,
+      lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
@@ -2601,7 +2606,10 @@ export class ParcelService implements OnApplicationBootstrap {
   private rebateFlexible(parcel: Parcel): void {
     if (parcel.routeMode !== 'flexible' || !parcel.vendorId || parcel.rebate != null) return;
     if (parcel.ceilingCost == null || parcel.nodeFees == null || parcel.routeKm == null) return;
-    const perKm = parcel.actualPerKm ?? this.vehicles.priceRange().min;
+    // The carrier's rate where it is known in the parcel's money; else the cheapest it was quoted at — never the
+    // cheapest on the whole network, which is a figure in whatever money that vehicle happens to be priced in.
+    const perKm = parcel.actualPerKm ?? parcel.lockedPerKm;
+    if (perKm == null) return; // a parcel from before either was kept: nothing honest to work a rebate out from
     // The rates the parcel was MINTED at, never today's — the margin knob AND the size factor both. A
     // sister may turn the first while this parcel is in transit and the network may retune the second;
     // settling against either new number would quietly rewrite a price the customer already agreed to.
