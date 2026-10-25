@@ -112,7 +112,7 @@
 
 <!-- ─────────────────────────────────────────────────────── where it stands now -->
 <h2 id="now">Where it stands now</h2>
-<p class="lead">Checked against the code on 2026-10-25. What this page recommended without needing a decision is built. What is left needs a decision of yours, and most of it is inbound supply.</p>
+<p class="lead">Checked against the code on 2026-10-25. What this page recommended without needing a decision is built. What was left needed a decision of yours: you answered the three that come first the same day, all as recommended, and they are being built in this order — the live view (built), the broken-down bike, inbound supply.</p>
 <div class="grid">
   <div class="card"><span class="tag t-strong">Built since 2026-10-15</span><h3>What was done</h3><ul>
     <li>The two recommendations that needed no decision: who drives on which day, and a parcel running late is told (<a href="#built">below</a>).</li>
@@ -121,10 +121,10 @@
     <li>Planning across sites and shifts: all six, with your four answers. That also gave a fleet early and late shifts, and two drivers sharing a truck in a day.</li>
     <li>The compendium check, all its rounds of answers, then the ISO 28000 check.</li>
   </ul></div>
-  <div class="card"><span class="tag t-ask">Your decision</span><h3>What is left to decide first</h3><ul>
-    <li><b>Inbound supply</b>, D1–D14: nothing decided yet (<a href="#inbound">below</a>). Hub opening hours, and a time booked at a dock two carriers share, belong with it.</li>
-    <li><b>Bags and parcels on a broken-down vehicle.</b> A fleet's truck could pass its bags on with its loads, which changes nobody's pay. A courier's bike has no way to pass them on, and another courier taking them over changes who is paid for the road.</li>
-    <li><b>One live view</b> (P4). The console does not refresh by itself at all: staff press Refresh to see a new sign-up, or a colleague's request to approve. The fleet office's map asks again every 45 seconds.</li>
+  <div class="card"><span class="tag t-strong">Your answers, 2026-10-25</span><h3>What was left to decide first</h3><ul>
+    <li><b>One live view</b> (P4), “Console and fleet offices”: <b>built</b>. The console never refreshed by itself — a new sign-up, or a colleague's request to approve, sat unseen until somebody pressed Refresh. Now it and a fleet office's screens are told the moment something they show changes (<a href="#central">below</a>).</li>
+    <li><b>Bags and parcels on a broken-down vehicle</b>, “Split by the road”: another courier nearby takes a broken-down courier's bags over at the bike with the six digits, all or none, and the road is paid once — the first courier for the part driven, the second for the rest. A fleet truck's bags move with its loads, which changes nobody's pay. Next to build.</li>
+    <li><b>Inbound supply</b>, “Yes, A then B”: built on the recommendations for D1–D14 as written (<a href="#inbound">below</a>) — first a business sees and receives what is coming to its own sites, then one hub breaks bulk into parcels. Hub opening hours, and a time booked at a dock two carriers share, come with it.</li>
   </ul></div>
   <div class="card"><span class="tag t-partial">Later</span><h3>What I would leave until after the first test</h3><ul>
     <li>An accounting export (the rest of P3), a reporting copy (P5), other carriers' feeds (P6).</li>
@@ -242,7 +242,7 @@
 
 <!-- ─────────────────────────────────────────────────────── inbound decisions -->
 <h2 id="inbound">Inbound supply flows: the decisions before the build</h2>
-<p class="lead">"Inbound supply" means goods coming INTO a place from a supplier: what is expected, when it arrives, what is counted, what happens with what is missing or broken, and who holds it afterwards. None of that exists yet. Most of it touches rules already set (who owns goods, who pays, who is told, who may see what), so it has to be decided before it is built. Each decision below gives the question, why it matters here, the options and my recommendation. Nothing in this section is decided.</p>
+<p class="lead">"Inbound supply" means goods coming INTO a place from a supplier: what is expected, when it arrives, what is counted, what happens with what is missing or broken, and who holds it afterwards. None of that exists yet. Most of it touches rules already set (who owns goods, who pays, who is told, who may see what), so it has to be decided before it is built. Each decision below gives the question, why it matters here, the options and my recommendation. <b>Decided 2026-10-25:</b> your answer “Yes, A then B” takes every recommendation below as written — reading A first, then B at one hub.</p>
 
 <h3 style="margin-top:28px">First: what "inbound" would mean for us</h3>
 <p class="note" style="margin-top:0">Four different businesses hide under one word. Each reading is a different product.</p>
@@ -459,7 +459,7 @@
   <p class="q"><span class="num">P4</span>One live view</p>
   <dl>
     <dt>What</dt><dd>A live connection from the server to the console and the fleet office, instead of asking again on a timer; and the console's overview reading the digital twin, which is already fed by every parcel event and read by nothing.</dd>
-    <dt>Decisions</dt><dd><ul><li>Who needs live (the console and fleet offices) and who is fine on push (everybody on a phone).</li></ul></dd>
+    <dt>Decisions</dt><dd><ul><li>Who needs live (the console and fleet offices) and who is fine on push (everybody on a phone). <b>Your answer, 2026-10-25:</b> “Console and fleet offices”. <b>Built:</b> signed in, they keep a connection open to the server, which says by name only that something they show may have changed; the screen reads it again through its usual doors. The console hears of every change and reads its counts and the screen in front again, at most every five seconds — a record somebody opened by its name stays as opened until Refresh, so it does not count as opened again. A fleet office hears only of its own. “Live” in the console's header says it is on, “Reconnecting…” when it dropped; it comes back by itself and reads once.</li><li>Still open: the console's overview reading the digital twin.</li></ul></dd>
   </dl>
 </div>
 
@@ -510,7 +510,7 @@
 <h3 style="margin-top:28px">Open</h3>
 <div class="grid">
   <div class="card"><span class="tag t-strong">Built</span><h3>A courier's own vehicle</h3><p>The Driver app opens the upkeep sheet a fleet's office has for each vehicle that is the courier's own: off the road and back, readings, services and when one is due, the daily check's defects, and how a breakdown ended (2026-10-25). Moving loads to another driver stays the office's. The sheet and its words are fetched when first opened.</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>Bags and parcels on a broken-down vehicle</h3><p>They are told by their own running-late rule, and they do not move in a handover — only loads and run bookings do. A courier's bike breaking down with parcels has no way yet to pass them on.</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>Bags and parcels on a broken-down vehicle</h3><p>They are told by their own running-late rule, and they do not move in a handover — only loads and run bookings do. A courier's bike breaking down with parcels has no way yet to pass them on.</p><p><b>Your answer, 2026-10-25:</b> “Split by the road” — another courier nearby takes them over at the bike with the six digits, all or none; the first courier is paid for the part driven, the second for the rest. A fleet truck's bags move with its loads. Next to build.</p></div>
   <div class="card"><span class="tag t-strong">Answered</span><h3>A reload on the consignment note</h3><p>Your words, 2026-10-16: “moving goods to another truck can be written on the consignment note only.” Built: the reload is kept on the load (or the run) where its note reads it, and box 18 says it — when, onto which truck and driver, after which broke down, where, and on whose word. The breakdown keeps no copy; it reads the loads. Box 16 keeps the truck the goods were taken over in; the tracking link shows the truck coming now. Each note is frozen in the archive at the reload, a new moment in its list. A change of truck before the goods were taken over is not written on the note.</p><p class="note">Commit <code>5725e0d</code>.</p></div>
   <div class="card"><span class="tag t-strong">Answered</span><h3>Staff and a fleet's upkeep</h3><p>Your words, 2026-10-16: “Staff should not be able to change upkeep records.” Built: staff read a fleet's upkeep and change none of it. No upkeep write route lets staff in, and each check refuses them in words as well. Standing in for a driver, staff may still start or end a shift, but give no odometer reading.</p><p class="note">Commit <code>5725e0d</code>.</p></div>
   <div class="card"><span class="tag t-strong">Built</span><h3>The live map</h3><p>A broken-down vehicle is a red dot on the fleet's live map, labelled so, with no line onward; one with nobody on shift in it stands where it was reported, and a tap says what happened (2026-10-25). The office also sees them on a map of their own at the top of Vehicles, and on each vehicle's sheet.</p></div>
