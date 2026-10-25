@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SbgError } from '../../lib/sbg';
-import { PIN_LENGTH, isNewDevice, pinReady, readDeviceKey, saveDeviceKey } from './pin';
+import { PIN_LENGTH, isNewDevice, pinGuessable, pinReady, readDeviceKey, saveDeviceKey } from './pin';
+import { pinChangeBlocker } from './password';
 import { recoveryApi } from './recovery';
 
 function mockStorage(): Storage {
@@ -22,6 +23,27 @@ const refusal = (code: string): SbgError => ({ code, status: 403, title: code, d
 beforeEach(() => {
   (globalThis as { localStorage?: Storage }).localStorage = mockStorage();
   vi.unstubAllGlobals();
+});
+
+/*
+ * TOO EASY TO GUESS, SAID ON THE PHONE (2026-10-25). The server refuses these PINs when one is chosen
+ * (person.service.ts isGuessablePin); the apps now say so before sending. The lists below are the server test's own
+ * ("refuses the PINs a colleague tries first", pudo.service.spec.ts) — change one, change both.
+ */
+describe('a PIN too easy to guess', () => {
+  it('is the server’s list, refused on the phone before anything is sent', () => {
+    for (const easy of ['00000', '77777', '12121', '11222', '55005', '12345', '98765', '78901', '13579', '24680', '97531', '12312', '45645', '02580', '25800', '08520', '70852']) {
+      expect([easy, pinGuessable(easy)]).toEqual([easy, true]);
+    }
+    for (const fine of ['13570', '24689', '48261', '90417']) expect([fine, pinGuessable(fine)]).toEqual([fine, false]);
+    // A PIN not yet typed in full is not judged — the boxes are still filling.
+    expect(pinGuessable('1234')).toBe(false);
+  });
+
+  it('holds a PIN change too, in the same words', () => {
+    expect(pinChangeBlocker({ current: '48261', next: '12345' })).toBe('account.pin.guessable');
+    expect(pinChangeBlocker({ current: '48261', next: '90417' })).toBeNull();
+  });
 });
 
 describe('a PIN', () => {

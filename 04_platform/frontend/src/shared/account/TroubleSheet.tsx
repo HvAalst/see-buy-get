@@ -8,7 +8,8 @@ import { IdDisputeCase } from './IdDisputeCase';
 import { IdDisputeOpen } from './IdDisputeOpen';
 import { looksLikeIdReference } from './idDispute';
 import { looksLikeReference, moveStatusSays, supportLines, type MoveAsked, type MoveStatus } from './move';
-import { PIN_LENGTH } from './pin';
+import { PIN_LENGTH, pinGuessable } from './pin';
+import { PinGuessHint } from './PinGuessHint';
 import { asksForNationalId, type RecoveryApi } from './recovery';
 import { articlesFor, type GuideApp, type GuideArticle } from '../guide/articles';
 import { frontDoorUrl } from '../ui/AllAppsLink';
@@ -215,7 +216,7 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
     onDone();
   };
 
-  const ready = email.trim() && code.length === 6 && phone.trim() && (phoneVerified || phoneCode.length === 6) && pin.length === PIN_LENGTH && (!wantsId || nationalId.trim());
+  const ready = email.trim() && code.length === 6 && phone.trim() && (phoneVerified || phoneCode.length === 6) && pin.length === PIN_LENGTH && !pinGuessable(pin) && (!wantsId || nationalId.trim());
 
   return (
     <>
@@ -263,6 +264,7 @@ function Gone({ api, onDone }: { api: RecoveryApi; onDone: () => void }) {
         <span class="field__label">{t('account.trouble.newPin')}</span>
         <CodeBoxes id="gone-pin" label={t('account.trouble.newPin')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} />
       </div>
+      <PinGuessHint pin={pin} />
       {error ? <RefusalNote error={error} /> : null}
       <Button chevron={false} disabled={!ready} busy={busy} onClick={() => void submit()}>
         {t('account.trouble.goneCta')}

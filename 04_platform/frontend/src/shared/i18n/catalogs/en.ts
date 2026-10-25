@@ -480,6 +480,8 @@ export const en = {
   'account.menu.signOut': 'Sign out',
   'account.pin.needCurrent': 'Type your current 5-digit PIN.',
   'account.pin.digits': 'A PIN is 5 digits.',
+  // Said on the phone as a PIN is chosen, before anything is sent (shared/account/pin.ts pinGuessable, 2026-10-25).
+  'account.pin.guessable': 'That PIN is too easy to guess. Avoid mostly one digit, a run like 12345 or 13579, and a pattern like 12312.',
   // A PIN typed on a phone or browser no code to that number was ever typed on (NewDeviceSheet).
   // "Forgot your PIN?" — one sheet, for an app whose sign-in screen has no such step of its own.
   'account.choosePin.link': 'Forgot your PIN?',

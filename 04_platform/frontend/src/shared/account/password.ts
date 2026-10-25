@@ -1,4 +1,4 @@
-import { pinReady } from './pin';
+import { pinGuessable, pinReady } from './pin';
 import type { MessageKey } from '../i18n';
 
 /**
@@ -17,6 +17,7 @@ export function passwordChangeBlocker(form: { current: string; next: string; aga
 export function pinChangeBlocker(form: { current: string; next: string; again?: string }): MessageKey | null {
   if (!pinReady(form.current)) return 'account.pin.needCurrent';
   if (!pinReady(form.next)) return 'account.pin.digits';
+  if (pinGuessable(form.next)) return 'account.pin.guessable';
   if (form.again !== undefined && form.next !== form.again) return 'account.pin.mismatch';
   if (form.next === form.current) return 'account.pin.same';
   return null;

@@ -6,7 +6,7 @@
 
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { IconName } from '../../shared/ui/Icon';
-import { PIN_LENGTH } from '../../shared/account/pin';
+import { PIN_LENGTH, pinGuessable } from '../../shared/account/pin';
 import { formatMoney, type MessageKey } from '../../shared/i18n';
 import type { ConsumerParcelView, NetworkPoint, ParcelSize, ParcelStatus, PersonRole, QuoteView, RunningLate, TrackView, FreightTrackView } from './types';
 
@@ -427,7 +427,9 @@ export function phoneBlocker(phone: string, t: Translate): string {
   return phoneReady(phone) ? '' : t('send.logic.phoneBlocker');
 }
 export function pinBlocker(pin: string, t: Translate): string {
-  return codeReady(pin, PIN_LENGTH) ? '' : t('send.logic.pinBlocker');
+  if (!codeReady(pin, PIN_LENGTH)) return t('send.logic.pinBlocker');
+  // Said before anything is sent: the server refuses the same PINs (2026-10-25).
+  return pinGuessable(pin) ? t('account.pin.guessable') : '';
 }
 
 export interface RoleMeta {

@@ -7,7 +7,8 @@ import type { SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
-import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
+import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/pin';
+import { PinGuessHint } from '../../../shared/account/PinGuessHint';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { driverConfig } from '../api';
 
@@ -60,7 +61,8 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (busy) return;
+    // Enter goes no further than the button would: a PIN too easy to guess is said here, not sent (2026-10-25).
+    if (busy || !ready) return;
     if (step === 'pin') {
       void busyWhile(() => onSignIn(phone, pin));
     } else if (step === 'phone') {
@@ -116,7 +118,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   );
 
   const ready =
-    step === 'pin' ? phone.trim() !== '' && pin.length === PIN_LENGTH : step === 'phone' ? phone.trim() !== '' : step === 'code' ? code.length === 6 && pin.length === PIN_LENGTH : email.trim() !== '' && emailCode.length === 6;
+    step === 'pin' ? phone.trim() !== '' && pin.length === PIN_LENGTH : step === 'phone' ? phone.trim() !== '' : step === 'code' ? code.length === 6 && pin.length === PIN_LENGTH && !pinGuessable(pin) : email.trim() !== '' && emailCode.length === 6;
 
   return (
     <>
@@ -156,6 +158,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
             <div class="field">
               <span class="field__label">{t('driver.signin.newPinLabel')}</span>
               <CodeBoxes id="drv-new-pin" label={t('driver.signin.newPinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} />
+              <PinGuessHint pin={pin} />
             </div>
           </>
         ) : null}

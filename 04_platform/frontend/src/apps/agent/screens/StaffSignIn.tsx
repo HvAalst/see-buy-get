@@ -6,7 +6,8 @@ import { EmailStep } from '../../../shared/account/EmailStep';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
-import { PIN_LENGTH, isNewDevice, pinReady } from '../../../shared/account/pin';
+import { PIN_LENGTH, isNewDevice, pinGuessable, pinReady } from '../../../shared/account/pin';
+import { PinGuessHint } from '../../../shared/account/PinGuessHint';
 import { asksForEmail, isPinReset, recoveryApi } from '../../../shared/account/recovery';
 import { agentConfig } from '../api';
 import { counterPlaces, placesInOrder, staffDoors, type CounterPlace, type CounterPlacesApi, type PersonSignIn, type StaffSession } from '../staff';
@@ -179,11 +180,11 @@ export function StaffSignIn({
     if (step === 'login' && phone.trim() && pinReady(pin)) void login();
     else if (step === 'phone' && phone.trim()) void sendCode();
     else if (step === 'code' && code.length === 6) void checkCode();
-    else if ((step === 'pin' && pinReady(pin)) || (step === 'email' && email.trim() && emailCode.length === 6)) void choosePin();
+    else if ((step === 'pin' && pinReady(pin) && !pinGuessable(pin)) || (step === 'email' && email.trim() && emailCode.length === 6)) void choosePin();
   };
 
   const ready =
-    step === 'login' ? Boolean(phone.trim()) && pinReady(pin) : step === 'phone' ? Boolean(phone.trim()) : step === 'code' ? code.length === 6 : step === 'pin' ? pinReady(pin) : step === 'email' ? Boolean(email.trim()) && emailCode.length === 6 : false;
+    step === 'login' ? Boolean(phone.trim()) && pinReady(pin) : step === 'phone' ? Boolean(phone.trim()) : step === 'code' ? code.length === 6 : step === 'pin' ? pinReady(pin) && !pinGuessable(pin) : step === 'email' ? Boolean(email.trim()) && emailCode.length === 6 : false;
   const cta: MessageKey = step === 'login' ? 'agent.staff.loginCta' : step === 'phone' ? 'agent.staff.phoneCta' : step === 'code' ? 'agent.staff.codeCta' : step === 'pin' ? 'agent.staff.pinCta' : 'agent.staff.emailCta';
 
   if (step === 'places') {
@@ -255,6 +256,7 @@ export function StaffSignIn({
           <div class="field" style="margin-top:12px">
             <span class="field__label">{t(step === 'pin' ? 'agent.staff.newPin' : 'agent.staff.pin')}</span>
             <CodeBoxes id="staff-pin" label={t('agent.staff.pin')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} mask={step === 'login'} />
+            {step === 'pin' ? <PinGuessHint pin={pin} /> : null}
           </div>
         ) : null}
         {step === 'code' ? (

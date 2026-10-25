@@ -2,13 +2,13 @@ import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { canPickContact } from '../../../shared/device';
-import { codeReady, phoneReady } from '../logic';
+import { codeReady, phoneReady, pinBlocker } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
 import { useState } from 'preact/hooks';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
-import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
+import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { sendConfig } from '../api';
 
@@ -207,9 +207,11 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
             <span class="field__label">{t('send.newPin')}</span>
             <CodeBoxes id="auth-newpin" label={t('send.newPin')} length={PIN_LENGTH} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} />
           </div>
+          {/* Too easy to guess: said as it is typed, not after a round trip (2026-10-25). */}
+          {pinGuessable(state.authPin) ? <p class="card__note" role="status">{t('account.pin.guessable')}</p> : null}
         </Card>
         <div class="scr__cta">
-          <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={!codeReady(state.authPin, PIN_LENGTH)} busy={busy}>
+          <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={Boolean(pinBlocker(state.authPin, t))} busy={busy}>
             {t('send.auth.createAccount')}
           </Button>
         </div>

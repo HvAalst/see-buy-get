@@ -9,6 +9,7 @@
 import type { IconName } from '../../shared/ui/Icon';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { THIN_MARKET_LOADS } from '../../shared/market';
+import { pinGuessable } from '../../shared/account/pin';
 
 /* ------------------------------------------------------------------ roles -- */
 
@@ -328,7 +329,9 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
     case 'code':
       return codeLooksValid(f.code) ? null : t('home.block.code');
     case 'pin':
-      return /^\d{5}$/.test(f.pin) ? null : t('home.block.pin');
+      if (!/^\d{5}$/.test(f.pin)) return t('home.block.pin');
+      // Too easy to guess: said before anything is sent — the server refuses the same PINs (2026-10-25).
+      return pinGuessable(f.pin) ? t('account.pin.guessable') : null;
     case 'papers':
       return FLEET_PAPERS.every(([key]) => f.papers[key]) ? null : t('home.block.papers');
     case 'about':

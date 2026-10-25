@@ -7090,6 +7090,7 @@ describe('PUDO Light', () => {
       const phone = '+254711779901';
       otp.verify(phone, otp.request(phone).code);
       // Mostly one digit; a run up, down and round the dial; every second number; the same three again; the keypad's middle column.
+      // The apps say the same before sending (frontend shared/account/pin.ts pinGuessable, its test the same lists): change one, change both.
       for (const easy of ['00000', '77777', '12121', '11222', '55005', '12345', '98765', '78901', '13579', '24680', '97531', '12312', '45645', '02580', '25800', '08520', '70852']) {
         expect([easy, (() => { try { persons.enroll(phone, true, easy); return 'taken'; } catch (e) { return (e as { code?: string }).code; } })()]).toEqual([easy, 'PIN_GUESSABLE']);
       }

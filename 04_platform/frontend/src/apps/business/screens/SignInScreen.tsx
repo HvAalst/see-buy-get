@@ -5,7 +5,8 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
-import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
+import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/pin';
+import { PinGuessHint } from '../../../shared/account/PinGuessHint';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { businessConfig } from '../api';
 import { digitsReady, phoneReady } from '../logic';
@@ -59,7 +60,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
     if (step === 'login' && phoneReady(state.phone) && digitsReady(state.pin, PIN_LENGTH)) void actions.submitLogin();
     else if (step === 'phone' && phoneReady(state.phone)) void actions.requestCode();
     else if (step === 'code' && digitsReady(state.code, 6)) void actions.submitCode();
-    else if (step === 'pin' && digitsReady(state.pin, PIN_LENGTH)) void actions.submitPin();
+    else if (step === 'pin' && digitsReady(state.pin, PIN_LENGTH) && !pinGuessable(state.pin)) void actions.submitPin();
     else if (step === 'email' && state.email.trim() && digitsReady(state.emailCode, 6)) void actions.submitPin();
   };
 
@@ -71,7 +72,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
         : step === 'code'
           ? digitsReady(state.code, 6)
           : step === 'pin'
-            ? digitsReady(state.pin, PIN_LENGTH)
+            ? digitsReady(state.pin, PIN_LENGTH) && !pinGuessable(state.pin)
             : Boolean(state.email.trim()) && digitsReady(state.emailCode, 6);
 
   return (
@@ -117,6 +118,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
             <div class="cfield">
               <span class="cfield__label">{t(step === 'pin' ? 'business.signIn.newPin' : 'business.signIn.pin')}</span>
               <CodeBoxes id="biz-pin" label={t('business.signIn.pin')} length={PIN_LENGTH} value={state.pin} onInput={(v) => actions.set({ pin: v })} disabled={busy} mask={step === 'login'} />
+              {step === 'pin' ? <PinGuessHint pin={state.pin} /> : null}
             </div>
           ) : null}
 

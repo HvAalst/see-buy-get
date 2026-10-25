@@ -13,6 +13,24 @@ export function pinReady(pin: string): boolean {
   return pin.length === PIN_LENGTH && /^\d+$/.test(pin);
 }
 
+/**
+ * THE PINS SOMEBODY WHO KNOWS YOU TRIES FIRST — the server's rule (`isGuessablePin`, person.service.ts), said on the
+ * phone before anything is sent (2026-10-25): on a slow connection, a refusal after the round trip is the slowest way
+ * to learn a rule the phone can say at once. The server still decides; this only says it sooner. Mostly one digit
+ * (11111, 12121, 11222), a run up or down round the dial (12345, 98765, 78901, 13579, 24680), the same three over
+ * again (12312), or the keypad's middle column (02580). Only for a PIN being CHOSEN — never one being typed to sign in.
+ */
+const KEYPAD_COLUMN = ['2580', '0852'];
+export function pinGuessable(pin: string): boolean {
+  if (!pinReady(pin)) return false;
+  const d = pin.split('').map(Number);
+  if (new Set(d).size < 3) return true;
+  const runs = (step: number) => d.every((x, i) => i === 0 || x === (d[i - 1] + step + 10) % 10);
+  if (runs(1) || runs(-1) || runs(2) || runs(-2)) return true;
+  if (d.every((x, i) => i < 3 || x === d[i - 3])) return true;
+  return KEYPAD_COLUMN.some((column) => pin.startsWith(column) || pin.endsWith(column));
+}
+
 /* ------------------------------------------------------------------------ the device a PIN works on -- */
 
 /**

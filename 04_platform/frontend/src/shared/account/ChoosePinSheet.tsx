@@ -3,7 +3,8 @@ import { Button, CodeBoxes, ErrorNote, Note, RefusalNote, Sheet } from '../ui';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { EmailStep } from './EmailStep';
-import { PIN_LENGTH, pinReady } from './pin';
+import { PIN_LENGTH, pinGuessable, pinReady } from './pin';
+import { PinGuessHint } from './PinGuessHint';
 import { asksForEmail, isPinReset, type RecoveryApi } from './recovery';
 
 export interface ChoosePinSheetProps {
@@ -142,7 +143,8 @@ export function ChoosePinSheet({ open, onClose, api, phone: typed, onChosen }: C
             <span class="field__label">{t('account.choosePin.pin')}</span>
             <CodeBoxes id="choose-pin" label={t('account.choosePin.pin')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} />
           </div>
-          <Button chevron={false} busy={busy} disabled={!pinReady(pin)} onClick={() => void choose()}>
+          <PinGuessHint pin={pin} />
+          <Button chevron={false} busy={busy} disabled={!pinReady(pin) || pinGuessable(pin)} onClick={() => void choose()}>
             {t('account.choosePin.save')}
           </Button>
         </>
