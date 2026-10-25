@@ -20,6 +20,14 @@ import {
 export const SEED_WRITER = 'SeeBuyGet (inserted with the system)';
 
 /**
+ * WHY A VERSION WAS PUBLISHED, when it was more than a change of wording — said to whoever tells people about it. Today
+ * one occasion: a company of ours was switched on in the country, and these are its terms (the user, 2026-10-25).
+ */
+export interface PublishOccasion {
+  established?: { company: string };
+}
+
+/**
  * THE DOCUMENTS A SIGN-UP AGREES TO, AS VERSIONS STAFF WRITE (the user, 2026-10-25: "need cms from the staff console
  * and it's usual track of changes timestamped etc."). See documents.types.ts for what a version and a line are.
  *
@@ -34,7 +42,7 @@ export class DocumentsService implements OnApplicationBootstrap {
   /** Which ACCOUNT wrote each version — beside it, not on it: a version is read whole by everybody on staff. */
   private readonly writerKeys = new PersistentMap<string, string>('document-writer-keys');
   /** Told of each version as it is published — the bell of everybody it concerns (pudo's DocumentNoticeService). */
-  private readonly onPublished: Array<(version: DocumentVersion) => void> = [];
+  private readonly onPublished: Array<(version: DocumentVersion, occasion?: PublishOccasion) => void> = [];
 
   onApplicationBootstrap(): void {
     this.seed();
@@ -67,8 +75,8 @@ export class DocumentsService implements OnApplicationBootstrap {
     }
   }
 
-  /** Something to be told of every version published. */
-  whenPublished(listener: (version: DocumentVersion) => void): void {
+  /** Something to be told of every version published — and why, when it was published for a reason of its own. */
+  whenPublished(listener: (version: DocumentVersion, occasion?: PublishOccasion) => void): void {
     this.onPublished.push(listener);
   }
 
@@ -177,23 +185,33 @@ export class DocumentsService implements OnApplicationBootstrap {
    * THE SECOND PERSON PUBLISHES IT. Never the one who wrote it. Refused when the line moved on since it was written:
    * publishing it would quietly undo whatever was published in between.
    */
-  publish(versionId: string, publisher: Signer, now = Date.now()): DocumentVersion {
-    const version = this.requireProposed(versionId);
-    if (!publisher.name?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who you are — the second person is named just like the first');
-    if (sameSigner(publisher, this.writerOf(version))) throw new GlosError('FORBIDDEN', 'You wrote this version — a different person must publish it');
+  publish(versionId: string, publisher: Signer, now = Date.now(), occasion?: PublishOccasion): DocumentVersion {
+    const version = this.assertPublishable(versionId, publisher);
     const current = this.currentOrNone(version.kind, version.country);
-    if ((current?.versionId ?? undefined) !== version.basedOn) {
-      throw new GlosError('CONFLICT', `Version ${current?.number ?? 1} was published after this was written — write it again from that text, so nothing in it is undone`);
-    }
     const at = new Date(now).toISOString();
     Object.assign(version, { status: 'published', number: (current?.number ?? 0) + 1, decidedBy: publisher.name.trim(), decidedAt: at, publishedAt: at });
     this.versions.set(version.versionId, version);
     for (const tell of this.onPublished) {
       try {
-        tell(version);
+        tell(version, occasion);
       } catch {
         // Telling people is not publishing: a listener that fails never takes the version back.
       }
+    }
+    return version;
+  }
+
+  /**
+   * MAY THIS PERSON PUBLISH IT NOW? Throws the reason they may not, changing nothing — asked on its own by an act that
+   * publishes a version as part of something bigger (a company switched on), before any of that is done.
+   */
+  assertPublishable(versionId: string, publisher: Signer): DocumentVersion {
+    const version = this.requireProposed(versionId);
+    if (!publisher.name?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say who you are — the second person is named just like the first');
+    if (sameSigner(publisher, this.writerOf(version))) throw new GlosError('FORBIDDEN', `You wrote this version of ${version.title} — a different person must publish it`);
+    const current = this.currentOrNone(version.kind, version.country);
+    if ((current?.versionId ?? undefined) !== version.basedOn) {
+      throw new GlosError('CONFLICT', `Version ${current?.number ?? 1} was published after this was written — write it again from that text, so nothing in it is undone`);
     }
     return version;
   }

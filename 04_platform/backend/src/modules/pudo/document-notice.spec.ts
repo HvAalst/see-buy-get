@@ -17,7 +17,8 @@ describe('a published version is told in the bell of everybody it concerns', () 
   ];
   const hubs = [{ did: 'did:hub:ke', name: 'Nairobi Sort', country: 'KE', vetting: { state: 'approved' } }];
   const stores = [{ did: 'did:store:ug', name: 'Kampala Threads', country: 'UG' }];
-  const fleets = [{ did: 'did:fleet:ke', companyName: 'Kilima Logistics', jurisdiction: 'KE', status: 'ACTIVE' }];
+  // The one in Kenya that gave an address: told by email too when a company of ours is switched on there.
+  const fleets = [{ did: 'did:fleet:ke', companyName: 'Kilima Logistics', jurisdiction: 'KE', status: 'ACTIVE', contactEmail: 'office@kilima.example' }];
   const drivers = [
     { did: 'did:driver:ke', displayName: 'Amos', jurisdiction: 'KE', status: 'ACTIVE' },
     { did: 'did:driver:ug', displayName: 'Okello', jurisdiction: 'UG', status: 'ACTIVE' },
@@ -36,7 +37,7 @@ describe('a published version is told in the bell of everybody it concerns', () 
     for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r));
   };
 
-  const build = () => {
+  const build = (mail?: { send: (template: string, to: { address: string }, params: Record<string, unknown>) => Promise<void> }) => {
     const documents = new DocumentsService();
     documents.seed();
     const agreements = new AgreementService(documents);
@@ -63,13 +64,14 @@ describe('a published version is told in the bell of everybody it concerns', () 
       list(entities),
       agreements,
       countries,
+      mail as never,
     );
     // Wanjiru agreed for Kenya, Okello for Uganda; the newest person has agreed to nothing yet.
     agreements.record('person:did:person:wanjiru', { terms: 1, privacy: 1, cookies: 1 }, 'identity/enroll', 'KE');
     agreements.record('person:did:person:okello', { terms: 1, privacy: 1, cookies: 1 }, 'identity/enroll', 'UG');
     const publish = (input: { body: string; changeNote: string; askAgain: boolean; country?: string; title?: string }) =>
       documents.publish(documents.propose('terms', { title: input.title ?? 'Terms of use', ...input }, amina).versionId, brian);
-    return { notifications, publish };
+    return { notifications, publish, documents };
   };
   const told = (notifications: NotificationService, did: string) => notifications.inboxFor(did).filter((n) => n.kind === 'terms_updated');
 
@@ -99,15 +101,32 @@ describe('a published version is told in the bell of everybody it concerns', () 
     for (const did of ['did:shop:ke', 'did:hub:ke', 'did:fleet:ke', 'did:driver:ke', 'did:biz:ke', 'did:person:wanjiru']) {
       expect(told(notifications, did)).toHaveLength(1);
       // A country's first version asks everybody there, whatever was ticked.
-      expect(told(notifications, did)[0]).toMatchObject({ title: 'Terms of use — Kenya: a new version', link: '/terms/?country=KE', data: { key: 'terms@KE', number: 1, askAgain: true } });
+      expect(told(notifications, did)[0]).toMatchObject({ title: 'New: Terms of use — Kenya', link: '/terms/?country=KE', data: { key: 'terms@KE', number: 1, askAgain: true } });
     }
     for (const did of ['did:shop:ug', 'did:store:ug', 'did:driver:ug', 'did:biz:ug', 'did:person:okello', 'did:person:new', 'did:sbg-ke']) expect(told(notifications, did)).toEqual([]);
+  });
+
+  it('says a company of ours switched on as that — who they work with from today — and emails the ones who gave an address', async () => {
+    const sent: Array<{ template: string; to: string; params: Record<string, unknown> }> = [];
+    const { notifications, documents } = build({ send: async (template: string, to: { address: string }, params: Record<string, unknown>) => void sent.push({ template, to: to.address, params }) });
+    const version = documents.propose('terms', { title: 'Terms of use — Kenya', body: 'In Kenya, you agree with SeeBuyGet Kenya Limited.', changeNote: 'Who you agree with', askAgain: true, country: 'KE' }, amina);
+    documents.publish(version.versionId, brian, undefined, { established: { company: 'SeeBuyGet Kenya Limited' } });
+    await settle();
+    expect(told(notifications, 'did:shop:ke')[0]).toMatchObject({
+      title: 'SeeBuyGet Kenya Limited runs SeeBuyGet in Kenya from today',
+      body: 'SeeBuyGet Kenya Limited is the company you work with in Kenya from today. Its terms are in your app: you are asked to agree to them the next time you open it.',
+      data: { key: 'terms@KE', established: 'SeeBuyGet Kenya Limited' },
+    });
+    expect(told(notifications, 'did:person:wanjiru')[0].title).toBe('SeeBuyGet Kenya Limited runs SeeBuyGet in Kenya from today');
+    // By email to those registered there who gave one — and nobody elsewhere.
+    expect(sent.map((m) => [m.template, m.to])).toEqual([['country-established', 'office@kilima.example']]);
+    expect(sent[0].params).toMatchObject({ country: 'Kenya', company: 'SeeBuyGet Kenya Limited', asked: true, app: 'fleet' });
   });
 
   it('names the country when the title does not', async () => {
     const { notifications, publish } = build();
     publish({ country: 'UG', title: 'Terms of use', body: 'What Ugandan law adds', changeNote: 'What Ugandan law adds', askAgain: true });
     await settle();
-    expect(told(notifications, 'did:shop:ug')[0].title).toBe('Terms of use for Uganda: a new version');
+    expect(told(notifications, 'did:shop:ug')[0].title).toBe('New: Terms of use for Uganda');
   });
 });

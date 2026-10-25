@@ -25,6 +25,7 @@ import {
 } from '../../foundation/documents/documents.types';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { AgentService } from './agent.service';
+import { CountryTermsService } from './country-terms.service';
 import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { MdpService } from './mdp.service';
@@ -42,6 +43,8 @@ interface StaffLine {
   path: string;
   current?: DocumentVersion;
   pending?: DocumentVersion;
+  /** The waiting version names a company of ours still in draft: it is published by the approval that switches it on. */
+  heldFor?: { company: string; country: string };
   versions: DocumentVersion[];
 }
 
@@ -60,6 +63,7 @@ export class DocumentsController {
     @Optional() private readonly drivers?: DriverService,
     @Optional() private readonly managers?: FleetManagerService,
     @Optional() private readonly entities?: EntityService,
+    @Optional() private readonly countryTerms?: CountryTermsService,
   ) {}
 
   /* ------------------------------------------------------------------- anybody -- */
@@ -159,6 +163,7 @@ export class DocumentsController {
       if (!versions.length && country) return null;
       const current = this.documents.currentOrNone(kind, country);
       const pending = versions.find((v) => v.status === 'proposed');
+      const held = pending ? this.countryTerms?.heldFor(pending) : undefined;
       return {
         key,
         kind,
@@ -166,6 +171,7 @@ export class DocumentsController {
         path: documentPath(kind, country),
         ...(current ? { current: { ...current, agreed: counts[current.number!] ?? 0 } } : {}),
         ...(pending ? { pending } : {}),
+        ...(held && country ? { heldFor: { company: this.countryTerms!.nameOf(held), country } } : {}),
         versions,
       };
     };
@@ -182,10 +188,30 @@ export class DocumentsController {
     return this.documents.propose(this.documents.requireKind(kind), { title: dto.title, body: dto.body, changeNote: dto.changeNote, askAgain: dto.askAgain, country: dto.country }, who);
   }
 
+  /**
+   * A FIRST TEXT TO WRITE A COUNTRY'S TERMS FROM — naming its company of ours, from the company's own record. Nothing
+   * where the country has no company of ours on record (the console then starts from an empty page).
+   */
+  @Roles('operator')
+  @Get('documents/terms/draft')
+  @ApiQuery({ name: 'country', required: true })
+  termsDraft(@Query('country') country: string): { title: string; body: string; changeNote: string; company: string } | Record<string, never> {
+    const code = this.documents.requireCountry(country);
+    return (code && this.countryTerms?.draft(code)) || {};
+  }
+
   /** The second person publishes it: from now on it is what everybody it concerns reads, and agrees to — and they are told. */
   @Roles('operator')
   @Post('documents/versions/:versionId/publish')
   publish(@Param('versionId') versionId: string, @Body() dto: DecideDocumentDto, @Actor() actor: IntrospectionResult): DocumentVersion {
+    // A country's terms naming a company of ours that is not switched on yet wait for the approval that switches it on:
+    // nobody is asked to agree to a company before it exists.
+    const held = this.documents.list().find((v) => v.versionId === versionId);
+    const company = held ? this.countryTerms?.heldFor(held) : undefined;
+    if (company && held?.country) {
+      const where = catalogueEntry(held.country)?.name ?? held.country;
+      throw new GlosError('INVALID_STATE', `These terms name ${this.countryTerms!.nameOf(company)}, which is not switched on yet. They are published by the approval that switches it on, under Countries — so nobody in ${where} is asked to agree to a company before it exists.`, { reason: 'held_for_switch_on' });
+    }
     return this.documents.publish(versionId, staffOf(actor, dto.by));
   }
 

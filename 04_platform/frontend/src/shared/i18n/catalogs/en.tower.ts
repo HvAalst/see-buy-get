@@ -1665,6 +1665,10 @@ export const enTowerQueues = {
   // Told in the bell once published (the user, 2026-10-25: "a notification in the bell for the users").
   'tower.docs.tellsAll': 'Once published, everybody with an account is told in their app, with the note above.',
   'tower.docs.tellsCountry': 'Once published, everybody in {country} is told in their app, with the note above.',
+  // A country's terms naming a company of ours not switched on yet: published by the approval that switches it on.
+  'tower.docs.held': 'This names {company}, which is not switched on yet. It is published by the approval that switches it on, under Countries: then everybody in {country} is told {company} is the company they work with, and asked to agree.',
+  'tower.docs.fromRecord': 'Started from {company}’s record: who people in {country} agree with. Add what {country}’s law asks for, and have it read.',
+  'tower.presence.publishes': 'Approving it also publishes “{title}”: everybody in {country} is told {company} runs SeeBuyGet there from today, and asked to agree.',
   'tower.docs.version': 'Version {number}',
   'tower.docs.unnumbered': 'Not published',
   'tower.docs.seeded': 'inserted with the system on {when}, not yet written by anybody here',

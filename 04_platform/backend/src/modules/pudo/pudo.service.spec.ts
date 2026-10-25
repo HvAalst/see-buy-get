@@ -361,7 +361,7 @@ describe('PUDO Light', () => {
       const told: Array<{ jurisdiction: string; level: string; lost: string[] }> = [];
       const self = controller as unknown as { countryNotice?: unknown };
       const kept = self.countryNotice;
-      self.countryNotice = { tellLowered: async (x: { jurisdiction: string; level: string; lost: string[] }) => (told.push(x), { told: 0, emailed: 0 }) };
+      self.countryNotice = { tellLowered: async (x: { jurisdiction: string; level: string; lost: string[] }) => (told.push(x), { told: 0, emailed: 0 }), recipientsIn: () => [] };
       const was = presence.resolve('ET');
       try {
         if (!was.capabilities.holdFloat) presence.set({ jurisdiction: 'ET', level: 'established', by: 'test' });

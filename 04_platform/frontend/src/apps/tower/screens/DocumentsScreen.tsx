@@ -57,6 +57,8 @@ export interface DocEntry {
   path: string;
   current?: DocVersion;
   pending?: DocVersion;
+  /** The waiting version names a company of ours still in draft: the approval that switches it on publishes it. */
+  heldFor?: { company: string; country: string };
   versions: DocVersion[];
 }
 
@@ -142,6 +144,29 @@ function CountryLines({ items, state, actions, onChanged }: { items: DocEntry[];
   const exists = country ? own.some((entry) => entry.country === country && entry.kind === kind) : false;
   const general = items.find((entry) => !entry.country && entry.kind === kind)?.current;
   const key = country ? `${kind}@${country}` : '';
+  /*
+   * WHERE THE EDITOR STARTS. A country's terms where a company of ours is on record start from that record — who people
+   * there agree with (2026-10-25): switching the company on waits for them. Anything else starts from a title alone.
+   */
+  const [start, setStart] = useState<{ title: string; body: string; changeNote?: string; company?: string } | null>(null);
+  useEffect(() => {
+    setStart(null);
+    if (!country || exists) return undefined;
+    const plain = { title: t('tower.docs.titleFor', { title: general?.title ?? t(`tower.docs.kind.${kind}` as const), country: nameOf(country) }), body: '' };
+    if (kind !== 'terms' || !client) {
+      setStart(plain);
+      return undefined;
+    }
+    let live = true;
+    void client.api.termsDraft(country).then((r) => {
+      if (!live) return;
+      const draft = narrow<{ title?: string; body?: string; changeNote?: string; company?: string }>(r.data);
+      setStart(draft?.body ? { title: draft.title ?? plain.title, body: draft.body, changeNote: draft.changeNote, company: draft.company } : plain);
+    });
+    return () => {
+      live = false;
+    };
+  }, [country, kind, exists]);
 
   return (
     <>
@@ -168,14 +193,17 @@ function CountryLines({ items, state, actions, onChanged }: { items: DocEntry[];
           </div>
           {exists ? (
             <p class="chint">{t('tower.docs.exists', { country: nameOf(country) })}</p>
-          ) : country ? (
+          ) : country && !start ? (
+            <p class="cons__empty">{t('tower.imports.loading')}</p>
+          ) : country && start ? (
             <Editor
               key={key}
               lineKey={key}
               kind={kind}
               country={country}
               countryName={nameOf(country)}
-              start={{ title: t('tower.docs.titleFor', { title: general?.title ?? t(`tower.docs.kind.${kind}` as const), country: nameOf(country) }), body: '' }}
+              start={start}
+              fromRecord={start.company}
               who={state.who?.name}
               actions={actions}
               onDone={async (sent) => {
@@ -284,10 +312,16 @@ function DocumentPanel({ entry, state, actions, onChanged }: { entry: DocEntry; 
             </>
           )}
           {/* Who is told once it is published (the user, 2026-10-25: "a notification in the bell"). */}
-          <p class="chint">{where ? t('tower.docs.tellsCountry', { country: where }) : t('tower.docs.tellsAll')}</p>
+          <p class="chint">
+            {entry.heldFor
+              ? t('tower.docs.held', { company: entry.heldFor.company, country: where ?? entry.heldFor.country })
+              : where
+                ? t('tower.docs.tellsCountry', { country: where })
+                : t('tower.docs.tellsAll')}
+          </p>
           {error ? <ErrorNote error={error} showDetail /> : null}
           <div class="docs__decide">
-            {pending.mine ? null : (
+            {pending.mine || entry.heldFor ? null : (
               <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void decide(pending, true)}>
                 {t('tower.docs.publish', { number: (current?.number ?? 0) + 1 })}
               </button>
@@ -425,7 +459,8 @@ function DiffRow({ line }: { line: DiffLine }) {
 
 /**
  * Writing a new version: from the published text, with a preview, a note saying what changed, and whether it asks again.
- * A country's first starts from nothing but a title naming it, and asks everybody there whatever would be ticked.
+ * A country's first starts from a title naming it — or, for its terms where a company of ours is on record, from that
+ * record (`fromRecord`: the company) — and asks everybody there whatever would be ticked.
  */
 function Editor({
   lineKey,
@@ -434,6 +469,7 @@ function Editor({
   countryName,
   current,
   start,
+  fromRecord,
   who,
   actions,
   onDone,
@@ -443,7 +479,8 @@ function Editor({
   country?: string;
   countryName?: string;
   current?: DocVersion;
-  start: { title: string; body: string };
+  start: { title: string; body: string; changeNote?: string };
+  fromRecord?: string;
   who?: string;
   actions: TowerActions;
   onDone: (sent: boolean) => Promise<void>;
@@ -453,14 +490,14 @@ function Editor({
   const kept = readDraft(lineKey);
   const [title, setTitle] = useState(kept?.title ?? start.title);
   const [body, setBody] = useState(kept?.body ?? start.body);
-  const [changeNote, setChangeNote] = useState(kept?.changeNote ?? '');
+  const [changeNote, setChangeNote] = useState(kept?.changeNote ?? start.changeNote ?? '');
   const [askAgain, setAskAgain] = useState(kept?.askAgain ?? false);
   const [preview, setPreview] = useState<'write' | 'preview' | 'changes'>('write');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
 
   useEffect(() => {
-    const unchanged = title === start.title && body === start.body && !changeNote;
+    const unchanged = title === start.title && body === start.body && changeNote === (start.changeNote ?? '');
     keepDraft(lineKey, unchanged ? null : { title, body, changeNote, askAgain });
   }, [title, body, changeNote, askAgain]);
 
@@ -469,6 +506,7 @@ function Editor({
 
   return (
     <div class="docs__editor">
+      {fromRecord ? <p class="chint">{t('tower.docs.fromRecord', { company: fromRecord, country: countryName ?? country ?? '' })}</p> : null}
       <label class="cfield">
         <span class="cfield__label">{t('tower.docs.f.title')}</span>
         <input class="cinput" value={title} maxLength={120} onInput={(e) => setTitle(e.currentTarget.value)} />

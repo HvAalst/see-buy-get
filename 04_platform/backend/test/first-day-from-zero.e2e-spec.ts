@@ -14,6 +14,9 @@ import { aDevice, openAsBrowser } from '../src/modules/pudo/push.test-util';
 import { PilotService } from '../src/modules/pudo/pilot.service';
 import { AGREED } from './agreed';
 
+/** A sign-up in Kenya, once Kenya has terms of its own (published when its company was switched on): those too. */
+const AGREED_KE = { agreement: { versions: { ...AGREED.agreement.versions, 'terms@KE': 1 } } };
+
 /**
  * THE FIRST DAY OF A NEW INSTALLATION, AS IT WOULD BE LIVE — from an empty server to a parcel collected.
  *
@@ -181,8 +184,8 @@ describe('the first day of a new installation, as it would be live', () => {
       await must(http().post(`/v1/sbg/entities/${kenya}/documents/${put.documentId}/verify`).set(bearer(brian)).send({}));
     }
     // What is left is the company's OWN to say, and staff cannot say it for them: where people come in person, and when —
-    // and (round 39) the number a driver held at a checkpoint in Kenya rings.
-    expect(await missing()).toEqual(['visitors_address', 'visiting_days', 'desk_phone']);
+    // and (round 39) the number a driver held at a checkpoint in Kenya rings. And (2026-10-25) Kenya's terms naming it.
+    expect((await missing()).sort()).toEqual(['country_terms', 'desk_phone', 'visiting_days', 'visitors_address']);
     const admin = await must(http().post(`/v1/sbg/entities/${kenya}/admins`).set(bearer(amina)).send({ email: 'wanjiru@kenya.sbg-rehearsal.org', name: 'Wanjiru Kamau' }));
     wanjiru = (await must(http().post('/v1/sbg/entities/admins/login').send({ email: 'wanjiru@kenya.sbg-rehearsal.org', password: admin.temporaryPassword ?? admin.password }))).token.access_token as string;
     await must(
@@ -191,6 +194,15 @@ describe('the first day of a new installation, as it would be live', () => {
         .set(bearer(wanjiru))
         .send({ contactName: 'Front desk', phone: '+254700100200', deskPhone: '+254700100300', address: '1 Kenyatta Avenue, Nairobi', visitDays: ['mon', 'tue', 'wed', 'thu', 'fri'], visitFrom: '09:00', visitTo: '16:00', visitorsPerHour: 6 }),
     );
+    expect(await missing()).toEqual(['country_terms']);
+
+    // KENYA'S TERMS NAMING IT (the user, 2026-10-25): written by one of staff from what the company's record says, and
+    // published by the approval that switches it on — not before: nobody is asked to agree to a company that is not on.
+    const termsDraft = await must(http().get('/v1/sbg/documents/terms/draft?country=KE').set(bearer(amina)), 200);
+    expect(termsDraft.body).toContain('you agree with SeeBuyGet Kenya Limited, registered under number PVT-REHEARSAL-1');
+    const written = await must(http().post('/v1/sbg/documents/terms/versions').set(bearer(amina)).send({ country: 'KE', title: termsDraft.title, body: termsDraft.body, changeNote: termsDraft.changeNote, askAgain: true }));
+    const early = await must(http().post(`/v1/sbg/documents/versions/${written.versionId}/publish`).set(bearer(brian)).send({}), 400);
+    expect(early).toMatchObject({ code: 'INVALID_STATE', params: { reason: 'held_for_switch_on' } });
     expect(await missing()).toEqual([]);
     expect((await record()).readiness.ready).toBe(true);
   });
@@ -208,6 +220,9 @@ describe('the first day of a new installation, as it would be live', () => {
 
     const now = await must(http().get('/v1/sbg/presence/KE').set(bearer(amina)), 200);
     expect(now).toMatchObject({ level: 'established', capabilities: { takeIn: true, holdFloat: true } });
+    // Kenya's terms, published by the same approval — and from now on everybody signing up in Kenya agrees to them too.
+    expect(await must(http().get('/v1/sbg/documents/terms?country=KE'), 200)).toMatchObject({ key: 'terms@KE', number: 1, title: 'Terms of use — Kenya' });
+    expect(((await must(http().get('/v1/sbg/agreement?country=KE'), 200)).documents as Array<{ key: string }>).map((d) => d.key)).toEqual(['terms', 'privacy', 'cookies', 'terms@KE']);
     const countries = await must(http().get('/v1/sbg/countries'), 200);
     expect(countries.find((c: { country: string }) => c.country === 'KE')).toMatchObject({ joinable: true, settles: true, currency: 'KES' });
     // And a code may now be texted there: the list of countries a text goes to is the list of countries switched on.
@@ -241,7 +256,7 @@ describe('the first day of a new installation, as it would be live', () => {
     const account = await must(
       http()
         .post('/v1/sbg/auth/signup')
-        .send({ ...AGREED,
+        .send({ ...AGREED_KE,
           role: 'pudo',
           email: `${slug}@shops.sbg-rehearsal.org`,
           password: `${slug}-keeps-this-to-itself-7`,
@@ -386,7 +401,7 @@ describe('the first day of a new installation, as it would be live', () => {
     await must(http().post('/v1/sbg/auth/phone/request').send({ phone }));
     await must(http().post('/v1/sbg/auth/phone/verify').send({ phone, code: codeIn(textTo(phone)) }));
     await must(http().post('/v1/sbg/identity/email/request').send({ email }));
-    const enrolled = await must(http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin, email, emailCode: codeMailedTo(email) }));
+    const enrolled = await must(http().post('/v1/sbg/identity/enroll').send({ ...AGREED_KE, phone, pin, email, emailCode: codeMailedTo(email) }));
     expect(enrolled.device).toBeTruthy();
     return enrolled.device as string;
   };

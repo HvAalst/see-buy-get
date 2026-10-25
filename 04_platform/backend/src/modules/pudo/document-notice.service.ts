@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
-import { DocumentsService } from '../../foundation/documents/documents.service';
+import { DocumentsService, type PublishOccasion } from '../../foundation/documents/documents.service';
+import { MailService } from '../../foundation/mail/mail.service';
 import { AgreementService } from '../../foundation/documents/agreement.service';
 import { documentKey, documentPath, type DocumentVersion } from '../../foundation/documents/documents.types';
 import { EntityService } from '../../foundation/entity/entity.service';
@@ -21,6 +22,10 @@ import { VendorService } from './vendor.service';
  * in the bell of the app they use: everybody with an account for the general text, everybody in the country for a
  * country's own. Said is what changed — the note its writer left for exactly these readers — and whether they will be
  * asked to agree to it, or have nothing to do. Never a text message, and never an email: the bell is where it is read.
+ *
+ * ONE OCCASION IS MORE THAN WORDING: a company of ours switched on in a country, publishing that country's terms naming
+ * it (CountryTermsService). Who people there work with changes that day, so it is said as that — and by email as well
+ * to those registered there who gave an address, as every change to a country is: the Hub app has no inbox to read it in.
  */
 @Injectable()
 export class DocumentNoticeService {
@@ -38,9 +43,10 @@ export class DocumentNoticeService {
     private readonly entities: EntityService,
     @Optional() private readonly agreements?: AgreementService,
     @Optional() private readonly countries?: CountryNoticeService,
+    @Optional() private readonly mail?: MailService,
   ) {
-    documents.whenPublished((version) => {
-      void this.tellPublished(version).catch((err) => this.logger.warn(`telling a new ${version.kind} version failed: ${(err as Error).message}`));
+    documents.whenPublished((version, occasion) => {
+      void this.tellPublished(version, occasion).catch((err) => this.logger.warn(`telling a new ${version.kind} version failed: ${(err as Error).message}`));
     });
   }
 
@@ -68,24 +74,50 @@ export class DocumentNoticeService {
   }
 
   /** Tell everybody a published version concerns. Returns how many were told. */
-  async tellPublished(version: DocumentVersion): Promise<number> {
+  async tellPublished(version: DocumentVersion, occasion?: PublishOccasion): Promise<number> {
     if (version.status !== 'published' || !version.number) return 0;
     const where = version.country ? catalogueEntry(version.country)?.name ?? version.country : undefined;
-    const title = where && !version.title.includes(where) ? `${version.title} for ${where}: a new version` : `${version.title}: a new version`;
-    const body = `${version.changeNote.replace(/\s*$/, '')}${/[.!?]$/.test(version.changeNote.trim()) ? '' : '.'} ${
-      version.askAgain ? 'You are asked to agree to it the next time you open the app.' : 'Nothing to do: it is there to read.'
-    }`;
+    const named = where && !version.title.includes(where) ? `${version.title} for ${where}` : version.title;
+    const established = version.country ? occasion?.established?.company : undefined;
+    // A country's first text is new to everybody there: not "a new version" of anything they read.
+    const title = established ? `${established} runs SeeBuyGet in ${where} from today` : version.number === 1 ? `New: ${named}` : `${named}: a new version`;
+    const asked = version.askAgain ? 'You are asked to agree to it the next time you open the app.' : 'Nothing to do: it is there to read.';
+    const body = established
+      ? `${established} is the company you work with in ${where} from today. Its terms are in your app: ${version.askAgain ? 'you are asked to agree to them the next time you open it.' : 'they are there to read.'}`
+      : `${version.changeNote.replace(/\s*$/, '')}${/[.!?]$/.test(version.changeNote.trim()) ? '' : '.'} ${asked}`;
     const key = documentKey(version.kind, version.country);
     let told = 0;
     for (const did of this.recipients(version.country)) {
       try {
         // One per line on a phone: a newer version replaces an older one's notice there; the inbox keeps them all.
-        await this.notifications.notify(did, { kind: 'terms_updated', title, body, link: documentPath(version.kind, version.country), tag: `document:${key}`, data: { key, number: version.number, askAgain: version.askAgain } });
+        await this.notifications.notify(did, {
+          kind: 'terms_updated',
+          title,
+          body,
+          link: documentPath(version.kind, version.country),
+          tag: `document:${key}`,
+          data: { key, number: version.number, askAgain: version.askAgain, ...(established ? { established } : {}) },
+        });
         told += 1;
       } catch (err) {
         this.logger.warn(`a new ${key} version not told to ${did}: ${(err as Error).message}`);
       }
     }
+    if (established && version.country) await this.mailEstablished(version.country, established, version.askAgain);
     return told;
+  }
+
+  /** A company of ours switched on, by email to everybody registered in its country who gave an address. */
+  private async mailEstablished(country: string, company: string, asked: boolean): Promise<void> {
+    if (!this.mail) return;
+    const name = catalogueEntry(country)?.name ?? country;
+    for (const r of this.countries?.recipientsIn(country) ?? []) {
+      if (!r.email) continue;
+      try {
+        await this.mail.send('country-established', { address: r.email, name: r.name }, { country: name, company, asked, app: r.app });
+      } catch (err) {
+        this.logger.warn(`the switch-on of ${company} not emailed to ${r.did}: ${(err as Error).message}`);
+      }
+    }
   }
 }

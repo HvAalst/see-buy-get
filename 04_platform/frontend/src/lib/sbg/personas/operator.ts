@@ -55,6 +55,8 @@ export function createOperatorApi(sbg: SbgClient) {
     documents: () => sbg.request((c) => c.GET('/v1/sbg/documents', {})),
     proposeDocument: (kind: string, body: { title: string; body: string; changeNote: string; askAgain: boolean; country?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/documents/{kind}/versions', { params: { path: { kind } }, body })),
+    /** 2026-10-25 — a first text for a country's terms, naming its company of ours from the company's record ({} where none). */
+    termsDraft: (country: string) => sbg.request((c) => c.GET('/v1/sbg/documents/terms/draft', { params: { query: { country } } })),
     publishDocument: (versionId: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/documents/versions/{versionId}/publish', { params: { path: { versionId } }, body: { ...(by ? { by } : {}) } })),
     declineDocument: (versionId: string, reason: string, by?: string) =>

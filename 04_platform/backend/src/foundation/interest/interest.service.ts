@@ -124,6 +124,15 @@ export class InterestService {
     return this.list().filter((n) => n.country === code && (!n.toldAt || n.toldLevel === 'coming'));
   }
 
+  /**
+   * The people told a country opened with NO company of ours handling the money there — matched or partnered — whose
+   * email said "when a company is established there, that changes and we will write again" (country-open).
+   */
+  toldWithoutCompany(country: string): InterestNote[] {
+    const code = country.trim().toUpperCase();
+    return this.list().filter((n) => n.country === code && (n.toldLevel === 'matched' || n.toldLevel === 'partnered'));
+  }
+
   /** Mark that a switch-on reached these people, so a later change does not tell them the same thing twice. */
   told(noteIds: string[], level: string): void {
     const at = new Date().toISOString();

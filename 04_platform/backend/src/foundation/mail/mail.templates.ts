@@ -149,6 +149,10 @@ export interface MailParams {
   'country-coming': { country: string; joinUrl: string };
   /** 2026-10-25 — a country people signed up in while it was coming is open: each told whether they can start today. */
   'country-opened': { country: string; ready: boolean; company?: string; app: MailApp };
+  /** 2026-10-25 — a company of ours switched on in a country people already worked in: who they work with from today. */
+  'country-established': { country: string; company: string; asked: boolean; app: MailApp };
+  /** 2026-10-25 — the same day, to the people who asked about that country and were told no company of ours was there yet. */
+  'country-settles': { country: string; company: string; joinUrl: string };
   /** B1 — SeeBuyGet checked a business, or refused to, with the reason. Sent to its owners by the decision itself. */
   'business-checked': { business: string; outcome: 'verified' | 'refused'; reason?: string; when: string };
   /** Round 10 — a business's own system has not taken our messages about its loads. To its owners, at most once a day. */
@@ -336,6 +340,60 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: 'Open the app', href: appUrl(p.app) },
       ],
       reason: `You are getting this email because you are registered with SeeBuyGet in ${p.country}. It is about the service you use there, so it cannot be turned off.`,
+    }),
+  },
+
+  /*
+   * A COMPANY OF OURS SWITCHED ON where people already worked with nobody of ours behind them (the user, 2026-10-25):
+   * the promise the opening made — "when a company is established there, that changes" — kept, by the approval itself.
+   */
+  'country-established': {
+    title: 'A company of ours now runs SeeBuyGet in your country',
+    sentWhen: 'Two members of staff switch on a company of ours in a country that was already open — to everybody registered there who gave an email address, with the country’s terms naming it. The apps say it in their inbox as well.',
+    wired: true,
+    sendLater: 72,
+    sample: { country: 'Uganda', company: 'SeeBuyGet Uganda Limited', asked: true, app: 'agent' },
+    build: (p) => ({
+      subject: `${p.company} runs SeeBuyGet in ${p.country} from today`,
+      preheader: `It is the company you work with in ${p.country} from today.`,
+      blocks: [
+        { kind: 'heading', text: `${p.company} runs SeeBuyGet in ${p.country}` },
+        { kind: 'paragraph', text: `From today, ${p.company} is the company you work with in ${p.country}. Until now no company of ours handled money there.` },
+        {
+          kind: 'paragraph',
+          text: p.asked
+            ? `Its terms of use for ${p.country} are in your app. You are asked to read them and agree the next time you open it.`
+            : `Its terms of use for ${p.country} are in your app, to read.`,
+        },
+        { kind: 'button', label: 'Open the app', href: appUrl(p.app) },
+      ],
+      reason: `You are getting this email because you are registered with SeeBuyGet in ${p.country}. It is about the service you use there, so it cannot be turned off.`,
+    }),
+  },
+
+  /*
+   * THE OTHER HALF OF THAT PROMISE: the waiting list was told, the day the country opened with nobody of ours behind the
+   * money, "when a company is established there, that changes and we will write again" (country-open). This is that.
+   */
+  'country-settles': {
+    title: 'A company of ours now runs SeeBuyGet in the country you asked about',
+    sentWhen: 'Two members of staff switch on a company of ours in a country that opened without one — to the people who asked to be told about it and were told no company of ours was there yet, unless they have signed up there since.',
+    wired: true,
+    sendLater: 72,
+    sample: { country: 'Uganda', company: 'SeeBuyGet Uganda Limited', joinUrl: 'https://seebuyget.com/' },
+    build: (p) => ({
+      subject: `${p.company} runs SeeBuyGet in ${p.country} from today`,
+      preheader: 'We said we would write again when a company of ours handled the money there. One does now.',
+      blocks: [
+        { kind: 'heading', text: `${p.company} runs SeeBuyGet in ${p.country}` },
+        {
+          kind: 'paragraph',
+          text: `When SeeBuyGet opened in ${p.country}, we wrote that no company of ours handled the money there yet, and that we would write again when one did. From today, ${p.company} does: it contracts with the shops, sort hubs, drivers, fleets and stores that work with SeeBuyGet there, and pays them.`,
+        },
+        { kind: 'paragraph', text: 'If you have not signed up yet, you can now.' },
+        { kind: 'button', label: 'Sign up', href: p.joinUrl },
+      ],
+      reason: 'You are getting this email because you asked to be told when SeeBuyGet reaches your country.',
     }),
   },
 

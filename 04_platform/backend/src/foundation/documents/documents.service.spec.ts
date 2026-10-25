@@ -86,6 +86,17 @@ describe('the documents a sign-up agrees to', () => {
       expect(() => documents.publish(written.versionId, brian)).toThrow(/Version 2 was published after this was written/);
     });
 
+    it('says whether a person may publish a version without publishing it — and passes on why it was published', () => {
+      const written = propose();
+      expect(() => documents.assertPublishable(written.versionId, amina)).toThrow(/a different person must publish it/);
+      expect(documents.assertPublishable(written.versionId, brian).status).toBe('proposed');
+      expect(documents.current('terms').number).toBe(1);
+      const heard: Array<string | undefined> = [];
+      documents.whenPublished((_v, occasion) => heard.push(occasion?.established?.company));
+      documents.publish(written.versionId, brian, T0 + 120_000, { established: { company: 'SeeBuyGet Kenya Limited' } });
+      expect(heard).toEqual(['SeeBuyGet Kenya Limited']);
+    });
+
     it('tells whoever listens of each version published — and a listener that fails takes nothing back', () => {
       const told: number[] = [];
       documents.whenPublished(() => {

@@ -30407,6 +30407,35 @@
         }
       }
     },
+    "/v1/sbg/documents/terms/draft": {
+      "get": {
+        "operationId": "Documents.termsDraft",
+        "summary": "",
+        "description": "A FIRST TEXT TO WRITE A COUNTRY'S TERMS FROM — naming its company of ours, from the company's own record. Nothing\nwhere the country has no company of ours on record (the console then starts from an empty page).",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/documents/versions/{versionId}/publish": {
       "post": {
         "operationId": "Documents.publish",

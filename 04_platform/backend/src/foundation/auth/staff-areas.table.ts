@@ -69,6 +69,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // 2026-10-25 — what somebody agreed to is their own; the documents are read by any staff, written by admin.
   'GET sbg/agreement/mine': 'none',
   'GET sbg/documents': 'any',
+  'GET sbg/documents/terms/draft': 'admin',
   'GET sbg/agents': 'any',
   'GET sbg/agents/:did': 'any',
   'GET sbg/agents/:did/bag-plan': 'support',

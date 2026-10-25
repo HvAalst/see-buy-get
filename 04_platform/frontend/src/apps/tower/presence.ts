@@ -212,6 +212,8 @@ export interface PresenceProposalRow {
   reason?: string;
   /** Said by the server to whoever is reading: THEY proposed this one. Absent from a server that predates it. */
   mine?: boolean;
+  /** A switch-on that publishes the country's terms naming its company (2026-10-25): which, and the company. */
+  publishes?: { title: string; company: string };
 }
 
 /**

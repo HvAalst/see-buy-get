@@ -56,6 +56,8 @@ import { ApiQuery } from '@nestjs/swagger';
 import { GlosError } from '../../foundation/http/glos-error';
 import { Public } from '../../foundation/auth/public.decorator';
 import { AgreementService } from '../../foundation/documents/agreement.service';
+import { DocumentsService } from '../../foundation/documents/documents.service';
+import { CountryTermsService } from './country-terms.service';
 import { Roles, Scopes, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingDid, actingTenant, auditActor } from '../../foundation/auth/acting';
@@ -320,6 +322,9 @@ export class SbgController {
     @Optional() private readonly gs1Disputes?: Gs1DisputeService,
     // 2026-10-25 — every sign-up agrees to the terms of use, the data notice and the cookie statement that count now.
     @Optional() private readonly agreements?: AgreementService,
+    // 2026-10-25 — a company of ours switched on publishes its country's terms naming it, in the same act.
+    @Optional() private readonly documents?: DocumentsService,
+    @Optional() private readonly countryTerms?: CountryTermsService,
   ) {}
 
   /**
@@ -884,7 +889,12 @@ export class SbgController {
   presenceProposals(@Actor() actor: IntrospectionResult) {
     // `mine` is said per reader, so the console offers "Approve" by ACCOUNT: two colleagues may share a name.
     const reader = this.reader(actor);
-    return { items: this.presence.listProposals().map((p) => ({ ...p, mine: this.presence.proposedByReader(p.proposalId, reader) })) };
+    // A switch-on that will publish the country's terms naming its company says so, to the person about to approve it.
+    const publishes = (p: { level: string; status: string; jurisdiction: string }) => {
+      const terms = p.level === 'established' && p.status === 'pending' ? this.countryTerms?.waitingFor(p.jurisdiction) : undefined;
+      return terms ? { publishes: { title: terms.version.title, company: this.countryTerms!.nameOf(terms.company) } } : {};
+    };
+    return { items: this.presence.listProposals().map((p) => ({ ...p, mine: this.presence.proposedByReader(p.proposalId, reader), ...publishes(p) })) };
   }
 
   /** CA2 — the second person approves. Never the proposer; the rate book is asked again if this switches a country on. */
@@ -898,6 +908,14 @@ export class SbgController {
     const proposal = this.presence.assertApprovable(proposalId, by, undefined, who.key);
     this.requirePriceableSwitchOn(proposal.jurisdiction, proposal.level);
     const company = this.requireReadyCompanyFor(proposal.jurisdiction, proposal.level);
+    /*
+     * THE COUNTRY'S TERMS NAMING THE COMPANY, published by this approval (the user, 2026-10-25: "staff publish that
+     * country's own terms naming the company; everyone there is told in the bell and agrees on their next opening;
+     * their records move to that company at the same time" — "yes"). Asked here, with the other refusals: the person
+     * approving must not be the one who wrote them, as for any version. Published below, once the company is on.
+     */
+    const terms = proposal.level === 'established' ? this.countryTerms?.waitingFor(proposal.jurisdiction) : undefined;
+    if (terms) this.documents?.assertPublishable(terms.version.versionId, who);
     if (company) this.entities.activate(company.entityId, by);
     // The one promise the waiting list makes, kept by the approval rather than by anybody remembering.
     // After the refusals above and before the change, so a switch-on that is about to be rejected never
@@ -916,8 +934,28 @@ export class SbgController {
     // Its FIRST opening: everybody registered there signed up while it was coming. A country opened again after being
     // lowered was told what stopped at the time, and is not told it is new.
     const firstOpening = !this.presence.resolve(proposal.jurisdiction).openedAt;
+    const levelBefore = this.presence.resolve(proposal.jurisdiction).level;
     const decided = this.presence.approve(proposalId, by, undefined, who.key);
     this.tellWhatStopped(proposal.jurisdiction, before);
+    // Its terms, now that the company they name is on. A country that was already open is told who it works with from
+    // today, by name; one opening today is told it is open (below), and these are its new terms.
+    if (terms) this.documents?.publish(terms.version.versionId, who, undefined, firstOpening ? undefined : { established: { company: this.countryTerms!.nameOf(terms.company) } });
+    // A country that opened with nobody of ours behind the money told the people who asked about it "when a company is
+    // established there, that changes and we will write again". This is that — to the ones who have not signed up there
+    // since: those registered hear it in their app, and by email, with the terms (DocumentNoticeService).
+    if (proposal.level === 'established' && levelBefore !== 'established' && !firstOpening) {
+      const company = this.entities.forJurisdiction(proposal.jurisdiction);
+      if (company) {
+        const companyName = this.countryTerms?.nameOf(company) ?? company.name;
+        const registered = new Set((this.countryNotice?.recipientsIn(proposal.jurisdiction) ?? []).map((r) => r.email?.trim().toLowerCase()).filter(Boolean));
+        const promised = this.interest.toldWithoutCompany(proposal.jurisdiction);
+        const country = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;
+        for (const note of promised.filter((n) => !registered.has(n.email))) {
+          void this.mail?.send('country-settles', { address: note.email }, { country, company: companyName, joinUrl: appUrl('home') }).catch(() => undefined);
+        }
+        this.interest.told(promised.map((n) => n.noteId), 'established');
+      }
+    }
 
     const after = this.presence.resolve(proposal.jurisdiction).capabilities;
     const name = catalogueEntry(proposal.jurisdiction)?.name ?? proposal.jurisdiction;

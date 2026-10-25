@@ -206,7 +206,7 @@ describe('agreeing to the terms, over the wire', () => {
 
     // Everybody in Kenya is told: the person (a Kenyan number), and the shop that stands there.
     for (const token of [person, duka]) {
-      expect((await bell(token))[0]).toMatchObject({ title: 'Terms of use — Kenya: a new version', link: '/terms/?country=KE', data: { key: 'terms@KE', number: 1, askAgain: true } });
+      expect((await bell(token))[0]).toMatchObject({ title: 'New: Terms of use — Kenya', link: '/terms/?country=KE', data: { key: 'terms@KE', number: 1, askAgain: true } });
     }
     // And asked to agree, to Kenya's on top of what they agreed to already.
     expect(await must(http().get('/v1/sbg/agreement/mine').set(bearer(person)), 200)).toMatchObject({ needed: true, country: 'KE' });

@@ -501,7 +501,7 @@ export const enHome = {
   'home.block.countryNotActive': 'We do not reach that country yet. Pick one we do.',
   'home.join.country.notActiveTitle': 'SeeBuyGet is not active in {name} yet',
   'home.join.country.notActiveBody':
-    'We can match you with loads here, and you can register today. What we cannot do is handle the money: there is no SeeBuyGet company in {name}, so nobody of ours invoices, pays you, or carries any responsibility for what you are owed. You agree the price with whoever you carry for and you settle it with them directly. When a company is established here, that changes and you will be told.',
+    'We can match you with loads here, and you can register today. What we cannot do is handle the money: there is no SeeBuyGet company in {name}, so nobody of ours invoices, pays you, or carries any responsibility for what you are owed. You agree the price with whoever you carry for and you settle it with them directly. When a company of ours is established here, it becomes the company you work with: you will be told in your app, and asked to agree to its terms.',
   'home.join.country.activeNote': 'This is the company you will be paid by, so it has to be where you really are.',
   /* THE WAY OUT OF THE ONLY DEAD END ON THIS FORM. Most of the world answers "we do not reach here yet",
      and somebody who would carry freight there is the evidence a switch-on decision never had. The copy

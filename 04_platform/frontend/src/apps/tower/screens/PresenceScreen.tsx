@@ -294,6 +294,10 @@ function ProposalView({ proposal, state, actions }: { proposal: PresenceProposal
         <div>{t('tower.presence.proposal.line', { level: t(LEVEL_LABEL[proposal.level]), gains: proposal.gains.map((c) => t(CAPABILITY_LABEL[c])).join(', ') })}</div>
         <div class="ctbl__sub">{t('tower.presence.proposal.by', { who: proposal.proposedBy, when: when(proposal.proposedAt), expires: when(proposal.expiresAt) })}</div>
         {proposal.note ? <div class="ctbl__sub">{proposal.note}</div> : null}
+        {/* What approving does beyond the country: its terms are published, and everybody there is told (2026-10-25). */}
+        {proposal.publishes ? (
+          <div class="ctbl__sub">{t('tower.presence.publishes', { title: proposal.publishes.title, company: proposal.publishes.company, country: countryNameOf(proposal.jurisdiction, state.catalogue) })}</div>
+        ) : null}
       </td>
       <td class="ctbl__num">
         {declining ? (
