@@ -46,6 +46,15 @@ describe('a hub’s arrivals, on the hub’s own clock', () => {
     expect(book(svc, 'PUD-A', '2026-10-27')).toMatchObject({ state: 'expected', today: true, late: false });
   });
 
+  it('books only a day the hub receives — Saturday the last of its week, Sunday the first', () => {
+    const svc = service();
+    svc.setBulk('mdp_1', { open: true, hours: { sat: { open: '08:00', close: '12:00' } } }, 'Owner', NOW);
+    parcel('PUD-SAT');
+    // Sat 31 Oct and Sun 1 Nov 2026, on the hub's clock.
+    expect(() => book(svc, 'PUD-SAT', '2026-11-01')).toThrow(/does not receive on a Sunday/);
+    expect(book(svc, 'PUD-SAT', '2026-10-31')).toMatchObject({ state: 'expected', expectedOn: '2026-10-31' });
+  });
+
   it('reads due and late by the hub’s day, and says its clock with the hub’s word', () => {
     const svc = service();
     expect(svc.setBulk('mdp_1', { open: true }, 'Owner', NOW)).toMatchObject({ zone: 'Africa/Nairobi', zoneName: expect.stringMatching(/East Africa/) });

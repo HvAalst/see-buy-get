@@ -540,7 +540,7 @@ function closedWhy(a: HubArrival): string {
 
 /** The weekday key of a day (YYYY-MM-DD): mon … sun. */
 function weekdayOf(day: string): string {
-  return WEEKDAYS[(new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7];
+  return WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()];
 }
 
 /** The day `n` days after `day`, both YYYY-MM-DD. */

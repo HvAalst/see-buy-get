@@ -1,5 +1,5 @@
 import type { MessageKey, Translate } from '../../shared/i18n';
-import { visitSpans } from '../../shared/visitHours';
+import { visitSpans, WEEK } from '../../shared/visitHours';
 
 /*
  * TWO PEOPLE SAY ONE NATIONAL ID IS THEIRS — what the console says about a dispute, and what its reader may do.
@@ -167,8 +167,6 @@ export function disputeNotes(row: DisputeRow, t: Translate): Array<{ tone: 'dang
   if (!row.holder.onRecord?.length) notes.push({ tone: 'info', text: t('tower.ids.note.nothingOnRecord') });
   return notes;
 }
-
-const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 /**
  * WHERE THE TWO PEOPLE ARE SENT, AND WHEN — as the country's company wrote it in its own admin (the user,

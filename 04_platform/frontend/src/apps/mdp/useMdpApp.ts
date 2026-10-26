@@ -757,7 +757,9 @@ export function useMdpApp() {
         const r = await client.api.scanArrival(at.mdpId, at.id, code);
         if (r.error) {
           signal('error');
-          setState((s) => ({ ...s, arrivalScan: null }));
+          // A code not on this arrival leaves the box empty for the next one — a hand scanner types into what is there;
+          // the refusal names the code.
+          setState((s) => ({ ...s, arrivalScan: null, form: r.error!.code === 'NOT_FOUND' ? { ...s.form, arrivalCode: '' } : s.form }));
           return fail(r.error);
         }
         const v = narrow<HubArrivalScan>(r.data);

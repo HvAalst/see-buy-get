@@ -112,6 +112,8 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'load-seals', apps: ['business'], group: 'freight', steps: 5, notes: ['why', 'note'] },
   { id: 'tampering', apps: ['driver', 'agent', 'mdp', 'console'], group: 'wrong', steps: 5, notes: ['note', 'why'] },
   { id: 'scan-a-parcel', apps: ['agent', 'mdp'], group: 'daily', steps: 4, notes: ['why'] },
+  // Reading B (2026-10-26): a store's parcels handed in at a hub, in bulk — the hub's side and the store's.
+  { id: 'hub-bulk', apps: ['mdp', 'vendor'], group: 'daily', steps: 7, notes: ['note', 'why'] },
   { id: 'gs1-codes', apps: ['vendor', 'business'], group: 'start', steps: 4, notes: ['why', 'note'] },
   { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 6, notes: ['careful', 'why'] },
   { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['why', 'careful', 'note', 'note', 'note', 'note', 'rare'] },

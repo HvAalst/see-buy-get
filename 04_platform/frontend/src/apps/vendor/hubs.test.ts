@@ -12,7 +12,7 @@ describe('a store handing its parcels in at a hub, in bulk (reading B)', () => {
   });
 
   it('says when a hub receives as a site’s hours are said everywhere: days of the same hours run together, the rest closed', () => {
-    expect(hoursLine({ mon: day, tue: day, wed: day, thu: day, fri: day, sat: null, sun: null }, t)).toBe('Mon–Fri 07:00–15:00 · Sat–Sun closed');
+    expect(hoursLine({ mon: day, tue: day, wed: day, thu: day, fri: day, sat: null, sun: null }, t)).toBe('Sun closed · Mon–Fri 07:00–15:00 · Sat closed');
     expect(hoursLine(undefined, t)).toBeNull();
   });
 

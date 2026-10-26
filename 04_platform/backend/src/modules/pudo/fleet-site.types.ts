@@ -20,17 +20,18 @@ export const DEPOT_SITE = 'depot';
 export const MAX_SITES = 50;
 export const MAX_SHIFTS = 6;
 
-export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+/** A week's days in order: Sunday to Saturday (the user, 2026-10-26: "saturday should be the last day of the week"). Indexed by Date.getUTCDay(). */
+export const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 /** When a site is open for loading, day by day. A day left out, or null, is a day it is closed. */
 export class SiteWeek {
+  @ApiPropertyOptional({ type: DayHours, nullable: true }) sun?: DayHours | null;
   @ApiPropertyOptional({ type: DayHours, nullable: true }) mon?: DayHours | null;
   @ApiPropertyOptional({ type: DayHours, nullable: true }) tue?: DayHours | null;
   @ApiPropertyOptional({ type: DayHours, nullable: true }) wed?: DayHours | null;
   @ApiPropertyOptional({ type: DayHours, nullable: true }) thu?: DayHours | null;
   @ApiPropertyOptional({ type: DayHours, nullable: true }) fri?: DayHours | null;
   @ApiPropertyOptional({ type: DayHours, nullable: true }) sat?: DayHours | null;
-  @ApiPropertyOptional({ type: DayHours, nullable: true }) sun?: DayHours | null;
 }
 
 /** A shift drivers start on at a site: its name, when it starts, and how long it may be. */

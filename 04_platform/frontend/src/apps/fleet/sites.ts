@@ -10,8 +10,14 @@ export type UseTotals = components['schemas']['UseTotals'];
 export type VehicleUse = components['schemas']['VehicleUse'];
 export type SiteWeek = components['schemas']['SiteWeek'];
 
-export const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+/** A week's days in order: Sunday to Saturday (the user, 2026-10-26: "saturday should be the last day of the week"). */
+export const WEEK = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type Weekday = (typeof WEEK)[number];
+
+/** The weekday a calendar day (YYYY-MM-DD) falls on — the same wherever it is read. */
+export function weekdayOf(day: string): Weekday {
+  return WEEK[new Date(`${day}T12:00:00Z`).getUTCDay()];
+}
 export type WeekForm = Record<Weekday, { open: string; close: string } | null>;
 export const DAY_NAME: Record<Weekday, MessageKey> = { mon: 'fleet.sites.dayName.mon', tue: 'fleet.sites.dayName.tue', wed: 'fleet.sites.dayName.wed', thu: 'fleet.sites.dayName.thu', fri: 'fleet.sites.dayName.fri', sat: 'fleet.sites.dayName.sat', sun: 'fleet.sites.dayName.sun' };
 export const DAY_SHORT: Record<Weekday, MessageKey> = { mon: 'fleet.sites.day.mon', tue: 'fleet.sites.day.tue', wed: 'fleet.sites.day.wed', thu: 'fleet.sites.day.thu', fri: 'fleet.sites.day.fri', sat: 'fleet.sites.day.sat', sun: 'fleet.sites.day.sun' };

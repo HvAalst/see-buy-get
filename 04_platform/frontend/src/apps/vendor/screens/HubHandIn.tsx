@@ -26,7 +26,7 @@ const dayLabel = (day: string) => formatDate(`${day}T12:00:00Z`, { weekday: 'sho
  * the hub's word that nothing came. With nothing booked or waiting, a line on how it works: a hub is chosen where the
  * parcel is shipped.
  */
-export function HubHandIn({ api, vendorId }: { api: HubsApi | null; vendorId: string | null }) {
+export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsApi | null; vendorId: string | null; onWork?: (has: boolean) => void; lead?: boolean }) {
   const t = useT();
   const [data, setData] = useState<StoreHubArrivals | null>(null);
   const [booking, setBooking] = useState<BookingForm | null>(null);
@@ -38,8 +38,11 @@ export function HubHandIn({ api, vendorId }: { api: HubsApi | null; vendorId: st
     if (!api || !vendorId) return;
     const r = await api.arrivals(vendorId);
     if (r.error) return setError(r.error);
-    setData(r.data ?? { waiting: [], arrivals: [] });
-  }, [api, vendorId]);
+    const next = r.data ?? { waiting: [], arrivals: [] };
+    setData(next);
+    // Whether the store has anything at a hub: the Dock screen leads with it then.
+    onWork?.(Boolean(next.waiting.length || next.arrivals.length));
+  }, [api, vendorId, onWork]);
 
   useEffect(() => {
     void load();
@@ -94,7 +97,7 @@ export function HubHandIn({ api, vendorId }: { api: HubsApi | null; vendorId: st
 
   return (
     <>
-      <h2 class="scr__section">{t('vendor.hub.title')}</h2>
+      {lead ? <h1 class="scr__title">{t('vendor.hub.title')}</h1> : <h2 class="scr__section">{t('vendor.hub.title')}</h2>}
       <p class="hint">{t('vendor.hub.lede')}</p>
       {done ? <Note tone="ok" icon="check" title={done} /> : null}
       {error ? <ErrorNote error={error} /> : null}

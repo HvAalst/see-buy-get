@@ -33768,6 +33768,14 @@
       "SiteWeek": {
         "type": "object",
         "properties": {
+          "sun": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayHours"
+              }
+            ]
+          },
           "mon": {
             "nullable": true,
             "allOf": [
@@ -33809,14 +33817,6 @@
             ]
           },
           "sat": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayHours"
-              }
-            ]
-          },
-          "sun": {
             "nullable": true,
             "allOf": [
               {

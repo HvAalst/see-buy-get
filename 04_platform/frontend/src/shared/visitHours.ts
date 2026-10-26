@@ -3,11 +3,12 @@
  * same hours the same way.
  *
  * A day of the week may keep hours of its own ("a Saturday morning only"), so "Monday to Saturday, 09:00 to 16:00"
- * is no longer always true. The days are grouped by the hours they keep, in the order they first come in the week:
- * Monday, Tuesday, Wednesday, Thursday, Friday · 09:00 to 16:00; Saturday · 09:00 to 12:00.
+ * is no longer always true. The days are grouped by the hours they keep, in the order they first come in the week —
+ * which runs Sunday to Saturday (the user, 2026-10-26): Monday, Tuesday, Wednesday, Thursday, Friday · 09:00 to 16:00;
+ * Saturday · 09:00 to 12:00.
  */
 
-export const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+export const WEEK = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
 export interface VisitPlace {
   visitDays?: string[];

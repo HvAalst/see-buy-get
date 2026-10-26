@@ -37,14 +37,15 @@ const JOBS: Array<{ screen: Screen; icon: IconName; titleKey: MessageKey; subKey
   { screen: 'freight', icon: 'truck', titleKey: 'agent.freight.title', subKey: 'agent.home.jobFreightSub', owner: true },
 ];
 
+/** A shop's week, Sunday to Saturday (the user, 2026-10-26: "saturday should be the last day of the week"). */
 const DAYS: Array<{ key: Weekday; labelKey: MessageKey }> = [
+  { key: 'sun', labelKey: 'agent.hours.day.sun' },
   { key: 'mon', labelKey: 'agent.hours.day.mon' },
   { key: 'tue', labelKey: 'agent.hours.day.tue' },
   { key: 'wed', labelKey: 'agent.hours.day.wed' },
   { key: 'thu', labelKey: 'agent.hours.day.thu' },
   { key: 'fri', labelKey: 'agent.hours.day.fri' },
   { key: 'sat', labelKey: 'agent.hours.day.sat' },
-  { key: 'sun', labelKey: 'agent.hours.day.sun' },
 ];
 
 type SheetKind = 'topup' | 'price' | 'close' | 'photo' | 'location' | 'hours' | 'people' | null;

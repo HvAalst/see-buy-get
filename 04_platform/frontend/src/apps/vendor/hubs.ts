@@ -1,6 +1,6 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { Measure } from '../../lib/sbg/personas/vendor';
-import { WEEK, type SiteWeek } from '../fleet/sites';
+import { weekdayOf, type SiteWeek } from '../fleet/sites';
 import type { QuoteView } from './types';
 
 /** When a hub receives, said as a site's days and hours are said everywhere (en.site-hours.ts). */
@@ -136,8 +136,7 @@ export function bookableDays(hours: SiteWeek | undefined, today: string, n = 14)
   const out: string[] = [];
   for (let i = 0; i < n; i += 1) {
     const day = new Date(Date.parse(`${today}T12:00:00Z`) + i * 86_400_000).toISOString().slice(0, 10);
-    const key = WEEK[(new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7];
-    if (!hours || hours[key]) out.push(day);
+    if (!hours || hours[weekdayOf(day)]) out.push(day);
   }
   return out;
 }

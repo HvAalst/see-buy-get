@@ -220,7 +220,7 @@ const keyOf = (fleetDid: string, siteId: string) => `${fleetDid}|${siteId}`;
 
 /** When a week of hours is open on a day, in minutes after midnight on that day's weekday. Null: closed that day. */
 export function openOn(week: SiteWeek, day: string): { fromMin: number; toMin: number } | null {
-  const today = week[WEEKDAYS[(new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7]];
+  const today = week[WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()]];
   return today ? { fromMin: minutesOf(today.open), toMin: minutesOf(today.close) } : null;
 }
 

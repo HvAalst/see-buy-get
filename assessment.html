@@ -112,7 +112,7 @@
 
 <!-- ─────────────────────────────────────────────────────── where it stands now -->
 <h2 id="now">Where it stands now</h2>
-<p class="lead">Checked against the code on 2026-10-25. What this page recommended without needing a decision is built. What was left needed a decision of yours: you answered the three that come first the same day, all as recommended, and they are being built in this order — the live view (built), the broken-down bike (built), inbound supply (reading A built; reading B next).</p>
+<p class="lead">Checked against the code on 2026-10-25. What this page recommended without needing a decision is built. What was left needed a decision of yours: you answered the three that come first the same day, all as recommended, and they are being built in this order — the live view (built), the broken-down bike (built), inbound supply (reading A built; reading B’s first step built 2026-10-26).</p>
 <div class="grid">
   <div class="card"><span class="tag t-strong">Built since 2026-10-15</span><h3>What was done</h3><ul>
     <li>The two recommendations that needed no decision: who drives on which day, and a parcel running late is told (<a href="#built">below</a>).</li>
@@ -124,7 +124,7 @@
   <div class="card"><span class="tag t-strong">Your answers, 2026-10-25</span><h3>What was left to decide first</h3><ul>
     <li><b>One live view</b> (P4), “Console and fleet offices”: <b>built</b>. The console never refreshed by itself — a new sign-up, or a colleague's request to approve, sat unseen until somebody pressed Refresh. Now it and a fleet office's screens are told the moment something they show changes (<a href="#central">below</a>).</li>
     <li><b>Bags and parcels on a broken-down vehicle</b>, “Split by the road”: <b>built</b>. The couriers near a broken-down courier are told; one takes the bags and loose parcels over at the bike with the six digits, all or none, and the road is paid once — the first courier for the stretch driven, at the takeover; the second for the rest, on arrival. A fleet truck's bags now move with its loads (<a href="#fleet">below</a>).</li>
-    <li><b>Inbound supply</b>, “Yes, A then B”: being built on the recommendations for D1–D14 as written (<a href="#inbound">below</a>) — first a business sees and receives what is coming to its own sites (<b>built</b>: what is coming in, and the receiving moment on the place’s own clock), then one hub breaks bulk into parcels. Hub opening hours, and a time booked at a dock two carriers share, come with it.</li>
+    <li><b>Inbound supply</b>, “Yes, A then B”: being built on the recommendations for D1–D14 as written (<a href="#inbound">below</a>) — first a business sees and receives what is coming to its own sites (<b>built</b>: what is coming in, and the receiving moment on the place’s own clock), then one hub breaks bulk into parcels (<b>first step built 2026-10-26</b>: a store hands its parcels in at a hub in bulk). A hub’s receiving days, hours and doors came with it; a time booked at a dock two carriers share comes with bookable slots.</li>
   </ul></div>
   <div class="card"><span class="tag t-partial">Later</span><h3>What I would leave until after the first test</h3><ul>
     <li>An accounting export (the rest of P3), a reporting copy (P5), other carriers' feeds (P6).</li>
@@ -234,7 +234,7 @@
       <div><h4>What was missing</h4><ul>
         <li>Different start times within one fleet (an early and a late shift), and two drivers sharing one truck in a day: the plan had one start and one length for every truck. <b>Built 2026-10-17</b> as shifts at a site (<code>3a1e7df</code>, see <a href="#resources">Planning across sites and shifts</a>).</li>
         <li>Staff shifts at shops and hubs: <b>left out</b> by your answer of 2026-10-17, drivers' shifts only.</li>
-        <li>Hub opening hours: still missing, with the inbound decisions (D8).</li>
+        <li>Hub receiving hours: <b>built 2026-10-26</b> for stores’ parcels in bulk — the days and hours a hub receives, on its own clock, and its doors (D8). A hub’s general opening hours are still not kept.</li>
       </ul></div>
     </div>
   </div>
@@ -247,7 +247,8 @@
 <h3 style="margin-top:28px">Built so far</h3>
 <div class="grid">
   <div class="card"><span class="tag t-strong">Built 2026-10-25</span><h3>Reading A, first step: what is coming in</h3><p>A business that receives goods at its own places has a <b>Coming in</b> screen. Each place of its own can receive, with a code (like <code>7KQ3-PX9M</code>) the business gives its suppliers itself. A supplier posting a load writes the code as “Deliver to”, and may add the receiver's order number; the load goes to that place by its name. The receiver sees it coming: its order number, who from, packages, weight, where it is, who is bringing it and when it is expected — never the price (D2, D7). Its bell says when it is coming, on its way, delivered, not delivered or withdrawn, and its own system hears the same (D14). The code names the place and opens nothing else; a new code retires the old.</p></div>
-  <div class="card"><span class="tag t-strong">Built 2026-10-25</span><h3>Reading A, second step: the receiving moment</h3><p>At the door the driver writes down, with the receiver, what is not as the note says: packages <b>short</b>, <b>more</b> than the note says, <b>damaged</b> (always with a photo) or <b>not the goods</b> on the note. It is counted against the note's own count and goes in box 24 beside the receiver's name, frozen with the note (D9); goods found damaged are no longer ticked “Cargo intact”. The sender is told: its bell, its email, its Loads, its own system. The receiver's Coming in keeps what did not come, or came and is not the goods, under <b>Still expected</b> until one of its people closes it, “it came” or “not coming”. When a load is expected, and whether it is late, is read on the receiving place's own clock, named where the reader's clock is another (D10).</p><p class="note">Found while building it, and built: a business claims on its own delivered load from the Business app (before, only a shop at its counter could). Your answer, 2026-10-26, “Its copy, no carriage price”: built — the receiving business reads its own copy of the note (no carriage price unless the term makes the carriage its to pay), and claims where the trade term puts the loss on it. Next: reading B at one hub — its receiving hours and doors (D8), the fee per handling unit (D12), goods from abroad (D13).</p></div>
+  <div class="card"><span class="tag t-strong">Built 2026-10-25</span><h3>Reading A, second step: the receiving moment</h3><p>At the door the driver writes down, with the receiver, what is not as the note says: packages <b>short</b>, <b>more</b> than the note says, <b>damaged</b> (always with a photo) or <b>not the goods</b> on the note. It is counted against the note's own count and goes in box 24 beside the receiver's name, frozen with the note (D9); goods found damaged are no longer ticked “Cargo intact”. The sender is told: its bell, its email, its Loads, its own system. The receiver's Coming in keeps what did not come, or came and is not the goods, under <b>Still expected</b> until one of its people closes it, “it came” or “not coming”. When a load is expected, and whether it is late, is read on the receiving place's own clock, named where the reader's clock is another (D10).</p><p class="note">Found while building it, and built: a business claims on its own delivered load from the Business app (before, only a shop at its counter could). Your answer, 2026-10-26, “Its copy, no carriage price”: built — the receiving business reads its own copy of the note (no carriage price unless the term makes the carriage its to pay), and claims where the trade term puts the loss on it. Then reading B at one hub: its first step is built (next card).</p></div>
+  <div class="card"><span class="tag t-strong">Built 2026-10-26</span><h3>Reading B, first step: a hub as a cross-dock</h3><p>A hub's owner says, in the Hub app's new <b>Coming in</b> tab, that it takes stores' parcels in bulk: the days and hours it receives on its own clock, and how many vans it can unload at once (D8). A store shipping a parcel may choose such a hub as where it starts, priced from the hub: its sort fee and the shop's at the far end, with no shop and no road before it, so it costs less than a counter. On its Dock screen the store books an <b>arrival</b>: which of those parcels, on how many pallets, cartons, cages or sacks (handling units, D5), and which day the hub receives, from today on the hub's clock to a month ahead (D4, D10). At the door the hub counts what came, with a line for what it saw, then scans each parcel in, by our QR, its tracking key or the store's own barcode (SSCC). From that scan the hub holds it, its journey is promised from the hub, and it is sorted like any other parcel. The last parcel ends the arrival; ended by hand, what was not on it stays the store's, which is told and books it again (D9). What the hub saw at its door goes to the store, and the store’s own system hears how each arrival ended. An arrival whose day is over with nothing at the door: the hub says it did not come, and the store is told.</p><p class="note">Found and fixed on the way: a store parcel's barcode was found only once it stood at a hub, so it could not be scanned in off a pallet. Section headings in the Shop, Driver, Fleet and Store apps had no style of their own. Not in this step: the hub's fee per handling unit (D12), goods from abroad (D13), and load carriers before bookable slots (D11).</p></div>
 </div>
 
 <h3 style="margin-top:28px">First: what "inbound" would mean for us</h3>
@@ -295,7 +296,7 @@
   <dl>
     <dt>Why it matters</dt><dd>The consignment note is the source of truth for anything we carry. A supplier who uses its own transport has no note with us. Two records stating the same facts drift apart.</dd>
     <dt>Options</dt><dd><ul><li>Inbound is a view over loads whose destination is the receiver's site — nothing new is stored.</li><li>A new "expected arrival" record, the receiver's expectation, linked to zero or more loads (zero when the supplier delivers itself).</li><li>Both: build the view first, add the record when B needs it.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Both, in that order. The expected arrival never copies what the note says; it points at it.</dd>
+    <dt>Recommendation</dt><dd class="rec">Both, in that order. The expected arrival never copies what the note says; it points at it. <b>Built:</b> the view for reading A (2026-10-25); the record for reading B (2026-10-26) — a store’s arrival at a hub names its parcels, its handling units and its day, and copies nothing of them.</dd>
   </dl>
 </div>
 
@@ -304,7 +305,7 @@
   <dl>
     <dt>Why it matters</dt><dd>We know parcels, bags and loads (weight, packaging, pieces). We have no product data, and pallets and trolleys as things we track are an idea not yet built (the hub would declare its own carrier; capacity is derived, never typed).</dd>
     <dt>Options</dt><dd><ul><li>Handling units: pallets, cartons, pieces, as on the note.</li><li>Item lines: product codes and quantities.</li><li>Both.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Handling units. Counting items belongs to the receiver's own stock system, and needs product data we do not have and should not own.</dd>
+    <dt>Recommendation</dt><dd class="rec">Handling units. Counting items belongs to the receiver's own stock system, and needs product data we do not have and should not own. <b>Built 2026-10-26:</b> a hub arrival is booked and counted at the door in pallets, cartons, cages or sacks.</dd>
   </dl>
 </div>
 
@@ -333,7 +334,7 @@
   <dl>
     <dt>Why it matters</dt><dd>Participants declare and the network reads: a shop declares its shelf and bag bays, a hub its zones and sort fee. A hub has no opening hours, no doors and no receiving capacity today. A country sets its own office hours; a place should set its own receiving hours.</dd>
     <dt>Options</dt><dd><ul><li>No appointments: first come, first served.</li><li>Declared receiving hours and doors, which carriers and the day plan read (delivery windows already exist in the planner).</li><li>Bookable slots per door, with no-show rules.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Declared hours and doors first. Bookable slots once a hub actually queues trucks. A no-show clock starts from the booking, never from a fixed date (a lesson paid for once already).</dd>
+    <dt>Recommendation</dt><dd class="rec">Declared hours and doors first. Bookable slots once a hub actually queues trucks. A no-show clock starts from the booking, never from a fixed date (a lesson paid for once already). <b>Built 2026-10-26</b> for stores’ parcels in bulk: a hub declares its receiving days, hours and doors; a store books a day it receives; the hub says an arrival did not come only once its booked day is over.</dd>
   </dl>
 </div>
 
@@ -395,7 +396,7 @@
   <li><b>D1 and D3</b> — which reading, and whether we ever store. Everything else depends on these two.</li>
   <li><b>D2 and D5</b> — what we write down about the goods: a reference and handling units, or more.</li>
   <li><b>D4, D7 and D14</b> — the record, who sees it, and who is told. With these, reading A can be built: a business sees what is coming to its sites.</li>
-  <li><b>D8, D9 and D10</b> — the place: its hours and doors, the receiving moment, its clock. With these, reading B can start at one hub.</li>
+  <li><b>D8, D9 and D10</b> — the place: its hours and doors, the receiving moment, its clock. With these, reading B can start at one hub (started 2026-10-26).</li>
   <li><b>D11, D12 and D13</b> — empties and returns, money, borders. Needed before B runs at more than one hub.</li>
 </ol>
 <p class="note">What we would not do in any reading: handle payment between businesses, compute customs duty, classify goods for customs, or keep a supplier's prices.</p>

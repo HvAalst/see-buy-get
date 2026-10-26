@@ -1,3 +1,4 @@
+import { WEEK } from '../../../shared/visitHours';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { addClosedDate, closedDateWords, ownHoursOf, removeClosedDate, visitorsPerHourOf, windowOk, type ClosedDate, type VisitWindow } from '../contactCard';
@@ -24,8 +25,8 @@ export interface ContactCardView {
   basis: string;
 }
 
-/** The days of a week, in the order a company ticks them. */
-export const VISIT_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+/** The days of a week, in the order a company ticks them: Sunday to Saturday. */
+export const VISIT_DAYS = WEEK;
 
 /**
  * A COMPANY'S OWN ENTRY — how to reach them, written by them, changed by them whenever they like.

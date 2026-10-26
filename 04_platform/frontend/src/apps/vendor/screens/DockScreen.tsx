@@ -19,12 +19,18 @@ import { HubHandIn } from './HubHandIn';
  */
 export function DockScreen({ state, actions }: { state: VendorState; actions: VendorActions }) {
   const dock = state.vendor?.collection;
+  // Reading B — the other way parcels leave the store: brought to a hub in bulk. A store with a dock of its own works that
+  // first. One without leads with the hub where it has parcels or arrivals there — the screen's title is then the hub's,
+  // and the offer of a dock follows; otherwise the offer leads, and the hub's short line follows it.
+  const [hubWork, setHubWork] = useState(false);
+  const hubFirst = !dock && hubWork;
+  const hub = <HubHandIn key="hub" api={actions.hubs} vendorId={state.vendor?.vendorId ?? null} onWork={setHubWork} lead={hubFirst} />;
+  const offer = <DockOffer key="offer" state={state} actions={actions} lead={!hubFirst} />;
   return (
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={() => void actions.loadDock()} /> : null}
-      {dock ? <DockWork state={state} actions={actions} /> : <DockOffer state={state} actions={actions} />}
-      {/* Reading B — the other way parcels leave the store: brought to a hub in bulk. */}
-      <HubHandIn api={actions.hubs} vendorId={state.vendor?.vendorId ?? null} />
+      {dock ? <DockWork state={state} actions={actions} /> : null}
+      {dock ? hub : hubFirst ? [hub, offer] : [offer, hub]}
     </div>
   );
 }
@@ -35,7 +41,7 @@ export function DockScreen({ state, actions }: { state: VendorState; actions: Ve
  * What a dock IS, in the terms a merchant weighs it in — a saved trip and one handover fewer — and the
  * things it is not, stated plainly so nobody enables it expecting a shop counter.
  */
-function DockOffer({ state, actions }: { state: VendorState; actions: VendorActions }) {
+function DockOffer({ state, actions, lead = true }: { state: VendorState; actions: VendorActions; lead?: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState('');
@@ -49,7 +55,7 @@ function DockOffer({ state, actions }: { state: VendorState; actions: VendorActi
 
   return (
     <>
-      <h1 class="scr__title">{t('vendor.dock.offerTitle')}</h1>
+      {lead ? <h1 class="scr__title">{t('vendor.dock.offerTitle')}</h1> : <h2 class="scr__section">{t('vendor.dock.offerTitle')}</h2>}
       <Explainer who={state.vendor?.did} id="vendor.dock.how" text={t('vendor.dock.offerLede')} />
 
       <Card title={t('vendor.dock.whatTitle')}>

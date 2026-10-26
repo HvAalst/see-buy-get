@@ -1,3 +1,4 @@
+import { useT } from '../i18n';
 import { Icon, type IconName } from './Icon';
 
 export interface NavItem<K extends string = string> {
@@ -44,6 +45,7 @@ export interface BottomNavProps<K extends string = string> {
  * of eight, and the argument above may be right again on a surface we have not built yet.
  */
 export function BottomNav<K extends string>({ items, active, onSelect, labels = true }: BottomNavProps<K>) {
+  const t = useT();
   return (
     <nav class={`bnav${labels ? '' : ' bnav--bare'}`} aria-label="Main">
       {items.map((it) => {
@@ -56,7 +58,9 @@ export function BottomNav<K extends string>({ items, active, onSelect, labels = 
             onClick={() => onSelect(it.key)}
             disabled={it.disabled}
             aria-current={on ? 'page' : undefined}
-            aria-label={labels ? undefined : it.label}
+            // Without its words, a tab is named by its label — and its count with it: a name given here is all a screen
+            // reader says, so a count written beside it inside the button would never be heard.
+            aria-label={labels ? undefined : it.badge ? t('common.nav.withCount', { label: it.label, n: it.badge }) : it.label}
             title={labels ? undefined : it.label}
           >
             {on ? <span class="bnav__ind" aria-hidden="true" /> : null}
@@ -67,7 +71,7 @@ export function BottomNav<K extends string>({ items, active, onSelect, labels = 
                 {it.badge}
               </span>
             ) : null}
-            {it.badge ? <span class="sr-only">{`${it.badge} items`}</span> : null}
+            {labels && it.badge ? <span class="sr-only">{t('common.nav.count', { n: it.badge })}</span> : null}
           </button>
         );
       })}

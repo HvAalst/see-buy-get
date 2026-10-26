@@ -50,7 +50,8 @@ export function ArrivalScreen({ state, actions }: { state: MdpState; actions: Md
         <Pill tone={WORD_TONE[word]}>{t(`mdp.arrivals.word.${word}` as never)}</Pill>
         {a.bringer ? <span class="hint">{t('mdp.arrivals.bringer', { who: a.bringer })}</span> : null}
       </div>
-      {state.error ? <ErrorNote error={state.error} /> : null}
+      {/* The server's own words under the headline: a code not on this arrival is to be set aside, and the store told. */}
+      {state.error ? <ErrorNote error={state.error} showDetail /> : null}
 
       {a.state === 'expected' ? (
         <>

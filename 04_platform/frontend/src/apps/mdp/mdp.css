@@ -346,10 +346,28 @@
 
 .dayrow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 104px 104px;
+  /* The two times share what the day's name leaves: a 12-hour clock writes "06:00 PM", and a box too narrow for it cuts
+     the PM off — which reads as six in the morning. */
+  grid-template-columns: 76px minmax(0, 1fr) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-height: var(--tap);
+}
+
+/* On the narrowest phones the times go under the day, side by side, each with room for its AM or PM. */
+@media (max-width: 359px) {
+  .dayrow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding-bottom: 6px;
+  }
+
+  .dayrow__day {
+    grid-column: 1 / -1;
+  }
+
+  .dayrow--head span:first-child {
+    display: none;
+  }
 }
 
 .dayrow--head {

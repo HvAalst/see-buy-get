@@ -20,8 +20,8 @@ import { EntityService } from '../../foundation/entity/entity.service';
  * whole point of writing one — so the screens say plainly that it is the gate's number and not somebody's
  * private one, and nothing here ever reads a person's identity out of the vault to fill it in.
  */
-/** The days of a week, as a company ticks them. */
-export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+/** The days of a week, as a company ticks them: Sunday to Saturday (the user, 2026-10-26). Indexed by Date.getUTCDay(). */
+export const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DAY_WORD: Record<Weekday, string> = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
@@ -29,7 +29,7 @@ const DAY_WORD: Record<Weekday, string> = { mon: 'Monday', tue: 'Tuesday', wed: 
 /** The weekday a calendar date falls on. A date is the same date wherever it is read, so no time zone enters into it. */
 export function weekdayOf(date: string): Weekday | undefined {
   const at = Date.parse(`${date}T00:00:00.000Z`);
-  return Number.isNaN(at) ? undefined : WEEKDAYS[(new Date(at).getUTCDay() + 6) % 7];
+  return Number.isNaN(at) ? undefined : WEEKDAYS[new Date(at).getUTCDay()];
 }
 
 /**

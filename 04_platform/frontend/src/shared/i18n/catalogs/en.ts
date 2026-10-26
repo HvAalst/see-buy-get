@@ -159,6 +159,9 @@ export const en = {
   /* Teaching text somebody has finished reading (Explainer). The dismiss is described as putting the
      line away rather than hiding or deleting it, because the restore below is the other half of it. */
   'common.tips.dismiss': 'I have read this — put it away',
+  // A tab's count, as a screen reader says it: "Coming in (2)" — the tab's own word says what is counted.
+  'common.nav.withCount': '{label} ({n})',
+  'common.nav.count': '({n})',
   // Said in words on a block, where a corner cross would read as "close this for now" rather than for good.
   'common.tips.dismissBlock': 'Got it — do not show me this again',
   'common.tips.restoreOne': 'Show the tip I put away',
