@@ -11,17 +11,27 @@ const WEEK = 7 * DAY;
 /** Each hour a week that has ended is frozen, if it was not already. Reading the board does the same. */
 const SWEEP_MS = 3_600_000;
 
-/** Monday 00:00 UTC of the week `t` falls in. */
+/**
+ * Sunday 00:00 UTC of the week `t` falls in. A week runs Sunday to Saturday (the user, 2026-10-26: "saturday should be
+ * the last day of the week"; and for the pilot's weeks, "Sunday to Saturday") — no longer an ISO week, Monday to Sunday.
+ */
 export function weekStart(t: number): number {
   const d = new Date(t);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - d.getUTCDay());
 }
 
-/** The ISO week a Monday starts, as "2026-W42": the week's Thursday decides its year. */
-export function isoWeek(monday: number): string {
-  const year = new Date(monday + 3 * DAY).getUTCFullYear();
-  const first = weekStart(Date.UTC(year, 0, 4));
-  return `${year}-W${String(1 + Math.round((monday - first) / WEEK)).padStart(2, '0')}`;
+/** A week by its first day, a Sunday: "2026-10-25". */
+export function weekName(sunday: number): string {
+  return new Date(sunday).toISOString().slice(0, 10);
+}
+
+const DAY_WORDS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTH_WORDS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** A week as a sentence says it: "the week of Sunday 25 October 2026". */
+export function weekInWords(sunday: number): string {
+  const d = new Date(sunday);
+  return `the week of ${DAY_WORDS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTH_WORDS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
 /** When the parcel was taken in at a counter: its intake, or a walk-up's first scan by the shop. Never a mint. */
@@ -88,9 +98,9 @@ export class PilotService implements OnApplicationBootstrap, OnModuleDestroy {
   /** The week still running (so far), every frozen week newest first, and the compendium's targets. */
   board(now: number = Date.now()): PilotBoard {
     this.freeze(now);
-    const monday = weekStart(now);
+    const sunday = weekStart(now);
     return {
-      thisWeek: this.compute(monday, now, false),
+      thisWeek: this.compute(sunday, now, false),
       weeks: [...this.weeks.values()].sort((a, b) => b.from.localeCompare(a.from)),
       targets: {
         handshake: PILOT_TARGETS.handshake.target,
@@ -113,20 +123,21 @@ export class PilotService implements OnApplicationBootstrap, OnModuleDestroy {
    */
   offTarget(now: number = Date.now()): PudoFlag[] {
     this.freeze(now);
-    const last = this.weeks.get(isoWeek(weekStart(now) - WEEK));
+    const last = this.weeks.get(weekName(weekStart(now) - WEEK));
     if (!last) return [];
     const flags: PudoFlag[] = [];
     const say = (metric: string, detail: string) => flags.push({ type: 'Pilot_Off_Target', subject: `${last.week}:${metric}`, detail, ageHours: Math.max(0, Math.round((now - Date.parse(last.to)) / 3_600_000)) });
     const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
+    const inWeek = weekInWords(Date.parse(last.from));
     const tg = PILOT_TARGETS;
     const h = last.handshake;
-    if (h.rate !== undefined && h.rate < tg.handshake.target) say('handshake', `Handshake ${pct(h.rate)} in ${last.week}, target ${pct(tg.handshake.target)}: ${h.handed} scanned onto a bus, ${h.missed} left behind`);
+    if (h.rate !== undefined && h.rate < tg.handshake.target) say('handshake', `Handshake ${pct(h.rate)} in ${inWeek}, target ${pct(tg.handshake.target)}: ${h.handed} scanned onto a bus, ${h.missed} left behind`);
     const l = last.loss;
-    if (l.rate !== undefined && l.rate >= tg.loss.target) say('loss', `Lost or damaged ${pct(l.rate)} in ${last.week}, target under ${pct(tg.loss.target)}: ${l.lost} lost, ${l.damaged} damaged, of ${l.takenIn} taken in`);
+    if (l.rate !== undefined && l.rate >= tg.loss.target) say('loss', `Lost or damaged ${pct(l.rate)} in ${inWeek}, target under ${pct(tg.loss.target)}: ${l.lost} lost, ${l.damaged} damaged, of ${l.takenIn} taken in`);
     const ti = last.takeIn;
-    if (ti.medianSeconds !== undefined && ti.medianSeconds >= tg.takeInSeconds.target) say('take-in', `Take-in time ${ti.medianSeconds} s in ${last.week}, target under ${tg.takeInSeconds.target} s: the median of ${ti.timed} timed`);
+    if (ti.medianSeconds !== undefined && ti.medianSeconds >= tg.takeInSeconds.target) say('take-in', `Take-in time ${ti.medianSeconds} s in ${inWeek}, target under ${tg.takeInSeconds.target} s: the median of ${ti.timed} timed`);
     const r = last.retention;
-    if (r && r.rate !== undefined && r.pilotWeek >= tg.retention.atWeek && r.rate < tg.retention.target) say('retention', `Original shops working ${pct(r.rate)} in ${last.week} (week ${r.pilotWeek} of the pilot), target ${pct(tg.retention.target)}: ${r.active} of ${r.original}`);
+    if (r && r.rate !== undefined && r.pilotWeek >= tg.retention.atWeek && r.rate < tg.retention.target) say('retention', `Original shops working ${pct(r.rate)} in ${inWeek} (week ${r.pilotWeek} of the pilot), target ${pct(tg.retention.target)}: ${r.active} of ${r.original}`);
     return flags;
   }
 
@@ -135,17 +146,17 @@ export class PilotService implements OnApplicationBootstrap, OnModuleDestroy {
     const first = this.firstWeek();
     if (first === undefined) return 0;
     let made = 0;
-    for (let monday = first; monday + WEEK <= now; monday += WEEK) {
-      const key = isoWeek(monday);
+    for (let sunday = first; sunday + WEEK <= now; sunday += WEEK) {
+      const key = weekName(sunday);
       if (this.weeks.get(key)) continue;
-      const week = this.compute(monday, monday + WEEK, true, now);
+      const week = this.compute(sunday, sunday + WEEK, true, now);
       this.weeks.set(key, week);
       made += 1;
     }
     return made;
   }
 
-  /** The Monday the first parcel was taken in at a counter: week 1 of the pilot. */
+  /** The Sunday that began the week the first parcel was taken in at a counter: week 1 of the pilot. */
   private firstWeek(): number | undefined {
     let first: number | undefined;
     for (const p of this.parcels.list()) {
@@ -188,7 +199,7 @@ export class PilotService implements OnApplicationBootstrap, OnModuleDestroy {
       .sort((a, b) => a - b);
 
     const week: PilotWeek = {
-      week: isoWeek(from),
+      week: weekName(from),
       from: new Date(from).toISOString(),
       to: new Date(frozen ? to : from + WEEK).toISOString(),
       frozen,

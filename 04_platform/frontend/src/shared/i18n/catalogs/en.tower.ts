@@ -789,7 +789,7 @@ export const enTower = {
   'tower.record.notKeptSub': 'Records live only while it runs (a test, or GLOS_PERSIST=off).',
   'tower.record.checkAgain': 'Check again',
   'tower.pilot.title': 'The pilot, week by week',
-  'tower.pilot.lede': 'The four numbers the compendium judges the pilot on, each week against its target. A week that has ended is frozen and never counted again; this week is so far. Weeks run Monday to Sunday, UTC.',
+  'tower.pilot.lede': 'The four numbers the compendium judges the pilot on, each week against its target. A week that has ended is frozen and never counted again; this week is so far. Weeks run Sunday to Saturday, UTC.',
   'tower.pilot.weeks': 'Weeks',
   'tower.pilot.col.week': 'Week',
   'tower.pilot.col.handshake': 'Handshake',

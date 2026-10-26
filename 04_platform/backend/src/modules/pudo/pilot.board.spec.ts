@@ -63,11 +63,12 @@ describe('the pilot’s numbers, counted', () => {
     // Monday of week 2: the review.
     const monday = MON + 7 * 24 * 3_600_000 + 9 * 3_600_000;
     const flags = pilot.offTarget(monday);
-    expect(flags.map((f) => f.subject)).toEqual(['2026-W42:handshake', '2026-W42:loss', '2026-W42:take-in']);
+    // Mon 12 Oct falls in the week of Sunday 11 October (a week runs Sunday to Saturday).
+    expect(flags.map((f) => f.subject)).toEqual(['2026-10-11:handshake', '2026-10-11:loss', '2026-10-11:take-in']);
     expect(flags.every((f) => f.type === 'Pilot_Off_Target')).toBe(true);
-    expect(flags[0].detail).toBe('Handshake 75% in 2026-W42, target 95%: 3 scanned onto a bus, 1 left behind');
+    expect(flags[0].detail).toBe('Handshake 75% in the week of Sunday 11 October 2026, target 95%: 3 scanned onto a bus, 1 left behind');
     // A week later still, that week is no longer the one under review.
-    expect(pilot.offTarget(monday + 7 * 24 * 3_600_000).map((f) => f.subject).filter((s) => s.startsWith('2026-W42'))).toEqual([]);
+    expect(pilot.offTarget(monday + 7 * 24 * 3_600_000).map((f) => f.subject).filter((s) => s.startsWith('2026-10-11'))).toEqual([]);
   });
 
   it('raises nothing for a week on target, and judges the original shops only from week 8', () => {
@@ -84,7 +85,7 @@ describe('the pilot’s numbers, counted', () => {
     // Monday of week 3: week 2 under review — half the original shops working, and nothing else off. Week 2 of the pilot.
     expect(pilot.offTarget(MON + (2 * WEEK_H + 9) * 3_600_000)).toEqual([]);
     // Monday of week 9: week 8 under review — still half: now it is judged.
-    expect(pilot.offTarget(MON + (8 * WEEK_H + 9) * 3_600_000).map((f) => f.subject)).toEqual(['2026-W49:retention']);
+    expect(pilot.offTarget(MON + (8 * WEEK_H + 9) * 3_600_000).map((f) => f.subject)).toEqual(['2026-11-29:retention']);
   });
 
   it('counts a shop as working only by the scans it signed — not a hub’s, a driver’s or the network’s', () => {

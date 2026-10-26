@@ -56133,7 +56133,7 @@
         "properties": {
           "week": {
             "type": "string",
-            "description": "ISO week, e.g. 2026-W42."
+            "description": "The week by its first day, a Sunday, e.g. 2026-10-25: a week runs Sunday to Saturday, UTC."
           },
           "frozen": {
             "type": "boolean",

@@ -793,7 +793,9 @@ describe('the first day of a new installation, as it would be live', () => {
   it('12 · the pilot’s first week, as the day went: the four numbers the compendium judges it on — and a finished week is frozen', async () => {
     const board = await must(http().get('/v1/sbg/pilot').set(bearer(amina)), 200);
     const week = board.thisWeek;
-    expect(week).toMatchObject({ frozen: false, week: expect.stringMatching(/^\d{4}-W\d{2}$/) });
+    // A week runs Sunday to Saturday, named by its first day.
+    expect(week).toMatchObject({ frozen: false, week: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+    expect(new Date(week.from).getUTCDay()).toBe(0);
     // Every parcel due onto a bus was scanned onto it.
     expect(week.handshake).toMatchObject({ missed: 0, rate: 1 });
     expect(week.handshake.handed).toBeGreaterThan(0);

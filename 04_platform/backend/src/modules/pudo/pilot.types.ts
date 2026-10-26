@@ -68,7 +68,7 @@ export class PilotRetention {
 }
 
 export class PilotWeek {
-  @ApiProperty({ description: 'ISO week, e.g. 2026-W42.' }) week: string;
+  @ApiProperty({ description: 'The week by its first day, a Sunday, e.g. 2026-10-25: a week runs Sunday to Saturday, UTC.' }) week: string;
   from: string;
   to: string;
   @ApiProperty({ description: 'False for the week still running: its numbers are "so far" and are not kept.' }) frozen: boolean;

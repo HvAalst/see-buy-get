@@ -1,18 +1,20 @@
-import { isoWeek, takenInAt, weekStart } from './pilot.service';
+import { takenInAt, weekInWords, weekName, weekStart } from './pilot.service';
 import type { Parcel } from './pudo.types';
 
-/** The pilot's weeks run Monday to Monday, UTC, and are named as ISO weeks — the year is the one the week's Thursday falls in. */
+/** The pilot's weeks run Sunday to Saturday, UTC (the user, 2026-10-26), each named by its first day. */
 describe('the pilot’s weeks', () => {
-  it('starts each week on Monday 00:00 UTC, whatever the day', () => {
-    expect(new Date(weekStart(Date.parse('2026-10-18T23:59:00Z'))).toISOString()).toBe('2026-10-12T00:00:00.000Z');
-    expect(new Date(weekStart(Date.parse('2026-10-12T00:00:00Z'))).toISOString()).toBe('2026-10-12T00:00:00.000Z');
+  it('starts each week on Sunday 00:00 UTC, whatever the day — Saturday is its last', () => {
+    // Sat 24 Oct, the last minute: still the week of Sun 18 Oct. Sun 25 Oct, its first minute: a new week.
+    expect(new Date(weekStart(Date.parse('2026-10-24T23:59:00Z'))).toISOString()).toBe('2026-10-18T00:00:00.000Z');
+    expect(new Date(weekStart(Date.parse('2026-10-25T00:00:00Z'))).toISOString()).toBe('2026-10-25T00:00:00.000Z');
+    expect(new Date(weekStart(Date.parse('2026-10-26T12:00:00Z'))).toISOString()).toBe('2026-10-25T00:00:00.000Z');
   });
 
-  it('names a week as ISO does, across the turn of a year with fifty-three weeks', () => {
-    expect(isoWeek(Date.parse('2026-10-12T00:00:00Z'))).toBe('2026-W42');
-    expect(isoWeek(Date.parse('2025-12-29T00:00:00Z'))).toBe('2026-W01');
-    expect(isoWeek(Date.parse('2026-12-28T00:00:00Z'))).toBe('2026-W53');
-    expect(isoWeek(Date.parse('2027-01-04T00:00:00Z'))).toBe('2027-W01');
+  it('names a week by its first day, across the turn of a year, and says it in words', () => {
+    expect(weekName(Date.parse('2026-10-25T00:00:00Z'))).toBe('2026-10-25');
+    // Sun 27 Dec 2026 to Sat 2 Jan 2027: the week is the one it began in.
+    expect(weekName(weekStart(Date.parse('2027-01-01T08:00:00Z')))).toBe('2026-12-27');
+    expect(weekInWords(Date.parse('2026-10-25T00:00:00Z'))).toBe('the week of Sunday 25 October 2026');
   });
 
   it('counts a parcel as taken in when a counter took it — never when somebody minted it at home', () => {
