@@ -91,6 +91,11 @@ describe('who the door lets in', () => {
     expect(door('PATCH sbg/mdps/:id/pricing')).toMatchObject({ open: false, roles: ['mdp', 'operator'] });
   });
 
+  /** A shop's fee is the least it is paid: the same — staff refused by name inside. */
+  it('PATCH sbg/agents/:did/pricing is for a shop', () => {
+    expect(door('PATCH sbg/agents/:did/pricing')).toMatchObject({ open: false, roles: ['agent', 'operator'] });
+  });
+
   /** A bag in somebody's hands: the trades that handle bags. A store, a business, a fleet's office never hold one. */
   it.each(['POST sbg/totes/:code/assign', 'POST sbg/totes/:code/fill', 'POST sbg/totes/:code/release'])('%s is for a shop or a hub', (route) => {
     expect(door(route)).toMatchObject({ open: false, roles: ['agent', 'mdp', 'operator'] });
@@ -183,7 +188,6 @@ describe('who the door lets in', () => {
         'POST sbg/agents/:did/top-up',
         'GET sbg/agents/:did/funding',
         'POST sbg/agents/:did/receive-bag',
-        'PATCH sbg/agents/:did/pricing',
         'POST sbg/agents/:did/totes',
         'POST sbg/consignments/:code/deposit',
         'GET sbg/consignments',
@@ -336,9 +340,9 @@ describe('who the door lets in', () => {
     expect(door(route)).toMatchObject({ open: false, ...label });
   });
 
-  it('…and that is 123 of them, none listed twice', () => {
+  it('…and that is 122 of them, none listed twice', () => {
     const listed = OWN.flatMap(([, , routes]) => routes);
-    expect(listed).toHaveLength(123);
+    expect(listed).toHaveLength(122);
     expect(new Set(listed).size).toBe(listed.length);
   });
 

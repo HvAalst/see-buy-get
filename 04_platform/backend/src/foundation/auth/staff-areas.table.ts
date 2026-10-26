@@ -385,7 +385,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET tracking/module-info': 'admin',
   'GET tracking/webhooks/outbox': 'admin',
   'PATCH sbg/account/profile': 'none',
-  'PATCH sbg/agents/:did/pricing': 'support',
+  'PATCH sbg/agents/:did/pricing': 'none',
   'PATCH sbg/business/me': 'none',
   'PATCH sbg/business/me/clients/:clientId': 'none',
   'PATCH sbg/dispatch/freight/:id/instructions': 'support',

@@ -235,21 +235,23 @@ describe('the collection window closing', () => {
 
   // ---------------------------------------------------------------------------------------------
   describe('what the shop earns', () => {
-    it('pays the shelving half when the parcel lands, before anybody has collected anything', () => {
+    it('pays at least the shop’s own fee when the parcel lands, before anybody has collected anything', () => {
       // THE REGRESSION THIS FIXES. Before the split, a destination shop that received, scanned and
       // shelved a parcel earned nothing for any of it until a stranger turned up — and nothing at all if
-      // one never did.
-      const { to } = onShelf();
-      expect(agents.balance(to.did)).toBeCloseTo(SHELVING_FEE, 2);
+      // one never did. Now the least it is paid is its own fee, the one the parcel was sold at (the user,
+      // 2026-10-26: "shops are at minimum paid the fee they set"): 0.50, more than its company's shelving pay.
+      const { parcel, to } = onShelf();
+      expect(parcel.stopFees?.find((s) => s.id === to.did)?.fee).toBe(0.5);
+      expect(agents.balance(to.did)).toBeCloseTo(0.5, 2);
     });
 
-    it('pays the release half on handover, and the two together are what the single fee was', () => {
-      // No new money enters the system. The sender already paid for a whole journey, last leg included;
-      // what changed is only WHEN the shop sees its share, and that half of it is no longer contingent.
+    it('pays at release only what its company’s figures add beyond its own fee — here nothing: shelving and release come to less', () => {
+      // No new money enters the system. The sender already paid the shop's own fee in the price, last leg included.
       const { parcel, to } = onShelf();
       parcels.collectConfirm(parcel.parcelId, to.did, parcel.collectionCode!);
-      expect(agents.balance(to.did)).toBeCloseTo(PICKUP_FEE, 2);
       expect(SHELVING_FEE + RELEASE_FEE).toBeCloseTo(PICKUP_FEE, 2);
+      expect(PICKUP_FEE).toBeLessThan(0.5);
+      expect(agents.balance(to.did)).toBeCloseTo(0.5, 2);
     });
 
     it('leaves the shop paid for a parcel that is never collected at all', () => {

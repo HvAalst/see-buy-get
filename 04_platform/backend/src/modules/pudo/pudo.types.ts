@@ -1037,6 +1037,12 @@ export class Parcel {
    * sold at is the one the store paid for: a fee raised or lowered afterwards changes what later parcels pay, not this.
    */
   stopFees?: ParcelStopFee[];
+  /**
+   * WHAT OF ITS OWN FEE THE RECEIVING SHOP WAS PAID AHEAD, AT SHELVING (the user, 2026-10-26: "shops are at minimum paid the
+   * fee they set"): the part of what it was paid there beyond its company's shelving pay. Its release then pays only what
+   * its company's release pay adds beyond that. Which shop, so another counter that releases it is paid its own way.
+   */
+  floorPaidAhead?: { did: string; amount: number };
   /** The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant
    *  today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,
    *  so an unstamped factor would re-price parcels already sold. Absent on records written before this

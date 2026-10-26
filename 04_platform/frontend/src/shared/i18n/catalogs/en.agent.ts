@@ -303,7 +303,7 @@ export const enAgent = {
   'agent.push.turnOn': 'Turn on notifications',
   'agent.push.notNow': 'Not now',
   'agent.home.priceTitle': 'Your price per parcel',
-  'agent.home.priceBody': 'This is what senders pay your shop to handle a parcel. It is public — nearby shops compete on it.',
+  'agent.home.priceBody': 'This is what senders pay your shop to handle a parcel, and the least you are paid for each parcel you take in or shelve — more where your company’s figures for the steps come to more. A parcel already sold keeps the fee it was sold at. It is public — nearby shops compete on it.',
   'agent.home.pricePerParcel': 'Price per parcel',
   'agent.home.pricePerParcelIn': 'Price per parcel, in {currency}',
   'agent.home.savePrice': 'Save the new price',

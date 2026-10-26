@@ -12449,7 +12449,7 @@
       "patch": {
         "operationId": "Sbg.setAgentPrice",
         "summary": "",
-        "description": "A PUDO agent sets its open-data per-parcel handling price.",
+        "description": "A shop sets its own handling fee — the least it is paid for each parcel it handles: its own word, never staff's.",
         "parameters": [
           {
             "name": "did",
@@ -42415,6 +42415,19 @@
               "$ref": "#/components/schemas/ParcelStopFee"
             }
           },
+          "floorPaidAhead": {
+            "type": "object",
+            "properties": {
+              "did": {
+                "required": true,
+                "type": "string"
+              },
+              "amount": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
           "transportFactor": {
             "type": "number",
             "description": "The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant\n today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,\n so an unstamped factor would re-price parcels already sold. Absent on records written before this\n field existed; read it through ParcelService.transportFactorOf, which falls back to the constant."
@@ -42651,6 +42664,7 @@
           "paymentMode",
           "status",
           "rateStack",
+          "floorPaidAhead",
           "papersSeen",
           "acceptedAt",
           "scans"

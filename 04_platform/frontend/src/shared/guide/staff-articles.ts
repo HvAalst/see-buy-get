@@ -142,7 +142,8 @@ export const STAFF_ARTICLES: GuideArticle[] = [
     notes: [
       "A change counts for every step done from then on. It does not re-price what has happened: a parcel that is cancelled is refunded what its shop was charged, and a parcel already past its free collection time keeps the daily holding rate it started at.",
       "The price of a parcel is also the float a shop needs to take the next one in, and a shop’s credit line is twenty parcels at that price. Change the price and both follow; there is no second figure to keep in step.",
-      "Whose list counts is the company of whoever does the step. A parcel shelved in another country is paid for at that country’s figure, in that country’s money."
+      "Whose list counts is the company of whoever does the step. A parcel shelved in another country is paid for at that country’s figure, in that country’s money.",
+      "A hub and a shop each set their own fee, and it is what senders are charged. A hub is paid its own fee for each parcel it sorts — the sorting figure here is only where a new hub starts. A shop is paid at least its own fee for each parcel it takes in or shelves, and these figures where they come to more. Staff change neither fee."
     ]
   },
   {

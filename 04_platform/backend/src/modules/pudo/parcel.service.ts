@@ -23,7 +23,7 @@ import { capWords, standingOf, unseenStanding, type CustodyStanding } from './cu
 import { DriverService, idUnseen } from './driver.service';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
-import { Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
+import { Agent, Birthplace, HandoverManifest, ConsumerParcelView, RunningLate, CustodyKind, CustodyLeg, DisputeDecision, DisputeOrigin, DisputeOutcomeView, Parcel, ParcelDirection, ParcelScan, ParcelSize, ParcelStatus, PaymentMode, PhygitalLabel, ShippingPolicy, LOSABLE_STATUSES, isCollectable } from './pudo.types';
 import { VendorService } from './vendor.service';
 import { VehicleService } from './vehicle.service';
 import { MediaService } from './media.service';
@@ -924,6 +924,56 @@ export class ParcelService implements OnApplicationBootstrap {
     return this.entities.amountsFor(own ?? sellerEntityId);
   }
 
+  /**
+   * WHAT A SHOP IS PAID AT LEAST FOR A PARCEL IT HANDLES (the user, 2026-10-26: "shops are at minimum paid the fee they
+   * set"): its own fee — the one it advertised when the parcel was sold (`stopFees`), else its fee now — where that fee is
+   * in the money its pay is in. None where it is not: a shop no company of ours contracts is paid the seller's list, in the
+   * seller's money, while its own fee is in its country's.
+   */
+  private shopFloorOf(agentDid: string, parcel: Pick<Parcel, 'stopFees' | 'sellerEntityId'>): number | undefined {
+    let shop: Agent;
+    try {
+      shop = this.agents.get(agentDid);
+    } catch {
+      return undefined;
+    }
+    const payIn = this.amountsAt(agentDid, parcel.sellerEntityId).currency ?? NETWORK_CURRENCY;
+    const sold = parcel.stopFees?.find((s) => s.type === 'pudo' && s.id === agentDid);
+    if (sold) return sold.currency === payIn ? Math.round(sold.fee * 100) / 100 : undefined;
+    // Never sold through this shop (a walk-up, or a parcel that came to another counter): its fee now, in its own company's
+    // money — the money it is paid in, where a company of ours contracts it.
+    return this.agents.entityIdOrNone(shop) ? Math.round(shop.pricePerParcel * 100) / 100 : undefined;
+  }
+
+  /**
+   * The origin shop's pay for taking a parcel in: its company's take-in pay, or its own fee where that is more. Its only pay
+   * by the parcel at that end (a hand-over is paid by the batch, on top), so its own fee is met here.
+   */
+  private takeInPayOf(agentDid: string, parcel: Parcel): number {
+    return Math.max(this.amountsAt(agentDid, parcel.sellerEntityId).labourFee, this.shopFloorOf(agentDid, parcel) ?? 0);
+  }
+
+  /**
+   * The receiving shop's pay for shelving a parcel: its company's shelving pay, or its own fee where that is more — met the
+   * moment the parcel is on its shelf, whether or not anybody ever comes for it. What was paid beyond the shelving pay is
+   * kept on the parcel, and the release then pays only what its company's release pay adds beyond the shop's own fee.
+   */
+  private payShelving(agentDid: string, parcel: Parcel): void {
+    const list = this.amountsAt(agentDid, parcel.sellerEntityId).shelvingFee;
+    const pay = Math.max(list, this.shopFloorOf(agentDid, parcel) ?? 0);
+    if (pay > list) parcel.floorPaidAhead = { did: agentDid, amount: Math.round((pay - list) * 100) / 100 };
+    else delete parcel.floorPaidAhead;
+    this.gate.payLabour(agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
+  }
+
+  /** The receiving shop's pay for releasing a parcel: its company's release pay, less what of its own fee it was paid ahead
+   *  at shelving — never below nothing. Another counter that releases it is paid the release pay in full. */
+  private releasePayOf(agentDid: string, parcel: Parcel): number {
+    const list = this.amountsAt(agentDid, parcel.sellerEntityId).releaseFee;
+    const ahead = parcel.floorPaidAhead?.did === agentDid ? parcel.floorPaidAhead.amount : 0;
+    return Math.max(0, Math.round((list - ahead) * 100) / 100);
+  }
+
   /** What a day of holding costs at the shop that holds this parcel TODAY, and in what money. */
   holdingRateNow(parcel: Parcel): { perDay: number; currency: string } {
     const list = parcel.destAgentDid ? this.amountsAt(parcel.destAgentDid, parcel.sellerEntityId) : this.entities.amountsFor(parcel.sellerEntityId ?? parcel.collectingEntityId);
@@ -1468,7 +1518,7 @@ export class ParcelService implements OnApplicationBootstrap {
         parcel.taxLabel = rule.label;
         this.gate.chargeShipping(input.agentDid, bill.gross, parcel.parcelId, bill.tax);
       } else {
-        const pay = this.amountsAt(input.agentDid, parcel.sellerEntityId).labourFee;
+        const pay = this.takeInPayOf(input.agentDid, parcel);
         parcel.intakeLabour = pay;
         this.gate.payLabour(input.agentDid, pay, parcel.parcelId, 'parcel', parcel.sellerEntityId);
       }
@@ -1688,8 +1738,9 @@ export class ParcelService implements OnApplicationBootstrap {
     this.handTo(parcel, 'shop', destAgentDid, 'arrived at the collection point', step);
     parcel.readyAt = step.at; // when the wait began — see Parcel.readyAt; on the shelf since it arrived, however late we heard
     // The shelving half, paid HERE rather than at release. Receiving, scanning and committing a shelf
-    // slot is finished work at this moment, and it stays finished whether or not anybody ever comes.
-    this.gate.payLabour(destAgentDid, this.amountsAt(destAgentDid, parcel.sellerEntityId).shelvingFee, parcelId, 'parcel', parcel.sellerEntityId);
+    // slot is finished work at this moment, and it stays finished whether or not anybody ever comes. At least the
+    // shop's own fee from this moment (payShelving).
+    this.payShelving(destAgentDid, parcel);
     this.scan(parcel, 'Ready_For_Pickup', destAgentDid, `arrived · shelf ${parcel.binSlot}`, step);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid, binSlot: parcel.binSlot }, { source: 'pudo' }).catch(() => undefined);
     // No secret in this response: the customer brings the code, the shop checks it.
@@ -1741,7 +1792,8 @@ export class ParcelService implements OnApplicationBootstrap {
     this.scan(parcel, 'Delivered', agentDid, 'OTP verified');
     // THE OTHER HALF OF THE SHOP'S PAY (see RELEASE_FEE). It was paid where an order is collected by its QR and not
     // here, so a shop that handed over a parcel sent from a counter was paid for shelving it and nothing for the rest.
-    this.gate.payLabour(agentDid, this.amountsAt(agentDid, parcel.sellerEntityId).releaseFee, parcelId, 'parcel', parcel.sellerEntityId);
+    // What of it its own fee has not already paid at shelving (releasePayOf); nothing written where that is nothing.
+    this.gate.payLabour(agentDid, this.releasePayOf(agentDid, parcel), parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
@@ -2240,7 +2292,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // isn't attached elsewhere may bind here (S29/S33a media-laundering guard).
     this.media.adopt(dropoffPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'dropoff');
     if (due > 0) this.gate.chargeShipping(agentDid, due, parcelId, parcel.shipmentTax, parcel.shipmentProvision); // remit the collected cash, tax and all (a 0-priced route charges nothing)
-    const pay = this.amountsAt(agentDid, parcel.sellerEntityId).labourFee;
+    const pay = this.takeInPayOf(agentDid, parcel);
     parcel.intakeLabour = pay;
     this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'cash' }, { source: 'pudo' }).catch(() => undefined);
@@ -2268,7 +2320,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.acceptedAt = step.at;
     this.handTo(parcel, 'shop', agentDid, 'handed in at the counter', step);
     this.scan(parcel, 'At_PUDO', agentDid, 'inbound intake', step);
-    const pay = this.amountsAt(agentDid, parcel.sellerEntityId).labourFee;
+    const pay = this.takeInPayOf(agentDid, parcel);
     parcel.intakeLabour = pay;
     this.gate.payLabour(agentDid, pay, parcelId, 'parcel', parcel.sellerEntityId);
     void this.events.publish(GlosEvent.Pudo.ParcelAccepted, { parcelId, agentDid, destZone: parcel.destZone, mode: 'prepaid' }, { source: 'pudo' }).catch(() => undefined);
@@ -2450,7 +2502,7 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.otpLockedAt = undefined;
     this.handTo(parcel, 'shop', agentDid, 'shelved at the collection point');
     parcel.readyAt = new Date().toISOString(); // when the wait began — see Parcel.readyAt
-    this.gate.payLabour(agentDid, this.amountsAt(agentDid, parcel.sellerEntityId).shelvingFee, parcelId, 'parcel', parcel.sellerEntityId); // see arrive()
+    this.payShelving(agentDid, parcel); // see arrive()
     this.scan(parcel, 'Ready_For_Pickup', agentDid, `shelved · bin ${parcel.binSlot}`);
     void this.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid: agentDid, collectionCode: parcel.collectionCode, binSlot: parcel.binSlot, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return { parcelId, binSlot: parcel.binSlot, status: parcel.status };
@@ -2527,7 +2579,7 @@ export class ParcelService implements OnApplicationBootstrap {
     );
     this.endCustody(parcel);
     this.scan(parcel, 'Delivered', agentDid, byProxy ? 'collected · by a named proxy' : 'collected · OK');
-    this.gate.payLabour(agentDid, this.amountsAt(agentDid, parcel.sellerEntityId).releaseFee, parcelId, 'parcel', parcel.sellerEntityId);
+    this.gate.payLabour(agentDid, this.releasePayOf(agentDid, parcel), parcelId, 'parcel', parcel.sellerEntityId); // see pickup()
     this.rebateFlexible(parcel); // a flexible parcel taken by a cheaper carrier → refund the over-hold
     void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId }, { source: 'pudo' }).catch(() => undefined);
     return parcel;

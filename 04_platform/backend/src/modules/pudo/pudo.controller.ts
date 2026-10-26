@@ -4024,10 +4024,11 @@ export class SbgController {
     };
   }
 
-  /** A PUDO agent sets its open-data per-parcel handling price. */
+  /** A shop sets its own handling fee — the least it is paid for each parcel it handles: its own word, never staff's. */
   @Roles('agent', 'operator')
   @Patch('agents/:did/pricing')
   setAgentPrice(@Param('did') did: string, @Body() dto: SetPriceDto, @Actor() actor: IntrospectionResult) {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A shop sets its own fee, signed in as the shop: it is the least it is paid. Staff change nothing in its name');
     this.assertAgentActs(did, actor);
     return this.agents.setPrice(did, dto.price);
   }

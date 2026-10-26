@@ -549,11 +549,16 @@ export class AgentService {
     return this.agents.get(did);
   }
 
-  /** Set the agent's open-data per-parcel handling price (public, drives the shipment quote). */
+  /**
+   * The shop sets its own handling fee: public (nearby shops compete on it), what senders are charged for each parcel it
+   * handles, and the least it is paid for each (the user, 2026-10-26: "shops are at minimum paid the fee they set"). Parcels
+   * already sold keep the fee they were sold at. Written at once — it is money.
+   */
   setPrice(did: string, pricePerParcel: number): Agent {
     if (pricePerParcel < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
     const agent = this.require(did);
     agent.pricePerParcel = Math.round(pricePerParcel * 100) / 100;
+    this.agents.set(did, agent);
     return agent;
   }
 

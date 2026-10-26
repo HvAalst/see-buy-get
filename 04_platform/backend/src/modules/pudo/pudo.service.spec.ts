@@ -1664,8 +1664,10 @@ describe('PUDO Light', () => {
     expect(p.status).toBe('At_PUDO');
     expect(p.paidStatus).toBe('ParcelPaid');
     expect(p.dropoffPhotoRef).toBe(dropped);
-    // The shop remits the LOCKED price it just collected in cash, and earns the same labour fee as any intake.
-    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2);
+    // The shop remits the LOCKED price it just collected in cash, and is paid for the intake as for any: its own fee (0.50),
+    // where that is more than its company's take-in pay (0.40) — the least a shop is paid (the user, 2026-10-26).
+    expect(parcels.get(parcelId).intakeLabour).toBe(0.5);
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.5, 2);
     await flush();
     // The twin (born at mint) ADVANCES to picked_up — its created-time journey is kept, not re-registered.
     expect(twin.shipment(parcelId)?.state).toBe('picked_up');
@@ -1741,7 +1743,7 @@ describe('PUDO Light', () => {
     expect(due).not.toBeCloseTo(2.0, 2); // the price is NOT the WHOLESALE+labour coincidence — the bug would hide there
     const before = gate.canTransact(origin.did).balance;
     controller.intake(parcelId, { dropoffPhotoRef: photoBy(origin.did) } as never, { role: 'agent', did: origin.did } as never);
-    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2); // remitted the cash, earned labour
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.5, 2); // remitted the cash, paid its own fee for the intake
     parcels.void(parcelId, origin.did, photoBy(origin.did));
     // A full reversal: the locked price back, the labour fee clawed back → exactly the pre-intake balance.
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before, 2);
@@ -1751,7 +1753,7 @@ describe('PUDO Light', () => {
     const { origin, parcelId, due } = mintPeerSend('PG2X', '50');
     const before = gate.canTransact(origin.did).balance;
     controller.intake(parcelId, { dropoffPhotoRef: photoBy(origin.did) } as never, { role: 'agent', did: origin.did } as never);
-    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.4, 2);
+    expect(gate.canTransact(origin.did).balance).toBeCloseTo(before - due + 0.5, 2);
     controller.cancelParcel(parcelId, { reason: 'test' } as never, { role: 'operator' } as never);
     expect(gate.canTransact(origin.did).balance).toBeCloseTo(before, 2);
   });
@@ -7697,19 +7699,34 @@ describe('PUDO Light', () => {
       expect(parcels.pickup('QR-REL-1', dest.did, code).status).toBe('Delivered');
     });
 
-    it('pays the shop for handing it over: shelving when it lands, the rest at release — together the whole destination leg', () => {
+    it('pays the shop at least its own fee the moment the parcel is on its shelf, and at release only what its company’s figures add beyond it (the user, 2026-10-26: “shops are at minimum paid the fee they set”)', () => {
       const { dest } = onItsShelf('QR-REL-2');
       const before = agents.balance(dest.did) ?? 0;
       const earned = () => Math.round(((agents.balance(dest.did) ?? 0) - before) * 100) / 100;
       parcels.arrive('QR-REL-2', dest.did);
-      expect(earned()).toBe(SHELVING_FEE);
+      // Its own fee (0.50) is more than its company's shelving pay: paid now, whether or not anybody ever comes.
+      expect(earned()).toBe(0.5);
       // A wrong code pays nothing.
       const code = releaseCodeOf('QR-REL-2');
       expect(() => parcels.pickup('QR-REL-2', dest.did, code === '0000' ? '1111' : '0000')).toThrow('Incorrect OTP');
-      expect(earned()).toBe(SHELVING_FEE);
+      expect(earned()).toBe(0.5);
       parcels.pickup('QR-REL-2', dest.did, code);
-      expect(earned()).toBe(PICKUP_FEE);
+      // Shelving and release pay together (0.30) come to less than its own fee: the release adds nothing to it.
       expect(Math.round((SHELVING_FEE + RELEASE_FEE) * 100) / 100).toBe(PICKUP_FEE);
+      expect(PICKUP_FEE).toBeLessThan(0.5);
+      expect(earned()).toBe(0.5);
+    });
+
+    it('pays its company’s figures where they come to more than the shop’s own fee — shelving when it lands, the rest at release', () => {
+      const { dest } = onItsShelf('QR-REL-3');
+      agents.setPrice(dest.did, 0.2);
+      const before = agents.balance(dest.did) ?? 0;
+      const earned = () => Math.round(((agents.balance(dest.did) ?? 0) - before) * 100) / 100;
+      parcels.arrive('QR-REL-3', dest.did);
+      // Its own fee (0.20) is more than the shelving pay (0.15): 0.20 now, and the release pays the 0.10 left of the 0.30.
+      expect(earned()).toBe(0.2);
+      parcels.pickup('QR-REL-3', dest.did, releaseCodeOf('QR-REL-3'));
+      expect(earned()).toBe(PICKUP_FEE);
     });
   });
 
@@ -9016,6 +9033,9 @@ describe('PUDO Light', () => {
     expect(controller.getAgent(shop.did, asShop).did).toBe(shop.did);
     expect(() => controller.setAvailability(shop.did, { open: true } as never, asShop)).not.toThrow(DENIED);
     expect(() => controller.setAvailability(shop.did, { open: true } as never, staff)).not.toThrow(DENIED);
+    // Its fee is the least it is paid (the user, 2026-10-26: "shops are at minimum paid the fee they set"): its own word.
+    expect(() => controller.setAgentPrice(shop.did, { price: 0.9 } as never, staff)).toThrow(/A shop sets its own fee/);
+    expect((controller.setAgentPrice(shop.did, { price: 0.6 } as never, asShop) as { pricePerParcel: number }).pricePerParcel).toBe(0.6);
   });
 
   it('FP3b: a delivery that could not be made is written down, the load stays in transit, and the sender is told', () => {
