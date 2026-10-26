@@ -189,6 +189,11 @@ export const NOTIFICATION_KINDS = [
    */
   'inbound',
   /**
+   * Reading B: a store's parcels handed in at a hub in bulk — all of them taken in, or which were not on it and are still
+   * with the store, to bring next time. To the store's bell.
+   */
+  'hub_arrival',
+  /**
    * Round 16 — a vehicle on a shift standing still longer than its fleet allows, away from anywhere it had reason to stop:
    * to its fleet's office, to call the driver. Never to a shipper: where a fleet's vehicles are is the fleet's.
    */

@@ -1,5 +1,6 @@
 import { INTERCEPTORS_METADATA } from '@nestjs/common/constants';
 import { BagClosureController } from './bag-closure.controller';
+import { HubArrivalController } from './hub-arrival.controller';
 import { SbgController } from './pudo.controller';
 import { CounterLogInterceptor } from './shop-staff.controller';
 import { COUNTER_ACTS } from './shop-staff.service';
@@ -13,7 +14,7 @@ import { isShopStaff, STAFF_KEY_PREFIX } from './shop-staff.types';
  */
 describe('the counter’s own record of who did what', () => {
   it('names only handlers the watched controllers have, and watches each of them', () => {
-    const watched = [SbgController, BagClosureController, TamperController];
+    const watched = [SbgController, BagClosureController, TamperController, HubArrivalController];
     const has = (name: string) => watched.some((c) => typeof (c.prototype as unknown as Record<string, unknown>)[name] === 'function');
     expect(Object.keys(COUNTER_ACTS).filter((name) => !has(name))).toEqual([]);
     for (const c of watched) expect(Reflect.getMetadata(INTERCEPTORS_METADATA, c)).toContain(CounterLogInterceptor);

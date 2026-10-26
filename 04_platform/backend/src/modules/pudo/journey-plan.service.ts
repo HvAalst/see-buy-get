@@ -56,6 +56,10 @@ export class JourneyPlanService implements OnModuleInit {
     this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelAccepted, (e) => {
       this.freeze(e.payload.parcelId);
     });
+    // Reading B — or taken in at a hub, handed in there by the store in bulk: the promise starts at the hub.
+    this.events.subscribe<{ parcelId: string }>(GlosEvent.Pudo.ParcelTakenInAtHub, (e) => {
+      this.freeze(e.payload.parcelId);
+    });
   }
 
   /** Plan the journey now and keep it on the parcel — once. Nothing where it has a plan already or nowhere to go. */
@@ -69,8 +73,10 @@ export class JourneyPlanService implements OnModuleInit {
     if (parcel.plan || !parcel.destAgentDid) return parcel.plan;
     try {
       // From the take-in, which is when the promise starts — earlier than now where the counter had no signal (round 23).
-      const takenIn = parcel.acceptedAt ? Date.parse(parcel.acceptedAt) : NaN;
-      const j = this.routing.planJourney({ originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid, destAgentDid: parcel.destAgentDid, ...(takenIn < now ? { startAt: takenIn } : {}) });
+      // Reading B — handed in at a hub: the journey starts at the hub, at the take-in, which is now.
+      const fromHub = parcel.handInMdpId ? this.routing.hubEnd(parcel.handInMdpId) : undefined;
+      const takenIn = fromHub ? NaN : parcel.acceptedAt ? Date.parse(parcel.acceptedAt) : NaN;
+      const j = this.routing.planJourney({ ...(fromHub ? { from: fromHub } : { originAgentDid: parcel.committedNodeDid ?? parcel.originAgentDid }), destAgentDid: parcel.destAgentDid, ...(takenIn < now ? { startAt: takenIn } : {}) });
       const plan: JourneyPlan = {
         hops: j.hops.map((h) => ({ type: h.type, id: h.id, label: h.label, zone: h.zone })),
         mdpRouted: j.mdpRouted,

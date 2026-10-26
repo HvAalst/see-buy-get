@@ -1832,7 +1832,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
@@ -1923,6 +1923,8 @@ export class ParcelService implements OnApplicationBootstrap {
       // Committed to a first-mile shop only when there is one. A dock parcel commits to nobody: it waits at
       // the store until a driver takes it, which is the whole point of collecting from the store.
       committedNodeDid: input.originAgentDid,
+      // Reading B — handed in at a hub by the store, in bulk: the hub that takes it in.
+      ...(input.handInMdpId ? { handInMdpId: input.handInMdpId } : {}),
       originZone,
       destZone: dest.zone,
       destAgentDid: input.destAgentDid,
@@ -3025,6 +3027,28 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   // --- internals ---
+
+  /**
+   * READING B — A STORE'S PARCEL TAKEN IN AT A HUB, scanned off the pallet or carton it came on: the store parts with it
+   * and the hub answers for it from here (custody: the store → the hub, under the hub's name as a bag's parcels are), and
+   * it waits at the hub for its sort like a parcel out of a bag. Only the store's own parcel booked for this hub, paid,
+   * and in nobody else's hands yet — refused, in words the hub can act on, before anything is written.
+   */
+  takeInAtHub(parcelId: string, hub: { mdpId: string; name: string }, note: string, now: number = Date.now()): Parcel {
+    const parcel = this.require(parcelId);
+    this.refuseIfHeld(parcel);
+    if (parcel.handInMdpId !== hub.mdpId) throw new GlosError('WRONG_PUDO', `${parcelId} is not booked to be handed in at ${hub.name}: set it aside`);
+    if (parcel.status === 'Voided') throw new GlosError('INVALID_STATE', `${parcelId} was withdrawn by the store: set it aside, it is not to go`);
+    if (parcel.status !== 'Created') throw new GlosError('INVALID_STATE', `${parcelId} was taken in already (${parcel.status})`);
+    if (parcel.paidStatus !== 'ParcelPaid') throw new GlosError('INVALID_STATE', `${parcelId} is not paid for yet: set it aside, the store is told`);
+    const step: Step = { at: new Date(now).toISOString() };
+    parcel.status = 'At_MDP';
+    parcel.atMdpId = hub.mdpId;
+    this.handTo(parcel, 'hub', hub.name, note, step);
+    this.scan(parcel, 'At_MDP', hub.name, note, step);
+    this.parcels.set(parcel.parcelId, parcel);
+    return parcel;
+  }
 
   /**
    * Hand the parcel to somebody: close whoever was holding it, open a leg for whoever now is.

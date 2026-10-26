@@ -38,6 +38,10 @@ export const COUNTER_ACTS: Readonly<Record<string, string | ((body: Record<strin
   close: 'closed a bag',
   reportAtHub: 'reported a parcel not as it was',
   reportOnBag: 'reported a bag not as it was closed',
+  // Reading B — a store's parcels handed in at the hub's door in bulk: counted, scanned off, finished.
+  receiveArrival: 'took a store’s parcels in at the door',
+  scanArrival: 'scanned a store’s parcel in',
+  finishArrival: 'finished taking a store’s parcels in',
 };
 
 /**

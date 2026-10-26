@@ -78,6 +78,7 @@ import { storeDeskOf, storeRowOf, type StoreDesk, type StoreRecord, type StoreRo
 import { ShelfService } from './shelf.service';
 import { DamageReportService } from './damage-report.service';
 import { RoutingService, publicQuote, type QuoteCarriers } from './routing.service';
+import { HubArrivalService } from './hub-arrival.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { ConsignmentService } from './consignment.service';
@@ -325,6 +326,8 @@ export class SbgController {
     // 2026-10-25 — a company of ours switched on publishes its country's terms naming it, in the same act.
     @Optional() private readonly documents?: DocumentsService,
     @Optional() private readonly countryTerms?: CountryTermsService,
+    // Reading B — a store's parcels handed in at a hub, in bulk (the user, 2026-10-25: "Yes, A then B").
+    @Optional() private readonly hubArrivals?: HubArrivalService,
   ) {}
 
   /**
@@ -4285,7 +4288,8 @@ export class SbgController {
     const dimsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
     const cargoClass = this.cargo.classify({ kg: weightKg, dimsCm });
     if (this.cargo.dedicatedRequired(cargoClass)) {
-      const origin = this.agents.get(dto.originPudoDid);
+      if (dto.handInMdpId) throw new GlosError('CARGO_REQUIRES_DEDICATED', `This order is ${cargoClass}: it goes as a load of its own, from a drop-off shop — not handed in at a hub as a parcel`);
+      const origin = this.agents.get(dto.originPudoDid ?? '');
       const dest = this.agents.get(destPudoDid);
       for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'takeIn'); // freight moves wherever goods may be taken in; a store no sister settles is not billed at claim
       const freight = this.dispatch.registerFreight({
@@ -4328,8 +4332,16 @@ export class SbgController {
     // ITEM 9 — a store's mint takes real centimetres, so the transport is priced on the measurement
     // rather than on the tier it happens to fall in. No dims (a store that only picked a size) → the band.
     const measured = dto.dimensionsCm ? measuredFactor({ ...dto.dimensionsCm, kg: weightKg }) : undefined;
-    const dock = dto.originPudoDid ? undefined : this.vendors.requireCollection(dto.vendorId);
-    const quote = dock
+    // READING B — or handed in at a hub, in bulk, by the store itself: the journey starts at the hub, which works it from
+    // there; there is no road before it to charge, and no shop. One origin only.
+    if (dto.handInMdpId && dto.originPudoDid) throw new GlosError('INVALID_INPUT', 'Hand it in at a shop or at a hub, not both', { field: 'handInMdpId' });
+    if (dto.handInMdpId && !this.hubArrivals) throw new GlosError('INVALID_STATE', 'Parcels are not taken in at hubs here');
+    const hub = dto.handInMdpId ? this.hubArrivals!.requireTakingBulk(dto.handInMdpId) : undefined;
+    const hubFrom = hub ? this.routing.hubEnd(hub.mdpId) : undefined;
+    const dock = dto.originPudoDid || hub ? undefined : this.vendors.requireCollection(dto.vendorId);
+    const quote = hubFrom
+      ? this.routing.quoteShipmentFrom(hubFrom, destPudoDid, size, this.vendors.entityIdOf(vendor), measured, { kg: weightKg, fragile: dto.fragile })
+      : dock
       ? this.routing.quoteShipmentFrom(
           { type: 'dock', id: vendor.did, label: dock.label, zone: dock.zone, country: this.vendors.dockCountryOf(vendor), location: dock.location },
           destPudoDid,
@@ -4339,6 +4351,7 @@ export class SbgController {
           { kg: weightKg, fragile: dto.fragile },
         )
       : this.routing.quoteShipment(dto.originPudoDid!, destPudoDid, size, measured, { kg: weightKg, fragile: dto.fragile });
+    // (The hub branch above is the third way a store's parcel starts; see HubArrivalService.)
     // ROUND 13 — the same rule as the shipping API: a parcel crossing a border goes with its commercial invoice, checked
     // before the parcel exists; one staying inside a country needs none and is told so.
     if (dto.invoice && !quote.crossesBorder) throw new GlosError('INVALID_INPUT', 'This shipment does not cross a border, so it needs no commercial invoice', { field: 'invoice' });
@@ -4359,8 +4372,9 @@ export class SbgController {
     const result = this.parcels.createInbound({
       vendorId: dto.vendorId,
       externalOrderId: dto.externalOrderId ?? handoff?.externalOrderId,
-      originAgentDid: dto.originPudoDid,
-      originZone: dock?.zone,
+      originAgentDid: dto.originPudoDid || undefined,
+      originZone: hubFrom?.zone ?? dock?.zone,
+      ...(hub ? { handInMdpId: hub.mdpId } : {}),
       destAgentDid: destPudoDid,
       buyerMobile: dto.buyerMobile ?? handoff?.buyerMobile ?? '',
       buyerEmail: dto.buyerEmail ?? handoff?.buyerEmail,

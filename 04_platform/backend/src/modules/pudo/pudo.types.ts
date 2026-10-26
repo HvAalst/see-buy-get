@@ -927,6 +927,12 @@ export class Parcel {
    * to be told apart.
    */
   originAgentDid?: string;
+  /**
+   * READING B (inbound; the user, 2026-10-25: "Yes, A then B") — the hub the store hands this parcel in at, in bulk,
+   * with others (hub-arrival.service.ts). Absent for every other parcel. Like a dock parcel it has no first PUDO; unlike
+   * one it is not collected from the store: the store brings it, and the hub takes it in, scanned off what it came on.
+   */
+  handInMdpId?: string;
   originZone: string;
   destZone: string;
   destAgentDid?: string;

@@ -1256,7 +1256,10 @@ export class InboundOrderDto {
   @IsString() vendorId!: string;
   @IsOptional() @IsString() checkoutId?: string; // pre-fill from a captured checkout handoff
   @IsOptional() @IsString() externalOrderId?: string;
-  @IsString() originPudoDid!: string;
+  /** The drop-off shop. Absent: the store's own dock — or, with `handInMdpId`, a hub it hands its parcels in at. */
+  @IsOptional() @IsString() originPudoDid?: string;
+  /** Reading B — handed in at this hub, in bulk, by the store itself: it is priced from the hub (HubArrivalService). */
+  @IsOptional() @IsString() @MaxLength(64) handInMdpId?: string;
   @IsString() destPudoDid!: string;
   @IsOptional() @IsString() buyerMobile?: string;
   @IsOptional() @IsString() buyerEmail?: string;

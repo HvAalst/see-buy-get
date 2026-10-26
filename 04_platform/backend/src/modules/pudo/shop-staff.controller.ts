@@ -148,6 +148,8 @@ function refOf(req: Request, answer: unknown): string | undefined {
   }
   const a = (answer ?? {}) as { parcelId?: unknown; code?: unknown; freightId?: unknown };
   for (const v of [a.parcelId, a.code, a.freightId]) if (typeof v === 'string') return v;
+  // A store's arrival at a hub, taken in or finished: the arrival itself.
+  if (params.arrivalId) return params.arrivalId;
   return undefined;
 }
 

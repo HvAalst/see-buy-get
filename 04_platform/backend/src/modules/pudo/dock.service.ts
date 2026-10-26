@@ -79,6 +79,8 @@ export class DockService {
     // A parcel booked to be handed in at a SHOP is that shop's to expect — it was quoted with that shop's fee
     // and its drop-off is what the shop was told to wait for. Only a parcel with no first PUDO leaves here.
     if (parcel.originAgentDid) throw new GlosError('WRONG_PUDO', `Parcel ${parcelId} is booked for drop-off at a shop, not for collection here`);
+    // Reading B — booked to be handed in at a hub, in bulk: the store takes it there itself.
+    if (parcel.handInMdpId) throw new GlosError('WRONG_PUDO', `Parcel ${parcelId} is booked to be handed in at a hub, not for collection here`);
     if (parcel.destZone !== bag.destinationNodeId) {
       throw new GlosError('WRONG_DESTINATION', `${parcelId} is going to ${parcel.destZone}, but this bag goes to ${bag.destinationLabel}`, {
         parcelId,
@@ -141,7 +143,7 @@ export class DockService {
       .list({ vendorId })
       // …and no first PUDO: a parcel the store booked to hand in at a shop is going there, not onto this
       // dock, so it must not be demanded by the seal gate either.
-      .filter((p) => p.status === 'Created' && p.paidStatus === 'ParcelPaid' && !p.originAgentDid && !p.shortShippedAt);
+      .filter((p) => p.status === 'Created' && p.paidStatus === 'ParcelPaid' && !p.originAgentDid && !p.handInMdpId && !p.shortShippedAt);
   }
 
   /** What to bag, and what is already open — the dock's answer to the shop's bag plan. */

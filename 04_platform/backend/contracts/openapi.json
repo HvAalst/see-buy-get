@@ -4093,6 +4093,327 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/hubs": {
+      "get": {
+        "operationId": "HubArrival.hubOptions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dest",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubOptions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/hub-arrivals": {
+      "get": {
+        "operationId": "HubArrival.storeArrivals",
+        "summary": "",
+        "description": "What this store has to book at each hub, and its arrivals.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoreHubArrivals"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "HubArrival.book",
+        "summary": "",
+        "description": "The store books the hand-in of its parcels at a hub: which, on how many units, which day.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookHubArrivalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/vendors/{id}/hub-arrivals/{arrivalId}/withdraw": {
+      "post": {
+        "operationId": "HubArrival.withdraw",
+        "summary": "",
+        "description": "The store withdraws an arrival the hub has not taken in.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/arrivals": {
+      "get": {
+        "operationId": "HubArrival.hubArrivals",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubArrivals"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/bulk": {
+      "put": {
+        "operationId": "HubArrival.setBulk",
+        "summary": "",
+        "description": "The hub's own word that it takes stores' parcels in bulk, on these days and hours, at so many doors — or no longer\ndoes. Its owner's, signed in as the hub: not its people's, and not network staff's (a hub declares its own).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHubBulkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/arrivals/{arrivalId}/receive": {
+      "post": {
+        "operationId": "HubArrival.receiveArrival",
+        "summary": "",
+        "description": "At the hub's door: the units that came, counted.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiveHubArrivalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/arrivals/{arrivalId}/scan": {
+      "post": {
+        "operationId": "HubArrival.scanArrival",
+        "summary": "",
+        "description": "One parcel scanned off the units: the hub answers for it from here.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScanHubArrivalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/arrivals/{arrivalId}/finish": {
+      "post": {
+        "operationId": "HubArrival.finishArrival",
+        "summary": "",
+        "description": "Scanning finished: what was booked and not scanned is still the store's, which is told.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/risk-register": {
       "get": {
         "operationId": "RiskRegister.register",
@@ -33385,6 +33706,527 @@
           "siteName"
         ]
       },
+      "DayHours": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "string"
+          },
+          "close": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "open",
+          "close"
+        ]
+      },
+      "SiteWeek": {
+        "type": "object",
+        "properties": {
+          "mon": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayHours"
+              }
+            ]
+          },
+          "tue": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayHours"
+              }
+            ]
+          },
+          "wed": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayHours"
+              }
+            ]
+          },
+          "thu": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayHours"
+              }
+            ]
+          },
+          "fri": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayHours"
+              }
+            ]
+          },
+          "sat": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayHours"
+              }
+            ]
+          },
+          "sun": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DayHours"
+              }
+            ]
+          }
+        }
+      },
+      "HubOption": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "address": {
+            "type": "string"
+          },
+          "hours": {
+            "description": "The days and hours it receives, on its own clock. Absent: whenever it is working.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SiteWeek"
+              }
+            ]
+          },
+          "doors": {
+            "type": "number",
+            "description": "How many trucks it takes at once. Absent: not said."
+          },
+          "zone": {
+            "type": "string",
+            "description": "Its clock, and the name of it: Africa/Nairobi, \"East Africa Time\". Absent: a country of several clocks."
+          },
+          "zoneName": {
+            "type": "string"
+          },
+          "quote": {
+            "type": "object",
+            "description": "The quote, as a shop's is shown: the price of this parcel handed in here."
+          },
+          "error": {
+            "type": "string"
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "mdpId",
+          "name",
+          "since"
+        ]
+      },
+      "HubOptions": {
+        "type": "object",
+        "properties": {
+          "hubs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubOption"
+            }
+          }
+        },
+        "required": [
+          "hubs"
+        ]
+      },
+      "HubArrivalParcel": {
+        "type": "object",
+        "properties": {
+          "trackingKey": {
+            "type": "string"
+          },
+          "sscc": {
+            "type": "string"
+          },
+          "withdrawn": {
+            "type": "boolean",
+            "description": "The store withdrew it after booking: it is not coming."
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string",
+            "description": "The shop it goes to."
+          },
+          "scanned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "parcelId",
+          "destination",
+          "scanned"
+        ]
+      },
+      "HubWaiting": {
+        "type": "object",
+        "properties": {
+          "parcels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubArrivalParcel"
+            }
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "hubName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcels",
+          "mdpId",
+          "hubName"
+        ]
+      },
+      "HubArrivalView": {
+        "type": "object",
+        "properties": {
+          "parcels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubArrivalParcel"
+            }
+          },
+          "unitKind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "carton",
+              "cage",
+              "sack"
+            ]
+          },
+          "reference": {
+            "type": "string"
+          },
+          "bringer": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "expected",
+              "receiving",
+              "received",
+              "withdrawn"
+            ]
+          },
+          "received": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "units": {
+                "required": true,
+                "type": "number"
+              },
+              "note": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "finished": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "missing": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "withdrawn": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "today": {
+            "type": "boolean",
+            "description": "On the hub's own clock (D10): it is expected today there, or its day has gone and it has not come."
+          },
+          "late": {
+            "type": "boolean"
+          },
+          "arrivalId": {
+            "type": "string"
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "hubName": {
+            "type": "string"
+          },
+          "vendorId": {
+            "type": "string"
+          },
+          "storeName": {
+            "type": "string"
+          },
+          "units": {
+            "type": "number"
+          },
+          "expectedOn": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "scannedCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "parcels",
+          "unitKind",
+          "state",
+          "received",
+          "finished",
+          "withdrawn",
+          "arrivalId",
+          "mdpId",
+          "hubName",
+          "vendorId",
+          "storeName",
+          "units",
+          "expectedOn",
+          "createdAt",
+          "scannedCount"
+        ]
+      },
+      "StoreHubArrivals": {
+        "type": "object",
+        "properties": {
+          "waiting": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubWaiting"
+            }
+          },
+          "arrivals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubArrivalView"
+            }
+          }
+        },
+        "required": [
+          "waiting",
+          "arrivals"
+        ]
+      },
+      "BookHubArrivalDto": {
+        "type": "object",
+        "properties": {
+          "unitKind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "carton",
+              "cage",
+              "sack"
+            ]
+          },
+          "mdpId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "parcelIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "units": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "expectedOn": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "bringer": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "unitKind",
+          "mdpId",
+          "parcelIds",
+          "units",
+          "expectedOn"
+        ]
+      },
+      "HubBulkView": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "address": {
+            "type": "string"
+          },
+          "hours": {
+            "description": "The days and hours it receives, on its own clock. Absent: whenever it is working.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SiteWeek"
+              }
+            ]
+          },
+          "doors": {
+            "type": "number",
+            "description": "How many trucks it takes at once. Absent: not said."
+          },
+          "zone": {
+            "type": "string",
+            "description": "Its clock, and the name of it: Africa/Nairobi, \"East Africa Time\". Absent: a country of several clocks."
+          },
+          "zoneName": {
+            "type": "string"
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "mdpId",
+          "name",
+          "since"
+        ]
+      },
+      "HubArrivals": {
+        "type": "object",
+        "properties": {
+          "bulk": {
+            "description": "Whether this hub takes stores' parcels in bulk now, and when. Absent: it does not.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubBulkView"
+              }
+            ]
+          },
+          "arrivals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubArrivalView"
+            }
+          }
+        },
+        "required": [
+          "arrivals"
+        ]
+      },
+      "SetHubBulkDto": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean"
+          },
+          "hours": {
+            "type": "object",
+            "nullable": true,
+            "description": "The days and hours it receives: { mon: { open: '07:00', close: '15:00' }, sun: null, … }. Null clears them."
+          },
+          "doors": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "open"
+        ]
+      },
+      "ReceiveHubArrivalDto": {
+        "type": "object",
+        "properties": {
+          "units": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "units"
+        ]
+      },
+      "ScanHubArrivalDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
       "RiskCellView": {
         "type": "object",
         "properties": {
@@ -40841,6 +41683,10 @@
             "type": "string",
             "description": "The first PUDO to take custody — absent when there is none, which is a real case rather than missing\ndata: a store collected from its own dock hands the parcel straight to a driver. This is NOT where the\nparcel came from; that is `birthplace`, which every parcel has. The two were one field until they had\nto be told apart."
           },
+          "handInMdpId": {
+            "type": "string",
+            "description": "READING B (inbound; the user, 2026-10-25: \"Yes, A then B\") — the hub the store hands this parcel in at, in bulk,\nwith others (hub-arrival.service.ts). Absent for every other parcel. Like a dock parcel it has no first PUDO; unlike\none it is not collected from the store: the store brings it, and the hub takes it in, scanned off what it came on."
+          },
           "originZone": {
             "type": "string"
           },
@@ -42907,7 +43753,13 @@
             "type": "string"
           },
           "originPudoDid": {
-            "type": "string"
+            "type": "string",
+            "description": "The drop-off shop. Absent: the store's own dock — or, with `handInMdpId`, a hub it hands its parcels in at."
+          },
+          "handInMdpId": {
+            "type": "string",
+            "description": "Reading B — handed in at this hub, in bulk, by the store itself: it is priced from the hub (HubArrivalService).",
+            "maxLength": 64
           },
           "destPudoDid": {
             "type": "string"
@@ -42997,7 +43849,6 @@
         },
         "required": [
           "vendorId",
-          "originPudoDid",
           "destPudoDid",
           "contentPhotoRef"
         ]
@@ -59851,82 +60702,6 @@
           "to",
           "days"
         ]
-      },
-      "DayHours": {
-        "type": "object",
-        "properties": {
-          "open": {
-            "type": "string"
-          },
-          "close": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "open",
-          "close"
-        ]
-      },
-      "SiteWeek": {
-        "type": "object",
-        "properties": {
-          "mon": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayHours"
-              }
-            ]
-          },
-          "tue": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayHours"
-              }
-            ]
-          },
-          "wed": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayHours"
-              }
-            ]
-          },
-          "thu": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayHours"
-              }
-            ]
-          },
-          "fri": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayHours"
-              }
-            ]
-          },
-          "sat": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayHours"
-              }
-            ]
-          },
-          "sun": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DayHours"
-              }
-            ]
-          }
-        }
       },
       "SiteShift": {
         "type": "object",

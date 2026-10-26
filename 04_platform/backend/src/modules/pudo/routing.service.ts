@@ -198,8 +198,14 @@ export function publicQuote(quote: ShipmentQuote): PublicQuote {
   return { ...rest, flexible: strip(flexible), locked: strip(locked) };
 }
 
+/*
+ * READING B (inbound, assessment.html; the user, 2026-10-25: "Yes, A then B") — a journey may also start AT A HUB: a
+ * store hands its parcels in there in bulk. Unlike a dock, the hub is a node: it takes the parcel in and sorts it, so it
+ * is on the route as the first hub and in the fee stack for the work it does — and there is no road before it to charge,
+ * because the store brought the goods itself.
+ */
 export interface RouteEnd {
-  type: 'pudo' | 'dock';
+  type: 'pudo' | 'dock' | 'mdp';
   id: string;
   label: string;
   zone: string;
@@ -591,12 +597,23 @@ export class RoutingService {
     // having to be declared. A hub's country is the hub's own — not the zone's — because a hub can serve
     // zones across a border and it is the HUB the goods are driven to.
     const route: RouteHop[] = [{ type: origin.type, id: origin.id, label: origin.label, zone: origin.zone, country: origin.country, location: origin.location }];
-    const originMdp = this.mdps.mdpForZone(origin.zone);
+    // A journey handed in at a hub starts AT its first hub: that hub is the origin, not the zone's.
+    const originMdp = origin.type === 'mdp' ? this.mdps.require(origin.id) : this.mdps.mdpForZone(origin.zone);
     const destMdp = this.mdps.mdpForZone(dest.zone);
-    if (originMdp) route.push({ type: 'mdp', id: originMdp.mdpId, label: originMdp.name, zone: origin.zone, country: this.mdps.countryOf(originMdp), location: originMdp.location });
+    if (originMdp && origin.type !== 'mdp') route.push({ type: 'mdp', id: originMdp.mdpId, label: originMdp.name, zone: origin.zone, country: this.mdps.countryOf(originMdp), location: originMdp.location });
     if (destMdp && destMdp.mdpId !== originMdp?.mdpId) route.push({ type: 'mdp', id: destMdp.mdpId, label: destMdp.name, zone: dest.zone, country: this.mdps.countryOf(destMdp), location: destMdp.location });
     route.push({ type: 'pudo', id: dest.did, label: dest.shopName, zone: dest.zone, country: this.agents.countryOf(dest), location: dest.location });
     return route;
+  }
+
+  /**
+   * READING B — WHERE A JOURNEY HANDED IN AT THIS HUB STARTS: the hub itself, in the first zone it serves, in its own
+   * country. A hub that may not work (not approved, its country not open) starts nothing.
+   */
+  hubEnd(mdpId: string): RouteEnd {
+    const hub = this.mdps.working(mdpId);
+    if (!hub.zones.length) throw new GlosError('INVALID_STATE', `${hub.name} serves no zone yet, so nothing can be routed from it`);
+    return { type: 'mdp', id: hub.mdpId, label: hub.name, zone: hub.zones[0], country: this.mdps.countryOf(hub), location: hub.location };
   }
 
   private nodePick(agentDid: string): NodePick {
