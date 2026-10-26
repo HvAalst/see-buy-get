@@ -4372,7 +4372,14 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubArrivalScan"
+                }
+              }
+            }
           }
         }
       }
@@ -4382,6 +4389,43 @@
         "operationId": "HubArrival.finishArrival",
         "summary": "",
         "description": "Scanning finished: what was booked and not scanned is still the store's, which is told.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/arrivals/{arrivalId}/missed": {
+      "post": {
+        "operationId": "HubArrival.missedArrival",
+        "summary": "",
+        "description": "Its day is over on the hub's clock and nothing came: the hub says so, and the store is told.",
         "parameters": [
           {
             "name": "id",
@@ -33848,6 +33892,51 @@
           "hubs"
         ]
       },
+      "HubBulkView": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "address": {
+            "type": "string"
+          },
+          "hours": {
+            "description": "The days and hours it receives, on its own clock. Absent: whenever it is working.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SiteWeek"
+              }
+            ]
+          },
+          "doors": {
+            "type": "number",
+            "description": "How many trucks it takes at once. Absent: not said."
+          },
+          "zone": {
+            "type": "string",
+            "description": "Its clock, and the name of it: Africa/Nairobi, \"East Africa Time\". Absent: a country of several clocks."
+          },
+          "zoneName": {
+            "type": "string"
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "mdpId",
+          "name",
+          "since"
+        ]
+      },
       "HubArrivalParcel": {
         "type": "object",
         "properties": {
@@ -33881,6 +33970,14 @@
       "HubWaiting": {
         "type": "object",
         "properties": {
+          "bulk": {
+            "description": "When the hub receives, on its clock — what the store books against. Absent: it no longer takes parcels in bulk.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubBulkView"
+              }
+            ]
+          },
           "parcels": {
             "type": "array",
             "items": {
@@ -33898,6 +33995,80 @@
           "parcels",
           "mdpId",
           "hubName"
+        ]
+      },
+      "HubArrivalReceived": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "units": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "units"
+        ]
+      },
+      "HubArrivalFinished": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "missing"
+        ]
+      },
+      "HubArrivalWithdrawn": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by"
+        ]
+      },
+      "HubArrivalMissed": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by"
         ]
       },
       "HubArrivalView": {
@@ -33930,62 +34101,21 @@
               "expected",
               "receiving",
               "received",
-              "withdrawn"
+              "withdrawn",
+              "missed"
             ]
           },
           "received": {
-            "type": "object",
-            "properties": {
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "by": {
-                "required": true,
-                "type": "string"
-              },
-              "units": {
-                "required": true,
-                "type": "number"
-              },
-              "note": {
-                "required": false,
-                "type": "string"
-              }
-            }
+            "$ref": "#/components/schemas/HubArrivalReceived"
           },
           "finished": {
-            "type": "object",
-            "properties": {
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "by": {
-                "required": true,
-                "type": "string"
-              },
-              "missing": {
-                "required": true,
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
+            "$ref": "#/components/schemas/HubArrivalFinished"
           },
           "withdrawn": {
-            "type": "object",
-            "properties": {
-              "at": {
-                "required": true,
-                "type": "string"
-              },
-              "by": {
-                "required": true,
-                "type": "string"
-              }
-            }
+            "$ref": "#/components/schemas/HubArrivalWithdrawn"
+          },
+          "missed": {
+            "$ref": "#/components/schemas/HubArrivalMissed"
           },
           "today": {
             "type": "boolean",
@@ -34026,9 +34156,6 @@
           "parcels",
           "unitKind",
           "state",
-          "received",
-          "finished",
-          "withdrawn",
           "arrivalId",
           "mdpId",
           "hubName",
@@ -34109,51 +34236,6 @@
           "expectedOn"
         ]
       },
-      "HubBulkView": {
-        "type": "object",
-        "properties": {
-          "location": {
-            "$ref": "#/components/schemas/GeoPoint"
-          },
-          "address": {
-            "type": "string"
-          },
-          "hours": {
-            "description": "The days and hours it receives, on its own clock. Absent: whenever it is working.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SiteWeek"
-              }
-            ]
-          },
-          "doors": {
-            "type": "number",
-            "description": "How many trucks it takes at once. Absent: not said."
-          },
-          "zone": {
-            "type": "string",
-            "description": "Its clock, and the name of it: Africa/Nairobi, \"East Africa Time\". Absent: a country of several clocks."
-          },
-          "zoneName": {
-            "type": "string"
-          },
-          "mdpId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "since": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "location",
-          "mdpId",
-          "name",
-          "since"
-        ]
-      },
       "HubArrivals": {
         "type": "object",
         "properties": {
@@ -34225,6 +34307,31 @@
         },
         "required": [
           "code"
+        ]
+      },
+      "HubArrivalScan": {
+        "type": "object",
+        "properties": {
+          "arrival": {
+            "$ref": "#/components/schemas/HubArrivalView"
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string",
+            "description": "The shop it goes to, as the hub sorts it."
+          },
+          "already": {
+            "type": "boolean",
+            "description": "Scanned before: nothing changed."
+          }
+        },
+        "required": [
+          "arrival",
+          "parcelId",
+          "destination",
+          "already"
         ]
       },
       "RiskCellView": {

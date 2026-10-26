@@ -34,13 +34,14 @@ describe('a store handing its parcels in at a hub, in bulk (reading B)', () => {
     expect(bookableDays(undefined, '2026-12-31', 2)).toEqual(['2026-12-31', '2027-01-01']);
   });
 
-  it('puts an arrival in one word: coming, late, being taken in, all in, some not there, withdrawn', () => {
+  it('puts an arrival in one word: coming, late, being taken in, all in, some not there, withdrawn, did not come', () => {
     expect(arrivalWord({ state: 'expected' })).toBe('expected');
     expect(arrivalWord({ state: 'expected', late: true })).toBe('late');
     expect(arrivalWord({ state: 'receiving', late: true })).toBe('receiving');
     expect(arrivalWord({ state: 'received', finished: { missing: [] } } as never)).toBe('all_in');
     expect(arrivalWord({ state: 'received', finished: { missing: ['PUD-1'] } } as never)).toBe('some_missing');
     expect(arrivalWord({ state: 'withdrawn' })).toBe('withdrawn');
+    expect(arrivalWord({ state: 'missed', late: true })).toBe('missed');
   });
 
   it('sends a booking only with a parcel on it, its units counted 1 to 100, and a day', () => {

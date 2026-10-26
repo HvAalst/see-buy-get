@@ -3,9 +3,11 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { contentPhotoOver, CONTENTS_PNG } from './content-photo';
+import { ssccOf } from '../src/foundation/gs1/gs1';
 import { declared } from './declared';
 import { AGREED } from './agreed';
 import { ParcelService } from '../src/modules/pudo/parcel.service';
+import { HubArrivalService } from '../src/modules/pudo/hub-arrival.service';
 
 /**
  * INBOUND SUPPLY, READING B, over the wire (assessment.html D1–D14; the user, 2026-10-25: "Yes, A then B"): A HUB AS A
@@ -117,7 +119,7 @@ describe('reading B: a store hands its parcels in at a hub, in bulk', () => {
     expect(listed.arrivals[0]).toMatchObject({ arrivalId: booked.arrivalId, storeName: `Bulk Store ${tag}`, today: true, late: false });
     const scan = (code: string) => http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${booked.arrivalId}/scan`).set(hubToken).send({ code });
     expect((await scan(ids[0]).expect(400)).body.detail).toMatch(/Count what came at the door first/);
-    await http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${booked.arrivalId}/receive`).set(hubToken).send({ units: 1, note: 'Wrap intact' }).expect(201);
+    await http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${booked.arrivalId}/receive`).set(hubToken).send({ units: 1, note: 'One corner of the wrap torn' }).expect(201);
 
     // SCANNED OFF: by its tracking key or its id. The hub answers for it from here; twice changes nothing; a stranger is set aside.
     const parcels = app.get(ParcelService);
@@ -129,6 +131,8 @@ describe('reading B: a store hands its parcels in at a hub, in bulk', () => {
     expect(taken.plan?.hops[0]).toMatchObject({ type: 'mdp', id: hub.mdpId });
     expect((await scan(ids[0]).expect(201)).body.already).toBe(true);
     expect((await scan('NOT-ON-IT').expect(404)).body.detail).toMatch(/is not on this arrival: set it aside/);
+    // Priced as the store was shown: from the hub — its fee and the shop's at the far end, nothing before it.
+    expect(parcels.get(ids[2]).nodeFees).toBe(here.quote.nodeFees);
     await scan(ids[1]).expect(201);
 
     // FINISHED: the third was not on it — still the store's, told, and bookable again.
@@ -136,9 +140,21 @@ describe('reading B: a store hands its parcels in at a hub, in bulk', () => {
     expect(done).toMatchObject({ state: 'received', scannedCount: 2, finished: { missing: [ids[2]] } });
     expect(parcels.get(ids[2])).toMatchObject({ status: 'Created' });
     const bell = (await http().get('/v1/sbg/notifications/inbox').set(store).expect(200)).body;
-    expect(((bell.items ?? bell) as Array<{ kind: string; title: string }>).find((n) => n.kind === 'hub_arrival')?.title).toBe(`Bulk Hub ${tag} took in 2 parcels of 3`);
+    const arrived = ((bell.items ?? bell) as Array<{ kind: string; title: string; body: string }>).find((n) => n.kind === 'hub_arrival');
+    expect(arrived?.title).toBe(`Bulk Hub ${tag} took in 2 parcels of 3`);
+    // What the hub saw at its door goes to the store, as a receiver's findings go to the sender.
+    expect(arrived?.body).toMatch(/At the door: “One corner of the wrap torn”/);
+    // And the store's own system hears the end of it: what came, what did not — with the store's order numbers.
+    const sent = (await http().get(`/v1/sbg/vendors/${made.vendorId}/callbacks`).set(store).expect(200)).body as Array<{ event: string; body: string }>;
+    const ended = JSON.parse(sent.find((c) => c.event === 'hub_arrival.received')!.body).data;
+    expect(ended).toMatchObject({ arrivalId: booked.arrivalId, reference: `DISPATCH-${tag}`, units: { kind: 'pallet', count: 1 }, atTheDoor: { units: 1, note: 'One corner of the wrap torn' } });
+    expect(ended.takenIn).toEqual([{ parcelId: ids[0], externalOrderId: `WEB-${tag}-0` }, { parcelId: ids[1], externalOrderId: `WEB-${tag}-1` }]);
+    expect(ended.missing).toEqual([{ parcelId: ids[2], externalOrderId: `WEB-${tag}-2` }]);
     const after = (await http().get(`/v1/sbg/vendors/${made.vendorId}/hub-arrivals`).set(store).expect(200)).body;
     expect(after.waiting[0].parcels.map((p: { parcelId: string }) => p.parcelId)).toEqual([ids[2]]);
+
+    // In the hub's hands, a parcel is booked on no other arrival.
+    expect((await book({ parcelIds: [ids[0]] }).expect(400)).body.detail).toMatch(/was taken in already/);
 
     // SORTED like any other parcel at the hub.
     await http().post(`/v1/sbg/mdps/${hub.mdpId}/sort`).set(hubToken).send({ parcelId: ids[0] }).expect(201);
@@ -147,5 +163,91 @@ describe('reading B: a store hands its parcels in at a hub, in bulk', () => {
     const again = (await book({ parcelIds: [ids[2]] }).expect(201)).body;
     await http().post(`/v1/sbg/vendors/${made.vendorId}/hub-arrivals/${again.arrivalId}/withdraw`).set(store).expect(201);
     expect((await http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${again.arrivalId}/receive`).set(hubToken).send({ units: 1 }).expect(400)).body.detail).toMatch(/The store withdrew it/);
+
+    // IT DID NOT COME: not said before its day is over on the hub's clock; said after, the arrival ends, the store is told,
+    // and its parcel is the store's to book again. Nothing more happens to it at the door, and the store cannot withdraw it.
+    const late = (await book({ parcelIds: [ids[2]], reference: `LATE-${tag}` }).expect(201)).body;
+    const missed = () => http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${late.arrivalId}/missed`).set(hubToken);
+    expect((await missed().expect(400)).body.detail).toMatch(/It is due today: say it did not come once its day is over/);
+    // Its day goes by: the record says it was due yesterday, on the hub's clock.
+    const store$ = (app.get(HubArrivalService) as unknown as { arrivals: Map<string, { expectedOn: string }> }).arrivals;
+    store$.set(late.arrivalId, { ...store$.get(late.arrivalId)!, expectedOn: kenyaDay(Date.now() - 86_400_000) });
+    expect((await http().get(`/v1/sbg/mdps/${hub.mdpId}/arrivals`).set(hubToken).expect(200)).body.arrivals.find((a: { arrivalId: string }) => a.arrivalId === late.arrivalId)).toMatchObject({ late: true });
+    const said2 = (await missed().expect(201)).body;
+    expect(said2).toMatchObject({ state: 'missed', missed: { by: expect.any(String) } });
+    expect((await missed().expect(201)).body.state).toBe('missed');
+    expect((await http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${late.arrivalId}/receive`).set(hubToken).send({ units: 1 }).expect(400)).body.detail).toMatch(/said not to have come/);
+    expect((await http().post(`/v1/sbg/vendors/${made.vendorId}/hub-arrivals/${late.arrivalId}/withdraw`).set(store).expect(400)).body.detail).toMatch(/did not come/);
+    const told = (await http().get('/v1/sbg/notifications/inbox').set(store).expect(200)).body;
+    expect(((told.items ?? told) as Array<{ kind: string; title: string; body: string }>).find((n) => n.title === `Bulk Hub ${tag}: your arrival did not come`)?.body).toMatch(/LATE-.*still with you: book it on a new arrival/);
+    const missedSent = (await http().get(`/v1/sbg/vendors/${made.vendorId}/callbacks`).set(store).expect(200)).body as Array<{ event: string; body: string }>;
+    expect(JSON.parse(missedSent.find((c) => c.event === 'hub_arrival.missed')!.body).data).toMatchObject({ arrivalId: late.arrivalId, reference: `LATE-${tag}`, parcels: [{ parcelId: ids[2], externalOrderId: `WEB-${tag}-2` }] });
+    const free = (await http().get(`/v1/sbg/vendors/${made.vendorId}/hub-arrivals`).set(store).expect(200)).body;
+    expect(free.waiting[0].parcels.map((p: { parcelId: string }) => p.parcelId)).toEqual([ids[2]]);
+    expect(free.arrivals.find((a: { arrivalId: string }) => a.arrivalId === late.arrivalId)).toMatchObject({ state: 'missed' });
+  });
+
+  it('books only the store’s parcels for this hub, on a day it receives, within a month; the hub finds one by its own barcode and the last scan ends the arrival', async () => {
+    const t2 = digits();
+    const north = `BarNorth${t2}`;
+    const south = `BarSouth${t2}`;
+    const counter = await aShop(`Counter ${t2}`, north, { lat: -1.2, lng: 36.8 });
+    const dest = await aShop(`Lakeside ${t2}`, south, { lat: -1.32, lng: 36.92 });
+    const made = (await http().post('/v1/sbg/vendors').set(operator).send({ ...AGREED, name: `Barcode Store ${t2}`, callbackUrl: 'https://store.example/hook' }).expect(201)).body;
+    const store = bearer((await http().post('/v1/sbg/vendors/login').send({ vendorId: made.vendorId, secret: made.secret }).expect(201)).body.token.access_token);
+    const funded = await http().post(`/v1/sbg/vendors/${made.vendorId}/top-up`).set(store).send({ amount: 5000 }).expect(201);
+    await http().post(`/v1/rails/funding/${funded.body.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 5000 }).expect(201);
+    const P = `62${String(Math.floor(Math.random() * 90_000) + 10_000)}`;
+    await http().put(`/v1/sbg/vendors/${made.vendorId}/gs1`).set(store).send({ companyPrefix: P, extensionDigit: 4 }).expect(200);
+    const hubA = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Hub A ${t2}`, zones: [north, south], location: { lat: -1.25, lng: 36.88 } }).expect(201)).body;
+    const hubB = (await http().post('/v1/sbg/mdps').set(operator).send({ name: `Hub B ${t2}`, zones: [north, south], location: { lat: -1.26, lng: 36.89 } }).expect(201)).body;
+    const tokenA = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hubA.did }).expect(201)).body.access_token);
+    const tokenB = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hubB.did }).expect(201)).body.access_token);
+    declared(app, 'hub', hubA.did);
+    declared(app, 'hub', hubB.did);
+
+    // Hub A receives on one weekday only — today's, on its own clock.
+    const today = kenyaDay(Date.now());
+    const weekday = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][new Date(`${today}T12:00:00Z`).getUTCDay()];
+    await http().put(`/v1/sbg/mdps/${hubA.mdpId}/bulk`).set(tokenA).send({ open: true, hours: { [weekday]: { open: '00:00', close: '23:59' } } }).expect(200);
+    await http().put(`/v1/sbg/mdps/${hubB.mdpId}/bulk`).set(tokenB).send({ open: true }).expect(200);
+    // Set hours with no day in them say nothing: refused, not stored as a hub that never receives.
+    expect((await http().put(`/v1/sbg/mdps/${hubB.mdpId}/bulk`).set(tokenB).send({ open: true, hours: { sun: null } }).expect(400)).body.detail).toMatch(/at least one day/);
+
+    const mint = (body: Record<string, unknown>) => http().post('/v1/sbg/inbound/orders').set(store).send({ vendorId: made.vendorId, destPudoDid: dest.did, buyerMobile: `+2547${digits()}1`, size: 'M', weightKg: 2, ...body });
+    const handIn = (await mint({ handInMdpId: hubA.mdpId, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store) }).expect(201)).body.parcel;
+    expect(handIn.sscc).toBe(ssccOf(P, 4, 0));
+    const atShop = (await mint({ originPudoDid: counter.did, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store) }).expect(201)).body.parcel;
+
+    // THE BOOKING'S RULES: the store's own parcel for this hub; a day it receives; a month ahead at most.
+    const book = (body: Record<string, unknown>) => http().post(`/v1/sbg/vendors/${made.vendorId}/hub-arrivals`).set(store).send({ mdpId: hubA.mdpId, unitKind: 'carton', units: 1, expectedOn: today, ...body });
+    expect((await book({ parcelIds: [atShop.parcelId] }).expect(400)).body.detail).toMatch(/is not booked to be handed in at Hub A/);
+    const after = (n: number) => kenyaDay(Date.parse(`${today}T12:00:00Z`) + n * 86_400_000);
+    expect((await book({ parcelIds: [handIn.parcelId], expectedOn: after(1) }).expect(400)).body.detail).toMatch(/does not receive on a/);
+    expect((await book({ parcelIds: [handIn.parcelId], expectedOn: after(35) }).expect(400)).body.detail).toMatch(/at most 30 days ahead/);
+    // A hub that does not take bulk is not one to book at: Hub B stops, and the parcel is not for it anyway.
+    await http().put(`/v1/sbg/mdps/${hubB.mdpId}/bulk`).set(tokenB).send({ open: false }).expect(200);
+    expect((await book({ parcelIds: [handIn.parcelId], mdpId: hubB.mdpId }).expect(400)).body.detail).toMatch(/does not take parcels in bulk/);
+
+    // ITS OWN BARCODE: the hub it is booked to finds it by its SSCC before it is taken in; another hub does not.
+    const scanned = `(00) ${handIn.sscc}`;
+    expect((await http().get('/v1/sbg/scan/parcel').query({ scanned }).set(tokenA).expect(200)).body).toMatchObject({ parcelId: handIn.parcelId, status: 'Created' });
+    await http().get('/v1/sbg/scan/parcel').query({ scanned }).set(tokenB).expect(404);
+
+    const booked = (await book({ parcelIds: [handIn.parcelId] }).expect(201)).body;
+    // Another hub reads nothing of it and does nothing to it.
+    await http().get(`/v1/sbg/mdps/${hubA.mdpId}/arrivals`).set(tokenB).expect(403);
+    await http().post(`/v1/sbg/mdps/${hubA.mdpId}/arrivals/${booked.arrivalId}/receive`).set(tokenB).send({ units: 1 }).expect(403);
+    await http().post(`/v1/sbg/mdps/${hubB.mdpId}/arrivals/${booked.arrivalId}/receive`).set(tokenB).send({ units: 1 }).expect(404);
+
+    // THE LAST SCAN ENDS IT: one parcel, scanned in by its barcode — nothing missing, the store told.
+    await http().post(`/v1/sbg/mdps/${hubA.mdpId}/arrivals/${booked.arrivalId}/receive`).set(tokenA).send({ units: 1 }).expect(201);
+    // Counted at the door, it came: there is no saying it did not.
+    expect((await http().post(`/v1/sbg/mdps/${hubA.mdpId}/arrivals/${booked.arrivalId}/missed`).set(tokenA).expect(400)).body.detail).toMatch(/It was taken in at the door/);
+    const last = (await http().post(`/v1/sbg/mdps/${hubA.mdpId}/arrivals/${booked.arrivalId}/scan`).set(tokenA).send({ code: scanned }).expect(201)).body;
+    expect(last).toMatchObject({ parcelId: handIn.parcelId, already: false, arrival: { state: 'received', scannedCount: 1, finished: { missing: [] } } });
+    await http().post(`/v1/sbg/mdps/${hubA.mdpId}/arrivals/${booked.arrivalId}/finish`).set(tokenA).expect(400);
+    const bell = (await http().get('/v1/sbg/notifications/inbox').set(store).expect(200)).body;
+    expect(((bell.items ?? bell) as Array<{ kind: string; title: string }>).find((n) => n.kind === 'hub_arrival')?.title).toBe(`Hub A ${t2} took in your parcel`);
   });
 });

@@ -19,7 +19,8 @@ import { GeoPoint } from './pudo.types';
 export const HUB_UNIT_KINDS = ['pallet', 'carton', 'cage', 'sack'] as const;
 export type HubUnitKind = (typeof HUB_UNIT_KINDS)[number];
 
-export const HUB_ARRIVAL_STATES = ['expected', 'receiving', 'received', 'withdrawn'] as const;
+/** `missed`: its day went by on the hub's clock and nothing came — the hub said so, and its parcels are the store's to book again. */
+export const HUB_ARRIVAL_STATES = ['expected', 'receiving', 'received', 'withdrawn', 'missed'] as const;
 export type HubArrivalState = (typeof HUB_ARRIVAL_STATES)[number];
 
 /** How far ahead a store may book an arrival: a month. */
@@ -60,6 +61,8 @@ export interface HubArrival {
   /** Scanning finished: what was booked and did not come — still the store's. */
   finished?: { at: string; by: string; missing: string[] };
   withdrawn?: { at: string; by: string };
+  /** The hub said it did not come, once its day was over. */
+  missed?: { at: string; by: string };
 }
 
 /** A hub that takes stores' parcels in bulk: where, when, and at how many doors. */
@@ -122,6 +125,12 @@ export class HubArrivalWithdrawn {
   by: string;
 }
 
+/** Its day went by and nothing came: when the hub said so, and who. */
+export class HubArrivalMissed {
+  at: string;
+  by: string;
+}
+
 export class HubArrivalView {
   arrivalId: string;
   mdpId: string;
@@ -140,6 +149,7 @@ export class HubArrivalView {
   scannedCount: number;
   @ApiPropertyOptional({ type: HubArrivalFinished }) finished?: HubArrivalFinished;
   @ApiPropertyOptional({ type: HubArrivalWithdrawn }) withdrawn?: HubArrivalWithdrawn;
+  @ApiPropertyOptional({ type: HubArrivalMissed }) missed?: HubArrivalMissed;
   /** On the hub's own clock (D10): it is expected today there, or its day has gone and it has not come. */
   @ApiPropertyOptional() today?: boolean;
   @ApiPropertyOptional() late?: boolean;

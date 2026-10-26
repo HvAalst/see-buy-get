@@ -45,6 +45,7 @@ export type TipId =
   | 'agent.lots.how'
   /* THE HUB. Five screens, and every one of them is a scan-and-be-told loop that never changes. */
   | 'mdp.sort.how'
+  | 'mdp.arrivals.how'
   | 'mdp.drop.how'
   | 'mdp.load.how'
   | 'mdp.tote.how'

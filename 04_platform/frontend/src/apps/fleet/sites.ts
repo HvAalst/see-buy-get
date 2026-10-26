@@ -14,7 +14,7 @@ export const WEEK = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 export type Weekday = (typeof WEEK)[number];
 export type WeekForm = Record<Weekday, { open: string; close: string } | null>;
 export const DAY_NAME: Record<Weekday, MessageKey> = { mon: 'fleet.sites.dayName.mon', tue: 'fleet.sites.dayName.tue', wed: 'fleet.sites.dayName.wed', thu: 'fleet.sites.dayName.thu', fri: 'fleet.sites.dayName.fri', sat: 'fleet.sites.dayName.sat', sun: 'fleet.sites.dayName.sun' };
-const DAY_SHORT: Record<Weekday, MessageKey> = { mon: 'fleet.sites.day.mon', tue: 'fleet.sites.day.tue', wed: 'fleet.sites.day.wed', thu: 'fleet.sites.day.thu', fri: 'fleet.sites.day.fri', sat: 'fleet.sites.day.sat', sun: 'fleet.sites.day.sun' };
+export const DAY_SHORT: Record<Weekday, MessageKey> = { mon: 'fleet.sites.day.mon', tue: 'fleet.sites.day.tue', wed: 'fleet.sites.day.wed', thu: 'fleet.sites.day.thu', fri: 'fleet.sites.day.fri', sat: 'fleet.sites.day.sat', sun: 'fleet.sites.day.sun' };
 
 /** What the office writes about a site: what is not sent stays as it was. */
 export interface SiteInput {

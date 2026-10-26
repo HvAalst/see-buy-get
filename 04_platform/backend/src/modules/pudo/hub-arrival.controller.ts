@@ -133,6 +133,15 @@ export class HubArrivalController {
     return this.arrivals.finish(id, arrivalId, actor?.actorName?.trim() || hub);
   }
 
+  /** Its day is over on the hub's clock and nothing came: the hub says so, and the store is told. */
+  @Roles('mdp', 'operator')
+  @Post('mdps/:id/arrivals/:arrivalId/missed')
+  @AtTheCounter()
+  missedArrival(@Param('id') id: string, @Param('arrivalId') arrivalId: string, @Actor() actor: IntrospectionResult): HubArrivalView {
+    const hub = this.hubActs(id, actor);
+    return this.arrivals.missed(id, arrivalId, actor?.actorName?.trim() || hub);
+  }
+
   /* ---------------------------------------------------------------------------------------------- inside -- */
 
   /** The store itself reads its own — staff named and refused, as at every door of a store's own records. */

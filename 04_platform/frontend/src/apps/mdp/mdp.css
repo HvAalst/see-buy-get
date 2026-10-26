@@ -327,3 +327,57 @@
   border-radius: var(--r-ctl);
   margin-bottom: 8px;
 }
+
+/* ------------------------------------------------------------ coming in -- */
+
+/* Reading B — one arrival's state and who brings it, on one line under its title. */
+.arrival__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The days and hours the hub receives: a line a day, its two times beside it. Short day names, so a 320px phone keeps
+   the line; the full name is the checkbox's label for a screen reader. */
+.days {
+  margin-top: 4px;
+}
+
+.dayrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 104px;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+}
+
+.dayrow--head {
+  min-height: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+
+.dayrow--closed .dayrow__day {
+  grid-column: 1 / -1;
+}
+
+.dayrow__day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--tx2);
+}
+
+.dayrow__day input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--blue);
+}
+
+.dayrow .input {
+  padding-left: 8px;
+  padding-right: 8px;
+}

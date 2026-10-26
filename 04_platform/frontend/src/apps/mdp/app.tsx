@@ -11,6 +11,9 @@ import { mdpConfig } from './api';
 import { useAccount } from '../../shared/account/useAccount';
 import { useT } from '../../shared/i18n';
 import { fillingBags, floorOpen, homeSummary, unsortedAt } from './logic';
+import { arrivalsAtTheDoor } from './arrivals';
+import { ArrivalScreen } from './screens/ArrivalScreen';
+import { ArrivalsScreen } from './screens/ArrivalsScreen';
 import { DropScreen } from './screens/DropScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { LoadScreen } from './screens/LoadScreen';
@@ -22,7 +25,7 @@ import { useMdpApp, type MdpActions, type MdpState, type Screen } from './useMdp
 import '../../shared/screens.css';
 import './mdp.css';
 
-type Tab = 'home' | 'sort' | 'load';
+type Tab = 'home' | 'arrivals' | 'sort' | 'load';
 
 export function App() {
   const t = useT();
@@ -54,10 +57,20 @@ export function App() {
   }
 
   const unsorted = state.hub ? unsortedAt(state.inbound, state.hub.mdpId).length : 0;
-  const tab: Tab = state.screen === 'sort' || state.screen === 'drop' ? 'sort' : state.screen === 'load' || state.screen === 'newtote' ? 'load' : 'home';
+  const tab: Tab =
+    state.screen === 'sort' || state.screen === 'drop'
+      ? 'sort'
+      : state.screen === 'load' || state.screen === 'newtote'
+        ? 'load'
+        : state.screen === 'arrivals' || state.screen === 'arrival'
+          ? 'arrivals'
+          : 'home';
+  // Reading B — what stores bring in bulk and is at the door now: being scanned in, late, due today.
+  const atTheDoor = arrivalsAtTheDoor(state.arrivals);
 
   const tabs: NavItem<Tab>[] = [
     { key: 'home', label: t('mdp.nav.home'), icon: 'grid' },
+    { key: 'arrivals', label: t('mdp.nav.arrivals'), icon: 'truck', badge: atTheDoor || undefined },
     { key: 'sort', label: t('mdp.nav.sort'), icon: 'scan', badge: unsorted || undefined },
     { key: 'load', label: t('mdp.nav.bags'), icon: 'bag' },
   ];
@@ -71,8 +84,9 @@ export function App() {
         // under it can never report different numbers because there is only one computation.
         subtitle={state.hub ? homeSummary(unsortedAt(state.inbound, state.hub.mdpId).length, fillingBags(state.totes).length, t) : undefined}
         subtitleHint={state.hub?.name}
-        onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
-        backLabel={t('mdp.backToHub')}
+        // One arrival goes back to the list it was opened from; every other screen to the hub's home.
+        onBack={state.screen === 'home' ? undefined : state.screen === 'arrival' ? () => actions.openArrival(null) : () => actions.go('home')}
+        backLabel={state.screen === 'arrival' ? t('mdp.backToArrivals') : t('mdp.backToHub')}
         end={
           <>
             {needRefresh ? (
@@ -125,6 +139,10 @@ function ScreenRouter({ screen, state, actions, sbg }: { screen: Screen; state: 
       return <LoadScreen state={state} actions={actions} />;
     case 'newtote':
       return <NewToteScreen state={state} actions={actions} />;
+    case 'arrivals':
+      return <ArrivalsScreen state={state} actions={actions} />;
+    case 'arrival':
+      return <ArrivalScreen state={state} actions={actions} />;
     case 'rates':
       // The fee is the owner's: one of the hub's people is shown the floor instead (the server refuses them the door).
       return state.staff ? <HomeScreen state={state} actions={actions} sbg={sbg} /> : <RatesScreen state={state} actions={actions} />;

@@ -42,6 +42,7 @@ export const COUNTER_ACTS: Readonly<Record<string, string | ((body: Record<strin
   receiveArrival: 'took a store’s parcels in at the door',
   scanArrival: 'scanned a store’s parcel in',
   finishArrival: 'finished taking a store’s parcels in',
+  missedArrival: 'said a store’s arrival did not come',
 };
 
 /**

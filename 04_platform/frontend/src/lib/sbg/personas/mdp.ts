@@ -52,6 +52,29 @@ export function createMdpApi(sbg: SbgClient) {
     sendPapers: (mdpId: string, body: { idCopyRef: string; licenceRef: string; photoRefs: string[] }) =>
       sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/papers', { params: { path: { id: mdpId } }, body })),
 
+    /** Reading B — whether this hub takes stores' parcels in bulk, and when; and what is coming to it. */
+    arrivals: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/arrivals', { params: { path: { id: mdpId } } })),
+
+    /** The hub's own word that it takes stores' parcels in bulk — its days and hours, its doors — or no longer does. Its owner's. */
+    setBulk: (mdpId: string, body: { open: boolean; hours?: Record<string, { open: string; close: string } | null> | null; doors?: number | null }) =>
+      sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/bulk', { params: { path: { id: mdpId } }, body: body as never })),
+
+    /** At the hub's door: the units that came, counted, and a line of the hub's words. */
+    receiveArrival: (mdpId: string, arrivalId: string, body: { units: number; note?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/arrivals/{arrivalId}/receive', { params: { path: { id: mdpId, arrivalId } }, body })),
+
+    /** One parcel scanned off the units, by its label: the hub answers for it from here. */
+    scanArrival: (mdpId: string, arrivalId: string, code: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/arrivals/{arrivalId}/scan', { params: { path: { id: mdpId, arrivalId } }, body: { code } })),
+
+    /** Scanning finished: what was booked and not scanned did not come — still the store's, which is told. */
+    finishArrival: (mdpId: string, arrivalId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/arrivals/{arrivalId}/finish', { params: { path: { id: mdpId, arrivalId } } })),
+
+    /** Its day is over on the hub's clock and nothing came: the hub says so, and the store is told. */
+    missedArrival: (mdpId: string, arrivalId: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/arrivals/{arrivalId}/missed', { params: { path: { id: mdpId, arrivalId } } })),
+
     /** Register a fresh laminated tote into this hub's pool. */
     newTote: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/totes', { params: { path: { id: mdpId } } })),
 

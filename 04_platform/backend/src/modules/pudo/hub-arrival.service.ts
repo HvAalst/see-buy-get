@@ -183,6 +183,7 @@ export class HubArrivalService {
     const a = this.arrivals.get(arrivalId);
     if (!a || a.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'No such arrival of yours');
     if (a.state === 'withdrawn') return this.viewOf(a, now);
+    if (a.state === 'missed') throw new GlosError('INVALID_STATE', 'The hub said it did not come: its parcels are free to book again');
     if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'The hub has taken it in already: what it scanned is in its hands');
     a.state = 'withdrawn';
     a.withdrawn = { at: new Date(now).toISOString(), by };
@@ -221,7 +222,7 @@ export class HubArrivalService {
   receive(mdpId: string, arrivalId: string, input: { units: number; note?: string }, by: string, now: number = Date.now()): HubArrivalView {
     this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
-    if (a.state === 'withdrawn') throw new GlosError('INVALID_STATE', 'The store withdrew it: it is not coming');
+    if (a.state === 'withdrawn' || a.state === 'missed') throw new GlosError('INVALID_STATE', closedWhy(a));
     if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'It was taken in at the door already');
     if (!Number.isInteger(input.units) || input.units < 1) throw new GlosError('INVALID_INPUT', 'Count the units that came: one or more', { field: 'units' });
     const note = input.note?.trim();
@@ -239,7 +240,7 @@ export class HubArrivalService {
     const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
     if (a.state === 'expected') throw new GlosError('INVALID_STATE', 'Count what came at the door first: take it in, then scan each parcel off it');
-    if (a.state !== 'receiving') throw new GlosError('INVALID_STATE', a.state === 'withdrawn' ? 'The store withdrew it: it is not coming' : 'Scanning of it is finished');
+    if (a.state !== 'receiving') throw new GlosError('INVALID_STATE', closedWhy(a));
     const parcelId = this.match(a, code);
     if (!parcelId) throw new GlosError('NOT_FOUND', `${code.trim()} is not on this arrival: set it aside, and tell the store`);
     const parcel = this.parcels.get(parcelId);
@@ -259,8 +260,29 @@ export class HubArrivalService {
   finish(mdpId: string, arrivalId: string, by: string, now: number = Date.now()): HubArrivalView {
     const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
-    if (a.state !== 'receiving') throw new GlosError('INVALID_STATE', a.state === 'expected' ? 'Take it in at the door first' : 'Scanning of it is finished already');
+    if (a.state !== 'receiving') throw new GlosError('INVALID_STATE', a.state === 'expected' ? 'Take it in at the door first' : closedWhy(a));
     this.close(a, hub, by, now);
+    return this.viewOf(a, now);
+  }
+
+  /**
+   * IT DID NOT COME: its day is over on the hub's own clock and nothing was taken in at the door. The hub says so — not
+   * before its day is over, and not of one it has begun to take in — and the arrival ends: its parcels are the store's,
+   * free to book on another arrival, and the store is told. Said twice, it is the same.
+   */
+  missed(mdpId: string, arrivalId: string, by: string, now: number = Date.now()): HubArrivalView {
+    const hub = this.mdps.working(mdpId);
+    const a = this.hubArrival(mdpId, arrivalId);
+    if (a.state === 'missed') return this.viewOf(a, now);
+    if (a.state === 'withdrawn') throw new GlosError('INVALID_STATE', closedWhy(a));
+    if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'It was taken in at the door: scan what came, then finish it');
+    const today = clockAt(now, this.clockOf(hub, now) ?? 'UTC').day;
+    if (a.expectedOn >= today) throw new GlosError('INVALID_STATE', `It is due ${a.expectedOn === today ? 'today' : `on ${a.expectedOn}`}: say it did not come once its day is over`);
+    a.state = 'missed';
+    a.missed = { at: new Date(now).toISOString(), by };
+    this.arrivals.set(a.arrivalId, a);
+    void this.tellStoreMissed(a, hub);
+    this.tellStoreSystem(a, hub, 'hub_arrival.missed');
     return this.viewOf(a, now);
   }
 
@@ -272,6 +294,7 @@ export class HubArrivalService {
     a.finished = { at: new Date(now).toISOString(), by, missing };
     this.arrivals.set(a.arrivalId, a);
     void this.tellStore(a, hub, missing);
+    this.tellStoreSystem(a, hub, 'hub_arrival.received');
   }
 
   /** The store's bell: all of it in at the hub, or what was not on it — still with the store, to bring next time. */
@@ -285,14 +308,76 @@ export class HubArrivalService {
     }
     const what = a.reference ?? unitsInWords(a.units.kind, a.units.count);
     const took = a.scanned.length;
-    const title = missing.length ? `${hub.name} took in ${parcelsInWords(took)} of ${a.parcelIds.length}` : `${hub.name} took in all ${parcelsInWords(took)}`;
+    const title = missing.length ? `${hub.name} took in ${parcelsInWords(took)} of ${a.parcelIds.length}` : took === 1 ? `${hub.name} took in your parcel` : `${hub.name} took in all ${parcelsInWords(took)}`;
     const body = missing.length
       ? `${what}: ${parcelsInWords(missing.length)} booked on it ${missing.length === 1 ? 'was' : 'were'} not there (${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', …' : ''}). ${missing.length === 1 ? 'It is' : 'They are'} still with you: book ${missing.length === 1 ? 'it' : 'them'} on your next arrival.`
       : `${what}: every parcel booked on it is at the hub and on its way to its sort.`;
+    // What the hub saw at its door goes to the store, as a receiver's findings go to the sender (D9).
+    const seen = a.received?.note ? ` At the door: “${a.received.note}”` : '';
     try {
-      await this.notifications.notify(did, { kind: 'hub_arrival', title, body, link: '/vendor/', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
+      await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}`, link: '/vendor/', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
     } catch (err) {
       this.logger.warn(`hub arrival notice failed for ${a.arrivalId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** The store's bell: the hub says the arrival did not come — its parcels are still the store's, to book again. */
+  private async tellStoreMissed(a: HubArrival, hub: Mdp): Promise<void> {
+    if (!this.notifications) return;
+    let did: string;
+    try {
+      did = this.vendors.get(a.vendorId).did;
+    } catch {
+      return;
+    }
+    const what = a.reference ?? unitsInWords(a.units.kind, a.units.count);
+    const n = a.parcelIds.length;
+    try {
+      await this.notifications.notify(did, {
+        kind: 'hub_arrival',
+        title: `${hub.name}: your arrival did not come`,
+        body: `${what}, booked for ${a.expectedOn}: ${hub.name} says nothing came. ${n === 1 ? 'Its parcel is' : `Its ${parcelsInWords(n)} are`} still with you: book ${n === 1 ? 'it' : 'them'} on a new arrival.`,
+        link: '/vendor/',
+        tag: `hub-arrival:${a.arrivalId}`,
+        data: { arrivalId: a.arrivalId, mdpId: a.mdpId },
+      });
+    } catch (err) {
+      this.logger.warn(`hub arrival notice failed for ${a.arrivalId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * THE STORE'S OWN SYSTEM hears how an arrival ended, as it hears a parcel's milestones — where the store gave an address
+   * for it (VendorService.notify): which parcels the hub took in and which were not there, each with the store's own
+   * order number, and what the hub saw at its door; or that it did not come. A store's system that booked the arrival
+   * over the API learns the end of it the same way its people do in the bell.
+   */
+  private tellStoreSystem(a: HubArrival, hub: Mdp, event: 'hub_arrival.received' | 'hub_arrival.missed'): void {
+    const order = (parcelId: string) => {
+      try {
+        const p = this.parcels.get(parcelId);
+        return { parcelId, ...(p.externalOrderId ? { externalOrderId: p.externalOrderId } : {}) };
+      } catch {
+        return { parcelId };
+      }
+    };
+    try {
+      this.vendors.notify(a.vendorId, event, {
+        arrivalId: a.arrivalId,
+        hub: { mdpId: hub.mdpId, name: hub.name },
+        expectedOn: a.expectedOn,
+        ...(a.reference ? { reference: a.reference } : {}),
+        units: { kind: a.units.kind, count: a.units.count },
+        ...(event === 'hub_arrival.received'
+          ? {
+              takenIn: a.scanned.map(order),
+              missing: (a.finished?.missing ?? []).map(order),
+              ...(a.received ? { atTheDoor: { units: a.received.units, ...(a.received.note ? { note: a.received.note } : {}) } } : {}),
+            }
+          : { parcels: a.parcelIds.map(order) }),
+      });
+    } catch (err) {
+      this.logger.warn(`hub arrival message to the store's system failed for ${a.arrivalId}: ${(err as Error).message}`);
     }
   }
 
@@ -396,6 +481,7 @@ export class HubArrivalService {
       scannedCount: a.scanned.length,
       ...(a.finished ? { finished: a.finished } : {}),
       ...(a.withdrawn ? { withdrawn: a.withdrawn } : {}),
+      ...(a.missed ? { missed: a.missed } : {}),
       // On the hub's own clock (D10): due today there, or its day gone with nothing taken in at the door.
       ...(open ? { today: a.expectedOn === today, late: a.state === 'expected' && a.expectedOn < today } : {}),
     };
@@ -442,7 +528,14 @@ function isOpen(a: HubArrival): boolean {
 }
 
 function doneAt(a: HubArrival): string {
-  return a.finished?.at ?? a.withdrawn?.at ?? a.received?.at ?? a.createdAt;
+  return a.finished?.at ?? a.withdrawn?.at ?? a.missed?.at ?? a.received?.at ?? a.createdAt;
+}
+
+/** Why an arrival is closed to the floor, in words the hub can act on. */
+function closedWhy(a: HubArrival): string {
+  if (a.state === 'withdrawn') return 'The store withdrew it: it is not coming';
+  if (a.state === 'missed') return 'It was said not to have come: the store books its parcels on a new arrival';
+  return 'Scanning of it is finished';
 }
 
 /** The weekday key of a day (YYYY-MM-DD): mon … sun. */

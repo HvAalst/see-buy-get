@@ -233,7 +233,7 @@ describe('the people at a shop’s counter, over the wire', () => {
         // a hub's floor, worked by its own people (the ISO 28000 check: "a hub's own people by name")
         'POST sbg/mdps/:id/drop-bag', 'POST sbg/mdps/:id/sort', 'POST sbg/mdps/:id/totes', 'GET sbg/totes', 'POST sbg/mdps/:id/parcels/:parcelId/tamper',
         // reading B — a store's parcels handed in at the hub's door in bulk: what is coming, counted, scanned off, finished
-        'GET sbg/mdps/:id/arrivals', 'POST sbg/mdps/:id/arrivals/:arrivalId/receive', 'POST sbg/mdps/:id/arrivals/:arrivalId/scan', 'POST sbg/mdps/:id/arrivals/:arrivalId/finish',
+        'GET sbg/mdps/:id/arrivals', 'POST sbg/mdps/:id/arrivals/:arrivalId/receive', 'POST sbg/mdps/:id/arrivals/:arrivalId/scan', 'POST sbg/mdps/:id/arrivals/:arrivalId/finish', 'POST sbg/mdps/:id/arrivals/:arrivalId/missed',
         // photographs, a parcel's damage report, a word with the receiver, the shop's inbox
         'POST sbg/media//', 'GET sbg/media/:id',
         'GET sbg/parcels/:id/damage-report', 'GET sbg/parcels/:id/damage-report/file', 'GET sbg/parcels/:id/damage-report/links', 'POST sbg/parcels/:id/damage-report/links',

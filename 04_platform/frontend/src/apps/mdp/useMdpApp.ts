@@ -5,7 +5,8 @@ import type { IconName } from '../../shared/ui/Icon';
 import { signal } from '../../shared/feedback';
 import { t } from '../../shared/i18n';
 import { clearDid, createMdpClient, mdpConfig, purgeMdpTokens, readDid, readEmail, saveDid, saveEmail } from './api';
-import { addToQueue, dropFromQueue, findMyHub, money, unsortedAt } from './logic';
+import { addToQueue, dropFromQueue, findMyHub, floorOpen, money, unsortedAt } from './logic';
+import { onIt, replaceArrival, unitsLine, type HubArrival, type HubArrivalScan, type HubArrivalsView, type HubBulk } from './arrivals';
 import { downscaleImage } from '../../shared/media';
 import { holdPhoto } from '../../shared/heldPhotos';
 import { errorSentence } from '../../shared/ui';
@@ -17,7 +18,7 @@ import { peopleApi } from '../agent/people';
 /** Where this device keeps who is working the hub's floor: the tab's, like the session. */
 export const HUB_STAFF_KEY = 'glos-mdp-staff';
 
-export type Screen = 'home' | 'drop' | 'sort' | 'load' | 'newtote' | 'rates';
+export type Screen = 'home' | 'drop' | 'sort' | 'load' | 'newtote' | 'rates' | 'arrivals' | 'arrival';
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 
 export interface Toast {
@@ -49,7 +50,13 @@ export interface MdpState {
   deviceAsk: (DeviceAsk & { email: string }) | null;
   refreshing: boolean;
   stale: boolean;
-  form: { dropCode: string; sortId: string; loadCode: string; badge: string };
+  form: { dropCode: string; sortId: string; loadCode: string; badge: string; arrivalCode: string };
+  /** Reading B — whether this hub takes stores' parcels in bulk, and what is coming to it. Null until read. */
+  arrivals: HubArrivalsView | null;
+  /** The arrival open on the floor. */
+  arrivalId: string | null;
+  /** The last parcel scanned in off it: which, where it goes, and whether it had been scanned in before. */
+  arrivalScan: { arrivalId: string; parcelId: string; destination: string; already: boolean } | null;
   /** Round 35 — a parcel found cut or opened, being reported: which, its photograph, what is seen. `null` when closed. */
   tamper: { parcelId: string; photoRef: string; note: string } | null;
   /** Round 36 — the bag scanned to drop, looked at before it is opened: how it was closed, held; a seal read that did not match. */
@@ -58,7 +65,7 @@ export interface MdpState {
   staff: StaffAtCounter | null;
 }
 
-const EMPTY_FORM = { dropCode: '', sortId: '', loadCode: '', badge: '' };
+const EMPTY_FORM = { dropCode: '', sortId: '', loadCode: '', badge: '', arrivalCode: '' };
 
 const INITIAL: MdpState = {
   phase: 'boot',
@@ -78,6 +85,9 @@ const INITIAL: MdpState = {
   refreshing: false,
   stale: false,
   form: { ...EMPTY_FORM },
+  arrivals: null,
+  arrivalId: null,
+  arrivalScan: null,
   tamper: null,
   staff: null,
   drop: {},
@@ -184,7 +194,12 @@ export function useMdpApp() {
         return;
       }
 
-      const [totesR, parcelsR] = await Promise.all([client.api.totesAt(hub.mdpId), client.api.parcelsAtMdp()]);
+      const [totesR, parcelsR, arrivalsR] = await Promise.all([
+        client.api.totesAt(hub.mdpId),
+        client.api.parcelsAtMdp(),
+        // Reading B — what stores bring in bulk. Read where the floor is open: a hub not yet approved takes nothing in.
+        floorOpen(hub) ? client.api.arrivals(hub.mdpId) : Promise.resolve(null),
+      ]);
       if (superseded()) return;
       if (totesR.error) {
         setState((s) => ({ ...s, hub, phase: 'ready' }));
@@ -202,6 +217,7 @@ export function useMdpApp() {
         hub,
         totes,
         inbound: inbound ?? s.inbound,
+        arrivals: arrivalsR && !arrivalsR.error ? (narrow<HubArrivalsView>(arrivalsR.data) ?? s.arrivals) : s.arrivals,
         queue: inbound ? addToQueue(s.queue, unsortedAt(inbound, hub.mdpId).map((p) => p.parcelId)) : s.queue,
         error: null,
         stale: false,
@@ -210,6 +226,8 @@ export function useMdpApp() {
 
       // Parcels soft-fail (totes alone still run the floor) — but say what is missing.
       if (parcelsR.error) fail(parcelsR.error);
+      // What is coming in, likewise — said where it is being looked at.
+      else if (arrivalsR?.error && (stateRef.current.screen === 'arrivals' || stateRef.current.screen === 'arrival')) fail(arrivalsR.error);
     } finally {
       refreshesRunning.current -= 1;
     }
@@ -404,7 +422,7 @@ export function useMdpApp() {
       setState((s) => ({ ...s, screen, error: null, lastTote: screen === 'newtote' ? null : s.lastTote }));
       if (screen === 'rates') void loadRates();
       // Fresh bag/parcel truth for the floor screens costs one round trip.
-      if (screen === 'home' || screen === 'load' || screen === 'sort') void refresh();
+      if (screen === 'home' || screen === 'load' || screen === 'sort' || screen === 'arrivals') void refresh();
     },
     [loadRates, refresh],
   );
@@ -692,6 +710,140 @@ export function useMdpApp() {
     [client, run, fail, pushToast, refresh, loadRates],
   );
 
+  /* ------------------------------------------------------------ coming in -- */
+
+  /** Reading B — an arrival opened on the floor, or closed back to the list. */
+  const openArrival = useCallback((arrivalId: string | null) => {
+    setState((s) => ({ ...s, screen: arrivalId ? 'arrival' : 'arrivals', arrivalId, arrivalScan: null, error: null, form: { ...s.form, arrivalCode: '' } }));
+  }, []);
+
+  /** The open arrival's id and the hub, or nothing to act on. */
+  const arrivalAt = () => {
+    const hub = stateRef.current.hub;
+    const id = stateRef.current.arrivalId;
+    return hub && id ? { mdpId: hub.mdpId, id } : null;
+  };
+
+  /** At the door: the units that came, counted, and a line of the hub's words. Each parcel is scanned in after. */
+  const receiveArrival = useCallback(
+    async (units: number, note: string) => {
+      const at = arrivalAt();
+      if (!client || !at) return;
+      await run('arrival-receive', async () => {
+        const r = await client.api.receiveArrival(at.mdpId, at.id, { units, ...(note.trim() ? { note: note.trim() } : {}) });
+        if (r.error) {
+          signal('error');
+          return fail(r.error);
+        }
+        signal('ok');
+        const a = narrow<HubArrival>(r.data);
+        if (a) setState((s) => ({ ...s, arrivals: replaceArrival(s.arrivals, a) }));
+        pushToast({ tone: 'ok', icon: 'truck', title: t('mdp.toast.arrivalIn', { units: a ? unitsLine(a.unitKind, units, t) : String(units) }), detail: t('mdp.toast.arrivalInDetail') });
+      });
+    },
+    [client, run, fail, pushToast],
+  );
+
+  /**
+   * One parcel scanned in off the units, by its label — our QR, its tracking key, or its own barcode (the box finds the
+   * parcel by it). From that scan it is the hub's: it joins the parcels waiting for their sort. The last one ends it.
+   */
+  const scanArrival = useCallback(
+    async (override?: string) => {
+      const at = arrivalAt();
+      const code = (override ?? stateRef.current.form.arrivalCode).trim().toUpperCase();
+      if (!client || !at || !code) return;
+      await run('arrival-scan', async () => {
+        const r = await client.api.scanArrival(at.mdpId, at.id, code);
+        if (r.error) {
+          signal('error');
+          setState((s) => ({ ...s, arrivalScan: null }));
+          return fail(r.error);
+        }
+        const v = narrow<HubArrivalScan>(r.data);
+        if (!v) return;
+        signal(v.already ? 'warn' : 'ok');
+        setState((s) => ({
+          ...s,
+          arrivals: replaceArrival(s.arrivals, v.arrival),
+          arrivalScan: { arrivalId: at.id, parcelId: v.parcelId, destination: v.destination, already: v.already },
+          form: { ...s.form, arrivalCode: '' },
+          queue: v.already ? s.queue : addToQueue(s.queue, [v.parcelId]),
+        }));
+        if (v.arrival.state === 'received') {
+          pushToast({ tone: 'ok', icon: 'check', title: t('mdp.toast.arrivalAllIn', { n: v.arrival.scannedCount }), detail: t('mdp.toast.arrivalAllInDetail') });
+          await refresh();
+        }
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /** Scanning finished by hand: what was booked and not scanned did not come — still the store's, which is told. */
+  const finishArrival = useCallback(async () => {
+    const at = arrivalAt();
+    if (!client || !at) return;
+    await run('arrival-finish', async () => {
+      const r = await client.api.finishArrival(at.mdpId, at.id);
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
+      const a = narrow<HubArrival>(r.data);
+      if (a) setState((s) => ({ ...s, arrivals: replaceArrival(s.arrivals, a) }));
+      const missing = a?.finished?.missing.length ?? 0;
+      pushToast({
+        tone: missing ? 'warn' : 'ok',
+        icon: 'truck',
+        title: t('mdp.toast.arrivalFinished', { done: a?.scannedCount ?? 0, all: a ? onIt(a).length : 0 }),
+        detail: t(missing ? 'mdp.toast.arrivalFinishedMissing' : 'mdp.toast.arrivalAllInDetail'),
+      });
+      await refresh();
+    });
+  }, [client, run, fail, pushToast, refresh]);
+
+  /** Its day is over on the hub's clock and nothing came: said, the store is told and books its parcels again. */
+  const missedArrival = useCallback(async () => {
+    const at = arrivalAt();
+    if (!client || !at) return;
+    await run('arrival-missed', async () => {
+      const r = await client.api.missedArrival(at.mdpId, at.id);
+      if (r.error) {
+        signal('error');
+        return fail(r.error);
+      }
+      signal('ok');
+      const a = narrow<HubArrival>(r.data);
+      if (a) setState((s) => ({ ...s, arrivals: replaceArrival(s.arrivals, a) }));
+      pushToast({ tone: 'ok', icon: 'check', title: t('mdp.toast.arrivalMissed'), detail: t('mdp.toast.arrivalMissedDetail') });
+    });
+  }, [client, run, fail, pushToast]);
+
+  /**
+   * The hub's word that it takes stores' parcels in bulk — its days and hours, its doors — or that it no longer does. Its
+   * owner's (the server refuses its people). Answers with the refusal, for the sheet to show where it was asked.
+   */
+  const setBulk = useCallback(
+    async (body: { open: boolean; hours?: Record<string, { open: string; close: string } | null> | null; doors?: number | null }): Promise<{ error: SbgError | null }> => {
+      const hub = stateRef.current.hub;
+      if (!client || !hub) return { error: null };
+      let error: SbgError | null = null;
+      await run('bulk', async () => {
+        const r = await client.api.setBulk(hub.mdpId, body);
+        if (r.error) {
+          error = r.error;
+          return;
+        }
+        const bulk = narrow<{ bulk?: HubBulk }>(r.data)?.bulk;
+        setState((s) => ({ ...s, arrivals: { arrivals: s.arrivals?.arrivals ?? [], ...(bulk ? { bulk } : {}) } }));
+        pushToast({ tone: 'ok', icon: 'check', title: t(bulk ? 'mdp.bulk.saved' : 'mdp.bulk.stopped') });
+      });
+      return { error };
+    },
+    [client, run, pushToast],
+  );
+
   /** Round 40 — the hub's own phones and browsers, in Settings: read and forgotten as the shop's are. */
   const hubDevices = useMemo(
     () => (client ? shopDevicesApi((path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'hub') : undefined),
@@ -733,6 +885,12 @@ export function useMdpApp() {
       submitNewTote,
       sendPapers,
       setPrice,
+      openArrival,
+      receiveArrival,
+      scanArrival,
+      finishArrival,
+      missedArrival,
+      setBulk,
       pushToast,
       dismissToast,
       readEmail,

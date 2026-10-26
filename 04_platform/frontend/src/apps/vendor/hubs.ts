@@ -39,7 +39,7 @@ export interface HubArrivalParcel {
   withdrawn?: boolean;
 }
 
-export type HubArrivalState = 'expected' | 'receiving' | 'received' | 'withdrawn';
+export type HubArrivalState = 'expected' | 'receiving' | 'received' | 'withdrawn' | 'missed';
 
 export interface HubArrivalView {
   arrivalId: string;
@@ -59,6 +59,8 @@ export interface HubArrivalView {
   scannedCount: number;
   finished?: { at: string; by: string; missing: string[] };
   withdrawn?: { at: string; by: string };
+  /** Its day went by and nothing came: the hub said so. Its parcels are free to book again. */
+  missed?: { at: string; by: string };
   today?: boolean;
   late?: boolean;
 }
@@ -141,10 +143,11 @@ export function bookableDays(hours: SiteWeek | undefined, today: string, n = 14)
 }
 
 /** Where an arrival stands for the store, in one word the list can colour. */
-export type ArrivalWord = 'expected' | 'late' | 'receiving' | 'all_in' | 'some_missing' | 'withdrawn';
+export type ArrivalWord = 'expected' | 'late' | 'receiving' | 'all_in' | 'some_missing' | 'withdrawn' | 'missed';
 
 export function arrivalWord(a: Pick<HubArrivalView, 'state' | 'late' | 'finished'>): ArrivalWord {
   if (a.state === 'withdrawn') return 'withdrawn';
+  if (a.state === 'missed') return 'missed';
   if (a.state === 'receiving') return 'receiving';
   if (a.state === 'received') return a.finished?.missing.length ? 'some_missing' : 'all_in';
   return a.late ? 'late' : 'expected';

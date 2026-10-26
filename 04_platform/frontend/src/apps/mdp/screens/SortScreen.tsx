@@ -1,8 +1,9 @@
-import { Button, Card, ErrorNote, Explainer, PhotoField, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, ReadAloud, ScanField } from '../../../shared/ui';
 import { heldLine } from '../../../shared/tamper';
 import { useT } from '../../../shared/i18n';
 import { bagLine, fillPercent, fillingBags, placeLine, sortSummary, swatchIndex } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
+import { TamperSheet } from './TamperSheet';
 
 export interface SortScreenProps {
   state: MdpState;
@@ -22,7 +23,6 @@ export function SortScreen({ state, actions }: SortScreenProps) {
   const held = state.inbound.filter((p) => p.held && p.atMdpId === state.hub?.mdpId);
   const heldIds = new Set(held.map((p) => p.parcelId));
   const sortable = state.queue.filter((id) => !heldIds.has(id));
-  const tamper = state.tamper;
 
   return (
     <div class="scr">
@@ -110,37 +110,7 @@ export function SortScreen({ state, actions }: SortScreenProps) {
         <ReadAloud text={() => sortSummary(state.queue.length, state.last, t)} label={t('mdp.readAloud')} />
       </div>
 
-      <Sheet open={tamper !== null} onClose={() => actions.openTamper(null)} title={t('mdp.tamper.title')}>
-        {tamper ? (
-          <>
-            <p class="t-body">{t('mdp.tamper.body')}</p>
-            <ScanField
-              id="tamper-id"
-              label={t('mdp.tamper.parcel')}
-              value={tamper.parcelId}
-              onValue={(v) => actions.setTamper({ parcelId: v })}
-              expect="parcel"
-              placeholder={t('mdp.sort.scanSticker')}
-              upper
-            />
-            <div class="field" style="margin-top:12px">
-              <span class="field__label">{t('mdp.tamper.photo')}</span>
-              <PhotoField id="tamper-photo" value={tamper.photoRef} upload={(f) => actions.uploadPhoto(f)} onCapture={(ref) => actions.setTamper({ photoRef: ref })} label={t('mdp.tamper.photo')} disabled={state.busy === 'tamper'} />
-            </div>
-            <div class="field">
-              <label class="field__label" for="tamper-note">
-                {t('mdp.tamper.note')}
-              </label>
-              <textarea id="tamper-note" class="input" rows={2} maxLength={500} value={tamper.note} onInput={(e) => actions.setTamper({ note: e.currentTarget.value })} disabled={state.busy === 'tamper'} />
-            </div>
-            <Button chevron={false} busy={state.busy === 'tamper'} disabled={!tamper.parcelId.trim() || !tamper.photoRef} onClick={() => void actions.submitTamper()}>
-              {t('mdp.tamper.send')}
-            </Button>
-            <Button variant="link" onClick={() => actions.openTamper(null)}>
-              {t('mdp.tamper.cancel')}
-            </Button>
-          </>
-        ) : null}
-      </Sheet>    </div>
+      <TamperSheet state={state} actions={actions} />
+    </div>
   );
 }
