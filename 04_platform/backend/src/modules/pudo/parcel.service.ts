@@ -127,12 +127,12 @@ export function vendorOrderStatsOf(rows: Parcel[]): VendorOrderStats {
   return { total: rows.length, unpaid, active };
 }
 
-/** Products as a human string: "Ankara shirt ×2, Kitenge scarf". */
 /** Each stop's own fee as the parcel is sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */
 function stopFeesOf(quote: ShipmentQuote): NonNullable<Parcel['stopFees']> {
   return quote.nodes.map((n) => ({ type: n.type, id: n.id, fee: n.nativeFee, currency: n.currency }));
 }
 
+/** Products as a human string: "Ankara shirt ×2, Kitenge scarf". */
 function vendorProducts(p: Parcel): string {
   return (p.items ?? []).map((i) => (i.qty > 1 ? `${i.name} ×${i.qty}` : i.name)).join(', ');
 }

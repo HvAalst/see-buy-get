@@ -549,6 +549,20 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       expect(() => imports.releaseCustomsHold(one.importId, agentId, hold.holdId, '2026-09-13T08:00:00.000Z')).toThrow(/already recorded as released/);
     });
 
+    it('D13 — tells the receiver’s Coming in what customs did, as the agent recorded it: held since when, until the hold ends; let go, when', () => {
+      const one = appointed();
+      expect(imports.customsOnNote(one.code)).toEqual({ originCountry: one.originCountry, destCountry: one.destCountry, port: 'Djibouti' });
+      const hold = imports.recordCustomsHold(one.importId, agentId, { kind: 'physical_exam', at: '2026-09-10T08:00:00.000Z' }, 'Selam').customsHolds[0];
+      expect(imports.customsOnNote(one.code.toLowerCase())).toMatchObject({ held: { kind: 'physical_exam', since: '2026-09-10T08:00:00.000Z' } });
+      // The hold ended: no longer held.
+      imports.releaseCustomsHold(one.importId, agentId, hold.holdId, '2026-09-12T08:00:00.000Z');
+      expect(imports.customsOnNote(one.code)?.held).toBeUndefined();
+      imports.recordRelease(one.importId, agentId, 'Selam', Date.parse('2026-09-13T08:00:00.000Z'));
+      expect(imports.customsOnNote(one.code)).toMatchObject({ releasedAt: '2026-09-13T08:00:00.000Z' });
+      // A code that is no consignment says nothing.
+      expect(imports.customsOnNote('ORD-7')).toBeNull();
+    });
+
     it('carries the holds into the agent’s record without touching one figure they control', () => {
       const one = appointed();
       imports.publishRequired(one.importId, agentId, [{ label: 'Invoice' }], 'Selam');
