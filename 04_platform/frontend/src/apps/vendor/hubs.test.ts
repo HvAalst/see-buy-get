@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { arrivalWord, bookableDays, bookingReady, hoursLine, hubOriginOf, HUB_ORIGIN, receivingHours, todayAt } from './hubs';
+import { arrivalWord, bookableDays, bookingReady, hoursLine, hubOriginOf, HUB_ORIGIN, minutesAt, receivingHours, todayAt } from './hubs';
 
 const day = { open: '07:00', close: '15:00' };
 
@@ -36,11 +36,25 @@ describe('a store handing its parcels in at a hub, in bulk (reading B)', () => {
 
   it('offers only the days the hub receives, from today on its clock — every day where it keeps no hours', () => {
     // Fri 30 Oct 2026: a hub open Mon–Fri offers Fri, then Mon and Tue — never the weekend.
-    expect(bookableDays({ mon: day, tue: day, wed: day, thu: day, fri: day }, '2026-10-30', 5)).toEqual(['2026-10-30', '2026-11-02', '2026-11-03']);
-    expect(bookableDays({ sat: day }, '2026-10-30', 9)).toEqual(['2026-10-31', '2026-11-07']);
-    expect(bookableDays(undefined, '2026-10-30', 3)).toEqual(['2026-10-30', '2026-10-31', '2026-11-01']);
+    expect(bookableDays({ mon: day, tue: day, wed: day, thu: day, fri: day }, '2026-10-30', { n: 5 })).toEqual(['2026-10-30', '2026-11-02', '2026-11-03']);
+    expect(bookableDays({ sat: day }, '2026-10-30', { n: 9 })).toEqual(['2026-10-31', '2026-11-07']);
+    expect(bookableDays(undefined, '2026-10-30', { n: 3 })).toEqual(['2026-10-30', '2026-10-31', '2026-11-01']);
     // Across the end of a month and a year, by the calendar, not by adding hours.
-    expect(bookableDays(undefined, '2026-12-31', 2)).toEqual(['2026-12-31', '2027-01-01']);
+    expect(bookableDays(undefined, '2026-12-31', { n: 2 })).toEqual(['2026-12-31', '2027-01-01']);
+  });
+
+  it('offers today only while the hub still receives, on its own clock', () => {
+    // Fri 30 Oct, the hub receiving 07:00–15:00: at 14:59 today is offered; at 15:00 it is not, Monday is next.
+    const week = { mon: day, fri: day };
+    expect(bookableDays(week, '2026-10-30', { n: 4, nowMinutes: 14 * 60 + 59 })).toEqual(['2026-10-30', '2026-11-02']);
+    expect(bookableDays(week, '2026-10-30', { n: 4, nowMinutes: 15 * 60 })).toEqual(['2026-11-02']);
+    // Where it keeps no hours, it receives whenever it is working: today stays.
+    expect(bookableDays(undefined, '2026-10-30', { n: 1, nowMinutes: 23 * 60 })).toEqual(['2026-10-30']);
+    // 22:30 in London is 01:30 the next day in Nairobi.
+    const at = Date.parse('2026-10-26T22:30:00Z');
+    expect(minutesAt('Africa/Nairobi', at)).toBe(90);
+    expect(minutesAt('Europe/London', at)).toBe(22 * 60 + 30);
+    expect(minutesAt('Not/AZone', at)).toBeGreaterThanOrEqual(0);
   });
 
   it('puts an arrival in one word: coming, late, being taken in, all in, some not there, withdrawn, did not come', () => {

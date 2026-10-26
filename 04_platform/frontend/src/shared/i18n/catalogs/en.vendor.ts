@@ -664,7 +664,7 @@ export const enVendor = {
   // Reading B — a store's parcels handed in at a hub, in bulk (the user, 2026-10-25: "Yes, A then B").
   'vendor.mint.hubsTitle': 'Or hand it in at a hub, with your other parcels',
   'vendor.mint.hubsLede': 'For many parcels at once: bring them to the hub on a pallet or in cartons, on a day it receives. No shop and no road before the hub, so it costs less.',
-  'vendor.mint.hubHours': 'Receives {hours}',
+  'vendor.mint.hubHours': 'Receives: {hours}',
   'vendor.mint.hubAnyHour': 'Receives whenever it is working',
   'vendor.mint.handInHere': 'Hand in here',
   'vendor.mint.handInTitle': 'Hand it in at {hub}, with your other parcels',

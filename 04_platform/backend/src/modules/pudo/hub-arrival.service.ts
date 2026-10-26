@@ -163,8 +163,13 @@ export class HubArrivalService {
     if (input.expectedOn > dayAfter(today, HUB_ARRIVAL_DAYS_AHEAD)) throw new GlosError('INVALID_INPUT', `Book it at most ${HUB_ARRIVAL_DAYS_AHEAD} days ahead`, { field: 'expectedOn' });
     // The days it takes parcels in bulk — or, where it set none, the days it is open.
     const hours = this.bulk.get(hub.mdpId)?.hours ?? this.contacts?.openingHoursOf(hub.mdpId);
-    if (hours && !openOn(hours, input.expectedOn)) {
+    const receives = hours ? openOn(hours, input.expectedOn) : null;
+    if (hours && !receives) {
       throw new GlosError('INVALID_INPUT', `${hub.name} does not receive on a ${WEEKDAY_NAMES[weekdayOf(input.expectedOn)]}: choose a day it does`, { field: 'expectedOn' });
+    }
+    // Today only while it still receives: once it has closed on its own clock, nothing booked for today comes today.
+    if (receives && input.expectedOn === today && clockAt(now, zone ?? 'UTC').minutes >= receives.toMin) {
+      throw new GlosError('INVALID_INPUT', `${hub.name} stopped receiving at ${hhmm(receives.toMin)} today, on its clock: choose a day ahead`, { field: 'expectedOn' });
     }
     const reference = input.reference?.trim();
     const bringer = input.bringer?.trim();
@@ -223,7 +228,8 @@ export class HubArrivalService {
     this.mdps.require(mdpId);
     const here = [...this.arrivals.values()].filter((a) => a.mdpId === mdpId && (isOpen(a) || now - Date.parse(doneAt(a)) <= HUB_DONE_SHOWN_MS));
     const bulk = this.bulkOf(mdpId, now);
-    return { ...(bulk ? { bulk } : {}), arrivals: this.ordered(here).map((a) => this.viewOf(a, now)) };
+    const openingHours = this.contacts?.openingHoursOf(mdpId);
+    return { ...(bulk ? { bulk } : {}), ...(openingHours ? { openingHours } : {}), arrivals: this.ordered(here).map((a) => this.viewOf(a, now)) };
   }
 
   /** AT THE HUB'S DOOR: the units that came, counted, by whom, with a line of their words. Then each parcel is scanned off. */
@@ -562,6 +568,9 @@ function closedWhy(a: HubArrival): string {
 }
 
 /** The weekday key of a day (YYYY-MM-DD): mon … sun. */
+/** Minutes past midnight as a clock says them: 1080 → "18:00". */
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
 function weekdayOf(day: string): string {
   return WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()];
 }

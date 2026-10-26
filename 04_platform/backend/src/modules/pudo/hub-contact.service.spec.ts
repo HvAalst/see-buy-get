@@ -21,6 +21,9 @@ describe('a hub’s opening hours and how to reach it', () => {
     expect(openNowOf(week, 'Africa/Nairobi', at('2026-10-26T03:00:00Z'))).toEqual({ open: false, opensDay: 'mon', opensAt: '07:00', opensToday: true });
     // Sat 31 Oct, 10:00 UTC is 13:00 there: closed since noon, and Sunday is closed, so Monday 07:00.
     expect(openNowOf(week, 'Africa/Nairobi', at('2026-10-31T10:00:00Z'))).toEqual({ open: false, opensDay: 'mon', opensAt: '07:00', opensToday: false });
+    // On the minute: open at 07:00 sharp; closed at 18:00 sharp — a driver arriving then finds the gate shut.
+    expect(openNowOf(week, 'Africa/Nairobi', at('2026-10-26T04:00:00Z'))).toEqual({ open: true, until: '18:00' });
+    expect(openNowOf(week, 'Africa/Nairobi', at('2026-10-26T15:00:00Z'))).toEqual({ open: false, opensDay: 'tue', opensAt: '07:00', opensToday: false });
   });
 
   it('says nothing it cannot know: no hours kept, or no single clock — and never open on a week with no open day', () => {

@@ -71,6 +71,27 @@ describe('a hub’s arrivals, on the hub’s own clock', () => {
     expect(() => svc.setBulk('mdp_1', { open: true, hours: { sat: { open: '08:00', close: '14:00' } } }, 'Owner', NOW)).toThrow(/The hub is not open then \(Saturday 08:00–14:00/);
   });
 
+  it('books today only while the hub still receives, on its own clock — not once it has closed', () => {
+    const svc = service();
+    // Tue 27 Oct in Nairobi: receiving 01:00–02:00, and it is 01:30 there.
+    svc.setBulk('mdp_1', { open: true, hours: { tue: { open: '01:00', close: '02:00' }, wed: { open: '01:00', close: '02:00' } } }, 'Owner', NOW);
+    parcel('PUD-LATE');
+    expect(book(svc, 'PUD-LATE', '2026-10-27')).toMatchObject({ state: 'expected', today: true });
+    const later = new HubArrivalService(
+      { working: () => hub, require: () => hub, countryOf: () => 'KE' } as unknown as MdpService,
+      { get: (id: string) => parcels.get(id), list: () => [...parcels.values()] } as unknown as ParcelService,
+      { get: () => ({ vendorId: 'v_1', name: 'Bulk Store', did: 'did:store:1' }) } as unknown as VendorService,
+      {} as RoutingService,
+      { get: () => ({ shopName: 'Riverside' }) } as unknown as AgentService,
+    );
+    // Half an hour later it is 02:00 there: it has stopped receiving for today. Tomorrow is still open to book.
+    const AFTER = NOW + 30 * 60_000;
+    later.setBulk('mdp_1', { open: true, hours: { tue: { open: '01:00', close: '02:00' }, wed: { open: '01:00', close: '02:00' } } }, 'Owner', AFTER);
+    parcel('PUD-LATER');
+    expect(() => later.book('v_1', { mdpId: 'mdp_1', parcelIds: ['PUD-LATER'], unitKind: 'pallet', units: 1, expectedOn: '2026-10-27' }, 'Bulk Store', AFTER)).toThrow(/Nairobi Hub stopped receiving at 02:00 today, on its clock: choose a day ahead/);
+    expect(later.book('v_1', { mdpId: 'mdp_1', parcelIds: ['PUD-LATER'], unitKind: 'pallet', units: 1, expectedOn: '2026-10-28' }, 'Bulk Store', AFTER)).toMatchObject({ state: 'expected', today: false });
+  });
+
   it('reads due and late by the hub’s day, and says its clock with the hub’s word', () => {
     const svc = service();
     expect(svc.setBulk('mdp_1', { open: true }, 'Owner', NOW)).toMatchObject({ zone: 'Africa/Nairobi', zoneName: expect.stringMatching(/East Africa/) });

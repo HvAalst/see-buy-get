@@ -287,7 +287,7 @@ export const enMdp = {
   // When the hub is open and how to reach it (HubReachCard.tsx; the user, 2026-10-26).
   'mdp.reach.title': 'Opening hours and how to reach you',
   'mdp.reach.lede': 'Drivers bringing or collecting bags and stores bringing parcels see this in their apps: when you are open, who to ask for, where to come in, and a button that calls you.',
-  'mdp.reach.hours': 'Open {hours}',
+  'mdp.reach.hours': 'Hours: {hours}',
   'mdp.reach.noHours': 'No opening hours yet: drivers and stores are not told when you are open.',
   'mdp.reach.hasPhone': 'Drivers and stores can call you with one tap.',
   'mdp.reach.noPhone': 'No number yet: nobody can call you from the app.',
@@ -318,7 +318,7 @@ export const enMdp = {
   'mdp.reach.errCloses': 'On a day you are open, closing comes after opening.',
   'mdp.bulk.title': 'Stores’ parcels in bulk',
   'mdp.bulk.taking': 'Taking them',
-  'mdp.bulk.hours': 'Receives {hours}',
+  'mdp.bulk.hours': 'Receives: {hours}',
   'mdp.bulk.anyHour': 'Receives whenever the hub is working',
   'mdp.bulk.doors': '{n, plural, one {# door} other {# doors}} to unload at',
   'mdp.bulk.clock': 'On your clock: {zone}',

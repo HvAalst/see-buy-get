@@ -191,6 +191,8 @@ export class StoreHubArrivals {
 export class HubArrivals {
   /** Whether this hub takes stores' parcels in bulk now, and when. Absent: it does not. */
   @ApiPropertyOptional({ type: HubBulkView }) bulk?: HubBulkView;
+  /** When the hub is open, Sunday to Saturday (its own entry): the hours it takes parcels in bulk start from them. */
+  @ApiPropertyOptional({ type: SiteWeek }) openingHours?: SiteWeek;
   @ApiProperty({ type: [HubArrivalView] }) arrivals: HubArrivalView[];
 }
 

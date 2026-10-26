@@ -1,8 +1,8 @@
 import { useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
-import { Button, Card, ErrorNote, errorSentence, Explainer, Icon, Note, Pill, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Explainer, Icon, Note, Pill, refusalSentence, Sheet } from '../../../shared/ui';
 import { hoursLine, weekForm, type WeekForm } from '../../fleet/sites';
-import { arrivalGroups, bulkBody, hubArrivalWord, loadLine, onIt, WORD_TONE, type HubArrival, type HubBulk } from '../arrivals';
+import { arrivalGroups, bulkBody, hubArrivalWord, loadLine, onIt, WORD_TONE, type HubArrival, type HubArrivalsView, type HubBulk } from '../arrivals';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { WeekRows } from './WeekRows';
 
@@ -38,7 +38,7 @@ export function ArrivalsScreen({ state, actions }: { state: MdpState; actions: M
         </>
       )}
 
-      {bulkOpen ? <BulkSheet bulk={view?.bulk} busy={state.busy === 'bulk'} onClose={() => setBulkOpen(false)} onSave={actions.setBulk} /> : null}
+      {bulkOpen ? <BulkSheet bulk={view?.bulk} opening={view?.openingHours} busy={state.busy === 'bulk'} onClose={() => setBulkOpen(false)} onSave={actions.setBulk} /> : null}
     </div>
   );
 }
@@ -126,10 +126,11 @@ function BulkCard({ bulk, staff, onEdit }: { bulk?: HubBulk; staff: boolean; onE
  * can unload at once. Checked as the server checks it before it is sent; the server's refusal is shown here, where it was
  * asked. Stopping asks first: stores can no longer book, and what they booked still comes.
  */
-function BulkSheet({ bulk, busy, onClose, onSave }: { bulk?: HubBulk; busy: boolean; onClose: () => void; onSave: MdpActions['setBulk'] }) {
+function BulkSheet({ bulk, opening, busy, onClose, onSave }: { bulk?: HubBulk; opening?: HubArrivalsView['openingHours']; busy: boolean; onClose: () => void; onSave: MdpActions['setBulk'] }) {
   const t = useT();
   const [keepsHours, setKeepsHours] = useState(bulk ? Boolean(bulk.hours) : true);
-  const [week, setWeek] = useState<WeekForm>(weekForm(bulk?.hours));
+  // Its own bulk hours; else the hours it is open — bulk hours stay inside them — before a week to start from.
+  const [week, setWeek] = useState<WeekForm>(weekForm(bulk?.hours ?? opening));
   const [doors, setDoors] = useState(bulk?.doors ? String(bulk.doors) : '');
   const [stopping, setStopping] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -139,14 +140,14 @@ function BulkSheet({ bulk, busy, onClose, onSave }: { bulk?: HubBulk; busy: bool
     if ('error' in made) return setProblem(t(made.error));
     setProblem(null);
     const r = await onSave(made.body);
-    if (r.error) return setProblem(errorSentence(r.error));
+    if (r.error) return setProblem(refusalSentence(r.error));
     onClose();
   };
 
   const stop = async () => {
     setProblem(null);
     const r = await onSave({ open: false });
-    if (r.error) return setProblem(errorSentence(r.error));
+    if (r.error) return setProblem(refusalSentence(r.error));
     onClose();
   };
 

@@ -145,12 +145,32 @@ export function todayAt(zone: string | undefined, now: number = Date.now()): str
   }
 }
 
-/** The days a store may book a hand-in: from today on the hub's clock, the next `n`, only those the hub receives. */
-export function bookableDays(hours: SiteWeek | undefined, today: string, n = 14): string[] {
+/** Minutes past midnight on a hub's clock — its own zone where it has one, else the reader's. */
+export function minutesAt(zone: string | undefined, now: number = Date.now()): number {
+  const parts = (timeZone?: string) => new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
+  let p: Intl.DateTimeFormatPart[];
+  try {
+    p = parts(zone);
+  } catch {
+    p = parts();
+  }
+  const n = (type: string) => Number(p.find((x) => x.type === type)?.value ?? 0);
+  return (n('hour') % 24) * 60 + n('minute');
+}
+
+/**
+ * The days a store may book a hand-in: from today on the hub's clock, the next `n`, only those the hub receives — and
+ * today only while it still receives: once it has closed on its own clock, nothing booked for today comes today. The
+ * server refuses it too (hub-arrival.service.ts).
+ */
+export function bookableDays(hours: SiteWeek | undefined, today: string, { n = 14, nowMinutes }: { n?: number; nowMinutes?: number } = {}): string[] {
   const out: string[] = [];
   for (let i = 0; i < n; i += 1) {
     const day = new Date(Date.parse(`${today}T12:00:00Z`) + i * 86_400_000).toISOString().slice(0, 10);
-    if (!hours || hours[weekdayOf(day)]) out.push(day);
+    const h = hours?.[weekdayOf(day)];
+    if (hours && !h) continue;
+    if (i === 0 && h && nowMinutes !== undefined && nowMinutes >= Number(h.close.slice(0, 2)) * 60 + Number(h.close.slice(3, 5))) continue;
+    out.push(day);
   }
   return out;
 }

@@ -4,7 +4,6 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { declared } from './declared';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
-import { HandleDirectory } from '../src/modules/pudo/handle-directory.service';
 import { ToteService } from '../src/modules/pudo/tote.service';
 
 /**
@@ -46,6 +45,9 @@ describe('a hub’s opening hours and how to reach it', () => {
     const day = { open: '07:00', close: '18:00' };
     const week = { sun: null, mon: day, tue: day, wed: day, thu: day, fri: day, sat: { open: '08:00', close: '12:00' } };
 
+    // ITS ADDRESS FROM THE FIRST TIME IT OPENS ITS CARD: the page its card links to is there already — nobody sweeps for it.
+    expect((await http().get(contact).set(asHub).expect(200)).body.handle).toMatch(/^ghala-hub/);
+
     // ITS OWN WORD: written by its owner — not staff, not another hub.
     expect((await http().put(contact).set(operator).send({ phone: '+254700000001' }).expect(403)).body.detail).toMatch(/A hub writes its own hours/);
     await http().put(contact).set(asOther).send({ phone: '+254700000001' }).expect(403);
@@ -59,7 +61,6 @@ describe('a hub’s opening hours and how to reach it', () => {
     await http().get(contact).set(asOther).expect(403);
 
     // ITS PUBLIC PAGE: its hours always; its number and gate only once it ticks that they go there.
-    app.get(HandleDirectory).ensure();
     const handle = (await http().get(contact).set(asHub).expect(200)).body.handle as string;
     expect(handle).toBeTruthy();
     const page = () => http().get(`/v1/sbg/profiles/${handle}`).expect(200);
@@ -73,6 +74,10 @@ describe('a hub’s opening hours and how to reach it', () => {
     expect((await page()).body.hub.phone).toBeUndefined();
 
     // BULK INSIDE OPENING HOURS: not on a day it is closed, not before it opens — and its hours cannot then shrink past them.
+    // Its Coming in carries the hours it is open, before it takes anything in bulk: the bulk sheet starts from them.
+    const comingIn = (await http().get(`/v1/sbg/mdps/${hub.mdpId}/arrivals`).set(asHub).expect(200)).body;
+    expect(comingIn.bulk).toBeUndefined();
+    expect(comingIn.openingHours).toMatchObject({ mon: day, sat: { open: '08:00', close: '12:00' } });
     const bulk = (body: Record<string, unknown>) => http().put(`/v1/sbg/mdps/${hub.mdpId}/bulk`).set(asHub).send({ open: true, ...body });
     expect((await bulk({ hours: { sun: { open: '09:00', close: '12:00' } } }).expect(400)).body.detail).toMatch(/The hub is not open then \(Sunday — the hub is closed then\)/);
     expect((await bulk({ hours: { mon: { open: '06:00', close: '12:00' } } }).expect(400)).body.detail).toMatch(/Monday 06:00–12:00/);

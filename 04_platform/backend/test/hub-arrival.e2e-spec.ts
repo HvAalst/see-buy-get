@@ -75,8 +75,9 @@ describe('reading B: a store hands its parcels in at a hub, in bulk', () => {
     const hubToken = bearer((await http().post('/v1/auth/token').send({ role: 'mdp', did: hub.did }).expect(201)).body.access_token);
     declared(app, 'hub', hub.did);
 
-    // THE HUB'S WORD: it takes stores' parcels in bulk, every day 06:00–18:00, at two doors. Its own, never staff's.
-    const everyDay = Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, { open: '06:00', close: '18:00' }]));
+    // THE HUB'S WORD: it takes stores' parcels in bulk, every day, at two doors. Its own, never staff's. Around the clock,
+    // so that today can be booked whenever this runs: today is offered only until the hub stops receiving on its clock.
+    const everyDay = Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d) => [d, { open: '00:00', close: '23:59' }]));
     expect((await http().put(`/v1/sbg/mdps/${hub.mdpId}/bulk`).set(operator).send({ open: true, hours: everyDay, doors: 2 }).expect(403)).body.detail).toMatch(/A hub says itself whether it takes parcels in bulk/);
     // Before it says so, a store cannot hand in there.
     const mint = (body: Record<string, unknown>) => http().post('/v1/sbg/inbound/orders').set(store).send({ vendorId: made.vendorId, destPudoDid: dest.did, buyerMobile: `+2547${digits()}1`, size: 'M', weightKg: 2, ...body });

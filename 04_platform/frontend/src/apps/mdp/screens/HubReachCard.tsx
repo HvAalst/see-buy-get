@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { createMdpApi, narrow, type SbgClient, type SbgError } from '../../../lib/sbg';
 import { openNowLine, type HubReachView } from '../../../shared/hubReach';
 import { useT } from '../../../shared/i18n';
-import { Button, Card, ErrorNote, errorSentence, Note, Pill, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Note, Pill, refusalSentence, Sheet } from '../../../shared/ui';
 import { hoursLine, weekForm, type SiteWeek, type WeekForm } from '../../fleet/sites';
 import { openingHoursProblem } from '../arrivals';
 import { WeekRows } from './WeekRows';
@@ -102,7 +102,7 @@ function ReachSheet({ view, onClose, save, onSaved }: { view: HubContactView; on
     setBusy(true);
     const r = await save({ openingHours: keepsHours ? week : null, phone, phoneAlt, askFor, gate, publish });
     setBusy(false);
-    if (r.error) return setProblem(errorSentence(r.error));
+    if (r.error) return setProblem(refusalSentence(r.error));
     onSaved(narrow<HubContactView>(r.data));
   };
 

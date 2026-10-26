@@ -34386,6 +34386,14 @@
               }
             ]
           },
+          "openingHours": {
+            "description": "When the hub is open, Sunday to Saturday (its own entry): the hours it takes parcels in bulk start from them.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SiteWeek"
+              }
+            ]
+          },
           "arrivals": {
             "type": "array",
             "items": {

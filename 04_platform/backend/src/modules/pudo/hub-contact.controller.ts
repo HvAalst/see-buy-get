@@ -5,6 +5,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { weekOf } from './fleet-site.service';
+import { HandleDirectory } from './handle-directory.service';
 import { HubArrivalService } from './hub-arrival.service';
 import { HubContactService, outsideOf } from './hub-contact.service';
 import { HubContactView, SetHubContactDto } from './hub-contact.types';
@@ -21,6 +22,8 @@ export class HubContactController {
     private readonly contacts: HubContactService,
     private readonly mdps: MdpService,
     @Optional() private readonly arrivals?: HubArrivalService,
+    // Issues a newly approved hub its address (a sweep, as on the public pages): its card links to its page.
+    @Optional() private readonly handleDirectory?: HandleDirectory,
   ) {}
 
   /** The hub's entry as it reads it: its hours, whether it is open now, its numbers and its gate. */
@@ -30,6 +33,7 @@ export class HubContactController {
   read(@Param('id') id: string, @Actor() actor: IntrospectionResult): HubContactView {
     const hub = this.mdps.require(id); // 404 if unknown
     if (actor?.role !== 'operator' && (!actor?.did || actor.did !== hub.did)) throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
+    this.handleDirectory?.ensure();
     return this.contacts.viewOf(id);
   }
 
@@ -49,6 +53,7 @@ export class HubContactController {
       const out = bulk ? outsideOf(bulk, weekOf(dto.openingHours)) : null;
       if (out) throw new GlosError('INVALID_INPUT', `You take stores’ parcels in bulk outside these hours (${out}): change those first, under Coming in`, { field: 'openingHours' });
     }
+    this.handleDirectory?.ensure();
     return this.contacts.set(id, dto, actor?.actorName?.trim() || hub.name);
   }
 }

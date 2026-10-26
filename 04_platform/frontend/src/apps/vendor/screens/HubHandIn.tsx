@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { SbgError } from '../../../lib/sbg';
 import { formatDate, useT } from '../../../shared/i18n';
-import { Button, Card, ErrorNote, HubReach, Note, Pill, type PillTone } from '../../../shared/ui';
-import { arrivalWord, bookableDays, bookingReady, HUB_UNIT_KINDS, hoursLine, receivingHours, todayAt, type ArrivalWord, type HubArrivalView, type HubsApi, type HubUnitKind, type HubWaiting, type StoreHubArrivals } from '../hubs';
+import { Button, Card, HubReach, Note, Pill, RefusalNote, type PillTone } from '../../../shared/ui';
+import { arrivalWord, bookableDays, bookingReady, HUB_UNIT_KINDS, hoursLine, minutesAt, receivingHours, todayAt, type ArrivalWord, type HubArrivalView, type HubsApi, type HubUnitKind, type HubWaiting, type StoreHubArrivals } from '../hubs';
+
+/** The days the store may book at a hub: those it receives, from today on its clock — today only while it still receives. */
+const daysFor = (w: HubWaiting) => bookableDays(receivingHours(w.bulk), todayAt(w.bulk?.zone), { nowMinutes: minutesAt(w.bulk?.zone) });
 
 const WORD_TONE: Record<ArrivalWord, PillTone> = { expected: 'info', late: 'warn', receiving: 'info', all_in: 'ok', some_missing: 'warn', withdrawn: 'idle', missed: 'warn' };
 
@@ -51,7 +54,7 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
   if (!api || !vendorId || !data) return null;
 
   const start = (w: HubWaiting) => {
-    const days = bookableDays(receivingHours(w.bulk), todayAt(w.bulk?.zone));
+    const days = daysFor(w);
     setDone(null);
     setError(null);
     setBooking({ mdpId: w.mdpId, parcelIds: w.parcels.map((p) => p.parcelId), unitKind: 'pallet', units: '1', expectedOn: days[0] ?? '', reference: '', bringer: '' });
@@ -100,12 +103,13 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
       {lead ? <h1 class="scr__title">{t('vendor.hub.title')}</h1> : <h2 class="scr__section">{t('vendor.hub.title')}</h2>}
       <p class="hint">{t('vendor.hub.lede')}</p>
       {done ? <Note tone="ok" icon="check" title={done} /> : null}
-      {error ? <ErrorNote error={error} /> : null}
+      {/* A refusal in the server's own words: "Ghala Hub stopped receiving at 18:00 today, on its clock: choose a day ahead". */}
+      {error ? <RefusalNote error={error} /> : null}
 
       {data.waiting.map((w) => {
         const open = booking?.mdpId === w.mdpId ? booking : null;
         const hours = hoursLine(receivingHours(w.bulk), t);
-        const days = bookableDays(receivingHours(w.bulk), todayAt(w.bulk?.zone));
+        const days = daysFor(w);
         return (
           <Card key={w.mdpId} title={w.hubName}>
             <p class="card__note">{t('vendor.hub.waiting', { n: w.parcels.length, hub: w.hubName })}</p>
