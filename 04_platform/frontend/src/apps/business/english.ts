@@ -1,5 +1,6 @@
 import { addEnglish, helpWordsAlso } from '../../shared/i18n';
 import { enBusiness } from '../../shared/i18n/catalogs/en.business';
+import { enAbbr } from '../../shared/i18n/catalogs/en.abbr';
 import { enGoods } from '../../shared/i18n/catalogs/en.goods';
 import { enSiteHours } from '../../shared/i18n/catalogs/en.site-hours';
 import { enSpecialisms } from '../../shared/i18n/catalogs/en.specialisms';
@@ -13,5 +14,5 @@ import { enTowerBusiness } from '../../shared/i18n/catalogs/en.tower-business';
  * light on a slow connection (the user, 2026-10-23). The help's words come when its Help opens, the articles about
  * working in this app with them (en.help-app.ts), not on the public site.
  */
-addEnglish({ ...enBusiness, ...enGoods, ...enSiteHours, ...enSpecialisms, ...enTowerBusiness });
+addEnglish({ ...enBusiness, ...enGoods, ...enSiteHours, ...enSpecialisms, ...enTowerBusiness, ...enAbbr });
 helpWordsAlso(() => import('../../shared/i18n/catalogs/en.help-app').then((m) => m.enHelpApp));

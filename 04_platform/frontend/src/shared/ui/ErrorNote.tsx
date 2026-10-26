@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact';
 import { presentationFor, type SbgError } from '../../lib/sbg';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
@@ -176,7 +177,8 @@ export interface NoteProps {
   /** A name from the monoline set. Typed so an emoji cannot be passed here at all. */
   icon?: IconName;
   title: string;
-  detail?: string;
+  /** Words, or words with the trade's short forms marked (<Abbreviated>). */
+  detail?: ComponentChildren;
 }
 
 /** The same shape for a non-error message (shift started, rate matched, bag loaded). */

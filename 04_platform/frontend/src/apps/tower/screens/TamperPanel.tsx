@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { findingWords, heldLine, heldWhen, releaseBlocker, type TamperUnit } from '../../../shared/tamper';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -77,7 +78,7 @@ export function TamperPanel({ subject, live, state, actions, onReleased }: { sub
               </p>
             ) : null}
             {e.note ? <p class="chint">“{e.note}”</p> : null}
-            <p class="chint">{e.ssccs.length ? t('tower.tamper.ssccs', { codes: e.ssccs.join(', ') }) : t('tower.tamper.noSscc')}</p>
+            <p class="chint"><Abbreviated text={e.ssccs.length ? t('tower.tamper.ssccs', { codes: e.ssccs.join(', ') }) : t('tower.tamper.noSscc')} /></p>
             <DocumentStrip refs={e.photoRefs} state={state} actions={actions} titleKey="tower.tamper.photos" emptyKey="tower.tamper.noPhotos" />
             <p class="ctbl__sub mono">{t('tower.tamper.fingerprint', { hash: e.fingerprint.slice(0, 16) })}</p>
             {e.release ? <p class="chint">{t('tower.tamper.released', { by: e.release.by, when: heldWhen(e.release.at), reason: e.release.reason })}</p> : null}

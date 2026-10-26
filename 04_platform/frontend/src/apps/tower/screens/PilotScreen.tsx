@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { handshakeStanding, lossStanding, pct, retentionStanding, seconds, takeInStanding, type PilotBoardView, type PilotWeekRow, type Standing } from '../pilot';
@@ -38,7 +39,7 @@ export function PilotScreen({ actions }: { actions: TowerActions }) {
     <>
       <header class="cons__head">
         <h1 class="cons__title">{t('tower.pilot.title')}</h1>
-        <p class="cons__lede">{t('tower.pilot.lede')}</p>
+        <p class="cons__lede"><Abbreviated text={t('tower.pilot.lede')} /></p>
       </header>
 
       <section class="cons__panel">

@@ -1,3 +1,5 @@
+import type { ComponentChildren } from 'preact';
+
 /**
  * HELP'S WORDS, WITH WHAT THE READER MUST FIND ON SCREEN MARKED (the review, 2026-10-22: "render every button/label the
  * reader must find as a chip … render navigation as a path"). Nothing but the help's own quotation marks says it, so it
@@ -28,8 +30,11 @@ export function pieces(s: string): HelpPiece[] {
   return out;
 }
 
-/** The sentence, drawn: chips for what to press, a path for where to go. */
-export function HelpText({ text }: { text: string }) {
+/**
+ * The sentence, drawn: chips for what to press, a path for where to go. `renderText` draws the plain words in between —
+ * the apps' help marks the trade's short forms there (ui/Abbr.tsx); the front door's help draws them as they are.
+ */
+export function HelpText({ text, renderText }: { text: string; renderText?: (words: string) => ComponentChildren }) {
   return (
     <>
       {pieces(text).map((p, i) =>
@@ -47,7 +52,7 @@ export function HelpText({ text }: { text: string }) {
             ))}
           </span>
         ) : (
-          <span key={i}>{p.text}</span>
+          <span key={i}>{renderText ? renderText(p.text) : p.text}</span>
         ),
       )}
     </>

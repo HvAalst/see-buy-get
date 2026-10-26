@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { publicRequest } from '../../../lib/sbg';
 import { downloadZpl } from '../../../shared/download';
@@ -187,7 +188,7 @@ function InvoiceEditor({ client, row, view, origin, onCancel, onSigned }: { clie
 
   return (
     <form class="biz-invoice" onSubmit={(e) => void sign(e)}>
-      <p class="cons__lede">{t('business.invoice.lede')}</p>
+      <p class="cons__lede"><Abbreviated text={t('business.invoice.lede')} /></p>
       <div class="biz-two">
         <label class="cfield">
           <span class="cfield__label">{t('business.invoice.number')}</span>

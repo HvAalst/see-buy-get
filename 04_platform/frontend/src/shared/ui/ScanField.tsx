@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { Abbreviated } from './Abbr';
 import { useT } from '../i18n';
 import { useLoadFinder, type LoadFound } from '../loadFinder';
 import { loadLookupOf, parcelSsccOf, type ScanKind } from '../scan';
@@ -162,11 +163,11 @@ export function ScanField({ id, label, value, onValue, expect, placeholder, onSc
 function LoadNote({ looked, onOpen, canOpen }: { looked: Looked; onOpen?: (found: LoadFound) => void; canOpen?: (found: LoadFound) => boolean }) {
   const t = useT();
   if (looked.state === 'looking') return <p class="hint">{t('common.loadScan.looking')}</p>;
-  if (looked.state === 'looking-parcel') return <p class="hint">{t('common.ssccScan.looking')}</p>;
+  if (looked.state === 'looking-parcel') return <p class="hint"><Abbreviated text={t('common.ssccScan.looking')} /></p>;
   if (looked.state === 'parcel') return <Note tone="ok" icon="box" title={t('common.ssccScan.parcel', { parcelId: looked.parcelId })} />;
-  if (looked.state === 'nothing') return <Note tone="warn" icon="box" title={t('common.ssccScan.title')} detail={t('common.ssccScan.nothing')} />;
-  if (looked.state === 'here') return <Note tone="info" icon="box" title={t('common.loadScan.isPackage')} detail={t('common.loadScan.notHere')} />;
-  if (looked.state === 'none') return <Note tone="warn" icon="box" title={t('common.loadScan.isPackage')} detail={t('common.loadScan.none')} />;
+  if (looked.state === 'nothing') return <Note tone="warn" icon="box" title={t('common.ssccScan.title')} detail={<Abbreviated text={t('common.ssccScan.nothing')} />} />;
+  if (looked.state === 'here') return <Note tone="info" icon="box" title={t('common.loadScan.isPackage')} detail={<Abbreviated text={t('common.loadScan.notHere')} />} />;
+  if (looked.state === 'none') return <Note tone="warn" icon="box" title={t('common.loadScan.isPackage')} detail={<Abbreviated text={t('common.loadScan.none')} />} />;
   if (looked.state === 'error') return <Note tone="warn" icon="warning" title={looked.detail} />;
   const l = looked.load;
   const which = l.package && l.packages ? t('common.loadScan.package', { no: l.package, of: l.packages, code: l.code }) : t('common.loadScan.load', { code: l.code });

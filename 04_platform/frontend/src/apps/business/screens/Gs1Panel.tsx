@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { BusinessClient, BusinessView } from '../api';
 import { PREFIX_TAKEN, disputeLine, maySendLicence, mayTakeBack, stillWorthShowing, type Gs1DisputeView } from '../gs1Dispute';
@@ -74,7 +75,7 @@ export function Gs1Panel({ business, actions, client, owner }: { business: Busin
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('business.gs1.title')}</span>
       </div>
-      <p class="cons__lede">{t('business.gs1.lede')}</p>
+      <p class="cons__lede"><Abbreviated text={t('business.gs1.lede')} /></p>
       {editing ? (
         <form onSubmit={(e) => void save(e)}>
           <div class="biz-two">
@@ -121,7 +122,7 @@ export function Gs1Panel({ business, actions, client, owner }: { business: Busin
         </form>
       ) : (
         <>
-          <p class="crow__sub">{gs1 ? gs1Line(gs1, t) : t('business.gs1.none')}</p>
+          <p class="crow__sub"><Abbreviated text={gs1 ? gs1Line(gs1, t) : t('business.gs1.none')} /></p>
           {owner ? (
             <div class="twr-panelend">
               {gs1 ? (
@@ -183,7 +184,7 @@ export function ClaimPrefix({ client, prefix, digit, onOpened, forClient }: { cl
   };
   return (
     <div class="cnote">
-      <p class="chint">{forClient ? t('business.gs1.claimLedeClient', { prefix, name: forClient.name }) : t('business.gs1.claimLede', { prefix })}</p>
+      <p class="chint"><Abbreviated text={forClient ? t('business.gs1.claimLedeClient', { prefix, name: forClient.name }) : t('business.gs1.claimLede', { prefix })} /></p>
       <label class="cfield">
         <span class="cfield__label">{t('business.gs1.licence')}</span>
         <input id="gs1-licence" class="cinput" type="file" accept="image/*" disabled={busy} onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />

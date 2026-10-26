@@ -1,4 +1,4 @@
-import { addEnglish } from '../../shared/i18n';
+import { addEnglish, helpWordsAlso } from '../../shared/i18n';
 import { enHome } from '../../shared/i18n/catalogs/en.home';
 import { enFront } from '../../shared/i18n/catalogs/en.front';
 import { enPages } from '../../shared/i18n/catalogs/en.pages';
@@ -11,3 +11,6 @@ import { enPrivacy } from '../../shared/i18n/catalogs/en.privacy';
  * (main.tsx), a help sheet when it opens (useHelpWords). main.tsx imports this first.
  */
 addEnglish({ ...enHome, ...enFront, ...enPages, ...enPrivacy });
+// The trade’s short forms said in full in a help sheet’s articles (shared/abbr.ts): fetched with the help’s words when a
+// help sheet opens, never in the first download.
+helpWordsAlso(() => import('../../shared/i18n/catalogs/en.abbr').then((m) => m.enAbbr));

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { Abbreviated } from './ui/Abbr';
 import { Button, Card, Icon } from './ui';
 import { formatMoney, useT } from './i18n';
 import { fiscalStanding, fiscalTitle, printable, type FiscalInvoiceRow } from './fiscal';
@@ -75,7 +76,7 @@ export function TaxInvoicesCard({ load, page, title, taxNumber }: { load: () => 
               <span>{num.name}</span>
               <b class="mono-t">{num.number ?? t('fiscal.number.none')}</b>
             </div>
-            <p class="hint">{num.number ? t('fiscal.number.carried', { name: num.name }) : t('fiscal.number.why', { name: num.name })}</p>
+            <p class="hint"><Abbreviated text={num.number ? t('fiscal.number.carried', { name: num.name }) : t('fiscal.number.why', { name: num.name })} /></p>
             <Button
               variant="link"
               full={false}
@@ -91,7 +92,7 @@ export function TaxInvoicesCard({ load, page, title, taxNumber }: { load: () => 
         )
       ) : null}
       {rows.length === 0 ? <p class="hint">{t('fiscal.noneYet')}</p> : <p class="hint">{t('fiscal.original')}</p>}
-      {rows.some((r) => r.etims.receipt?.sandbox) ? <p class="hint">{t('fiscal.sandbox')}</p> : null}
+      {rows.some((r) => r.etims.receipt?.sandbox) ? <p class="hint"><Abbreviated text={t('fiscal.sandbox')} /></p> : null}
       {error ? (
         <div class="note note--warn" role="alert">
           <p class="note__t">{error}</p>

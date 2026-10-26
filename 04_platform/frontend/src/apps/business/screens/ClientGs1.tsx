@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT } from '../../../shared/i18n';
 import type { BusinessClient, Client } from '../api';
 import { PREFIX_TAKEN } from '../gs1Dispute';
@@ -61,7 +62,7 @@ export function ClientGs1({ row, client, owner, onRow }: { row: Client; client: 
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('business.clients.gs1.title')}</span>
       </div>
-      <p class="cons__lede">{t('business.clients.gs1.lede', { name: row.name })}</p>
+      <p class="cons__lede"><Abbreviated text={t('business.clients.gs1.lede', { name: row.name })} /></p>
       {editing ? (
         <form onSubmit={(e) => void save(e)}>
           <div class="biz-two">
@@ -108,7 +109,7 @@ export function ClientGs1({ row, client, owner, onRow }: { row: Client; client: 
         </form>
       ) : (
         <>
-          <p class="crow__sub">{row.gs1 ? gs1Line(row.gs1, t) : t('business.clients.gs1.none', { name: row.name })}</p>
+          <p class="crow__sub"><Abbreviated text={row.gs1 ? gs1Line(row.gs1, t) : t('business.clients.gs1.none', { name: row.name })} /></p>
           {owner ? (
             <div class="twr-panelend">
               {row.gs1 ? (

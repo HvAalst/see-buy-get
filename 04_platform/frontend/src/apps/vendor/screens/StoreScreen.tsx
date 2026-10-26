@@ -1,12 +1,13 @@
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Info, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
 import type { SbgError } from '../../../lib/sbg';
 import { callbackLine, insurerLine, ledgerTypeWord, money, policyLine } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
+import { CallbacksInfo, callbacksAloud } from './CallbacksInfo';
 import { Gs1Card } from './Gs1Card';
 
 export interface StoreScreenProps {
@@ -45,7 +46,15 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
 
       <Gs1Card state={state} api={actions.gs1} />
 
-      <Card title={t('vendor.store.callbacksTitle')}>
+      {/* What a callback URL is, and whether this store needs one, in the (i)'s sheet (the user, 2026-10-26). */}
+      <Card
+        title={t('vendor.store.callbacksTitle')}
+        aside={
+          <Info title={t('vendor.store.cbInfo.title')} aloud={callbacksAloud(t)}>
+            <CallbacksInfo />
+          </Info>
+        }
+      >
         <p class="card__note">{t('vendor.store.callbacksNote')}</p>
         <div class="field" style="margin-top:8px">
           <label class="field__label" for="cb-url">

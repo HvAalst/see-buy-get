@@ -2246,6 +2246,26 @@
   font-weight: 700;
 }
 
+/* A heading and a list inside an (i)'s sheet: the callback URL's messages, for one. */
+.info__h {
+  margin: 6px 0 6px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx);
+}
+
+.info__list {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tx2);
+}
+
+.info__list li {
+  margin-bottom: 6px;
+}
+
 /* One option inside a help sheet: its picture, its name, its sentence. The picture leads because it is the
    fastest thing to read, and it is optional — the row collapses to text alone when no admin has curated one
    (or when the fetch failed), which must look deliberate rather than broken. */
@@ -2767,4 +2787,71 @@
 }
 .phonefield__code:has(select:disabled) {
   opacity: 0.65;
+}
+
+/* A term of the trade in a sentence (Abbr.tsx): a dotted line under it, the full words in a bubble under it — on hover
+   with a mouse, on a tap on a phone. It reads as the sentence it stands in: same size, same colour. */
+.abbr {
+  position: relative;
+  display: inline;
+}
+
+.abbr__term {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.abbr__term:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.abbr__tip {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: normal;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 8px 24px rgba(16, 24, 64, 0.25);
+}
+
+.abbr__name {
+  font-weight: 700;
+}
+
+/* Its words stay white wherever it opens — inside an (i)'s sheet too, whose own bold is dark. */
+.abbr__tip .abbr__name,
+.abbr__tip .abbr__about {
+  color: #fff;
+}
+
+/* The read-aloud keeps its own light pill: it reads on the dark bubble as it does on a page. */
+.abbr__tip .readaloud {
+  align-self: flex-start;
+  margin-top: 4px;
 }

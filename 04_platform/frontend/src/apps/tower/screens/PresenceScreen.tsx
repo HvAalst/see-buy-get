@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
@@ -547,7 +548,7 @@ function PresenceEditor({ row, state, actions }: { row: PresenceRow; state: Towe
             </div>
           );
         })}
-        <p class="chint">{t('tower.presence.f.termsCare')}</p>
+        <p class="chint"><Abbreviated text={t('tower.presence.f.termsCare')} /></p>
       </div>
 
       <div class="twr-presedit__act">

@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { formatDate, useT } from '../../../shared/i18n';
 import { GS1_STATE, gs1Step, gs1Waiting, licenceRefs, mayApprove, sideWords, type Gs1DisputeRow, type Gs1PartyRow, type Gs1Side } from '../gs1Disputes';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -21,7 +22,7 @@ export function Gs1DisputesPanel({ state, actions }: { state: TowerState; action
         <span class="cons__panelt">{t('tower.gs1.title')}</span>
         <span class="chint">{t('tower.gs1.waiting', { n: gs1Waiting(rows) })}</span>
       </div>
-      <p class="cons__lede">{t('tower.gs1.lede')}</p>
+      <p class="cons__lede"><Abbreviated text={t('tower.gs1.lede')} /></p>
       {rows.map((row) => (
         <Dispute key={row.disputeId} row={row} state={state} actions={actions} onChanged={() => void actions.refresh()} />
       ))}

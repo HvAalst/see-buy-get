@@ -1,5 +1,9 @@
 import type { GuideArticle } from './articles';
 import { HelpText } from './HelpText';
+import { Abbreviated } from '../ui/Abbr';
+
+/** The apps' help says the trade's short forms in full when they are hovered or tapped. */
+const words = (s: string) => <Abbreviated text={s} />;
 import './guide.css';
 
 /**
@@ -19,7 +23,7 @@ export function GuideArticles({ articles }: { articles: GuideArticle[] }) {
           </summary>
           <div class="guide__body">
             <p class="guide__s">
-              <HelpText text={a.summary} />
+              <HelpText text={a.summary} renderText={words} />
             </p>
             {a.steps?.length ? (
               <ol class="guide__steps">
@@ -27,7 +31,7 @@ export function GuideArticles({ articles }: { articles: GuideArticle[] }) {
                   <li key={step}>
                     {/* One element for the sentence: the li is a grid (badge | words), and every chip would be a cell. */}
                     <span>
-                      <HelpText text={step} />
+                      <HelpText text={step} renderText={words} />
                     </span>
                   </li>
                 ))}
@@ -35,7 +39,7 @@ export function GuideArticles({ articles }: { articles: GuideArticle[] }) {
             ) : null}
             {a.notes?.map((note) => (
               <p key={note} class="guide__p">
-                <HelpText text={note} />
+                <HelpText text={note} renderText={words} />
               </p>
             ))}
           </div>

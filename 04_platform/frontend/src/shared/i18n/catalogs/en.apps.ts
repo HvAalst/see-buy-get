@@ -22,6 +22,7 @@ import { enHelpApp } from './en.help-app';
 import { enPages } from './en.pages';
 import { enFront } from './en.front';
 import { enPrivacy } from './en.privacy';
+import { enAbbr } from './en.abbr';
 
 export const enApps = {
   ...enAgent,
@@ -38,4 +39,5 @@ export const enApps = {
   ...enPages,
   ...enFront,
   ...enPrivacy,
+  ...enAbbr,
 };

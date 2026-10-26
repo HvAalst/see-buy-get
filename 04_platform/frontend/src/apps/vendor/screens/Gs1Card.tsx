@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import type { SbgError } from '../../../lib/sbg';
 import { formatDate, useT } from '../../../shared/i18n';
 import { PREFIX_TAKEN, cleanPrefix, maySendLicence, mayTakeBack, stillWorthShowing, type Gs1DisputeView } from '../../../shared/gs1';
@@ -83,9 +84,9 @@ export function Gs1Card({ state, api }: { state: VendorState; api: StoreGs1Api |
           ) : undefined
         }
       >
-        <p class="card__note">{t('vendor.gs1.lede')}</p>
+        <p class="card__note"><Abbreviated text={t('vendor.gs1.lede')} /></p>
         <p class="t-body" style="margin-top:8px">
-          {gs1 ? storeGs1Line(gs1, t) : t('vendor.gs1.none')}
+          <Abbreviated text={gs1 ? storeGs1Line(gs1, t) : t('vendor.gs1.none')} />
         </p>
         {gs1 ? (
           <Button variant="link" full={false} busy={busy && !open} onClick={() => void giveUp()}>
@@ -104,7 +105,7 @@ export function Gs1Card({ state, api }: { state: VendorState; api: StoreGs1Api |
             {t('vendor.gs1.prefix')}
           </label>
           <input id="gs1-prefix" class="input input--mono" inputMode="numeric" maxLength={24} value={prefix} onInput={(e) => edited(() => setPrefix(e.currentTarget.value))} />
-          <p class="hint">{bad ? t('vendor.gs1.badPrefix') : t('vendor.gs1.prefixHint')}</p>
+          <p class="hint"><Abbreviated text={bad ? t('vendor.gs1.badPrefix') : t('vendor.gs1.prefixHint')} /></p>
         </div>
         <div class="field" style="margin-top:12px">
           <label class="field__label" for="gs1-digit">
@@ -173,7 +174,7 @@ function ClaimPrefix({ api, prefix, digit, onOpened }: { api: StoreGs1Api; prefi
   };
   return (
     <div style="margin-top:12px">
-      <p class="t-body">{t('vendor.gs1.claimLede', { prefix })}</p>
+      <p class="t-body"><Abbreviated text={t('vendor.gs1.claimLede', { prefix })} /></p>
       <div class="field" style="margin-top:10px">
         <label class="field__label" for="gs1-licence">
           {t('vendor.gs1.licence')}
