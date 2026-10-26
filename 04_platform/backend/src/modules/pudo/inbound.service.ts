@@ -8,7 +8,9 @@ import { ConsignmentNoteService } from './consignment-note.service';
 import { DispatchService, FREIGHT_CLAIM_WINDOW_DAYS, LATE_GRACE_MIN } from './dispatch.service';
 import type { Freight } from './dispatch.types';
 import { clockAt, clocksOfCountry, zoneName } from './fleet-clock';
-import { INBOUND_CLOSINGS, type InboundClosed, type InboundClosingHow, type InboundDue, type InboundRow, type InboundView, type ReceivingPointNamed, type ReceivingPointView } from './inbound.types';
+import { INBOUND_CLOSINGS, type InboundAbroad, type InboundClosed, type InboundClosingHow, type InboundDue, type InboundRow, type InboundView, type ReceivingPointNamed, type ReceivingPointView } from './inbound.types';
+import { ImportService } from './import.service';
+import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { NoteArchiveService } from './note-archive.service';
 import { consigneeDocId } from './note-archive.types';
 import { NotificationService } from './notification.service';
@@ -60,6 +62,8 @@ export class InboundService implements OnModuleInit {
     @Optional() private readonly notifications?: NotificationService,
     // The receiver's copy of each note (the user, 2026-10-26: "Its copy, no carriage price"): where it is kept.
     @Optional() private readonly archive?: NoteArchiveService,
+    // D13 — what customs did with an import its loads carry, as its clearing agent recorded it.
+    @Optional() private readonly imports?: ImportService,
   ) {}
 
   onModuleInit(): void {
@@ -115,7 +119,33 @@ export class InboundService implements OnModuleInit {
       ...(exceptions.length ? { exceptions, stillExpected: closing ? 0 : stillExpectedOf(exceptions) } : {}),
       ...(closing ? { closed: { how: closing.how, ...(closing.note ? { note: closing.note } : {}), at: closing.at, by: closing.by } } : {}),
       ...this.copyAndClaimOf(f, now),
+      ...this.abroadOf(f, track),
     };
+  }
+
+  /**
+   * D13 — GOODS FROM ABROAD: whether they have cleared, from what the note rests on — customs letting an import go or
+   * holding it, as its agent recorded; a hold on the way or a border post, as its driver said; a leg under bond — and who
+   * clears them in under the agreed term. Nothing more is computed (the user, 2026-10-26). Delivered, only what was
+   * recorded is said: a driver who never said "cleared" does not leave goods that came reading as still at the border.
+   */
+  private abroadOf(f: Freight, track: { passages?: Array<{ kind: string; post?: string; at: string }>; heldOnTheWay?: { since: string } }): { abroad?: InboundAbroad } {
+    const imp = f.externalOrderId ? this.imports?.customsOnNote(f.externalOrderId) : null;
+    const from = imp && imp.originCountry !== imp.destCountry ? imp.originCountry : f.pickupCountry && f.destCountry && f.pickupCountry !== f.destCountry ? f.pickupCountry : undefined;
+    if (!from) return {};
+    const term = f.incoterm ? incotermEntry(f.incoterm) : undefined;
+    const said = (state: InboundAbroad['state'], at?: string, where?: string): { abroad: InboundAbroad } => ({
+      abroad: { from, state, ...(at ? { at } : {}), ...(where ? { where } : {}), ...(term ? { clearsIn: term.importClearance === 'buyer' ? 'receiver' : 'supplier' } : {}) },
+    });
+    if (imp?.releasedAt) return said('cleared', imp.releasedAt, imp.port);
+    if (imp?.held) return said('held', imp.held.since, imp.port);
+    const border = [...(track.passages ?? [])].reverse().find((p) => p.kind === 'at_border' || p.kind === 'cleared_border');
+    if (border?.kind === 'cleared_border') return said('cleared', border.at, border.post);
+    if (f.status === 'delivered' || f.status === 'cancelled') return {};
+    if (track.heldOnTheWay) return said('held', track.heldOnTheWay.since);
+    if (border?.kind === 'at_border') return said('at_border', border.at, border.post);
+    if (f.bonded) return said('under_bond');
+    return said('not_yet');
   }
 
   /**

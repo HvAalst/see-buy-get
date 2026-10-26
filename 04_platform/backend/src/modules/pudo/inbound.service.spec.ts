@@ -65,6 +65,75 @@ describe('inbound: what stays expected, and the place’s own clock', () => {
     events = new EventBus();
   });
 
+  /**
+   * D13 — GOODS FROM ABROAD (the user, 2026-10-26: "An expected arrival from abroad shows whether it has cleared, from the
+   * note. Nothing more is computed."): what customs did, as an import's agent recorded it; what the driver said at a border
+   * post; a hold, a leg under bond — and who clears it in under the term. Never a guess.
+   */
+  describe('D13 — goods from abroad: whether they have cleared, from the note', () => {
+    const NOW = Date.parse('2026-10-26T12:00:00Z');
+    let road: Record<string, { passages?: Array<{ kind: string; post?: string; at: string }>; heldOnTheWay?: { since: string } }>;
+    let imports: Record<string, { originCountry: string; destCountry: string; port: string; releasedAt?: string; held?: { kind: string; since: string } }>;
+    const abroadOf = (f: Freight) => {
+      freights = [f];
+      const s = new InboundService(
+        { listFreight: () => freights, expectedAtOf: () => undefined, claimantOf: () => ({ party: 'sender', why: '' }) } as never,
+        { receivingPoints: () => [] } as never,
+        { find: () => ({ entityId: 'ent_jenga', did: 'did:ent:jenga', name: 'Jenga Builders', jurisdiction: 'KE' }), byDid: () => undefined } as never,
+        { trackView: (x: Freight) => ({ kind: 'freight', ref: x.code, status: x.status, description: x.description, weightKg: x.weightKg, pickupLabel: x.pickupLabel, destLabel: x.destLabel, steps: [], ...(road[x.freightId] ?? {}) }) } as never,
+        undefined,
+        undefined,
+        undefined,
+        { customsOnNote: (code: string) => imports[code] ?? null } as never,
+      );
+      return s.rowOf(f, NOW).abroad;
+    };
+    beforeEach(() => {
+      road = {};
+      imports = {};
+    });
+
+    it('says nothing of goods from inside the country', () => {
+      expect(abroadOf(base({ pickupCountry: 'KE', destCountry: 'KE' }))).toBeUndefined();
+      expect(abroadOf(base({ destCountry: 'KE' }))).toBeUndefined();
+    });
+
+    it('a road load from Uganda: not cleared yet, then at the border post, then cleared — as its driver said; and who clears it in under the term', () => {
+      const f = base({ freightId: 'fr_ug', pickupCountry: 'UG', destCountry: 'KE', incoterm: 'DAP' });
+      expect(abroadOf(f)).toEqual({ from: 'UG', state: 'not_yet', clearsIn: 'receiver' });
+      road.fr_ug = { passages: [{ kind: 'at_border', post: 'Malaba', at: '2026-10-26T06:00:00Z' }] };
+      expect(abroadOf(f)).toEqual({ from: 'UG', state: 'at_border', at: '2026-10-26T06:00:00Z', where: 'Malaba', clearsIn: 'receiver' });
+      road.fr_ug.passages!.push({ kind: 'at_hub', at: '2026-10-26T08:00:00Z' }, { kind: 'cleared_border', post: 'Malaba', at: '2026-10-26T09:30:00Z' });
+      expect(abroadOf(f)).toEqual({ from: 'UG', state: 'cleared', at: '2026-10-26T09:30:00Z', where: 'Malaba', clearsIn: 'receiver' });
+      // Under DDP its supplier clears it in; with no term agreed, nobody is named.
+      expect(abroadOf({ ...f, incoterm: 'DDP' })?.clearsIn).toBe('supplier');
+      expect(abroadOf({ ...f, incoterm: undefined })?.clearsIn).toBeUndefined();
+    });
+
+    it('held on the way, as its driver said; under bond until it is cleared in', () => {
+      road.fr_held = { heldOnTheWay: { since: '2026-10-26T07:00:00Z' } };
+      expect(abroadOf(base({ freightId: 'fr_held', pickupCountry: 'TZ', destCountry: 'KE' }))).toEqual({ from: 'TZ', state: 'held', at: '2026-10-26T07:00:00Z' });
+      expect(abroadOf(base({ freightId: 'fr_bond', pickupCountry: 'TZ', destCountry: 'KE', bonded: true }))).toEqual({ from: 'TZ', state: 'under_bond' });
+    });
+
+    it('delivered with nothing said of the border: nothing is said of it now — it came, and no driver’s silence reads as still at the post', () => {
+      road.fr_came = { passages: [{ kind: 'at_border', post: 'Busia', at: '2026-10-25T06:00:00Z' }] };
+      expect(abroadOf(base({ freightId: 'fr_came', pickupCountry: 'UG', destCountry: 'KE', status: 'delivered', deliveredAt: '2026-10-26T09:00:00Z' }))).toBeUndefined();
+      road.fr_came.passages!.push({ kind: 'cleared_border', post: 'Busia', at: '2026-10-25T10:00:00Z' });
+      expect(abroadOf(base({ freightId: 'fr_came', pickupCountry: 'UG', destCountry: 'KE', status: 'delivered', deliveredAt: '2026-10-26T09:00:00Z' }))).toMatchObject({ state: 'cleared', where: 'Busia' });
+    });
+
+    it('an import cleared inland: let go at its port, as its agent recorded — or held there, since when; the road leg itself is inside one country', () => {
+      imports['IMP-100'] = { originCountry: 'NL', destCountry: 'ET', port: 'Modjo', releasedAt: '2026-10-24T10:00:00Z' };
+      const leg = base({ freightId: 'fr_imp', externalOrderId: 'IMP-100', pickupCountry: 'ET', destCountry: 'ET', incoterm: 'DAP' });
+      expect(abroadOf(leg)).toEqual({ from: 'NL', state: 'cleared', at: '2026-10-24T10:00:00Z', where: 'Modjo', clearsIn: 'receiver' });
+      imports['IMP-100'] = { originCountry: 'NL', destCountry: 'ET', port: 'Modjo', held: { kind: 'physical_exam', since: '2026-10-23T08:00:00Z' } };
+      expect(abroadOf(leg)).toEqual({ from: 'NL', state: 'held', at: '2026-10-23T08:00:00Z', where: 'Modjo', clearsIn: 'receiver' });
+      // A shop's order number that is no consignment is no import: the road says it.
+      expect(abroadOf(base({ freightId: 'fr_shop', externalOrderId: 'ORD-7', pickupCountry: 'KE', destCountry: 'KE' }))).toBeUndefined();
+    });
+  });
+
   describe('D10 — when, on the receiving place’s own clock', () => {
     it('reads the day an order was placed for on the place’s clock: past midnight in Nairobi it is the 26th there, while UTC still says the 25th', () => {
       freights = [base({ deliverOn: '2026-10-26' })];

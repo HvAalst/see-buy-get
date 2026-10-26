@@ -1444,6 +1444,17 @@ export class ImportService {
     return { sender: party, consignee: party };
   }
 
+  /**
+   * D13 — WHAT CUSTOMS DID WITH AN IMPORT, as its clearing agent recorded it: let go (when, at which port), or held (since
+   * when, what kind of hold); null for a code that is no consignment. Recorded, never worked out: no duty, no forecast.
+   */
+  customsOnNote(code: string): { originCountry: string; destCountry: string; port: string; releasedAt?: string; held?: { kind: string; since: string } } | null {
+    const c = [...this.imports.values()].find((x) => x.code.toUpperCase() === (code ?? '').toUpperCase());
+    if (!c) return null;
+    const open = (c.customsHolds ?? []).filter((h) => !h.releasedAt).sort((a, b) => b.at.localeCompare(a.at))[0];
+    return { originCountry: c.originCountry, destCountry: c.destCountry, port: c.destPort, ...(c.releasedAt ? { releasedAt: c.releasedAt } : {}), ...(open ? { held: { kind: open.kind, since: open.at } } : {}) };
+  }
+
   papersOnNote(code: string): string[] {
     const consignment = [...this.imports.values()].find((c) => c.code.toUpperCase() === (code ?? '').toUpperCase());
     if (!consignment) return [];

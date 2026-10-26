@@ -9,6 +9,7 @@ import { BusinessHookService } from '../src/modules/pudo/business-hooks.service'
 import { EventBus } from '../src/foundation/events/event-bus.service';
 import { GlosEvent } from '../src/foundation/events/glos-events';
 import { requiredUnloadKeys } from '../src/modules/pudo/heavy-cargo';
+import { ImportService } from '../src/modules/pudo/import.service';
 
 /**
  * INBOUND SUPPLY, READING A, over the wire (assessment.html D1–D14; the user, 2026-10-25: "Yes, A then B"). A business
@@ -339,6 +340,35 @@ describe('inbound, reading A: what is coming in to a business’s own sites', ()
     // The supplier's Loads say whose claim it is: the receiver's.
     const theirs = (await http().get('/v1/sbg/dispatch/posted').set(bearer(supplier.token)).expect(200)).body;
     expect(((theirs.items ?? theirs) as Array<{ freightId: string; claim?: { by?: string } }>).find((r) => r.freightId === posted.freightId)?.claim?.by).toBe('receiver');
+  });
+
+  it('D13 — goods from abroad: Coming in says whether they have cleared, from what the note rests on; nothing computed', async () => {
+    const yard = await aBusiness('Bandari Traders', ['receiver']);
+    const supplier = await aBusiness('Kampala Mills', ['shipper']);
+    const site = (await http().post(`/v1/sbg/entities/${yard.entityId}/sites`).set(bearer(yard.token)).send({ kind: 'delivery', name: 'Kisumu depot', location: { lat: -0.1, lng: 34.75 } }).expect(201)).body;
+    const point = (await http().post(`/v1/sbg/business/me/receiving/${site.siteId}`).set(bearer(yard.token)).expect(201)).body;
+    const posted = (
+      await http()
+        .post('/v1/sbg/dispatch/freight')
+        .set(bearer(supplier.token))
+        .send({ description: 'Maize flour, 200 bags', pickupLocation: { lat: -0.6, lng: 34.2 }, pickupLabel: 'Border mill', destLabel: 'x', weightKg: 10000, packaging: 'bagged', packages: 200, pickupCountry: 'KE', destCountry: 'KE', receivingPoint: point.code, receiverRef: 'BT-1' })
+        .expect(201)
+    ).body;
+    const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
+    const rowOf = async () => (await http().get('/v1/sbg/business/me/inbound').set(bearer(yard.token)).expect(200)).body.items.find((i: { freightId: string }) => i.freightId === posted.freightId);
+
+    // Inside one country: nothing said of customs.
+    expect((await rowOf()).abroad).toBeUndefined();
+    // From Uganda under DAP: not cleared in yet — and clearing it in is the receiver's.
+    store.set(posted.freightId, { ...store.get(posted.freightId), pickupCountry: 'UG', incoterm: 'DAP' });
+    expect((await rowOf()).abroad).toEqual({ from: 'UG', state: 'not_yet', clearsIn: 'receiver' });
+
+    // A leg carrying an imported container, cleared at its port: let go there, as its clearing agent recorded it.
+    const imports = (app.get(ImportService) as unknown as { imports: Map<string, Record<string, unknown>> }).imports;
+    const code = `IMP-D13-${tag}`;
+    imports.set(`imp_d13_${tag}`, { importId: `imp_d13_${tag}`, code, status: 'appointed', importerEntityId: yard.entityId, goodsDescription: 'Flour', originCountry: 'NL', destCountry: 'KE', destPort: 'Mombasa', required: [], releasedAt: '2026-10-24T10:00:00.000Z', releasedBy: 'Clearing agent' });
+    store.set(posted.freightId, { ...store.get(posted.freightId), pickupCountry: 'KE', externalOrderId: code });
+    expect((await rowOf()).abroad).toEqual({ from: 'NL', state: 'cleared', at: '2026-10-24T10:00:00.000Z', where: 'Mombasa', clearsIn: 'receiver' });
   });
 });
 

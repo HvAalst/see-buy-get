@@ -33349,6 +33349,45 @@
           "number"
         ]
       },
+      "InboundAbroad": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "cleared",
+              "held",
+              "at_border",
+              "under_bond",
+              "not_yet"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "description": "When it was let go, held, or reached the post."
+          },
+          "where": {
+            "type": "string",
+            "description": "Where: the port customs let it go at or holds it, or the border post its driver named."
+          },
+          "clearsIn": {
+            "type": "string",
+            "description": "Who clears it in under the agreed term — this receiver, or its supplier. Absent where no term was agreed.",
+            "enum": [
+              "receiver",
+              "supplier"
+            ]
+          },
+          "from": {
+            "type": "string",
+            "description": "The country it comes from."
+          }
+        },
+        "required": [
+          "state",
+          "from"
+        ]
+      },
       "ReceivingExceptionView": {
         "type": "object",
         "properties": {
@@ -33635,6 +33674,14 @@
             "items": {
               "$ref": "#/components/schemas/TrackSeal"
             }
+          },
+          "abroad": {
+            "description": "D13 — from abroad: whether it has cleared, from what the note rests on. Absent for goods from inside the country.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InboundAbroad"
+              }
+            ]
           },
           "trackingKey": {
             "type": "string",

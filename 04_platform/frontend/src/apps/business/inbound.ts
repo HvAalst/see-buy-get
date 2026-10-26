@@ -1,6 +1,7 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { FoundLine } from '../../shared/found';
-import { formatDate, type MessageKey } from '../../shared/i18n';
+import { countryNameIn } from '../../shared/documents/documents';
+import { formatDate, getLocale, type MessageKey, type Translate } from '../../shared/i18n';
 
 /**
  * INBOUND SUPPLY, READING A (backend inbound.service.ts; the user, 2026-10-25: "Yes, A then B") — a business receiving
@@ -84,6 +85,45 @@ export interface InboundRow {
   claimant?: 'sender' | 'receiver';
   canClaim?: boolean;
   claim?: import('./claim').LoadClaim;
+  /** D13 — from abroad: whether it has cleared, from what the note rests on. Absent for goods from inside the country. */
+  abroad?: InboundAbroad;
+}
+
+export interface InboundAbroad {
+  from: string;
+  state: 'cleared' | 'held' | 'at_border' | 'under_bond' | 'not_yet';
+  at?: string;
+  where?: string;
+  clearsIn?: 'receiver' | 'supplier';
+}
+
+/**
+ * D13 — WHETHER GOODS FROM ABROAD HAVE CLEARED, in one line, as the record has it: let go or cleared (where, when), held,
+ * at a border post, under bond, or not yet — and, until it has cleared, who clears it in under the agreed term. Nothing
+ * estimated (the user, 2026-10-26: "Nothing more is computed").
+ */
+export function abroadLine(abroad: InboundAbroad | undefined, incoterm: string | undefined, t: Translate): string | null {
+  if (!abroad) return null;
+  const when = abroad.at ? formatDate(abroad.at, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  const country = countryNameIn(abroad.from, getLocale());
+  const head =
+    abroad.state === 'cleared'
+      ? abroad.where
+        ? t('business.inbound.abroad.clearedAt', { where: abroad.where, when })
+        : t('business.inbound.abroad.cleared', { when })
+      : abroad.state === 'held'
+        ? abroad.where
+          ? t('business.inbound.abroad.heldAt', { where: abroad.where, when })
+          : t('business.inbound.abroad.heldOnTheWay', { when })
+        : abroad.state === 'at_border'
+          ? abroad.where
+            ? t('business.inbound.abroad.atBorderAt', { where: abroad.where, when })
+            : t('business.inbound.abroad.atBorder', { when })
+          : abroad.state === 'under_bond'
+            ? t('business.inbound.abroad.underBond', { country })
+            : t('business.inbound.abroad.notYet', { country });
+  if (abroad.state === 'cleared' || !abroad.clearsIn || !incoterm) return head;
+  return `${head} · ${t(abroad.clearsIn === 'receiver' ? 'business.inbound.abroad.yoursToClear' : 'business.inbound.abroad.supplierClears', { term: incoterm })}`;
 }
 
 export interface InboundView {

@@ -3,7 +3,7 @@ import { foundWords } from '../../../shared/found';
 import { formatDate, useT } from '../../../shared/i18n';
 import { ConsoleDetail } from '../../tower/ConsoleDetail';
 import type { BusinessClient } from '../api';
-import { inboundTitle, type InboundRow } from '../inbound';
+import { abroadLine, inboundTitle, type InboundRow } from '../inbound';
 import { LoadClaimPanel } from './LoadClaim';
 import { NoteFile, NoteLinksPanel } from './LoadNote';
 
@@ -74,6 +74,13 @@ export function InboundDetail({ row, client, act, onClose, onChanged }: { row: I
             <div class="cons__fact">
               <dt class="cons__factk">{t('business.inbound.fact.term')}</dt>
               <dd class="cons__factv">{row.incoterm}</dd>
+            </div>
+          ) : null}
+          {/* D13 — from abroad: whether it has cleared, as the record has it. */}
+          {row.abroad ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.inbound.fact.customs')}</dt>
+              <dd class="cons__factv">{abroadLine(row.abroad, row.incoterm, t)}</dd>
             </div>
           ) : null}
         </dl>

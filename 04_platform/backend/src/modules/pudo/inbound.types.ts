@@ -73,8 +73,32 @@ export class InboundClaimView {
   @ApiPropertyOptional() decidedAt?: string;
 }
 
+/**
+ * D13 — GOODS FROM ABROAD: whether they have cleared, from what the note rests on (the user, 2026-10-26: "An expected
+ * arrival from abroad shows whether it has cleared, from the note. Nothing more is computed."). `cleared` — customs let
+ * the import go, as its agent recorded, or its driver said it cleared the border; `held` — held by customs at its port, or
+ * on the way by an authority, as its driver said; `at_border` — at a border post, as its driver said; `under_bond` — in
+ * the country under a transit bond, not cleared in yet; `not_yet` — nothing said of it yet.
+ */
+export const ABROAD_STATES = ['cleared', 'held', 'at_border', 'under_bond', 'not_yet'] as const;
+export type AbroadState = (typeof ABROAD_STATES)[number];
+
+export class InboundAbroad {
+  /** The country it comes from. */
+  from: string;
+  @ApiProperty({ enum: ABROAD_STATES }) state: AbroadState;
+  /** When it was let go, held, or reached the post. */
+  @ApiPropertyOptional() at?: string;
+  /** Where: the port customs let it go at or holds it, or the border post its driver named. */
+  @ApiPropertyOptional() where?: string;
+  /** Who clears it in under the agreed term — this receiver, or its supplier. Absent where no term was agreed. */
+  @ApiPropertyOptional({ enum: ['receiver', 'supplier'] }) clearsIn?: 'receiver' | 'supplier';
+}
+
 /** A load coming in to one of the business's receiving points — the tracking link's view, and the receiver's own facts. */
 export class InboundRow extends FreightTrackView {
+  /** D13 — from abroad: whether it has cleared, from what the note rests on. Absent for goods from inside the country. */
+  @ApiPropertyOptional({ type: InboundAbroad }) abroad?: InboundAbroad;
   freightId: string;
   /** The load's own tracking link, to open the whole of it. */
   @ApiPropertyOptional() trackingKey?: string;

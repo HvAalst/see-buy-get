@@ -4,7 +4,7 @@ import { foundPhotos, foundWords } from '../../../shared/found';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SiteView } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
-import { carrierLine, dueLine, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundClosingHow, type InboundRow, type InboundState, type InboundView, type ReceivingPoint } from '../inbound';
+import { abroadLine, carrierLine, dueLine, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundClosingHow, type InboundRow, type InboundState, type InboundView, type ReceivingPoint } from '../inbound';
 import { mayAct } from '../logic';
 import { InboundDetail } from './InboundDetail';
 
@@ -310,6 +310,8 @@ function InboundLine({ row, children, onOpen }: { row: InboundRow; children?: Co
         <span class="crow__sub">{what.join(' · ')}</span>
         {title.kind === 'order' ? <span class="crow__sub">{row.description}</span> : null}
         <span class="crow__sub">{when}</span>
+        {/* D13 — from abroad: whether it has cleared, as the record has it. */}
+        {abroadLine(row.abroad, row.incoterm, t) ? <span class="crow__sub">{abroadLine(row.abroad, row.incoterm, t)}</span> : null}
         {/* D9 — what was found at the handover, as the note has it beside the receiver's name. */}
         {found ? <span class="crow__sub">{photos ? t('business.inbound.foundWithPhotos', { found, n: photos }) : t('business.inbound.found', { found })}</span> : null}
         {row.closed ? (

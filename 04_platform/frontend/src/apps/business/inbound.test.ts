@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
 import { foundPhotos, foundWords } from '../../shared/found';
-import { carrierLine, codeOf, dayLabel, dueLine, inboundApi, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundDue } from './inbound';
+import { abroadLine, carrierLine, codeOf, dayLabel, dueLine, inboundApi, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundDue } from './inbound';
 import { loadGaps, sectionsFor } from './logic';
+
+describe('D13 — goods from abroad, in one line: whether they have cleared, as the record has it', () => {
+  const at = '2026-10-26T09:30:00Z';
+  it('says cleared, held, at the border, under bond or not yet — where and since when it was said', () => {
+    expect(abroadLine({ from: 'UG', state: 'cleared', at, where: 'Malaba' }, 'DAP', t)).toMatch(/^Cleared at Malaba, /);
+    expect(abroadLine({ from: 'NL', state: 'held', at, where: 'Modjo' }, undefined, t)).toMatch(/^Held by customs at Modjo since /);
+    expect(abroadLine({ from: 'TZ', state: 'held', at }, undefined, t)).toMatch(/^Held on the way since /);
+    expect(abroadLine({ from: 'UG', state: 'at_border', at, where: 'Busia' }, undefined, t)).toMatch(/^At the border post at Busia since /);
+    expect(abroadLine({ from: 'TZ', state: 'under_bond' }, undefined, t)).toBe('In the country under bond: not cleared in yet');
+    expect(abroadLine({ from: 'UG', state: 'not_yet' }, undefined, t)).toBe('From Uganda: not cleared in yet');
+    expect(abroadLine(undefined, 'DAP', t)).toBeNull();
+  });
+
+  it('says who clears it in under the term until it has cleared — and nothing of it after', () => {
+    expect(abroadLine({ from: 'UG', state: 'not_yet', clearsIn: 'receiver' }, 'DAP', t)).toBe('From Uganda: not cleared in yet · Under DAP, clearing it in is yours');
+    expect(abroadLine({ from: 'UG', state: 'at_border', at, where: 'Busia', clearsIn: 'supplier' }, 'DDP', t)).toMatch(/ · Under DDP, your supplier clears it in$/);
+    expect(abroadLine({ from: 'UG', state: 'cleared', at, where: 'Malaba', clearsIn: 'receiver' }, 'DAP', t)).not.toMatch(/yours/);
+  });
+});
 
 describe('inbound, reading A, in the Business app', () => {
   it('shows Coming in to a business that receives goods, and to nobody who said it does not', () => {
