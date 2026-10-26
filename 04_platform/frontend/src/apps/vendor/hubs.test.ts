@@ -24,6 +24,8 @@ describe('what a store pays a hub to take its units in (D12; the user, 2026-10-2
   it('counts what it paid on an arrival: the units it booked and any more at the door — what came back said apart', () => {
     expect(receivingPaid({ perUnit: 150, currency: 'KES', charged: 354.96, extra: 177.48, refunded: 0 })).toBe(532.44);
     expect(receivingPaid({ perUnit: 150, currency: 'KES', charged: 354.96 })).toBe(354.96);
+    // What came back is said beside it, never taken off it.
+    expect(receivingPaid({ perUnit: 150, currency: 'KES', charged: 306, refunded: 153 })).toBe(306);
     expect(receivingPaid({ perUnit: 150, currency: 'KES' })).toBeNull();
     expect(receivingPaid(undefined)).toBeNull();
   });

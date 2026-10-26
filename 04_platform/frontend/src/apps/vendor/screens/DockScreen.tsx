@@ -24,7 +24,7 @@ export function DockScreen({ state, actions }: { state: VendorState; actions: Ve
   // and the offer of a dock follows; otherwise the offer leads, and the hub's short line follows it.
   const [hubWork, setHubWork] = useState(false);
   const hubFirst = !dock && hubWork;
-  const hub = <HubHandIn key="hub" api={actions.hubs} vendorId={state.vendor?.vendorId ?? null} onWork={setHubWork} lead={hubFirst} />;
+  const hub = <HubHandIn key="hub" api={actions.hubs} vendorId={state.vendor?.vendorId ?? null} onWork={setHubWork} onMoney={() => void actions.refresh()} lead={hubFirst} />;
   const offer = <DockOffer key="offer" state={state} actions={actions} lead={!hubFirst} />;
   return (
     <div class="scr">

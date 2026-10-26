@@ -41,7 +41,8 @@ const dayLabel = (day: string) => formatDate(`${day}T12:00:00Z`, { weekday: 'sho
  * the hub's word that nothing came. With nothing booked or waiting, a line on how it works: a hub is chosen where the
  * parcel is shipped.
  */
-export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsApi | null; vendorId: string | null; onWork?: (has: boolean) => void; lead?: boolean }) {
+// `onMoney`: a booking or a withdrawal moves the store's balance where the hub charges for receiving (D12): the header reads it again.
+export function HubHandIn({ api, vendorId, onWork, onMoney, lead = false }: { api: HubsApi | null; vendorId: string | null; onWork?: (has: boolean) => void; onMoney?: () => void; lead?: boolean }) {
   const t = useT();
   const [data, setData] = useState<StoreHubArrivals | null>(null);
   const [booking, setBooking] = useState<BookingForm | null>(null);
@@ -89,6 +90,7 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
     if (r.error) return setError(r.error);
     setDone(t('vendor.hub.booked', { hub: hubName, day: dayLabel(booking.expectedOn) }));
     setBooking(null);
+    onMoney?.();
     await load();
   };
 
@@ -99,6 +101,7 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
     setBusy(false);
     if (r.error) return setError(r.error);
     setDone(t('vendor.hub.withdrawn'));
+    onMoney?.();
     await load();
   };
 

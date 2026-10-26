@@ -96,8 +96,9 @@ describe('D12: a hub’s fee per handling unit, charged to the store that booked
     expect(here).toMatchObject({ fees: { pallet: 150, carton: 20 }, feeCurrency: 'KES', receiving: { pallet: { currency: 'KES' }, carton: { currency: 'KES' } } });
     const pallet = here.receiving.pallet.gross as number;
     const carton = here.receiving.carton.gross as number;
-    expect(pallet).toBeGreaterThanOrEqual(150);
-    expect(carton).toBeGreaterThanOrEqual(20);
+    // The network's fee on top of the hub's own, as on a parcel (and the tax, where the company charges it).
+    expect(pallet).toBeGreaterThan(150);
+    expect(carton).toBeGreaterThan(20);
 
     const mint = async () =>
       (await http().post('/v1/sbg/inbound/orders').set(store).send({ vendorId: made.vendorId, destPudoDid: dest, handInMdpId: hub.mdpId, buyerMobile: `+2547${digits()}1`, size: 'M', weightKg: 2, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store) }).expect(201)).body.parcel.parcelId as string;
