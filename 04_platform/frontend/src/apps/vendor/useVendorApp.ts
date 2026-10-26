@@ -4,6 +4,7 @@ import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type Dev
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { openPage } from '../../shared/openPage';
 import { papersBody } from './papers';
+import { hubOriginOf, type HubOptionView } from './hubs';
 import { downloadZpl, triggerDownload } from '../../shared/download';
 import { openSvg } from '../../shared/openPage';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
@@ -160,6 +161,8 @@ export interface VendorState {
   points: NetworkPoint[];
   pointsState: 'idle' | 'loading' | 'ready' | 'error';
   originOptions: OriginOption[] | null;
+  /** Reading B — the hubs this parcel may be handed in at, in bulk, each priced from the hub. */
+  hubOptions: HubOptionView[] | null;
   originState: 'idle' | 'loading' | 'ready' | 'error';
   /** Returns this store has been asked to decide on. Loaded with the orders, because that is where a
    *  store operator already looks and a decision nobody sees is a decision nobody makes. */
@@ -210,6 +213,7 @@ const INITIAL: VendorState = {
   points: [],
   pointsState: 'idle',
   originOptions: null,
+  hubOptions: null,
   originState: 'idle',
   returns: [],
   quote: null,
@@ -721,6 +725,7 @@ export function useVendorApp() {
         quote: null,
         quoteState: 'idle',
         originOptions: null,
+        hubOptions: null,
         originState: 'idle',
         form: checkout ? fromHandoff({ ...EMPTY_MINT }, checkout) : { ...EMPTY_MINT },
         mintStep: 'parcel',
@@ -768,17 +773,19 @@ export function useVendorApp() {
   const pickDest = useCallback(
     async (destDid: string) => {
       if (!client) return;
-      setState((s) => ({ ...s, form: { ...s.form, destDid, originDid: '' }, mintStep: 'origin', originState: 'loading', originOptions: null }));
+      setState((s) => ({ ...s, form: { ...s.form, destDid, originDid: '' }, mintStep: 'origin', originState: 'loading', originOptions: null, hubOptions: null }));
       const f = stateRef.current.form;
       const size = f.derivedSize ?? 'M';
       const origins = stateRef.current.points.filter((p) => p.did !== destDid && p.openState === 'open' && p.takesNew !== false).map((p) => p.did);
-      const r = await client.api.quoteOrigins(destDid, origins, size, measureOf(f), f.fragile);
+      // Reading B — and the hubs that take parcels in bulk, priced from the hub, asked at the same time.
+      const [r, hubs] = await Promise.all([client.api.quoteOrigins(destDid, origins, size, measureOf(f), f.fragile), creds ? client.hubs.options(creds.vendorId, destDid, size, measureOf(f), f.fragile) : Promise.resolve(null)]);
       if (r.error) {
         setState((s) => ({ ...s, originState: 'error' }));
         fail(r.error);
         return;
       }
-      setState((s) => ({ ...s, originOptions: narrow<{ options: OriginOption[] }>(r.data)?.options ?? [], originState: 'ready' }));
+      const hubOptions = hubs && !hubs.error ? (narrow<{ hubs: HubOptionView[] }>(hubs.data)?.hubs ?? []) : [];
+      setState((s) => ({ ...s, originOptions: narrow<{ options: OriginOption[] }>(r.data)?.options ?? [], hubOptions, originState: 'ready' }));
     },
     [client, fail],
   );
@@ -786,6 +793,14 @@ export function useVendorApp() {
   const pickOrigin = useCallback(
     async (originDid: string) => {
       if (!client) return;
+      // Reading B — a hub chosen as where it starts: its price is the one the hubs were offered at, from the hub.
+      const hubId = hubOriginOf(originDid);
+      if (hubId) {
+        const hub = stateRef.current.hubOptions?.find((h) => h.mdpId === hubId);
+        if (!hub?.quote) return;
+        setState((s) => ({ ...s, form: { ...s.form, originDid }, mintStep: 'price', quote: hub.quote ?? null, quoteState: 'ready' }));
+        return;
+      }
       setState((s) => ({ ...s, form: { ...s.form, originDid }, mintStep: 'price', quoteState: 'loading', quote: null }));
       const f = stateRef.current.form;
       const r = await client.api.quote(originDid, f.destDid, f.derivedSize ?? 'M', measureOf(f), f.fragile);
@@ -910,7 +925,8 @@ export function useVendorApp() {
     await run('mint', async () => {
       const r = await client.api.mint({
         vendorId: creds.vendorId,
-        originPudoDid: f.originDid,
+        // Reading B — handed in at a hub, in bulk: the hub, and no shop.
+        ...(hubOriginOf(f.originDid) ? { handInMdpId: hubOriginOf(f.originDid)! } : { originPudoDid: f.originDid }),
         destPudoDid: f.destDid,
         ...(f.checkoutId ? { checkoutId: f.checkoutId } : {}),
         ...(f.externalOrderId.trim() ? { externalOrderId: f.externalOrderId.trim() } : {}),
@@ -1343,6 +1359,8 @@ export function useVendorApp() {
       chatApi: client?.conversations ?? null,
       /** The Web Push controls — a store is run by a person, and they wait on a payment like anybody else. */
       notifications: client?.notifications ?? null,
+      /** Reading B — the hubs it may hand its parcels in at, and its arrivals there. */
+      hubs: client?.hubs ?? null,
       gs1,
       uploadContentPhoto,
       loadMedia,

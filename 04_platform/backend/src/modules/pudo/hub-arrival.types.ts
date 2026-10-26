@@ -101,6 +101,27 @@ export class HubArrivalParcel {
   @ApiPropertyOptional() withdrawn?: boolean;
 }
 
+/** At the hub's door: how many units came, who took them in, and a line of their words. */
+export class HubArrivalReceived {
+  at: string;
+  by: string;
+  units: number;
+  @ApiPropertyOptional() note?: string;
+}
+
+/** Scanning finished: when, by whom, and what was booked and did not come — still the store's. */
+export class HubArrivalFinished {
+  at: string;
+  by: string;
+  missing: string[];
+}
+
+/** The store withdrew it before the hub took it in. */
+export class HubArrivalWithdrawn {
+  at: string;
+  by: string;
+}
+
 export class HubArrivalView {
   arrivalId: string;
   mdpId: string;
@@ -115,10 +136,10 @@ export class HubArrivalView {
   @ApiPropertyOptional() bringer?: string;
   @ApiProperty({ enum: HUB_ARRIVAL_STATES }) state: HubArrivalState;
   createdAt: string;
-  @ApiPropertyOptional() received?: { at: string; by: string; units: number; note?: string };
+  @ApiPropertyOptional({ type: HubArrivalReceived }) received?: HubArrivalReceived;
   scannedCount: number;
-  @ApiPropertyOptional() finished?: { at: string; by: string; missing: string[] };
-  @ApiPropertyOptional() withdrawn?: { at: string; by: string };
+  @ApiPropertyOptional({ type: HubArrivalFinished }) finished?: HubArrivalFinished;
+  @ApiPropertyOptional({ type: HubArrivalWithdrawn }) withdrawn?: HubArrivalWithdrawn;
   /** On the hub's own clock (D10): it is expected today there, or its day has gone and it has not come. */
   @ApiPropertyOptional() today?: boolean;
   @ApiPropertyOptional() late?: boolean;
@@ -128,7 +149,19 @@ export class HubArrivalView {
 export class HubWaiting {
   mdpId: string;
   hubName: string;
+  /** When the hub receives, on its clock — what the store books against. Absent: it no longer takes parcels in bulk. */
+  @ApiPropertyOptional({ type: HubBulkView }) bulk?: HubBulkView;
   @ApiProperty({ type: [HubArrivalParcel] }) parcels: HubArrivalParcel[];
+}
+
+/** One parcel scanned off the units: which, where it goes next, and whether it had been scanned already. */
+export class HubArrivalScan {
+  @ApiProperty({ type: HubArrivalView }) arrival: HubArrivalView;
+  parcelId: string;
+  /** The shop it goes to, as the hub sorts it. */
+  destination: string;
+  /** Scanned before: nothing changed. */
+  already: boolean;
 }
 
 export class StoreHubArrivals {

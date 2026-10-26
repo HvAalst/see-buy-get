@@ -33,6 +33,8 @@ const KIND_ICON: Record<string, IconName> = {
   // Round 39 — where they work was rated for a threat: seals, and no night running, when it is high.
   risk_rated: 'warning',
   bus_inbound: 'bag',
+  // Reading B — a store's parcels handed in at a hub: taken in, or some not there.
+  hub_arrival: 'truck',
   intake_expected: 'box',
   bag_ready_to_close: 'bag',
   message: 'send',

@@ -105,11 +105,18 @@ export class LoadFinderService {
     return { parcelId: p.parcelId, sscc, status: p.status };
   }
 
-  /** Who handles a parcel now: staff; the shop it was taken in at or is going to; the hub it stands at. */
-  private handles(p: { originAgentDid?: string; destAgentDid?: string; atMdpId?: string }, actor: IntrospectionResult | undefined): boolean {
+  /**
+   * Who handles a parcel now: staff; the shop it was taken in at or is going to; the hub it stands at — or, still with the
+   * store, the hub it is booked to be handed in at (reading B): that hub scans it off a pallet at its door by this barcode.
+   */
+  private handles(p: { originAgentDid?: string; destAgentDid?: string; atMdpId?: string; handInMdpId?: string; status?: string }, actor: IntrospectionResult | undefined): boolean {
     if (actor?.role === 'operator') return true;
     if (actor?.role === 'agent' && actor.did) return p.originAgentDid === actor.did || p.destAgentDid === actor.did;
-    if (actor?.role === 'mdp' && actor.did) return Boolean(p.atMdpId) && this.mdps?.list().find((m) => m.did === actor.did)?.mdpId === p.atMdpId;
+    if (actor?.role === 'mdp' && actor.did) {
+      const hub = this.mdps?.list().find((m) => m.did === actor.did)?.mdpId;
+      if (!hub) return false;
+      return p.atMdpId === hub || (p.status === 'Created' && p.handInMdpId === hub);
+    }
     return false;
   }
 

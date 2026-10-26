@@ -140,6 +140,8 @@ export interface OrderDetail extends OrderRow {
   damageReport?: { number: string };
   destAgentDid?: string;
   originAgentDid?: string;
+  /** Reading B — handed in at this hub, in bulk, by the store: booked on an arrival there. */
+  handInMdpId?: string;
   /** Round 13 — it crosses a border: its commercial invoice travels in the pouch. */
   customs?: { crossings: Array<{ fromCountry: string; toCountry: string }> };
   buyerMobile?: string;

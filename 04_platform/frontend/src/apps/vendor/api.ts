@@ -17,6 +17,7 @@ import {
   type VendorApi,
 } from '../../lib/sbg';
 import type { NetworkPoint, PlaceFound, VendorLoginView } from './types';
+import { createHubsApi, type HubsApi } from './hubs';
 
 const APP_VERSION = '1.0.0';
 
@@ -89,6 +90,8 @@ export interface VendorClient {
   /** The store's own notifications — a store is run by a person at a desk or on a phone, not only by
    *  an integration reading callbacks. See the money-in work: they wait on a payment to be confirmed. */
   notifications: NotificationsApi;
+  /** Reading B — the hubs it may hand its parcels in at, in bulk, and its arrivals there. */
+  hubs: HubsApi;
 }
 
 /**
@@ -100,7 +103,7 @@ export interface VendorClient {
  */
 export function createVendorClient(vendorId: string): VendorClient {
   const client = createSeededClient(vendorConfig(), tokenKeyFor(TOKEN_PREFIX, vendorId));
-  return { api: createVendorApi(client.sbg), client, conversations: createConversationsApi(client.sbg), notifications: createNotificationsApi(client.sbg) };
+  return { api: createVendorApi(client.sbg), client, conversations: createConversationsApi(client.sbg), notifications: createNotificationsApi(client.sbg), hubs: createHubsApi(client.sbg) };
 }
 
 export function purgeVendorTokens(keepVendorId: string | null): void {

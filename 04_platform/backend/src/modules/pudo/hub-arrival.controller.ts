@@ -5,7 +5,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { HubArrivalService } from './hub-arrival.service';
-import { BookHubArrivalDto, HubArrivalView, HubArrivals, HubBulkView, HubOptions, ReceiveHubArrivalDto, ScanHubArrivalDto, SetHubBulkDto, StoreHubArrivals } from './hub-arrival.types';
+import { BookHubArrivalDto, HubArrivalScan, HubArrivalView, HubArrivals, HubBulkView, HubOptions, ReceiveHubArrivalDto, ScanHubArrivalDto, SetHubBulkDto, StoreHubArrivals } from './hub-arrival.types';
 import { MdpService } from './mdp.service';
 import { CounterLogInterceptor } from './shop-staff.controller';
 import { classifySize, measuredFactor } from './pudo.config';
@@ -119,7 +119,7 @@ export class HubArrivalController {
   @Roles('mdp', 'operator')
   @Post('mdps/:id/arrivals/:arrivalId/scan')
   @AtTheCounter()
-  scanArrival(@Param('id') id: string, @Param('arrivalId') arrivalId: string, @Body() dto: ScanHubArrivalDto, @Actor() actor: IntrospectionResult) {
+  scanArrival(@Param('id') id: string, @Param('arrivalId') arrivalId: string, @Body() dto: ScanHubArrivalDto, @Actor() actor: IntrospectionResult): HubArrivalScan {
     const hub = this.hubActs(id, actor);
     return this.arrivals.scan(id, arrivalId, dto.code, actor?.actorName?.trim() || hub);
   }

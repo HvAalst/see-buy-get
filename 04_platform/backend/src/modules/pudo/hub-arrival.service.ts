@@ -12,6 +12,7 @@ import {
   HUB_ARRIVAL_DAYS_AHEAD,
   type HubArrival,
   type HubArrivalParcel,
+  type HubArrivalScan,
   type HubArrivalView,
   type HubArrivals,
   type HubBulk,
@@ -198,7 +199,10 @@ export class HubArrivalService {
       if (!p.handInMdpId || p.status !== 'Created' || p.paidStatus !== 'ParcelPaid' || onOpen.has(p.parcelId)) continue;
       byHub.set(p.handInMdpId, [...(byHub.get(p.handInMdpId) ?? []), this.parcelOf(p, false)]);
     }
-    const waiting: HubWaiting[] = [...byHub.entries()].map(([mdpId, parcels]) => ({ mdpId, hubName: this.hubName(mdpId), parcels }));
+    const waiting: HubWaiting[] = [...byHub.entries()].map(([mdpId, parcels]) => {
+      const bulk = this.bulkOf(mdpId, now);
+      return { mdpId, hubName: this.hubName(mdpId), ...(bulk ? { bulk } : {}), parcels };
+    });
     const mine = [...this.arrivals.values()].filter((a) => a.vendorId === vendorId && (isOpen(a) || now - Date.parse(doneAt(a)) <= STORE_DONE_SHOWN_MS));
     return { waiting, arrivals: this.ordered(mine).map((a) => this.viewOf(a, now)) };
   }
@@ -231,7 +235,7 @@ export class HubArrivalService {
    * ONE PARCEL SCANNED OFF THE UNITS — by its label: the parcel id, its tracking key or its SSCC, matched against what the
    * store booked on THIS arrival only. Scanned twice, it says so and changes nothing. The last one finishes the arrival.
    */
-  scan(mdpId: string, arrivalId: string, code: string, by: string, now: number = Date.now()): { arrival: HubArrivalView; parcelId: string; destination: string; already: boolean } {
+  scan(mdpId: string, arrivalId: string, code: string, by: string, now: number = Date.now()): HubArrivalScan {
     const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
     if (a.state === 'expected') throw new GlosError('INVALID_STATE', 'Count what came at the door first: take it in, then scan each parcel off it');

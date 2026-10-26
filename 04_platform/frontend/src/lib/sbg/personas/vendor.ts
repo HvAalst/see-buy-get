@@ -151,7 +151,9 @@ export function createVendorApi(sbg: SbgClient) {
     /** MINT: an order ships → inbound parcel + phygital label + collection code + tracking key. */
     mint: (body: {
       vendorId: string;
-      originPudoDid: string;
+      /** The drop-off shop — absent for the store's own dock, or for a hub it hands its parcels in at (reading B). */
+      originPudoDid?: string;
+      handInMdpId?: string;
       destPudoDid: string;
       checkoutId?: string;
       externalOrderId?: string;

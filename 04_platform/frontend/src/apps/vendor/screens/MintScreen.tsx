@@ -8,6 +8,7 @@ import { PapersCard } from './PapersCard';
 import { papersGaps } from '../papers';
 import { chargeOf, dimsComplete, feeLines, handoffLine, money, originRows, priceCards } from '../logic';
 import type { NetworkPoint } from '../types';
+import { HUB_ORIGIN, hoursLine, type HubOptionView } from '../hubs';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
 export interface MintScreenProps {
@@ -380,6 +381,31 @@ function PointRow({ point, onPick, price, sub }: { point: NetworkPoint; onPick: 
   );
 }
 
+/**
+ * Reading B — a hub that takes parcels in bulk, as a place this parcel may start: priced from the hub (no shop, no road
+ * before it), with the days and hours it receives on its own clock.
+ */
+function HubRow({ hub, onPick }: { hub: HubOptionView; onPick: () => void }) {
+  const t = useT();
+  const hours = hoursLine(hub.hours, t);
+  const total = hub.quote?.locked.total;
+  return (
+    <button type="button" class="row" onClick={onPick} disabled={total == null}>
+      <span class="row__ic">
+        <Icon name="truck" size={24} />
+      </span>
+      <span class="row__body">
+        <span class="row__t">{hub.name}</span>
+        <span class="row__s">{[hours ? t('vendor.mint.hubHours', { hours }) : t('vendor.mint.hubAnyHour'), hub.address].filter(Boolean).join(' · ')}</span>
+      </span>
+      <span class="row__end">
+        {total == null ? <Pill tone="idle">{t('vendor.mint.noRoute')}</Pill> : <b class="mono-t">{money(total, hub.quote?.currency)}</b>}
+        <Icon name="chevronRight" size={22} />
+      </span>
+    </button>
+  );
+}
+
 /* ----------------------------------------------------------------- origin -- */
 
 function OriginStep({ state, actions }: MintScreenProps) {
@@ -418,6 +444,19 @@ function OriginStep({ state, actions }: MintScreenProps) {
           />
         ))}
       </div>
+
+      {/* Reading B — or handed in at a hub that takes parcels in bulk, with the store's other parcels. */}
+      {state.hubOptions?.length ? (
+        <>
+          <h2 class="scr__section">{t('vendor.mint.hubsTitle')}</h2>
+          <p class="hint">{t('vendor.mint.hubsLede')}</p>
+          <div class="rows" role="list">
+            {state.hubOptions.map((hub) => (
+              <HubRow key={hub.mdpId} hub={hub} onPick={() => void actions.pickOrigin(`${HUB_ORIGIN}${hub.mdpId}`)} />
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <div class="scr__foot">
         <Button variant="link" full={false} onClick={() => actions.toStep(state.form.checkoutId ? 'parcel' : 'dest')}>
@@ -595,6 +634,16 @@ function LabelStep({ state, actions }: MintScreenProps) {
             </Button>
           </div>
         </>
+      ) : null}
+
+      {/* Reading B — handed in at a hub, in bulk: booked on an arrival from the Dock screen. */}
+      {m.parcel.handInMdpId ? (
+        <Note
+          tone="info"
+          icon="truck"
+          title={t('vendor.mint.handInTitle', { hub: state.hubOptions?.find((h) => h.mdpId === m.parcel.handInMdpId)?.name ?? m.parcel.handInMdpId })}
+          detail={t('vendor.mint.handInDetail')}
+        />
       ) : null}
 
       {m.parcel.collectionCode ? <CodeCard label={t('vendor.buyerCollectionCode')} code={m.parcel.collectionCode} scanAs="collect" /> : null}

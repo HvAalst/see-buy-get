@@ -5,6 +5,7 @@ import { Button, Card, ErrorNote, Explainer, GlanceNumber, Note, PlaceMap, Sheet
 import { useT } from '../../../shared/i18n';
 import { dockBlockers, stagingTone } from '../logic';
 import type { VendorActions, VendorState } from '../useVendorApp';
+import { HubHandIn } from './HubHandIn';
 
 /**
  * The store's own dock — the screen for a capability that has been backend-complete and invisible.
@@ -22,6 +23,8 @@ export function DockScreen({ state, actions }: { state: VendorState; actions: Ve
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={() => void actions.loadDock()} /> : null}
       {dock ? <DockWork state={state} actions={actions} /> : <DockOffer state={state} actions={actions} />}
+      {/* Reading B — the other way parcels leave the store: brought to a hub in bulk. */}
+      <HubHandIn api={actions.hubs} vendorId={state.vendor?.vendorId ?? null} />
     </div>
   );
 }

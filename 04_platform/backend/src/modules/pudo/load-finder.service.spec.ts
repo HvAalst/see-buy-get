@@ -83,4 +83,21 @@ describe('a store parcel found by its SSCC (round 32)', () => {
     expect(() => finder().findParcel(ssccOf('6169876', 2, 1), as('did:shop:north', 'agent'))).toThrow(NO_PARCEL_YOU_HANDLE);
     expect(() => finder().findParcel('PUD-AB12', as('did:shop:north', 'agent'))).toThrow(/not a GS1 barcode/);
   });
+
+  it('finds a store parcel still with the store for the hub it is booked to be handed in at — that hub alone, and only until it is taken in', () => {
+    const handIn = { parcelId: 'PUD-HB01', status: 'Created', handInMdpId: 'mdp_1' } as Record<string, string>;
+    const SSCC = ssccOf('6169876', 2, 5);
+    const finderOf = (p: Record<string, string>) => {
+      const codes = { parcelOfSscc: (s: string) => (s === SSCC ? p.parcelId : undefined), packageOf: () => undefined } as unknown as ShipperCodesService;
+      const parcels = { get: () => p } as unknown as ParcelService;
+      const mdps = { list: () => [{ mdpId: 'mdp_1', did: 'did:hub:1' }, { mdpId: 'mdp_2', did: 'did:hub:2' }] } as unknown as MdpService;
+      return new LoadFinderService(codes, {} as DispatchService, {} as ConsignmentNoteService, parcels, mdps);
+    };
+    expect(finderOf(handIn).findParcel(SSCC, as('did:hub:1', 'mdp'))).toEqual({ parcelId: 'PUD-HB01', sscc: SSCC, status: 'Created' });
+    expect(() => finderOf(handIn).findParcel(SSCC, as('did:hub:2', 'mdp'))).toThrow(NO_PARCEL_YOU_HANDLE);
+    expect(() => finderOf(handIn).findParcel(SSCC, as('did:shop:north', 'agent'))).toThrow(NO_PARCEL_YOU_HANDLE);
+    // Taken in somewhere, it is the hub it stands at that finds it — no longer a hub it was once booked to.
+    expect(() => finderOf({ ...handIn, status: 'At_MDP', atMdpId: 'mdp_2' }).findParcel(SSCC, as('did:hub:1', 'mdp'))).toThrow(NO_PARCEL_YOU_HANDLE);
+    expect(finderOf({ ...handIn, status: 'At_MDP', atMdpId: 'mdp_2' }).findParcel(SSCC, as('did:hub:2', 'mdp')).parcelId).toBe('PUD-HB01');
+  });
 });
