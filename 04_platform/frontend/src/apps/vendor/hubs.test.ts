@@ -1,8 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { arrivalWord, bookableDays, bookingReady, hoursLine, hubOriginOf, HUB_ORIGIN, minutesAt, receivingHours, todayAt } from './hubs';
+import { arrivalWord, bookableDays, bookingReady, hoursLine, hubOriginOf, HUB_ORIGIN, minutesAt, receivingCost, receivingHours, receivingPaid, receivingWords, todayAt } from './hubs';
 
 const day = { open: '07:00', close: '15:00' };
+
+describe('what a store pays a hub to take its units in (D12; the user, 2026-10-26: “Its own fee”)', () => {
+  const plain = (s: string | null) => s?.replace(/[\u00a0\u202f]/g, ' ') ?? null;
+  const bulk = { receiving: { pallet: { gross: 177.48, currency: 'KES' }, sack: { gross: 5.8, currency: 'KES' } } };
+
+  it('costs n of one unit, to the cent — as the server charges it — and nothing for a kind the hub takes in free', () => {
+    expect(receivingCost(bulk, 'pallet', '3')).toEqual({ each: 177.48, total: 532.44, currency: 'KES' });
+    expect(receivingCost(bulk, 'sack', '7')).toEqual({ each: 5.8, total: 40.6, currency: 'KES' });
+    expect(receivingCost(bulk, 'carton', '3')).toBeNull();
+    expect(receivingCost(bulk, 'pallet', '')).toBeNull();
+    expect(receivingCost(undefined, 'pallet', '3')).toBeNull();
+  });
+
+  it('says what a unit of each kind costs, in the store’s money; nothing where every kind is free', () => {
+    expect(plain(receivingWords(bulk, t))).toBe('KES 177.48 a pallet · KES 5.80 a sack');
+    expect(receivingWords({}, t)).toBeNull();
+  });
+
+  it('counts what it paid on an arrival: the units it booked and any more at the door — what came back said apart', () => {
+    expect(receivingPaid({ perUnit: 150, currency: 'KES', charged: 354.96, extra: 177.48, refunded: 0 })).toBe(532.44);
+    expect(receivingPaid({ perUnit: 150, currency: 'KES', charged: 354.96 })).toBe(354.96);
+    expect(receivingPaid({ perUnit: 150, currency: 'KES' })).toBeNull();
+    expect(receivingPaid(undefined)).toBeNull();
+  });
+});
 
 describe('a store handing its parcels in at a hub, in bulk (reading B)', () => {
   it('books on the hours the hub takes parcels in bulk; where it set none, on its opening hours; else on any day', () => {

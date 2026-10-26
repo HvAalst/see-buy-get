@@ -209,7 +209,7 @@ export interface MintView {
 
 export interface SettlementRow {
   id: string;
-  type: 'TOP_UP' | 'TOP_UP_FEE' | 'BILLING' | 'REBATE';
+  type: 'TOP_UP' | 'TOP_UP_FEE' | 'BILLING' | 'REBATE' | 'CLAIM';
   sign: '+' | '-';
   amount: number;
   /** The money of the books the line was posted to. */

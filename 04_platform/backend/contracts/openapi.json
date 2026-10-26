@@ -33917,6 +33917,55 @@
           "open"
         ]
       },
+      "HubUnitFees": {
+        "type": "object",
+        "properties": {
+          "pallet": {
+            "type": "number"
+          },
+          "carton": {
+            "type": "number"
+          },
+          "cage": {
+            "type": "number"
+          },
+          "sack": {
+            "type": "number"
+          }
+        }
+      },
+      "HubUnitPrice": {
+        "type": "object",
+        "properties": {
+          "gross": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "gross",
+          "currency"
+        ]
+      },
+      "HubUnitPrices": {
+        "type": "object",
+        "properties": {
+          "pallet": {
+            "$ref": "#/components/schemas/HubUnitPrice"
+          },
+          "carton": {
+            "$ref": "#/components/schemas/HubUnitPrice"
+          },
+          "cage": {
+            "$ref": "#/components/schemas/HubUnitPrice"
+          },
+          "sack": {
+            "$ref": "#/components/schemas/HubUnitPrice"
+          }
+        }
+      },
       "HubOption": {
         "type": "object",
         "properties": {
@@ -33968,6 +34017,25 @@
           },
           "handle": {
             "type": "string"
+          },
+          "fees": {
+            "description": "What it charges to take in one unit of each kind, in its own money (D12) — public, as its sort fee is. Absent: nothing.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubUnitFees"
+              }
+            ]
+          },
+          "feeCurrency": {
+            "type": "string"
+          },
+          "receiving": {
+            "description": "Read by a store: one unit of each kind as the store pays for it, in its own money.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubUnitPrices"
+              }
+            ]
           },
           "quote": {
             "type": "object",
@@ -34058,6 +34126,25 @@
           },
           "handle": {
             "type": "string"
+          },
+          "fees": {
+            "description": "What it charges to take in one unit of each kind, in its own money (D12) — public, as its sort fee is. Absent: nothing.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubUnitFees"
+              }
+            ]
+          },
+          "feeCurrency": {
+            "type": "string"
+          },
+          "receiving": {
+            "description": "Read by a store: one unit of each kind as the store pays for it, in its own money.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubUnitPrices"
+              }
+            ]
           },
           "mdpId": {
             "type": "string"
@@ -34210,6 +34297,56 @@
           "by"
         ]
       },
+      "HubArrivalFeeView": {
+        "type": "object",
+        "properties": {
+          "storeCurrency": {
+            "type": "string"
+          },
+          "unitGross": {
+            "type": "number",
+            "description": "One unit as the store pays for it."
+          },
+          "charged": {
+            "type": "number",
+            "description": "Paid for the booked units when the store booked them."
+          },
+          "chargedUnits": {
+            "type": "number"
+          },
+          "extra": {
+            "type": "number",
+            "description": "Charged at the door for units beyond the booking."
+          },
+          "extraUnits": {
+            "type": "number"
+          },
+          "refunded": {
+            "type": "number",
+            "description": "Given back: booked units the hub did not count, or all of them."
+          },
+          "refundedUnits": {
+            "type": "number"
+          },
+          "paid": {
+            "type": "number",
+            "description": "To the hub: what it is paid for the units it counted, in its own money."
+          },
+          "paidUnits": {
+            "type": "number"
+          },
+          "perUnit": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "perUnit",
+          "currency"
+        ]
+      },
       "HubArrivalView": {
         "type": "object",
         "properties": {
@@ -34255,6 +34392,14 @@
           },
           "missed": {
             "$ref": "#/components/schemas/HubArrivalMissed"
+          },
+          "fee": {
+            "description": "The hub's receiving fee on it (D12), as this reader may read it. Absent: none for its kind of unit.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubArrivalFeeView"
+              }
+            ]
           },
           "today": {
             "type": "boolean",
@@ -34421,6 +34566,11 @@
             "nullable": true,
             "minimum": 1,
             "maximum": 50
+          },
+          "fees": {
+            "type": "object",
+            "nullable": true,
+            "description": "What it charges to take in one unit of each kind, in its own money: { pallet: 150, carton: 20 }. Null clears them."
           }
         },
         "required": [

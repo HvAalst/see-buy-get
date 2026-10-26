@@ -1,4 +1,4 @@
-import { filterVendorLedger, ledgerRowOf, vendorLedgerSummaryOf, vendorLedgerToCsv, type VendorSettlement } from './vendor.service';
+import { filterVendorLedger, ledgerRowOf, ledgerTypeWord, vendorLedgerSummaryOf, vendorLedgerToCsv, type VendorSettlement } from './vendor.service';
 
 /** A minimal ledger entry carrying only the register-relevant fields. */
 function entry(over: Partial<VendorSettlement>): VendorSettlement {
@@ -73,5 +73,13 @@ describe('vendor bookkeeping register (R3)', () => {
       expect(ledgerRowOf(rows[1]).currency).toBe('KES');
       expect(ledgerRowOf({ ...rows[1], country: 'NL' }).currency).toBe('EUR');
     });
+  });
+
+  it('names every line for what it is: a hub’s receiving charge apart from a shipment (D12), a top-up’s fee and a claim by their own words', () => {
+    expect(ledgerTypeWord('BILLING', 'PUD-1')).toBe('Shipment');
+    expect(ledgerTypeWord('BILLING', 'arr_1a2b3c')).toBe('Receiving at a hub');
+    expect(ledgerTypeWord('TOP_UP_FEE')).toBe('Top-up fee');
+    expect(ledgerTypeWord('CLAIM')).toBe('Damage claim');
+    expect(ledgerTypeWord('REBATE', 'arr_1a2b3c')).toBe('Rebate');
   });
 });

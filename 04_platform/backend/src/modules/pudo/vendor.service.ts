@@ -66,9 +66,17 @@ export interface VendorLedgerQuery {
   offset?: number | string;
 }
 
-/** The merchant's word for an entry type — also the fourth thing the search matches. */
-export function ledgerTypeWord(type: VendorSettlement['type']): string {
-  return type === 'TOP_UP' ? 'Top-up' : type === 'BILLING' ? 'Shipment' : type === 'CLAIM' ? 'Damage claim' : 'Rebate';
+/**
+ * The merchant's word for an entry — also the fourth thing the search matches. Each type by its own word: a top-up's fee is
+ * not a rebate. A charge for a hub's receiving (D12) is billed as a shipment is, against its arrival, and named for what
+ * it is.
+ */
+export function ledgerTypeWord(type: VendorSettlement['type'], ref?: string): string {
+  if (type === 'TOP_UP') return 'Top-up';
+  if (type === 'TOP_UP_FEE') return 'Top-up fee';
+  if (type === 'BILLING') return ref?.startsWith('arr_') ? 'Receiving at a hub' : 'Shipment';
+  if (type === 'CLAIM') return 'Damage claim';
+  return 'Rebate';
 }
 
 /** One row of the bookkeeping register (the entry itself — it carries no secret and no PII beyond the parcel id). */
@@ -141,7 +149,7 @@ export function filterVendorLedger(rows: VendorSettlement[], q: VendorLedgerQuer
   if (q.type) out = out.filter((s) => s.type === q.type);
   if (q.direction) out = out.filter((s) => (q.direction === 'in' ? s.sign === '+' : s.sign === '-'));
   if (q.from || q.to) out = out.filter((s) => withinDates(s.at, q.from, q.to));
-  if (q.q) out = out.filter((s) => textMatch([s.parcelId, s.note, ledgerTypeWord(s.type)], q.q));
+  if (q.q) out = out.filter((s) => textMatch([s.parcelId, s.note, ledgerTypeWord(s.type, s.parcelId)], q.q));
   return [...out].sort(ledgerSort(q.sort));
 }
 
@@ -150,7 +158,7 @@ export function filterVendorLedger(rows: VendorSettlement[], q: VendorLedgerQuer
 export function vendorLedgerToCsv(rows: VendorSettlement[]): string {
   return toCsv(
     ['Date', 'Type', 'Direction', 'Amount', 'Currency', 'Parcel', 'Note'],
-    rows.map((s) => [s.at, ledgerTypeWord(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, settlementCurrencyOf(s), s.parcelId ?? '', s.note ?? '']),
+    rows.map((s) => [s.at, ledgerTypeWord(s.type, s.parcelId), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, settlementCurrencyOf(s), s.parcelId ?? '', s.note ?? '']),
   );
 }
 
@@ -398,7 +406,7 @@ export class VendorService {
    * because **SBG is not a bank profiting from exchange rates**: what the buffer absorbs belongs in FX
    * gain/loss, where a buffer that is consistently too fat is a number somebody has to answer for.
    */
-  billShipment(vendorId: string, parcelId: string, amount: number, fxBuffer = 0, tax = 0, provision = 0): { paid: boolean; balance: number } {
+  billShipment(vendorId: string, parcelId: string, amount: number, fxBuffer = 0, tax = 0, provision = 0, what: { kind?: string; note?: string } = {}): { paid: boolean; balance: number } {
     const vendor = this.get(vendorId);
     // `amount` is the GROSS — what actually leaves the store's float, tax included. The balance is checked
     // against it for that reason: a customer must fund the whole charge, not the part we get to keep.
@@ -420,14 +428,15 @@ export class VendorService {
     // money right up until the moment somebody claims. Clamped to what is left after tax and the buffer
     // so three slices of one amount can never sum to more than the amount.
     const risk = Number.isFinite(provision) ? Math.min(Math.max(Math.round(provision * 100) / 100, 0), Math.max(0, Math.round((net - buffer) * 100) / 100)) : 0;
-    const entryId = this.post(vendor, 'shipping', parcelId, [
+    // What was sold: a shipment, unless the caller names another service sold the same way (a hub's receiving, D12).
+    const entryId = this.post(vendor, what.kind ?? 'shipping', parcelId, [
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount },
       { code: ACCOUNT_CODES.REVENUE, amount: -(Math.round((net - buffer - risk) * 100) / 100) },
       ...(buffer > 0 ? [{ code: ACCOUNT_CODES.FX_GAINLOSS, amount: -buffer }] : []),
       ...(collected > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: -collected }] : []),
       ...(risk > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: -risk }] : []),
     ]);
-    this.book(vendor, 'BILLING', '-', amount, parcelId, 'shipment', entryId);
+    this.book(vendor, 'BILLING', '-', amount, parcelId, what.note ?? 'shipment', entryId);
     return { paid: true, balance: this.syncBalance(vendor).balance ?? 0 }; // a store that was just billed has a sister, so a till
   }
 

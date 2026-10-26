@@ -2,7 +2,19 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { SbgError } from '../../../lib/sbg';
 import { formatDate, useT } from '../../../shared/i18n';
 import { Button, Card, HubReach, Note, Pill, RefusalNote, type PillTone } from '../../../shared/ui';
-import { arrivalWord, bookableDays, bookingReady, HUB_UNIT_KINDS, hoursLine, minutesAt, receivingHours, todayAt, type ArrivalWord, type HubArrivalView, type HubsApi, type HubUnitKind, type HubWaiting, type StoreHubArrivals } from '../hubs';
+import { arrivalWord, bookableDays, bookingReady, HUB_UNIT_KINDS, hoursLine, minutesAt, receivingCost, receivingHours, receivingPaid, receivingWords, todayAt, type ArrivalWord, type HubArrivalView, type HubsApi, type HubUnitKind, type HubWaiting, type StoreHubArrivals } from '../hubs';
+import { money } from '../logic';
+
+/**
+ * WHAT RECEIVING COSTS, beside the units (D12): n units at what one costs the store, paid when it books; what the hub does
+ * not count comes back. Nothing where the hub takes this kind in for nothing.
+ */
+function FeeHint({ bulk, kind, units, hub }: { bulk: HubWaiting['bulk']; kind: HubUnitKind; units: string; hub: string }) {
+  const t = useT();
+  const cost = receivingCost(bulk, kind, units);
+  if (cost) return <p class="hint">{t('vendor.hub.feeLine', { units: t(`vendor.hub.units.${kind}` as never, { n: Number(units) }), total: money(cost.total, cost.currency), each: money(cost.each, cost.currency) })}</p>;
+  return bulk?.receiving ? <p class="hint">{t('vendor.hub.feeFree', { hub })}</p> : null;
+}
 
 /** The days the store may book at a hub: those it receives, from today on its clock — today only while it still receives. */
 const daysFor = (w: HubWaiting) => bookableDays(receivingHours(w.bulk), todayAt(w.bulk?.zone), { nowMinutes: minutesAt(w.bulk?.zone) });
@@ -116,6 +128,8 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
             {w.bulk ? <p class="card__note">{hours ? t('vendor.mint.hubHours', { hours }) : t('vendor.mint.hubAnyHour')}</p> : <p class="card__note">{t('vendor.hub.notTaking', { hub: w.hubName })}</p>}
             {/* Whether it is open now, who to ask for, where to come in, and a button that calls it (the user, 2026-10-26). */}
             {w.bulk ? <HubReach hub={{ ...w.bulk, name: w.hubName }} showName={false} /> : null}
+            {/* What a unit costs it to hand in here (D12): the hub's own fee, with the network's fee and tax. */}
+            {receivingWords(w.bulk, t) ? <p class="card__note">{t('vendor.hub.fees', { prices: receivingWords(w.bulk, t)! })}</p> : null}
             {!open ? (
               <Button variant="outline" disabled={!w.bulk || busy} onClick={() => start(w)}>
                 {t('vendor.hub.book')}
@@ -153,6 +167,7 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
                     {t('vendor.hub.unitsLabel')}
                   </label>
                   <input id={`hub-units-${w.mdpId}`} class="input" type="number" inputMode="numeric" min={1} max={100} value={open.units} onInput={(e) => setBooking({ ...open, units: e.currentTarget.value })} />
+                  <FeeHint bulk={w.bulk} kind={open.unitKind} units={open.units} hub={w.hubName} />
                 </div>
                 <div class="field" style="margin-top:12px">
                   <label class="field__label" for={`hub-day-${w.mdpId}`}>
@@ -212,6 +227,16 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
                   {a.state === 'receiving' ? <span class="dockrow__sub">{t('vendor.hub.progress', { done: a.scannedCount, all: a.parcels.length })}</span> : null}
                   {a.finished?.missing.length ? <span class="dockrow__sub">{t('vendor.hub.missing', { n: a.finished.missing.length })}</span> : null}
                   {a.state === 'missed' ? <span class="dockrow__sub">{t('vendor.hub.missedLine', { hub: a.hubName })}</span> : null}
+                  {receivingPaid(a.fee) != null ? (
+                    <span class="dockrow__sub">
+                      {[
+                        t('vendor.hub.feePaid', { amount: money(receivingPaid(a.fee), a.fee?.storeCurrency) }),
+                        a.fee?.refunded ? t('vendor.hub.feeBack', { amount: money(a.fee.refunded, a.fee.storeCurrency) }) : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  ) : null}
                   <span>
                     <Pill tone={WORD_TONE[word]}>{t(`vendor.hub.word.${word}` as never)}</Pill>
                   </span>

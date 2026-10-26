@@ -313,27 +313,37 @@ export function orderRowsToCsv(rows: OrderRow[]): string {
 
 /** The merchant's word for a ledger entry type — the shipment billing reads as "Shipment". For ON-SCREEN
  *  display (translated); the CSV export deliberately keeps English (see ledgerRowsToCsv). */
-export function ledgerTypeWord(type: SettlementRow['type'], t: Translate): string {
+export function ledgerTypeWord(type: SettlementRow['type'], t: Translate, ref?: string): string {
   // A chain, not a fallback: a new row type arriving here used to render as 'Rebate', which is a wrong
   // word rather than a missing one — the worst way for a register to be out of date.
   if (type === 'TOP_UP') return t('vendor.ledger.typeTopUp');
   if (type === 'TOP_UP_FEE') return t('vendor.ledger.typeTopUpFee');
-  if (type === 'BILLING') return t('vendor.ledger.typeShipment');
+  // A hub's receiving (D12) is billed as a shipment is, against its arrival: named for what it is.
+  if (type === 'BILLING') return ref?.startsWith('arr_') ? t('vendor.ledger.typeReceiving') : t('vendor.ledger.typeShipment');
   if (type === 'REBATE') return t('vendor.ledger.typeRebate');
+  if (type === 'CLAIM') return t('vendor.ledger.typeClaim');
   return type;
+}
+
+/** The English word in the export, the same as the server's (vendor.service.ts ledgerTypeWord). */
+function ledgerCsvType(s: Pick<SettlementRow, 'type' | 'parcelId'>): string {
+  if (s.type === 'TOP_UP') return 'Top-up';
+  if (s.type === 'TOP_UP_FEE') return 'Top-up fee';
+  if (s.type === 'BILLING') return s.parcelId?.startsWith('arr_') ? 'Receiving at a hub' : 'Shipment';
+  if (s.type === 'CLAIM') return 'Damage claim';
+  return 'Rebate';
 }
 
 /** The bookkeeping export columns — SAME set + order as the server's ledger export (vendorLedgerToCsv), so a
  *  client "export selected" and a server "export all" are byte-identical. Amount is a SIGNED number. */
-export const LEDGER_CSV_HEADERS = ['Date', 'Type', 'Direction', 'Amount', 'Parcel', 'Note'];
+export const LEDGER_CSV_HEADERS = ['Date', 'Type', 'Direction', 'Amount', 'Currency', 'Parcel', 'Note'];
 
 export function ledgerRowsToCsv(rows: SettlementRow[]): string {
   // The Type column mirrors the SERVER's English export byte-for-byte (NOT locale-translated) so a client
   // "export selected" equals a server "export all"; the on-screen word translates via ledgerTypeWord(t).
-  const csvType = (type: SettlementRow['type']) => (type === 'TOP_UP' ? 'Top-up' : type === 'BILLING' ? 'Shipment' : 'Rebate');
   return toCsv(
     LEDGER_CSV_HEADERS,
-    rows.map((s) => [s.at, csvType(s.type), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, s.parcelId ?? '', s.note ?? '']),
+    rows.map((s) => [s.at, ledgerCsvType(s), s.sign === '+' ? 'in' : 'out', s.sign === '+' ? s.amount : -s.amount, s.currency ?? '', s.parcelId ?? '', s.note ?? '']),
   );
 }
 

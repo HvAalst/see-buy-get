@@ -33,7 +33,7 @@ import { VendorService } from './vendor.service';
  */
 
 /** What a company sells, and what gives a sale back. */
-const SALE_KINDS = new Set(['shipping', 'top-up']);
+const SALE_KINDS = new Set(['shipping', 'top-up', 'hub-receiving']);
 const CREDIT_KINDS = new Set(['refund', 'rebate']);
 /** The lines a price is made of: what was earned, the exchange buffer, the risk cover, and the tax. */
 const PRICE_CODES = new Set<AccountCode>([ACCOUNT_CODES.REVENUE, ACCOUNT_CODES.FX_GAINLOSS, ACCOUNT_CODES.PROVISION_CLAIMS, ACCOUNT_CODES.PAYABLE_TAX]);
@@ -236,6 +236,8 @@ export class FiscalInvoiceService implements OnModuleInit, OnApplicationBootstra
 
   private describe(entry: JournalEntry, parcel: Parcel | undefined): string {
     if (entry.kind === 'top-up') return 'Top-up service fee';
+    // A hub's receiving (D12), sold and given back under its arrival.
+    if (entry.kind === 'hub-receiving' || entry.ref?.startsWith('arr_')) return `Receiving service at a hub, arrival ${entry.ref}`;
     return parcel ? `Delivery service, parcel ${parcel.parcelId}` : entry.ref ? `Delivery service, load ${entry.ref}` : 'Delivery service';
   }
 

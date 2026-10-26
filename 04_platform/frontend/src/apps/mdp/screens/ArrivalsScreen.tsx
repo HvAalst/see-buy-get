@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
 import { Button, Card, ErrorNote, Explainer, Icon, Note, Pill, refusalSentence, Sheet } from '../../../shared/ui';
 import { hoursLine, weekForm, type WeekForm } from '../../fleet/sites';
-import { arrivalGroups, bulkBody, hubArrivalWord, loadLine, onIt, WORD_TONE, type HubArrival, type HubArrivalsView, type HubBulk } from '../arrivals';
+import { arrivalGroups, bulkBody, feesLine, hubArrivalWord, loadLine, onIt, UNIT_KINDS, WORD_TONE, type HubArrival, type HubArrivalsView, type HubBulk, type HubUnitKind } from '../arrivals';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { WeekRows } from './WeekRows';
 
@@ -38,7 +38,7 @@ export function ArrivalsScreen({ state, actions }: { state: MdpState; actions: M
         </>
       )}
 
-      {bulkOpen ? <BulkSheet bulk={view?.bulk} opening={view?.openingHours} busy={state.busy === 'bulk'} onClose={() => setBulkOpen(false)} onSave={actions.setBulk} /> : null}
+      {bulkOpen ? <BulkSheet bulk={view?.bulk} opening={view?.openingHours} currency={state.hub?.currency} busy={state.busy === 'bulk'} onClose={() => setBulkOpen(false)} onSave={actions.setBulk} /> : null}
     </div>
   );
 }
@@ -109,6 +109,8 @@ function BulkCard({ bulk, staff, onEdit }: { bulk?: HubBulk; staff: boolean; onE
     <Card title={t('mdp.bulk.title')} aside={<Pill tone="ok">{t('mdp.bulk.taking')}</Pill>}>
       <p class="card__note">{hours ? t('mdp.bulk.hours', { hours }) : t('mdp.bulk.anyHour')}</p>
       {bulk.doors ? <p class="card__note">{t('mdp.bulk.doors', { n: bulk.doors })}</p> : null}
+      {/* What it charges to take them in (D12): stores pay it when they book; it is paid it for each unit it counts. */}
+      <p class="card__note">{feesLine(bulk, t) ? t('mdp.bulk.fees', { fees: feesLine(bulk, t)! }) : t('mdp.bulk.noFees')}</p>
       {bulk.zoneName ? <p class="card__note">{t('mdp.bulk.clock', { zone: bulk.zoneName })}</p> : null}
       {staff ? (
         <p class="hint">{t('mdp.bulk.ownerDecides')}</p>
@@ -126,17 +128,19 @@ function BulkCard({ bulk, staff, onEdit }: { bulk?: HubBulk; staff: boolean; onE
  * can unload at once. Checked as the server checks it before it is sent; the server's refusal is shown here, where it was
  * asked. Stopping asks first: stores can no longer book, and what they booked still comes.
  */
-function BulkSheet({ bulk, opening, busy, onClose, onSave }: { bulk?: HubBulk; opening?: HubArrivalsView['openingHours']; busy: boolean; onClose: () => void; onSave: MdpActions['setBulk'] }) {
+function BulkSheet({ bulk, opening, currency, busy, onClose, onSave }: { bulk?: HubBulk; opening?: HubArrivalsView['openingHours']; currency?: string; busy: boolean; onClose: () => void; onSave: MdpActions['setBulk'] }) {
   const t = useT();
   const [keepsHours, setKeepsHours] = useState(bulk ? Boolean(bulk.hours) : true);
   // Its own bulk hours; else the hours it is open — bulk hours stay inside them — before a week to start from.
   const [week, setWeek] = useState<WeekForm>(weekForm(bulk?.hours ?? opening));
   const [doors, setDoors] = useState(bulk?.doors ? String(bulk.doors) : '');
+  // What it charges to take in each kind (D12): as it last said, blank where it charges nothing.
+  const [fees, setFees] = useState<Partial<Record<HubUnitKind, string>>>(Object.fromEntries(UNIT_KINDS.map((k) => [k, bulk?.fees?.[k] ? String(bulk.fees[k]) : ''])));
   const [stopping, setStopping] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   const save = async () => {
-    const made = bulkBody(keepsHours, week, doors);
+    const made = bulkBody(keepsHours, week, doors, fees);
     if ('error' in made) return setProblem(t(made.error));
     setProblem(null);
     const r = await onSave(made.body);
@@ -186,6 +190,16 @@ function BulkSheet({ bulk, opening, busy, onClose, onSave }: { bulk?: HubBulk; o
             <input id="bulk-doors" class="input" inputMode="numeric" maxLength={2} value={doors} onInput={(e) => setDoors(e.currentTarget.value)} />
             <p class="hint">{t('mdp.bulk.doorsHint')}</p>
           </div>
+          <h2 class="scr__section">{t('mdp.bulk.feesTitle')}</h2>
+          <p class="hint">{t('mdp.bulk.feesHint')}</p>
+          {UNIT_KINDS.map((k) => (
+            <div class="field" key={k}>
+              <label class="field__label" for={`bulk-fee-${k}`}>
+                {t(`mdp.bulk.feeLabel.${k}` as never, { currency: currency ?? '' })}
+              </label>
+              <input id={`bulk-fee-${k}`} class="input" inputMode="decimal" maxLength={10} value={fees[k] ?? ''} onInput={(e) => setFees({ ...fees, [k]: e.currentTarget.value })} />
+            </div>
+          ))}
           {problem ? <Note tone="danger" icon="warning" title={problem} /> : null}
           <Button chevron={false} busy={busy} onClick={() => void save()}>
             {t('mdp.bulk.save')}

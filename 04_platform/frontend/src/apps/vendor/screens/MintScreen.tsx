@@ -8,7 +8,7 @@ import { PapersCard } from './PapersCard';
 import { papersGaps } from '../papers';
 import { chargeOf, dimsComplete, feeLines, handoffLine, money, originRows, priceCards } from '../logic';
 import type { NetworkPoint } from '../types';
-import { HUB_ORIGIN, hoursLine, receivingHours, type HubOptionView } from '../hubs';
+import { HUB_ORIGIN, hoursLine, receivingHours, receivingWords, type HubOptionView } from '../hubs';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
 export interface MintScreenProps {
@@ -397,6 +397,8 @@ function HubRow({ hub, onPick }: { hub: HubOptionView; onPick: () => void }) {
       <span class="row__body">
         <span class="row__t">{hub.name}</span>
         <span class="row__s">{[hours ? t('vendor.mint.hubHours', { hours }) : t('vendor.mint.hubAnyHour'), hub.address].filter(Boolean).join(' · ')}</span>
+        {/* What a unit costs to hand in there (D12). */}
+        {receivingWords(hub, t) ? <span class="row__s">{t('vendor.hub.fees', { prices: receivingWords(hub, t)! })}</span> : null}
       </span>
       <span class="row__end">
         {total == null ? <Pill tone="idle">{t('vendor.mint.noRoute')}</Pill> : <b class="mono-t">{money(total, hub.quote?.currency)}</b>}

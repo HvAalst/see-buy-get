@@ -102,7 +102,7 @@ export class HubArrivalController {
     const hub = this.mdps.require(id);
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A hub says itself whether it takes parcels in bulk, and when, signed in as the hub. Staff change nothing in its name');
     if (!actor?.did || actor.did !== hub.did) throw new GlosError('FORBIDDEN', 'Only the hub can do this, from its own sign-in');
-    const bulk = this.arrivals.setBulk(id, { open: dto.open, ...(dto.hours !== undefined ? { hours: dto.hours } : {}), ...(dto.doors !== undefined ? { doors: dto.doors } : {}) }, actor?.actorName?.trim() || hub.name);
+    const bulk = this.arrivals.setBulk(id, { open: dto.open, ...(dto.hours !== undefined ? { hours: dto.hours } : {}), ...(dto.doors !== undefined ? { doors: dto.doors } : {}), ...(dto.fees !== undefined ? { fees: dto.fees } : {}) }, actor?.actorName?.trim() || hub.name);
     return bulk ? { bulk } : {};
   }
 

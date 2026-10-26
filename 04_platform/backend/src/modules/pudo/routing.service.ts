@@ -483,6 +483,20 @@ export class RoutingService {
     return entity.currency ?? currencyForJurisdiction(entity.jurisdiction);
   }
 
+  /**
+   * ONE UNIT OF A HUB'S RECEIVING FEE AS THE STORE PAYS FOR IT (D12; the user, 2026-10-26: "Its own fee") — the hub's own
+   * fee, converted into the store's company's money at the buffered rate where the two differ, with that company's fee on
+   * top and its tax: the layers of a parcel's price. Booking n units costs n of these.
+   */
+  receivingUnit(perUnit: number, hubCurrency: string, sellerEntityId: string): { currency: string; gross: number; tax: number; buffer: number; provision: number } {
+    const currency = this.currencyOf(sellerEntityId);
+    const net = this.fx.convertForQuote(perUnit, hubCurrency, currency);
+    const buffer = hubCurrency === currency ? 0 : Math.max(0, Math.round((net - this.fx.convert(perUnit, hubCurrency, currency)) * 100) / 100);
+    const stack = this.entities.ratesFor(sellerEntityId);
+    const { tax, gross } = taxOn(withPlatformFee(net, stack.totalPct), this.entities.taxFor(sellerEntityId).ratePct);
+    return { currency, gross, tax, buffer, provision: Math.round(net * stack.costOfRiskPct * 100) / 100 };
+  }
+
   /** The real total at a known per-km rate (the delivering carrier's) — drives the flexible rebate. */
   costAtRate(nodeFees: number, totalKm: number, size: ParcelSize, perKm: number): number {
     return withPlatformFee(Math.round((nodeFees + totalKm * perKm * SIZE_TRANSPORT_FACTOR[size]) * 100) / 100);

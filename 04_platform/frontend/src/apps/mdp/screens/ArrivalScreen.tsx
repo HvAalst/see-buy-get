@@ -1,7 +1,8 @@
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
-import { Button, Card, ErrorNote, Note, Pill, ScanField, Sheet } from '../../../shared/ui';
-import { canSayMissed, hubArrivalWord, loadLine, onIt, stillToScan, unitsLine, unitsOf, WORD_TONE } from '../arrivals';
+import { Button, Card, Note, Pill, RefusalNote, ScanField, Sheet } from '../../../shared/ui';
+import { canSayMissed, feeEach, hubArrivalWord, loadLine, onIt, stillToScan, unitsLine, unitsOf, WORD_TONE } from '../arrivals';
+import { money } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { dayLabel } from './ArrivalsScreen';
 import { TamperSheet } from './TamperSheet';
@@ -50,8 +51,17 @@ export function ArrivalScreen({ state, actions }: { state: MdpState; actions: Md
         <Pill tone={WORD_TONE[word]}>{t(`mdp.arrivals.word.${word}` as never)}</Pill>
         {a.bringer ? <span class="hint">{t('mdp.arrivals.bringer', { who: a.bringer })}</span> : null}
       </div>
-      {/* The server's own words under the headline: a code not on this arrival is to be set aside, and the store told. */}
-      {state.error ? <ErrorNote error={state.error} showDetail /> : null}
+      {/* The server's own words, where the hub acted: a code not on this arrival is set aside and the store told; more units
+          than the store can pay for are not taken in. */}
+      {state.error ? <RefusalNote error={state.error} /> : null}
+      {/* Its receiving fee (D12): paid to the hub for each unit it counts in; once counted, what it is paid. */}
+      {a.fee ? (
+        <p class="card__note">
+          {a.fee.paid != null && a.received
+            ? t('mdp.arrival.feePaid', { amount: money(a.fee.paid, a.fee.currency), units: unitsLine(a.unitKind, a.fee.paidUnits ?? a.received.units, t) })
+            : t('mdp.arrival.fee', { each: feeEach(a.unitKind, a.fee.perUnit, a.fee.currency, t) })}
+        </p>
+      ) : null}
 
       {a.state === 'expected' ? (
         <>
@@ -64,7 +74,7 @@ export function ArrivalScreen({ state, actions }: { state: MdpState; actions: Md
               </label>
               <input id="arrival-units" class="input" type="number" inputMode="numeric" min={1} max={100} value={units} onInput={(e) => setUnits(e.currentTarget.value)} />
               {counted !== null && counted < a.units ? <p class="hint">{t('mdp.arrival.fewer')}</p> : null}
-              {counted !== null && counted > a.units ? <p class="hint">{t('mdp.arrival.more')}</p> : null}
+              {counted !== null && counted > a.units ? <p class="hint">{t(a.fee ? 'mdp.arrival.moreFee' : 'mdp.arrival.more')}</p> : null}
             </div>
             <div class="field">
               <label class="field__label" for="arrival-note">

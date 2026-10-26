@@ -131,7 +131,7 @@ export function StoreScreen({ state, actions }: StoreScreenProps) {
         {state.settlement.length === 0 && state.storeState === 'ready' ? <p class="hint">{t('vendor.noEntriesYet')}</p> : null}
         {state.settlement.slice(0, 10).map((s) => (
           <div key={s.id} class="kv">
-            <span>{`${ledgerTypeWord(s.type, t)}${s.parcelId ? ` · ${s.parcelId}` : ''}`}</span>
+            <span>{`${ledgerTypeWord(s.type, t, s.parcelId)}${s.parcelId ? ` · ${s.parcelId}` : ''}`}</span>
             <b>{`${s.sign}${money(s.amount, s.currency ?? v?.currency)}`}</b>
           </div>
         ))}

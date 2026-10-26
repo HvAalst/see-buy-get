@@ -56,7 +56,7 @@ export function createMdpApi(sbg: SbgClient) {
     arrivals: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/arrivals', { params: { path: { id: mdpId } } })),
 
     /** The hub's own word that it takes stores' parcels in bulk — its days and hours, its doors — or no longer does. Its owner's. */
-    setBulk: (mdpId: string, body: { open: boolean; hours?: Record<string, { open: string; close: string } | null> | null; doors?: number | null }) =>
+    setBulk: (mdpId: string, body: { open: boolean; hours?: Record<string, { open: string; close: string } | null> | null; doors?: number | null; fees?: Record<string, number | null> | null }) =>
       sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/bulk', { params: { path: { id: mdpId } }, body: body as never })),
 
     /** At the hub's door: the units that came, counted, and a line of the hub's words. */

@@ -10,7 +10,10 @@ import { openOn, weekOf } from './fleet-site.service';
 import { WEEKDAYS } from './fleet-site.types';
 import {
   HUB_ARRIVAL_DAYS_AHEAD,
+  HUB_UNIT_KINDS,
   type HubArrival,
+  type HubArrivalFee,
+  type HubArrivalFeeView,
   type HubArrivalParcel,
   type HubArrivalScan,
   type HubArrivalView,
@@ -19,6 +22,7 @@ import {
   type HubBulkView,
   type HubOption,
   type HubUnitKind,
+  type HubUnitPrices,
   type HubWaiting,
   type StoreHubArrivals,
 } from './hub-arrival.types';
@@ -29,6 +33,7 @@ import { ParcelService } from './parcel.service';
 import type { Mdp, Parcel, ParcelSize } from './pudo.types';
 import { publicQuote, RoutingService, type QuoteCarriers } from './routing.service';
 import { VendorService } from './vendor.service';
+import { WalletGateService } from './wallet-gate.service';
 
 /** How long a finished or withdrawn arrival stays on the hub's list: a week. On the store's, a fortnight. */
 const HUB_DONE_SHOWN_MS = 7 * 86_400_000;
@@ -52,7 +57,13 @@ const WEEKDAY_NAMES: Record<string, string> = { mon: 'Monday', tue: 'Tuesday', w
  * THE HUB'S TAKE-IN: at its door it counts the units that came (the handover of the bulk), then scans each parcel off them
  * (ParcelService.takeInAtHub: custody store → hub; the parcel waits for its sort like one out of a bag, and its journey
  * plan is frozen from the hub). Finished by hand, or by the last parcel: what was booked and did not come is still the
- * store's, which is told in its bell and books it again. The hub is paid for its work as for any parcel: when it sorts it.
+ * store's, which is told in its bell and books it again. The hub is paid for its work on a parcel as for any parcel: when
+ * it sorts it.
+ *
+ * THE RECEIVING FEE (D12): where the hub charges for a unit of its kind, the store pays for the units it books when it books
+ * them (refused, before anything is written, where its balance cannot carry it), and the hub is paid its own fee at its door
+ * for the units it counts — a custody event. Units booked and not counted go back to the store at the door; all of them,
+ * where it was withdrawn or did not come. Units beyond the booking are charged at the door, or not taken in.
  */
 @Injectable()
 export class HubArrivalService {
@@ -70,6 +81,8 @@ export class HubArrivalService {
     @Optional() private readonly notifications?: NotificationService,
     // When the hub is open and how to reach it (hub-contact.service.ts). Optional for the specs; without it, nothing of it.
     @Optional() private readonly contacts?: HubContactService,
+    // Pays the hub its receiving fee at its door (D12). Optional for the specs; without it, the hub is not paid.
+    @Optional() private readonly gate?: WalletGateService,
   ) {}
 
   /* ---------------------------------------------------------------------------------------- the hub's word -- */
@@ -78,7 +91,7 @@ export class HubArrivalService {
    * The hub says it takes stores' parcels in bulk — on these days and hours, at so many doors — or that it no longer does.
    * Stopping refuses new bookings only: what stores already booked with it, it still takes in.
    */
-  setBulk(mdpId: string, input: { open: boolean; hours?: Record<string, { open: string; close: string } | null> | null; doors?: number | null }, by: string, now: number = Date.now()): HubBulkView | undefined {
+  setBulk(mdpId: string, input: { open: boolean; hours?: Record<string, { open: string; close: string } | null> | null; doors?: number | null; fees?: Record<string, number | null> | null }, by: string, now: number = Date.now()): HubBulkView | undefined {
     const hub = this.mdps.working(mdpId);
     if (!input.open) {
       this.bulk.delete(mdpId);
@@ -93,15 +106,17 @@ export class HubArrivalService {
     if (outside) throw new GlosError('INVALID_INPUT', `The hub is not open then (${outside}): choose hours inside its opening hours, or open it then first`, { field: 'hours' });
     const doors = input.doors === null ? undefined : (input.doors ?? was?.doors);
     if (doors !== undefined && !(Number.isInteger(doors) && doors >= 1 && doors <= 50)) throw new GlosError('INVALID_INPUT', 'Doors are counted 1 to 50', { field: 'doors' });
-    const next: HubBulk = { mdpId: hub.mdpId, ...(hours ? { hours } : {}), ...(doors ? { doors } : {}), since: was?.since ?? new Date(now).toISOString(), by };
+    // What it charges to take in each kind of unit (D12): its own, in its own money. Arrivals already booked keep theirs.
+    const fees = input.fees === null ? undefined : input.fees !== undefined ? feesOf(input.fees) : was?.fees;
+    const next: HubBulk = { mdpId: hub.mdpId, ...(hours ? { hours } : {}), ...(doors ? { doors } : {}), ...(fees ? { fees } : {}), since: was?.since ?? new Date(now).toISOString(), by };
     this.bulk.set(hub.mdpId, next);
     return this.bulkView(hub, next, now);
   }
 
-  /** Whether this hub takes stores' parcels in bulk, and when. */
-  bulkOf(mdpId: string, now: number = Date.now()): HubBulkView | undefined {
+  /** Whether this hub takes stores' parcels in bulk, and when — read by a store, with what a unit costs it. */
+  bulkOf(mdpId: string, now: number = Date.now(), vendorId?: string): HubBulkView | undefined {
     const b = this.bulk.get(mdpId);
-    return b ? this.bulkView(this.mdps.require(mdpId), b, now) : undefined;
+    return b ? this.bulkView(this.mdps.require(mdpId), b, now, vendorId) : undefined;
   }
 
   /** The hub, working and taking stores' parcels in bulk — or refused in words a store can act on. */
@@ -126,7 +141,7 @@ export class HubArrivalService {
       } catch {
         continue; // a hub that may not work today offers nothing
       }
-      const view = this.bulkView(hub, b, now);
+      const view = this.bulkView(hub, b, now, vendorId);
       try {
         out.push({ ...view, quote: publicQuote(this.routing.quoteShipmentFrom(this.routing.hubEnd(hub.mdpId), destDid, size, seller, measured, carriers)) });
       } catch (err) {
@@ -173,8 +188,21 @@ export class HubArrivalService {
     }
     const reference = input.reference?.trim();
     const bringer = input.bringer?.trim();
+    // THE RECEIVING FEE (D12): the hub's own fee for this kind, locked now; the booked units paid for now, out of the store's
+    // balance — refused before anything is written where it cannot carry them.
+    const arrivalId = `arr_${randomBytes(5).toString('hex')}`;
+    const fee = this.feeFor(hub, vendorId, input.unitKind, input.units, now);
+    if (fee) {
+      const n = fee.charged.units;
+      const balance = this.vendors.balanceOf(vendorId);
+      const refused = () =>
+        new GlosError('WALLET_INSUFFICIENT', `Top up first — taking in ${unitsInWords(input.unitKind, n)} at ${hub.name} costs ${money(fee.charged.amount, fee.unit.currency)}, and your balance is ${money(balance, fee.unit.currency)}`);
+      if (balance + 1e-9 < fee.charged.amount) throw refused();
+      const bill = this.vendors.billShipment(vendorId, arrivalId, fee.charged.amount, times(fee.unit.buffer, n), times(fee.unit.tax, n), times(fee.unit.provision, n), { kind: 'hub-receiving', note: `receiving at ${hub.name}: ${unitsInWords(input.unitKind, n)}` });
+      if (!bill.paid) throw refused();
+    }
     const arrival: HubArrival = {
-      arrivalId: `arr_${randomBytes(5).toString('hex')}`,
+      arrivalId,
       mdpId: hub.mdpId,
       vendorId,
       parcelIds: ids,
@@ -186,22 +214,25 @@ export class HubArrivalService {
       createdAt: new Date(now).toISOString(),
       createdBy: by,
       scanned: [],
+      ...(fee ? { fee } : {}),
     };
     this.arrivals.set(arrival.arrivalId, arrival);
-    return this.viewOf(arrival, now);
+    return this.viewOf(arrival, now, 'store');
   }
 
   /** The store withdraws an arrival the hub has not taken in: its parcels are free to book again. */
   withdraw(vendorId: string, arrivalId: string, by: string, now: number = Date.now()): HubArrivalView {
     const a = this.arrivals.get(arrivalId);
     if (!a || a.vendorId !== vendorId) throw new GlosError('NOT_FOUND', 'No such arrival of yours');
-    if (a.state === 'withdrawn') return this.viewOf(a, now);
+    if (a.state === 'withdrawn') return this.viewOf(a, now, 'store');
     if (a.state === 'missed') throw new GlosError('INVALID_STATE', 'The hub said it did not come: its parcels are free to book again');
     if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'The hub has taken it in already: what it scanned is in its hands');
     a.state = 'withdrawn';
     a.withdrawn = { at: new Date(now).toISOString(), by };
+    // Nothing was taken in: what it paid for receiving goes back, all of it.
+    if (a.fee) this.giveBack(a, a.fee.charged.units, 'withdrawn', now);
     this.arrivals.set(a.arrivalId, a);
-    return this.viewOf(a, now);
+    return this.viewOf(a, now, 'store');
   }
 
   /** What the store has to book (its parcels for each hub, on no arrival yet), and its arrivals — open first. */
@@ -214,11 +245,11 @@ export class HubArrivalService {
       byHub.set(p.handInMdpId, [...(byHub.get(p.handInMdpId) ?? []), this.parcelOf(p, false)]);
     }
     const waiting: HubWaiting[] = [...byHub.entries()].map(([mdpId, parcels]) => {
-      const bulk = this.bulkOf(mdpId, now);
+      const bulk = this.bulkOf(mdpId, now, vendorId);
       return { mdpId, hubName: this.hubName(mdpId), ...(bulk ? { bulk } : {}), parcels };
     });
     const mine = [...this.arrivals.values()].filter((a) => a.vendorId === vendorId && (isOpen(a) || now - Date.parse(doneAt(a)) <= STORE_DONE_SHOWN_MS));
-    return { waiting, arrivals: this.ordered(mine).map((a) => this.viewOf(a, now)) };
+    return { waiting, arrivals: this.ordered(mine).map((a) => this.viewOf(a, now, 'store')) };
   }
 
   /* --------------------------------------------------------------------------------------------- the hub -- */
@@ -229,21 +260,46 @@ export class HubArrivalService {
     const here = [...this.arrivals.values()].filter((a) => a.mdpId === mdpId && (isOpen(a) || now - Date.parse(doneAt(a)) <= HUB_DONE_SHOWN_MS));
     const bulk = this.bulkOf(mdpId, now);
     const openingHours = this.contacts?.openingHoursOf(mdpId);
-    return { ...(bulk ? { bulk } : {}), ...(openingHours ? { openingHours } : {}), arrivals: this.ordered(here).map((a) => this.viewOf(a, now)) };
+    return { ...(bulk ? { bulk } : {}), ...(openingHours ? { openingHours } : {}), arrivals: this.ordered(here).map((a) => this.viewOf(a, now, 'hub')) };
   }
 
   /** AT THE HUB'S DOOR: the units that came, counted, by whom, with a line of their words. Then each parcel is scanned off. */
   receive(mdpId: string, arrivalId: string, input: { units: number; note?: string }, by: string, now: number = Date.now()): HubArrivalView {
-    this.mdps.working(mdpId);
+    const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
     if (a.state === 'withdrawn' || a.state === 'missed') throw new GlosError('INVALID_STATE', closedWhy(a));
     if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'It was taken in at the door already');
     if (!Number.isInteger(input.units) || input.units < 1) throw new GlosError('INVALID_INPUT', 'Count the units that came: one or more', { field: 'units' });
+    const at = new Date(now).toISOString();
+    // UNITS BEYOND THE BOOKING (D12): charged to the store now, at the fee it booked at — or, where its balance cannot
+    // carry them, not taken in: refused before anything is written, and the hub counts in only what was booked.
+    const booked = a.fee?.charged.units ?? 0;
+    if (a.fee && input.units > booked) {
+      const more = input.units - booked;
+      const amount = times(a.fee.unit.gross, more);
+      const store = this.storeName(a.vendorId);
+      const refused = () =>
+        new GlosError('WALLET_INSUFFICIENT', `${store} booked and paid for ${unitsInWords(a.units.kind, booked)}, and cannot pay for ${more} more: take in the ${booked} it booked, and leave the rest with whoever brought them`);
+      if (this.vendors.balanceOf(a.vendorId) + 1e-9 < amount) throw refused();
+      const bill = this.vendors.billShipment(a.vendorId, a.arrivalId, amount, times(a.fee.unit.buffer, more), times(a.fee.unit.tax, more), times(a.fee.unit.provision, more), { kind: 'hub-receiving', note: `receiving at ${hub.name}: ${unitsInWords(a.units.kind, more)} more than booked` });
+      if (!bill.paid) throw refused();
+      a.fee.extra = { units: more, amount, at };
+    }
     const note = input.note?.trim();
     a.state = 'receiving';
-    a.received = { at: new Date(now).toISOString(), by, units: input.units, ...(note ? { note: note.slice(0, 300) } : {}) };
+    a.received = { at, by, units: input.units, ...(note ? { note: note.slice(0, 300) } : {}) };
+    if (a.fee) {
+      // Booked and not counted: back to the store, at the door.
+      if (input.units < booked) this.giveBack(a, booked - input.units, 'not counted at the door', now);
+      // The hub's own fee for what it counted: a custody event, paid as its sort is.
+      if (this.gate) {
+        const amount = Math.round(a.fee.perUnit * input.units * 100) / 100;
+        this.gate.receivingLabour(hub.mdpId, amount, a.arrivalId, this.mdps.entityIdOrNone(hub), this.vendors.entityIdOrNone(this.vendors.get(a.vendorId)));
+        a.fee.paid = { units: input.units, amount, at };
+      }
+    }
     this.arrivals.set(a.arrivalId, a);
-    return this.viewOf(a, now);
+    return this.viewOf(a, now, 'hub');
   }
 
   /**
@@ -259,7 +315,7 @@ export class HubArrivalService {
     if (!parcelId) throw new GlosError('NOT_FOUND', `${code.trim()} is not on this arrival: set it aside, and tell the store`);
     const parcel = this.parcels.get(parcelId);
     const destination = this.destinationOf(parcel);
-    if (a.scanned.includes(parcelId)) return { arrival: this.viewOf(a, now), parcelId, destination, already: true };
+    if (a.scanned.includes(parcelId)) return { arrival: this.viewOf(a, now, 'hub'), parcelId, destination, already: true };
     const store = this.storeName(a.vendorId);
     this.parcels.takeInAtHub(parcelId, hub, `handed in at ${hub.name} by ${store}${a.reference ? `, ${a.reference}` : ''} · awaiting sort`, now);
     a.scanned.push(parcelId);
@@ -267,7 +323,7 @@ export class HubArrivalService {
     void this.events?.publish(GlosEvent.Pudo.ParcelTakenInAtHub, { parcelId, mdpId: hub.mdpId, arrivalId: a.arrivalId }, { source: 'pudo' }).catch(() => undefined);
     // The last one booked: nothing is missing, so the arrival is done.
     if (a.scanned.length === a.parcelIds.length) this.close(a, hub, by, now);
-    return { arrival: this.viewOf(a, now), parcelId, destination, already: false };
+    return { arrival: this.viewOf(a, now, 'hub'), parcelId, destination, already: false };
   }
 
   /** Scanning finished by hand: what was booked and not scanned did not come — it is still the store's, which is told. */
@@ -276,7 +332,7 @@ export class HubArrivalService {
     const a = this.hubArrival(mdpId, arrivalId);
     if (a.state !== 'receiving') throw new GlosError('INVALID_STATE', a.state === 'expected' ? 'Take it in at the door first' : closedWhy(a));
     this.close(a, hub, by, now);
-    return this.viewOf(a, now);
+    return this.viewOf(a, now, 'hub');
   }
 
   /**
@@ -287,17 +343,19 @@ export class HubArrivalService {
   missed(mdpId: string, arrivalId: string, by: string, now: number = Date.now()): HubArrivalView {
     const hub = this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
-    if (a.state === 'missed') return this.viewOf(a, now);
+    if (a.state === 'missed') return this.viewOf(a, now, 'hub');
     if (a.state === 'withdrawn') throw new GlosError('INVALID_STATE', closedWhy(a));
     if (a.state !== 'expected') throw new GlosError('INVALID_STATE', 'It was taken in at the door: scan what came, then finish it');
     const today = clockAt(now, this.clockOf(hub, now) ?? 'UTC').day;
     if (a.expectedOn >= today) throw new GlosError('INVALID_STATE', `It is due ${a.expectedOn === today ? 'today' : `on ${a.expectedOn}`}: say it did not come once its day is over`);
     a.state = 'missed';
     a.missed = { at: new Date(now).toISOString(), by };
+    // Nothing came, so nothing was taken in: what the store paid for receiving goes back, all of it.
+    if (a.fee) this.giveBack(a, a.fee.charged.units, 'it did not come', now);
     this.arrivals.set(a.arrivalId, a);
     void this.tellStoreMissed(a, hub);
     this.tellStoreSystem(a, hub, 'hub_arrival.missed');
-    return this.viewOf(a, now);
+    return this.viewOf(a, now, 'hub');
   }
 
   /* ---------------------------------------------------------------------------------------------- inside -- */
@@ -329,7 +387,7 @@ export class HubArrivalService {
     // What the hub saw at its door goes to the store, as a receiver's findings go to the sender (D9).
     const seen = a.received?.note ? ` At the door: “${a.received.note}”` : '';
     try {
-      await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}`, link: '/vendor/', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
+      await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}${receivingLine(a)}`, link: '/vendor/', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
     } catch (err) {
       this.logger.warn(`hub arrival notice failed for ${a.arrivalId}: ${(err as Error).message}`);
     }
@@ -350,7 +408,7 @@ export class HubArrivalService {
       await this.notifications.notify(did, {
         kind: 'hub_arrival',
         title: `${hub.name}: your arrival did not come`,
-        body: `${what}, booked for ${a.expectedOn}: ${hub.name} says nothing came. ${n === 1 ? 'Its parcel is' : `Its ${parcelsInWords(n)} are`} still with you: book ${n === 1 ? 'it' : 'them'} on a new arrival.`,
+        body: `${what}, booked for ${a.expectedOn}: ${hub.name} says nothing came. ${n === 1 ? 'Its parcel is' : `Its ${parcelsInWords(n)} are`} still with you: book ${n === 1 ? 'it' : 'them'} on a new arrival.${receivingLine(a)}`,
         link: '/vendor/',
         tag: `hub-arrival:${a.arrivalId}`,
         data: { arrivalId: a.arrivalId, mdpId: a.mdpId },
@@ -382,6 +440,8 @@ export class HubArrivalService {
         expectedOn: a.expectedOn,
         ...(a.reference ? { reference: a.reference } : {}),
         units: { kind: a.units.kind, count: a.units.count },
+        // What it paid for receiving and what came back (D12), in its own money.
+        ...(a.fee ? { receiving: { currency: a.fee.unit.currency, charged: a.fee.charged.amount, ...(a.fee.extra ? { extra: a.fee.extra.amount } : {}), ...(a.fee.refunded ? { refunded: a.fee.refunded.amount } : {}) } } : {}),
         ...(event === 'hub_arrival.received'
           ? {
               takenIn: a.scanned.map(order),
@@ -447,8 +507,52 @@ export class HubArrivalService {
     return clocks.length === 1 ? clocks[0] : undefined;
   }
 
-  private bulkView(hub: Mdp, b: HubBulk, now: number): HubBulkView {
+  /**
+   * THE RECEIVING FEE TO LOCK ON A BOOKING (D12): the hub's own fee for this kind of unit, in its own money, and one unit as
+   * this store pays for it, in its own money. None where the hub charges nothing for the kind.
+   */
+  private feeFor(hub: Mdp, vendorId: string, kind: HubUnitKind, units: number, now: number): HubArrivalFee | undefined {
+    const perUnit = this.bulk.get(hub.mdpId)?.fees?.[kind];
+    if (!perUnit || perUnit <= 0) return undefined;
+    const currency = this.mdps.currencyOf(hub);
+    const unit = this.routing.receivingUnit(perUnit, currency, this.vendors.entityIdOf(this.vendors.get(vendorId)));
+    return { perUnit, currency, unit, charged: { units, amount: times(unit.gross, units), at: new Date(now).toISOString() } };
+  }
+
+  /** Given back to the store: so many booked units, at what it paid for each — the mirror of the charge, tax and all. */
+  private giveBack(a: HubArrival, units: number, why: string, now: number): void {
+    if (!a.fee || units <= 0) return;
+    const amount = times(a.fee.unit.gross, units);
+    this.vendors.rebate(a.vendorId, a.arrivalId, amount, `receiving at ${this.hubName(a.mdpId)} given back: ${unitsInWords(a.units.kind, units)}, ${why}`, times(a.fee.unit.tax, units), times(a.fee.unit.provision, units));
+    a.fee.refunded = { units, amount, at: new Date(now).toISOString() };
+  }
+
+  /** One unit of each kind as this store pays for it, where the hub charges for it. A kind that cannot be priced is left out. */
+  private unitPricesFor(hub: Mdp, fees: Partial<Record<HubUnitKind, number>>, vendorId: string): HubUnitPrices | undefined {
+    let seller: string;
+    try {
+      seller = this.vendors.entityIdOf(this.vendors.get(vendorId));
+    } catch {
+      return undefined;
+    }
+    const currency = this.mdps.currencyOf(hub);
+    const out: HubUnitPrices = {};
+    for (const kind of HUB_UNIT_KINDS) {
+      const fee = fees[kind];
+      if (!fee || fee <= 0) continue;
+      try {
+        const unit = this.routing.receivingUnit(fee, currency, seller);
+        out[kind] = { gross: unit.gross, currency: unit.currency };
+      } catch {
+        // No rate between the two moneys yet: the booking would say so.
+      }
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  private bulkView(hub: Mdp, b: HubBulk, now: number, vendorId?: string): HubBulkView {
     const zone = this.clockOf(hub, now);
+    const receiving = vendorId && b.fees ? this.unitPricesFor(hub, b.fees, vendorId) : undefined;
     return {
       mdpId: hub.mdpId,
       name: hub.name,
@@ -459,6 +563,9 @@ export class HubArrivalService {
       ...(zone ? { zone, zoneName: zoneName(zone, now) } : {}),
       since: b.since,
       ...this.reachOf(hub.mdpId, now),
+      // What it charges to take in each kind of unit (D12): its own, public; and, read by a store, what a unit costs it.
+      ...(b.fees && Object.keys(b.fees).length ? { fees: b.fees, feeCurrency: this.mdps.currencyOf(hub) } : {}),
+      ...(receiving ? { receiving } : {}),
     };
   }
 
@@ -476,7 +583,22 @@ export class HubArrivalService {
     };
   }
 
-  private viewOf(a: HubArrival, now: number): HubArrivalView {
+  /** The receiving fee as its reader may read it (D12): the hub's own fee for a unit; the store's money to the store; the hub's pay to the hub. */
+  private feeView(f: HubArrivalFee, reader: 'hub' | 'store'): HubArrivalFeeView {
+    if (reader === 'hub') return { perUnit: f.perUnit, currency: f.currency, ...(f.paid ? { paid: f.paid.amount, paidUnits: f.paid.units } : {}) };
+    return {
+      perUnit: f.perUnit,
+      currency: f.currency,
+      storeCurrency: f.unit.currency,
+      unitGross: f.unit.gross,
+      charged: f.charged.amount,
+      chargedUnits: f.charged.units,
+      ...(f.extra ? { extra: f.extra.amount, extraUnits: f.extra.units } : {}),
+      ...(f.refunded ? { refunded: f.refunded.amount, refundedUnits: f.refunded.units } : {}),
+    };
+  }
+
+  private viewOf(a: HubArrival, now: number, reader: 'hub' | 'store'): HubArrivalView {
     let hub: Mdp | undefined;
     try {
       hub = this.mdps.require(a.mdpId);
@@ -511,6 +633,7 @@ export class HubArrivalService {
       ...(a.finished ? { finished: a.finished } : {}),
       ...(a.withdrawn ? { withdrawn: a.withdrawn } : {}),
       ...(a.missed ? { missed: a.missed } : {}),
+      ...(a.fee ? { fee: this.feeView(a.fee, reader) } : {}),
       // On the hub's own clock (D10): due today there, or its day gone with nothing taken in at the door.
       ...(open ? { today: a.expectedOn === today, late: a.state === 'expected' && a.expectedOn < today } : {}),
     };
@@ -567,10 +690,40 @@ function closedWhy(a: HubArrival): string {
   return 'Scanning of it is finished';
 }
 
-/** The weekday key of a day (YYYY-MM-DD): mon … sun. */
 /** Minutes past midnight as a clock says them: 1080 → "18:00". */
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
+/** So many of one amount, to the cent: every receiving charge and return is so many units (D12). */
+const times = (each: number, n: number) => Math.round(each * n * 100) / 100;
+
+/** "KES 354.96" — a sum as a refusal or a notice says it. */
+const money = (amount: number, currency: string) => `${currency} ${amount.toFixed(2)}`;
+
+/** What a store paid for receiving and what came back, as its bell says it (D12). Nothing where the hub charged nothing. */
+function receivingLine(a: HubArrival): string {
+  const f = a.fee;
+  if (!f) return '';
+  const paid = Math.round((f.charged.amount + (f.extra?.amount ?? 0)) * 100) / 100;
+  const back = f.refunded ? ` ${money(f.refunded.amount, f.unit.currency)} of it given back: ${unitsInWords(a.units.kind, f.refunded.units)}.` : '';
+  return ` Receiving: ${money(paid, f.unit.currency)} paid.${back}`;
+}
+
+/**
+ * WHAT A HUB CHARGES TO TAKE IN EACH KIND OF UNIT, as it wrote it (D12): known kinds only; a sum of money, 0 or more, to
+ * the cent; 0 or null leaves the kind free. Nothing at all where it charges for none.
+ */
+function feesOf(raw: Record<string, number | null>): Partial<Record<HubUnitKind, number>> | undefined {
+  const out: Partial<Record<HubUnitKind, number>> = {};
+  for (const [kind, value] of Object.entries(raw)) {
+    if (!(HUB_UNIT_KINDS as readonly string[]).includes(kind)) throw new GlosError('INVALID_INPUT', `${kind} is not a kind of unit: pallet, carton, cage or sack`, { field: 'fees' });
+    if (value === null || value === 0) continue;
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1_000_000) throw new GlosError('INVALID_INPUT', 'A fee is a sum of money: 0 or more', { field: 'fees' });
+    out[kind as HubUnitKind] = Math.round(value * 100) / 100;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** The weekday key of a day (YYYY-MM-DD): sun … sat. */
 function weekdayOf(day: string): string {
   return WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()];
 }

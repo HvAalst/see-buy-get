@@ -2,6 +2,8 @@ import type { Result, SbgClient } from '../../lib/sbg';
 import type { Measure } from '../../lib/sbg/personas/vendor';
 import { weekdayOf, type SiteWeek } from '../fleet/sites';
 import type { HubOpenNow } from '../../shared/hubReach';
+import type { MessageKey, Translate } from '../../shared/i18n';
+import { money } from './logic';
 import type { QuoteView } from './types';
 
 /** When a hub receives, said as a site's days and hours are said everywhere (en.site-hours.ts). */
@@ -35,8 +37,56 @@ export interface HubOptionView {
   askFor?: string;
   gate?: string;
   handle?: string;
+  /** What it charges to take in one unit of each kind, in its own money (D12) — public. */
+  fees?: Partial<Record<HubUnitKind, number>>;
+  feeCurrency?: string;
+  /** One unit of each kind as this store pays for it, in its own money: the hub's fee with the network's fee and tax. */
+  receiving?: Partial<Record<HubUnitKind, { gross: number; currency: string }>>;
   quote?: QuoteView;
   error?: string;
+}
+
+/** The receiving fee on an arrival as the store reads it (D12): what it paid, in its own money, and what came back. */
+export interface HubArrivalFeeView {
+  perUnit: number;
+  currency: string;
+  storeCurrency?: string;
+  unitGross?: number;
+  charged?: number;
+  chargedUnits?: number;
+  extra?: number;
+  extraUnits?: number;
+  refunded?: number;
+  refundedUnits?: number;
+}
+
+const FEE_EACH: Record<HubUnitKind, MessageKey> = {
+  pallet: 'vendor.hub.feeEach.pallet',
+  carton: 'vendor.hub.feeEach.carton',
+  cage: 'vendor.hub.feeEach.cage',
+  sack: 'vendor.hub.feeEach.sack',
+};
+
+/** "KES 177.48 a pallet · KES 23.66 a carton" — a unit of each kind as this store pays for it; null where all are free. */
+export function receivingWords(bulk: Pick<HubOptionView, 'receiving'> | undefined, t: Translate): string | null {
+  const r = bulk?.receiving;
+  if (!r) return null;
+  const parts = HUB_UNIT_KINDS.filter((k) => r[k]).map((k) => t(FEE_EACH[k], { price: money(r[k]!.gross, r[k]!.currency) }));
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/** Booking n units of a kind: what it costs the store, as the server charges it — n of one unit, to the cent. None where free. */
+export function receivingCost(bulk: Pick<HubOptionView, 'receiving'> | undefined, kind: HubUnitKind, unitsText: string): { each: number; total: number; currency: string } | null {
+  const unit = bulk?.receiving?.[kind];
+  const n = Number(unitsText);
+  if (!unit || !Number.isInteger(n) || n < 1) return null;
+  return { each: unit.gross, total: Math.round(unit.gross * n * 100) / 100, currency: unit.currency };
+}
+
+/** What the store paid for receiving on an arrival, all told — the booked units and any more at the door; null where none. */
+export function receivingPaid(fee: HubArrivalFeeView | undefined): number | null {
+  if (!fee || fee.charged == null) return null;
+  return Math.round((fee.charged + (fee.extra ?? 0)) * 100) / 100;
 }
 
 /** The days and hours a hub takes parcels in bulk: its own for bulk, or else the hours it is open. */
@@ -77,6 +127,8 @@ export interface HubArrivalView {
   missed?: { at: string; by: string };
   today?: boolean;
   late?: boolean;
+  /** The hub's receiving fee on it (D12): what the store paid and what came back. Absent: none for its kind. */
+  fee?: HubArrivalFeeView;
 }
 
 export interface HubWaiting {

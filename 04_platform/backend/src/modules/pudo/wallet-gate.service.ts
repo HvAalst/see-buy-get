@@ -568,10 +568,19 @@ export class WalletGateService {
   /** MDP sort labour — the hub is a provider like any other, so the sister accrues what it owes. A hub in
    *  another country recharges its sister's outlay to the seller exactly as a shop does. */
   sortLabour(mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
+    return this.hubLabour('sort-labour', mdpId, amount, reference, entityId, sellerEntityId);
+  }
+
+  /** A hub's receiving work (D12): its own fee for the units it counted at its door, accrued as its sort labour is. */
+  receivingLabour(mdpId: string, amount: number, arrivalId: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
+    return this.hubLabour('receiving-labour', mdpId, amount, arrivalId, entityId, sellerEntityId);
+  }
+
+  private hubLabour(kind: 'sort-labour' | 'receiving-labour', mdpId: string, amount: number, reference: string, entityId?: string, sellerEntityId?: string): PudoLedgerEntry {
     const entryId = entityId
       ? this.books.post({
           entityId,
-          kind: 'sort-labour',
+          kind,
           ref: reference || mdpId,
           lines: [
             { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount },

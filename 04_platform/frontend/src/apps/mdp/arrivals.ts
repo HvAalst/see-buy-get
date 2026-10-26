@@ -1,6 +1,7 @@
 import type { components } from '../../lib/sbg/schema';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import type { PillTone } from '../../shared/ui';
+import { money } from './logic';
 import { WEEK, type WeekForm } from '../fleet/sites';
 
 /**
@@ -101,6 +102,29 @@ export function onIt(a: Pick<HubArrival, 'parcels'>): HubArrivalParcel[] {
   return a.parcels.filter((p) => !p.withdrawn);
 }
 
+/** The kinds of unit a hub takes in, in the order a sheet asks for them. */
+export const UNIT_KINDS: readonly HubUnitKind[] = ['pallet', 'carton', 'cage', 'sack'];
+
+const FEE_EACH: Record<HubUnitKind, MessageKey> = {
+  pallet: 'mdp.bulk.feeEach.pallet',
+  carton: 'mdp.bulk.feeEach.carton',
+  cage: 'mdp.bulk.feeEach.cage',
+  sack: 'mdp.bulk.feeEach.sack',
+};
+
+/** "KES 150.00 a pallet" — the hub's fee for one unit of a kind (D12). */
+export function feeEach(kind: HubUnitKind, fee: number, currency: string | undefined, t: Translate): string {
+  return t(FEE_EACH[kind], { price: money(fee, currency) });
+}
+
+/** "KES 150.00 a pallet · KES 20.00 a carton" — what the hub charges to take in each kind; null where it charges nothing. */
+export function feesLine(bulk: Pick<HubBulk, 'fees' | 'feeCurrency'> | undefined, t: Translate): string | null {
+  const fees = bulk?.fees;
+  if (!fees) return null;
+  const parts = UNIT_KINDS.filter((k) => (fees[k] ?? 0) > 0).map((k) => feeEach(k, fees[k]!, bulk?.feeCurrency, t));
+  return parts.length ? parts.join(' · ') : null;
+}
+
 /** Units as counted at the door: a whole number from 1 to 100 — or nothing. */
 export function unitsOf(text: string): number | null {
   const s = text.trim();
@@ -144,7 +168,8 @@ export function bulkBody(
   keepsHours: boolean,
   week: WeekForm,
   doorsText: string,
-): { body: { open: true; hours: WeekForm | null; doors: number | null } } | { error: MessageKey } {
+  feesText?: Partial<Record<HubUnitKind, string>>,
+): { body: { open: true; hours: WeekForm | null; doors: number | null; fees?: Record<HubUnitKind, number | null> } } | { error: MessageKey } {
   const wrong = keepsHours ? weekProblem(week) : null;
   if (wrong) return { error: BULK_PROBLEM[wrong] };
   const s = doorsText.trim();
@@ -154,5 +179,17 @@ export function bulkBody(
     if (!/^\d+$/.test(s) || n < 1 || n > 50) return { error: 'mdp.bulk.errDoors' };
     doors = n;
   }
-  return { body: { open: true, hours: keepsHours ? week : null, doors } };
+  if (!feesText) return { body: { open: true, hours: keepsHours ? week : null, doors } };
+  // What it charges to take in each kind (D12): a sum of money to the cent, or blank for nothing.
+  const fees = {} as Record<HubUnitKind, number | null>;
+  for (const kind of UNIT_KINDS) {
+    const f = (feesText[kind] ?? '').trim().replace(',', '.');
+    if (!f) {
+      fees[kind] = null;
+      continue;
+    }
+    if (!/^\d+(\.\d{1,2})?$/.test(f) || Number(f) > 1_000_000) return { error: 'mdp.bulk.errFee' };
+    fees[kind] = Number(f) || null;
+  }
+  return { body: { open: true, hours: keepsHours ? week : null, doors, fees } };
 }

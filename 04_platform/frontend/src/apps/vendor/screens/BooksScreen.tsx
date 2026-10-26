@@ -196,7 +196,7 @@ function netLabel(net: number, currency?: string): string {
 /** A line is in the money of the books it was posted to; one from before lines said so, in the store’s. */
 function LedgerRowItem({ s, currency, selected, onToggle }: { s: SettlementRow; currency?: string; selected: boolean; onToggle: () => void }) {
   const t = useT();
-  const word = ledgerTypeWord(s.type, t);
+  const word = ledgerTypeWord(s.type, t, s.parcelId);
   const sub = [s.parcelId, s.note].filter(Boolean).join(' · ');
   return (
     <div class={`orow${selected ? ' orow--on' : ''}`}>

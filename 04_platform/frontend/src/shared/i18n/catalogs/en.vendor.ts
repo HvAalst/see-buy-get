@@ -179,6 +179,8 @@ export const enVendor = {
   'vendor.ledger.typeTopUpFee': 'Top-up fee',
   'vendor.ledger.typeShipment': 'Shipment',
   'vendor.ledger.typeRebate': 'Rebate',
+  'vendor.ledger.typeReceiving': 'Receiving at a hub',
+  'vendor.ledger.typeClaim': 'Damage claim',
 
   // Sign-in screen (login + create store).
   'vendor.signin.spoken': 'Sign in with your store’s email and password. New here? Sign up on the SeeBuyGet front page.',
@@ -708,6 +710,16 @@ export const enVendor = {
   'vendor.hub.progress': '{done} of {all} scanned in',
   'vendor.hub.counted': '{units} counted at the hub’s door',
   'vendor.hub.countedNote': '{units} counted at the hub’s door: “{note}”',
+  // A hub's fee per unit it takes in (D12; the user, 2026-10-26: "Its own fee").
+  'vendor.hub.fees': 'Receiving: {prices}',
+  'vendor.hub.feeEach.pallet': '{price} a pallet',
+  'vendor.hub.feeEach.carton': '{price} a carton',
+  'vendor.hub.feeEach.cage': '{price} a cage',
+  'vendor.hub.feeEach.sack': '{price} a sack',
+  'vendor.hub.feeLine': 'Receiving {units} costs {total} ({each} each, with fees and tax), paid when you book. What the hub does not count comes back to you.',
+  'vendor.hub.feeFree': '{hub} takes these in for nothing.',
+  'vendor.hub.feePaid': 'Receiving: {amount} paid',
+  'vendor.hub.feeBack': '{amount} of it given back',
   'vendor.hub.missing': '{n, plural, one {# parcel was} other {# parcels were}} not there: still with you, book again.',
   'vendor.hub.withdraw': 'Withdraw',
   'vendor.hub.withdrawn': 'Withdrawn: its parcels are free to book again.',

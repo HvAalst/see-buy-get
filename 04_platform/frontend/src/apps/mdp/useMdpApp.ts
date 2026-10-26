@@ -827,7 +827,7 @@ export function useMdpApp() {
    * owner's (the server refuses its people). Answers with the refusal, for the sheet to show where it was asked.
    */
   const setBulk = useCallback(
-    async (body: { open: boolean; hours?: Record<string, { open: string; close: string } | null> | null; doors?: number | null }): Promise<{ error: SbgError | null }> => {
+    async (body: { open: boolean; hours?: Record<string, { open: string; close: string } | null> | null; doors?: number | null; fees?: Record<string, number | null> | null }): Promise<{ error: SbgError | null }> => {
       const hub = stateRef.current.hub;
       if (!client || !hub) return { error: null };
       let error: SbgError | null = null;
@@ -838,7 +838,11 @@ export function useMdpApp() {
           return;
         }
         const bulk = narrow<{ bulk?: HubBulk }>(r.data)?.bulk;
-        setState((s) => ({ ...s, arrivals: { arrivals: s.arrivals?.arrivals ?? [], ...(bulk ? { bulk } : {}) } }));
+        // The new word in place of the old; the arrivals and the opening hours stay as they were read.
+        setState((s) => {
+          const { bulk: _was, ...rest } = s.arrivals ?? { arrivals: [] };
+          return { ...s, arrivals: { ...rest, ...(bulk ? { bulk } : {}) } };
+        });
         pushToast({ tone: 'ok', icon: 'check', title: t(bulk ? 'mdp.bulk.saved' : 'mdp.bulk.stopped') });
       });
       return { error };
