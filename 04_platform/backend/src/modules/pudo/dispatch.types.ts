@@ -10,6 +10,7 @@ import { BorderAdvice } from './border-rules.types';
 import { LoadArrival, LoadCrossing, LoadPassageForDriver, LoadPassageView } from './load-passage.types';
 import { LoadSealView, SEAL_STATES, SealToFind, type SealState } from './load-seal.types';
 import { UnitHold } from './tamper.types';
+import { HubAtStop } from './hub-contact.types';
 import { HeldByAuthority, HeldOnTheWay } from './load-detention.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { GeoPoint } from './pudo.types';
@@ -1452,7 +1453,11 @@ export class Claimable {
   code?: string;
   pickupLocation: GeoPoint;
   pickupLabel: string;
+  /** A bag taken at a hub: whether it is open now, and how to reach somebody there. */
+  @ApiPropertyOptional({ type: HubAtStop }) pickupHub?: HubAtStop;
   destLabel: string;
+  /** A bag going to a hub: the same, for the door it is driven to. */
+  @ApiPropertyOptional({ type: HubAtStop }) destHub?: HubAtStop;
   /**
    * The haul destination as a PLACE, so pricing and routing can work the pickup→dropoff leg.
    *

@@ -112,6 +112,30 @@ export function unitsOf(text: string): number | null {
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /**
+ * WHAT IS WRONG WITH A WEEK OF HOURS as a hub writes it — its opening hours or the hours it takes stores' parcels in bulk
+ * — checked as the server checks it: no day open, a time not HH:MM, closing before opening on a day.
+ */
+export function weekProblem(week: WeekForm): 'noDay' | 'time' | 'closes' | null {
+  const open = WEEK.filter((d) => week[d]);
+  if (!open.length) return 'noDay';
+  for (const d of open) {
+    const h = week[d]!;
+    if (!HHMM.test(h.open) || !HHMM.test(h.close)) return 'time';
+    if (h.close <= h.open) return 'closes';
+  }
+  return null;
+}
+
+const BULK_PROBLEM = { noDay: 'mdp.bulk.errNoDay', time: 'mdp.bulk.errTime', closes: 'mdp.bulk.errCloses' } as const satisfies Record<string, MessageKey>;
+const REACH_PROBLEM = { noDay: 'mdp.reach.errNoDay', time: 'mdp.reach.errTime', closes: 'mdp.reach.errCloses' } as const satisfies Record<string, MessageKey>;
+
+/** The hub's opening hours, before they are sent (HubReachCard.tsx): nothing to check where it keeps no set hours. */
+export function openingHoursProblem(keepsHours: boolean, week: WeekForm): MessageKey | null {
+  const wrong = keepsHours ? weekProblem(week) : null;
+  return wrong ? REACH_PROBLEM[wrong] : null;
+}
+
+/**
  * THE HUB'S WORD THAT IT TAKES PARCELS IN BULK, as its owner wrote it, made the body the server takes — or the first thing
  * wrong with it, checked as the server checks it: a day it receives at least, each opening before it closes; doors blank
  * (not said) or 1 to 50. Without set hours it receives whenever it is working.
@@ -121,15 +145,8 @@ export function bulkBody(
   week: WeekForm,
   doorsText: string,
 ): { body: { open: true; hours: WeekForm | null; doors: number | null } } | { error: MessageKey } {
-  if (keepsHours) {
-    const open = WEEK.filter((d) => week[d]);
-    if (!open.length) return { error: 'mdp.bulk.errNoDay' };
-    for (const d of open) {
-      const h = week[d]!;
-      if (!HHMM.test(h.open) || !HHMM.test(h.close)) return { error: 'mdp.bulk.errTime' };
-      if (h.close <= h.open) return { error: 'mdp.bulk.errCloses' };
-    }
-  }
+  const wrong = keepsHours ? weekProblem(week) : null;
+  if (wrong) return { error: BULK_PROBLEM[wrong] };
   const s = doorsText.trim();
   let doors: number | null = null;
   if (s) {

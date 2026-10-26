@@ -9,6 +9,7 @@ import { PeopleSheet } from '../../agent/screens/PeopleSheet';
 import { HUB_PEOPLE_WORDS } from '../staffWords';
 import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient } from '../../../lib/sbg';
+import { HubReachCard } from './HubReachCard';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -177,6 +178,9 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
           />
         </Card>
       ) : null}
+
+      {/* When the hub is open and how to reach it: what drivers and stores working with it see; its owner writes it. */}
+      <HubReachCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />
 
       {/* The hub's people work the floor; its fee and its people are the owner's (the server refuses them those doors). */}
       {state.staff ? null : (

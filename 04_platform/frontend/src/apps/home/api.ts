@@ -3,6 +3,8 @@ import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { DocumentLinkView, LinkAnswer } from '../../shared/archive/documentLink';
 import type { ReportLinkAnswer, ReportLinkView } from '../../shared/damage/damageReport';
 import type { ProofAnswer } from '../../lib/sbg/personas/archive';
+import type { HubOpenNow, HubWeek } from '../../shared/hubReach';
+import type { VisitPlace } from '../../shared/visitHours';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { downscaleImage } from '../../shared/media';
 import type { FleetSignupStatus } from './logic';
@@ -402,6 +404,13 @@ export interface ProfileView {
   offer?: ClearanceOffer;
   /** Why an empty record is not a bad record — we only count what came through this network. */
   recordSays?: string;
+  /** HOW TO REACH A COMPANY — its own entry, published by it, never verified (its `basis` says so). */
+  contact?: { contactName?: string; phone?: string; phoneAlt?: string; email?: string; website?: string; address?: string; hours?: string; saidAt: string; saidBy: string; basis: string } & VisitPlace;
+  /**
+   * A HUB'S HOURS AND WHETHER IT IS OPEN NOW — and its number and gate only where it ticked that they go here (the user,
+   * 2026-10-26: "public if the hub ticks it, but the phone number under a button that opens the phone app").
+   */
+  hub?: { openingHours?: HubWeek; openNow?: HubOpenNow; zoneName?: string; phone?: string; phoneAlt?: string; askFor?: string; gate?: string; basis: string };
 }
 
 /** The things a clearing agent can say they clear. A vocabulary, so a finder can match it. */

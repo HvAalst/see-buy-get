@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { SbgError } from '../../../lib/sbg';
 import { formatDate, useT } from '../../../shared/i18n';
-import { Button, Card, ErrorNote, Note, Pill, type PillTone } from '../../../shared/ui';
-import { arrivalWord, bookableDays, bookingReady, HUB_UNIT_KINDS, hoursLine, todayAt, type ArrivalWord, type HubArrivalView, type HubsApi, type HubUnitKind, type HubWaiting, type StoreHubArrivals } from '../hubs';
+import { Button, Card, ErrorNote, HubReach, Note, Pill, type PillTone } from '../../../shared/ui';
+import { arrivalWord, bookableDays, bookingReady, HUB_UNIT_KINDS, hoursLine, receivingHours, todayAt, type ArrivalWord, type HubArrivalView, type HubsApi, type HubUnitKind, type HubWaiting, type StoreHubArrivals } from '../hubs';
 
 const WORD_TONE: Record<ArrivalWord, PillTone> = { expected: 'info', late: 'warn', receiving: 'info', all_in: 'ok', some_missing: 'warn', withdrawn: 'idle', missed: 'warn' };
 
@@ -51,7 +51,7 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
   if (!api || !vendorId || !data) return null;
 
   const start = (w: HubWaiting) => {
-    const days = bookableDays(w.bulk?.hours, todayAt(w.bulk?.zone));
+    const days = bookableDays(receivingHours(w.bulk), todayAt(w.bulk?.zone));
     setDone(null);
     setError(null);
     setBooking({ mdpId: w.mdpId, parcelIds: w.parcels.map((p) => p.parcelId), unitKind: 'pallet', units: '1', expectedOn: days[0] ?? '', reference: '', bringer: '' });
@@ -104,12 +104,14 @@ export function HubHandIn({ api, vendorId, onWork, lead = false }: { api: HubsAp
 
       {data.waiting.map((w) => {
         const open = booking?.mdpId === w.mdpId ? booking : null;
-        const hours = hoursLine(w.bulk?.hours, t);
-        const days = bookableDays(w.bulk?.hours, todayAt(w.bulk?.zone));
+        const hours = hoursLine(receivingHours(w.bulk), t);
+        const days = bookableDays(receivingHours(w.bulk), todayAt(w.bulk?.zone));
         return (
           <Card key={w.mdpId} title={w.hubName}>
             <p class="card__note">{t('vendor.hub.waiting', { n: w.parcels.length, hub: w.hubName })}</p>
             {w.bulk ? <p class="card__note">{hours ? t('vendor.mint.hubHours', { hours }) : t('vendor.mint.hubAnyHour')}</p> : <p class="card__note">{t('vendor.hub.notTaking', { hub: w.hubName })}</p>}
+            {/* Whether it is open now, who to ask for, where to come in, and a button that calls it (the user, 2026-10-26). */}
+            {w.bulk ? <HubReach hub={{ ...w.bulk, name: w.hubName }} showName={false} /> : null}
             {!open ? (
               <Button variant="outline" disabled={!w.bulk || busy} onClick={() => start(w)}>
                 {t('vendor.hub.book')}

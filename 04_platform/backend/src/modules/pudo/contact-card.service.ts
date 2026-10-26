@@ -167,6 +167,8 @@ export const CONTACT_BASIS =
 /** Digits, spaces, brackets and dashes, with an optional +. We check the shape and never dial it. */
 const PHONE = /^\+?[\d\s()\-.]{6,24}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+/** The same shapes, for a hub's own entry (hub-contact.service.ts). */
+export { PHONE as CONTACT_PHONE, EMAIL as CONTACT_EMAIL };
 
 @Injectable()
 export class ContactCardService {

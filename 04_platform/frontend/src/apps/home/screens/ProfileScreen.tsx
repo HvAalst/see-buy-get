@@ -1,4 +1,7 @@
-import { Card, Note, Pill, ReadAloud } from '../../../shared/ui';
+import { CallButton, Card, Note, OpenInMaps, Pill, ReadAloud } from '../../../shared/ui';
+import { dayName, HUB_WEEK, openNowLine } from '../../../shared/hubReach';
+import { visitSpans } from '../../../shared/visitHours';
+import type { ProfileView } from '../api';
 import { useT } from '../../../shared/i18n';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -71,6 +74,10 @@ export function ProfileScreen({ state }: ProfileScreenProps) {
         {/* A getter, not a string: the component speaks state at the moment of the tap. */}
         <ReadAloud text={() => [p.name + '.', p.does, p.presence?.says].filter(Boolean).join(' ')} />
       </Card>
+
+      {/* A HUB: when it is open and whether it is now; how to reach it where it chose. A COMPANY: its own contact entry. */}
+      {p.hub ? <HubOnPage hub={p.hub} name={p.name} at={p.at} /> : null}
+      {p.contact ? <ContactOnPage contact={p.contact} name={p.name} /> : null}
 
       {/* WHAT OUR PRESENCE THERE ACTUALLY PROMISES. Not a badge — a sentence. Omitted entirely when no
           country is recorded: the ladder answers 'observed' for an unknown jurisdiction, which would
@@ -276,5 +283,91 @@ export function ProfileScreen({ state }: ProfileScreenProps) {
         </Card>
       ) : null}
     </>
+  );
+}
+
+/** Buttons side by side, wrapping on a narrow phone. */
+const ACTIONS = 'display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px';
+
+/**
+ * A HUB ON ITS PAGE (the user, 2026-10-26): its week, Sunday to Saturday, and whether it is open now on its own clock —
+ * always. Who to ask for, where to come in, a button that calls it and a way there — only where it ticked that they go on
+ * its page. The number itself is never printed.
+ */
+function HubOnPage({ hub, name, at }: { hub: NonNullable<ProfileView['hub']>; name: string; at?: { lat: number; lng: number } }) {
+  const t = useT();
+  const now = openNowLine(hub.openNow, t);
+  const buttons = Boolean(hub.phone || hub.phoneAlt || at);
+  return (
+    <Card>
+      <h2 class="h2">{t('home.profile.hoursTitle')}</h2>
+      {now ? (
+        <p>
+          <Pill tone={hub.openNow?.open ? 'ok' : 'idle'}>{now}</Pill>
+        </p>
+      ) : null}
+      {hub.openingHours ? (
+        <ul class="list">
+          {HUB_WEEK.map((d) => {
+            const h = hub.openingHours?.[d];
+            return (
+              <li key={d}>
+                {dayName(d, 'long')} · {h ? `${h.open}–${h.close}` : t('home.profile.closed')}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {hub.zoneName ? <p class="card__note">{t('home.profile.onClock', { zone: hub.zoneName })}</p> : null}
+      {hub.askFor ? <p>{t('common.hub.askFor', { who: hub.askFor })}</p> : null}
+      {hub.gate ? <p>{t('common.hub.gate', { gate: hub.gate })}</p> : null}
+      {buttons ? (
+        <div style={ACTIONS}>
+          {hub.phone ? <CallButton phone={hub.phone} label={t('common.hub.call', { name })} /> : null}
+          {hub.phoneAlt ? <CallButton phone={hub.phoneAlt} label={t('home.profile.callSecond')} /> : null}
+          {at ? <OpenInMaps point={at} label={t('home.profile.navigate')} /> : null}
+        </div>
+      ) : null}
+      <p class="card__note">{hub.basis}</p>
+    </Card>
+  );
+}
+
+/** Only an address on the web, never a script: a site without its scheme is taken as https. */
+const siteOf = (website: string) => (/^https?:\/\//i.test(website) ? website : `https://${website.replace(/^[a-z]+:/i, '')}`);
+
+/**
+ * HOW TO REACH A COMPANY — its own entry, published by it (a yard, a clearing agent): who to ask for, where to come in,
+ * when somebody is there; a button that calls it, one that writes to it, its site. Never verified, and said so.
+ */
+function ContactOnPage({ contact, name }: { contact: NonNullable<ProfileView['contact']>; name: string }) {
+  const t = useT();
+  // The days it receives visitors, grouped by the hours they keep: "Monday, Tuesday · 09:00–16:00; Saturday · 09:00–12:00".
+  const visitors = visitSpans(contact)
+    .map((s) => [s.days.map((d) => dayName(d, 'long')).join(', '), s.from && s.to ? `${s.from}–${s.to}` : ''].filter(Boolean).join(' · '))
+    .join('; ');
+  return (
+    <Card>
+      <h2 class="h2">{t('home.profile.reachTitle')}</h2>
+      {contact.contactName ? <p>{t('common.hub.askFor', { who: contact.contactName })}</p> : null}
+      {contact.address ? <p>{t('common.hub.gate', { gate: contact.address })}</p> : null}
+      {contact.hours ? <p>{t('home.profile.whenThere', { hours: contact.hours })}</p> : null}
+      {visitors ? <p>{t('home.profile.visitors', { when: visitors })}</p> : null}
+      <div style={ACTIONS}>
+        {contact.phone ? <CallButton phone={contact.phone} label={t('common.hub.call', { name })} /> : null}
+        {contact.phoneAlt ? <CallButton phone={contact.phoneAlt} label={t('home.profile.callSecond')} /> : null}
+        {contact.email ? (
+          <a class="btn btn--link" href={`mailto:${contact.email}`}>
+            {t('home.profile.writeTo', { name })}
+          </a>
+        ) : null}
+        {contact.website ? (
+          <a class="btn btn--link" href={siteOf(contact.website)} target="_blank" rel="noopener noreferrer nofollow">
+            {t('home.profile.website')}
+          </a>
+        ) : null}
+      </div>
+      <p class="card__note">{contact.basis}</p>
+    </Card>
   );
 }

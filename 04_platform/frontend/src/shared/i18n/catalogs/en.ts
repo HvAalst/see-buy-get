@@ -106,6 +106,15 @@ export const en = {
   // Shared controls the whole network reuses.
   'common.readAloud': 'Read this screen aloud',
   'common.whatIsThis': 'What is this? {title}',
+  // A hub where a driver or a store meets it (shared/hubReach.ts): open now on its own clock, and how to reach it.
+  'common.hub.openNow': 'Open now',
+  'common.hub.openUntil': 'Open until {until}',
+  'common.hub.opensToday': 'Closed · opens at {at}',
+  'common.hub.opensOn': 'Closed · opens {day} {at}',
+  'common.hub.closedWeek': 'Closed this week',
+  'common.hub.askFor': 'Ask for {who}',
+  'common.hub.gate': 'Where to come in: {gate}',
+  'common.hub.call': 'Call {name}',
   // The look-and-choose picker (OptionPicker), used wherever a list is too long or too visual for a dropdown.
   'common.searchOptions': 'Search the list…',
   'common.noMatches': 'Nothing in this list matches that.',

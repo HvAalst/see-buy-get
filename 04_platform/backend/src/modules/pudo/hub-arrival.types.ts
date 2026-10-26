@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { SiteWeek } from './fleet-site.types';
 import { GeoPoint } from './pudo.types';
+import { HubOpenNow } from './hub-contact.types';
 
 /**
  * INBOUND SUPPLY, READING B (assessment.html D1–D14; the user, 2026-10-25: "Yes, A then B") — A HUB AS A CROSS-DOCK.
@@ -79,6 +80,14 @@ export class HubBulkView {
   @ApiPropertyOptional() zone?: string;
   @ApiPropertyOptional() zoneName?: string;
   since: string;
+  /** When it is open, Sunday to Saturday — what "whenever it is working" means where it set no hours for bulk. */
+  @ApiPropertyOptional({ type: SiteWeek }) openingHours?: SiteWeek;
+  @ApiPropertyOptional({ type: HubOpenNow }) openNow?: HubOpenNow;
+  /** How a store bringing it parcels reaches it: its number (a call button, never printed), who to ask for, its gate. */
+  @ApiPropertyOptional() phone?: string;
+  @ApiPropertyOptional() askFor?: string;
+  @ApiPropertyOptional() gate?: string;
+  @ApiPropertyOptional() handle?: string;
 }
 
 /** A hub a store may hand this parcel in at, priced from there — the price the mint will charge — or why not. */

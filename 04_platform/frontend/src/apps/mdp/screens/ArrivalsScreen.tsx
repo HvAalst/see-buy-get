@@ -1,9 +1,10 @@
 import { useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
 import { Button, Card, ErrorNote, errorSentence, Explainer, Icon, Note, Pill, Sheet } from '../../../shared/ui';
-import { DAY_NAME, DAY_SHORT, hoursLine, WEEK, weekForm, type WeekForm } from '../../fleet/sites';
+import { hoursLine, weekForm, type WeekForm } from '../../fleet/sites';
 import { arrivalGroups, bulkBody, hubArrivalWord, loadLine, onIt, WORD_TONE, type HubArrival, type HubBulk } from '../arrivals';
 import type { MdpActions, MdpState } from '../useMdpApp';
+import { WeekRows } from './WeekRows';
 
 /** "Tue 27 Oct" — a day as the hub keeps it, the same date wherever it is read. */
 export const dayLabel = (day: string) => formatDate(`${day}T12:00:00Z`, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -173,32 +174,7 @@ function BulkSheet({ bulk, busy, onClose, onSave }: { bulk?: HubBulk; busy: bool
             <span>{t('mdp.bulk.keepsHours')}</span>
           </label>
           {keepsHours ? (
-            <div class="days">
-              <div class="dayrow dayrow--head" aria-hidden="true">
-                <span />
-                <span>{t('fleet.sites.opens')}</span>
-                <span>{t('fleet.sites.closes')}</span>
-              </div>
-              {WEEK.map((d) => {
-                const day = week[d];
-                const name = t(DAY_NAME[d]);
-                const setDay = (value: { open: string; close: string } | null) => setWeek((was) => ({ ...was, [d]: value }));
-                return (
-                  <div class={`dayrow${day ? '' : ' dayrow--closed'}`} key={d}>
-                    <label class="dayrow__day">
-                      <input type="checkbox" checked={Boolean(day)} aria-label={name} onChange={(e) => setDay(e.currentTarget.checked ? { open: '08:00', close: '17:00' } : null)} />
-                      <span>{day ? t(DAY_SHORT[d]) : t('mdp.bulk.closedOn', { day: t(DAY_SHORT[d]) })}</span>
-                    </label>
-                    {day ? (
-                      <>
-                        <input class="input" type="time" aria-label={`${name} ${t('fleet.sites.opens')}`} value={day.open} onChange={(e) => setDay({ open: e.currentTarget.value, close: day.close })} />
-                        <input class="input" type="time" aria-label={`${name} ${t('fleet.sites.closes')}`} value={day.close} onChange={(e) => setDay({ open: day.open, close: e.currentTarget.value })} />
-                      </>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
+            <WeekRows week={week} onChange={setWeek} />
           ) : (
             <p class="hint">{t('mdp.bulk.anyHourHint')}</p>
           )}

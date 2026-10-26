@@ -30,6 +30,8 @@ export { Explainer, ExplainerBlock, ExplainerReset } from './Explainer';
 export { Icon, type IconName, type IconProps } from './Icon';
 export { Info, type InfoProps } from './Info';
 export { Abbr, Abbreviated } from './Abbr';
+export { CallButton } from './CallButton';
+export { HubReach } from './HubReach';
 export { OptionInfo, type OptionHelpItem, type OptionInfoProps } from './OptionInfo';
 export { OptionPicker, type OptionPickerProps, type PickerOption } from './OptionPicker';
 export { NotificationBell, type NotificationBellProps } from './NotificationBell';

@@ -4458,6 +4458,72 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/contact": {
+      "get": {
+        "operationId": "HubContact.read",
+        "summary": "",
+        "description": "The hub's entry as it reads it: its hours, whether it is open now, its numbers and its gate.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubContactView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "HubContact.write",
+        "summary": "",
+        "description": "Its owner writes it: when it is open, the number drivers and stores ring, who to ask for, where to come in — and\nwhether its number and gate go on its public page too. Not its people, and not network staff: a hub's word is its own.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHubContactDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubContactView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/risk-register": {
       "get": {
         "operationId": "RiskRegister.register",
@@ -33826,6 +33892,31 @@
           }
         }
       },
+      "HubOpenNow": {
+        "type": "object",
+        "properties": {
+          "until": {
+            "type": "string",
+            "description": "Open: until when today (HH:MM)."
+          },
+          "opensDay": {
+            "type": "string",
+            "description": "Closed: the day it next opens (sun … sat), at what time, and whether that is later today. Absent: not this week."
+          },
+          "opensAt": {
+            "type": "string"
+          },
+          "opensToday": {
+            "type": "boolean"
+          },
+          "open": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "open"
+        ]
+      },
       "HubOption": {
         "type": "object",
         "properties": {
@@ -33852,6 +33943,30 @@
             "description": "Its clock, and the name of it: Africa/Nairobi, \"East Africa Time\". Absent: a country of several clocks."
           },
           "zoneName": {
+            "type": "string"
+          },
+          "openingHours": {
+            "description": "When it is open, Sunday to Saturday — what \"whenever it is working\" means where it set no hours for bulk.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SiteWeek"
+              }
+            ]
+          },
+          "openNow": {
+            "$ref": "#/components/schemas/HubOpenNow"
+          },
+          "phone": {
+            "type": "string",
+            "description": "How a store bringing it parcels reaches it: its number (a call button, never printed), who to ask for, its gate."
+          },
+          "askFor": {
+            "type": "string"
+          },
+          "gate": {
+            "type": "string"
+          },
+          "handle": {
             "type": "string"
           },
           "quote": {
@@ -33918,6 +34033,30 @@
             "description": "Its clock, and the name of it: Africa/Nairobi, \"East Africa Time\". Absent: a country of several clocks."
           },
           "zoneName": {
+            "type": "string"
+          },
+          "openingHours": {
+            "description": "When it is open, Sunday to Saturday — what \"whenever it is working\" means where it set no hours for bulk.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SiteWeek"
+              }
+            ]
+          },
+          "openNow": {
+            "$ref": "#/components/schemas/HubOpenNow"
+          },
+          "phone": {
+            "type": "string",
+            "description": "How a store bringing it parcels reaches it: its number (a call button, never printed), who to ask for, its gate."
+          },
+          "askFor": {
+            "type": "string"
+          },
+          "gate": {
+            "type": "string"
+          },
+          "handle": {
             "type": "string"
           },
           "mdpId": {
@@ -34333,6 +34472,114 @@
           "destination",
           "already"
         ]
+      },
+      "HubContactView": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Its public page: seebuyget.com/@handle."
+          },
+          "phone": {
+            "type": "string"
+          },
+          "askFor": {
+            "type": "string"
+          },
+          "gate": {
+            "type": "string"
+          },
+          "openingHours": {
+            "$ref": "#/components/schemas/SiteWeek"
+          },
+          "openNow": {
+            "description": "Absent where it keeps no opening hours, or its country keeps more than one clock.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubOpenNow"
+              }
+            ]
+          },
+          "location": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phoneAlt": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string",
+            "description": "Its clock, and the name of it. Absent: a country of several clocks."
+          },
+          "zoneName": {
+            "type": "string"
+          },
+          "publish": {
+            "type": "boolean",
+            "description": "Whether its number and gate are on its public page, for anyone."
+          },
+          "saidAt": {
+            "type": "string"
+          },
+          "saidBy": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string",
+            "description": "Said on every screen that shows it: the hub's own claim, published, and nobody checked it."
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "location",
+          "basis",
+          "mdpId",
+          "name"
+        ]
+      },
+      "SetHubContactDto": {
+        "type": "object",
+        "properties": {
+          "openingHours": {
+            "type": "object",
+            "nullable": true,
+            "description": "{ sun: null, mon: { open: '07:00', close: '18:00' }, … }. Null clears them."
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "phoneAlt": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "askFor": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "gate": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "publish": {
+            "type": "boolean",
+            "description": "Its number and gate on its public page too."
+          }
+        }
       },
       "RiskCellView": {
         "type": "object",
@@ -44203,6 +44450,38 @@
           "ratesNeed"
         ]
       },
+      "HubOnPage": {
+        "type": "object",
+        "properties": {
+          "openingHours": {
+            "$ref": "#/components/schemas/SiteWeek"
+          },
+          "openNow": {
+            "$ref": "#/components/schemas/HubOpenNow"
+          },
+          "zoneName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "phoneAlt": {
+            "type": "string"
+          },
+          "askFor": {
+            "type": "string"
+          },
+          "gate": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "basis"
+        ]
+      },
       "ProfileView": {
         "type": "object",
         "properties": {
@@ -44298,6 +44577,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ContactCardView"
+              }
+            ]
+          },
+          "hub": {
+            "description": "A HUB'S OPENING HOURS, AND HOW TO REACH IT IF IT CHOSE (the user, 2026-10-26: \"public if the hub ticks it, but the phone\nnumber under a button that opens the phone app\"). Its hours and whether it is open now always; its number and gate\nonly where it ticked that they go here. Never a street address it did not write.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubOnPage"
               }
             ]
           },

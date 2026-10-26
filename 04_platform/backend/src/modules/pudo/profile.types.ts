@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { HANDLE_KINDS, type HandleKind } from '../../foundation/handle/handle.service';
 import { ClearanceOffer, ClearanceRecord } from './import.types';
 import { ContactCardView } from './depot.types';
+import { HubOnPage } from './hub-contact.types';
 import { GeoPoint } from './pudo.types';
 
 /**
@@ -281,4 +282,12 @@ export class ProfileView {
    */
   @ApiPropertyOptional({ type: ContactCardView })
   contact?: ContactCardView;
+
+  /**
+   * A HUB'S OPENING HOURS, AND HOW TO REACH IT IF IT CHOSE (the user, 2026-10-26: "public if the hub ticks it, but the phone
+   * number under a button that opens the phone app"). Its hours and whether it is open now always; its number and gate
+   * only where it ticked that they go here. Never a street address it did not write.
+   */
+  @ApiPropertyOptional({ type: HubOnPage })
+  hub?: HubOnPage;
 }

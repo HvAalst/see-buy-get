@@ -79,6 +79,7 @@ import { ShelfService } from './shelf.service';
 import { DamageReportService } from './damage-report.service';
 import { RoutingService, publicQuote, type QuoteCarriers } from './routing.service';
 import { HubArrivalService } from './hub-arrival.service';
+import { HubContactService } from './hub-contact.service';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { ConsignmentService } from './consignment.service';
@@ -328,6 +329,8 @@ export class SbgController {
     @Optional() private readonly countryTerms?: CountryTermsService,
     // Reading B — a store's parcels handed in at a hub, in bulk (the user, 2026-10-25: "Yes, A then B").
     @Optional() private readonly hubArrivals?: HubArrivalService,
+    // A hub's opening hours and how to reach it, on its public page as far as it chose (the user, 2026-10-26).
+    @Optional() private readonly hubContacts?: HubContactService,
   ) {}
 
   /**
@@ -4719,6 +4722,8 @@ export class SbgController {
      * is a different act: a business asking to be telephoned, which is what a directory is for.
      */
     const contact = company ? this.contacts.of(company.entityId) : undefined;
+    // A HUB: its hours and whether it is open now — and its number and gate where it ticked that they go on its page.
+    const hubPage = hub ? this.hubContacts?.onPage(hub.mdpId) : undefined;
 
     // A verified paper is named, with its date, and an empty list is a real answer shown as one. Only a
     // COMPANY has a document register; the rest carry what their own record can honestly attest.
@@ -4770,6 +4775,7 @@ export class SbgController {
       ...(clears ? { clears, clearsMeasured: AGENT_MEASURED } : {}),
       ...(offer ? { offer } : {}),
       ...(contact ? { contact: { ...contact, basis: CONTACT_BASIS } } : {}),
+      ...(hubPage ? { hub: hubPage } : {}),
       ...(clears || offer ? { recordSays: RECORD_SAYS } : {}),
     };
   }

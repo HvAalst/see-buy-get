@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { arrivalWord, bookableDays, bookingReady, hoursLine, hubOriginOf, HUB_ORIGIN, todayAt } from './hubs';
+import { arrivalWord, bookableDays, bookingReady, hoursLine, hubOriginOf, HUB_ORIGIN, receivingHours, todayAt } from './hubs';
 
 const day = { open: '07:00', close: '15:00' };
 
 describe('a store handing its parcels in at a hub, in bulk (reading B)', () => {
+  it('books on the hours the hub takes parcels in bulk; where it set none, on its opening hours; else on any day', () => {
+    const opening = { mon: day, sat: { open: '08:00', close: '12:00' } };
+    const bulk = { tue: day };
+    expect(receivingHours({ hours: bulk, openingHours: opening })).toBe(bulk);
+    expect(receivingHours({ openingHours: opening })).toBe(opening);
+    expect(receivingHours({})).toBeUndefined();
+    expect(receivingHours(undefined)).toBeUndefined();
+  });
+
   it('keeps a hub chosen as where a parcel starts apart from a shop: "hub:<id>", and nothing else is one', () => {
     expect(hubOriginOf(`${HUB_ORIGIN}mdp_1`)).toBe('mdp_1');
     expect(hubOriginOf('did:agent:shop-1')).toBeNull();

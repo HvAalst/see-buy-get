@@ -1,6 +1,7 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { Measure } from '../../lib/sbg/personas/vendor';
 import { weekdayOf, type SiteWeek } from '../fleet/sites';
+import type { HubOpenNow } from '../../shared/hubReach';
 import type { QuoteView } from './types';
 
 /** When a hub receives, said as a site's days and hours are said everywhere (en.site-hours.ts). */
@@ -26,8 +27,21 @@ export interface HubOptionView {
   zone?: string;
   zoneName?: string;
   since: string;
+  /** When it is open, Sunday to Saturday: what "whenever it is working" means where it set no hours for bulk. */
+  openingHours?: SiteWeek;
+  openNow?: HubOpenNow;
+  /** How to reach it: a number (a call button, never printed), who to ask for, where to come in. */
+  phone?: string;
+  askFor?: string;
+  gate?: string;
+  handle?: string;
   quote?: QuoteView;
   error?: string;
+}
+
+/** The days and hours a hub takes parcels in bulk: its own for bulk, or else the hours it is open. */
+export function receivingHours(h: Pick<HubOptionView, 'hours' | 'openingHours'> | undefined): SiteWeek | undefined {
+  return h?.hours ?? h?.openingHours;
 }
 
 export interface HubArrivalParcel {

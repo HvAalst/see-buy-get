@@ -75,6 +75,13 @@ export function createMdpApi(sbg: SbgClient) {
     missedArrival: (mdpId: string, arrivalId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/arrivals/{arrivalId}/missed', { params: { path: { id: mdpId, arrivalId } } })),
 
+    /** The hub's opening hours and how to reach it: its own entry, and whether it is open now on its clock. */
+    contact: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/contact', { params: { path: { id: mdpId } } })),
+
+    /** Its owner writes it — a merge: a field left out stays, an empty one goes, hours sent as null go. */
+    setContact: (mdpId: string, body: { openingHours?: Record<string, { open: string; close: string } | null> | null; phone?: string; phoneAlt?: string; askFor?: string; gate?: string; email?: string; publish?: boolean }) =>
+      sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/contact', { params: { path: { id: mdpId } }, body: body as never })),
+
     /** Register a fresh laminated tote into this hub's pool. */
     newTote: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/totes', { params: { path: { id: mdpId } } })),
 

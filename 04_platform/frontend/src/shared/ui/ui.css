@@ -2855,3 +2855,33 @@
   align-self: flex-start;
   margin-top: 4px;
 }
+
+/* A number to call, as a button (CallButton.tsx): a link that looks like the buttons beside it. */
+a.btn {
+  text-decoration: none;
+}
+
+/* A hub at a glance where a driver or a store meets it (HubReach.tsx): open now, who to ask for, where to come in. */
+.hubreach {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hubreach__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hubreach__name {
+  font-weight: 700;
+}
+
+.hubreach__line {
+  font-size: 15px;
+  color: var(--tx2);
+}

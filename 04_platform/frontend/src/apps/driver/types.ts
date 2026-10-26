@@ -267,7 +267,11 @@ export interface Claimable {
   code?: string; // S32b — the human reference to show (TOTE-042 / FRT-007); ref for freight is an opaque id
   pickupLocation?: { lat: number; lng: number };
   pickupLabel: string;
+  /** A bag taken at a hub: whether it is open now, and how to reach somebody there (the user, 2026-10-26). */
+  pickupHub?: HubReachView;
   destLabel: string;
+  /** A bag going to a hub: the same, for the door it is driven to. */
+  destHub?: HubReachView;
   weightKg: number;
   /** D9 — how many packages the note says, and of what: what the receiver counts against at the door. */
   packages?: number;
@@ -298,6 +302,7 @@ export interface Claimable {
  * takeable, because deciding otherwise would be the platform overruling the operator who drives the road.
  */
 import type { InstructionsView } from '../../shared/instructions';
+import type { HubReachView } from '../../shared/hubReach';
 import type { DeskNumber, HeldByAuthorityView } from '../../shared/heldByAuthority';
 export type { BlockerKind, BoardBlocker } from '../../shared/board';
 import type { BoardBlocker } from '../../shared/board';

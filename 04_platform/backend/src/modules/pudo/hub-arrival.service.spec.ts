@@ -1,5 +1,6 @@
 import { HubArrivalService } from './hub-arrival.service';
 import type { AgentService } from './agent.service';
+import type { HubContactService } from './hub-contact.service';
 import type { MdpService } from './mdp.service';
 import type { ParcelService } from './parcel.service';
 import type { RoutingService } from './routing.service';
@@ -20,7 +21,7 @@ describe('a hub’s arrivals, on the hub’s own clock', () => {
     parcels.set(parcelId, p);
     return p;
   };
-  const service = () =>
+  const service = (contacts?: HubContactService) =>
     new HubArrivalService(
       { working: () => hub, require: () => hub, countryOf: () => 'KE' } as unknown as MdpService,
       {
@@ -34,6 +35,9 @@ describe('a hub’s arrivals, on the hub’s own clock', () => {
       { get: () => ({ vendorId: 'v_1', name: 'Bulk Store', did: 'did:store:1' }) } as unknown as VendorService,
       {} as RoutingService,
       { get: () => ({ shopName: 'Riverside' }) } as unknown as AgentService,
+      undefined,
+      undefined,
+      contacts,
     );
   const book = (svc: HubArrivalService, parcelId: string, expectedOn: string) =>
     svc.book('v_1', { mdpId: 'mdp_1', parcelIds: [parcelId], unitKind: 'pallet', units: 1, expectedOn }, 'Bulk Store', NOW);
@@ -53,6 +57,18 @@ describe('a hub’s arrivals, on the hub’s own clock', () => {
     // Sat 31 Oct and Sun 1 Nov 2026, on the hub's clock.
     expect(() => book(svc, 'PUD-SAT', '2026-11-01')).toThrow(/does not receive on a Sunday/);
     expect(book(svc, 'PUD-SAT', '2026-10-31')).toMatchObject({ state: 'expected', expectedOn: '2026-10-31' });
+  });
+
+  it('books, where the hub set no hours for bulk, only a day it is open — and keeps its bulk hours inside its opening hours', () => {
+    const day = { open: '07:00', close: '18:00' };
+    const opening = { sun: null, mon: day, tue: day, wed: day, thu: day, fri: day, sat: { open: '08:00', close: '12:00' } };
+    const svc = service({ openingHoursOf: () => opening, atStop: () => undefined } as unknown as HubContactService);
+    svc.setBulk('mdp_1', { open: true }, 'Owner', NOW);
+    parcel('PUD-OPEN');
+    // Sun 1 Nov 2026: the hub is closed. Sat 31 Oct: open.
+    expect(() => book(svc, 'PUD-OPEN', '2026-11-01')).toThrow(/does not receive on a Sunday/);
+    expect(book(svc, 'PUD-OPEN', '2026-10-31')).toMatchObject({ state: 'expected' });
+    expect(() => svc.setBulk('mdp_1', { open: true, hours: { sat: { open: '08:00', close: '14:00' } } }, 'Owner', NOW)).toThrow(/The hub is not open then \(Saturday 08:00–14:00/);
   });
 
   it('reads due and late by the hub’s day, and says its clock with the hub’s word', () => {

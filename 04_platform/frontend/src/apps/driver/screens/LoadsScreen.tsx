@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, HubReach, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
 import { capLine } from '../../../shared/custodyCap';
 import { LoadFinderContext, useLoadFinder, type LoadFinder } from '../../../shared/loadFinder';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
@@ -140,6 +140,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                       <OpenInMaps point={c.pickupLocation} label={t('driver.navigateTo', { label: c.pickupLabel })} />
                     </div>
                   ) : null}
+                  {/* A bag to collect at a hub: whether it is open now, who to ask for, where to come in, a button to call it. */}
+                  {c.pickupHub ? <HubReach hub={c.pickupHub} /> : null}
                 </li>
               );
             }
@@ -208,6 +210,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                     )}
                   </span>
                 </div>
+                {/* A bag on board going to a hub: whether it is open when the driver gets there, and how to reach it. */}
+                {control === 'onboard' && c.destHub ? <HubReach hub={c.destHub} /> : null}
                 {/* Round 37 — a bag on board: its seal read here when a counter loaded it, and reported when it is not as closed. */}
                 {c.kind === 'tote' && c.bagSeal && !c.held ? (
                   <div class="load__nav">

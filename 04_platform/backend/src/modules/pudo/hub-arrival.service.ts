@@ -23,6 +23,7 @@ import {
   type StoreHubArrivals,
 } from './hub-arrival.types';
 import { MdpService } from './mdp.service';
+import { HubContactService, outsideOf } from './hub-contact.service';
 import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
 import type { Mdp, Parcel, ParcelSize } from './pudo.types';
@@ -67,6 +68,8 @@ export class HubArrivalService {
     private readonly agents: AgentService,
     @Optional() private readonly events?: EventBus,
     @Optional() private readonly notifications?: NotificationService,
+    // When the hub is open and how to reach it (hub-contact.service.ts). Optional for the specs; without it, nothing of it.
+    @Optional() private readonly contacts?: HubContactService,
   ) {}
 
   /* ---------------------------------------------------------------------------------------- the hub's word -- */
@@ -84,6 +87,10 @@ export class HubArrivalService {
     const was = this.bulk.get(mdpId);
     const hours = input.hours === null ? undefined : input.hours !== undefined ? weekOf(input.hours) : was?.hours;
     if (hours && !WEEKDAYS.some((d) => hours[d])) throw new GlosError('INVALID_INPUT', 'Give at least one day the hub receives — or say it takes no parcels in bulk', { field: 'hours' });
+    // Inside the hours the hub is open, where it keeps them: it cannot take parcels in at a closed door.
+    const opening = this.contacts?.openingHoursOf(hub.mdpId);
+    const outside = hours && opening ? outsideOf(hours, opening) : null;
+    if (outside) throw new GlosError('INVALID_INPUT', `The hub is not open then (${outside}): choose hours inside its opening hours, or open it then first`, { field: 'hours' });
     const doors = input.doors === null ? undefined : (input.doors ?? was?.doors);
     if (doors !== undefined && !(Number.isInteger(doors) && doors >= 1 && doors <= 50)) throw new GlosError('INVALID_INPUT', 'Doors are counted 1 to 50', { field: 'doors' });
     const next: HubBulk = { mdpId: hub.mdpId, ...(hours ? { hours } : {}), ...(doors ? { doors } : {}), since: was?.since ?? new Date(now).toISOString(), by };
@@ -154,7 +161,8 @@ export class HubArrivalService {
     const today = clockAt(now, zone ?? 'UTC').day;
     if (input.expectedOn < today) throw new GlosError('INVALID_INPUT', `Choose today or a day ahead, on ${hub.name}'s clock`, { field: 'expectedOn' });
     if (input.expectedOn > dayAfter(today, HUB_ARRIVAL_DAYS_AHEAD)) throw new GlosError('INVALID_INPUT', `Book it at most ${HUB_ARRIVAL_DAYS_AHEAD} days ahead`, { field: 'expectedOn' });
-    const hours = this.bulk.get(hub.mdpId)?.hours;
+    // The days it takes parcels in bulk — or, where it set none, the days it is open.
+    const hours = this.bulk.get(hub.mdpId)?.hours ?? this.contacts?.openingHoursOf(hub.mdpId);
     if (hours && !openOn(hours, input.expectedOn)) {
       throw new GlosError('INVALID_INPUT', `${hub.name} does not receive on a ${WEEKDAY_NAMES[weekdayOf(input.expectedOn)]}: choose a day it does`, { field: 'expectedOn' });
     }
@@ -444,6 +452,21 @@ export class HubArrivalService {
       ...(b.doors ? { doors: b.doors } : {}),
       ...(zone ? { zone, zoneName: zoneName(zone, now) } : {}),
       since: b.since,
+      ...this.reachOf(hub.mdpId, now),
+    };
+  }
+
+  /** When the hub is open and how a store bringing it parcels reaches it — from the hub's own entry, where it wrote one. */
+  private reachOf(mdpId: string, now: number): Pick<HubBulkView, 'openingHours' | 'openNow' | 'phone' | 'askFor' | 'gate' | 'handle'> {
+    const s = this.contacts?.atStop(mdpId, now);
+    if (!s) return {};
+    return {
+      ...(s.openingHours ? { openingHours: s.openingHours } : {}),
+      ...(s.openNow ? { openNow: s.openNow } : {}),
+      ...(s.phone ? { phone: s.phone } : {}),
+      ...(s.askFor ? { askFor: s.askFor } : {}),
+      ...(s.gate ? { gate: s.gate } : {}),
+      ...(s.handle ? { handle: s.handle } : {}),
     };
   }
 

@@ -8,7 +8,7 @@ import { PapersCard } from './PapersCard';
 import { papersGaps } from '../papers';
 import { chargeOf, dimsComplete, feeLines, handoffLine, money, originRows, priceCards } from '../logic';
 import type { NetworkPoint } from '../types';
-import { HUB_ORIGIN, hoursLine, type HubOptionView } from '../hubs';
+import { HUB_ORIGIN, hoursLine, receivingHours, type HubOptionView } from '../hubs';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
 export interface MintScreenProps {
@@ -387,7 +387,7 @@ function PointRow({ point, onPick, price, sub }: { point: NetworkPoint; onPick: 
  */
 function HubRow({ hub, onPick }: { hub: HubOptionView; onPick: () => void }) {
   const t = useT();
-  const hours = hoursLine(hub.hours, t);
+  const hours = hoursLine(receivingHours(hub), t);
   const total = hub.quote?.locked.total;
   return (
     <button type="button" class="row" onClick={onPick} disabled={total == null}>

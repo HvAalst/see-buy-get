@@ -61,6 +61,7 @@ import { LoadPassageService, viewOf as passageView } from './load-passage.servic
 import type { LoadArrival, LoadCrossing, LoadPassageView, PassageKind, PassageRecorded } from './load-passage.types';
 import { LoadSealService, sealCheck } from './load-seal.service';
 import { ContactCardService } from './contact-card.service';
+import { HubContactService } from './hub-contact.service';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { BagClosureService } from './bag-closure.service';
 import type { HeldByAuthority } from './load-detention.types';
@@ -440,6 +441,8 @@ export class DispatchService {
     @Optional() private readonly contacts?: ContactCardService,
     // Round 39 — the security declarations: no load is taken on without one in force. Optional for the specs.
     @Optional() private readonly declarations?: SecurityDeclarationService,
+    // A hub at a bag's stop: whether it is open now and how to reach it (the user, 2026-10-26). Optional for the specs.
+    @Optional() private readonly hubContacts?: HubContactService,
   ) {
     this.freightSeq = [...this.freights.values()].length; // continue the human FRT-NNN sequence after a restart
     // An account moving off a number takes the orders addressed to that number with it.
@@ -3814,7 +3817,9 @@ export class DispatchService {
       ...(closure ? { bagSeal: { closedWith: closure.kind, ...(closure.key ? { check: sealCheck(t.code, closure.key) } : {}), taken: closure.taken?.by.did === holder } } : {}),
       pickupLocation: place.loc,
       pickupLabel: place.label,
+      ...this.hubStop('pickupHub', t.locationId),
       destLabel: t.destinationLabel || 'destination',
+      ...this.hubStop('destHub', t.destinationNodeId),
       // Absent when the destination cannot be placed — never a guess, because a coordinate is about to be
       // used for distances and directions.
       destLocation: dest?.loc,
@@ -4056,6 +4061,17 @@ export class DispatchService {
    * Null when neither resolves. Nothing is invented — a zone centroid would be a number that looks like a
    * distance and is not one, and this figure is about to be paid to somebody.
    */
+  /**
+   * A HUB AT A BAG'S STOP — where it is taken, or where it goes (a hub by its id, or the hub serving the zone it names): is
+   * it open now, and how does the driver reach somebody there. Nothing where the stop is no hub.
+   */
+  private hubStop(key: 'pickupHub' | 'destHub', id: string | undefined): Partial<Pick<Claimable, 'pickupHub' | 'destHub'>> {
+    if (!id || !this.hubContacts) return {};
+    const hub = this.mdps.list().find((m) => m.mdpId === id) ?? (key === 'destHub' && !this.pickupPlace(id) ? this.mdps.mdpForZone(id) : undefined);
+    const stop = hub ? this.hubContacts.atStop(hub.mdpId) : undefined;
+    return stop ? { [key]: stop } : {};
+  }
+
   private destinationPlace(tote: { destinationNodeId?: string }): { loc: { lat: number; lng: number }; label: string } | null {
     const id = tote.destinationNodeId;
     if (!id) return null;
