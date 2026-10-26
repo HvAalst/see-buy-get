@@ -300,7 +300,12 @@
       Delivered, it carries what was found at the handover (<code>exceptions</code>, as above) and <code>stillExpected</code>:
       the packages short or not the goods, until one of your people closes them — then <code>inbound.closed</code>, with
       <code>closed: { how, note, at, by }</code>, <code>how</code> being <code>came</code> or <code>not_coming</code>. While it is
-      coming, <code>due</code> says when on your receiving place's own clock: <code>{ zone, day, about, today, late }</code>.</li>
+      coming, <code>due</code> says when on your receiving place's own clock: <code>{ zone, day, about, today, late }</code>.
+      Delivered, it says who claims for goods lost or damaged on the road (<code>claimant</code>: <code>sender</code>, or
+      <code>receiver</code> where the agreed <code>incoterm</code> passed you the risk), whether you may now (<code>canClaim</code>),
+      a <code>claim</code> on it (<code>{ kind, state, by, decision }</code>, never money), and <code>noteId</code>: your own copy of
+      the consignment note in the archive, without the carriage price. A load's own messages say whose a claim is
+      (<code>claim.by</code>).</li>
     <li><b>A fleet</b> (Dashboard → <i>Your own system</i>): an order came in, changed, left your Orders, was cancelled; a
       load put on a driver, taken, given back, picked up, not handed over, delivered, withdrawn, a problem reported and
       decided; a vehicle broke down, how it ended, its loads moved; space booked on a run, given back, the run called
