@@ -559,8 +559,12 @@ describe('the first day of a new installation, as it would be live', () => {
     const float = async (shop: Shop) => (await must(http().get(`/v1/sbg/agents/${encodeURIComponent(shop.did)}/can-transact`).set(bearer(shop.token)), 200)).balance as number;
     // The shop that took it in paid for the journey out of its float and was paid for handing the batch to the driver.
     expect(await float(mamaSarah)).toBe(cents(60 - WHOLESALE + HANDOVER_FEE));
-    // The shop that received it was paid for shelving it, and again for handing it over.
-    expect(await float(riverside)).toBe(cents(60 + SHELVING_FEE + RELEASE_FEE));
+    // The shop that received it was paid at least its own fee (1.50, set when it signed up) the moment the parcel was on its
+    // shelf, and the release added only what its company's figures came to beyond that — here nothing (the user,
+    // 2026-10-26: "shops are at minimum paid the fee they set").
+    const ownFee = 1.5;
+    const received = Math.max(ownFee, cents(SHELVING_FEE + RELEASE_FEE));
+    expect(await float(riverside)).toBe(cents(60 + received));
 
     const books = await must(http().get(`/v1/sbg/entities/${kenya}/books`).set(bearer(amina)), 200);
     const account = (code: string) => (books.accounts as Array<{ code: string; balance: number; currency: string }>).filter((a) => a.code === code);
@@ -570,7 +574,7 @@ describe('the first day of a new installation, as it would be live', () => {
     expect(account('cash.custody').map((a) => a.balance)).toEqual([120]);
     expect(cents(-account('deposit.agent').reduce((sum, a) => sum + a.balance, 0))).toBe(cents((await float(mamaSarah)) + (await float(riverside))));
     expect(account('revenue').map((a) => cents(-a.balance))).toEqual([WHOLESALE]);
-    expect(account('expense.provider_fees').map((a) => cents(a.balance))).toEqual([cents(HANDOVER_FEE + SHELVING_FEE + RELEASE_FEE)]);
+    expect(account('expense.provider_fees').map((a) => cents(a.balance))).toEqual([cents(HANDOVER_FEE + received)]);
   });
 
   /* ------------------------------------------- the second day: the shelf, and a dispute -- */

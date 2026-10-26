@@ -10251,6 +10251,37 @@ describe('PUDO Light', () => {
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 
+    it('a shop is paid at least the fee the parcel was sold at — a fee raised afterwards is the next parcel’s (the user, 2026-10-26: “shops are at minimum paid the fee they set”)', () => {
+      // The company's figures below the shops' own fees (0.50): take-in 0.40, shelving 0.15, release 0.15.
+      set({ labourFee: 0.4, shelvingFee: 0.15, releaseFee: 0.15 });
+      const { origin, dest, res } = mintInbound('FLR');
+      const id = res.parcel.parcelId;
+      expect(parcels.get(id).stopFees).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'pudo', id: origin.did, fee: 0.5 }), expect.objectContaining({ type: 'pudo', id: dest.did, fee: 0.5 })]));
+      // Both shops raise their fees once it was sold: this parcel keeps the 0.50 it was sold at.
+      agents.setPrice(origin.did, 0.9);
+      agents.setPrice(dest.did, 0.9);
+      parcels.intakeInbound(id, origin.did);
+      expect(paidTo(origin.did)).toEqual([0.5]);
+      parcels.get(id).status = 'On_Bus';
+      parcels.arrive(id, dest.did);
+      expect(paidTo(dest.did)).toEqual([0.5]);
+      // The release adds nothing: shelving and release pay (0.30) come to less than the fee it was sold at.
+      parcels.collectConfirm(id, dest.did, parcels.get(id).collectionCode!);
+      expect(paidTo(dest.did)).toEqual([0.5]);
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('never reads a shop’s fee in another money as its pay: a stop sold in euros is paid its pay in shillings, as the list says', () => {
+      set({ labourFee: 0.4, shelvingFee: 0.15, releaseFee: 0.15 });
+      const { dest, res } = mintInbound('FLX');
+      const id = res.parcel.parcelId;
+      // As a stop bought abroad is sold: its own fee in its own money, which is not the money it is paid in here.
+      parcels.get(id).stopFees = [{ type: 'pudo', id: dest.did, fee: 50, currency: 'EUR' }];
+      parcels.get(id).status = 'On_Bus';
+      parcels.arrive(id, dest.did);
+      expect(paidTo(dest.did)).toEqual([0.15]);
+    });
+
     it('handing a batch to the driver pays that shop’s company’s figure — and a step paid nothing writes no row', () => {
       set({ handoverFee: 55 });
       const { badge } = mkFleetDriver('AMH');
