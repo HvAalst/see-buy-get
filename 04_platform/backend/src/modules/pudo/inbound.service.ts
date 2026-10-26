@@ -5,10 +5,12 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { ConsignmentNoteService } from './consignment-note.service';
-import { DispatchService, LATE_GRACE_MIN } from './dispatch.service';
+import { DispatchService, FREIGHT_CLAIM_WINDOW_DAYS, LATE_GRACE_MIN } from './dispatch.service';
 import type { Freight } from './dispatch.types';
 import { clockAt, clocksOfCountry, zoneName } from './fleet-clock';
 import { INBOUND_CLOSINGS, type InboundClosed, type InboundClosingHow, type InboundDue, type InboundRow, type InboundView, type ReceivingPointNamed, type ReceivingPointView } from './inbound.types';
+import { NoteArchiveService } from './note-archive.service';
+import { consigneeDocId } from './note-archive.types';
 import { NotificationService } from './notification.service';
 import { exceptionViewsOf, exceptionsInWords, stillExpectedOf } from './receiving';
 import { Site, SiteService } from './site.service';
@@ -56,6 +58,8 @@ export class InboundService implements OnModuleInit {
     private readonly notes: ConsignmentNoteService,
     @Optional() private readonly events?: EventBus,
     @Optional() private readonly notifications?: NotificationService,
+    // The receiver's copy of each note (the user, 2026-10-26: "Its copy, no carriage price"): where it is kept.
+    @Optional() private readonly archive?: NoteArchiveService,
   ) {}
 
   onModuleInit(): void {
@@ -110,6 +114,27 @@ export class InboundService implements OnModuleInit {
       ...(f.packaging ? { packaging: f.packaging } : {}),
       ...(exceptions.length ? { exceptions, stillExpected: closing ? 0 : stillExpectedOf(exceptions) } : {}),
       ...(closing ? { closed: { how: closing.how, ...(closing.note ? { note: closing.note } : {}), at: closing.at, by: closing.by } } : {}),
+      ...this.copyAndClaimOf(f, now),
+    };
+  }
+
+  /**
+   * ITS COPY OF THE NOTE, AND WHO CLAIMS: the receiver's copy once one is frozen; the term, and — delivered — whether the
+   * loss on the road is the receiver's to claim or its supplier's (CL1: the term says; with none, the sender's); and the
+   * claim on it, where there is one, without money.
+   */
+  private copyAndClaimOf(f: Freight, now: number): Pick<InboundRow, 'noteId' | 'incoterm' | 'claimant' | 'canClaim' | 'claim'> {
+    const receiverDid = f.receiver ? this.entities.find(f.receiver.entityId)?.did : undefined;
+    const noteId = receiverDid && this.archive?.hasFor(consigneeDocId(f.freightId), receiverDid) ? consigneeDocId(f.freightId) : undefined;
+    const delivered = f.status === 'delivered';
+    const claimant = delivered ? this.dispatch.claimantOf(f).party : undefined;
+    const within = f.deliveredAt ? now - Date.parse(f.deliveredAt) <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : false;
+    const c = f.claim;
+    return {
+      ...(noteId ? { noteId } : {}),
+      ...(f.incoterm ? { incoterm: f.incoterm } : {}),
+      ...(claimant ? { claimant, canClaim: claimant === 'receiver' && !c && within } : {}),
+      ...(c ? { claim: { kind: c.kind, state: c.state, raisedAt: c.raisedAt, by: receiverDid && c.raisedBy === receiverDid ? ('receiver' as const) : ('sender' as const), ...(c.decision ? { decision: c.decision } : {}), ...(c.note ? { note: c.note } : {}), ...(c.decidedAt ? { decidedAt: c.decidedAt } : {}) } } : {}),
     };
   }
 

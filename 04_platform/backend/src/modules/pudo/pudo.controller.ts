@@ -7010,6 +7010,10 @@ export class SbgController {
     const standing = this.dispatch.claimantOf(f);
     if (actor?.role === 'operator') return { did: actor.did ?? 'operator', why: standing.why };
     if (standing.party === 'sender') return { did: this.assertFreightSender(freightId, actor).did, why: standing.why };
+    // Inbound, reading A: a load sent to a business's receiving point records that business — a receiver we can
+    // identify. Under a term that passed the risk at the origin it claims, from its own sign-in (a viewer is refused
+    // before this, as everywhere a business changes something).
+    if (f.receiver && actor?.role === 'business' && actor.did && this.notes.isConsignee(f, actor.did)) return { did: actor.did, why: standing.why };
     // A freight records its buyer as the number they gave — and, once one is certain, the account that number was —
     // and never as a party, so that is the only honest way to recognise the receiver.
     if (!f.buyerPhoneHash) {
@@ -7101,7 +7105,8 @@ export class SbgController {
   @Get('dispatch/freight/:id/consignment-note')
   @AtTheCounter()
   consignmentNote(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
-    this.notes.requireReader(id, actor);
+    // The business a load was sent to reads ITS copy (no carriage price) — frozen, once there is one.
+    if (this.notes.readerOf(id, actor).copy === 'consignee') return this.archive.latestConsigneeCopy(id)?.note ?? this.notes.noteFor(id, actor, { consignee: true });
     // ONCE A COPY HAS BEEN FROZEN, THAT IS THE NOTE. A live re-render against today's facts is not the
     // document anybody signed — see note-archive.types.ts. Before the goods move there is nothing to
     // freeze, and the load's own record is the only truth there is.
@@ -7115,7 +7120,7 @@ export class SbgController {
   @Header('Cache-Control', 'private, no-store')
   @AtTheCounter()
   consignmentNoteHtml(@Param('id') id: string, @Actor() actor: IntrospectionResult): string {
-    this.notes.requireReader(id, actor);
+    if (this.notes.readerOf(id, actor).copy === 'consignee') return this.notes.htmlFor(this.archive.latestConsigneeCopy(id)?.note ?? this.notes.noteFor(id, actor, { consignee: true }));
     return this.notes.htmlFor(this.archive.latestForFreight(id)?.note ?? this.notes.noteFor(id, actor));
   }
 

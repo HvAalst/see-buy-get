@@ -33007,6 +33007,57 @@
           "today"
         ]
       },
+      "InboundClaimView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "damaged",
+              "short",
+              "not_received"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "resolved"
+            ]
+          },
+          "by": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "receiver"
+            ]
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "upheld",
+              "partly_upheld",
+              "rejected",
+              "report_only"
+            ]
+          },
+          "note": {
+            "type": "string"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "raisedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "state",
+          "by",
+          "raisedAt"
+        ]
+      },
       "InboundRow": {
         "type": "object",
         "properties": {
@@ -33189,6 +33240,28 @@
                 "$ref": "#/components/schemas/InboundDue"
               }
             ]
+          },
+          "noteId": {
+            "type": "string",
+            "description": "ITS COPY OF THE NOTE (the user, 2026-10-26: \"Its copy, no carriage price\"): the id in the archive of the receiver's\ncopy, once one is frozen — the file, and the links to pass it on to an insurer, hang on it."
+          },
+          "incoterm": {
+            "type": "string",
+            "description": "The trade term agreed, where one was; and so, once delivered, who claims for goods lost or damaged on the road."
+          },
+          "claimant": {
+            "type": "string",
+            "enum": [
+              "sender",
+              "receiver"
+            ]
+          },
+          "canClaim": {
+            "type": "boolean",
+            "description": "The receiver may claim on it now: it carries the risk, the load is delivered, no claim yet, within the window."
+          },
+          "claim": {
+            "$ref": "#/components/schemas/InboundClaimView"
           },
           "freightId": {
             "type": "string"
@@ -44063,6 +44136,14 @@
               "upheld",
               "partly_upheld",
               "rejected"
+            ]
+          },
+          "by": {
+            "type": "string",
+            "description": "As a party reads it: whether the sender's side or the business the load was sent to made it. Not kept: derived.",
+            "enum": [
+              "sender",
+              "receiver"
             ]
           },
           "state": {

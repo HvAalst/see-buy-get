@@ -220,6 +220,11 @@ export function boardDocId(freightId: string): string {
   return `freight~${freightId}`;
 }
 
+/** The receiver's copy of a board haul's note: a document of its own, read only by the business the load was sent to. */
+export function consigneeDocId(freightId: string): string {
+  return `freight~${freightId}~consignee`;
+}
+
 export function runDocId(departureId: string, bookingId: string): string {
   return `booking~${departureId}~${bookingId}`;
 }

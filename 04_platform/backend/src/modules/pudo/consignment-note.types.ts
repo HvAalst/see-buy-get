@@ -92,6 +92,13 @@ export interface ConsignmentNote {
   attempts: string[];
   /** FP3b — the sender's claim against the delivered goods, and its decision when there is one. */
   claim?: { line: string; decision?: string };
+  /**
+   * THE RECEIVER'S COPY (the user, 2026-10-26: "Its copy, no carriage price"). A business that receives goods at its own
+   * places reads the note of a load sent to it, as a CMR consignee holds its copy — without the carriage price, which is
+   * between the sender and the carrier; except where the agreed term makes the carriage payable by the consignee, whose
+   * price it then is. Frozen beside the full note at every signature, with a fingerprint of its own.
+   */
+  copy?: 'consignee';
   /** FP3 — the load was withdrawn before taking over. Boxes 23 and 24 then say so instead of "not yet". */
   cancelled?: { at: string; reason: string; by: 'sender' | 'network' };
 }

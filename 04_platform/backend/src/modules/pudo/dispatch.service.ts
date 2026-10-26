@@ -1735,7 +1735,8 @@ export class DispatchService {
         cancelledAt: f.cancelledAt,
         canCancel: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed',
         ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts } : {}),
-        ...(f.claim ? { claim: f.claim } : {}),
+        // Made by this business, or by the one the load was sent to (under a term that passed it the risk).
+        ...(f.claim ? { claim: { ...f.claim, by: this.claimRaisedBy(f) } } : {}),
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
         // FP6 — the link to hand on, who is carrying it, and the verdict.
         ...(f.trackingKey ? { trackingKey: f.trackingKey, trackingUrl: trackingUrlOf(f.trackingKey) } : {}),
@@ -3248,6 +3249,12 @@ export class DispatchService {
         ? term.code + ' passes the risk at the origin, so a loss in transit belongs to the receiver'
         : term.code + ' keeps the risk with the sender until delivery, so a loss in transit belongs to the sender';
     return { party, term: term.code, why };
+  }
+
+  /** Who made the claim on a load, as either side reads it: the business it was sent to, or the sender's side (staff included). */
+  private claimRaisedBy(f: Freight): 'sender' | 'receiver' {
+    const receiverDid = f.receiver ? this.entities.find(f.receiver.entityId)?.did : undefined;
+    return receiverDid && f.claim?.raisedBy === receiverDid ? 'receiver' : 'sender';
   }
 
   /** The claims waiting on a person, oldest first — the one somebody has waited longest for needs answering most. */

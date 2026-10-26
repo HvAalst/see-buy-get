@@ -224,6 +224,25 @@ describe('the consignment note', () => {
     expect(box24).toContain('Received with reservations: 3 packages short, 2 packages damaged, 1 package not the goods the note describes');
   });
 
+  it('the receiver’s copy (the user, 2026-10-26: “Its copy, no carriage price”): no price on it — unless the term makes the carriage the receiver’s to pay', () => {
+    const at = '2026-09-14T12:00:00Z';
+    const sent = { status: 'delivered' as const, lockedPrice: 41000, pickedUpAt: '2026-09-14T09:00:00Z', deliveredAt: at, proofOfDelivery: { receiverName: 'Grace', at }, receiver: { entityId: 'ent_jenga', siteId: 'site_1', name: 'Jenga Builders', siteName: 'Mombasa Road yard' } };
+    const full = service.build(base(sent));
+    expect(full.carriage.amount).toBe(41000);
+    expect(full.copy).toBeUndefined();
+    const copy = service.build(base(sent), { consignee: true });
+    expect(copy).toMatchObject({ copy: 'consignee', title: 'Consignment note (CMR layout) — the receiver’s copy' });
+    expect(copy.carriage.amount).toBeUndefined();
+    expect(copy.carriage.note).toMatch(/^The carriage price is between the sender and the carrier/);
+    expect(service.htmlFor(copy)).not.toContain('41000');
+    // FCA: the risk passed at the origin and the carriage is the receiver's to pay — so is knowing its price.
+    expect(service.build(base({ ...sent, incoterm: 'FCA', namedPlace: 'Athi River' }), { consignee: true }).carriage.amount).toBe(41000);
+    // A decision's money stays off the receiver's copy; that it was decided does not.
+    const decided = { ...sent, claim: { state: 'resolved' as const, kind: 'damaged' as const, description: 'Two bags split', raisedBy: 'did:shop:a1', raisedAt: at, decision: 'upheld' as const, award: 500, decidedAt: at } };
+    expect(service.build(base(decided)).claim?.decision).toMatch(/500 KES awarded/);
+    expect(service.build(base(decided), { consignee: true }).claim?.decision).toMatch(/^Decided .*: upheld$/);
+  });
+
   it('inbound, reading A: a load sent to a receiving point names its business and place in box 2, by its code — not as the sender named it', () => {
     const n = service.build(base({ destLabel: 'Jenga Builders — Mombasa Road yard', receiver: { entityId: 'ent_jenga', siteId: 'site_1', name: 'Jenga Builders', siteName: 'Mombasa Road yard' }, receiverRef: 'PO-7781' }));
     expect(n.consignee).toEqual({ name: 'Jenga Builders', address: 'Mombasa Road yard, by its receiving code — their order PO-7781', country: 'Kenya' });

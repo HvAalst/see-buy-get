@@ -6,6 +6,7 @@ import type { SiteView } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
 import { carrierLine, dueLine, inboundState, inboundTitle, isStillExpected, sameClockAs, trackingPathOf, type InboundClosingHow, type InboundRow, type InboundState, type InboundView, type ReceivingPoint } from '../inbound';
 import { mayAct } from '../logic';
+import { InboundDetail } from './InboundDetail';
 
 const STATE_TAG: Record<InboundState, string> = { booked: 'quiet', carrier: 'info', on_its_way: 'info', delivered: 'ok', withdrawn: 'quiet' };
 
@@ -29,6 +30,8 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
   // D9 — closing what is still expected of one load: which, how, and a line for the business's own records.
   const [closing, setClosing] = useState<{ freightId: string; how: InboundClosingHow } | null>(null);
   const [closeNote, setCloseNote] = useState('');
+  // A delivered load, opened: its copy of the note, and a problem with the goods.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -82,6 +85,8 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
   };
 
   const items = view?.items ?? [];
+  const opened = openId ? items.find((r) => r.freightId === openId) : undefined;
+  const openOf = (r: InboundRow) => (inboundState(r) === 'delivered' ? () => setOpenId(r.freightId) : undefined);
   const coming = items.filter((r) => inboundState(r) !== 'delivered' && inboundState(r) !== 'withdrawn');
   const still = items.filter(isStillExpected);
   const past = items.filter((r) => (inboundState(r) === 'delivered' || inboundState(r) === 'withdrawn') && !isStillExpected(r));
@@ -179,7 +184,7 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
           <p class="chint">{t('business.inbound.stillHint')}</p>
           <div class="crows">
             {still.map((r) => (
-              <InboundLine key={r.freightId} row={r}>
+              <InboundLine key={r.freightId} row={r} onOpen={openOf(r)}>
                 {works ? (
                   closing?.freightId === r.freightId ? (
                     <span class="biz-inbound__close">
@@ -230,10 +235,23 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
           </div>
           <div class="crows">
             {past.map((r) => (
-              <InboundLine key={r.freightId} row={r} />
+              <InboundLine key={r.freightId} row={r} onOpen={openOf(r)} />
             ))}
           </div>
         </section>
+      ) : null}
+
+      {opened ? (
+        <InboundDetail
+          row={opened}
+          client={client}
+          act={works}
+          onClose={() => setOpenId(null)}
+          onChanged={async (message) => {
+            if (message) setDone(message);
+            await load();
+          }}
+        />
       ) : null}
     </>
   );
@@ -243,7 +261,7 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
  * One load coming in: its name, who from and how much, where it stands and when, who brings it, and its tracking page —
  * and, delivered, what was found at the handover, what is still expected, and who closed it.
  */
-function InboundLine({ row, children }: { row: InboundRow; children?: ComponentChildren }) {
+function InboundLine({ row, children, onOpen }: { row: InboundRow; children?: ComponentChildren; onOpen?: () => void }) {
   const t = useT();
   const state = inboundState(row);
   const title = inboundTitle(row);
@@ -308,6 +326,13 @@ function InboundLine({ row, children }: { row: InboundRow; children?: ComponentC
             <a href={track} target="_blank" rel="noopener">
               {t('business.inbound.follow')}
             </a>
+          </span>
+        ) : null}
+        {onOpen ? (
+          <span class="twr-panelend">
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={onOpen}>
+              {t('business.inbound.openRow')}
+            </button>
           </span>
         ) : null}
         {children}

@@ -77,6 +77,13 @@ export interface InboundRow {
   closed?: InboundClosed;
   /** D10 — on the place's own clock; where it is given, it is the row's one answer to when. */
   due?: InboundDue;
+  /** Its copy of the note in the archive, once one is frozen (the user, 2026-10-26: "Its copy, no carriage price"). */
+  noteId?: string;
+  incoterm?: string;
+  /** Delivered: who claims for goods lost or damaged on the road — the term says; with none, the supplier. */
+  claimant?: 'sender' | 'receiver';
+  canClaim?: boolean;
+  claim?: import('./claim').LoadClaim;
 }
 
 export interface InboundView {

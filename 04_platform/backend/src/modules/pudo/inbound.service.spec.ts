@@ -44,6 +44,8 @@ describe('inbound: what stays expected, and the place’s own clock', () => {
           return f;
         },
         expectedAtOf: () => expectedAt,
+        // CL1: the term says who claims; with none, the sender.
+        claimantOf: (f: Freight) => ({ party: f.incoterm === 'CPT' ? 'receiver' : 'sender', why: '' }),
       } as never,
       { receivingPoints: () => [] } as never,
       { find: (id: string) => (id === 'ent_jenga' ? { entityId: 'ent_jenga', did: 'did:ent:jenga', name: 'Jenga Builders', jurisdiction: 'KE' } : undefined), byDid: () => undefined } as never,
@@ -150,6 +152,27 @@ describe('inbound: what stays expected, and the place’s own clock', () => {
       const s = service();
       s.close('ent_jenga', 'fr_closed', { how: 'not_coming' }, { name: 'Grace' }, Date.parse('2026-10-27T08:00:00Z'));
       expect(s.comingTo('ent_jenga', later).items.map((r) => r.freightId)).toEqual(['fr_1']);
+    });
+
+    it('says who claims for goods lost on the road — the term says, with none the supplier — and whether the receiver may now', () => {
+      freights = [
+        delivered(undefined),
+        delivered(undefined, { freightId: 'fr_cpt', incoterm: 'CPT' }),
+        delivered(undefined, { freightId: 'fr_old', incoterm: 'CPT', deliveredAt: '2026-10-10T09:00:00Z' }),
+        delivered(undefined, { freightId: 'fr_claimed', incoterm: 'CPT', claim: { state: 'resolved', kind: 'damaged', description: 'Bent', raisedBy: 'did:ent:jenga', raisedAt: '2026-10-26T10:00:00Z', decision: 'report_only', award: 900, decidedAt: '2026-10-26T10:00:00Z' } }),
+        delivered(undefined, { freightId: 'fr_theirs', claim: { state: 'open', kind: 'short', description: 'Three missing', raisedBy: 'did:ent:supplier', raisedAt: '2026-10-26T10:00:00Z' } }),
+      ];
+      const s = service();
+      const row = (id: string) => s.rowOf(freights.find((f) => f.freightId === id)!, now);
+      expect(row('fr_1')).toMatchObject({ claimant: 'sender', canClaim: false });
+      expect(row('fr_cpt')).toMatchObject({ claimant: 'receiver', canClaim: true, incoterm: 'CPT' });
+      expect(row('fr_old')).toMatchObject({ claimant: 'receiver', canClaim: false }); // past the window
+      expect(row('fr_claimed')).toMatchObject({ canClaim: false, claim: { kind: 'damaged', by: 'receiver', decision: 'report_only' } });
+      expect(JSON.stringify(row('fr_claimed'))).not.toMatch(/award|900/);
+      expect(row('fr_theirs').claim).toMatchObject({ kind: 'short', by: 'sender', state: 'open' });
+      // Still on the road: nobody claims yet.
+      freights = [base({ freightId: 'fr_road', incoterm: 'CPT' })];
+      expect(service().rowOf(freights[0], now)).not.toHaveProperty('claimant');
     });
 
     it('tells the receiver’s bell what was found, and what stays expected until it closes it', async () => {

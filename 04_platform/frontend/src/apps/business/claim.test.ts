@@ -29,6 +29,19 @@ describe('a business’s claim on its delivered load', () => {
     expect(t(line.key, { kind: t(CLAIM_KIND_KEYS[line.kind]), when: '25 Oct 2026', note: '' })).toMatch(/^Claim \(Short: some of it is missing\), 25 Oct 2026: the damage claim report was made/);
   });
 
+  it('from the receiver’s side: it claims where the term passed it the risk; else its supplier does, and a supplier’s claim is said as such', () => {
+    expect(claimStanding({ status: 'delivered', claimant: 'receiver', canClaim: true }, 'receiver')).toEqual({ kind: 'may_claim' });
+    expect(claimStanding({ status: 'delivered', claimant: 'receiver', canClaim: false }, 'receiver')).toEqual({ kind: 'window_closed' });
+    expect(claimStanding({ status: 'delivered', claimant: 'sender', canClaim: false }, 'receiver')).toEqual({ kind: 'sender_claims' });
+    expect(claimStanding({ status: 'delivered', canClaim: false }, 'receiver')).toEqual({ kind: 'sender_claims' });
+    expect(claimStanding({ status: 'in_transit', claimant: 'receiver' }, 'receiver')).toBeNull();
+    expect(claimLine(claim({ by: 'sender', decision: 'report_only' }), 'receiver').key).toBe('business.claim.line.supplier');
+    expect(claimLine(claim({ by: 'receiver', decision: 'report_only' }), 'receiver').key).toBe('business.claim.line.report');
+    // The sender's own claim reads as its own; the receiver's, read by the sender, as the receiver's.
+    expect(claimLine(claim({ by: 'sender', decision: 'report_only' })).key).toBe('business.claim.line.report');
+    expect(claimLine(claim({ by: 'receiver', decision: 'report_only' })).key).toBe('business.claim.line.receiver');
+  });
+
   it('sends a claim only with what is wrong and a few words of what was found', () => {
     expect(claimReady({ kind: '', text: 'Two bags split' })).toBe(false);
     expect(claimReady({ kind: 'damaged', text: '  a ' })).toBe(false);

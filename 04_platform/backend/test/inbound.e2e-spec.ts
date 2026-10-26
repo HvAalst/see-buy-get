@@ -287,5 +287,58 @@ describe('inbound, reading A: what is coming in to a business’s own sites', ()
       await new Promise<void>((r) => system.close(() => r()));
     }
   });
+
+  it('its copy of the note (the user, 2026-10-26: “Its copy, no carriage price”): the receiver reads its own copy only, and claims where the term puts the loss on it', async () => {
+    const yard = await aBusiness('Imara Hardware', ['receiver']);
+    const viewer = await yard.join('viewer');
+    const supplier = await aBusiness('Tausi Steel', ['shipper']);
+    const stranger = await aBusiness('Nyota Traders', ['receiver']);
+    const site = (await http().post(`/v1/sbg/entities/${yard.entityId}/sites`).set(bearer(yard.token)).send({ kind: 'delivery', name: 'Kisumu store', location: { lat: -0.1, lng: 34.75 } }).expect(201)).body;
+    const point = (await http().post(`/v1/sbg/business/me/receiving/${site.siteId}`).set(bearer(yard.token)).expect(201)).body;
+    const posted = (
+      await http()
+        .post('/v1/sbg/dispatch/freight')
+        .set(bearer(supplier.token))
+        .send({ description: 'Steel bars, 6 bundles', pickupLocation: { lat: -0.3, lng: 36.07 }, pickupLabel: 'Nakuru mill', destLabel: 'x', weightKg: 3000, packaging: 'piece', packages: 6, pickupCountry: 'KE', destCountry: 'KE', receivingPoint: point.code, receiverRef: 'IH-40' })
+        .expect(201)
+    ).body;
+    // Priced with its carrier, agreed CPT (switched on per country by two staff, pinned elsewhere), on the road with a driver.
+    const driver = await aDriver('Odhiambo');
+    const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
+    store.set(posted.freightId, { ...store.get(posted.freightId), lockedPrice: 41000, incoterm: 'CPT', namedPlace: 'Kisumu', status: 'in_transit', claimedBy: driver.did, claimedAt: new Date().toISOString(), pickedUpAt: new Date().toISOString() });
+    await http().post(`/v1/sbg/dispatch/freight/${posted.freightId}/deliver`).set(bearer(driver.token)).send({ driverDid: driver.did, confirmed: requiredUnloadKeys(), receiverName: 'Achieng at the store', podPhotoId: await photo(driver.token, 'pod') }).expect(201);
+
+    // The receiver reads its copy: no price. The sender reads the whole note. A business it was not sent to reads nothing.
+    const copy = (await http().get(`/v1/sbg/dispatch/freight/${posted.freightId}/consignment-note`).set(bearer(yard.token)).expect(200)).body;
+    expect(copy).toMatchObject({ copy: 'consignee', consignee: { name: `Imara Hardware ${tag}` } });
+    expect(copy.carriage.amount).toBeUndefined();
+    expect(JSON.stringify(copy)).not.toContain('41000');
+    expect((await http().get(`/v1/sbg/dispatch/freight/${posted.freightId}/consignment-note.html`).set(bearer(viewer)).expect(200)).text).not.toContain('41000');
+    expect((await http().get(`/v1/sbg/dispatch/freight/${posted.freightId}/consignment-note`).set(bearer(supplier.token)).expect(200)).body.carriage.amount).toBe(41000);
+    await http().get(`/v1/sbg/dispatch/freight/${posted.freightId}/consignment-note`).set(bearer(stranger.token)).expect(404);
+
+    // In the archive: its own document, read by it alone; the full one is not its to read.
+    const row = (await http().get('/v1/sbg/business/me/inbound').set(bearer(yard.token)).expect(200)).body.items.find((i: { freightId: string }) => i.freightId === posted.freightId);
+    expect(row).toMatchObject({ noteId: `freight~${posted.freightId}~consignee`, incoterm: 'CPT', claimant: 'receiver', canClaim: true });
+    await http().get(`/v1/sbg/consignment-notes/${encodeURIComponent(row.noteId)}`).set(bearer(yard.token)).expect(200);
+    await http().get(`/v1/sbg/consignment-notes/${encodeURIComponent(row.noteId)}`).set(bearer(supplier.token)).expect(404);
+    await http().get(`/v1/sbg/consignment-notes/${encodeURIComponent(`freight~${posted.freightId}`)}`).set(bearer(yard.token)).expect(404);
+
+    // CPT passed the risk at the origin: the receiver claims — not a viewer, not the supplier.
+    await http().post(`/v1/sbg/dispatch/freight/${posted.freightId}/claim`).set(bearer(viewer)).send({ kind: 'damaged', description: 'Two bundles bent' }).expect(403);
+    expect((await http().post(`/v1/sbg/dispatch/freight/${posted.freightId}/claim`).set(bearer(supplier.token)).send({ kind: 'damaged', description: 'Two bundles bent' }).expect(403)).body.code).toBe('NOT_THE_CLAIMANT');
+    await http().post(`/v1/sbg/dispatch/freight/${posted.freightId}/claim`).set(bearer(yard.token)).send({ kind: 'damaged', description: 'Two bundles bent at the ends' }).expect(201);
+    const after = (await http().get('/v1/sbg/business/me/inbound').set(bearer(yard.token)).expect(200)).body.items.find((i: { freightId: string }) => i.freightId === posted.freightId);
+    expect(after).toMatchObject({ canClaim: false, claim: { kind: 'damaged', by: 'receiver', state: 'resolved', decision: 'report_only' } });
+    // Its copy, frozen with the claim on it, is the report — said as the receiver's claim.
+    const report = (await http().get(`/v1/sbg/dispatch/freight/${posted.freightId}/consignment-note`).set(bearer(yard.token)).expect(200)).body;
+    expect(report.claim.line).toMatch(/^Claim by the receiver /);
+    expect(report.claim.decision).toMatch(/This note, frozen with the claim on it, is the report/);
+    const bell = (await http().get('/v1/sbg/notifications/inbox').set(bearer(yard.token)).expect(200)).body;
+    expect(((bell.items ?? bell) as Array<{ kind: string; title: string }>).some((n) => n.kind === 'claim_decided' && n.title === `A damage claim report was made for ${posted.code}`)).toBe(true);
+    // The supplier's Loads say whose claim it is: the receiver's.
+    const theirs = (await http().get('/v1/sbg/dispatch/posted').set(bearer(supplier.token)).expect(200)).body;
+    expect(((theirs.items ?? theirs) as Array<{ freightId: string; claim?: { by?: string } }>).find((r) => r.freightId === posted.freightId)?.claim?.by).toBe('receiver');
+  });
 });
 

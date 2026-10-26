@@ -12,6 +12,7 @@ import { DepartureNoteService } from './departure-note.service';
 import { DepartureService } from './departure.service';
 import { DispatchService } from './dispatch.service';
 import type { Freight } from './dispatch.types';
+import { foundPhotosOf } from './receiving';
 import {
   ArchivedNote,
   ArchivedNoteRow,
@@ -23,6 +24,7 @@ import {
   ProofAnswer,
   STAGE_WORDS,
   boardDocId,
+  consigneeDocId,
   noteAnchorOf,
   noteFingerprint,
   runDocId,
@@ -175,8 +177,9 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
           path: 'board',
           freightId,
           parties: this.notes.partiesOf(f),
-          // Round 15 — and every photograph of its seals: as the shipper sealed it, at pickup, a re-seal, a break.
-          mediaRefs: [f.loadSafety?.securementPhotoRef, f.proofOfDelivery?.photoRef, f.claim?.photoRef, ...(this.dispatch.sealPhotosOf?.(freightId) ?? [])],
+          // Round 15 — and every photograph of its seals: as the shipper sealed it, at pickup, a re-seal, a break. D9 — and
+          // of what the receiver found at the handover.
+          mediaRefs: [f.loadSafety?.securementPhotoRef, f.proofOfDelivery?.photoRef, ...foundPhotosOf(f), f.claim?.photoRef, ...(this.dispatch.sealPhotosOf?.(freightId) ?? [])],
           country: f.destCountry ?? f.pickupCountry,
           from: f.pickupLabel,
           to: f.destLabel,
@@ -185,6 +188,19 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
         event,
         note,
       );
+      // THE RECEIVER'S COPY (the user, 2026-10-26: "Its copy, no carriage price"): a load sent to a business's receiving
+      // point is frozen a second time, as that business reads it — its own document, with a fingerprint of its own, read
+      // by it and by nobody else; the full note's readers are not its readers. With the photographs of the delivery.
+      const consignee = this.notes.consigneeDidOf(f);
+      if (consignee) {
+        this.append(
+          consigneeDocId(freightId),
+          { path: 'board', freightId, parties: [consignee], mediaRefs: [f.proofOfDelivery?.photoRef, ...foundPhotosOf(f), f.claim?.photoRef], country: f.destCountry ?? f.pickupCountry, from: f.pickupLabel, to: f.destLabel },
+          stage,
+          event,
+          this.notes.build(f, { consignee: true }),
+        );
+      }
     } catch (err) {
       this.logger.warn(`could not archive freight ${freightId} at ${stage}: ${(err as Error).message}`);
     }
@@ -575,6 +591,11 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
   /** Every frozen copy of a load's note, oldest first: for the trail. */
   versionsOfFreight(freightId: string): NoteVersion[] {
     return [...(this.docs.get(boardDocId(freightId))?.versions ?? [])];
+  }
+
+  /** The receiver's copy as last frozen — what the business a load was sent to reads instead of the full note. */
+  latestConsigneeCopy(freightId: string): NoteVersion | undefined {
+    return this.latest(consigneeDocId(freightId));
   }
 
   latestForFreight(freightId: string): NoteVersion | undefined {

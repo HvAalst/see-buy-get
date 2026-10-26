@@ -83,6 +83,29 @@ export class ConsignmentNoteService implements OnModuleInit {
     throw new GlosError('NOT_FOUND', 'Freight not found');
   }
 
+  /**
+   * WHICH COPY THIS READER HOLDS: a party to the carriage reads the whole note; the business the load was sent to — at one
+   * of its receiving points — reads the receiver's copy (ConsignmentNote.copy); anybody else is told there is no such load.
+   */
+  readerOf(freightId: string, actor: IntrospectionResult | undefined): { f: Freight; copy: 'full' | 'consignee' } {
+    const f = this.dispatch.requireFreightPublic(freightId) as Freight;
+    if (actor?.role === 'operator') return { f, copy: 'full' };
+    const did = actor?.did;
+    if (did && this.isParty(f, did)) return { f, copy: 'full' };
+    if (did && this.isConsignee(f, did)) return { f, copy: 'consignee' };
+    throw new GlosError('NOT_FOUND', 'Freight not found');
+  }
+
+  /** The business a load was sent to at one of its receiving points (inbound, reading A) — by its own identity. */
+  isConsignee(f: Freight, did: string): boolean {
+    return Boolean(f.receiver && did && this.consigneeDidOf(f) === did);
+  }
+
+  /** The receiving business's identity, where the load was sent to one of its receiving points. */
+  consigneeDidOf(f: Freight): string | undefined {
+    return f.receiver ? this.entities?.find(f.receiver.entityId)?.did : undefined;
+  }
+
   isParty(f: Freight, did: string): boolean {
     if (f.postedByDid === did || f.claimedBy === did) return true;
     if (f.shipperDid && this.shipperDidOf(f) === did) return true;
@@ -104,9 +127,9 @@ export class ConsignmentNoteService implements OnModuleInit {
   /* ------------------------------------------------------------------ the note -- */
 
   /** The note as it reads now — for this reader, where it says the seals (see readsSealNumbers). */
-  noteFor(freightId: string, reader?: IntrospectionResult): ConsignmentNote {
+  noteFor(freightId: string, reader?: IntrospectionResult, opts: { consignee?: boolean } = {}): ConsignmentNote {
     const f = this.dispatch.requireFreightPublic(freightId) as Freight;
-    return this.build(f, { sealNumbers: this.readsSealNumbers(f, reader) });
+    return this.build(f, { sealNumbers: this.readsSealNumbers(f, reader), ...(opts.consignee ? { consignee: true } : {}) });
   }
 
   /**
@@ -125,7 +148,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   }
 
   /** `sealNumbers` defaults to whether the goods are taken over: a copy frozen for every reader says them only then. */
-  build(f: Freight, opts: { sealNumbers?: boolean } = {}): ConsignmentNote {
+  build(f: Freight, opts: { sealNumbers?: boolean; consignee?: boolean } = {}): ConsignmentNote {
     const sender = this.senderOf(f);
     const agent = f.onBehalfOf ? this.agentOf(f.postedByDid) : undefined;
     const carrier = this.carrierOf(f);
@@ -171,22 +194,23 @@ export class ConsignmentNoteService implements OnModuleInit {
     reservations.push(...seals.observations);
     // Round 35 — each exception under the tamper protocol, where and when, and its release by operations.
     reservations.push(...(this.dispatch.tamperOnNote?.(f.freightId) ?? []));
-    const carriage = this.carriageOf(f);
+    const carriage = this.carriageOf(f, opts.consignee);
     const attempts = (f.deliveryAttempts ?? []).map((a) => `Delivery attempted ${when(a.at)}: ${a.outcome === 'absent' ? 'nobody to receive the goods' : a.outcome === 'refused' ? 'the receiver refused the goods' : 'the place could not be reached'}${a.note ? ` — ${a.note}` : ''}`);
     const claim = f.claim
       ? {
-          line: `Claim by the sender ${when(f.claim.raisedAt)} — goods ${f.claim.kind === 'damaged' ? 'damaged' : f.claim.kind === 'short' ? 'short' : 'not received'}: ${f.claim.description}`,
+          line: `Claim by the ${this.dispatch.claimantOf?.(f).party === 'receiver' ? 'receiver' : 'sender'} ${when(f.claim.raisedAt)} — goods ${f.claim.kind === 'damaged' ? 'damaged' : f.claim.kind === 'short' ? 'short' : 'not received'}: ${f.claim.description}`,
           ...(f.claim.state === 'resolved' && f.claim.decision === 'report_only'
             ? { decision: `Damage claim report made ${when(f.claim.decidedAt ?? f.claim.raisedAt)}: no company of the network decides this claim or pays one. This note, frozen with the claim on it, is the report.` }
             : f.claim.state === 'resolved' && f.claim.decision
-            ? { decision: `Decided ${when(f.claim.decidedAt ?? f.claim.raisedAt)}: ${f.claim.decision === 'upheld' ? 'upheld' : f.claim.decision === 'partly_upheld' ? 'upheld in part' : 'rejected'}${f.claim.award ? `, ${f.claim.award} ${NETWORK_CURRENCY} awarded` : f.claim.paidTo?.kind === 'between_parties' ? ', to be settled between sender and carrier' : ''}${f.claim.note ? ` — ${f.claim.note}` : ''}` }
+            ? { decision: `Decided ${when(f.claim.decidedAt ?? f.claim.raisedAt)}: ${f.claim.decision === 'upheld' ? 'upheld' : f.claim.decision === 'partly_upheld' ? 'upheld in part' : 'rejected'}${f.claim.award && !opts.consignee ? `, ${f.claim.award} ${NETWORK_CURRENCY} awarded` : f.claim.paidTo?.kind === 'between_parties' ? ', to be settled between sender and carrier' : ''}${f.claim.note ? ` — ${f.claim.note}` : ''}` }
             : {}),
         }
       : undefined;
     return {
       number: `CMR-${f.code}`,
       kind: international ? 'cmr' : 'national',
-      title: international ? 'CMR — International consignment note' : 'Consignment note (CMR layout)',
+      title: `${international ? 'CMR — International consignment note' : 'Consignment note (CMR layout)'}${opts.consignee ? ' — the receiver’s copy' : ''}`,
+      ...(opts.consignee ? { copy: 'consignee' as const } : {}),
       freightId: f.freightId,
       code: f.code,
       trackingKey: f.trackingKey,
@@ -422,13 +446,15 @@ export class ConsignmentNoteService implements OnModuleInit {
     }
   }
 
-  private carriageOf(f: Freight): ConsignmentNote['carriage'] {
+  private carriageOf(f: Freight, consignee = false): ConsignmentNote['carriage'] {
     // CL1 — the agreed term decides who BEARS the carriage, which is the carriage-level shadow of it and the
     // only part of a sale term that belongs on a carriage document. The term itself is not a box of the CMR.
     const term = incotermEntry(f.incoterm);
     const borne = term ? (term.riskPassesAt === 'origin' && term.code !== 'CPT' && term.code !== 'CIP' && term.code !== 'CFR' && term.code !== 'CIF' ? 'collect' : 'prepaid') : undefined;
     const termNote = term ? ' Agreed ' + term.code + (f.namedPlace ? ' ' + f.namedPlace : '') + ', so carriage is ' + (borne === 'collect' ? 'COLLECT (payable by the consignee).' : 'PREPAID (borne by the sender).') : '';
     if (f.lockedPrice == null) return { paidBy: 'not-priced', note: 'Carriage charges not yet agreed' + termNote };
+    // The receiver's copy: the price is between the sender and the carrier — unless the term makes it the consignee's to pay.
+    if (consignee && borne !== 'collect') return { paidBy: f.shipperDid ? 'sender' : 'between-parties', note: 'The carriage price is between the sender and the carrier: it is not on the receiver’s copy.' + termNote };
     if (!f.shipperDid) return { amount: f.lockedPrice, currency: NETWORK_CURRENCY, paidBy: 'between-parties', note: 'Carriage charges settled between sender and carrier; the network holds no money for this load.' + termNote };
     return { amount: f.lockedPrice, currency: NETWORK_CURRENCY, paidBy: 'sender', note: 'Carriage charges paid by the sender through SeeBuyGet.' + termNote };
   }

@@ -1,16 +1,27 @@
 import { useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
-import type { BusinessClient, PostedLoad } from '../api';
-import { CLAIM_KINDS, CLAIM_KIND_KEYS, claimLine, claimReady, claimStanding, type ClaimKind } from '../claim';
+import type { BusinessClient } from '../api';
+import { CLAIM_KINDS, CLAIM_KIND_KEYS, claimLine, claimReady, claimStanding, type ClaimKind, type ClaimSide, type LoadClaim } from '../claim';
+
+/** What the panel reads of a load, from either side of it. */
+export interface ClaimableLoad {
+  freightId: string;
+  code: string;
+  status: string;
+  claim?: LoadClaim;
+  claimant?: 'sender' | 'receiver';
+  canClaim?: boolean;
+  incoterm?: string;
+}
 
 /**
  * A PROBLEM WITH THE GOODS DELIVERED (claim.ts): what the business found, in its own words, with a photo if it has one —
  * where it is the one to claim. SeeBuyGet does not judge it: unless a company of ours stated cover, the consignment note,
  * frozen with the claim on it, is the damage claim report, which the business hands on by a link from the note above.
  */
-export function LoadClaimPanel({ row, client, act, onChanged }: { row: PostedLoad; client: BusinessClient | null; act: boolean; onChanged: (message?: string) => void | Promise<void> }) {
+export function LoadClaimPanel({ row, client, act, onChanged, side = 'sender' }: { row: ClaimableLoad; client: BusinessClient | null; act: boolean; onChanged: (message?: string) => void | Promise<void>; side?: ClaimSide }) {
   const t = useT();
-  const standing = claimStanding(row);
+  const standing = claimStanding(row, side);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<{ kind: ClaimKind | ''; text: string; photo: string }>({ kind: '', text: '', photo: '' });
   const [busy, setBusy] = useState(false);
@@ -45,12 +56,14 @@ export function LoadClaimPanel({ row, client, act, onChanged }: { row: PostedLoa
       {standing.kind === 'made' ? (
         <p class="cons__lede">
           {(() => {
-            const line = claimLine(standing.claim);
+            const line = claimLine(standing.claim, side);
             return t(line.key, { kind: t(CLAIM_KIND_KEYS[line.kind]), when: formatDate(standing.claim.decidedAt ?? standing.claim.raisedAt, { day: 'numeric', month: 'short', year: 'numeric' }), note: standing.claim.note ?? '' });
           })()}
         </p>
       ) : standing.kind === 'receiver_claims' ? (
         <p class="cons__lede">{t('business.claim.receiverClaims', { term: row.incoterm ?? '' })}</p>
+      ) : standing.kind === 'sender_claims' ? (
+        <p class="cons__lede">{row.incoterm ? t('business.claim.senderClaimsTerm', { term: row.incoterm }) : t('business.claim.senderClaims')}</p>
       ) : standing.kind === 'window_closed' ? (
         <p class="cons__lede">{t('business.claim.windowClosed')}</p>
       ) : !act ? (

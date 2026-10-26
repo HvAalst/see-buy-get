@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
-import { FreightTrackView, ReceivingExceptionView } from './dispatch.types';
+import { FREIGHT_CLAIM_DECISIONS, FREIGHT_CLAIM_KINDS, FreightTrackView, ReceivingExceptionView, type FreightClaimDecision, type FreightClaimKind } from './dispatch.types';
 import { GeoPoint } from './pudo.types';
 
 /**
@@ -62,6 +62,17 @@ export class InboundDue {
   @ApiPropertyOptional({ enum: ['day', 'hour'] }) late?: 'day' | 'hour';
 }
 
+/** A claim on goods that came in: what it says, where it stands, and whether the sender or the receiver made it — never money. */
+export class InboundClaimView {
+  @ApiProperty({ enum: FREIGHT_CLAIM_KINDS }) kind: FreightClaimKind;
+  @ApiProperty({ enum: ['open', 'resolved'] }) state: 'open' | 'resolved';
+  raisedAt: string;
+  @ApiProperty({ enum: ['sender', 'receiver'] }) by: 'sender' | 'receiver';
+  @ApiPropertyOptional({ enum: [...FREIGHT_CLAIM_DECISIONS, 'report_only'] }) decision?: FreightClaimDecision;
+  @ApiPropertyOptional() note?: string;
+  @ApiPropertyOptional() decidedAt?: string;
+}
+
 /** A load coming in to one of the business's receiving points — the tracking link's view, and the receiver's own facts. */
 export class InboundRow extends FreightTrackView {
   freightId: string;
@@ -86,6 +97,17 @@ export class InboundRow extends FreightTrackView {
    * not known (a country of several clocks): the carrier's reading stands, as the tracking link shows it.
    */
   @ApiPropertyOptional({ type: InboundDue }) due?: InboundDue;
+  /**
+   * ITS COPY OF THE NOTE (the user, 2026-10-26: "Its copy, no carriage price"): the id in the archive of the receiver's
+   * copy, once one is frozen — the file, and the links to pass it on to an insurer, hang on it.
+   */
+  @ApiPropertyOptional() noteId?: string;
+  /** The trade term agreed, where one was; and so, once delivered, who claims for goods lost or damaged on the road. */
+  @ApiPropertyOptional() incoterm?: string;
+  @ApiPropertyOptional({ enum: ['sender', 'receiver'] }) claimant?: 'sender' | 'receiver';
+  /** The receiver may claim on it now: it carries the risk, the load is delivered, no claim yet, within the window. */
+  @ApiPropertyOptional() canClaim?: boolean;
+  @ApiPropertyOptional({ type: InboundClaimView }) claim?: InboundClaimView;
 }
 
 /** What is coming in to a business: its receiving points, and what is addressed to them — coming first, then the last fortnight's. */

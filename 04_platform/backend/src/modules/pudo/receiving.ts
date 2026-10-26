@@ -32,3 +32,8 @@ export function stillExpectedOf(list: ReadonlyArray<{ kind: ReceivingExceptionKi
 export function exceptionViewsOf(f: Pick<Freight, 'proofOfDelivery'>): ReceivingExceptionView[] {
   return (f.proofOfDelivery?.exceptions ?? []).map((e) => ({ kind: e.kind, count: e.count, photos: e.photoRefs?.length ?? 0 }));
 }
+
+/** The photographs of what the receiver found: kept with the note, for whoever holds a copy of it. */
+export function foundPhotosOf(f: Pick<Freight, 'proofOfDelivery'>): string[] {
+  return (f.proofOfDelivery?.exceptions ?? []).flatMap((e) => e.photoRefs ?? []);
+}

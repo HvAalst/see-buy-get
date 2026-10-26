@@ -271,6 +271,8 @@ export class FreightClaim {
   decidedAt?: string;
   funding?: { fromProvision: number; fromExpense: number };
   paidTo?: { kind: 'vendor' | 'between_parties'; id?: string };
+  /** As a party reads it: whether the sender's side or the business the load was sent to made it. Not kept: derived. */
+  @ApiPropertyOptional({ enum: ['sender', 'receiver'] }) by?: 'sender' | 'receiver';
 }
 
 /**
