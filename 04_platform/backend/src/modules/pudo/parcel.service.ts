@@ -128,6 +128,11 @@ export function vendorOrderStatsOf(rows: Parcel[]): VendorOrderStats {
 }
 
 /** Products as a human string: "Ankara shirt ×2, Kitenge scarf". */
+/** Each stop's own fee as the parcel is sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */
+function stopFeesOf(quote: ShipmentQuote): NonNullable<Parcel['stopFees']> {
+  return quote.nodes.map((n) => ({ type: n.type, id: n.id, fee: n.nativeFee, currency: n.currency }));
+}
+
 function vendorProducts(p: Parcel): string {
   return (p.items ?? []).map((i) => (i.qty > 1 ? `${i.name} ×${i.qty}` : i.name)).join(', ');
 }
@@ -1948,6 +1953,7 @@ export class ParcelService implements OnApplicationBootstrap {
       routeKm: quote.totalKm,
       lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
+      stopFees: stopFeesOf(quote),
       transportCost: chosen.transport,
       platformFee,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel
@@ -2086,6 +2092,7 @@ export class ParcelService implements OnApplicationBootstrap {
       routeKm: quote.totalKm,
       lockedPerKm: quote.perKm.min,
       nodeFees: quote.nodeFees,
+      stopFees: stopFeesOf(quote),
       transportCost: chosen.transport,
       platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
       platformFeePct: quote.platformFeePct, // the rate quoted, locked to this parcel

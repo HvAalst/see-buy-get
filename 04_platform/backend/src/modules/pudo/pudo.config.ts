@@ -83,7 +83,6 @@ export function classifySize(dims: { l: number; w: number; h: number; kg: number
 // (per km × distance). GLOS holds no fiat — it REPORTS the agreed price to a per-country daughter
 // company and bills the vendor prepaid. The 2% is that daughter company's reporting/handling margin.
 export const DEFAULT_PUDO_PRICE_PER_PARCEL = 0.5; // a PUDO agent's default handling fee per parcel
-export const DEFAULT_MDP_PRICE_PER_PARCEL = 0.3; // an MDP hub's default sort fee per parcel
 export const DEFAULT_PRICE_PER_KM = 0.08; // a vehicle's default transport rate per km
 /**
  * "NEAR ME" FOR A QUOTE (the user, 2026-10-25: "the asker should be able to filter quotations from 'near me'"): the
@@ -392,7 +391,9 @@ export const MAX_BAG_BAYS = 20;
 
 // Tote/MDP-path settlement (parallel to the direct-path LABOUR/HANDOVER/PICKUP fees).
 export const TOTE_LOAD_FEE = 0.5; // paid to the driver who scans a bag onto their vehicle
-export const MDP_SORT_FEE = 0.2; // MDP labour, per parcel sorted into its next-hop bag
+// What a new hub's own sort fee starts at, per parcel, where its company's list says nothing else. A hub is paid its OWN
+// fee — the one it advertised when the parcel was sold (the user, 2026-10-26: "Its own fee"); this only starts it.
+export const MDP_SORT_FEE = 0.3;
 
 // Agent-eligibility filter (Ch 18.1) + onboarding (18.3).
 export const MIN_SLOTS = 6; // minimum shelf capacity (rows × cols)

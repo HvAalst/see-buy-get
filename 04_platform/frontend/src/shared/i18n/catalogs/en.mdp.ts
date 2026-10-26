@@ -75,7 +75,7 @@ export const enMdp = {
   'mdp.home.signOut': 'Sign out of this hub',
   'mdp.home.changePassword': 'Change password',
   'mdp.home.feeSheetTitle': 'Your sort fee per parcel',
-  'mdp.home.feeSheetBody': 'Senders pay this fee for every parcel your hub sorts. Nearby hubs see it and compete.',
+  'mdp.home.feeSheetBody': 'Senders pay this fee for every parcel your hub sorts, and you are paid it for each. A parcel already sold keeps the fee it was sold at. Nearby hubs see it and compete.',
   'mdp.home.feeSheetLabel': 'Fee per parcel',
   'mdp.home.feeSheetLabelIn': 'Fee per parcel, in {currency}',
   'mdp.home.feeSheetSave': 'Save the new fee',

@@ -18,11 +18,11 @@ import { FleetService } from './fleet.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, VehicleCapability } from './cargo.types';
-import { DEFAULT_MDP_PRICE_PER_PARCEL, NETWORK_CURRENCY } from './pudo.config';
+import { NETWORK_CURRENCY } from './pudo.config';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { HubPapers, Mdp, NextHop, Tote } from './pudo.types';
+import { HubPapers, Mdp, NextHop, Parcel, Tote } from './pudo.types';
 import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
@@ -156,7 +156,9 @@ export class MdpService {
       location: input.location,
       contactPhone: input.contactPhone,
       address: input.address?.trim() || undefined,
-      pricePerParcel: input.pricePerParcel ?? DEFAULT_MDP_PRICE_PER_PARCEL,
+      // Its own fee — what senders are charged and what it is paid for each parcel it sorts. A hub that names none starts
+      // at its company's list (the user, 2026-10-26: "Its own fee"), and sets its own from its home screen.
+      pricePerParcel: input.pricePerParcel ?? this.entities.amountsFor(entity?.entityId).mdpSortFee,
       createdAt: now,
       vetting: vouched === 'joining' ? { state: 'draft' } : { state: 'approved', approvedAt: now, approvedBy: vouched.approvedBy },
     };
@@ -253,12 +255,27 @@ export class MdpService {
     return this.list().filter((m) => this.isApproved(m));
   }
 
-  /** Set the hub's open-data per-parcel sort price (public, drives the shipment quote). */
+  /**
+   * The hub sets its own sort fee: public (nearby hubs compete on it), what senders are charged for each parcel it sorts,
+   * and what it is paid for each (the user, 2026-10-26: "Its own fee"). Parcels already sold keep the fee they were sold
+   * at. Written at once — it is money.
+   */
   setPrice(mdpId: string, pricePerParcel: number): Mdp {
     if (pricePerParcel < 0) throw new GlosError('AMOUNT_INVALID', 'Price cannot be negative');
     const mdp = this.require(mdpId);
     mdp.pricePerParcel = Math.round(pricePerParcel * 100) / 100;
+    this.mdps.set(mdp.mdpId, mdp);
     return mdp;
+  }
+
+  /**
+   * WHAT A HUB IS PAID TO SORT A PARCEL: its own fee, in its own money — the one it advertised when the parcel was sold,
+   * which is what the store paid for; its fee now where the parcel was never sold through this hub (sent another way
+   * since, or sold before fees were kept per stop), or where the hub's money has changed since.
+   */
+  sortPayOf(mdp: Mdp, parcel: Pick<Parcel, 'stopFees'>): number {
+    const sold = parcel.stopFees?.find((s) => s.type === 'mdp' && s.id === mdp.mdpId);
+    return sold && sold.currency === this.currencyOf(mdp) ? sold.fee : mdp.pricePerParcel;
   }
 
   list(): Mdp[] {
@@ -734,10 +751,11 @@ export class MdpService {
     }
     this.totes.add(tote.code, parcelId, parcel.size);
     parcel.toteId = tote.toteId; // bag ↔ parcel; stays At_MDP until the bag is loaded onward
-    // MDP sort labour, recharged at cost when this hub's sister is not the one that sold the shipment.
-    // At this hub's own company's figure; where no company of ours stands behind it, at the seller's, who buys the work.
-    const hubEntity = this.entityIdOrNone(this.require(mdpId));
-    const sortPay = this.entities.amountsFor(hubEntity ?? parcel.sellerEntityId).mdpSortFee;
+    // MDP sort labour at the hub's OWN fee (the user, 2026-10-26: "Its own fee"), recharged at cost when this hub's
+    // sister is not the one that sold the shipment.
+    const hub = this.require(mdpId);
+    const hubEntity = this.entityIdOrNone(hub);
+    const sortPay = this.sortPayOf(hub, parcel);
     if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, hubEntity, parcel.sellerEntityId);
 
     void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);

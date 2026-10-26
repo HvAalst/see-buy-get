@@ -7603,8 +7603,11 @@ describe('PUDO Light', () => {
 
       expect((controller.setMdpPrice(hub.mdpId, { price: 7 } as never, own) as { pricePerParcel: number }).pricePerParcel).toBe(7);
       expect((controller.registerTote(hub.mdpId, own) as { code: string }).code).toBeTruthy();
-      // Network staff stand in for a hub.
-      expect((controller.setMdpPrice(hub.mdpId, { price: 8 } as never, staff) as { pricePerParcel: number }).pricePerParcel).toBe(8);
+      // Its fee is what it is paid (the user, 2026-10-26: "Its own fee"): staff are refused by name, and nothing moves.
+      expect(() => controller.setMdpPrice(hub.mdpId, { price: 8 } as never, staff)).toThrow(/A hub sets its own fee/);
+      expect(mdps.require(hub.mdpId).pricePerParcel).toBe(7);
+      // Its bags are still the floor's: staff stand in for a hub there.
+      expect((controller.registerTote(hub.mdpId, staff) as { code: string }).code).toBeTruthy();
     });
 
     it('a vehicle goes into the fleet of the office that registers it, whatever fleet the request names', () => {
@@ -10085,7 +10088,7 @@ describe('PUDO Light', () => {
 
     it('starts every company from today’s figures — and nothing changes until somebody sets one', () => {
       // …and what the road starts from (2026-10-25): a vehicle's rate per kilometre and a truck's loading fee.
-      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.2, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10 });
+      expect(DEFAULT_AMOUNTS).toEqual({ wholesale: 1.6, labourFee: 0.4, handoverFee: 0.5, shelvingFee: 0.15, releaseFee: 0.15, toteLoadFee: 0.5, mdpSortFee: 0.3, holdingFeePerDay: 0.1, freightPerKm: 0.08, freightBaseFee: 10 });
       expect(entities.amountsFor(KE())).toEqual({ ...DEFAULT_AMOUNTS, currency: 'KES' });
       // Nobody's company: the starting figures, in no money in particular.
       expect(entities.amountsFor(undefined)).toEqual({ ...DEFAULT_AMOUNTS, currency: undefined });
@@ -10241,24 +10244,40 @@ describe('PUDO Light', () => {
       expect(parcels.get('QR-AMH-2').status).toBe('On_Bus'); // the parcel moved all the same
     });
 
-    it('a hub is paid for each parcel it sorts at its own company’s figure', () => {
+    it('a hub is paid for each parcel it sorts at ITS OWN fee, the one the parcel was sold at — its company’s list only starts it (the user, 2026-10-26: “Its own fee”)', () => {
       set({ mdpSortFee: 25 });
       const origin = onboardAgent('Sort Origin', 'NorthTown', 50);
       const dest = onboardAgent('Sort Dest', 'SouthTown', 50);
       const hub = mdps.register({ name: 'Sort Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+      // A hub that names no fee starts at its company's list; then it sets its own.
+      expect(hub.pricePerParcel).toBe(25);
+      mdps.setPrice(hub.mdpId, 30);
       const vendor = vendors.register({ name: 'SortStore' });
-      vendors.topUp(vendor.vendorId, 50);
-      const { parcel } = parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700222', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') });
-      parcels.intakeInbound(parcel.parcelId, origin.did);
+      vendors.topUp(vendor.vendorId, 500);
+      const sell = (n: number) => parcels.createInbound({ vendorId: vendor.vendorId, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: `+25470022${n}`, size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote: routing.quoteShipment(origin.did, dest.did, 'M') }).parcel;
+      const first = sell(1);
+      // Sold through the hub at 30: kept on the parcel, in the hub's own money.
+      expect(first.stopFees).toContainEqual({ type: 'mdp', id: hub.mdpId, fee: 30, currency: mdps.currencyOf(mdps.require(hub.mdpId)) });
+      // The hub raises its fee: the next parcel is sold at 40; the first keeps the 30 it was sold at.
+      mdps.setPrice(hub.mdpId, 40);
+      const second = sell(2);
+      // One sold before fees were kept per stop: the hub's fee now.
+      const third = sell(3);
+      delete parcels.get(third.parcelId).stopFees;
       const bag = totes.register(origin.did);
       totes.assign(bag.code, hub.mdpId, hub.name);
-      mdps.fillTote(bag.code, parcel.parcelId);
+      for (const p of [first, second, third]) {
+        parcels.intakeInbound(p.parcelId, origin.did);
+        mdps.fillTote(bag.code, p.parcelId);
+      }
       closeForTest(bag.code);
       mdps.loadBag(bag.code, 'BUS-AM');
       mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
-      mdps.sortParcel(hub.mdpId, parcel.parcelId);
+      for (const p of [first, second, third]) mdps.sortParcel(hub.mdpId, p.parcelId);
       const sorted = gate.entries({ type: 'LABOR_PAYOUT' }).filter((e) => e.refType === 'mdp');
-      expect(sorted.map((e) => e.amount)).toEqual([25]);
+      const paid = Object.fromEntries(sorted.map((e) => [e.reference, e.amount]));
+      expect(paid).toEqual({ [first.parcelId]: 30, [second.parcelId]: 40, [third.parcelId]: 40 });
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
   });
 });

@@ -390,7 +390,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'PATCH sbg/business/me/clients/:clientId': 'none',
   'PATCH sbg/dispatch/freight/:id/instructions': 'support',
   'PATCH sbg/identity/profile': 'none',
-  'PATCH sbg/mdps/:id/pricing': 'support',
+  'PATCH sbg/mdps/:id/pricing': 'none',
   'PATCH sbg/vehicles/:id/pricing': 'support',
   'PATCH sbg/vendors/:id': 'none',
   'POST control-tower/actions': 'admin',

@@ -82,7 +82,7 @@ export function amountsLine(amounts: Partial<Record<AmountKey, number | undefine
     shelvingFee: 'shelving pay',
     releaseFee: 'release pay',
     toteLoadFee: 'bag-loading pay',
-    mdpSortFee: 'sorting pay',
+    mdpSortFee: 'a new hub’s sorting fee',
     holdingFeePerDay: 'holding per day',
     freightPerKm: 'freight per km',
     freightBaseFee: 'truck loading fee',

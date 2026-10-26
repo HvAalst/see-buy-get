@@ -81,9 +81,14 @@ describe('who the door lets in', () => {
     expect(door(route)).toMatchObject({ open: false, roles: ['operator'] });
   });
 
-  /** The hub's own: its price, its bags, what is dropped and sorted at it. */
-  it.each(['PATCH sbg/mdps/:id/pricing', 'POST sbg/mdps/:id/totes', 'POST sbg/mdps/:id/drop-bag', 'POST sbg/mdps/:id/sort'])('%s is for a hub, and staff standing in', (route) => {
+  /** The hub's own: its bags, what is dropped and sorted at it. */
+  it.each(['POST sbg/mdps/:id/totes', 'POST sbg/mdps/:id/drop-bag', 'POST sbg/mdps/:id/sort'])('%s is for a hub, and staff standing in', (route) => {
     expect(door(route)).toMatchObject({ open: false, roles: ['mdp', 'operator'] });
+  });
+
+  /** Its fee is what it is paid: staff pass the role check and are then refused by name (pudo.controller.ts). */
+  it('PATCH sbg/mdps/:id/pricing is for a hub', () => {
+    expect(door('PATCH sbg/mdps/:id/pricing')).toMatchObject({ open: false, roles: ['mdp', 'operator'] });
   });
 
   /** A bag in somebody's hands: the trades that handle bags. A store, a business, a fleet's office never hold one. */

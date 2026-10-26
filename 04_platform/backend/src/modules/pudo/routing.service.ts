@@ -73,7 +73,7 @@ export interface QuoteLeg {
  * A stop on the journey + its open-data fee, the sister company owed that fee, and what it is owed IN.
  *
  * Two amounts on purpose. `nativeFee` in `currency` is what the site actually charges — the number it
- * advertises and the number it will be paid. `fee` is that amount expressed in the QUOTE's currency, which
+ * advertises; a hub is paid it at its sort (kept on the parcel as `stopFees`; the user, 2026-10-26: "Its own fee"). `fee` is that amount expressed in the QUOTE's currency, which
  * is what the buyer's price is built from. On a domestic route they are the same number; across a border
  * they must not be conflated, because one of them is a promise to a shop and the other is a promise to a
  * buyer, and the rate between them can move.

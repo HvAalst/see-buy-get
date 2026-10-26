@@ -12488,7 +12488,7 @@
       "patch": {
         "operationId": "Sbg.setMdpPrice",
         "summary": "",
-        "description": "An MDP sets its open-data per-parcel sort price.",
+        "description": "A hub sets its own sort fee — what it is paid for each parcel it sorts: its own word, never staff's.",
         "parameters": [
           {
             "name": "id",
@@ -41686,6 +41686,29 @@
           "svg"
         ]
       },
+      "ParcelStopFee": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "object"
+          },
+          "id": {
+            "type": "string"
+          },
+          "fee": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "fee",
+          "currency"
+        ]
+      },
       "CustomsDeclaration": {
         "type": "object",
         "properties": {
@@ -42186,6 +42209,13 @@
                 "required": true,
                 "type": "number"
               }
+            }
+          },
+          "stopFees": {
+            "description": "EACH STOP'S OWN FEE, AS IT WAS SOLD — the fee each shop and hub on the route advertised when this parcel was bought,\nin its own money. A hub is paid its own fee at its sort (the user, 2026-10-26: \"Its own fee\"), and the one it was\nsold at is the one the store paid for: a fee raised or lowered afterwards changes what later parcels pay, not this.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParcelStopFee"
             }
           },
           "transportFactor": {

@@ -48,6 +48,12 @@ describe('a hub’s opening hours and how to reach it', () => {
     // ITS ADDRESS FROM THE FIRST TIME IT OPENS ITS CARD: the page its card links to is there already — nobody sweeps for it.
     expect((await http().get(contact).set(asHub).expect(200)).body.handle).toMatch(/^ghala-hub/);
 
+    // ITS FEE IS ITS PAY (the user, 2026-10-26: "Its own fee"): set by the hub, never by staff in its name.
+    const pricing = `/v1/sbg/mdps/${hub.mdpId}/pricing`;
+    expect((await http().patch(pricing).set(operator).send({ price: 0.9 }).expect(403)).body.detail).toMatch(/A hub sets its own fee/);
+    await http().patch(pricing).set(asOther).send({ price: 0.9 }).expect(403);
+    expect((await http().patch(pricing).set(asHub).send({ price: 0.45 }).expect(200)).body.pricePerParcel).toBe(0.45);
+
     // ITS OWN WORD: written by its owner — not staff, not another hub.
     expect((await http().put(contact).set(operator).send({ phone: '+254700000001' }).expect(403)).body.detail).toMatch(/A hub writes its own hours/);
     await http().put(contact).set(asOther).send({ phone: '+254700000001' }).expect(403);

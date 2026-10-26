@@ -905,6 +905,14 @@ export interface ConsumerParcelView {
   relinquishedAt?: string;
 }
 
+/** One stop's own fee as the parcel was sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */
+export class ParcelStopFee {
+  type: 'pudo' | 'mdp';
+  id: string;
+  fee: number;
+  currency: string;
+}
+
 export class Parcel {
   parcelId: string; // pre-printed QR sticker id (the human handle; reusable across shipments)
   // DT — the shipment's stable GLOS identity: a real DID minted at creation (the digital twin's id, distinct
@@ -1023,6 +1031,12 @@ export class Parcel {
    * whose whole rate was margin by definition.
    */
   rateStack?: { costOfRiskPct: number; profitOnRiskPct: number; marginPct: number };
+  /**
+   * EACH STOP'S OWN FEE, AS IT WAS SOLD — the fee each shop and hub on the route advertised when this parcel was bought,
+   * in its own money. A hub is paid its own fee at its sort (the user, 2026-10-26: "Its own fee"), and the one it was
+   * sold at is the one the store paid for: a fee raised or lowered afterwards changes what later parcels pay, not this.
+   */
+  stopFees?: ParcelStopFee[];
   /** The SIZE FACTOR its transport was quoted at, stamped at mint for the same reason. A network constant
    *  today, but one that will be retuned — and the flexible rebate recomputes the real cost at delivery,
    *  so an unstamped factor would re-price parcels already sold. Absent on records written before this

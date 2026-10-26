@@ -4032,10 +4032,11 @@ export class SbgController {
     return this.agents.setPrice(did, dto.price);
   }
 
-  /** An MDP sets its open-data per-parcel sort price. */
+  /** A hub sets its own sort fee — what it is paid for each parcel it sorts: its own word, never staff's. */
   @Roles('mdp', 'operator')
   @Patch('mdps/:id/pricing')
   setMdpPrice(@Param('id') id: string, @Body() dto: SetPriceDto, @Actor() actor: IntrospectionResult) {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A hub sets its own fee, signed in as the hub: it is what the hub is paid. Staff change nothing in its name');
     this.assertMdpActs(id, actor);
     return this.mdps.setPrice(id, dto.price);
   }
