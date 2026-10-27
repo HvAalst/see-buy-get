@@ -305,6 +305,13 @@ function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; currenc
           <Icon name="weight" size={21} class="meta__ic" />
           <span>{t('driver.board.weight', { kg: row.weightKg, dest: row.destLabel })}</span>
         </p>
+        {/* A match (the user, 2026-10-27): who pays, said before it is taken. */}
+        {row.paidByShipper ? (
+          <p class="meta">
+            <Icon name="wallet" size={21} class="meta__ic" />
+            <span>{t('driver.paidByShipper')}</span>
+          </p>
+        ) : null}
         <p class="meta">
           <Icon name="pin" size={21} class="meta__ic" />
           <span>{t('driver.board.from', { where: row.pickupLabel })}</span>

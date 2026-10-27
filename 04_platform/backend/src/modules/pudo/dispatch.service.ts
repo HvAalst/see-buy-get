@@ -627,7 +627,12 @@ export class DispatchService {
       // every path a business posts through (its own form, an import's road leg, a box going home) is covered
       // and delivery never has to work out afterwards whose money it was.
       // …and a job a hub posts for its own carriers' way home: it pays the carrier itself (the user, 2026-10-27).
-      ...(this.entities.byDid(input.postedByDid)?.kind === 'business' || contract || input.betweenParties ? { settlement: 'between_parties' as const } : {}),
+      // WHO PAYS (the user, 2026-10-27: "anybody who posts loads will pay unless we match, then they settle the money among
+      // themselves, nevertheless, the price is negotiated on sbg"): a load is billed through us only where a store that settles
+      // with us ships it. Every other load is a MATCH — the price agreed here, the money passed between the two of them — and
+      // the network pays no driver for a load nobody paid it for. A driver posting their own has the note, the labels and the
+      // times, never a payout ("the network will not pay from their own pocket").
+      ...(this.entities.byDid(input.postedByDid)?.kind === 'business' || contract || input.betweenParties || !this.billedThroughUs(input) ? { settlement: 'between_parties' as const } : {}),
       // P1 — and a contract order is settled under the contract, between the two of them, whoever placed it.
       ...(contract ? { contract, deliverOn: input.deliverOn } : {}),
       ...(contract && input.orderRef?.trim() ? { orderRef: input.orderRef.trim().slice(0, 60) } : {}),
@@ -885,6 +890,7 @@ export class DispatchService {
       driverDid,
       kind: load.kind,
       ref: load.ref,
+      ...(load.paidByShipper ? { paidByShipper: true } : {}),
       pickupLabel: load.pickupLabel,
       pickupLocation: load.pickupLocation,
       destLabel: load.destLabel,
@@ -1453,6 +1459,7 @@ export class DispatchService {
       );
       rows.push({
         freightId: f.freightId,
+        ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}),
         code: f.code,
         description: f.description,
         pickupLabel: f.pickupLabel,
@@ -3444,7 +3451,10 @@ export class DispatchService {
    * our books would be a second debt for the same work, owed by a company that never held the money.
    */
   private payTheRoad(f: Freight): void {
-    if (f.lockedPrice != null && !f.driverPaid && f.claimedBy && f.settlement !== 'between_parties') {
+    // Only a load somebody paid US for — billed, or billed and owed (a store short at the take): never a match, and never a
+    // load billed to nobody (2026-10-27), whatever its stamp says.
+    const billed = f.paidStatus === 'billed' || f.paidStatus === 'billing_failed';
+    if (f.lockedPrice != null && !f.driverPaid && f.claimedBy && f.settlement !== 'between_parties' && billed) {
       // WHO it was owed to, read in the same turn the payout resolves it and kept on the load: a claim upheld
       // weeks later takes the money back from this party, not from a fleet the driver has joined since.
       const payee = this.drivers.payeeOrNone(f.claimedBy);
@@ -3742,6 +3752,11 @@ export class DispatchService {
       this.freights.set(f.freightId, f);
     }
     return f;
+  }
+
+  /** Whether this load will be billed through us when a driver takes it: a store's, where that store settles with us. */
+  private billedThroughUs(input: { shipperDid?: string }): boolean {
+    return Boolean(input.shipperDid && this.vendors.has(input.shipperDid) && this.vendors.settlesWithUs(input.shipperDid));
   }
 
   /** A load withdrawn, its checks done: what was billed given back, open proposals and offers closed, everyone told. */
@@ -4246,7 +4261,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

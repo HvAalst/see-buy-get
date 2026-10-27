@@ -120,6 +120,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {/* A store's parcel called off at a hub, to its door (2026-10-27): collected at the hub's counter, by the pass. */}
                   {c.collectAtHub && !c.collectAtHub.handed ? <span class="load__warn">{t('driver.loads.collectAtHub', { parcel: c.collectAtHub.parcelId, hub: c.collectAtHub.hubName })}</span> : null}
                   {c.returnOf ? <span class="load__meta">{t('driver.loads.returnOf', { code: c.returnOf.code })}</span> : null}
+                  {c.paidByShipper ? <span class="load__meta">{t('driver.paidByShipper')}</span> : null}
                   {/* Round 37 — loaded onto them by their pass, its seal not read yet: received nowhere until it is. */}
                   {control === 'onboard' && c.bagSeal && !c.bagSeal.taken && !c.held ? <span class="load__warn">{t('driver.bag.notRead')}</span> : null}
                 </span>

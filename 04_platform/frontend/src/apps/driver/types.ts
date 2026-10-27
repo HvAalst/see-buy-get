@@ -263,6 +263,8 @@ export interface Claimable {
   refusedPart?: number;
   /** A store's parcel to collect at a hub's counter, which hands it over by the driver's pass (2026-10-27). */
   collectAtHub?: { parcelId: string; hubName: string; handed: boolean };
+  /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */
+  paidByShipper?: boolean;
   /** A return: refused goods carried on as this new load — the load they were refused on. */
   returnOf?: { freightId: string; code: string };
   /** Round 37 — a bag, to the driver holding it: how it was closed (never the number), what a reading is checked against, read yet. */
@@ -318,6 +320,8 @@ import type { BoardBlocker } from '../../shared/board';
 /** FB1 — one load on the open board: the market's facts, this vehicle's price, and every reason why not. */
 export interface BoardRow {
   freightId: string;
+  /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */
+  paidByShipper?: boolean;
   code: string;
   description: string;
   pickupLabel: string;
@@ -372,6 +376,8 @@ export interface RatesView {
 
 export interface OfferView {
   offerId: string;
+  /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */
+  paidByShipper?: boolean;
   kind: ClaimKind;
   ref: string;
   pickupLabel: string;

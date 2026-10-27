@@ -8162,7 +8162,7 @@ describe('PUDO Light', () => {
     });
   });
 
-  it('S34: a bulletin freight with no shipper stays unpaid at claim but still pays the driver on delivery', () => {
+  it('S34: a load nobody is billed for is a match — the price agreed here, the money between the two of them; the network pays its driver nothing (the user, 2026-10-27)', () => {
     const d = drivers.register({ displayName: 'BL', fullName: 'B', nationalId: 'ID-BL', mobile: '+254770888', licenceClasses: ['truck'], licenceNumber: 'L-BL', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
     drivers.decideKyc(d.did, true);
@@ -8176,10 +8176,49 @@ describe('PUDO Light', () => {
     dispatch.claim(offer.offerId, noon);
     const claimed = dispatch.listFreight().find((x) => x.freightId === f.freightId)!;
     expect(claimed.lockedPrice).toBe(8);
-    expect(claimed.paidStatus).toBe('unpaid'); // no shipper to bill — settled off-platform
+    expect(claimed).toMatchObject({ paidStatus: 'unpaid', settlement: 'between_parties' }); // nobody billed: a match
     pickupOk(f, d.did);
-    deliverOk(f, d.did);
-    expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(1); // driver still paid
+    const done = deliverOk(f, d.did);
+    // "anybody who posts loads will pay unless we match, then they settle the money among themselves"
+    expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did)).toHaveLength(0);
+    expect(done.driverPaid).toBeFalsy();
+  });
+
+  it('a store’s load is billed through us when a driver takes it, and its driver paid at delivery; a driver posting their own is paid nothing by the network (the user, 2026-10-27)', () => {
+    const newTruckDriver = (tag: string) => {
+      const d = drivers.register({ displayName: tag, fullName: tag, nationalId: `ID-${tag}`, mobile: `+25477088${tag.length}${tag.charCodeAt(1)}`, licenceClasses: ['truck'], licenceNumber: `L-${tag}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+      drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+      drivers.decideKyc(d.did, true);
+      fleet.couple(d.did, vehicles.register({ plate: `${tag}-1`, vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 10_000, ownerName: 'X', baseFee: 8, pricePerKm: 0.4 }).vehicleId);
+      return d;
+    };
+    const pickup = { lat: -1.2, lng: 36.8 };
+    const noon = new Date('2026-07-22T11:00:00').getTime();
+    // A store that settles with us: billed at the take, its driver paid at delivery.
+    const store = vendors.register({ name: 'S34Store' });
+    vendors.topUp(store.vendorId, 500);
+    const billedD = newTruckDriver('SBA');
+    const billed = dispatch.registerFreight({ description: 'Tiles', pickupLocation: pickup, pickupLabel: 'Store', destLabel: 'Site', destLocation: pickup, weightKg: 3000, packaging: 'loose', shipperDid: store.vendorId });
+    expect(billed.settlement).toBeUndefined();
+    const offerB = dispatch.suggest(billedD.did, { from: pickup, to: pickup }, noon).find((o) => o.ref === billed.freightId)!;
+    expect(offerB.paidByShipper).toBeUndefined(); // SeeBuyGet pays this driver
+    dispatch.claim(offerB.offerId, noon);
+    expect(dispatch.listFreight().find((x) => x.freightId === billed.freightId)!.paidStatus).toBe('billed');
+    pickupOk(billed, billedD.did);
+    expect(deliverOk(billed, billedD.did).driverPaid).toBe(true);
+    expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === billedD.did)).toHaveLength(1);
+    // A driver posting their own load and carrying it: the note, the labels and the times — and nothing from the network.
+    const own = newTruckDriver('SOW');
+    const mine = dispatch.registerFreight({ description: 'Sand', pickupLocation: pickup, pickupLabel: 'Quarry', destLabel: 'Site', destLocation: pickup, weightKg: 3000, packaging: 'loose', postedByDid: own.did });
+    expect(mine.settlement).toBe('between_parties');
+    // Said before it is taken, on the board and in the offer: the shipper pays, not SeeBuyGet.
+    expect(dispatch.board({ driverDid: own.did, from: pickup, radiusKm: 50 }, noon).find((r) => r.freightId === mine.freightId)?.paidByShipper).toBe(true);
+    const offerM = dispatch.suggest(own.did, { from: pickup, to: pickup }, noon).find((o) => o.ref === mine.freightId)!;
+    expect(offerM.paidByShipper).toBe(true);
+    dispatch.claim(offerM.offerId, noon);
+    pickupOk(mine, own.did);
+    expect(deliverOk(mine, own.did).driverPaid).toBeFalsy();
+    expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === own.did)).toHaveLength(0);
   });
 
   // --- S34b: the dynamic market-pulse engine (per-zone supply/demand surge, admin rules, corridor clamp) ---
@@ -8524,7 +8563,8 @@ describe('PUDO Light', () => {
     const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiru at the gate', podPhotoId: photoBy(d.did) });
     expect(done.status).toBe('delivered');
     expect(done.unloadReport?.confirmed).toEqual(expect.arrayContaining(requiredUnloadKeys()));
-    expect(done.driverPaid).toBe(true); // the S34 payout still fires after the gate
+    // A match (nobody billed): the gate stamps the report, and the network pays nothing (2026-10-27).
+    expect(done.driverPaid).toBeFalsy();
   });
 
   it('S33: a claimed freight carries its cargo model + the exact checklists to the driver', () => {
@@ -9145,7 +9185,8 @@ describe('PUDO Light', () => {
       const closed = dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'back' }, T0 + 2 * H);
       expect(posted).toEqual([]);
       expect(closed.status).toBe('refused');
-      expect(closed.driverPaid).toBe(true);
+      // Posted by somebody we bill nothing: a match, its road paid between them — never by the network (2026-10-27).
+      expect(closed.driverPaid).toBeFalsy();
       expect(closed.refusal?.decision).toMatchObject({ choice: 'back', by: 'did:shop:rf', destLabel: 'Depot', destLocation: pickup });
       const leg = closed.refusal!.decision!.returnLeg!;
       const ret = dispatch.requireFreightPublic(leg.freightId);
@@ -9159,9 +9200,10 @@ describe('PUDO Light', () => {
       expect(() => dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'give_up' }, T0 + 3 * H)).toThrow(/Nothing was refused/);
       expect(dispatch.postedBy('did:shop:rf').find((r) => r.freightId === f.freightId)).toMatchObject({ status: 'refused', canDecideRefusal: false });
       expect(dispatch.postedBy('did:shop:rf').find((r) => r.freightId === ret.freightId)).toMatchObject({ returnOf: { code: f.code } });
-      // The return is delivered as any other load, and its road paid then.
+      // The return is delivered as any other load — a match too, its road paid by the sender, never by the network (2026-10-27).
       const done = dispatch.deliverFreight(ret.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Depot clerk', podPhotoId: photoBy(d.did) });
-      expect(done).toMatchObject({ status: 'delivered', driverPaid: true });
+      expect(done).toMatchObject({ status: 'delivered', settlement: 'between_parties' });
+      expect(done.driverPaid).toBeFalsy();
     });
 
     it('elsewhere: to the place the sender names, on the map, with who to ask for there', () => {
@@ -9183,7 +9225,8 @@ describe('PUDO Light', () => {
       dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0);
       const before = dispatch.postedBy('did:shop:rf').length;
       const closed = dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'give_up' }, T0 + H);
-      expect(closed).toMatchObject({ status: 'refused', driverPaid: true });
+      expect(closed).toMatchObject({ status: 'refused', settlement: 'between_parties' });
+      expect(closed.driverPaid).toBeFalsy();
       expect(closed.refusal?.decision).toEqual(expect.objectContaining({ choice: 'give_up', by: 'did:shop:rf' }));
       expect(closed.refusal?.decision?.returnLeg).toBeUndefined();
       expect(dispatch.postedBy('did:shop:rf')).toHaveLength(before); // no new load
@@ -9235,7 +9278,8 @@ describe('PUDO Light', () => {
       });
       const done = dispatch.deliverFreight(f.freightId, d.did, unloadBy(d.did, 2), T0);
       const decideBy = new Date(Date.parse(done.deliveredAt!) + 48 * H).toISOString();
-      expect(done).toMatchObject({ status: 'delivered', driverPaid: true });
+      expect(done).toMatchObject({ status: 'delivered', settlement: 'between_parties' });
+      expect(done.driverPaid).toBeFalsy();
       expect(done.proofOfDelivery?.exceptions).toEqual([{ kind: 'refused', count: 2 }]);
       expect(done.refusal).toEqual({ at: done.deliveredAt, by: d.did, decideBy, part: { packages: 2, of: 10 } });
       expect(delivered[0]).toMatchObject({ refusedPart: { packages: 2, of: 10, decideBy, pickupLabel: 'Depot' } });

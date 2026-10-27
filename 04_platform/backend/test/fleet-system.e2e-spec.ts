@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module';
 import { EventBus } from '../src/foundation/events/event-bus.service';
 import { GlosEvent } from '../src/foundation/events/glos-events';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { VendorService } from '../src/modules/pudo/vendor.service';
 import { FleetHookService } from '../src/modules/pudo/fleet-hooks.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
@@ -171,7 +172,10 @@ describe('a fleet’s own system, told of its work, over the wire', () => {
 
     // A load off the open board, which WE pay the fleet for: its money comes with it, as its Earnings screen reads it.
     const dispatch = app.get(DispatchService);
-    const board = dispatch.registerFreight({ description: 'Cement, 10 bags', pickupLocation: { lat: -1.3, lng: 36.84 }, pickupLabel: 'Athi River yard', destLabel: 'Ruiru', destLocation: { lat: -1.15, lng: 36.96 }, weightKg: 500 });
+    // A store's, billed through us when it is taken: a load nobody pays us for is a match, and carries no money of ours (2026-10-27).
+    const cementStore = app.get(VendorService).register({ name: 'Cement Store' });
+    app.get(VendorService).topUp(cementStore.vendorId, 100_000);
+    const board = dispatch.registerFreight({ description: 'Cement, 10 bags', pickupLocation: { lat: -1.3, lng: 36.84 }, pickupLabel: 'Athi River yard', destLabel: 'Ruiru', destLocation: { lat: -1.15, lng: 36.96 }, weightKg: 500, shipperDid: cementStore.vendorId });
     await settle();
     await hooks.drain();
     landed = [];

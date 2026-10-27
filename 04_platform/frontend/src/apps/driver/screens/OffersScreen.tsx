@@ -215,6 +215,13 @@ function OfferCard({ offer, now, currency }: { offer: OfferView; now: number; cu
       ) : null}
 
       <div class="offer__meta">
+        {/* A match (the user, 2026-10-27): who pays, said before it is taken. */}
+        {offer.paidByShipper ? (
+          <p class="meta">
+            <Icon name="wallet" size={21} class="meta__ic" />
+            <span>{t('driver.paidByShipper')}</span>
+          </p>
+        ) : null}
         <p class="meta">
           <Icon name="weight" size={21} class="meta__ic" />
           <span>

@@ -51493,6 +51493,10 @@
       "BoardRow": {
         "type": "object",
         "properties": {
+          "paidByShipper": {
+            "type": "boolean",
+            "description": "A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no\nmoney for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays."
+          },
           "cargoClass": {
             "type": "string",
             "enum": [
@@ -53873,6 +53877,10 @@
       "Offer": {
         "type": "object",
         "properties": {
+          "paidByShipper": {
+            "type": "boolean",
+            "description": "A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no\nmoney for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays."
+          },
           "border": {
             "description": "CA6 — for a load that crosses a border: where it may cross, when, what to carry, and the limits.",
             "allOf": [

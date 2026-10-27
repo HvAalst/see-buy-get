@@ -3,6 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { VendorService } from '../src/modules/pudo/vendor.service';
 import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { declared } from './declared';
@@ -209,7 +210,10 @@ describe('a company’s own system, with its key, over the wire', () => {
 
     // The board for its driver; where the driver is only once the fleet sends that to its own system.
     const dispatch = app.get(DispatchService);
-    const board = dispatch.registerFreight({ description: 'Steel bars, 2 t', pickupLocation: { lat: -1.3, lng: 36.84 }, pickupLabel: 'Athi River yard', destLabel: 'Thika', destLocation: { lat: -1.03, lng: 37.07 }, weightKg: 2000 });
+    // A store's load, billed through us when it is taken — one WE pay the fleet for (2026-10-27: a load nobody pays us for is a match).
+    const store = app.get(VendorService).register({ name: `Mabati Store ${tag}` });
+    app.get(VendorService).topUp(store.vendorId, 100_000);
+    const board = dispatch.registerFreight({ description: 'Steel bars, 2 t', pickupLocation: { lat: -1.3, lng: 36.84 }, pickupLabel: 'Athi River yard', destLabel: 'Thika', destLocation: { lat: -1.03, lng: 37.07 }, weightKg: 2000, shipperDid: store.vendorId });
     const negotiable = dispatch.registerFreight({ description: 'Timber', pickupLocation: { lat: -1.3, lng: 36.84 }, pickupLabel: 'Athi River yard', destLabel: 'Juja', destLocation: { lat: -1.1, lng: 37.01 }, weightKg: 1500, commitMode: 'negotiate' });
     await http().post(`/v1/sbg/fleet/drivers/${fleet.driverDid}/locate`).set(bearer(fleet.driverToken)).send({ lat: -1.29, lng: 36.82 }).expect(201);
     const read = (await http().get('/v1/sbg/api/fleet/board').query({ driverDid: fleet.driverDid }).set(keyed(live.secret)).expect(200)).body;

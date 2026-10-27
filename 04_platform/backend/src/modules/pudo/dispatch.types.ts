@@ -951,6 +951,11 @@ export class BoardBlocker {
 /** FB1 — one load as the board shows it: the market's facts, this driver's price, and every reason why not. */
 export class BoardRow {
   freightId: string;
+  /**
+   * A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no
+   * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.
+   */
+  @ApiPropertyOptional() paidByShipper?: boolean;
   code: string;
   description: string;
   pickupLabel: string;
@@ -1540,6 +1545,11 @@ export class DeskNumber {
 
 export class Claimable {
   kind: ClaimableKind;
+  /**
+   * A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no
+   * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.
+   */
+  @ApiPropertyOptional() paidByShipper?: boolean;
   /** Freight crossing a border whose shipper has not yet signed its commercial invoice: it cannot be taken over yet. */
   invoiceMissing?: boolean;
   /** Round 38 — the load's commercial invoice is this driver's to show at the border: across one, from pickup on. */
@@ -1653,6 +1663,11 @@ export type OfferStatus = 'pending' | 'claimed' | 'ignored' | 'expired';
 /** A suggestion pushed to a driver: "≈N min from <place>, a shipment is ready — claim it?" */
 export class Offer {
   offerId: string;
+  /**
+   * A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no
+   * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.
+   */
+  @ApiPropertyOptional() paidByShipper?: boolean;
   driverDid: string;
   kind: ClaimableKind;
   ref: string;
