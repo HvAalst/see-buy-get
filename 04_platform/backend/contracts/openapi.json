@@ -21155,6 +21155,45 @@
         }
       }
     },
+    "/v1/sbg/identity/parcels/{id}/door/raise": {
+      "post": {
+        "operationId": "Identity.doorRaise",
+        "summary": "",
+        "description": "Raise the most while no driver has taken it: M-Pesa asks for the difference (the user, 2026-10-27: \"Yes, a second M-Pesa ask\").",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoorRaiseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/parcels/{id}/door/cancel": {
       "post": {
         "operationId": "Identity.doorCancel",
@@ -54542,6 +54581,47 @@
           "phone"
         ]
       },
+      "DoorRaiseView": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "awaiting",
+              "paid",
+              "lapsed",
+              "reversed"
+            ]
+          },
+          "until": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "pushed": {
+            "type": "boolean"
+          },
+          "reference": {
+            "type": "string",
+            "description": "What to quote where the rail could not ask the phone itself (a paybill and a reference)."
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "to",
+          "amount",
+          "state"
+        ]
+      },
       "DoorView": {
         "type": "object",
         "properties": {
@@ -54600,6 +54680,18 @@
             "type": "boolean",
             "description": "posted, no driver yet: they may send it to the shop instead, all of it back."
           },
+          "canRaise": {
+            "type": "boolean",
+            "description": "posted, no driver yet, no raise being paid: they may raise the most by a second payment."
+          },
+          "raise": {
+            "description": "Their latest raise of the most, while the load is posted.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DoorRaiseView"
+              }
+            ]
+          },
           "shopName": {
             "type": "string"
           },
@@ -54613,6 +54705,19 @@
           "maxSpend",
           "currency",
           "phoneMasked"
+        ]
+      },
+      "DoorRaiseDto": {
+        "type": "object",
+        "properties": {
+          "maxSpend": {
+            "type": "number",
+            "description": "The new most they allow a driver: more than what they paid; the difference is asked for by mobile money now.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "maxSpend"
         ]
       },
       "PodDto": {

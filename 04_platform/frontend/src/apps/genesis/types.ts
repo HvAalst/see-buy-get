@@ -393,6 +393,10 @@ export interface DoorView {
   billed?: number;
   owedBack?: number;
   canSendToShop?: boolean;
+  /** No driver yet and no raise being paid: the most may be raised by a second payment (2026-10-27). */
+  canRaise?: boolean;
+  /** Their latest raise of the most: being paid (by when, what M-Pesa asked), paid, not paid in time, or taken back. */
+  raise?: { to: number; amount: number; state: 'awaiting' | 'paid' | 'lapsed' | 'reversed'; until?: string; instructions?: string; pushed?: boolean; reference?: string; why?: string };
   shopName?: string;
   shopParcelId?: string;
 }

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Optional, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiQuery } from '@nestjs/swagger';
 import { PersonDoorService } from './person-door.service';
-import { DoorPreview, DoorRequestDto, DoorView } from './person-door.types';
+import { DoorPreview, DoorRaiseDto, DoorRequestDto, DoorView } from './person-door.types';
 import { AgreementService } from '../../foundation/documents/agreement.service';
 import { countryOfPhone } from '../../foundation/countries/catalogue';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
@@ -402,6 +402,15 @@ export class IdentityController {
   @Post('parcels/:id/door')
   door(@Param('id') id: string, @Body() dto: DoorRequestDto, @Actor() actor: IntrospectionResult): Promise<DoorView> {
     return this.doorsOrRefuse(actor).request(actor.did!, id, { to: { lat: dto.lat, lng: dto.lng }, label: dto.label, maxSpend: dto.maxSpend, phone: dto.phone });
+  }
+
+  /** Raise the most while no driver has taken it: M-Pesa asks for the difference (the user, 2026-10-27: "Yes, a second M-Pesa ask"). */
+  @Roles('consumer')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(10, 15 * 60)
+  @Post('parcels/:id/door/raise')
+  doorRaise(@Param('id') id: string, @Body() dto: DoorRaiseDto, @Actor() actor: IntrospectionResult): Promise<DoorView> {
+    return this.doorsOrRefuse(actor).raise(actor.did!, id, { maxSpend: dto.maxSpend });
   }
 
   /** Give it up: before paying, at once; with a load no driver has taken, to the shop instead — all of it back. */

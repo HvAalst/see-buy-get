@@ -3426,7 +3426,7 @@ export class DispatchService {
     f.maxSpend = most;
     this.freights.set(f.freightId, f);
     void this.events
-      .publish(GlosEvent.Pudo.FreightPosted, { freightId: f.freightId, code: f.code, pickupLocation: f.pickupLocation, destLabel: f.destLabel, weightKg: f.weightKg, cargoClass: f.cargoClass }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightPosted, { freightId: f.freightId, code: f.code, pickupLocation: f.pickupLocation, destLabel: f.destLabel, weightKg: f.weightKg, cargoClass: f.cargoClass, raisedTo: most, ...(f.postedCurrency ? { currency: f.postedCurrency } : {}) }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }
@@ -3790,6 +3790,25 @@ export class DispatchService {
     if (!f.bringsBack || !this.prepaid?.owns(f)) throw new GlosError('NOT_FOUND', 'No load paid for first brings that parcel');
     if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A driver has taken load ${f.code}: it comes to your door`);
     return this.withdraw(f, { did: 'network', role: 'operator' }, why, now);
+  }
+
+  /**
+   * THE MOST A PERSON PAID FOR THEIR LOAD TO THEIR DOOR, RAISED (the user, 2026-10-27: "Yes, a second M-Pesa ask") — once the
+   * difference is paid, while no driver has taken it. Called by the prepaid shipper that holds the money (PersonDoorService),
+   * never from a route. Only up. Drivers near the hub are told again.
+   */
+  raisePrepaidMax(freightId: string, most: number): Freight {
+    const f = this.requireFreight(freightId);
+    if (!f.bringsBack || !this.prepaid?.owns(f)) throw new GlosError('NOT_FOUND', 'No load paid for first brings that parcel');
+    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A driver has taken load ${f.code}: its price is fixed`);
+    const m = Math.round(Number(most) * 100) / 100;
+    if (!Number.isFinite(m) || m <= (f.maxSpend ?? 0)) throw new GlosError('INVALID_INPUT', `Say more than ${f.maxSpend ?? 0}: the most can only be raised`, { field: 'maxSpend' });
+    f.maxSpend = m;
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightPosted, { freightId: f.freightId, code: f.code, pickupLocation: f.pickupLocation, destLabel: f.destLabel, weightKg: f.weightKg, cargoClass: f.cargoClass, raisedTo: m, ...(f.postedCurrency ? { currency: f.postedCurrency } : {}) }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
   }
 
   /** The loads bringing a store's parcel back to its door — for the reminder that none has been taken. */

@@ -11,6 +11,27 @@ import { IsNumber, IsString, Max, MaxLength, Min, MinLength } from 'class-valida
 export const DOOR_STATES = ['awaiting', 'posted', 'taken', 'delivered', 'lapsed', 'to_shop', 'reversed'] as const;
 export type DoorState = (typeof DOOR_STATES)[number];
 
+/**
+ * THE MOST, RAISED BY A SECOND ASK (the user, 2026-10-27: "Yes, a second M-Pesa ask"): while no driver has taken their load,
+ * a person is asked by mobile money for the difference; once it is paid, the load's most rises and drivers are told again.
+ */
+export interface DoorRaise {
+  /** The most it would be, and the difference asked for. */
+  to: number;
+  amount: number;
+  state: 'awaiting' | 'paid' | 'lapsed' | 'reversed';
+  fundingId?: string;
+  reference?: string;
+  instructions?: string;
+  pushed?: boolean;
+  openedAt: string;
+  /** Until when the difference may be paid. */
+  until: string;
+  paidAt?: string;
+  /** Why it lapsed: the time ran out, a driver took the load, it went to the shop. */
+  why?: string;
+}
+
 /** One person's load to their own door — kept beside the parcel and the load, never on them. */
 export interface DoorRequest {
   requestId: string;
@@ -55,6 +76,8 @@ export interface DoorRequest {
   shopParcelId?: string;
   remindedAt?: string;
   closedAt?: string;
+  /** The latest ask to raise the most, while no driver had taken the load. */
+  raise?: DoorRaise;
 }
 
 /** What bringing it to their door would be, said before they ask — the most to allow suggested, in the hub's money. */
@@ -65,6 +88,19 @@ export class DoorPreview {
   @ApiPropertyOptional() atHub?: string;
   /** How far from the hub a door may be, in kilometres. */
   @ApiPropertyOptional() maxKm?: number;
+  @ApiPropertyOptional() why?: string;
+}
+
+/** A raise of the most, as the Send app reads it: being paid (by when, what the rail asked), paid, or not paid in time. */
+export class DoorRaiseView {
+  @ApiProperty() to!: number;
+  @ApiProperty() amount!: number;
+  @ApiProperty({ enum: ['awaiting', 'paid', 'lapsed', 'reversed'] }) state!: 'awaiting' | 'paid' | 'lapsed' | 'reversed';
+  @ApiPropertyOptional() until?: string;
+  @ApiPropertyOptional() instructions?: string;
+  @ApiPropertyOptional() pushed?: boolean;
+  /** What to quote where the rail could not ask the phone itself (a paybill and a reference). */
+  @ApiPropertyOptional() reference?: string;
   @ApiPropertyOptional() why?: string;
 }
 
@@ -88,8 +124,17 @@ export class DoorView {
   @ApiPropertyOptional() owedBack?: number;
   /** posted, no driver yet: they may send it to the shop instead, all of it back. */
   @ApiPropertyOptional() canSendToShop?: boolean;
+  /** posted, no driver yet, no raise being paid: they may raise the most by a second payment. */
+  @ApiPropertyOptional() canRaise?: boolean;
+  /** Their latest raise of the most, while the load is posted. */
+  @ApiPropertyOptional({ type: DoorRaiseView }) raise?: DoorRaiseView;
   @ApiPropertyOptional() shopName?: string;
   @ApiPropertyOptional() shopParcelId?: string;
+}
+
+export class DoorRaiseDto {
+  /** The new most they allow a driver: more than what they paid; the difference is asked for by mobile money now. */
+  @IsNumber() @Min(1) maxSpend!: number;
 }
 
 export class DoorRequestDto {

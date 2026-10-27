@@ -31,6 +31,20 @@ export function doorSays(d: DoorView, t: Translate): { tone: 'info' | 'warn' | '
   }
 }
 
+/**
+ * A RAISE OF THE MOST (the user, 2026-10-27: "Yes, a second M-Pesa ask"), while their load waits for a driver: the difference
+ * to approve on their phone, by when — or that it was not paid, and the most stays as it was. Nothing once it is paid: the
+ * load's own line then says the new amount.
+ */
+export function raiseSays(d: DoorView, t: Translate): { tone: 'warn' | 'info'; title: string; detail: string } | null {
+  const r = d.raise;
+  if (!r || d.state !== 'posted') return null;
+  const m = (n?: number) => formatMoney(n ?? 0, d.currency);
+  if (r.state === 'awaiting') return { tone: 'warn', title: t('send.door.raiseAwaitingTitle', { amount: m(r.amount) }), detail: t('send.door.raiseAwaitingDetail', { phone: d.phoneMasked, until: clock(r.until), to: m(r.to) }) };
+  if (r.state === 'lapsed') return { tone: 'info', title: t('send.door.raiseLapsedTitle'), detail: t('send.door.raiseLapsedDetail', { to: m(r.to), paid: m(d.paid) }) };
+  return null;
+}
+
 /** A load to their door is under way (or went to the shop instead): the parcel's own way to the shop no longer applies. */
 export function doorUnderWay(p: ConsumerParcelView): boolean {
   return Boolean(p.door && ['awaiting', 'posted', 'taken', 'delivered', 'to_shop'].includes(p.door.state));
@@ -48,9 +62,11 @@ export function doorOnOffer(p: ConsumerParcelView): boolean {
 export function DoorBlock({ parcel, state, actions }: { parcel: ConsumerParcelView; state: SendState; actions: SendActions }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [raising, setRaising] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const d = parcel.door;
+  const raised = d ? raiseSays(d, t) : null;
   const act = async (fn: () => Promise<string | null>) => {
     setBusy(true);
     setProblem(await fn());
@@ -61,6 +77,8 @@ export function DoorBlock({ parcel, state, actions }: { parcel: ConsumerParcelVi
     <>
       {d && said ? <Note tone={said.tone} icon={d.state === 'awaiting' ? 'phone' : 'truck'} title={said.title} detail={said.detail} /> : null}
       {d?.state === 'awaiting' && d.instructions ? <p class="hint">{d.instructions}</p> : null}
+      {/* Where the rail could not ask the phone itself, they pay by paybill and quote this — so it is shown (found walking, 2026-10-27). */}
+      {d?.state === 'awaiting' && !d.pushed && d.reference ? <PayReference reference={d.reference} /> : null}
       {problem ? (
         <p class="hint" role="alert">
           {problem}
@@ -76,6 +94,22 @@ export function DoorBlock({ parcel, state, actions }: { parcel: ConsumerParcelVi
           </Button>
         </>
       ) : null}
+      {/* A raise of the most being paid, or not paid in time (2026-10-27). */}
+      {raised ? <Note tone={raised.tone} icon={d?.raise?.state === 'awaiting' ? 'phone' : 'info'} title={raised.title} detail={raised.detail} /> : null}
+      {d?.state === 'posted' && d.raise?.state === 'awaiting' ? (
+        <>
+          {d.raise.instructions ? <p class="hint">{d.raise.instructions}</p> : null}
+          {!d.raise.pushed && d.raise.reference ? <PayReference reference={d.raise.reference} /> : null}
+          <Button chevron={false} busy={busy} onClick={() => void actions.openParcel(parcel.parcelId)}>
+            {t('send.door.checkAgain')}
+          </Button>
+        </>
+      ) : null}
+      {d?.state === 'posted' && d.canRaise ? (
+        <Button variant="outline" chevron={false} onClick={() => setRaising(true)}>
+          {t('send.door.raise')}
+        </Button>
+      ) : null}
       {d?.state === 'posted' && d.canSendToShop ? (
         <Button variant="link" busy={busy} onClick={() => void act(() => actions.cancelDoor(parcel.parcelId))}>
           {t('send.door.toShop', { shop: d.shopName ?? t('send.door.theShop') })}
@@ -90,7 +124,62 @@ export function DoorBlock({ parcel, state, actions }: { parcel: ConsumerParcelVi
         </>
       ) : null}
       {open ? <DoorSheet parcel={parcel} state={state} actions={actions} onClose={() => setOpen(false)} /> : null}
+      {raising && d ? <RaiseSheet parcel={parcel} door={d} actions={actions} onClose={() => setRaising(false)} /> : null}
     </>
+  );
+}
+
+/** The reference to quote when paying by paybill, set apart so it can be read off and typed. */
+function PayReference({ reference }: { reference: string }) {
+  const t = useT();
+  return (
+    <p class="hint">
+      {t('send.door.reference')} <b class="mono-t">{reference}</b>
+    </p>
+  );
+}
+
+/** A higher most, while no driver has taken it: the difference, asked by M-Pesa from the number they paid from. */
+function RaiseSheet({ parcel, door, actions, onClose }: { parcel: ConsumerParcelView; door: DoorView; actions: SendActions; onClose: () => void }) {
+  const t = useT();
+  const paid = door.paid ?? door.maxSpend;
+  const [most, setMost] = useState(String(Math.ceil(paid * 1.25)));
+  const [problem, setProblem] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const amount = Math.ceil(Number(most));
+  const diff = Number.isFinite(amount) ? amount - paid : 0;
+  const ready = diff >= 1;
+  const pay = async () => {
+    if (!ready) return;
+    setBusy(true);
+    setProblem(null);
+    const refused = await actions.raiseDoor(parcel.parcelId, amount);
+    setBusy(false);
+    if (refused) return setProblem(refused);
+    onClose();
+  };
+  return (
+    <Sheet open onClose={onClose} title={t('send.door.raiseTitle')}>
+      <p class="card__note">{t('send.door.raiseBody', { paid: formatMoney(paid, door.currency), code: door.loadCode ?? '' })}</p>
+      <div class="field">
+        <label class="field__label" for="door-raise">
+          {t('send.door.raiseLabel', { currency: door.currency })}
+        </label>
+        <input id="door-raise" class="input" type="number" inputMode="numeric" min={Math.floor(paid) + 1} step="1" value={most} onInput={(e) => setMost(e.currentTarget.value)} />
+        {ready ? <p class="hint">{t('send.door.raiseDiff', { amount: formatMoney(diff, door.currency), last: last(door.phoneMasked) })}</p> : null}
+      </div>
+      {problem ? (
+        <p class="hint" role="alert">
+          {problem}
+        </p>
+      ) : null}
+      <Button chevron={false} busy={busy} disabled={!ready} onClick={() => void pay()}>
+        {t('send.door.pay', { amount: formatMoney(ready ? diff : 0, door.currency) })}
+      </Button>
+      <Button variant="link" onClick={onClose}>
+        {t('send.door.notNow')}
+      </Button>
+    </Sheet>
   );
 }
 

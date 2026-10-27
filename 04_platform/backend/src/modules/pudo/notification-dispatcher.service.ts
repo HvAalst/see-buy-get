@@ -400,7 +400,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ parcelId: string; originAgentDid?: string }>(GlosEvent.Pudo.ParcelMinted, (e) => this.onMinted(e.payload));
     // Rule 5 (driver) — a dedicated-freight load was posted; ping active drivers near its pickup (same
     // live-GPS matching as a ready tote), so a heavy divert reaches a truck at genesis, not only via pull.
-    this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
+    this.events.subscribe<{ freightId: string; destLabel?: string; pickupLocation?: GeoPoint; raisedTo?: number; currency?: string }>(GlosEvent.Pudo.FreightPosted, (e) => this.onFreightPosted(e.payload));
     // FP5 (driver) — their fleet office put a load on them: it is on their list before they looked, so say so.
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; byName?: string; pickupLabel: string; destLabel: string; weightKg: number; earning?: number }>(GlosEvent.Pudo.FreightAssigned, (e) => this.onFreightAssigned(e.payload));
     // FP8 (sender + office) — a driver gave a claimed load back: it is on the market again, and here is why.
@@ -2305,7 +2305,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
    * the load carries its own pickup coordinate, so we match drivers on it directly and push. Reuses the
    * exact live-GPS matching of Rule 2, so a heavy divert reaches a nearby truck at genesis.
    */
-  private async onFreightPosted(payload: { freightId: string; destLabel?: string; pickupLocation?: GeoPoint }): Promise<void> {
+  private async onFreightPosted(payload: { freightId: string; destLabel?: string; pickupLocation?: GeoPoint; raisedTo?: number; currency?: string }): Promise<void> {
     try {
       if (!payload.pickupLocation) return;
       // Unlike a tote (any bus carries it), a dedicated freight needs a fit vehicle. Ping only the nearby
@@ -2313,14 +2313,21 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       // (claim() re-checks capability regardless; this just keeps the audience honest.)
       const nearby = this.nearbyActiveDrivers(payload.pickupLocation).filter((d) => this.dispatch.freightCarryableByDriver(payload.freightId, d.driverDid));
       if (nearby.length === 0) return;
+      // Its most raised (2026-10-27): news, said as such — its own notice, so a phone that showed the first alerts again
+      // rather than quietly replacing it, and with the new most a driver weighs their price against.
+      const raised = payload.raisedTo != null ? `${payload.currency ? `${payload.currency} ` : ''}${payload.raisedTo.toLocaleString('en')}` : undefined;
       await Promise.all(
         nearby.map((d) =>
           this.notifications.notify(d.driverDid, {
             kind: 'load_nearby',
-            title: 'A load is near you',
-            body: payload.destLabel ? `A freight load to ${payload.destLabel} is ready to claim nearby.` : 'A freight load is ready to claim nearby.',
+            title: raised ? 'A load near you pays more now' : 'A load is near you',
+            body: raised
+              ? `${payload.destLabel ? `The load to ${payload.destLabel}` : 'A freight load'} now allows up to ${raised}. Ready to claim nearby.`
+              : payload.destLabel
+                ? `A freight load to ${payload.destLabel} is ready to claim nearby.`
+                : 'A freight load is ready to claim nearby.',
             link: '/',
-            tag: `freight:${payload.freightId}`,
+            tag: raised ? `freight:${payload.freightId}:raised:${payload.raisedTo}` : `freight:${payload.freightId}`,
             data: { freightId: payload.freightId },
           }),
         ),

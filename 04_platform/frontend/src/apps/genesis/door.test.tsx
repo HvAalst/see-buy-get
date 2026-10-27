@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { formatMoney, t } from '../../shared/i18n';
-import { DoorBlock, doorOnOffer, doorSays, doorUnderWay } from './screens/DoorDelivery';
+import { DoorBlock, doorOnOffer, doorSays, doorUnderWay, raiseSays } from './screens/DoorDelivery';
 import type { ConsumerParcelView, DoorView } from './types';
 import type { SendActions, SendState } from './useSendApp';
 
@@ -38,6 +38,28 @@ describe('their own door, paid first', () => {
     const d = door({ state: 'posted', paid: 300, loadCode: 'FRT-012', canSendToShop: true, shopName: 'Mama Njeri' });
     expect(doorSays(d, t)).toMatchObject({ title: t('send.door.postedTitle', { amount: formatMoney(300, 'KES') }) });
     expect(render(coming({ status: 'Returned', door: d }))).toContain(t('send.door.toShop', { shop: 'Mama Njeri' }));
+  });
+
+  it('waiting for a driver, the most may be raised by a second ask: approve the difference by when — or it stays as it was', () => {
+    const posted = door({ state: 'posted', paid: 300, loadCode: 'FRT-012', canSendToShop: true, canRaise: true, shopName: 'Mama Njeri' });
+    expect(render(coming({ status: 'Returned', door: posted }))).toContain(t('send.door.raise'));
+    expect(raiseSays(posted, t)).toBeNull();
+    const asking = door({ ...posted, canRaise: false, raise: { to: 400, amount: 100, state: 'awaiting', until: '2026-10-27T15:00:00.000Z', instructions: 'Check 2547***678 — enter your M-Pesa PIN' } });
+    expect(raiseSays(asking, t)).toMatchObject({ tone: 'warn', title: t('send.door.raiseAwaitingTitle', { amount: formatMoney(100, 'KES') }) });
+    const html = render(coming({ status: 'Returned', door: asking }));
+    expect(html).toContain('Check 2547***678 — enter your M-Pesa PIN');
+    expect(html).toContain(t('send.door.checkAgain'));
+    expect(html).not.toContain(t('send.door.raise'));
+    // Asked by paybill (the phone could not be asked): the reference to quote is shown; asked on the phone, it is not needed.
+    expect(render(coming({ status: 'Returned', door: door({ ...asking, raise: { ...asking.raise!, reference: 'SBG-R42' } }) }))).toContain('SBG-R42');
+    expect(render(coming({ status: 'Returned', door: door({ ...asking, raise: { ...asking.raise!, reference: 'SBG-R42', pushed: true } }) }))).not.toContain('SBG-R42');
+    expect(render(coming({ door: door({ state: 'awaiting', reference: 'SBG-D7' }) }))).toContain('SBG-D7');
+    const lapsed = door({ ...posted, raise: { to: 400, amount: 100, state: 'lapsed', why: 'the time to pay ran out' } });
+    expect(raiseSays(lapsed, t)?.detail).toBe(t('send.door.raiseLapsedDetail', { to: formatMoney(400, 'KES'), paid: formatMoney(300, 'KES') }));
+    // Paid: nothing of its own — the load's line says the new amount.
+    expect(raiseSays(door({ ...posted, paid: 400, raise: { to: 400, amount: 100, state: 'paid' } }), t)).toBeNull();
+    // Taken: its price is fixed, nothing to raise.
+    expect(raiseSays(door({ state: 'taken', paid: 300, raise: { to: 400, amount: 100, state: 'lapsed' } }), t)).toBeNull();
   });
 
   it('taken, then delivered: what the driver charged, and what goes back to the number it came from', () => {

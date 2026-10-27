@@ -190,6 +190,43 @@ export class PersonDoorService implements OnModuleInit {
     throw new GlosError('INVALID_STATE', req.state === 'taken' ? `A driver has taken load ${req.loadCode}: it comes to your door.` : 'It cannot be changed now.');
   }
 
+  /**
+   * RAISE THE MOST (the user, 2026-10-27: "Yes, a second M-Pesa ask"): while no driver has taken their load, M-Pesa asks them
+   * for the difference; once it is paid the load's most rises and drivers near the hub are told again (raisePaid). What the
+   * driver does not use still goes back after delivery. Refused before anything is asked where it cannot be raised.
+   */
+  async raise(personDid: string, parcelId: string, input: { maxSpend: number }, now: number = Date.now()): Promise<DoorView> {
+    const req = this.latestFor(personDid, parcelId);
+    if (!req) throw new GlosError('NOT_FOUND', 'Nothing is coming to your door for this parcel');
+    if (req.state !== 'posted' || !req.freightId) throw new GlosError('INVALID_STATE', req.state === 'taken' ? `A driver has taken load ${req.loadCode}: its price is fixed.` : 'It cannot be raised now.');
+    const load = this.dispatch.requireFreightPublic(req.freightId);
+    if (load.status !== 'available') throw new GlosError('INVALID_STATE', `A driver has taken load ${load.code}: its price is fixed.`);
+    if (req.raise?.state === 'awaiting') throw new GlosError('INVALID_STATE', 'You are paying to raise it already: approve it on your phone.');
+    // One payment asked of a person at a time: the rail asks whose it is before it opens one (resolvePayer).
+    if ([...this.requests.values()].some((r) => r.personDid === personDid && r.requestId !== req.requestId && (r.state === 'awaiting' || r.raise?.state === 'awaiting'))) {
+      throw new GlosError('INVALID_STATE', 'Pay for the door delivery you asked for first, or let it lapse.');
+    }
+    const paid = req.paid ?? 0;
+    const to = Math.ceil(Number(input?.maxSpend));
+    if (!Number.isFinite(to) || to <= paid) throw new GlosError('INVALID_INPUT', `Say more than ${this.money(paid, req.currency)}: the most can only be raised`, { field: 'maxSpend' });
+    const amount = round2(to - paid);
+    const before = req.raise;
+    // Kept first: the payment rail asks whose payment this is (`resolvePayer`) before it opens it.
+    req.raise = { to, amount, state: 'awaiting', openedAt: new Date(now).toISOString(), until: new Date(now + DOOR_PAY_WINDOW_MIN * 60_000).toISOString() };
+    this.requests.set(req.requestId, req);
+    let opened;
+    try {
+      opened = await this.funding.open({ payerKind: 'person', payerDid: personDid, purpose: 'door', amount, payerPhone: req.phone }, now);
+    } catch (err) {
+      req.raise = before;
+      this.requests.set(req.requestId, req);
+      throw err;
+    }
+    req.raise = { ...req.raise, fundingId: opened.fundingId, reference: opened.reference, ...(opened.instructions ? { instructions: opened.instructions } : {}), ...(opened.pushed ? { pushed: true } : {}) };
+    this.requests.set(req.requestId, req);
+    return this.viewOf(req);
+  }
+
   /** Their load to their door for this parcel, as the Send app reads it — or nothing. */
   viewFor(personDid: string, parcelId: string): DoorView | undefined {
     const req = this.latestFor(personDid, parcelId);
@@ -200,7 +237,7 @@ export class PersonDoorService implements OnModuleInit {
 
   /** Whose payment this is about to be asked for, and in which company's money (FundingPayer.resolve). */
   resolvePayer(personDid: string): { entityId: string; currency: string; label: string } {
-    const req = [...this.requests.values()].filter((r) => r.personDid === personDid && r.state === 'awaiting').sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1))[0];
+    const req = [...this.requests.values()].filter((r) => r.personDid === personDid && (r.state === 'awaiting' || r.raise?.state === 'awaiting')).sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1))[0];
     if (!req) throw new GlosError('INVALID_STATE', 'Nothing is waiting for this payment');
     return { entityId: req.entityId, currency: req.currency, label: 'Send app: a load to a door' };
   }
@@ -225,6 +262,12 @@ export class PersonDoorService implements OnModuleInit {
         { code: ACCOUNT_CODES.DEPOSIT_PERSON, counterparty: personDid, amount: -gross },
       ],
     });
+    // The difference to raise the most: its own way (raisePaid).
+    const raised = [...this.requests.values()].find((r) => r.raise?.fundingId === c.fundingId);
+    if (raised) {
+      this.raisePaid(raised, gross, c.reference, now);
+      return { entryId: entry.entryId };
+    }
     const req = [...this.requests.values()].find((r) => r.fundingId === c.fundingId);
     if (req && req.state === 'awaiting') {
       try {
@@ -245,6 +288,8 @@ export class PersonDoorService implements OnModuleInit {
   /** The rail took the payment back. Its mirror is posted; a load nobody has taken yet is withdrawn and the box goes to the shop. */
   reversed(personDid: string, c: { purpose: FundingPurpose; gross: number; fee: number; reference: string; fundingId: string }, now: number = Date.now()): { entryId: string } {
     const funding = this.funding.get(c.fundingId);
+    const raised = [...this.requests.values()].find((r) => r.raise?.fundingId === c.fundingId);
+    if (raised) return this.raiseReversed(raised, c, now);
     const req = [...this.requests.values()].find((r) => r.fundingId === c.fundingId);
     if (req?.state === 'posted') {
       try {
@@ -294,6 +339,8 @@ export class PersonDoorService implements OnModuleInit {
     req.billed = round2(bill.gross);
     req.state = 'taken';
     this.requests.set(req.requestId, req);
+    // Taken while a raise was still to be paid: no longer needed — paid after all, it goes back (raisePaid).
+    if (req.raise?.state === 'awaiting') this.closeRaise(req, 'a driver took the load', Date.now());
     this.tell(req.personDid, 'A driver is bringing it to your door', `Load ${req.loadCode} was taken for ${this.money(req.billed, req.currency)}. What is left of what you paid goes back to your number once it is delivered.`, req.parcelId);
     return true;
   }
@@ -347,6 +394,10 @@ export class PersonDoorService implements OnModuleInit {
         this.lapse(req, 'the time to pay ran out', now);
         lapsed.push(req.requestId);
         continue;
+      }
+      if (req.raise?.state === 'awaiting' && Date.parse(req.raise.until) <= now) {
+        this.closeRaise(req, 'the time to pay ran out', now);
+        this.tell(req.personDid, 'The most stays as it was', `No payment came to raise load ${req.loadCode} (the time to pay ran out). It still allows up to ${this.money(req.paid ?? 0, req.currency)}.`, req.parcelId);
       }
       if (req.state === 'posted' && !req.remindedAt && req.paidAt && now - Date.parse(req.paidAt) >= DOOR_LOAD_REMIND_H * 3_600_000) {
         req.remindedAt = new Date(now).toISOString();
@@ -447,6 +498,7 @@ export class PersonDoorService implements OnModuleInit {
     if ('why' in way) throw new GlosError('INVALID_STATE', way.why);
     const { back } = this.parcels.rerouteForSender(p.parcelId, { quote: way.quote, hub: { mdpId: way.hub.mdpId, name: way.hub.name, zone: this.routing.hubEnd(way.hub.mdpId).zone }, toAgentDid: way.shop.did, by: 'its sender' }, now);
     this.dispatch.withdrawPrepaid(req.freightId, 'Sent to the shop instead', now);
+    if (req.raise?.state === 'awaiting') this.closeRaise(req, 'sent to the shop instead', now);
     req.state = 'to_shop';
     req.closedAt = new Date(now).toISOString();
     req.shopName = way.shop.shopName;
@@ -456,6 +508,77 @@ export class PersonDoorService implements OnModuleInit {
     this.tellHub(req.mdpId, `${p.parcelId}: a new label`, `Its load to its sender's door (${req.loadCode}) is withdrawn: it goes to ${way.shop.shopName} as ${back.parcelId}. Print its new label, put it over the old one, then sort ${back.parcelId}.`, p.parcelId);
     if (told) this.tell(req.personDid, `It goes to ${way.shop.shopName} instead`, `As parcel ${back.parcelId}: you pay ${this.money(way.price, way.quote.currency)} in cash there as you collect it. ${this.money(req.owedBack ?? 0, req.currency)} goes back to your number with the next payout.`, back.parcelId);
     return this.viewOf(req);
+  }
+
+  /**
+   * THE DIFFERENCE CAME IN: the load's most rises and drivers are told again — or, where it can no longer rise (a driver took
+   * it, the time ran out, it went to the shop), all of it is owed back. The money was posted first, as every payment is.
+   */
+  private raisePaid(req: DoorRequest, gross: number, reference: string, now: number): void {
+    const raise = req.raise!;
+    if (raise.state === 'awaiting' && req.state === 'posted' && req.freightId) {
+      const to = round2((req.paid ?? 0) + gross);
+      try {
+        this.dispatch.raisePrepaidMax(req.freightId, to);
+        req.paid = to;
+        req.maxSpend = to;
+        req.raise = { ...raise, to, state: 'paid', paidAt: new Date(now).toISOString() };
+        this.requests.set(req.requestId, req);
+        this.tell(req.personDid, 'Raised: drivers are told again', `${this.money(gross, req.currency)} came in. Load ${req.loadCode} now allows up to ${this.money(to, req.currency)}. What the driver charges less than this goes back to your number.`, req.parcelId);
+        return;
+      } catch (err) {
+        this.logger.warn(`door load ${req.loadCode} not raised: ${(err as Error).message}`);
+      }
+    }
+    if (req.raise?.state === 'awaiting') this.closeRaise(req, 'it could no longer be raised', now);
+    this.owe(req.personDid, req.entityId, req.currency, gross, `a raise not used (${reference})`, req, now);
+    this.tell(req.personDid, 'Your payment goes back to you', `${this.money(gross, req.currency)} came in to raise load ${req.loadCode ?? ''}, but it could no longer be raised — it goes back to your number with the next payout.`, req.parcelId);
+  }
+
+  /** A raise no longer asked for: its payment request closed (paid later, it goes back), and why said. */
+  private closeRaise(req: DoorRequest, why: string, now: number): void {
+    if (!req.raise) return;
+    if (req.raise.fundingId) {
+      try {
+        if (this.funding.get(req.raise.fundingId).status === 'awaiting') this.funding.expire(req.raise.fundingId, why, now);
+      } catch (err) {
+        this.logger.warn(`door raise ${req.raise.fundingId} not closed: ${(err as Error).message}`);
+      }
+    }
+    req.raise = { ...req.raise, state: 'lapsed', why };
+    this.requests.set(req.requestId, req);
+  }
+
+  /**
+   * The rail took a raise back. Its mirror is posted where the money then was: still held for a load a driver has taken, or
+   * owed back. A raised load nobody has taken goes to the shop, as when the first payment is taken back.
+   */
+  private raiseReversed(req: DoorRequest, c: { gross: number; reference: string; fundingId: string }, now: number): { entryId: string } {
+    const gross = round2(c.gross);
+    const applied = req.raise?.state === 'paid';
+    if (applied && req.state === 'posted') {
+      try {
+        this.toShop(req, now, false);
+      } catch (err) {
+        this.logger.warn(`door load ${req.loadCode} not withdrawn after a raise was taken back: ${(err as Error).message}`);
+      }
+    }
+    const held = applied && req.state === 'taken';
+    if (held) req.paid = round2((req.paid ?? 0) - gross);
+    else req.owedBack = round2(Math.max(0, (req.owedBack ?? 0) - gross));
+    if (req.raise) req.raise = { ...req.raise, state: 'reversed' };
+    this.requests.set(req.requestId, req);
+    const entry = this.books.post({
+      entityId: req.entityId,
+      kind: 'door-prepayment-reversal',
+      ref: c.reference,
+      currency: req.currency,
+      lines: [
+        { code: held ? ACCOUNT_CODES.DEPOSIT_PERSON : ACCOUNT_CODES.PAYABLE_PERSON, counterparty: req.personDid, amount: gross },
+        { code: ACCOUNT_CODES.CASH_CUSTODY, amount: -gross },
+      ],
+    });
+    return { entryId: entry.entryId };
   }
 
   /** What a person is owed back, moved from what was held — rounded up to the whole unit where it is paid in whole units. */
@@ -560,6 +683,10 @@ export class PersonDoorService implements OnModuleInit {
         canSendToShop = false;
       }
     }
+    // No driver yet and no raise being paid: the most may be raised (2026-10-27).
+    const canRaise = canSendToShop && req.raise?.state !== 'awaiting';
+    const r = req.raise;
+    const raise = r && (req.state === 'posted' || r.state === 'paid') ? { to: r.to, amount: r.amount, state: r.state, ...(r.state === 'awaiting' ? { until: r.until, ...(r.instructions ? { instructions: r.instructions } : {}), ...(r.pushed ? { pushed: true } : {}), ...(r.reference ? { reference: r.reference } : {}) } : {}), ...(r.why ? { why: r.why } : {}) } : undefined;
     return {
       state: req.state,
       label: req.label,
@@ -572,6 +699,8 @@ export class PersonDoorService implements OnModuleInit {
       ...(req.billed != null ? { billed: req.billed } : {}),
       ...(req.owedBack ? { owedBack: req.owedBack } : {}),
       ...(canSendToShop ? { canSendToShop: true } : {}),
+      ...(canRaise ? { canRaise: true } : {}),
+      ...(raise ? { raise } : {}),
       ...(req.shopName ? { shopName: req.shopName } : {}),
       ...(req.shopParcelId ? { shopParcelId: req.shopParcelId } : {}),
     };

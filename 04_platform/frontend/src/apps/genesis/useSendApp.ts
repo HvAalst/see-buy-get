@@ -978,6 +978,24 @@ export function useSendApp() {
     [client, openParcel],
   );
 
+  /** Raise the most while no driver has taken it: M-Pesa asks for the difference. Answers the server's refusal, or nothing. */
+  const raiseDoor = useCallback(
+    async (id: string, maxSpend: number): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.doorRaise(id, maxSpend);
+      if (r.error) {
+        if (isSignInRequired(r.error)) {
+          signOutRef.current(r.error);
+          return null;
+        }
+        return refusalSentence(r.error);
+      }
+      void openParcel(id);
+      return null;
+    },
+    [client, openParcel],
+  );
+
   /**
    * Rate the store this parcel came from.
    *
@@ -1290,6 +1308,7 @@ export function useSendApp() {
       doorPreview,
       requestDoor,
       cancelDoor,
+      raiseDoor,
     rateStore,
     respondToNotice,
     nominateCollector,

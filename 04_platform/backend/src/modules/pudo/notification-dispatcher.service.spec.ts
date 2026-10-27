@@ -478,6 +478,19 @@ describe('NotificationDispatcher — rule 5: driver "load near you" for a posted
     expect(notifications.inboxFor('d-truck')).toHaveLength(1);
     expect(notifications.inboxFor('d-bike')).toHaveLength(0); // near, but can't carry it
   });
+
+  it('a load whose most was raised is told again as news — its own notice, with the new most (2026-10-27)', async () => {
+    const { events, notifications } = harness({ activeDrivers: [D('d-near', at(0, 0.01))] });
+    const sent = jest.spyOn(notifications, 'notify');
+    await events.publish(GlosEvent.Pudo.FreightPosted, { freightId: 'frt_4', destLabel: 'Kisumu', pickupLocation: at(0, 0), weightKg: 300 });
+    await events.publish(GlosEvent.Pudo.FreightPosted, { freightId: 'frt_4', destLabel: 'Kisumu', pickupLocation: at(0, 0), weightKg: 300, raisedTo: 1250, currency: 'KES' });
+    const inbox = notifications.inboxFor('d-near');
+    expect(inbox).toHaveLength(2);
+    const raised = inbox.find((n) => n.title === 'A load near you pays more now')!;
+    expect(raised.body).toBe('The load to Kisumu now allows up to KES 1,250. Ready to claim nearby.');
+    // A different tag from the first: the phone alerts again instead of quietly replacing it.
+    expect(sent.mock.calls.map(([, p]) => p.tag)).toEqual(['freight:frt_4', 'freight:frt_4:raised:1250']);
+  });
 });
 
 /**

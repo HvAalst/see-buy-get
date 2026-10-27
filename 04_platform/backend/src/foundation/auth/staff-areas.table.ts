@@ -744,6 +744,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/identity/parcels/:id/dispute': 'none',
   'POST sbg/identity/parcels/:id/door': 'none',
   'POST sbg/identity/parcels/:id/door/cancel': 'none',
+  'POST sbg/identity/parcels/:id/door/raise': 'none',
   'POST sbg/identity/parcels/:id/nominate-collector': 'none',
   'POST sbg/identity/parcels/:id/pod': 'none',
   'POST sbg/identity/parcels/:id/rate-store': 'none',

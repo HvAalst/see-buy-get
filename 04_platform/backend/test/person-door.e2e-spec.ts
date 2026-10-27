@@ -223,6 +223,102 @@ describe('a person’s own door, paid first by mobile money, over the wire', () 
     }
   });
 
+  it('no driver yet: the most raised by a second M-Pesa ask, drivers told again; not paid in time it stays as it was, paid late it goes back; a driver who takes it fixes the price', async () => {
+    const { sender, senderPhone, personDid, backId } = await goodsComingBack();
+    const entityId = app.get(EntityService).requireForJurisdiction('KE').entityId;
+    const said = (await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(near).set(sender).expect(200)).body;
+    await http().post(`/v1/sbg/identity/parcels/${backId}/door`).set(sender).send({ ...near, label: 'Gate 5', maxSpend: said.suggestedMax, phone: senderPhone }).expect(201);
+    await pay(personDid, said.suggestedMax);
+    await settle();
+    const load = app.get(DispatchService).bringsBackLoads().find((f) => f.bringsBack?.parcelId === backId)!;
+    const view = async () => (await http().get(`/v1/sbg/identity/parcels/${backId}`).set(sender).expect(200)).body.door;
+    const raise = (maxSpend: number) => http().post(`/v1/sbg/identity/parcels/${backId}/door/raise`).set(sender).send({ maxSpend });
+    expect(await view()).toMatchObject({ state: 'posted', canRaise: true });
+
+    // Only up; and staff ask nothing in a person's name.
+    const lower = await raise(said.suggestedMax);
+    expect([lower.status, lower.body.code]).toEqual([400, 'INVALID_INPUT']);
+    expect((await http().post(`/v1/sbg/identity/parcels/${backId}/door/raise`).set(operator).send({ maxSpend: 99_999 })).status).toBe(403);
+
+    // Asked: the difference, by M-Pesa — nothing raised until it is paid, and not two at once.
+    const to = Math.ceil(said.suggestedMax) + 200;
+    const diff = to - said.suggestedMax;
+    const asked = (await raise(to).expect(201)).body;
+    expect(asked).toMatchObject({ state: 'posted', raise: { to, amount: diff, state: 'awaiting', until: expect.any(String) } });
+    expect(asked.canRaise).toBeUndefined();
+    expect(fundingOf(personDid)).toMatchObject({ purpose: 'door', amount: diff, status: 'awaiting' });
+    expect(app.get(DispatchService).requireFreightPublic(load.freightId).maxSpend).toBe(said.suggestedMax);
+    expect((await raise(to + 50)).status).toBe(400);
+
+    // Paid: the load's most rises, drivers near the hub are told again, and it is held for this one load like the rest.
+    const told: string[] = [];
+    const off = app.get(EventBus).subscribe<{ freightId: string }>(GlosEvent.Pudo.FreightPosted, (e) => {
+      told.push(e.payload.freightId);
+    });
+    await pay(personDid, diff);
+    await settle();
+    off();
+    expect(app.get(DispatchService).requireFreightPublic(load.freightId).maxSpend).toBe(to);
+    expect(told).toContain(load.freightId);
+    expect(await view()).toMatchObject({ state: 'posted', paid: to, maxSpend: to, raise: { state: 'paid', to }, canRaise: true });
+    expect(owed(ACCOUNT_CODES.DEPOSIT_PERSON, personDid)).toBeCloseTo(to, 2);
+    expect(await inbox(sender)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'door_delivery', title: 'Raised: drivers are told again' })]));
+
+    // A raise not paid in time: the most stays as it was — and its payment, coming late, goes back.
+    await raise(to + 100).expect(201);
+    const late = fundingOf(personDid);
+    app.get(PersonDoorService).sweep(Date.now() + 16 * 60_000);
+    expect(app.get(FundingService).get(late.fundingId).status).toBe('expired');
+    expect(await view()).toMatchObject({ state: 'posted', paid: to, raise: { state: 'lapsed', why: 'the time to pay ran out' }, canRaise: true });
+    await http().post(`/v1/rails/funding/${late.fundingId}/simulate`).set(operator).send({ providerRef: `MPX${digits()}`, amount: 100 }).expect(201);
+    await settle();
+    expect(app.get(DispatchService).requireFreightPublic(load.freightId).maxSpend).toBe(to);
+    expect(owed(ACCOUNT_CODES.PAYABLE_PERSON, personDid)).toBeCloseTo(100, 2);
+    expect(owed(ACCOUNT_CODES.DEPOSIT_PERSON, personDid)).toBeCloseTo(to, 2);
+
+    // Asked again, and a driver takes the load meanwhile: its price is fixed, the raise closed, nothing more raised.
+    await raise(to + 300).expect(201);
+    const open = fundingOf(personDid);
+    const driver = app.get(DriverService).register({ displayName: 'Raise', fullName: 'Raise Driver', nationalId: `ID-RD-${digits()}`, mobile: `+2547${digits()}8`, licenceClasses: ['truck'], licenceNumber: `L-${digits()}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    app.get(DriverService).submitKyc(driver.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    app.get(DriverService).decideKyc(driver.did, true);
+    app.get(FleetService).couple(driver.did, app.get(VehicleService).register({ plate: `KDR ${digits().slice(0, 3)}R`, vehicleClass: 'truck', truckSubtype: 'tipper', capacityKg: 10_000, ownerName: 'X', baseFee: 0.5, pricePerKm: 0.1 }).vehicleId);
+    declared(app, 'driver', driver.did);
+    const dispatch = app.get(DispatchService);
+    const offer = dispatch.suggest(driver.did, { from: load.pickupLocation, to: load.pickupLocation }).find((o) => o.ref === load.freightId)!;
+    dispatch.claim(offer.offerId);
+    expect(app.get(FundingService).get(open.fundingId).status).toBe('expired');
+    // Taken: the price is fixed, and nothing about a raise is shown any more.
+    const taken = await view();
+    expect(taken.state).toBe('taken');
+    expect(taken.raise).toBeUndefined();
+    expect(taken.canRaise).toBeUndefined();
+    const fixed = await raise(to + 400);
+    expect([fixed.status, fixed.body.detail]).toEqual([400, `A driver has taken load ${load.code}: its price is fixed.`]);
+    expect(app.get(BooksService).balances(entityId)).toEqual({ balanced: true, drift: 0 });
+  });
+
+  it('a raise M-Pesa takes back: a load nobody has taken goes to the shop, and what goes back is what is left', async () => {
+    const { sender, senderPhone, personDid, backId } = await goodsComingBack();
+    const entityId = app.get(EntityService).requireForJurisdiction('KE').entityId;
+    const said = (await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(near).set(sender).expect(200)).body;
+    await http().post(`/v1/sbg/identity/parcels/${backId}/door`).set(sender).send({ ...near, label: 'Gate 6', maxSpend: said.suggestedMax, phone: senderPhone }).expect(201);
+    await pay(personDid, said.suggestedMax);
+    await settle();
+    const to = Math.ceil(said.suggestedMax) + 150;
+    await http().post(`/v1/sbg/identity/parcels/${backId}/door/raise`).set(sender).send({ maxSpend: to }).expect(201);
+    const raised = fundingOf(personDid);
+    await pay(personDid, to - said.suggestedMax);
+    await settle();
+    await http().post(`/v1/rails/funding/${raised.fundingId}/reverse`).set(operator).send({ reason: 'the payer disputed it' }).expect(201);
+    await settle();
+    const door = (await http().get(`/v1/sbg/identity/parcels/${backId}`).set(sender).expect(200)).body.door;
+    expect(door).toMatchObject({ state: 'to_shop', owedBack: said.suggestedMax });
+    expect(owed(ACCOUNT_CODES.PAYABLE_PERSON, personDid)).toBeCloseTo(said.suggestedMax, 2);
+    expect(owed(ACCOUNT_CODES.DEPOSIT_PERSON, personDid)).toBeCloseTo(0, 2);
+    expect(app.get(BooksService).balances(entityId)).toEqual({ balanced: true, drift: 0 });
+  });
+
   it('paid too late: the box went on to the shop, and the payment goes back whole', async () => {
     const { sender, senderPhone, personDid, backId } = await goodsComingBack();
     const said = (await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(near).set(sender).expect(200)).body;
