@@ -3,7 +3,7 @@ import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
 import { AgentService } from './agent.service';
-import { CallOffView, CalledOffView, HubHandoverView, MaxSpendView } from './call-off.types';
+import { CallOffView, CalledOffView, HubHandoverView, MaxSpendView, WithdrawnView, WithdrawView } from './call-off.types';
 import { DispatchService } from './dispatch.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
@@ -27,6 +27,18 @@ const WHY_NOT: Partial<Record<ParcelStatus, string>> = {
   Delivered: 'It was collected.',
   Disputed: 'The buyer reported a problem with it: that is settled first.',
   Voided: 'It was called off already.',
+  Returned: 'It is on its way back already.',
+  Lost: 'It was declared lost.',
+};
+
+/** Why staff cannot withdraw a person's parcel where it is (2026-10-27). */
+const WITHDRAW_WHY_NOT: Partial<Record<ParcelStatus, string>> = {
+  On_Bus: 'A driver is carrying it: it cannot be withdrawn on the road.',
+  Ready_For_Pickup: 'It is waiting at the shop for its receiver.',
+  Unclaimed: 'It is waiting at the shop for its receiver: one nobody collects is written off, not withdrawn.',
+  Delivered: 'It was collected.',
+  Disputed: 'Its receiver reported a problem with it: that is settled first.',
+  Voided: 'It was withdrawn already.',
   Returned: 'It is on its way back already.',
   Lost: 'It was declared lost.',
 };
@@ -300,6 +312,79 @@ export class CallOffService implements OnModuleInit {
     return { load, parcel: this.parcels.get(load.bringsBack.parcelId), hub: this.mdps.require(load.bringsBack.atMdpId) };
   }
 
+  /**
+   * WHAT WITHDRAWING A PERSON'S PARCEL WOULD DO NOW, for staff (the user, 2026-10-27: "Back to its shop, sender pays"): not yet
+   * handed in, or still at the shop it was handed in at — withdrawn there; at a hub — turned round to the shop it was handed
+   * in at, as a new parcel to its sender, at the price they pay there in cash as they collect it; anywhere else, why not.
+   */
+  withdrawPreview(parcelId: string): WithdrawView {
+    const p = this.parcelOf(parcelId);
+    const no = this.notWithdrawable(p);
+    if (no) return { parcelId, outcome: 'no', why: no };
+    if (WITHDRAWN_BEFORE.includes(p.status)) return { parcelId, outcome: 'void', ...(p.status === 'At_PUDO' && p.originAgentDid ? { atShop: this.agents.get(p.originAgentDid).shopName } : {}) };
+    const way = this.senderWay(p);
+    if ('why' in way) return { parcelId, outcome: 'no', why: way.why };
+    if (way.kind !== 'shop') return { parcelId, outcome: 'no', why: 'It cannot be turned round there.' };
+    return { parcelId, outcome: 'turn_round', amount: way.price, currency: way.quote.currency, backTo: way.shop.shopName, atHub: way.hub.name };
+  }
+
+  /**
+   * STAFF WITHDRAW A PERSON'S PARCEL: voided where it has not left its first shop (ParcelService.cancel, as it always was);
+   * at a hub, turned round there — its sender told where to collect it and what they pay, its receiver that it will not
+   * come, the hub what to put on the box. Refused, before anything is written, where it cannot be done.
+   */
+  withdraw(parcelId: string, by: string, reason: string, now: number = Date.now()): WithdrawnView {
+    const p = this.parcelOf(parcelId);
+    const no = this.notWithdrawable(p);
+    if (no) throw new GlosError('INVALID_STATE', no);
+    if (WITHDRAWN_BEFORE.includes(p.status)) {
+      const done = this.parcels.cancel(parcelId, by, reason);
+      return { parcelId, status: done.status, outcome: 'void' };
+    }
+    const way = this.senderWay(p);
+    if ('why' in way) throw new GlosError('INVALID_STATE', way.why);
+    if (way.kind !== 'shop') throw new GlosError('INVALID_STATE', 'It cannot be turned round there.');
+    // Sorted already: in a bag still at the hub (one on the road would have taken the parcel with it). It comes out of it.
+    const bag = p.toteId ? this.totes.list().find((t) => t.toteId === p.toteId) : undefined;
+    if (bag?.status === 'in_transit') throw new GlosError('INVALID_STATE', 'Its bag has left the hub: it cannot be withdrawn on the road.');
+    const { hub, shop, quote, price } = way;
+    const { back } = this.parcels.turnRoundForSender(parcelId, { quote, hub: { mdpId: hub.mdpId, name: hub.name, zone: this.routing.hubEnd(hub.mdpId).zone }, toAgentDid: shop.did, by, reason }, now);
+    if (bag?.parcels.includes(parcelId)) this.totes.takeOut(bag.code, parcelId, p.size);
+    this.tellHub(hub, p, `it goes back to ${shop.shopName}, where its sender handed it in, as ${back.parcelId}`, `Print its new label, put it over the old one, then sort ${back.parcelId}.`, 'Withdrawn: a new label', bag?.code, { returnParcelId: back.parcelId }, 'was withdrawn');
+    const amount = back.shipmentCost ?? price;
+    // Its journey starts at the hub, now: the promise of when it is ready is kept from here (JourneyPlanService).
+    void this.events?.publish(GlosEvent.Pudo.ParcelTakenInAtHub, { parcelId: back.parcelId, mdpId: hub.mdpId }, { source: 'pudo' }).catch(() => undefined);
+    // Its sender is told where to collect it and what they pay there; its receiver, that it will not come — in the app.
+    void this.events?.publish(GlosEvent.Pudo.ParcelWithdrawn, { parcelId, returnParcelId: back.parcelId, hubName: hub.name, shopName: shop.shopName, amount, currency: parcelCurrency(back) }, { source: 'pudo' }).catch(() => undefined);
+    return { parcelId, status: 'Returned', outcome: 'turn_round', amount, currency: parcelCurrency(back), returnParcelId: back.parcelId, backTo: shop.shopName, atHub: hub.name };
+  }
+
+  /** Why staff cannot withdraw it where it is — or nothing. A store's parcel is the store's to call off. */
+  private notWithdrawable(p: Parcel): string | undefined {
+    if (p.vendorId) return 'A store’s parcel is the store’s to call off, from its own app or its systems.';
+    if (p.returnOf) return 'It takes goods back to their sender: it is not withdrawn.';
+    if (p.held) return 'It is held: operations decide what happens to it first.';
+    if (WITHDRAWN_BEFORE.includes(p.status) || p.status === 'At_MDP') return undefined;
+    if (p.status === 'Returned' && p.returnParcelId) return `It is on its way back to its sender already, as ${p.returnParcelId}.`;
+    return WITHDRAW_WHY_NOT[p.status] ?? `It cannot be withdrawn now (${p.status}).`;
+  }
+
+  /** The way back for a person's goods at a hub: to the shop they were handed in at, worked out — or why there is none. */
+  private senderWay(p: Parcel): WayBack {
+    if (!p.atMdpId) return { why: 'Nobody recorded which hub has it: SeeBuyGet looks into it.' };
+    if (!p.originAgentDid) return { why: 'Nobody recorded the shop it was handed in at: it carries on to its receiver.' };
+    return this.toShop(p, this.mdps.require(p.atMdpId), this.agents.get(p.originAgentDid), false);
+  }
+
+  /** A parcel by its number, or one that does not exist. */
+  private parcelOf(parcelId: string): Parcel {
+    try {
+      return this.parcels.get(parcelId);
+    } catch {
+      throw new GlosError('NOT_FOUND', `No parcel ${parcelId}`);
+    }
+  }
+
   /** A store raises the most it pays for its parcel's way to its door, while no driver has taken the load. */
   raiseMaxSpend(vendorId: string, freightId: string, amount: number): MaxSpendView {
     if (!this.dispatch) throw new GlosError('INVALID_STATE', 'Loads are not open here');
@@ -361,13 +446,13 @@ export class CallOffService implements OnModuleInit {
 
   /** The way back to a shop, worked out — or why there is none. `picked`: the store chose it, so it must be one that receives. */
   private toShop(p: Parcel, hub: Mdp, shop: Agent, picked: boolean): WayBack {
-    const carriesOn = picked ? 'pick another shop' : 'it carries on to the buyer';
+    const carriesOn = picked ? 'pick another shop' : p.vendorId ? 'it carries on to the buyer' : 'it carries on to its receiver';
     if (picked && (!RECEIVING.includes(shop.status) || this.agents.notOpenYet(shop))) return { why: `${shop.shopName} is not taking parcels: pick another shop.` };
     // The same test as any new parcel naming a shop: held over its ID, its licence lapsed, or resting, it is named by none.
     try {
       this.agents.assertNamedAtMint(shop.did);
     } catch {
-      return { why: picked ? `${shop.shopName} is not taking parcels for now: pick another shop.` : `${shop.shopName} is not taking parcels for now, so it cannot come back there: it carries on to the buyer.` };
+      return { why: picked ? `${shop.shopName} is not taking parcels for now: pick another shop.` : `${shop.shopName} is not taking parcels for now, so it cannot come back there: ${carriesOn}.` };
     }
     // The hub must be able to sort it toward that shop — to it, or to the hub serving its area — or the goods would wait there
     // under a new label with nowhere to go.
@@ -376,19 +461,22 @@ export class CallOffService implements OnModuleInit {
     } catch {
       return { why: `${hub.name} sends nothing toward ${shop.zone}, so it cannot come back to ${shop.shopName}: ${carriesOn}.` };
     }
-    const vendor = this.vendors.get(p.vendorId!);
+    // Sold by the store's company — or, for a person's goods paid for at the counter they come back to, that shop's.
+    const seller = p.vendorId ? this.vendors.entityIdOf(this.vendors.get(p.vendorId)) : this.agents.entityIdOf(shop);
     // The same box, measured as it was: re-measured, it could change size between two legs of one journey.
     const measured = p.dimensionsCm ? measuredFactor({ ...p.dimensionsCm, kg: p.weightKg }) : undefined;
     let quote: ShipmentQuote;
     try {
-      quote = this.routing.quoteShipmentFrom(this.routing.hubEnd(hub.mdpId), shop.did, p.size, this.vendors.entityIdOf(vendor), measured, { kg: p.weightKg, fragile: p.fragile });
+      quote = this.routing.quoteShipmentFrom(this.routing.hubEnd(hub.mdpId), shop.did, p.size, seller, measured, { kg: p.weightKg, fragile: p.fragile });
     } catch (e) {
       if (e instanceof GlosError) return { why: `It cannot be brought back from ${hub.name}: ${e.message}` };
       throw e;
     }
     if (quote.crossesBorder) return { why: `Coming back it would cross a border, which needs papers of its own: ${carriesOn}.` };
-    // What the new parcel will cost, exactly as it is billed: the cheapest way back, and the cover the store buys with it.
-    const price = Math.round((quote.locked.gross + coverFor({ declaredValue: p.declaredValue, ...quote.insurance }).premium) * 100) / 100;
+    // What the new parcel will cost, exactly as it is billed: the cheapest way back, and the cover a store buys with it (a
+    // person's send carries none, as a counter send never did).
+    const premium = p.vendorId ? coverFor({ declaredValue: p.declaredValue, ...quote.insurance }).premium : 0;
+    const price = Math.round((quote.locked.gross + premium) * 100) / 100;
     return { kind: 'shop', hub, shop, quote, price };
   }
 
@@ -402,9 +490,9 @@ export class CallOffService implements OnModuleInit {
   }
 
   /** The hub has a box that is no longer going where its label says: what to do, said where the floor reads it. */
-  private tellHub(hub: Mdp, old: Parcel, where: string, todo: string, title: string, bagCode: string | undefined, data: Record<string, string>): void {
+  private tellHub(hub: Mdp, old: Parcel, where: string, todo: string, title: string, bagCode: string | undefined, data: Record<string, string>, what = 'was called off by its store'): void {
     const outOfBag = bagCode ? ` Take it out of bag ${bagCode}.` : '';
-    const body = `${old.parcelId} was called off by its store: ${where}.${outOfBag} ${todo}`;
+    const body = `${old.parcelId} ${what}: ${where}.${outOfBag} ${todo}`;
     void this.notifications
       ?.notify(hub.did, { kind: 'hub_arrival', title, body, link: '/', tag: `called-off:${old.parcelId}`, data: { parcelId: old.parcelId, ...data } })
       .catch((err: Error) => this.logger.warn(`called-off notice not sent: ${err.message}`));

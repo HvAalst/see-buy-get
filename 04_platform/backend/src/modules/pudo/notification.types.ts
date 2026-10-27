@@ -159,6 +159,12 @@ export const NOTIFICATION_KINDS = [
    */
   'parcel_lost',
   'parcel_found',
+  /**
+   * A person's parcel withdrawn by staff at a hub (the user, 2026-10-27: "Back to its shop, sender pays"): to its sender, that
+   * it comes back to the shop they handed it in at and what they pay there in cash; to its receiver, that it will not come.
+   * In the app, never a text.
+   */
+  'parcel_withdrawn',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

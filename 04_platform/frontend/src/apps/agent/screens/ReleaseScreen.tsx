@@ -5,7 +5,7 @@ import { useState } from 'preact/hooks';
 import { errorSentence, Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, ScanField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { useConnectivity } from '../../../shared/connectivity';
-import { handoverRoute, otpValid, releaseBlockedDetail, releaseStage } from '../logic';
+import { handoverRoute, money, otpValid, releaseBlockedDetail, releaseStage } from '../logic';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { CollectBody } from './CollectScreen';
 import { PhotoField } from './PhotoField';
@@ -116,6 +116,9 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
       {p && stage === 'otp' ? (
         <Card title={t('agent.release.confirmHandover')} label={p.parcelId}>
           {p.binSlot ? <p class="t-body">{t('agent.release.fetchShelf', { slot: p.binSlot })}</p> : null}
+          {/* Money owed BEFORE the code and the hand-over button, never after them — as for an order collected by its code. */}
+          {p.payAtCollection ? <Note tone="warn" icon="wallet" title={t('agent.release.wayBackTitle', { amount: money(p.payAtCollection.amount, p.payAtCollection.currency) })} detail={t('agent.release.wayBackDetail')} /> : null}
+          {p.holdingOwed ? <Note tone="warn" icon="clock" title={t('agent.collect.holdingTitle', { amount: money(p.holdingOwed, p.holdingCurrency) })} detail={t('agent.collect.holdingDetail')} /> : null}
           <div class="field" style="margin-top:8px">
             <span class="field__label">{t('agent.release.enterCode')}</span>
             <CodeBoxes id="otp" label={t('agent.release.codeBoxLabel')} value={f.otp} onInput={(otp) => actions.setRelease({ otp })} />

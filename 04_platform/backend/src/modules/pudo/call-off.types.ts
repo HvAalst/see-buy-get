@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 /**
  * A STORE CALLS ONE OF ITS PARCELS OFF (the user, 2026-10-26 "Refund and take back"; 2026-10-27 "Comes back, store pays",
@@ -84,6 +84,51 @@ export class HandToDriverDto {
 /** The shop a store's box goes to instead of its door, while no driver has taken the load (2026-10-27). */
 export class SwitchToShopDto {
   @IsString() @MaxLength(120) backTo!: string;
+}
+
+/**
+ * STAFF WITHDRAW A PERSON'S PARCEL (the user, 2026-10-27: "Back to its shop, sender pays"). Not yet handed in, or still at
+ * the shop it was handed in at: withdrawn there. At a hub: turned round there, to the shop it was handed in at, as a new
+ * parcel to its sender, who pays the way back in cash at that counter as they collect it. A store's parcel is the store's.
+ */
+export const WITHDRAW_OUTCOMES = ['void', 'turn_round', 'no'] as const;
+export type WithdrawOutcome = (typeof WITHDRAW_OUTCOMES)[number];
+
+/** What withdrawing it would do now, said to staff before they do it. */
+export class WithdrawView {
+  parcelId!: string;
+  /**
+   * `void`: withdrawn where it is — not yet handed in, or still at `atShop`, which gives back what was paid there.
+   * `turn_round`: at `atHub`, it goes back to `backTo`, the shop it was handed in at, as a new parcel to its sender, who
+   * pays `amount` in cash there as they collect it. `no`: `why`.
+   */
+  outcome!: WithdrawOutcome;
+  amount?: number;
+  currency?: string;
+  backTo?: string;
+  atHub?: string;
+  atShop?: string;
+  why?: string;
+}
+
+/** What withdrawing it did. */
+export class WithdrawnView {
+  parcelId!: string;
+  /** Voided, or Returned (going back to its sender as `returnParcelId`). */
+  status!: string;
+  outcome!: 'void' | 'turn_round';
+  amount?: number;
+  currency?: string;
+  returnParcelId?: string;
+  backTo?: string;
+  atHub?: string;
+}
+
+export class WithdrawDto {
+  /** Why, in staff's words — kept on the parcel's history. */
+  @IsString() @MinLength(3) @MaxLength(200) reason!: string;
+  /** Who, where the sign-in cannot say (a sandbox's shared key). */
+  @IsOptional() @IsString() @MaxLength(80) by?: string;
 }
 
 export class RaiseMaxSpendDto {

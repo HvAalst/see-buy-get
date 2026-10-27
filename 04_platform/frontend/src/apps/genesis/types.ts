@@ -308,6 +308,14 @@ export interface ConsumerParcelView {
   receiverResponse?: { choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine'; at: string; note?: string };
   collectProxy?: { name: string; code?: string };
   relinquishedAt?: string;
+  /**
+   * Withdrawn at a hub (the user, 2026-10-27: "Back to its shop, sender pays"): on the parcel taking the goods back to their
+   * sender, the one it takes back and what they pay in cash at the counter as they collect it; on the one withdrawn, the
+   * parcel taking it back.
+   */
+  returnOf?: string;
+  returnParcelId?: string;
+  payAtCollection?: { amount: number; currency: string };
 }
 
 /** S32d — a diverted dedicated-freight job the buyer is a party to (the freight analogue of a parcel twin).

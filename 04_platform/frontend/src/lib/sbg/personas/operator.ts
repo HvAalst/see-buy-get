@@ -174,6 +174,10 @@ export function createOperatorApi(sbg: SbgClient) {
      */
     reissueRelease: (parcelId: string, by?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/reissue-release', { params: { path: { id: parcelId } }, body: (by ? { by } : {}) as never })),
+    /** 2026-10-27 — what withdrawing a person's parcel would do now, and doing it with why: voided where it has not left its
+     *  first shop, turned round at a hub to the shop it was handed in at, its sender paying the way back there. */
+    withdrawPreview: (parcelId: string) => sbg.request((c) => c.GET('/v1/sbg/parcels/{id}/withdraw', { params: { path: { id: parcelId } } })),
+    withdraw: (parcelId: string, body: { reason: string; by?: string }) => sbg.request((c) => c.POST('/v1/sbg/parcels/{id}/withdraw', { params: { path: { id: parcelId } }, body })),
 
     /* ---- the illustration library ---- */
 

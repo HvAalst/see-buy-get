@@ -34,6 +34,7 @@ import { approvedSays } from './connections';
 import { staffListOf } from './staff';
 import { holds, rolesOf, type StaffRole } from './staffRoles';
 import { resolveBaseUrl } from '../../lib/sbg';
+import type { WithdrawnView, WithdrawView } from './withdraw';
 
 export type Phase = 'boot' | 'signin' | 'ready' | 'outdated';
 export type Screen = 'network' | 'pilot' | 'stores' | 'cases' | 'hazards' | 'claims' | 'disposal' | 'approvals' | 'businesses' | 'accountmoves' | 'iddisputes' | 'paperreports' | 'papers' | 'imports' | 'market' | 'movers' | 'reports' | 'support' | 'pictures' | 'money' | 'rates' | 'companies' | 'company' | 'corridors' | 'borders' | 'presence' | 'depots' | 'settings' | 'connections' | 'staffreads' | 'risks' | 'messages' | 'documents';
@@ -245,6 +246,13 @@ export interface ParcelView {
   dropoffPhotoRef?: string;
   deliveredPhotoRef?: string;
   scans?: Array<{ at: string; status: string; note?: string; receivedAt?: string }>;
+  /** Withdrawn at a hub (2026-10-27): the parcel taking it back to its sender — or, on that one, the one it takes back. */
+  returnParcelId?: string;
+  returnOf?: string;
+  /** What the counter takes in cash as it hands it over: the way back, and a holding fee past its free days. */
+  payAtCollection?: { amount: number; currency: string };
+  holdingOwed?: number;
+  holdingCurrency?: string;
 }
 
 /** `GET /finance` is untyped in the contract; these are the fields the screen reads. */
@@ -385,6 +393,9 @@ export interface TowerActions {
   applyFunding(unmatchedId: string, payerKind: 'agent' | 'vendor', payerDid: string): Promise<void>;
   lookupParcel(parcelId: string): Promise<void>;
   reissueRelease(parcelId: string): Promise<void>;
+  /** 2026-10-27 — what withdrawing a person's parcel would do now (null where it could not be read), and doing it with why. */
+  withdrawPreview(parcelId: string): Promise<WithdrawView | null>;
+  withdraw(parcelId: string, reason: string): Promise<boolean>;
   dismissReissued(): void;
   chooseHelpTopic(topic: string): Promise<void>;
   uploadPicture(topic: string, key: string, file: File): Promise<void>;
@@ -1919,6 +1930,30 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         await lookupParcel(parcelId); // the lock state changed; re-read rather than assume
       },
       dismissReissued: () => setState((s) => ({ ...s, reissued: null })),
+      withdrawPreview: async (parcelId: string) => {
+        const client = clientRef.current;
+        if (!client) return null;
+        setState((s) => ({ ...s, busyId: 'withdraw-ask', queueError: null, done: null }));
+        const { data, error } = await client.api.withdrawPreview(parcelId);
+        setState((s) => ({ ...s, busyId: null, ...(error ? { queueError: error.detail || error.title } : {}) }));
+        return error ? null : (narrow<WithdrawView>(data) ?? null);
+      },
+      withdraw: async (parcelId: string, reason: string) => {
+        const client = clientRef.current;
+        if (!client) return false;
+        setState((s) => ({ ...s, busyId: 'withdraw', queueError: null, done: null }));
+        const by = stateRef.current.who?.name;
+        const { data, error } = await client.api.withdraw(parcelId, { reason, ...(by ? { by } : {}) });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return false;
+        }
+        const done = narrow<WithdrawnView>(data);
+        // Re-read first: the look-up clears what was said, and the parcel changed.
+        await lookupParcel(parcelId);
+        setState((s) => ({ ...s, busyId: null, done: done?.outcome === 'turn_round' ? t('tower.withdraw.doneTurned', { shop: done.backTo ?? '', id: done.returnParcelId ?? '' }) : t('tower.withdraw.doneVoid') }));
+        return true;
+      },
       chooseHelpTopic: async (topic: string) => {
         const client = clientRef.current;
         setState((s) => ({ ...s, help: null, done: null, queueError: null }));

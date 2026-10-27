@@ -1,10 +1,11 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
-import { useT } from '../../../shared/i18n';
+import { formatMoney, useT } from '../../../shared/i18n';
 import type { LoadFound } from '../../../shared/loadFinder';
 import { isLoadLabel, ssccOfScan } from '../../../shared/scan';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
 import { TrailPanel } from './TrailPanel';
+import { WithdrawBlock } from './Withdraw';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -136,6 +137,12 @@ export function SupportScreen({ state, actions }: { state: TowerState; actions: 
                 </button>
               </div>
             ) : null}
+
+            {/* A person's parcel, withdrawn (2026-10-27): said first, then done with why. */}
+            <WithdrawBlock parcel={p} state={state} actions={actions} />
+            {/* Withdrawn at a hub: the parcel taking it back to its sender — and, on that one, what the counter takes in cash. */}
+            {p.returnParcelId ? <p class="chint">{t('tower.withdraw.comesBackAs', { id: p.returnParcelId })}</p> : null}
+            {p.returnOf ? <p class="chint">{p.payAtCollection ? t('tower.withdraw.takesBackDue', { id: p.returnOf, amount: formatMoney(p.payAtCollection.amount, p.payAtCollection.currency) }) : t('tower.withdraw.takesBack', { id: p.returnOf })}</p> : null}
 
             {/* The OTP for a peer send comes back ONCE, and it is the only code this screen ever shows.
                 Kept until it is dismissed by hand — a toast would take it away mid-sentence. */}

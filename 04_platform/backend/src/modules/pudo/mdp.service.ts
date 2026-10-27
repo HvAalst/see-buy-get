@@ -743,7 +743,8 @@ export class MdpService {
     if (parcel.status === 'Returned' && parcel.returnParcelId) {
       const back = this.parcels.get(parcel.returnParcelId);
       if (back.status === 'At_MDP' && back.atMdpId === mdpId) {
-        throw new GlosError('NEW_LABEL', `${parcelId} was called off by its store: it goes back as ${back.parcelId}. Print its new label, put it over the old one, then scan ${back.parcelId}.`, { parcelId, returnParcelId: back.parcelId });
+        // A store's parcel called off by the store, or a person's withdrawn by staff (2026-10-27): either way, a new label.
+        throw new GlosError('NEW_LABEL', `${parcelId} was ${parcel.vendorId ? 'called off by its store' : 'withdrawn'}: it goes back as ${back.parcelId}. Print its new label, put it over the old one, then scan ${back.parcelId}.`, { parcelId, returnParcelId: back.parcelId });
       }
     }
     if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, must be At_MDP to sort`);

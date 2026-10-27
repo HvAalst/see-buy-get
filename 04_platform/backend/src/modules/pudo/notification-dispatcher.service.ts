@@ -33,6 +33,8 @@ interface VehicleChanged { departureId: string; managerDid: string; company: str
 interface FleetChange { driverDid: string; driverName: string; fromManagerDid?: string; toManagerDid: string; toCompany: string }
 interface FleetOfferMade { offerId: string; driverDid: string; fleetDid: string; companyName: string; expiresAt: string }
 interface FleetOfferClosed { offerId: string; outcome: 'declined' | 'withdrawn'; fleetDid: string; driverDid: string; phoneEnding: string; companyName: string }
+/** A person's parcel withdrawn at a hub, going back to the shop it was handed in at as another parcel (2026-10-27). */
+interface Withdrawn { parcelId: string; returnParcelId: string; hubName: string; shopName: string; amount: number; currency: string }
 interface DriverLeftFleet { driverDid: string; driverName: string; fleetDid: string; companyName: string; reason: 'left' | 'ended' | 'other' | 'own'; note?: string; /** The runs they came off, when it was they who left. */ runs?: string[] }
 
 const OFFER_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -569,6 +571,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<DisputeDecided>(GlosEvent.Pudo.ParcelDisputeDecided, (e) => this.onParcelDisputeDecided(e.payload));
     this.events.subscribe<{ parcelId: string; reason: string }>(GlosEvent.Pudo.ParcelLost, (e) => this.onParcelLost(e.payload.parcelId, 'lost', e.payload.reason));
     this.events.subscribe<{ parcelId: string; note: string }>(GlosEvent.Pudo.ParcelFound, (e) => this.onParcelLost(e.payload.parcelId, 'found', e.payload.note));
+    this.events.subscribe<Withdrawn>(GlosEvent.Pudo.ParcelWithdrawn, (e) => this.onParcelWithdrawn(e.payload));
     this.events.subscribe<{ parcelId: string; number: string; at: string }>(GlosEvent.Pudo.DamageReportNoted, (e) => this.onDamageReportNoted(e.payload));
 
     // Retention: the parties hear about it a month before the document goes, not afterwards.
@@ -695,6 +698,39 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       }
     }
     if (parcel.vendorId) this.vendors.notify(parcel.vendorId, what === 'lost' ? 'parcel.lost' : 'parcel.found', { parcelId, externalOrderId: parcel.externalOrderId, status: parcel.status, ...(what === 'lost' ? { reason: words } : { note: words }) });
+  }
+
+  /**
+   * A PERSON'S PARCEL WITHDRAWN AT A HUB (the user, 2026-10-27: "Back to its shop, sender pays"): its sender is told where to
+   * collect it and what they pay there; its receiver, that it will not come. In the app, never a text.
+   */
+  private async onParcelWithdrawn(p: Withdrawn): Promise<void> {
+    let parcel: ReturnType<ParcelService['get']>;
+    try {
+      parcel = this.parcels.get(p.parcelId);
+    } catch {
+      return;
+    }
+    const sender = accountFor(this.parcels.senderOf(parcel), this.persons);
+    const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
+    const cash = `${p.amount.toFixed(2)} ${p.currency}`;
+    const say = async (to: string, n: { title: string; body: string; parcelId: string }) => {
+      try {
+        await this.notifications.notify(to, { kind: 'parcel_withdrawn', title: n.title, body: n.body, link: `/?parcel=${n.parcelId}`, tag: `withdrawn:${p.parcelId}`, data: { parcelId: n.parcelId } });
+      } catch (err) {
+        this.logger.warn(`parcel-withdrawn notice failed for ${p.parcelId}: ${(err as Error).message}`);
+      }
+    };
+    if (sender) {
+      await say(sender.personDid, {
+        title: `Your parcel ${p.parcelId} comes back to you`,
+        body: `It was withdrawn at ${p.hubName}. It comes back to ${p.shopName}, where you handed it in, as ${p.returnParcelId}: collect it there with its code, under Received. You pay ${cash} in cash there for the way back.`,
+        parcelId: p.returnParcelId,
+      });
+    }
+    if (receiver && receiver.personDid !== sender?.personDid) {
+      await say(receiver.personDid, { title: `Parcel ${p.parcelId} will not come`, body: `It was withdrawn at ${p.hubName} and goes back to its sender.`, parcelId: p.parcelId });
+    }
   }
 
   /**

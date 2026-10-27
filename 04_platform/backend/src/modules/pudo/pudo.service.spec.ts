@@ -10995,6 +10995,190 @@ describe('PUDO Light', () => {
       });
     });
 
+    /**
+     * A PERSON'S PARCEL WITHDRAWN BY STAFF AT A HUB (the user, 2026-10-27: "Back to its shop, sender pays"): turned round there,
+     * to the shop it was handed in at, as a new parcel to its sender — who reads its code in the Send app and pays the way
+     * back in cash at that counter as they collect it. What was carried is not given back; the goods never sit nowhere.
+     */
+    describe('a person’s parcel withdrawn by staff at a hub', () => {
+      let seq = 0;
+      const as = (p: { personDid: string; phoneHash: string }) => ({ phoneHash: p.phoneHash, personDid: p.personDid });
+      const floatOf = (did: string) => gate.canTransact(did).balance;
+      const personAtHub = (tag: string, opts: { sort?: boolean; oneWay?: boolean; originZone?: string } = {}) => {
+        seq += 1;
+        const origin = onboardAgent(`${tag} Origin`, opts.originZone ?? 'NorthTown', 500);
+        const dest = onboardAgent(`${tag} Dest`, 'SouthTown', 50);
+        // A hub serving both areas: it sorts the parcel on to its receiver's shop, and back to the one it was handed in at.
+        const hub = mdps.register({ name: `${tag} Hub`, zones: opts.oneWay ? ['SouthTown'] : ['SouthTown', origin.zone], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+        const sender = enrollPerson(`+25470066${String(seq).padStart(4, '0')}`);
+        const receiverPhone = `+25470067${String(seq).padStart(4, '0')}`;
+        const receiver = enrollPerson(receiverPhone);
+        const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+        const { parcel } = parcels.createConsumerSend({ senderPersonDid: sender.personDid, senderPhoneHash: sender.phoneHash, receiverMobile: receiverPhone, originAgentDid: origin.did, destAgentDid: dest.did, dimensionsCm: { l: 20, w: 20, h: 20 }, weightKg: 2, quote });
+        parcels.intakeConsumerSend(parcel.parcelId, origin.did, photoBy(origin.did));
+        const bag = totes.register(origin.did);
+        totes.assign(bag.code, hub.mdpId, hub.name);
+        mdps.fillTote(bag.code, parcel.parcelId);
+        closeForTest(bag.code);
+        mdps.loadBag(bag.code, `BUS-${tag}`);
+        mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
+        const sorted = opts.sort ? mdps.sortParcel(hub.mdpId, parcel.parcelId) : undefined;
+        const callOffs = new CallOffService(parcels, vendors, routing, agents, mdps, totes);
+        return { origin, dest, hub, sender, receiver, id: parcel.parcelId, sorted, callOffs };
+      };
+
+      it('says first what withdrawing it would do — back to the shop it was handed in at, at a price its sender pays there — and writes nothing', () => {
+        const { origin, hub, id, callOffs } = personAtHub('PWP');
+        const view = callOffs.withdrawPreview(id);
+        expect(view).toMatchObject({ parcelId: id, outcome: 'turn_round', backTo: origin.shopName, atHub: hub.name, currency: 'KES' });
+        expect(view.amount).toBeGreaterThan(0);
+        expect(parcels.get(id).status).toBe('At_MDP');
+        // Never voided at a hub, by any path: the goods would sit there belonging to no journey.
+        expect(() => parcels.cancel(id, 'ops', 'test')).toThrow(/not voided: withdrawn, it is turned round there/);
+        expect(parcels.get(id).status).toBe('At_MDP');
+        expect(() => callOffs.withdrawPreview('PUD-NOPE')).toThrow(/No parcel PUD-NOPE/);
+      });
+
+      it('not yet handed in, or still at the shop it was handed in at: withdrawn there — on the road, no; a store’s parcel is the store’s', () => {
+        const origin = onboardAgent('PWV Origin', 'NorthTown', 500);
+        const dest = onboardAgent('PWV Dest', 'SouthTown', 50);
+        mdps.register({ name: 'PWV Hub', zones: ['SouthTown', 'NorthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+        const sender = enrollPerson('+254700680001');
+        const send = () => parcels.createConsumerSend({ senderPersonDid: sender.personDid, senderPhoneHash: sender.phoneHash, receiverMobile: '+254700680002', originAgentDid: origin.did, destAgentDid: dest.did, dimensionsCm: { l: 20, w: 20, h: 20 }, weightKg: 2, quote: routing.quoteShipment(origin.did, dest.did, 'M') }).parcel;
+        const callOffs = new CallOffService(parcels, vendors, routing, agents, mdps, totes);
+        const booked = send();
+        expect(callOffs.withdrawPreview(booked.parcelId)).toEqual({ parcelId: booked.parcelId, outcome: 'void' });
+        expect(callOffs.withdraw(booked.parcelId, 'Staff Ann', 'the sender asked')).toEqual({ parcelId: booked.parcelId, status: 'Voided', outcome: 'void' });
+        // At the counter it was handed in at: withdrawn there, and what the counter took given back to its float.
+        const atShop = send();
+        const float = floatOf(origin.did);
+        parcels.intakeConsumerSend(atShop.parcelId, origin.did, photoBy(origin.did));
+        expect(callOffs.withdrawPreview(atShop.parcelId)).toEqual({ parcelId: atShop.parcelId, outcome: 'void', atShop: origin.shopName });
+        expect(callOffs.withdraw(atShop.parcelId, 'Staff Ann', 'the sender asked')).toMatchObject({ status: 'Voided', outcome: 'void' });
+        expect(floatOf(origin.did)).toBeCloseTo(float, 2);
+        // On the road: no.
+        const road = send();
+        parcels.get(road.parcelId).status = 'On_Bus';
+        expect(callOffs.withdrawPreview(road.parcelId)).toEqual({ parcelId: road.parcelId, outcome: 'no', why: 'A driver is carrying it: it cannot be withdrawn on the road.' });
+        expect(() => callOffs.withdraw(road.parcelId, 'Staff Ann', 'x')).toThrow(/cannot be withdrawn on the road/);
+        // A store's parcel is the store's to call off — from its own app or its systems.
+        const { res } = mintInbound('PWV');
+        expect(callOffs.withdrawPreview(res.parcel.parcelId)).toEqual({ parcelId: res.parcel.parcelId, outcome: 'no', why: 'A store’s parcel is the store’s to call off, from its own app or its systems.' });
+        expect(() => callOffs.withdraw(res.parcel.parcelId, 'Staff Ann', 'x')).toThrow(/the store’s to call off/);
+        expect(parcels.get(res.parcel.parcelId).status).not.toBe('Voided');
+      });
+
+      it('turned round where it is: a new parcel to the shop it was handed in at, its sender’s to collect — nothing given back', () => {
+        const { origin, hub, sender, receiver, id, callOffs } = personAtHub('PWT');
+        const told = callOffs.withdrawPreview(id).amount!;
+        const float = floatOf(origin.did);
+        const done = callOffs.withdraw(id, 'Staff Ann', 'the sender asked, by phone');
+        expect(done).toMatchObject({ parcelId: id, status: 'Returned', outcome: 'turn_round', amount: told, currency: 'KES', backTo: origin.shopName, atHub: hub.name });
+        const old = parcels.get(id);
+        const back = parcels.get(done.returnParcelId!);
+        expect(old).toMatchObject({ status: 'Returned', returnParcelId: back.parcelId });
+        expect(old.scans.at(-1)!.note).toBe(`withdrawn at ${hub.name} · going back to its sender as ${back.parcelId} · the sender asked, by phone`);
+        // The same box, at the hub from its first moment, to the shop it was handed in at — its sender's on both sides.
+        expect(back).toMatchObject({ status: 'At_MDP', atMdpId: hub.mdpId, handInMdpId: hub.mdpId, destAgentDid: origin.did, senderPhoneHash: sender.phoneHash, receiverPhoneHash: sender.phoneHash, paymentMode: 'cash', paidStatus: 'unpaid', size: old.size, weightKg: old.weightKg, shipmentCost: told });
+        expect(back.vendorId).toBeUndefined();
+        expect(back.payAtCollection).toEqual({ amount: told, currency: 'KES', tax: expect.any(Number), provision: expect.any(Number) });
+        expect(back.returnOf).toEqual({ parcelId: id, atMdpId: hub.mdpId, at: expect.any(String) });
+        expect(back.custody).toEqual([expect.objectContaining({ holderKind: 'hub', holderId: hub.name })]);
+        expect(back.label).toBeDefined();
+        expect(back.otp).toMatch(/^\d{4}$/);
+        // Its sender reads it under Received, with its own code and what they pay; the first one's code is dead.
+        expect(parcels.partyTo(as(sender)).received.map((v) => v.parcelId)).toContain(back.parcelId);
+        expect(parcels.consumerParcel(back.parcelId, as(sender))).toMatchObject({ relation: 'received', returnOf: id, payAtCollection: { amount: told, currency: 'KES' }, collectToken: { code: back.otp } });
+        expect(parcels.consumerParcel(id, as(sender))).toMatchObject({ status: 'Returned', returnParcelId: back.parcelId });
+        expect(parcels.consumerParcel(id, as(sender)).collectToken).toBeUndefined();
+        expect(parcels.consumerParcel(id, as(receiver)).collectToken).toBeUndefined();
+        // Not the receiver's: they never see the parcel going back.
+        expect([...parcels.partyTo(as(receiver)).received, ...parcels.partyTo(as(receiver)).sent].map((v) => v.parcelId)).not.toContain(back.parcelId);
+        // Nothing of the first given back — and nothing taken for the way back until it is collected.
+        expect(floatOf(origin.did)).toBeCloseTo(float, 2);
+        // Not again; and the one taking it back is not withdrawn.
+        expect(() => callOffs.withdraw(id, 'Staff Ann', 'again')).toThrow(`It is on its way back to its sender already, as ${back.parcelId}.`);
+        expect(callOffs.withdrawPreview(back.parcelId)).toEqual({ parcelId: back.parcelId, outcome: 'no', why: 'It takes goods back to their sender: it is not withdrawn.' });
+        expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+      });
+
+      it('collected where it came back to: the way back taken in cash, charged to the float — a float that cannot cover it refused before the code is tried', () => {
+        const { origin, sender, id, callOffs } = personAtHub('PWC');
+        const back = parcels.get(callOffs.withdraw(id, 'Staff Ann', 'the sender asked').returnParcelId!);
+        // On the shelf of the shop it came back to (the sort and the road are any parcel's).
+        back.status = 'Ready_For_Pickup';
+        back.atMdpId = undefined;
+        back.readyAt = new Date().toISOString();
+        const due = back.payAtCollection!.amount;
+        // Not come for in its free window either: a holding fee on top, as on any parcel.
+        back.status = 'Unclaimed';
+        back.unclaimedAt = new Date(Date.now() - 2 * 86_400_000 - 60_000).toISOString();
+        const holding = parcels.holdingOwed(back).amount;
+        expect(holding).toBeGreaterThan(0);
+        // The counter reads what to take before it hands anything over.
+        expect(monitor.parcelTimeline(back.parcelId)).toMatchObject({ payAtCollection: { amount: due, currency: 'KES' }, holdingOwed: holding, holdingCurrency: 'KES', returnOf: id });
+        // A float that cannot cover it: refused before the code is looked at, so the person loses no try.
+        gate.reverseTopUp(origin.did, floatOf(origin.did), 'drain-PWC');
+        expect(() => parcels.pickup(back.parcelId, origin.did, back.otp!)).toThrow(/^Top up first: .* is due on this parcel, taken in cash from the person collecting it$/);
+        expect(parcels.get(back.parcelId)).toMatchObject({ status: 'Unclaimed', otpAttempts: 0 });
+        gate.topUp(origin.did, due + 10);
+        // A wrong code: counted, and nothing charged.
+        const before = floatOf(origin.did);
+        expect(() => parcels.pickup(back.parcelId, origin.did, back.otp === '0000' ? '1111' : '0000')).toThrow(/Incorrect OTP/);
+        expect(floatOf(origin.did)).toBeCloseTo(before, 2);
+        expect(gate.entries({ did: origin.did, type: 'FEE' }).filter((e) => e.reference === back.parcelId)).toEqual([]);
+        // Its own code: the way back charged to the float, as a take-in is — once — and the parcel says it was paid.
+        const handed = parcels.pickup(back.parcelId, origin.did, back.otp!);
+        expect(handed).toMatchObject({ status: 'Delivered', paidStatus: 'ParcelPaid', payAtCollection: expect.objectContaining({ amount: due, paidAt: expect.any(String) }) });
+        // The holding fee: paid in cash and kept by the shop — nothing posted, and the parcel says it was paid.
+        expect(handed.holdingSettled).toBeCloseTo(holding, 2);
+        expect(parcels.holdingOwed(handed).amount).toBe(0);
+        expect(gate.entries({ did: origin.did, type: 'FEE' }).filter((e) => e.reference === back.parcelId)).toEqual([expect.objectContaining({ sign: '-', amount: due })]);
+        expect(parcels.consumerParcel(back.parcelId, as(sender)).payAtCollection).toBeUndefined();
+        expect(monitor.parcelTimeline(back.parcelId).payAtCollection).toBeUndefined();
+        expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+      });
+
+      it('sorted already: out of its bag, the floor told — its old label answers with the new one, which is sorted back toward its shop', () => {
+        const { origin, hub, id, sorted, callOffs } = personAtHub('PWS', { sort: true });
+        expect(totes.requireByCode(sorted!.toteCode).parcels).toContain(id);
+        const backId = callOffs.withdraw(id, 'Staff Ann', 'the sender asked').returnParcelId!;
+        expect(totes.requireByCode(sorted!.toteCode).parcels).not.toContain(id);
+        expect(parcels.get(id).toteId).toBeUndefined();
+        let refused: GlosError | undefined;
+        try {
+          mdps.sortParcel(hub.mdpId, id);
+        } catch (e) {
+          refused = e as GlosError;
+        }
+        expect(refused?.code).toBe('NEW_LABEL');
+        expect(refused?.message).toBe(`${id} was withdrawn: it goes back as ${backId}. Print its new label, put it over the old one, then scan ${backId}.`);
+        expect(parcels.hubLabel(hub.mdpId, backId).svg).toContain(backId);
+        const again = mdps.sortParcel(hub.mdpId, backId);
+        expect([origin.did, origin.zone]).toContain(again.nextDestination.type === 'pudo' ? again.nextDestination.id : again.nextDestination.zone);
+      });
+
+      it('refused before anything moves: held, the shop it was handed in at not taking parcels, a hub sending nothing toward it', () => {
+        const held = personAtHub('PWR1');
+        parcels.get(held.id).held = { exceptionId: 'EX-PW', finding: 'wrap_cut', where: 'at the hub', since: new Date().toISOString() } as never;
+        expect(held.callOffs.withdrawPreview(held.id)).toEqual({ parcelId: held.id, outcome: 'no', why: 'It is held: operations decide what happens to it first.' });
+        expect(() => held.callOffs.withdraw(held.id, 'Staff Ann', 'x')).toThrow(/It is held/);
+
+        const closed = personAtHub('PWR2');
+        agents.get(closed.origin.did).idHold = { reference: 'ID-DISPUTE-PW', at: new Date().toISOString() };
+        expect(closed.callOffs.withdrawPreview(closed.id).why).toBe('PWR2 Origin is not taking parcels for now, so it cannot come back there: it carries on to its receiver.');
+        expect(() => closed.callOffs.withdraw(closed.id, 'Staff Ann', 'x')).toThrow(/carries on to its receiver/);
+
+        // An area no hub serves: the hub has nothing to send it on toward.
+        const oneWay = personAtHub('PWR3', { oneWay: true, originZone: 'PWR3Town' });
+        expect(oneWay.callOffs.withdrawPreview(oneWay.id).why).toBe('PWR3 Hub sends nothing toward PWR3Town, so it cannot come back to PWR3 Origin: it carries on to its receiver.');
+        for (const p of [held, closed, oneWay]) {
+          expect(parcels.get(p.id)).toMatchObject({ status: 'At_MDP' });
+          expect(parcels.get(p.id).returnParcelId).toBeUndefined();
+        }
+      });
+    });
+
     it('handing a batch to the driver pays that shop’s company’s figure — and a step paid nothing writes no row', () => {
       set({ handoverFee: 55 });
       const { badge } = mkFleetDriver('AMH');

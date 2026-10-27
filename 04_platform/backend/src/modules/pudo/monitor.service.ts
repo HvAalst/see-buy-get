@@ -6,6 +6,7 @@ import { WalletGateService } from './wallet-gate.service';
 import { DispatchService } from './dispatch.service';
 import { ToteService } from './tote.service';
 import { FINDING_WORDS } from './tamper.types';
+import { isCollectable } from './pudo.types';
 import { HELD_BY_WORDS } from './load-detention.types';
 import { AGENT_ONLINE_H, CONNECTIVITY_LOSS_H, GHOST_BUS_H, MDP_DWELL_H, NETWORK_CURRENCY, NOT_SEEN_H, STAGNANT_INVENTORY_H , NEVER_DROPPED_H, UNCOLLECTED_H} from './pudo.config';
 
@@ -234,6 +235,7 @@ export class MonitorService {
   /** User/Support — the parcel audit timeline ('where is my package', 'it was damaged'). */
   parcelTimeline(parcelId: string) {
     const p = this.parcels.get(parcelId);
+    const holding = p.unclaimedAt && isCollectable(p.status) ? this.parcels.holdingOwed(p) : undefined;
     // `releaseLockedAt` (never the secret itself) so the support desk can SEE why a customer at the
     // counter cannot collect, and reissue — the whole point of a lockout that a human can recover from.
     // WHOSE PROMISE travels with it. A support desk answering the phone about a parcel has to know
@@ -251,6 +253,13 @@ export class MonitorService {
       releaseLockedAt: p.otpLockedAt,
       // A parcel held at a border: did the shop that took it in see its papers in the pouch, and when.
       ...(p.customs ? { crossesBorder: true, papersSeen: p.papersSeen } : {}),
+      // What the counter takes in cash as it is handed over (2026-10-27): the way back of a person's goods turned round at a
+      // hub, and the holding fee once its free window ran out — so the shop asks for it before it hands the parcel over.
+      ...(p.payAtCollection && !p.payAtCollection.paidAt ? { payAtCollection: { amount: p.payAtCollection.amount, currency: p.payAtCollection.currency } } : {}),
+      ...(p.unclaimedAt && holding && holding.amount > 0 ? { holdingOwed: holding.amount, holdingCurrency: holding.currency } : {}),
+      // Turned round at a hub: the parcel taking it back to its sender, or the one this one takes back.
+      ...(p.returnParcelId ? { returnParcelId: p.returnParcelId } : {}),
+      ...(p.returnOf ? { returnOf: p.returnOf.parcelId } : {}),
       scans: p.scans,
     };
   }

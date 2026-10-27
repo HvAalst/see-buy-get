@@ -596,6 +596,8 @@ export function operationalParcelView(p: Parcel, holding?: { amount: number; cur
     ...(p.held ? { held: p.held } : {}),
     // Called off at a hub (2026-10-27): the box it is, under its old label — the hub puts this one's label over that one.
     ...(p.returnOf ? { returnOf: p.returnOf } : {}),
+    // A person's goods turned round at a hub (2026-10-27): what the counter takes in cash from them, as they collect it.
+    ...(p.payAtCollection && !p.payAtCollection.paidAt ? { payAtCollection: { amount: p.payAtCollection.amount, currency: p.payAtCollection.currency } } : {}),
     unclaimedAt: p.unclaimedAt,
     /**
      * What is owed for the shelf slot, right now.
@@ -824,7 +826,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // isCollectable, not Ready_For_Pickup: a parcel whose free window has run out is still collectable,
     // and hiding the receiver's own code at exactly the moment they are being urged to come would be a
     // notice telling somebody to collect a parcel and an app refusing to show them how.
-    const stageOk = isPeerSend ? !TERMINAL_STATUSES.has(p.status) : isCollectable(p.status);
+    // Turned round at a hub, a peer send's code is dead: the goods go back under another parcel, with a code of its own.
+    const stageOk = isPeerSend ? !TERMINAL_STATUSES.has(p.status) && p.status !== 'Returned' : isCollectable(p.status);
     return secret && audienceOk && stageOk ? secret : undefined;
   }
 
@@ -1242,6 +1245,9 @@ export class ParcelService implements OnApplicationBootstrap {
       ...(p.dispute || p.lost ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
       // Declared lost by staff after a search, and found again: when, and in the words staff wrote — never who.
       ...(p.lost ? { lost: { declaredAt: p.lost.declaredAt, reason: p.lost.reason, ...(p.lost.foundAt ? { foundAt: p.lost.foundAt, foundNote: p.lost.foundNote } : {}) } } : {}),
+      // Turned round at a hub (2026-10-27): which parcel takes the goods back to their sender — read from either one.
+      ...(p.returnOf ? { returnOf: p.returnOf.parcelId } : {}),
+      ...(p.returnParcelId ? { returnParcelId: p.returnParcelId } : {}),
       // The closed-window facts, receiver-only — see ConsumerParcelView. The owed figure is DERIVED here
       // rather than left to the app, so the number somebody reads on their phone and the number the
       // counter asks for cannot come from two different pieces of arithmetic.
@@ -1257,6 +1263,8 @@ export class ParcelService implements OnApplicationBootstrap {
             ...(Boolean(p.receiverPhoneHash) && p.receiverPhoneHash !== who.phoneHash && !TERMINAL_STATUSES.has(p.status) ? { sentToOldNumber: true } : {}),
             // The figure and the money the counter will ask for (collect) — never a bare figure the receiver must guess.
             ...(p.unclaimedAt && holding.amount > 0 ? { holdingOwed: holding.amount, holdingCurrency: holding.currency } : {}),
+            // Turned round at a hub (2026-10-27): what the counter takes in cash as they collect it — the way back.
+            ...(p.payAtCollection && !p.payAtCollection.paidAt ? { payAtCollection: { amount: p.payAtCollection.amount, currency: p.payAtCollection.currency } } : {}),
           }
         : {}),
     };
@@ -1779,6 +1787,16 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.otpLockedAt) throw new GlosError('OTP_LOCKED', 'Too many wrong codes — ask the control tower to reissue');
     // Round 31 — a hand-over photo, when there is one, is the shop's own: refused before a code is counted.
     if (deliveredPhotoRef) this.media.requireHeld(deliveredPhotoRef, agentDid, { type: 'parcel', id: parcelId }, 'deliveredPhotoRef');
+    // A PERSON'S GOODS TURNED ROUND AT A HUB (2026-10-27): the way back is paid here, in cash, as they are collected — charged
+    // to the shop's float as a take-in is. The float must cover it: asked before the code is looked at, so a short float never
+    // costs the person one of their tries.
+    const due = parcel.payAtCollection && !parcel.payAtCollection.paidAt ? parcel.payAtCollection : undefined;
+    if (due) {
+      const float = this.gate.canTransact(agentDid);
+      if (!float.moneyOk || float.balance + 1e-9 < due.amount) {
+        throw new GlosError('WALLET_INSUFFICIENT', `Top up first: ${due.amount.toFixed(2)} ${due.currency} is due on this parcel, taken in cash from the person collecting it`);
+      }
+    }
 
     if (parcel.otp !== (otp || '').trim()) {
       parcel.otpAttempts = (parcel.otpAttempts ?? 0) + 1;
@@ -1792,6 +1810,15 @@ export class ParcelService implements OnApplicationBootstrap {
       throw new GlosError('OTP_INVALID', 'Incorrect OTP');
     }
 
+    if (due) {
+      this.gate.chargeShipping(agentDid, due.amount, parcelId, due.tax, due.provision);
+      parcel.payAtCollection = { ...due, paidAt: new Date().toISOString() };
+      parcel.paidStatus = 'ParcelPaid';
+    }
+    // The holding fee, where its free window ran out: paid in cash here and kept by the shop, so nothing is posted — as for an
+    // order collected by its code (collectConfirm). Recorded, so the parcel says it was paid.
+    const holdingPaid = this.holdingOwed(parcel).amount;
+    if (holdingPaid > 0) parcel.holdingSettled = (parcel.holdingSettled ?? 0) + holdingPaid;
     parcel.status = 'Delivered';
     parcel.deliveredAt = new Date().toISOString();
     parcel.deliveredPhotoRef = deliveredPhotoRef;
@@ -1908,6 +1935,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // goods would sit at the hub belonging to no journey — and staff do not spend a store's money on bringing it back.
     if (parcel.status === 'At_MDP' && parcel.vendorId) {
       throw new GlosError('INVALID_STATE', 'A store’s parcel at a hub is not withdrawn: the store calls it off, and it comes back to the shop it was handed in at, at the store’s cost');
+    }
+    // NOR IS A PERSON'S (the user, 2026-10-27: "Back to its shop, sender pays"): staff withdraw it and it is turned round there,
+    // to the shop it was handed in at, its sender paying the way back in cash as they collect it (CallOffService.withdraw).
+    // Voided here, the goods would sit at the hub belonging to no journey.
+    if (parcel.status === 'At_MDP') {
+      throw new GlosError('INVALID_STATE', 'A parcel at a hub is not voided: withdrawn, it is turned round there to the shop it was handed in at — staff withdraw it under Find a parcel');
     }
     // A store's parcel called off before it has left the shop it was handed in at — or before it was handed in at all: the
     // store's money back in full (the user, 2026-10-26: "Refund and take back"). Once a hub or a driver has it, what was
@@ -3222,6 +3255,111 @@ export class ParcelService implements OnApplicationBootstrap {
     back.custody = [{ holderId: input.hub.name, holderKind: 'hub', from: at, note: `called off by the store: turned round here — the goods of ${parcel.parcelId}` }];
     this.scan(back, 'At_MDP', input.hub.name, `called off at ${input.hub.name}: the goods of ${parcel.parcelId}, going back · its new label goes over the old one`, { at });
     this.persist(back);
+    return back;
+  }
+
+  /**
+   * A PERSON'S PARCEL WITHDRAWN BY STAFF AT A HUB (the user, 2026-10-27: "Back to its shop, sender pays"): turned round there,
+   * as a new parcel to the shop it was handed in at, addressed to its sender — whose code it carries, read in the Send app
+   * under their number — and paid for in cash at that counter as they collect it. What was carried is not given back. The
+   * same box: its new label goes over the old one at the hub.
+   */
+  turnRoundForSender(
+    parcelId: string,
+    input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string; by: string; reason?: string },
+    now: number = Date.now(),
+  ): { withdrawn: Parcel; back: Parcel } {
+    const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
+    this.refuseIfHeld(parcel);
+    if (parcel.vendorId) throw new GlosError('INVALID_STATE', `${parcelId} is a store’s parcel: the store calls it off`);
+    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not at ${input.hub.name}`);
+    if (parcel.returnOf) throw new GlosError('INVALID_STATE', `${parcelId} is taking goods back to their sender already`);
+    const at = new Date(now).toISOString();
+    const back = this.mintForSender(parcel, input, at);
+    // The one withdrawn: closed, pointing at the one taking it back, and out of any bag.
+    parcel.status = 'Returned';
+    parcel.returnParcelId = back.parcelId;
+    parcel.toteId = undefined;
+    this.scan(parcel, 'Returned', input.by, `withdrawn at ${input.hub.name} · going back to its sender as ${back.parcelId}${input.reason ? ` · ${input.reason}` : ''}`, { at });
+    this.media.anchorParcelTerminal(parcel.parcelId);
+    this.persist(parcel);
+    return { withdrawn: parcel, back };
+  }
+
+  /** The parcel taking a person's goods back from a hub to the shop they were handed in at: theirs, collected and paid for there. */
+  private mintForSender(parcel: Parcel, input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string }, at: string): Parcel {
+    const dest = this.agents.get(input.toAgentDid);
+    const quote = input.quote;
+    const chosen = quote.locked;
+    const parcelId = `PUD-${randomBytes(5).toString('hex').toUpperCase()}`;
+    const anchorTxId = this.ledger.anchor({ p: parcelId, s: parcel.senderPhoneHash ?? 'sender', o: input.hub.mdpId, d: dest.did, at }).txId;
+    const back: Parcel = {
+      parcelId,
+      did: this.mintShipmentDid(parcelId, 'outbound'),
+      direction: 'outbound',
+      // THE SAME BOX, measured as it was: re-measured, it could change size between two legs of one journey.
+      size: parcel.size,
+      dimensionsCm: parcel.dimensionsCm,
+      weightKg: parcel.weightKg,
+      cargoClass: parcel.cargoClass,
+      natureCode: parcel.natureCode,
+      fragile: parcel.fragile ?? false,
+      // From the hub: its journey starts there (JourneyPlanService reads handInMdpId) — never at a shop as this parcel.
+      originZone: input.hub.zone,
+      handInMdpId: input.hub.mdpId,
+      destZone: dest.zone,
+      destAgentDid: dest.did,
+      // Paid in cash at the counter it comes back to: that shop's company collects it.
+      collectingEntityId: this.agents.entityIdOf(dest),
+      // Its sender's on both sides: they sent it, and it comes back to them.
+      senderMobile: parcel.senderMobile,
+      senderPhoneHash: parcel.senderPhoneHash,
+      receiverMobile: parcel.senderMobile === 'app' ? '' : parcel.senderMobile,
+      receiverPhoneHash: parcel.senderPhoneHash,
+      paymentMode: 'cash',
+      status: 'At_MDP',
+      atMdpId: input.hub.mdpId,
+      trackingKey: `T-${randomBytes(5).toString('hex').toUpperCase()}`,
+      routeMode: 'locked',
+      routeKm: quote.totalKm,
+      lockedPerKm: quote.perKm.min,
+      nodeFees: quote.nodeFees,
+      stopFees: stopFeesOf(quote),
+      transportCost: chosen.transport,
+      platformFee: Math.round((chosen.total - chosen.base) * 100) / 100,
+      platformFeePct: quote.platformFeePct,
+      rateStack: { costOfRiskPct: quote.rates.costOfRiskPct, profitOnRiskPct: quote.rates.profitOnRiskPct, marginPct: quote.rates.marginPct },
+      transportFactor: quote.transportFactor,
+      taxPct: quote.tax.ratePct,
+      taxLabel: quote.tax.label,
+      shipmentTax: chosen.tax,
+      shipmentProvision: chosen.provision,
+      currency: quote.currency,
+      fx: quote.fx,
+      sellerEntityId: quote.sellerEntityId,
+      // GROSS: the cash the counter takes as it is collected. Nothing is held for it, so its ceiling is the same figure.
+      shipmentCost: chosen.gross,
+      ceilingCost: chosen.gross,
+      ceilingTax: chosen.tax,
+      ceilingProvision: chosen.provision,
+      paidStatus: 'unpaid',
+      payAtCollection: { amount: chosen.gross, currency: quote.currency, tax: chosen.tax, provision: chosen.provision },
+      acceptedAt: at,
+      // Its own code, shown to its sender in the Send app under their number: they collect it themselves.
+      otp: releaseOtp(),
+      otpAttempts: 0,
+      // The same box, born where the first one was.
+      birthplace: parcel.birthplace,
+      returnOf: { parcelId: parcel.parcelId, atMdpId: input.hub.mdpId, at },
+      custody: [{ holderId: input.hub.name, holderKind: 'hub', from: at, note: `withdrawn here — the goods of ${parcel.parcelId}, going back to their sender` }],
+      scans: [{ at, status: 'At_MDP', by: input.hub.name, note: `withdrawn at ${input.hub.name}: the goods of ${parcel.parcelId}, going back to their sender · its new label goes over the old one`, anchorTxId }],
+    };
+    back.label = this.label(back, dest.shopName);
+    this.persist(back);
+    // Kept by the account that sent the first one, on both sides — or by the number, until an account is certain of it.
+    const owner = this.senderOf(parcel).owner ?? this.accountAt(parcel.senderPhoneHash);
+    this.keep(parcelId, { sender: owner, receiver: owner });
     return back;
   }
 

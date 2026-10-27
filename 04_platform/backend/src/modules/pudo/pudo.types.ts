@@ -903,6 +903,14 @@ export interface ConsumerParcelView {
   collectProxy?: { name: string; code?: string };
   /** They gave up their claim. The parcel is still on a shelf; this says they are no longer coming. */
   relinquishedAt?: string;
+  /**
+   * A person's parcel turned round at a hub (2026-10-27): what the counter takes in cash as it is collected — the way back.
+   * The receiver's — on such a parcel, its sender.
+   */
+  payAtCollection?: { amount: number; currency: string };
+  /** Turned round at a hub: the parcel this one takes back to its sender — or, on that one, the parcel taking it back. */
+  returnOf?: string;
+  returnParcelId?: string;
 }
 
 /** One stop's own fee as the parcel was sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */
@@ -1194,6 +1202,12 @@ export class Parcel {
   returnOf?: { parcelId: string; atMdpId: string; at: string };
   /** Called off at a hub and going to the store's own door as a load (2026-10-27: "As a load to its door"): that load. */
   returnLoad?: { freightId: string; code: string };
+  /**
+   * A PERSON'S PARCEL TURNED ROUND AT A HUB (the user, 2026-10-27: "Back to its shop, sender pays"): its way back is paid in
+   * cash at the counter it comes back to, by its sender as they collect it — this parcel's price, charged to that shop's
+   * float at the hand-over, as a take-in is. `paidAt` once it was.
+   */
+  payAtCollection?: { amount: number; currency: string; tax: number; provision: number; paidAt?: string };
   /**
    * When the free collection window ran out — the start of the holding-fee clock.
    *

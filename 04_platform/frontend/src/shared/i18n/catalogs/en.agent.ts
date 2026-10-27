@@ -64,6 +64,8 @@ export const enAgent = {
   // able to explain it in one sentence without sounding like they invented it.
   'agent.collect.holdingTitle': 'Collect {amount} for the extra days',
   'agent.collect.holdingDetail': 'This parcel waited past its free time. Take the money before you hand it over.',
+  'agent.release.wayBackTitle': 'Collect {amount} in cash: its way back',
+  'agent.release.wayBackDetail': 'These are the sender’s own goods, withdrawn at a hub and sent back here. Take the money before you hand them over: it comes off your float as you do.',
   'agent.status.delivered': 'Collected',
   'agent.status.disputed': 'Problem reported',
   'agent.status.voided': 'Cancelled',

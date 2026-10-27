@@ -212,6 +212,14 @@ export interface ParcelView {
   overdue?: boolean;
   /** Round 35 — held under the tamper protocol: set apart here until SeeBuyGet operations releases it. */
   held?: UnitHold;
+  /**
+   * What the counter takes in cash as it hands the parcel over (2026-10-27): a person's goods turned round at a hub pay their
+   * way back here — it comes off the float at the hand-over — and a parcel past its free days its holding fee, which the shop
+   * keeps. Absent when nothing is owed; the same figures the person's own app shows them.
+   */
+  payAtCollection?: { amount: number; currency: string };
+  holdingOwed?: number;
+  holdingCurrency?: string;
 }
 
 /** A destination PUDO the counter can pick from the public directory (Map/Address intake picker). */

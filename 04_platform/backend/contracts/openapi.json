@@ -5022,6 +5022,72 @@
         }
       }
     },
+    "/v1/sbg/parcels/{id}/withdraw": {
+      "get": {
+        "operationId": "CallOff.withdrawPreview",
+        "summary": "",
+        "description": "What withdrawing a person's parcel would do now, said to staff before they do it (2026-10-27: \"Back to its shop, sender pays\").",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CallOff.withdraw",
+        "summary": "",
+        "description": "Staff withdraw a person's parcel: voided where it has not left its first shop, turned round at a hub. Named, with why.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawnView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/handovers": {
       "get": {
         "operationId": "CallOff.handovers",
@@ -36120,6 +36186,94 @@
           "backTo"
         ]
       },
+      "WithdrawView": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "object",
+            "description": "`void`: withdrawn where it is — not yet handed in, or still at `atShop`, which gives back what was paid there.\n`turn_round`: at `atHub`, it goes back to `backTo`, the shop it was handed in at, as a new parcel to its sender, who\npays `amount` in cash there as they collect it. `no`: `why`."
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "backTo": {
+            "type": "string"
+          },
+          "atHub": {
+            "type": "string"
+          },
+          "atShop": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "outcome"
+        ]
+      },
+      "WithdrawDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why, in staff's words — kept on the parcel's history.",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "by": {
+            "type": "string",
+            "description": "Who, where the sign-in cannot say (a sandbox's shared key).",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "WithdrawnView": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Voided, or Returned (going back to its sender as `returnParcelId`)."
+          },
+          "outcome": {
+            "type": "object"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "returnParcelId": {
+            "type": "string"
+          },
+          "backTo": {
+            "type": "string"
+          },
+          "atHub": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "status",
+          "outcome"
+        ]
+      },
       "HubHandoverLoad": {
         "type": "object",
         "properties": {
@@ -44015,6 +44169,31 @@
               }
             }
           },
+          "payAtCollection": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "required": true,
+                "type": "number"
+              },
+              "currency": {
+                "required": true,
+                "type": "string"
+              },
+              "tax": {
+                "required": true,
+                "type": "number"
+              },
+              "provision": {
+                "required": true,
+                "type": "number"
+              },
+              "paidAt": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "unclaimedAt": {
             "type": "string",
             "description": "When the free collection window ran out — the start of the holding-fee clock.\n\nDistinct from readyAt, and the distinction is the whole feature: readyAt is when the wait began,\nthis is when the wait stopped being free. An extension resets readyAt and CLEARS this, because a\nreceiver who bought more time is inside a free window again by definition."
@@ -44092,6 +44271,7 @@
           "acceptedAt",
           "returnOf",
           "returnLoad",
+          "payAtCollection",
           "scans"
         ]
       },

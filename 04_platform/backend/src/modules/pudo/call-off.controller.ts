@@ -8,7 +8,8 @@ import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { zplOut } from '../../foundation/label/zpl';
 import { CallOffService } from './call-off.service';
-import { CallOffDto, CallOffView, CalledOffView, HandToDriverDto, HubHandoverView, MaxSpendView, RaiseMaxSpendDto, SwitchToShopDto } from './call-off.types';
+import { CallOffDto, CallOffView, CalledOffView, HandToDriverDto, HubHandoverView, MaxSpendView, RaiseMaxSpendDto, SwitchToShopDto, WithdrawDto, WithdrawnView, WithdrawView } from './call-off.types';
+import { staffOf } from './staff-of';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import type { PhygitalLabel } from './pudo.types';
@@ -71,6 +72,20 @@ export class CallOffController {
   switchToShop(@Param('id') id: string, @Param('freightId') freightId: string, @Body() dto: SwitchToShopDto, @Actor() actor: IntrospectionResult): CalledOffView {
     const store = this.assertStoreSelf(id, actor);
     return this.callOffs.switchToShop(id, freightId, dto.backTo?.trim() || undefined, actor?.actorName?.trim() || store.name);
+  }
+
+  /** What withdrawing a person's parcel would do now, said to staff before they do it (2026-10-27: "Back to its shop, sender pays"). */
+  @Roles('operator')
+  @Get('parcels/:id/withdraw')
+  withdrawPreview(@Param('id') id: string): WithdrawView {
+    return this.callOffs.withdrawPreview(id);
+  }
+
+  /** Staff withdraw a person's parcel: voided where it has not left its first shop, turned round at a hub. Named, with why. */
+  @Roles('operator')
+  @Post('parcels/:id/withdraw')
+  withdraw(@Param('id') id: string, @Body() dto: WithdrawDto, @Actor() actor: IntrospectionResult): WithdrawnView {
+    return this.callOffs.withdraw(id, staffOf(actor, dto.by).name, dto.reason.trim());
   }
 
   /** The boxes called off at this hub waiting for the driver of the load that takes them to their store's door. Its floor's. */
