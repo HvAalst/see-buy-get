@@ -33557,6 +33557,21 @@
           "at"
         ]
       },
+      "FreightRefusalPart": {
+        "type": "object",
+        "properties": {
+          "packages": {
+            "type": "number"
+          },
+          "of": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "packages",
+          "of"
+        ]
+      },
       "FreightTrackRefused": {
         "type": "object",
         "properties": {
@@ -33570,6 +33585,14 @@
           },
           "returnCode": {
             "type": "string"
+          },
+          "part": {
+            "description": "Only a part was refused: the rest was delivered.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightRefusalPart"
+              }
+            ]
           },
           "at": {
             "type": "string"
@@ -33925,7 +33948,8 @@
               "short",
               "over",
               "damaged",
-              "wrong"
+              "wrong",
+              "refused"
             ]
           },
           "count": {
@@ -46592,7 +46616,8 @@
               "short",
               "over",
               "damaged",
-              "wrong"
+              "wrong",
+              "refused"
             ]
           },
           "photoRefs": {
@@ -46715,6 +46740,14 @@
           },
           "decision": {
             "$ref": "#/components/schemas/FreightRefusalDecision"
+          },
+          "part": {
+            "description": "Only a part was refused, at the handover: the load was delivered, and these packages stay with the driver.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightRefusalPart"
+              }
+            ]
           },
           "at": {
             "type": "string",
@@ -52601,7 +52634,8 @@
               "short",
               "over",
               "damaged",
-              "wrong"
+              "wrong",
+              "refused"
             ]
           },
           "count": {

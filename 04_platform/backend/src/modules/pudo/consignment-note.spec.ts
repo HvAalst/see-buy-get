@@ -241,6 +241,20 @@ describe('the consignment note', () => {
     expect(box24).toContain('Received with reservations: 3 packages short, 2 packages damaged, 1 package not the goods the note describes');
   });
 
+  it('a part refused at the handover (2026-10-27): box 24 has the reservation with the signature — and, once decided, what became of those packages', () => {
+    const at = '2026-09-14T12:00:00Z';
+    const delivered = { status: 'delivered' as const, pickedUpAt: '2026-09-14T09:00:00Z', deliveredAt: at, packages: 40, proofOfDelivery: { receiverName: 'Grace Wanjiru', at, exceptions: [{ kind: 'refused' as const, count: 2 }] } };
+    const waiting = service.build(base({ ...delivered, refusal: { at, decideBy: '2026-09-16T12:00:00Z', part: { packages: 2, of: 40 } } }));
+    expect(waiting.confirmations.consignee?.reservations).toBe('Received with reservations: 2 packages refused');
+    expect(waiting.refused).toBeUndefined();
+    const decided = service.build(base({ ...delivered, refusal: { at, decideBy: '2026-09-16T12:00:00Z', part: { packages: 2, of: 40 }, decision: { choice: 'back' as const, at: '2026-09-14T14:00:00Z', by: 'did:biz', destLabel: 'Athi River works', returnLeg: { freightId: 'frt_9', code: 'FRT-009' } } } }));
+    const html = service.htmlFor(decided);
+    const box24 = html.slice(html.indexOf('Goods received — signature and stamp of the consignee'));
+    expect(box24).toContain('Received with reservations: 2 packages refused');
+    expect(box24).toContain('2 of the 40 packages refused by the consignee');
+    expect(box24).toContain('The sender had the goods taken back to Athi River works as load FRT-009');
+  });
+
   it('the receiver’s copy (the user, 2026-10-26: “Its copy, no carriage price”): no price on it — unless the term makes the carriage the receiver’s to pay', () => {
     const at = '2026-09-14T12:00:00Z';
     const sent = { status: 'delivered' as const, lockedPrice: 41000, pickedUpAt: '2026-09-14T09:00:00Z', deliveredAt: at, proofOfDelivery: { receiverName: 'Grace', at }, receiver: { entityId: 'ent_jenga', siteId: 'site_1', name: 'Jenga Builders', siteName: 'Mombasa Road yard' } };

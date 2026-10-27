@@ -371,6 +371,7 @@ export const enDriver = {
   'driver.loads.deliver': 'Deliver',
   'driver.loads.onBoard': 'On board',
   'driver.loads.inProgress': 'In progress',
+  'driver.loads.awaitingSender': 'Waiting for the sender',
   'driver.loads.findMore': 'Find more work',
   'driver.loads.pickSheetTitle': 'Take this bag on board?',
   'driver.loads.pickBody': '{ref} — {kg} kg, going to {dest}.',

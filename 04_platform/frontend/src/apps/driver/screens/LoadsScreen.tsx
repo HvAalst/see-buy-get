@@ -210,6 +210,9 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                       <Pill tone="ok" dot>
                         {t('driver.loads.onBoard')}
                       </Pill>
+                    ) : c.kind === 'freight' && c.status === 'delivered' ? (
+                      // Delivered, a part refused (2026-10-27): what the driver waits on is the sender's word.
+                      <Pill tone="warn">{t('driver.loads.awaitingSender')}</Pill>
                     ) : (
                       <Pill tone="idle">{t('driver.loads.inProgress')}</Pill>
                     )}
