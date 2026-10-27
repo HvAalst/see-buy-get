@@ -18,7 +18,7 @@ import { RefusalCard } from '../../../shared/RefusalCard';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { utcMoment } from '../../../shared/refusal';
 import { CallOffBlock } from './CallOff';
-import { BringsBackLine } from './BringsBack';
+import { BringsBackLine, SwitchToShopSheet } from './BringsBack';
 
 export interface OrdersScreenProps {
   state: VendorState;
@@ -162,6 +162,7 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
           </div>
         </Card>
       ) : null}
+      <SwitchToShopSheet state={state} actions={actions} />
       {state.loads
         .filter((l) => l.refusal)
         .map((l) => (

@@ -10889,6 +10889,9 @@ describe('PUDO Light', () => {
         claimFreight(rider.did, load.pickupLocation, load.freightId);
         const taken = dispatch.requireFreightPublic(load.freightId);
         expect(taken.status).toBe('claimed');
+        // Taken: it comes to the store's door — no longer sent to a shop instead.
+        expect(withLoads.switchPreview(vendor.vendorId, load.freightId)).toMatchObject({ outcome: 'no', why: `A driver has taken load ${load.code}: it comes to your door.` });
+        expect(() => dispatch.withdrawBringsBack(load.freightId, vendor.vendorId)).toThrow(/A driver has taken load/);
         expect(vendors.balanceOf(vendor.vendorId)).toBeLessThan(before);
         expect(before - vendors.balanceOf(vendor.vendorId)).toBeLessThanOrEqual(most + 1);
         // Its driver cannot take it over until the hub hands it over; the hub hands it only to its driver.
@@ -10904,6 +10907,75 @@ describe('PUDO Light', () => {
         expect(parcels.get(id).custody?.at(-1)).toMatchObject({ holderKind: 'sender', holderId: vendor.vendorId, note: "back at the store's door, received by Wanjiku at the gate" });
         expect(withLoads.preview(vendor.vendorId, id)).toEqual({ parcelId: id, outcome: 'no', why: `It is on its way back already, to your door as load ${load.code}.` });
         expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+      });
+
+      it('no driver takes the load to its door: the store sends the box to a shop instead — priced first, the load withdrawn, nothing of it billed (the user, 2026-10-27: “Switch to a shop”)', () => {
+        const { origin, hub, vendor, id, withLoads } = noShop('CPW', { dock: true });
+        const most = withLoads.preview(vendor.vendorId, id, 'door').suggestedMax!;
+        const loadId = withLoads.callOff(vendor.vendorId, id, 'CPW Store', undefined, Date.now(), { backTo: 'door', maxSpend: most }).returnLoadId!;
+        expect(withLoads.switchPreview(vendor.vendorId, loadId)).toEqual({ parcelId: id, outcome: 'pick', atHub: hub.name });
+        const ask = withLoads.switchPreview(vendor.vendorId, loadId, origin.did);
+        expect(ask).toMatchObject({ outcome: 'bring_back', backTo: origin.shopName, atHub: hub.name });
+        expect(() => withLoads.switchPreview('ven_stranger', loadId)).toThrow(/No load of yours/);
+        expect(() => withLoads.switchToShop(vendor.vendorId, loadId, undefined, 'CPW Store')).toThrow(/Say which shop/);
+        expect(() => dispatch.withdrawBringsBack(loadId, 'ven_stranger')).toThrow(/No load of yours/);
+        // Its row offers no plain withdrawing: the store raises its most, or sends it to a shop.
+        expect(dispatch.postedBy(vendor.vendorId).find((r) => r.freightId === loadId)).toMatchObject({ canCancel: false, bringsBack: expect.objectContaining({ parcelId: id }) });
+        const before = vendors.balanceOf(vendor.vendorId);
+        const done = withLoads.switchToShop(vendor.vendorId, loadId, origin.did, 'CPW Store');
+        expect(done).toMatchObject({ parcelId: id, status: 'Returned', outcome: 'bring_back', amount: ask.amount, backTo: origin.shopName });
+        const back = parcels.get(done.returnParcelId!);
+        expect(back).toMatchObject({ status: 'At_MDP', atMdpId: hub.mdpId, destAgentDid: origin.did, returnOf: expect.objectContaining({ parcelId: id }) });
+        expect(parcels.get(id)).toMatchObject({ status: 'Returned', returnParcelId: back.parcelId });
+        expect(parcels.get(id).returnLoad).toBeUndefined();
+        expect(dispatch.requireFreightPublic(loadId)).toMatchObject({ status: 'cancelled', cancellation: expect.objectContaining({ reason: 'Sent to a shop instead' }) });
+        // Billed for the parcel only: the load was never taken, so never billed.
+        expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before - ask.amount!, 2);
+        // The hub no longer keeps it aside for a driver: it puts the new label on it.
+        expect(withLoads.handoversAt(hub.mdpId)).toEqual([]);
+        expect(() => withLoads.switchToShop(vendor.vendorId, loadId, origin.did, 'CPW Store')).toThrow(/was withdrawn already/);
+        expect(() => parcels.rerouteGoingHome(id, { hub: { mdpId: hub.mdpId, name: hub.name, zone: 'NorthTown' } } as never)).toThrow(/is not waiting at CPW Hub for a load to its store's door/);
+        expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+      });
+
+      it('a store that cannot pay for the shop instead: refused before anything moves — the load still waits for a driver', () => {
+        const { origin, vendor, id, withLoads } = noShop('CPX', { dock: true });
+        const most = withLoads.preview(vendor.vendorId, id, 'door').suggestedMax!;
+        const loadId = withLoads.callOff(vendor.vendorId, id, 'CPX Store', undefined, Date.now(), { backTo: 'door', maxSpend: most }).returnLoadId!;
+        vendors.reverseTopUp(vendor.vendorId, vendors.balanceOf(vendor.vendorId), 'drain-CPX');
+        const orders = () => parcels.list({}).filter((p) => p.vendorId === vendor.vendorId).length;
+        const count = orders();
+        expect(() => withLoads.switchToShop(vendor.vendorId, loadId, origin.did, 'CPX Store')).toThrow(/Top up first — bringing it to CPX Origin costs/);
+        expect(dispatch.requireFreightPublic(loadId).status).toBe('available');
+        expect(parcels.get(id).returnLoad).toEqual({ freightId: loadId, code: dispatch.requireFreightPublic(loadId).code });
+        expect(parcels.get(id).returnParcelId).toBeUndefined();
+        expect(orders()).toBe(count);
+      });
+
+      it('a day with no driver: the store is told once — raise the most it pays, or a shop instead', () => {
+        const { vendor, id, withLoads } = noShop('CPY', { dock: true });
+        const most = withLoads.preview(vendor.vendorId, id, 'door').suggestedMax!;
+        const load = dispatch.requireFreightPublic(withLoads.callOff(vendor.vendorId, id, 'CPY Store', undefined, Date.now(), { backTo: 'door', maxSpend: most }).returnLoadId!);
+        const told: Array<{ did: string; title: string; tag?: string }> = [];
+        const notifications = { notify: (did: string, n: { title: string; tag?: string }) => (told.push({ did, title: n.title, tag: n.tag }), Promise.resolve()) };
+        const reminding = new CallOffService(parcels, vendors, routing, agents, mdps, totes, notifications as never, dispatch, events, drivers);
+        const posted = Date.parse(load.createdAt);
+        // Other tests' loads may be due too: only this one is looked at.
+        expect(reminding.remindDoorLoads(posted + 23 * 3_600_000)).not.toContain(load.freightId);
+        expect(reminding.remindDoorLoads(posted + 25 * 3_600_000)).toContain(load.freightId);
+        expect(reminding.remindDoorLoads(posted + 30 * 3_600_000)).not.toContain(load.freightId);
+        expect(dispatch.requireFreightPublic(load.freightId).bringsBack?.remindedAt).toBeDefined();
+        // Told once, the store itself: in its own bell.
+        expect(told.filter((t) => t.tag === `door-load:${load.freightId}:remind`)).toEqual([{ did: vendors.get(vendor.vendorId).did, title: `No driver has taken load ${load.code} yet`, tag: `door-load:${load.freightId}:remind` }]);
+        // Taken by a driver before the day is out: nobody is told.
+        const other = noShop('CPZ', { dock: true });
+        const most2 = other.withLoads.preview(other.vendor.vendorId, other.id, 'door').suggestedMax!;
+        const load2 = dispatch.requireFreightPublic(other.withLoads.callOff(other.vendor.vendorId, other.id, 'CPZ Store', undefined, Date.now(), { backTo: 'door', maxSpend: most2 }).returnLoadId!);
+        const rider = drivers.register({ displayName: 'CPZ Rider', fullName: 'CPZ R', nationalId: 'ID-CPZ-R', mobile: '+254700998866', licenceClasses: ['motorcycle'] });
+        fleet.couple(rider.did, vehicles.register({ plate: 'CPZ-M', vehicleClass: 'motorcycle', ownerName: 'R' }).vehicleId);
+        claimFreight(rider.did, load2.pickupLocation, load2.freightId);
+        expect(reminding.remindDoorLoads(Date.parse(load2.createdAt) + 25 * 3_600_000)).not.toContain(load2.freightId);
+        expect(told.some((t) => t.tag === `door-load:${load2.freightId}:remind`)).toBe(false);
       });
 
       it('before it leaves the shop it was handed in at, calling off is withdrawing it, its money back in full — and on the road, it cannot be', () => {

@@ -3146,6 +3146,46 @@ export class ParcelService implements OnApplicationBootstrap {
     if (parcel.status !== 'At_MDP' || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not at ${input.hub.name}`);
     if (!parcel.vendorId) throw new GlosError('INVALID_STATE', `${parcelId} is not a store’s parcel`);
     const at = new Date(now).toISOString();
+    const back = this.mintBringingBack(parcel, input, at);
+    // The one called off: closed, pointing at the one bringing it back, and out of any bag.
+    parcel.status = 'Returned';
+    parcel.returnParcelId = back.parcelId;
+    parcel.toteId = undefined;
+    this.scan(parcel, 'Returned', input.by, `called off by the store at ${input.hub.name} · going back as ${back.parcelId}${input.reason ? ` · ${input.reason}` : ''}`, { at });
+    this.media.anchorParcelTerminal(parcel.parcelId);
+    this.persist(parcel);
+    return { calledOff: parcel, back };
+  }
+
+  /**
+   * A STORE'S BOX GOING TO ITS DOOR AS A LOAD THAT NO DRIVER TOOK, SENT TO A SHOP INSTEAD (the user, 2026-10-27: "Switch to a
+   * shop"): still at the hub, it goes on as a new parcel from there, the store paying for it — as a parcel turned round at a
+   * hub does. The one called off points at it now, and no longer at the withdrawn load.
+   */
+  rerouteGoingHome(
+    parcelId: string,
+    input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string; receiverMobile: string; shippingPolicy: ShippingPolicy; by: string; reason?: string },
+    now: number = Date.now(),
+  ): { calledOff: Parcel; back: Parcel } {
+    const parcel = this.require(parcelId);
+    if (parcel.status !== 'Returned' || !parcel.returnLoad || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not waiting at ${input.hub.name} for a load to its store's door`);
+    const at = new Date(now).toISOString();
+    const withdrawn = parcel.returnLoad.code;
+    const back = this.mintBringingBack(parcel, input, at);
+    parcel.returnParcelId = back.parcelId;
+    parcel.returnLoad = undefined;
+    this.scan(parcel, 'Returned', input.by, `the load to the store's door (${withdrawn}) withdrawn, no driver having taken it · going back as ${back.parcelId}`, { at });
+    this.persist(parcel);
+    return { calledOff: parcel, back };
+  }
+
+  /** The parcel bringing a store's box back from a hub, minted there: the same box, paid by the store, at the hub from its first moment. */
+  private mintBringingBack(
+    parcel: Parcel,
+    input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string; receiverMobile: string; shippingPolicy: ShippingPolicy },
+    at: string,
+  ): Parcel {
+    if (!parcel.vendorId) throw new GlosError('INVALID_STATE', `${parcel.parcelId} is not a store’s parcel`);
     const { parcel: back, paid } = this.createInbound({
       vendorId: parcel.vendorId,
       externalOrderId: parcel.externalOrderId,
@@ -3176,21 +3216,13 @@ export class ParcelService implements OnApplicationBootstrap {
       this.persist(back);
       throw new GlosError('WALLET_INSUFFICIENT', `Top up first — bringing it back costs ${(back.shipmentCost ?? 0).toFixed(2)} ${parcelCurrency(back)}`);
     }
-    const step: Step = { at };
     // At the hub from its first moment: the goods never went back to the store, so they were never in its hands.
     back.status = 'At_MDP';
     back.atMdpId = input.hub.mdpId;
     back.custody = [{ holderId: input.hub.name, holderKind: 'hub', from: at, note: `called off by the store: turned round here — the goods of ${parcel.parcelId}` }];
-    this.scan(back, 'At_MDP', input.hub.name, `called off at ${input.hub.name}: the goods of ${parcel.parcelId}, going back · its new label goes over the old one`, step);
+    this.scan(back, 'At_MDP', input.hub.name, `called off at ${input.hub.name}: the goods of ${parcel.parcelId}, going back · its new label goes over the old one`, { at });
     this.persist(back);
-    // The one called off: closed, pointing at the one bringing it back, and out of any bag.
-    parcel.status = 'Returned';
-    parcel.returnParcelId = back.parcelId;
-    parcel.toteId = undefined;
-    this.scan(parcel, 'Returned', input.by, `called off by the store at ${input.hub.name} · going back as ${back.parcelId}${input.reason ? ` · ${input.reason}` : ''}`, step);
-    this.media.anchorParcelTerminal(parcel.parcelId);
-    this.persist(parcel);
-    return { calledOff: parcel, back };
+    return back;
   }
 
   /**

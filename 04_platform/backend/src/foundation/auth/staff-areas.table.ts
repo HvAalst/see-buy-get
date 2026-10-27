@@ -36,6 +36,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/vendors/:id/orders/:parcelId/call-off': 'none',
   // …to the store's own door, as a load: the store raises the most it pays; the hub hands the box to that load's driver.
   'POST sbg/vendors/:id/loads/:freightId/max-spend': 'none',
+  'GET sbg/vendors/:id/loads/:freightId/to-shop': 'none',
+  'POST sbg/vendors/:id/loads/:freightId/to-shop': 'none',
   'GET sbg/mdps/:id/handovers': 'support',
   'POST sbg/mdps/:id/handovers/:parcelId': 'none',
   'POST sbg/mdps/:id/carrier-moves': 'none',

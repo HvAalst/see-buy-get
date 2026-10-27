@@ -8,7 +8,7 @@ import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { zplOut } from '../../foundation/label/zpl';
 import { CallOffService } from './call-off.service';
-import { CallOffDto, CallOffView, CalledOffView, HandToDriverDto, HubHandoverView, MaxSpendView, RaiseMaxSpendDto } from './call-off.types';
+import { CallOffDto, CallOffView, CalledOffView, HandToDriverDto, HubHandoverView, MaxSpendView, RaiseMaxSpendDto, SwitchToShopDto } from './call-off.types';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import type { PhygitalLabel } from './pudo.types';
@@ -54,6 +54,23 @@ export class CallOffController {
   raiseMaxSpend(@Param('id') id: string, @Param('freightId') freightId: string, @Body() dto: RaiseMaxSpendDto, @Actor() actor: IntrospectionResult): MaxSpendView {
     this.assertStoreSelf(id, actor);
     return this.callOffs.raiseMaxSpend(id, freightId, dto.maxSpend);
+  }
+
+  /** What sending the box to a shop instead would do, while no driver has taken its load to the store's door (2026-10-27). */
+  @Scopes('vendor:read:self')
+  @Get('vendors/:id/loads/:freightId/to-shop')
+  @ApiQuery({ name: 'backTo', required: false, description: 'The id of the shop it would go to' })
+  switchPreview(@Param('id') id: string, @Param('freightId') freightId: string, @Query('backTo') backTo: string | undefined, @Actor() actor: IntrospectionResult): CallOffView {
+    this.assertStoreReads(id, actor);
+    return this.callOffs.switchPreview(id, freightId, backTo?.trim() || undefined);
+  }
+
+  /** The box to that shop instead: a new parcel from the hub, the load withdrawn. The store's own act, and its money. */
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/loads/:freightId/to-shop')
+  switchToShop(@Param('id') id: string, @Param('freightId') freightId: string, @Body() dto: SwitchToShopDto, @Actor() actor: IntrospectionResult): CalledOffView {
+    const store = this.assertStoreSelf(id, actor);
+    return this.callOffs.switchToShop(id, freightId, dto.backTo?.trim() || undefined, actor?.actorName?.trim() || store.name);
   }
 
   /** The boxes called off at this hub waiting for the driver of the load that takes them to their store's door. Its floor's. */

@@ -9,7 +9,8 @@ import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { NotificationService } from './notification.service';
 import { ParcelService, parcelCurrency } from './parcel.service';
-import { coverFor, measuredFactor } from './pudo.config';
+import { coverFor, DOOR_LOAD_REMIND_H, measuredFactor } from './pudo.config';
+import type { Freight } from './dispatch.types';
 import type { Agent, GeoPoint, Mdp, Parcel, ParcelStatus, Tote } from './pudo.types';
 import { RoutingService, type ShipmentQuote } from './routing.service';
 import { ToteService } from './tote.service';
@@ -208,6 +209,97 @@ export class CallOffService implements OnModuleInit {
     return this.handoversAt(mdpId);
   }
 
+  /**
+   * WHAT SENDING THE BOX TO A SHOP INSTEAD WOULD DO (the user, 2026-10-27: "Switch to a shop") — for a store's load to its door
+   * that no driver has taken: the shops to pick from (`pick`), then the price to the one picked, said first.
+   */
+  switchPreview(vendorId: string, freightId: string, backTo?: string): CallOffView {
+    const { load, parcel, hub } = this.doorLoadOf(vendorId, freightId);
+    const parcelId = parcel.parcelId;
+    if (load.status !== 'available') return { parcelId, outcome: 'no', why: this.notSwitchable(load) };
+    if (!backTo) return { parcelId, outcome: 'pick', atHub: hub.name };
+    const way = this.pickedShop(parcel, hub, backTo);
+    if ('why' in way) return { parcelId, outcome: 'no', why: way.why };
+    if (way.kind !== 'shop') return { parcelId, outcome: 'no', why: 'Pick a shop.' };
+    return { parcelId, outcome: 'bring_back', amount: way.price, currency: way.quote.currency, backTo: way.shop.shopName, atHub: hub.name };
+  }
+
+  /**
+   * THE BOX TO A SHOP INSTEAD, while no driver has taken the load to the store's door: it goes on from the hub as a new parcel
+   * to the shop the store picked, paid by the store — the parcel first, so a refusal leaves the load as it was — and then the
+   * load is withdrawn. Nothing of it was billed: a load is billed when a driver takes it.
+   */
+  switchToShop(vendorId: string, freightId: string, backTo: string | undefined, by: string, now: number = Date.now()): CalledOffView {
+    const { load, parcel, hub } = this.doorLoadOf(vendorId, freightId);
+    if (load.status !== 'available') throw new GlosError('INVALID_STATE', this.notSwitchable(load));
+    if (!backTo) throw new GlosError('FIELD_REQUIRED', 'Say which shop it goes to instead', { field: 'backTo' });
+    const way = this.pickedShop(parcel, hub, backTo);
+    if ('why' in way) throw new GlosError('INVALID_STATE', way.why);
+    if (way.kind !== 'shop') throw new GlosError('INVALID_STATE', 'Pick a shop.');
+    if (this.vendors.balanceOf(vendorId) + 1e-9 < way.price) {
+      throw new GlosError('WALLET_INSUFFICIENT', `Top up first — bringing it to ${way.shop.shopName} costs ${way.price.toFixed(2)} ${way.quote.currency}`);
+    }
+    const vendor = this.vendors.get(vendorId);
+    const { back } = this.parcels.rerouteGoingHome(
+      parcel.parcelId,
+      { quote: way.quote, hub: { mdpId: hub.mdpId, name: hub.name, zone: this.routing.hubEnd(hub.mdpId).zone }, toAgentDid: way.shop.did, receiverMobile: vendor.contactMobile ?? '', shippingPolicy: vendor.shippingPolicy, by },
+      now,
+    );
+    this.dispatch!.withdrawBringsBack(freightId, vendorId, now);
+    this.tellHub(hub, parcel, `its load to the store's door (${load.code}) is withdrawn: it goes back to ${way.shop.shopName} as ${back.parcelId}`, `Print its new label, put it over the old one, then sort ${back.parcelId}.`, 'Called off: a new label', undefined, { returnParcelId: back.parcelId });
+    return { parcelId: parcel.parcelId, status: 'Returned', outcome: 'bring_back', amount: back.shipmentCost ?? way.price, currency: parcelCurrency(back), returnParcelId: back.parcelId, backTo: way.shop.shopName, atHub: hub.name };
+  }
+
+  /**
+   * A DAY WITH NO DRIVER (2026-10-27): a store whose load to its door nobody has taken in DOOR_LOAD_REMIND_H hours is told, once —
+   * it can raise the most it pays, or send the box to a shop instead. Answers which, for a test with a fixed clock.
+   */
+  remindDoorLoads(now: number = Date.now()): string[] {
+    if (!this.dispatch) return [];
+    const told: string[] = [];
+    for (const f of this.dispatch.bringsBackLoads()) {
+      if (f.status !== 'available' || !f.bringsBack || f.bringsBack.remindedAt) continue;
+      if (now - Date.parse(f.createdAt) < DOOR_LOAD_REMIND_H * 3_600_000) continue;
+      this.dispatch.markBringsBackReminded(f.freightId, now);
+      told.push(f.freightId);
+      let storeDid: string | undefined;
+      try {
+        storeDid = f.shipperDid ? this.vendors.get(f.shipperDid).did : undefined;
+      } catch {
+        storeDid = undefined;
+      }
+      if (!storeDid) continue;
+      void this.notifications
+        ?.notify(storeDid, {
+          kind: 'freight_problem',
+          title: `No driver has taken load ${f.code} yet`,
+          body: `It brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}. Raise the most you pay, or send it to a shop instead — under Sent as freight.`,
+          link: '/vendor/',
+          tag: `door-load:${f.freightId}:remind`,
+          data: { freightId: f.freightId },
+        })
+        .catch((err: Error) => this.logger.warn(`door-load reminder not sent: ${err.message}`));
+    }
+    return told;
+  }
+
+  private notSwitchable(load: Freight): string {
+    return load.status === 'cancelled' ? `Load ${load.code} was withdrawn already.` : `A driver has taken load ${load.code}: it comes to your door.`;
+  }
+
+  /** A store's own load to its door: the load, the parcel it brings back, and the hub it waits at. */
+  private doorLoadOf(vendorId: string, freightId: string): { load: Freight; parcel: Parcel; hub: Mdp } {
+    if (!this.dispatch) throw new GlosError('INVALID_STATE', 'Loads are not open here');
+    let load: Freight;
+    try {
+      load = this.dispatch.requireFreightPublic(freightId);
+    } catch {
+      throw new GlosError('NOT_FOUND', 'No load of yours brings a parcel back');
+    }
+    if (!load.bringsBack || load.shipperDid !== vendorId) throw new GlosError('NOT_FOUND', 'No load of yours brings a parcel back');
+    return { load, parcel: this.parcels.get(load.bringsBack.parcelId), hub: this.mdps.require(load.bringsBack.atMdpId) };
+  }
+
   /** A store raises the most it pays for its parcel's way to its door, while no driver has taken the load. */
   raiseMaxSpend(vendorId: string, freightId: string, amount: number): MaxSpendView {
     if (!this.dispatch) throw new GlosError('INVALID_STATE', 'Loads are not open here');
@@ -243,6 +335,11 @@ export class CallOffService implements OnModuleInit {
     // NOT HANDED IN AT A SHOP — collected at the store's own door, or handed in at a hub: the store says where it comes back
     // to (the user, 2026-10-27: "let the store pick"; "the store door could be a location as well").
     if (!backTo) return { kind: 'pick', hub, ...(door ? { door } : {}) };
+    return this.pickedShop(p, hub, backTo);
+  }
+
+  /** A shop the store picked by its id: one that receives, that the hub sends toward — or why not. */
+  private pickedShop(p: Parcel, hub: Mdp, backTo: string): WayBack {
     let shop: Agent;
     try {
       shop = this.agents.get(backTo);

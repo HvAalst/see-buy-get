@@ -11,7 +11,8 @@ export function relabelRows(inbound: ParcelRow[], hubId: string | undefined, sca
 
 /**
  * CALLED OFF AT THIS HUB (the user, 2026-10-27: "Comes back, store pays"): a store called a parcel off while it was here. The
- * box still wears its old label; it goes back to the shop it was handed in at under a new one — printed here, put over the
+ * box still wears its old label; it goes back to a shop under a new one (the one it was handed in at, or one the store
+ * picked) — printed here, put over the
  * old one, and then sorted like any parcel here. The old label scanned says which; every one still waiting for its new label
  * is listed, so the floor can print them from the notice without hunting for the box first.
  */

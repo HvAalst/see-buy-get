@@ -150,6 +150,11 @@ export function createVendorApi(sbg: SbgClient) {
     /** The most it pays for a parcel's way to its door, raised while no driver has taken the load. */
     raiseMaxSpend: (vendorId: string, freightId: string, maxSpend: number) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/loads/{freightId}/max-spend', { params: { path: { id: vendorId, freightId } }, body: { maxSpend } })),
+    /** 2026-10-27 — no driver has taken that load yet: what sending the box to a shop instead would do (`backTo` the shop's id), and doing it. */
+    switchPreview: (vendorId: string, freightId: string, backTo?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/loads/{freightId}/to-shop', { params: { path: { id: vendorId, freightId }, query: backTo ? { backTo } : {} } })),
+    switchToShop: (vendorId: string, freightId: string, backTo: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/loads/{freightId}/to-shop', { params: { path: { id: vendorId, freightId } }, body: { backTo } })),
 
     /** DT — the parcel's planned journey (origin PUDO → MDP(s) → dest PUDO), for the twin view after minting. */
     parcelRoute: (parcelId: string) =>

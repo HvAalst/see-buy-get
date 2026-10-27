@@ -92,7 +92,7 @@ export const enMdp = {
   'mdp.sort.queueEmpty': 'Queue empty — scan any parcel that is physically here.',
   // A store's parcel called off at this hub (the user, 2026-10-27: "Comes back, store pays").
   'mdp.relabel.title': 'Called off here: a new label',
-  'mdp.relabel.lede': 'Its store called it off: it goes back to the shop it was handed in at. Print its new label, put it over the old one, then sort it.',
+  'mdp.relabel.lede': 'Called off while it was here, it goes back to a shop as a new parcel. Print its new label, put it over the old one, then sort it.',
   'mdp.relabel.body': '{old} was called off by its store. It goes back as {new}: print its new label, put it over the old one, then scan {new}.',
   'mdp.relabel.row': '{old} → {new}',
   'mdp.relabel.print': 'Print the new label',

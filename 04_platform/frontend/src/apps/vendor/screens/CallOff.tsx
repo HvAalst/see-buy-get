@@ -36,6 +36,45 @@ export function shopsToPick(points: readonly NetworkPoint[], filter: string, nea
     .slice(0, n);
 }
 
+/**
+ * The shops to pick from (2026-10-27): found by name or area, the nearest to the store's door first — for a parcel called off
+ * at a hub, and for a box whose load to the store's door no driver took.
+ */
+export function ShopPicker({ id, label, state, onPick }: { id: string; label: string; state: VendorState; onPick: (did: string) => void }) {
+  const t = useT();
+  const [filter, setFilter] = useState('');
+  const near = state.vendor?.collection?.location ?? state.vendor?.location ?? null;
+  const shops = shopsToPick(state.points, filter, near);
+  return (
+    <>
+      <div class="field">
+        <label class="field__label" for={id}>
+          {label}
+        </label>
+        <input id={id} class="input" value={filter} onInput={(e) => setFilter(e.currentTarget.value)} autocomplete="off" />
+      </div>
+      {state.pointsState === 'loading' ? <p class="hint">{t('vendor.mint.findingShops')}</p> : null}
+      <div class="rows" role="list">
+        {shops.map((p) => (
+          <button key={p.did} type="button" class="row" onClick={() => onPick(p.did)} disabled={state.busy !== null}>
+            <span class="row__ic">
+              <Icon name="home" size={24} />
+            </span>
+            <span class="row__body">
+              <span class="row__t">{p.shopName}</span>
+              <span class="row__s">{[near && p.location ? distanceLabel(haversineKm(near, p.location)) : null, t('vendor.zone', { zone: p.zone }), p.landmark].filter(Boolean).join(' · ')}</span>
+            </span>
+            <span class="row__end">
+              <Icon name="chevronRight" size={22} />
+            </span>
+          </button>
+        ))}
+      </div>
+      {state.pointsState === 'ready' && !shops.length ? <p class="hint">{t('vendor.callOff.noShops')}</p> : null}
+    </>
+  );
+}
+
 /** Where an order may be called off: not handed in yet, at the shop it was handed in at, or at a hub. */
 const CALLABLE = ['Created', 'At_PUDO', 'At_MDP'];
 
@@ -50,7 +89,6 @@ export function CallOffBlock({ d, state, actions }: { d: OrderDetail; state: Ven
   const t = useT();
   const [reason, setReason] = useState('');
   const [most, setMost] = useState('');
-  const [filter, setFilter] = useState('');
   // The order bringing goods back to the store is not called off: they are the store's own, on their way to it.
   if (!CALLABLE.includes(d.status) || d.returnOf) return null;
   const asked = state.callOff?.parcelId === d.parcelId ? state.callOff : null;
@@ -87,8 +125,6 @@ export function CallOffBlock({ d, state, actions }: { d: OrderDetail; state: Ven
   );
 
   if (view.outcome === 'pick') {
-    const near = state.vendor?.collection?.location ?? state.vendor?.location ?? null;
-    const shops = shopsToPick(state.points, filter, near);
     return (
       <div class="calloff">
         <Note tone="info" icon="repeat" title={t('vendor.callOff.pickTitle')} detail={callOffSays(view, t)} />
@@ -106,30 +142,7 @@ export function CallOffBlock({ d, state, actions }: { d: OrderDetail; state: Ven
             </span>
           </button>
         ) : null}
-        <div class="field">
-          <label class="field__label" for="calloff-shop">
-            {t('vendor.callOff.findShop')}
-          </label>
-          <input id="calloff-shop" class="input" value={filter} onInput={(e) => setFilter(e.currentTarget.value)} autocomplete="off" />
-        </div>
-        {state.pointsState === 'loading' ? <p class="hint">{t('vendor.mint.findingShops')}</p> : null}
-        <div class="rows" role="list">
-          {shops.map((p) => (
-            <button key={p.did} type="button" class="row" onClick={() => ask(p.did)} disabled={state.busy !== null}>
-              <span class="row__ic">
-                <Icon name="home" size={24} />
-              </span>
-              <span class="row__body">
-                <span class="row__t">{p.shopName}</span>
-                <span class="row__s">{[near && p.location ? distanceLabel(haversineKm(near, p.location)) : null, t('vendor.zone', { zone: p.zone }), p.landmark].filter(Boolean).join(' · ')}</span>
-              </span>
-              <span class="row__end">
-                <Icon name="chevronRight" size={22} />
-              </span>
-            </button>
-          ))}
-        </div>
-        {state.pointsState === 'ready' && !shops.length ? <p class="hint">{t('vendor.callOff.noShops')}</p> : null}
+        <ShopPicker id="calloff-shop" label={t('vendor.callOff.findShop')} state={state} onPick={(did) => ask(did)} />
         {keep}
       </div>
     );

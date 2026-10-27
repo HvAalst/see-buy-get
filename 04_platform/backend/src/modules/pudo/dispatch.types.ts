@@ -239,6 +239,8 @@ export class FreightBringsBack {
   @ApiPropertyOptional() handedAt?: string;
   /** Who at the hub handed it over. */
   @ApiPropertyOptional() handedBy?: string;
+  /** When the store was told no driver had taken it yet (DOOR_LOAD_REMIND_H after it was posted). Once. */
+  @ApiPropertyOptional() remindedAt?: string;
 }
 
 /** The same, as its driver reads it: where to collect the box, and whether the hub has handed it over yet. */

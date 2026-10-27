@@ -34,6 +34,8 @@ export interface VendorLoad {
   /** One of its own parcels called off at a hub, brought to its door as this load (2026-10-27) — and the most it pays. */
   bringsBack?: { parcelId: string; atMdpId: string; hubName: string; handedAt?: string };
   maxSpend?: number;
+  /** Withdrawn — for a load to its door, only ever because the store sent the box to a shop instead. */
+  cancelledAt?: string;
 }
 import {
   clearCreds,
@@ -173,6 +175,8 @@ export interface VendorState {
   detailState: 'idle' | 'loading' | 'ready';
   /** 2026-10-27 — an order the store asked to call off, and what doing it would do: said before it is done. */
   callOff: { parcelId: string; view: CallOffView; backTo?: string } | null;
+  /** 2026-10-27 — a load to its door no driver has taken, the store asking to send the box to a shop instead: said first. */
+  switchTo: { freightId: string; view: CallOffView; backTo?: string } | null;
   settlement: SettlementRow[];
   callbacks: CallbackRow[];
   apiKeys: ApiKeyRow[];
@@ -233,6 +237,7 @@ const INITIAL: VendorState = {
   detail: null,
   detailState: 'idle',
   callOff: null,
+  switchTo: null,
   settlement: [],
   callbacks: [],
   apiKeys: [],
@@ -1230,6 +1235,51 @@ export function useVendorApp() {
     [client, creds, run, pushToast, refresh],
   );
 
+  /** 2026-10-27 — no driver has taken its load home: what sending the box to a shop instead would do, asked before it is done. */
+  const askSwitch = useCallback(
+    async (freightId: string, backTo?: string) => {
+      if (!client || !creds) return;
+      await run(`switch-ask:${freightId}`, async () => {
+        const r = await client.api.switchPreview(creds.vendorId, freightId, backTo);
+        if (r.error) return fail(r.error);
+        const view = narrow<CallOffView>(r.data);
+        setState((s) => ({ ...s, switchTo: { freightId, view, ...(backTo ? { backTo } : {}) } }));
+        // The shops of the network, read once.
+        if (view.outcome === 'pick' && stateRef.current.pointsState === 'idle') void loadPointsRef.current();
+      });
+    },
+    [client, creds, run, fail],
+  );
+
+  const cancelSwitch = useCallback(() => setState((s) => ({ ...s, switchTo: null })), []);
+
+  /**
+   * The box to that shop instead, at the price it was told: a new parcel from the hub, the load withdrawn — then read again.
+   * Refused (a driver took it meanwhile, or the balance does not cover it): said in the sheet, where the store is looking.
+   */
+  const confirmSwitch = useCallback(
+    async (freightId: string) => {
+      if (!client || !creds) return;
+      const asked = stateRef.current.switchTo;
+      if (asked?.freightId !== freightId || !asked.backTo) return;
+      const backTo = asked.backTo;
+      await run(`switch:${freightId}`, async () => {
+        const r = await client.api.switchToShop(creds.vendorId, freightId, backTo);
+        if (r.error) {
+          const why = refusalSentence(r.error);
+          setState((s) => ({ ...s, switchTo: { freightId, view: { parcelId: asked.view.parcelId, outcome: 'no', why } } }));
+          await refresh();
+          return;
+        }
+        const done = narrow<CalledOffView>(r.data);
+        setState((s) => ({ ...s, switchTo: null }));
+        pushToast({ tone: 'ok', icon: 'repeat', title: t('vendor.callOff.doneBack', { shop: done.backTo ?? '' }), detail: t('vendor.callOff.doneBackDetail', { id: done.returnParcelId ?? '', amount: money(done.amount, done.currency) }) });
+        await refresh();
+      });
+    },
+    [client, creds, run, pushToast, refresh],
+  );
+
   /** Export the WHOLE current-filter result set (every page) as a CSV download — the server renders it
    *  (owner-scoped, with the same columns + formula-injection guard as the multi-select export). */
   const exportOrders = useCallback(async () => {
@@ -1526,6 +1576,9 @@ export function useVendorApp() {
       cancelCallOff,
       confirmCallOff,
       raiseMaxSpend,
+      askSwitch,
+      cancelSwitch,
+      confirmSwitch,
       exportOrders,
       savePolicy,
       answerReturn,

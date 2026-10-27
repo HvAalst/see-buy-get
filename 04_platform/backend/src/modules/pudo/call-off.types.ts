@@ -81,6 +81,11 @@ export class HandToDriverDto {
   @IsString() @MaxLength(64) badge!: string;
 }
 
+/** The shop a store's box goes to instead of its door, while no driver has taken the load (2026-10-27). */
+export class SwitchToShopDto {
+  @IsString() @MaxLength(120) backTo!: string;
+}
+
 export class RaiseMaxSpendDto {
   @IsNumber() @Min(0.01) maxSpend!: number;
 }

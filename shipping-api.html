@@ -542,15 +542,20 @@
       yours to read like any other (it says <code>returnOf</code>, the one it brings back), collected at that shop with
       its own collection code. Your balance must cover it, or you get <code>WALLET_INSUFFICIENT</code> and nothing
       changes. It cannot be brought back where that shop is not taking parcels: then it carries on to your buyer, and you
-      get <code>INVALID_STATE</code> saying so.</li>
+      get <code>INVALID_STATE</code> saying so. Or, with <code>backTo: "door"</code>, it comes to your own door as a
+      load instead, as below, where your store has a door on the map. No other shop is chosen for it: any other
+      <code>backTo</code> gets <code>INVALID_STATE</code>.</li>
     <li><b>At a hub, and never handed in at a shop</b> — collected at your own door, or handed in at a hub: you say where
       it comes back to, with <code>backTo</code> in the body. Either a collection point's id (<code>pointId</code> from the
       directory): it comes back there as above, a new shipment you pay for. Or <code>"door"</code>: your own door — your
       collection point, or your store's pin — as a <b>load</b> posted from the hub, with <code>maxSpend</code>, the most you
       pay a driver. The first driver whose vehicle fits takes it, at their own price and never above what you allow; you are
       billed when a driver takes it. The answer says <code>returnLoad</code>, the load's code. The load cannot be withdrawn
-      (the goods would wait at the hub for nobody); the hub hands the box only to the driver who took it. Without
-      <code>backTo</code> you get <code>FIELD_REQUIRED</code> and nothing changes.</li>
+      (the goods would wait at the hub for nobody); the hub hands the box only to the driver who took it. While no
+      driver has taken it, you can raise the most you pay, or send the box to a shop instead: a new shipment you pay
+      for, the load withdrawn, nothing of it billed. Both are in your store's app, under <b>Sent as freight</b>. If no
+      driver has taken it after a day, you are told there. Without <code>backTo</code> you get
+      <code>FIELD_REQUIRED</code> and nothing changes.</li>
   </ul>
 <pre><code>curl -X POST https://api.seebuyget.example/v1/sbg/shipping/shipments/PUD-A1B2C3D4E5/cancel \
   -H "X-SBG-Key: sk_live_…" \

@@ -1730,7 +1730,8 @@ export class DispatchService {
         // D9 — what the receiver found not as the note says, at the handover.
         ...(f.proofOfDelivery?.exceptions?.length ? { exceptions: exceptionViewsOf(f) } : {}),
         cancelledAt: f.cancelledAt,
-        canCancel: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed',
+        // A load bringing a store's parcel home is never simply withdrawn: the store raises its most, or sends it to a shop.
+        canCancel: !f.bringsBack && (f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed'),
         ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts } : {}),
         // Refused at the door (the user, 2026-10-27): by when the sender decides, what it decided, and where "back" is.
         ...(f.refusal ? { refusal: f.refusal, canDecideRefusal: (f.status === 'in_transit' || (f.status === 'delivered' && Boolean(f.refusal.part))) && !f.refusal.decision, pickupLabel: f.pickupLabel } : {}),
@@ -3712,7 +3713,39 @@ export class DispatchService {
     if (f.status === 'delivered') throw new GlosError('INVALID_STATE', 'This load is delivered — a problem with the goods is a claim, not a cancellation');
     if (f.status === 'in_transit') throw new GlosError('INVALID_STATE', 'The goods are already on the road — a load that has been taken over cannot be cancelled; talk to the driver');
     // The only way home for a store's parcel called off at a hub: withdrawn, the goods would wait there for nobody.
-    if (f.bringsBack) throw new GlosError('INVALID_STATE', `This load brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}: it is not withdrawn. If no driver takes it, the store raises the most it pays`);
+    if (f.bringsBack) throw new GlosError('INVALID_STATE', `This load brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}: it is not withdrawn. If no driver takes it, the store raises the most it pays, or sends it to a shop instead`);
+    return this.withdraw(f, by, why, now);
+  }
+
+  /**
+   * A STORE'S LOAD TO ITS DOOR, WITHDRAWN TO SEND THE BOX TO A SHOP INSTEAD (the user, 2026-10-27: "Switch to a shop") — only
+   * while no driver has taken it, and only by the store whose parcel it brings back. Nothing was billed: a load is billed
+   * when a driver takes it. The box goes on as a parcel from the hub (CallOffService.switchToShop).
+   */
+  withdrawBringsBack(freightId: string, vendorId: string, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (!f.bringsBack || f.shipperDid !== vendorId) throw new GlosError('NOT_FOUND', 'No load of yours brings a parcel back');
+    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A driver has taken load ${f.code}: it comes to your door`);
+    return this.withdraw(f, { did: vendorId, role: 'shipper' }, 'Sent to a shop instead', now);
+  }
+
+  /** The loads bringing a store's parcel back to its door — for the reminder that none has been taken. */
+  bringsBackLoads(): Freight[] {
+    return [...this.freights.values()].filter((f) => Boolean(f.bringsBack));
+  }
+
+  /** The store was told no driver had taken it: once. */
+  markBringsBackReminded(freightId: string, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.bringsBack && !f.bringsBack.remindedAt) {
+      f.bringsBack = { ...f.bringsBack, remindedAt: new Date(now).toISOString() };
+      this.freights.set(f.freightId, f);
+    }
+    return f;
+  }
+
+  /** A load withdrawn, its checks done: what was billed given back, open proposals and offers closed, everyone told. */
+  private withdraw(f: Freight, by: { did: string; role: 'shipper' | 'operator' }, why: string, now: number): Freight {
     const at = new Date(now).toISOString();
     let refunded: number | undefined;
     if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {

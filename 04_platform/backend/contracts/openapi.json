@@ -4933,6 +4933,95 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/loads/{freightId}/to-shop": {
+      "get": {
+        "operationId": "CallOff.switchPreview",
+        "summary": "",
+        "description": "What sending the box to a shop instead would do, while no driver has taken its load to the store's door (2026-10-27).",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "backTo",
+            "required": false,
+            "in": "query",
+            "description": "The id of the shop it would go to",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallOffView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CallOff.switchToShop",
+        "summary": "",
+        "description": "The box to that shop instead: a new parcel from the hub, the load withdrawn. The store's own act, and its money.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchToShopDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalledOffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/handovers": {
       "get": {
         "operationId": "CallOff.handovers",
@@ -36019,6 +36108,18 @@
           "maxSpend"
         ]
       },
+      "SwitchToShopDto": {
+        "type": "object",
+        "properties": {
+          "backTo": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "backTo"
+        ]
+      },
       "HubHandoverLoad": {
         "type": "object",
         "properties": {
@@ -47043,6 +47144,10 @@
           "handedBy": {
             "type": "string",
             "description": "Who at the hub handed it over."
+          },
+          "remindedAt": {
+            "type": "string",
+            "description": "When the store was told no driver had taken it yet (DOOR_LOAD_REMIND_H after it was posted). Once."
           },
           "parcelId": {
             "type": "string"

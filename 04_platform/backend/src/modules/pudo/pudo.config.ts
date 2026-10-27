@@ -86,6 +86,8 @@ export const DEFAULT_PUDO_PRICE_PER_PARCEL = 0.5; // a PUDO agent's default hand
 export const DEFAULT_PRICE_PER_KM = 0.08; // a vehicle's default transport rate per km
 /** A load to a store's own door, the most suggested to allow (2026-10-27): as from a driver this far from the hub. */
 export const DOOR_GUIDE_DEADHEAD_KM = 10;
+/** …and when no driver has taken that load for this long, the store is told it can raise its most or send it to a shop. */
+export const DOOR_LOAD_REMIND_H = 24;
 /**
  * "NEAR ME" FOR A QUOTE (the user, 2026-10-25: "the asker should be able to filter quotations from 'near me'"): the
  * carriers within this many kilometres of the asker — on shift and placed there by their phone in the last
