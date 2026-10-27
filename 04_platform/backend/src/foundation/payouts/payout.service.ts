@@ -9,7 +9,7 @@ import { sameSigner, type Signer } from '../entity/same-person';
 import { IN_FLIGHT, PAYOUT_RAIL, Payout, PayoutRail, PayoutStatus, RailOutcome } from './payout.types';
 import { isSandbox } from '../runtime/sandbox';
 import { MPESA_PAYOUT_RAIL, type B2cResult, type MpesaPayoutRail } from './mpesa-payout-rail.adapter';
-import { isRefusal, payoutWayOf, type PayoutDestinations } from './payout-ways';
+import { isRefusal, payoutWayOf, type PayoutDestination, type PayoutDestinationRefusal, type PayoutDestinations, type PayoutWay } from './payout-ways';
 
 /**
  * Why a payee may NOT be paid out right now — or null when they may.
@@ -46,7 +46,8 @@ export const dayOf = (at: number): string => new Date(at).toISOString().slice(0,
 export class PayoutService {
   private readonly payouts = new PersistentMap<string, Payout>('payouts');
   private payeeGate: PayeeGate | null = null;
-  private destinations: PayoutDestinations | null = null;
+  /** Who keeps payees' numbers: the payout numbers payees set, and the number a person paid from (2026-10-27). */
+  private readonly destinations: PayoutDestinations[] = [];
 
   /**
    * Say who may not be paid out. One registration at boot rather than a parameter on `runFor`: an optional
@@ -58,7 +59,16 @@ export class PayoutService {
 
   /** Say where payees are paid, in a country whose way needs a number of theirs (payout-ways.ts). Registered at boot. */
   registerDestinations(destinations: PayoutDestinations): void {
-    this.destinations = destinations;
+    this.destinations.push(destinations);
+  }
+
+  /** Where this payee is paid, from whichever source keeps its number — or nothing, where none does. */
+  private destinationOf(payeeId: string, way: PayoutWay, now: number): PayoutDestination | PayoutDestinationRefusal | undefined {
+    for (const source of this.destinations) {
+      const found = source.of(payeeId, way, now);
+      if (found) return found;
+    }
+    return undefined;
   }
 
   constructor(
@@ -93,7 +103,9 @@ export class PayoutService {
     // committed, so a run cannot promise the same shilling to three different people.
     let available = this.books.coverage(entityId, currency).held;
 
-    for (const { counterparty, amount: owed } of this.books.outstanding(entityId, ACCOUNT_CODES.PAYABLE_PROVIDER, currency)) {
+    // What providers earned, then what people are owed back from loads to their door they paid for first (2026-10-27).
+    const owing = (code: typeof ACCOUNT_CODES.PAYABLE_PROVIDER | typeof ACCOUNT_CODES.PAYABLE_PERSON) => this.books.outstanding(entityId, code, currency).map((o) => ({ ...o, code }));
+    for (const { counterparty, amount: owed, code } of [...owing(ACCOUNT_CODES.PAYABLE_PROVIDER), ...owing(ACCOUNT_CODES.PAYABLE_PERSON)]) {
       // M-Pesa pays whole shillings: the cents stay owed, to the next run, rather than be rounded away or up.
       const amount = way === 'mpesa' ? Math.floor(owed) : owed;
       if (amount < 1 && way === 'mpesa') {
@@ -119,7 +131,7 @@ export class PayoutService {
       }
       // Where it goes, asked before any cash is set aside for it: a payee with no number of its own, or one changed
       // less than a day ago, is owed — and the run says why it is not paid today.
-      const destination = way === 'mpesa' ? this.destinations?.of(counterparty, way, now) : undefined;
+      const destination = way === 'mpesa' ? this.destinationOf(counterparty, way, now) : undefined;
       if (destination && isRefusal(destination)) {
         skipped.push({ payeeDid: counterparty, reason: destination.reason });
         continue;
@@ -137,6 +149,7 @@ export class PayoutService {
         amount,
         currency,
         status: 'requested',
+        ...(code === ACCOUNT_CODES.PAYABLE_PERSON ? { owed: code } : {}),
         way,
         ...(destination ? { destination } : {}),
         day,
@@ -257,13 +270,15 @@ export class PayoutService {
     const payout = this.require(payoutId);
     if (payout.status === 'settled') return payout; // a rail that confirms twice has not paid twice
     if (payout.status !== 'submitted') throw new GlosError('INVALID_STATE', `Payout is ${payout.status} — only a submitted payout can settle`);
+    // The payable it was raised against: a provider's earnings, or what a person is owed back.
+    const owed = payout.owed ?? ACCOUNT_CODES.PAYABLE_PROVIDER;
     const entry = this.books.post({
       entityId: payout.entityId,
-      kind: 'provider-settlement',
+      kind: owed === ACCOUNT_CODES.PAYABLE_PERSON ? 'person-refund' : 'provider-settlement',
       ref: payout.payoutId,
       currency: payout.currency,
       lines: [
-        { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: payout.payeeDid, amount: payout.amount },
+        { code: owed, counterparty: payout.payeeDid, amount: payout.amount },
         { code: ACCOUNT_CODES.CASH_CUSTODY, amount: -payout.amount },
       ],
     });
@@ -296,14 +311,15 @@ export class PayoutService {
   reverse(payoutId: string, reason: string, now: number = Date.now()): Payout {
     const payout = this.require(payoutId);
     if (payout.status !== 'settled') throw new GlosError('INVALID_STATE', `Payout is ${payout.status} — only a settled payout can be reversed`);
+    const owed = payout.owed ?? ACCOUNT_CODES.PAYABLE_PROVIDER;
     const entry = this.books.post({
       entityId: payout.entityId,
-      kind: 'provider-settlement-reversal',
+      kind: owed === ACCOUNT_CODES.PAYABLE_PERSON ? 'person-refund-reversal' : 'provider-settlement-reversal',
       ref: payout.payoutId,
       currency: payout.currency,
       lines: [
         { code: ACCOUNT_CODES.CASH_CUSTODY, amount: payout.amount },
-        { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: payout.payeeDid, amount: -payout.amount },
+        { code: owed, counterparty: payout.payeeDid, amount: -payout.amount },
       ],
     });
     payout.status = 'reversed';
@@ -346,8 +362,9 @@ export class PayoutService {
    * the payout is failed and the next run raises it to the number as it is now — never quietly redirected.
    */
   private assertSameDestination(payout: Payout, now: number): void {
-    if (!payout.destination || !this.destinations) return;
-    const current = this.destinations.of(payout.payeeDid, payout.way ?? 'mpesa', now);
+    if (!payout.destination || !this.destinations.length) return;
+    const current = this.destinationOf(payout.payeeDid, payout.way ?? 'mpesa', now);
+    if (!current) throw new GlosError('CONFLICT', 'Not sent: nobody keeps a number for this payee any more');
     if (isRefusal(current)) throw new GlosError('CONFLICT', `Not sent: ${current.reason}`);
     if (current.numberId !== payout.destination.numberId) {
       throw new GlosError('CONFLICT', 'The payout number changed after this payout was raised. Mark it failed; the next run raises it to the new number.');
@@ -365,7 +382,7 @@ export class PayoutService {
   /** The payee's whole number, for a live M-Pesa rail only — read now, from the number the payout was raised to. */
   private numberFor(payout: Payout, rail: PayoutRail): string | undefined {
     if (rail !== this.mpesa || !this.mpesa) return undefined;
-    const msisdn = payout.destination ? this.destinations?.full(payout.payeeDid, payout.destination.numberId) : undefined;
+    const msisdn = payout.destination ? this.destinations.map((d) => d.full(payout.payeeDid, payout.destination!.numberId)).find(Boolean) : undefined;
     if (!msisdn) throw new GlosError('CONFLICT', 'Not sent: this payout has no payout number of the payee’s to go to. Mark it failed; the next run raises it again.');
     return msisdn;
   }

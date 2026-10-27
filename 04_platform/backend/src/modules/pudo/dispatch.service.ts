@@ -50,7 +50,7 @@ import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DOOR_GUIDE_DEADHEAD_
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { RECEIVING_EXCEPTIONS, REFUSAL_CHOICES, REFUSAL_DECIDE_H, REFUSAL_REMIND_H, type FreightLink, type ReceivingException, type ReceivingExceptionKind, type RefusalChoice } from './dispatch.types';
+import { RECEIVING_EXCEPTIONS, REFUSAL_CHOICES, REFUSAL_DECIDE_H, REFUSAL_REMIND_H, type FreightLink, type PrepaidShipper, type ReceivingException, type ReceivingExceptionKind, type RefusalChoice } from './dispatch.types';
 import { exceptionViewsOf } from './receiving';
 import { BoardRow, Claimable, ClaimableKind, DeskNumber, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView, InboundReceiver } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
@@ -373,6 +373,8 @@ export class DispatchService {
   // Durable: a freight job is a real transport obligation (a diverted P4+ order is a paid commitment),
   // so — unlike the ephemeral offer bulletin — it must survive a restart.
   private readonly freights = new PersistentMap<string, Freight>('pudo-freights');
+  /** Loads paid for first by a person, billed and given back through what they paid (registerPrepaid, 2026-10-27). */
+  private prepaid?: PrepaidShipper;
   /**
    * WHICH ACCOUNT A DIVERTED ORDER'S BUYER IS — kept here, beside the loads, never on one: a load goes whole to every
    * driver who lists the board, and an account's id on it would follow one person across every number they ever gave a
@@ -541,7 +543,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string } }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -652,6 +654,7 @@ export class DispatchService {
       requiredEquipment,
       equipmentGaps,
       shipperDid: input.shipperDid,
+      ...(input.sellerEntityId ? { sellerEntityId: input.sellerEntityId } : {}),
       // CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked.
       ...(input.pickupCountry ? { pickupCountry: input.pickupCountry.toUpperCase() } : {}),
       ...(input.destCountry ? { destCountry: input.destCountry.toUpperCase() } : {}),
@@ -740,13 +743,9 @@ export class DispatchService {
         now > Math.max(due, f.claimedAt ? new Date(f.claimedAt).getTime() : due) + FREIGHT_NOSHOW_GRACE_H * 3_600_000
       ) {
         // A no-show: reserved ahead, but not picked up by the pickup date + grace → free it + undo the charge.
-        if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
-          // Reverses exactly what was charged, off the stamp — the rates behind that figure are knobs, and
-          // a no-show can be days after the claim. A load billed before the stamp existed falls back to
-          // recomputing, which is what it did before and is still right for a rate nobody has touched.
-          const charged = f.billed ?? this.shipperBill(f.lockedPrice ?? 0, f);
-          this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'freight no-show release', charged.tax, charged.provision);
-        }
+        // Reverses exactly what was charged, off the stamp — the rates behind that figure are knobs, and a no-show can be
+        // days after the claim. A load billed before the stamp existed falls back to recomputing (giveBackBill).
+        this.giveBackBill(f, 'freight no-show release');
         f.status = 'available';
         f.scheduledPickupAt = undefined; // its date has passed — it's now a plain ship-now load: no stale gate, no 'scheduled' timeline, and this loop skips it forever after (so it can never no-show-release twice)
         f.claimedBy = undefined;
@@ -2834,10 +2833,16 @@ export class DispatchService {
    * billed and there is no seller whose rate could apply. Falls back rather than throwing for the same
    * reason everywhere else does: a pricing lookup must never be what stops a load being offered.
    */
-  private freightFeePct(f?: { shipperDid?: string }): number {
-    if (!f?.shipperDid) return PLATFORM_FEE_PCT;
+  /** The company whose rates price a load: the one it names as its seller (a person's door load), else its store's. */
+  private billingEntityOf(f?: { shipperDid?: string; sellerEntityId?: string }): string | undefined {
+    if (f?.sellerEntityId) return f.sellerEntityId;
+    return f?.shipperDid ? this.vendors.entityIdOf(this.vendors.get(f.shipperDid)) : undefined;
+  }
+
+  private freightFeePct(f?: { shipperDid?: string; sellerEntityId?: string }): number {
+    if (!f?.shipperDid && !f?.sellerEntityId) return PLATFORM_FEE_PCT;
     try {
-      return this.entities.ratesFor(this.vendors.entityIdOf(this.vendors.get(f.shipperDid)), 'dedicated').totalPct;
+      return this.entities.ratesFor(this.billingEntityOf(f)!, 'dedicated').totalPct;
     } catch {
       return PLATFORM_FEE_PCT;
     }
@@ -2850,10 +2855,10 @@ export class DispatchService {
    * Falls back rather than throwing for the same reason `freightFeePct` does: a pricing lookup must never
    * be the thing that stops a load being offered.
    */
-  private freightTaxPct(f?: { shipperDid?: string }): number {
-    if (!f?.shipperDid) return 0;
+  private freightTaxPct(f?: { shipperDid?: string; sellerEntityId?: string }): number {
+    if (!f?.shipperDid && !f?.sellerEntityId) return 0;
     try {
-      return this.entities.taxFor(this.vendors.entityIdOf(this.vendors.get(f.shipperDid)), 'dedicated').ratePct;
+      return this.entities.taxFor(this.billingEntityOf(f)!, 'dedicated').ratePct;
     } catch {
       return 0;
     }
@@ -2867,7 +2872,7 @@ export class DispatchService {
    * shipper will part with, and what leaves their account is the gross; comparing a net figure to their
    * cap would commit them to a haul they cannot pay for and only find out at the billing.
    */
-  private shipperBill(driverTotal: number, f?: { shipperDid?: string }): { net: number; tax: number; gross: number; feePct: number; taxPct: number; provision: number } {
+  private shipperBill(driverTotal: number, f?: { shipperDid?: string; sellerEntityId?: string }): { net: number; tax: number; gross: number; feePct: number; taxPct: number; provision: number } {
     const feePct = this.freightFeePct(f);
     const taxPct = this.freightTaxPct(f);
     // The cost-of-risk slice, on the same base the fee was computed on — a haul's provider cost IS the
@@ -2878,10 +2883,10 @@ export class DispatchService {
 
   /** The cost-of-risk rate for a dedicated haul. Falls back to none, like its two neighbours above: a
    *  pricing lookup must never be the thing that stops a load being offered. */
-  private freightRiskPct(f?: { shipperDid?: string }): number {
-    if (!f?.shipperDid) return 0;
+  private freightRiskPct(f?: { shipperDid?: string; sellerEntityId?: string }): number {
+    if (!f?.shipperDid && !f?.sellerEntityId) return 0;
     try {
-      return this.entities.ratesFor(this.vendors.entityIdOf(this.vendors.get(f.shipperDid)), 'dedicated').costOfRiskPct;
+      return this.entities.ratesFor(this.billingEntityOf(f)!, 'dedicated').costOfRiskPct;
     } catch {
       return 0;
     }
@@ -3363,7 +3368,7 @@ export class DispatchService {
    * the hub to the door — as the store would be billed it. A suggestion only: each driver's own figures decide the price,
    * and none may take the load above what the store allows.
    */
-  doorGuide(input: { from: GeoPoint; to: GeoPoint; weightKg: number; fragile: boolean; shipperDid: string }): { suggestedMax: number; vehicleClass: string } {
+  doorGuide(input: { from: GeoPoint; to: GeoPoint; weightKg: number; fragile: boolean; shipperDid: string; sellerEntityId?: string }): { suggestedMax: number; vehicleClass: string } {
     // A car's, or the smallest body that holds it where a car cannot: room for a bicycle, a motorbike, a tuk-tuk or a car to take it.
     const order = ['car', 'van', 'truck'] as const;
     const cls = order.find((c) => VEHICLE_SPEC[c].maxParcelKg >= input.weightKg && (!input.fragile || VEHICLE_SPEC[c].allowsFragile)) ?? 'truck';
@@ -3374,7 +3379,7 @@ export class DispatchService {
       tripKm: round1(this.router.roadKm(input.from, input.to)),
       multiplier: DEFAULT_MAX_MULTIPLIER,
     });
-    return { suggestedMax: Math.max(1, Math.ceil(this.shipperBill(price.total, { shipperDid: input.shipperDid }).gross)), vehicleClass: cls };
+    return { suggestedMax: Math.max(1, Math.ceil(this.shipperBill(price.total, { shipperDid: input.shipperDid, sellerEntityId: input.sellerEntityId }).gross)), vehicleClass: cls };
   }
 
   /**
@@ -3473,6 +3478,13 @@ export class DispatchService {
    * The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
    */
   private settleShipper(f: Freight, earning: number): void {
+    // Paid first, by a person, for a load to their own door (2026-10-27): billed out of that payment, never a balance.
+    if (this.prepaid?.owns(f)) {
+      const bill = this.shipperBill(earning, f);
+      f.paidStatus = this.prepaid.bill(f, bill) ? 'billed' : 'billing_failed';
+      f.billed = { ...bill, coverLimit: this.freightCoverStated(f) };
+      return;
+    }
     if (f.shipperDid && this.vendors.has(f.shipperDid) && this.vendors.settlesWithUs(f.shipperDid)) {
       const bill = this.shipperBill(earning, f);
       const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, bill.gross, 0, bill.tax, bill.provision);
@@ -3568,9 +3580,9 @@ export class DispatchService {
 
   /** The cover the billing company states for dedicated freight, read at billing. A freight declares no value: the free limit is the whole of it. */
   private freightCoverStated(f: Freight): number {
-    if (!f.shipperDid || !this.vendors.has(f.shipperDid)) return 0;
+    if (!f.sellerEntityId && (!f.shipperDid || !this.vendors.has(f.shipperDid))) return 0;
     try {
-      return coverFor({ ...this.entities.insuranceFor(this.vendors.entityIdOf(this.vendors.get(f.shipperDid)), 'dedicated') }).limit;
+      return coverFor({ ...this.entities.insuranceFor(this.billingEntityOf(f)!, 'dedicated') }).limit;
     } catch {
       return 0;
     }
@@ -3688,10 +3700,7 @@ export class DispatchService {
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', f.status === 'in_transit' ? 'The goods are on your vehicle — a load that has been taken over is delivered, or the sender is asked to turn it back' : `Freight is ${f.status}`);
     if (f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This load is on another driver');
     const at = new Date(now).toISOString();
-    if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
-      const charged = f.billed ?? this.shipperBill(f.lockedPrice ?? 0, f);
-      this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'load handed back by the driver before pickup', charged.tax, charged.provision);
-    }
+    this.giveBackBill(f, 'load handed back by the driver before pickup');
     const assignedBy = f.assignedBy;
     // The hand-back keeps the carrier it was given back BY, read before the claim is unwound below: it counts on
     // that fleet's record, not on whichever fleet the driver drives for when somebody next reads it.
@@ -3739,6 +3748,17 @@ export class DispatchService {
     return this.withdraw(f, { did: vendorId, role: 'shipper' }, 'Sent to a shop instead', now);
   }
 
+  /**
+   * A PERSON'S LOAD TO THEIR DOOR, WITHDRAWN (2026-10-27) — only while no driver has taken it, and only one paid for first
+   * (PersonDoorService vouches for whose it is: the load carries nobody's id). The box goes on to the shop instead.
+   */
+  withdrawPrepaid(freightId: string, why: string, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (!f.bringsBack || !this.prepaid?.owns(f)) throw new GlosError('NOT_FOUND', 'No load paid for first brings that parcel');
+    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `A driver has taken load ${f.code}: it comes to your door`);
+    return this.withdraw(f, { did: 'network', role: 'operator' }, why, now);
+  }
+
   /** The loads bringing a store's parcel back to its door — for the reminder that none has been taken. */
   bringsBackLoads(): Freight[] {
     return [...this.freights.values()].filter((f) => Boolean(f.bringsBack));
@@ -3754,20 +3774,41 @@ export class DispatchService {
     return f;
   }
 
-  /** Whether this load will be billed through us when a driver takes it: a store's, where that store settles with us. */
-  private billedThroughUs(input: { shipperDid?: string }): boolean {
+  /**
+   * Whether this load will be billed through us when a driver takes it: a store's, where that store settles with us — or one
+   * a person paid for first, which names the company that sold it (PersonDoorService, 2026-10-27).
+   */
+  private billedThroughUs(input: { shipperDid?: string; sellerEntityId?: string }): boolean {
+    if (input.sellerEntityId) return true;
     return Boolean(input.shipperDid && this.vendors.has(input.shipperDid) && this.vendors.settlesWithUs(input.shipperDid));
+  }
+
+  /**
+   * Give a billed shipper back exactly what it was charged for this load, off the stamp — a store's balance, or what a person
+   * paid first (2026-10-27). Answers what went back, or nothing where nothing had been billed.
+   */
+  private giveBackBill(f: Freight, why: string): number | undefined {
+    if (f.paidStatus !== 'billed') return undefined;
+    const charged = f.billed ?? this.shipperBill(f.lockedPrice ?? 0, f);
+    // A person's load carries nobody's id: what they paid first is found beside it.
+    if (this.prepaid?.owns(f)) {
+      this.prepaid.giveBack(f, charged, why);
+      return charged.gross;
+    }
+    if (!f.shipperDid || !this.vendors.has(f.shipperDid)) return undefined;
+    this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, why, charged.tax, charged.provision);
+    return charged.gross;
+  }
+
+  /** Say how a load paid for first is billed and given back (PersonDoorService, at boot). */
+  registerPrepaid(prepaid: PrepaidShipper): void {
+    this.prepaid = prepaid;
   }
 
   /** A load withdrawn, its checks done: what was billed given back, open proposals and offers closed, everyone told. */
   private withdraw(f: Freight, by: { did: string; role: 'shipper' | 'operator' }, why: string, now: number): Freight {
     const at = new Date(now).toISOString();
-    let refunded: number | undefined;
-    if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
-      const charged = f.billed ?? this.shipperBill(f.lockedPrice ?? 0, f);
-      this.vendors.rebate(f.shipperDid, f.freightId, charged.gross, 'freight cancelled by the sender', charged.tax, charged.provision);
-      refunded = charged.gross;
-    }
+    const refunded = this.giveBackBill(f, 'freight cancelled by the sender');
     for (const p of this.proposals.values()) {
       if (p.freightId === f.freightId && p.status === 'open') {
         p.status = 'superseded'; // nobody judged these numbers — the load went away

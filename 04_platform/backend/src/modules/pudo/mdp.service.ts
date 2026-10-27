@@ -738,7 +738,12 @@ export class MdpService {
     // nothing is sorted under the old one.
     // …or going to its store's own door as a load: set aside, for the driver who took that load.
     if (parcel.status === 'Returned' && parcel.returnLoad && parcel.atMdpId === mdpId) {
-      throw new GlosError('SET_ASIDE', `${parcelId} was called off by its store: it goes to the store's door as load ${parcel.returnLoad.code}. Set it aside, and hand it only to the driver who comes for it — scan their pass at the counter.`, { parcelId, loadCode: parcel.returnLoad.code });
+      const where = parcel.vendorId ? `was called off by its store: it goes to the store's door` : `goes to its sender's own door, paid for`;
+      throw new GlosError('SET_ASIDE', `${parcelId} ${where} as load ${parcel.returnLoad.code}. Set it aside, and hand it only to the driver who comes for it — scan their pass at the counter.`, { parcelId, loadCode: parcel.returnLoad.code });
+    }
+    // A person's goods, held while their sender pays for a load to their door (2026-10-27): not sorted before the time runs out.
+    if (parcel.doorHold && Date.parse(parcel.doorHold.until) > Date.now() && parcel.atMdpId === mdpId) {
+      throw new GlosError('SET_ASIDE', `${parcelId} waits for its sender to pay for a load to their door, until ${parcel.doorHold.until.slice(11, 16)} UTC. Set it aside: if they have not paid by then, sort it as its label says.`, { parcelId });
     }
     if (parcel.status === 'Returned' && parcel.returnParcelId) {
       const back = this.parcels.get(parcel.returnParcelId);

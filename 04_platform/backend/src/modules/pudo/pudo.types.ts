@@ -1211,6 +1211,12 @@ export class Parcel {
    */
   payAtCollection?: { amount: number; currency: string; tax: number; provision: number; paidAt?: string };
   /**
+   * HELD AT THE HUB WHILE ITS SENDER PAYS for a load to their own door (the user, 2026-10-27: "Mobile money first"): not
+   * sorted on before `until` — if the payment has not come by then, it carries on to the shop as its label says. Who is
+   * paying is kept beside the payment, never here.
+   */
+  doorHold?: { until: string };
+  /**
    * When the free collection window ran out — the start of the holding-fee clock.
    *
    * Distinct from readyAt, and the distinction is the whole feature: readyAt is when the wait began,

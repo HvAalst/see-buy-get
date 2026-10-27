@@ -89,6 +89,13 @@ export const DOOR_GUIDE_DEADHEAD_KM = 10;
 /** …and when no driver has taken that load for this long, the store is told it can raise its most or send it to a shop. */
 export const DOOR_LOAD_REMIND_H = 24;
 /**
+ * A PERSON'S DOOR, PAID FIRST BY MOBILE MONEY (the user, 2026-10-27: "Mobile money first"): how long the box is held at the
+ * hub for the payment — the phone's prompt lasts about a minute, a try or two more fit in this — and how far from the hub a
+ * door may be. A map tap names no country, so the distance stands in for the border until a map can say which side it is.
+ */
+export const DOOR_PAY_WINDOW_MIN = 15;
+export const DOOR_MAX_KM = 100;
+/**
  * "NEAR ME" FOR A QUOTE (the user, 2026-10-25: "the asker should be able to filter quotations from 'near me'"): the
  * carriers within this many kilometres of the asker — on shift and placed there by their phone in the last
  * NEAR_LOCATED_H hours, or of a fleet whose depot stands that close.

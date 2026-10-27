@@ -165,6 +165,11 @@ export const NOTIFICATION_KINDS = [
    * In the app, never a text.
    */
   'parcel_withdrawn',
+  /**
+   * A person's own door, paid first by mobile money (the user, 2026-10-27: "Mobile money first"): paid, a driver bringing it,
+   * delivered and what goes back to their number, no driver yet, or the time to pay ran out. In their app, never a text.
+   */
+  'door_delivery',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

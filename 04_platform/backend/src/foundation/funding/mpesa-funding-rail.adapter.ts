@@ -432,7 +432,7 @@ export class MpesaFundingRail implements FundingRail {
       CallBackURL: `${this.config.callbackBase}/v1/rails/funding/${this.provider}/callback`,
       // Twelve characters is Daraja's limit, which is why the reference scheme normalises to eleven.
       AccountReference: accountReference(reference),
-      TransactionDesc: instruction.purpose === 'activation' ? 'Activation' : 'Float top-up',
+      TransactionDesc: instruction.purpose === 'activation' ? 'Activation' : instruction.purpose === 'door' ? 'Door delivery' : 'Float top-up',
     };
     const answer = await this.post<DarajaStkResponse>(STK_PATH, request as unknown as Record<string, unknown>);
     if (answer.errorCode) throw new Error(`${answer.errorCode}: ${answer.errorMessage ?? 'rejected'}`);

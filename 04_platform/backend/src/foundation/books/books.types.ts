@@ -68,6 +68,14 @@ export const ACCOUNT_CODES = {
   PAYABLE_CLAIM: 'payable.claim',
   /** The mother's periodic licence fee, owed by a sister. */
   PAYABLE_GROUP: 'payable.group',
+  /**
+   * WHAT A PERSON PAID FIRST FOR ONE LOAD TO THEIR OWN DOOR (the user, 2026-10-27: "Mobile money first"). A deposit held for
+   * that load alone — never a balance anybody can spend: the driver's price is billed out of it when a driver takes the
+   * load, and whatever is left moves to PAYABLE_PERSON, to go back to the number it came from. Per person.
+   */
+  DEPOSIT_PERSON: 'deposit.person',
+  /** Owed back to a person: what their load to their door did not use — or all of it, where it never went. The payout run pays it. */
+  PAYABLE_PERSON: 'payable.person',
   /** Bilateral running balance with another sister; the counterparty entity is on the account. */
   INTERCOMPANY: 'intercompany',
   /** What the sister has actually earned: its margin, and the legs it performed itself. */
@@ -93,6 +101,8 @@ export const ACCOUNT_KIND: Record<AccountCode, AccountKind> = {
   [ACCOUNT_CODES.EXPENSE_CLAIMS]: 'expense',
   [ACCOUNT_CODES.PAYABLE_CLAIM]: 'liability',
   [ACCOUNT_CODES.PAYABLE_GROUP]: 'liability',
+  [ACCOUNT_CODES.DEPOSIT_PERSON]: 'liability',
+  [ACCOUNT_CODES.PAYABLE_PERSON]: 'liability',
   [ACCOUNT_CODES.INTERCOMPANY]: 'asset', // a receivable when positive, a payable when negative
   [ACCOUNT_CODES.REVENUE]: 'revenue',
   [ACCOUNT_CODES.EXPENSE_PAYMENT_FEES]: 'expense',

@@ -272,14 +272,11 @@ export class CallOffService implements OnModuleInit {
     for (const f of this.dispatch.bringsBackLoads()) {
       if (f.status !== 'available' || !f.bringsBack || f.bringsBack.remindedAt) continue;
       if (now - Date.parse(f.createdAt) < DOOR_LOAD_REMIND_H * 3_600_000) continue;
+      // A store's load. A person's — paid first, with nobody's id on it — is told to them by PersonDoorService.
+      if (!f.shipperDid || !this.vendors.has(f.shipperDid)) continue;
       this.dispatch.markBringsBackReminded(f.freightId, now);
       told.push(f.freightId);
-      let storeDid: string | undefined;
-      try {
-        storeDid = f.shipperDid ? this.vendors.get(f.shipperDid).did : undefined;
-      } catch {
-        storeDid = undefined;
-      }
+      const storeDid = this.vendors.get(f.shipperDid).did;
       if (!storeDid) continue;
       void this.notifications
         ?.notify(storeDid, {
@@ -359,6 +356,24 @@ export class CallOffService implements OnModuleInit {
     return { parcelId, status: 'Returned', outcome: 'turn_round', amount, currency: parcelCurrency(back), returnParcelId: back.parcelId, backTo: shop.shopName, atHub: hub.name };
   }
 
+  /**
+   * The way to a shop for goods at a hub, worked out — the shop, the hub, the price — or why there is none. For a person's
+   * goods whose load to their door no driver took (PersonDoorService, 2026-10-27): to the shop they would have gone to.
+   */
+  wayToShopFor(p: Parcel, shopDid: string): { hub: Mdp; shop: Agent; quote: ShipmentQuote; price: number } | { why: string } {
+    if (!p.atMdpId) return { why: 'Nobody recorded which hub has it: SeeBuyGet looks into it.' };
+    let shop: Agent;
+    try {
+      shop = this.agents.get(shopDid);
+    } catch {
+      return { why: 'The shop it was going to is not in the network any more.' };
+    }
+    const way = this.toShop(p, this.mdps.require(p.atMdpId), shop, false);
+    if ('why' in way) return way;
+    if (way.kind !== 'shop') return { why: 'It cannot go to a shop from there.' };
+    return { hub: way.hub, shop: way.shop, quote: way.quote, price: way.price };
+  }
+
   /** Why staff cannot withdraw it where it is — or nothing. A store's parcel is the store's to call off. */
   private notWithdrawable(p: Parcel): string | undefined {
     if (p.vendorId) return 'A store’s parcel is the store’s to call off, from its own app or its systems.';
@@ -396,8 +411,16 @@ export class CallOffService implements OnModuleInit {
   private cameHome(freightId: string): void {
     try {
       const f = this.dispatch?.requireFreightPublic(freightId);
-      if (!f?.bringsBack || !f.shipperDid) return;
-      this.parcels.handOnHome(f.bringsBack.parcelId, { kind: 'sender', id: f.shipperDid }, `back at the store's door${f.proofOfDelivery?.receiverName ? `, received by ${f.proofOfDelivery.receiverName}` : ''}`, f.deliveredAt ?? new Date().toISOString());
+      if (!f?.bringsBack) return;
+      const signed = f.proofOfDelivery?.receiverName ? `, received by ${f.proofOfDelivery.receiverName}` : '';
+      const at = f.deliveredAt ?? new Date().toISOString();
+      if (f.shipperDid && this.vendors.has(f.shipperDid)) {
+        this.parcels.handOnHome(f.bringsBack.parcelId, { kind: 'sender', id: f.shipperDid }, `back at the store's door${signed}`, at);
+        return;
+      }
+      // A person's own door, paid first (2026-10-27): the goods end in their hands — known by the number, as at a counter.
+      const p = this.parcels.get(f.bringsBack.parcelId);
+      this.parcels.handOnHome(p.parcelId, { kind: 'receiver', id: p.receiverPhoneHash ?? 'receiver' }, `at its sender's own door${signed}`, at);
     } catch (err) {
       this.logger.warn(`home leg of load ${freightId} not written: ${(err as Error).message}`);
     }

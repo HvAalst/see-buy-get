@@ -221,6 +221,20 @@ export type RefusalChoice = (typeof REFUSAL_CHOICES)[number];
 export const REFUSAL_DECIDE_H = 48;
 export const REFUSAL_REMIND_H = 12;
 
+/**
+ * A SHIPPER BILLED FROM WHAT IT PAID FIRST (2026-10-27): a person whose load to their own door was paid by mobile money
+ * before it was posted. Registered at boot by the service that holds those payments (PersonDoorService), as the funding
+ * payers are: dispatch bills and gives back through it, and knows nothing of the money behind it.
+ */
+export interface PrepaidShipper {
+  /** Whether this load was paid for first, so is billed through here. */
+  owns(f: Freight): boolean;
+  /** Bill the driver's price, gross, out of what was paid first. True where it covered it. */
+  bill(f: Freight, bill: { gross: number; tax: number; provision: number }): boolean;
+  /** Give back exactly what was billed: the load went back on the board, or was withdrawn. */
+  giveBack(f: Freight, charged: { gross: number; tax: number; provision: number }, why: string): void;
+}
+
 /** One load, by its id and its code: a return and the load its goods were refused on point at each other. */
 export class FreightLink {
   freightId: string;
@@ -567,6 +581,11 @@ export class Freight {
    *  when both ends are equipped (or their equipment is unknown, e.g. a bulletin freight with only geo labels). */
   equipmentGaps: Array<'origin' | 'dest'>;
   shipperDid?: string;
+  /**
+   * WHICH COMPANY SOLD THIS LOAD, where its shipper has none of its own to say so: a person paying first for a load to their
+   * own door (2026-10-27) — the company of the country its hub is in. Its fee, its tax and its cover price the load.
+   */
+  @ApiPropertyOptional() sellerEntityId?: string;
   /** CA6 — the country at each end, where it is known (a shop's), so the rules of crossing can be asked. */
   @ApiPropertyOptional() pickupCountry?: string;
   @ApiPropertyOptional() destCountry?: string;

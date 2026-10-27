@@ -38,6 +38,12 @@ export class Payout {
   /** How it is paid: the way of the paying sister's country (payout-ways.ts). Absent on payouts raised before there were ways. */
   @ApiPropertyOptional({ enum: PAYOUT_WAYS })
   way?: PayoutWay;
+  /**
+   * WHAT IS PAID: a provider's earnings (`payable.provider`), or what a person is owed back from a load to their door they
+   * paid for first (`payable.person`, 2026-10-27). Absent on payouts raised before there were two: a provider's.
+   */
+  @ApiPropertyOptional({ enum: ['payable.provider', 'payable.person'] })
+  owed?: 'payable.provider' | 'payable.person';
   /** Where it goes, where the way needs a number of the payee's: the masked number it was raised to, and which one. */
   @ApiPropertyOptional({ type: PayoutDestination })
   destination?: PayoutDestination;

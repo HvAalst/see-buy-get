@@ -3289,6 +3289,49 @@ export class ParcelService implements OnApplicationBootstrap {
     return { withdrawn: parcel, back };
   }
 
+  /**
+   * HELD AT THE HUB FOR ITS SENDER'S PAYMENT (the user, 2026-10-27: "Mobile money first"): a person's goods coming back to
+   * them, while they pay for a load to their own door. Not sorted on before `until`; out of any bag it was sorted into.
+   */
+  holdForDoor(parcelId: string, until: number, by: string, now: number = Date.now()): Parcel {
+    const parcel = this.require(parcelId);
+    this.refuseIfHeld(parcel);
+    if (parcel.vendorId || !parcel.returnOf || parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `${parcelId} is not a person's goods waiting at a hub`);
+    parcel.doorHold = { until: new Date(until).toISOString() };
+    parcel.toteId = undefined;
+    this.scan(parcel, 'At_MDP', by, `set aside: its sender is paying for a load to their door, until ${new Date(until).toISOString().slice(11, 16)} UTC`, { at: new Date(now).toISOString() });
+    this.persist(parcel);
+    return parcel;
+  }
+
+  /** The payment did not come, or was given up: it carries on to the shop, as its label says. */
+  releaseDoorHold(parcelId: string, why: string, now: number = Date.now()): Parcel {
+    const parcel = this.require(parcelId);
+    if (!parcel.doorHold) return parcel;
+    parcel.doorHold = undefined;
+    this.scan(parcel, parcel.status, 'network', `no longer set aside: ${why} · it goes to the shop, as its label says`, { at: new Date(now).toISOString() });
+    this.persist(parcel);
+    return parcel;
+  }
+
+  /**
+   * A PERSON'S GOODS GOING TO THEIR DOOR AS A LOAD THAT NO DRIVER TOOK, SENT TO THE SHOP INSTEAD (2026-10-27): still at the
+   * hub, they go on as a new parcel to the shop, paid for there in cash as they are collected — as goods turned round at a
+   * hub are. The one going home points at it now, and no longer at the withdrawn load.
+   */
+  rerouteForSender(parcelId: string, input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string; by: string }, now: number = Date.now()): { calledOff: Parcel; back: Parcel } {
+    const parcel = this.require(parcelId);
+    if (parcel.vendorId || parcel.status !== 'Returned' || !parcel.returnLoad || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not waiting at ${input.hub.name} for a load to its sender's door`);
+    const at = new Date(now).toISOString();
+    const withdrawn = parcel.returnLoad.code;
+    const back = this.mintForSender(parcel, input, at);
+    parcel.returnParcelId = back.parcelId;
+    parcel.returnLoad = undefined;
+    this.scan(parcel, 'Returned', input.by, `the load to its sender's door (${withdrawn}) withdrawn · going to the shop as ${back.parcelId}`, { at });
+    this.persist(parcel);
+    return { calledOff: parcel, back };
+  }
+
   /** The parcel taking a person's goods back from a hub to the shop they were handed in at: theirs, collected and paid for there. */
   private mintForSender(parcel: Parcel, input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string }, at: string): Parcel {
     const dest = this.agents.get(input.toAgentDid);
@@ -3377,7 +3420,11 @@ export class ParcelService implements OnApplicationBootstrap {
     parcel.status = 'Returned';
     parcel.returnLoad = { freightId: load.freightId, code: load.code };
     parcel.toteId = undefined;
-    this.scan(parcel, 'Returned', by, `called off by the store at ${hubName} · going to its door as load ${load.code}${reason ? ` · ${reason}` : ''}`, { at: new Date(now).toISOString() });
+    // A person's goods going to their own door, paid first (2026-10-27): nothing is due at a counter any more.
+    parcel.payAtCollection = undefined;
+    parcel.doorHold = undefined;
+    const who = parcel.vendorId ? `called off by the store at ${hubName} · going to its door` : `its sender paid at ${hubName} · going to their own door`;
+    this.scan(parcel, 'Returned', by, `${who} as load ${load.code}${reason ? ` · ${reason}` : ''}`, { at: new Date(now).toISOString() });
     this.media.anchorParcelTerminal(parcel.parcelId);
     this.persist(parcel);
     return parcel;
@@ -3386,7 +3433,7 @@ export class ParcelService implements OnApplicationBootstrap {
   /** A box going to its store's door, handed on: by the hub to the load's driver, then by the driver to the store. Custody only. */
   handOnHome(parcelId: string, to: { kind: CustodyKind; id: string }, note: string, at: string): Parcel {
     const parcel = this.require(parcelId);
-    if (parcel.status !== 'Returned' || !parcel.returnLoad) throw new GlosError('INVALID_STATE', `${parcelId} is not going to its store's door`);
+    if (parcel.status !== 'Returned' || !parcel.returnLoad) throw new GlosError('INVALID_STATE', `${parcelId} is not going to a door as a load`);
     this.handTo(parcel, to.kind, to.id, note, { at });
     this.persist(parcel);
     return parcel;

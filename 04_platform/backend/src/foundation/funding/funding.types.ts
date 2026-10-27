@@ -39,13 +39,15 @@ export type FundingStatus = 'awaiting' | 'confirmed' | 'failed' | 'expired' | 'r
 /** The states in which money may still arrive. A payer with one of these open is not asked to open another. */
 export const FUNDING_OPEN: FundingStatus[] = ['awaiting'];
 
-/** What the money is FOR. The two are different obligations and must never share an account — a shop's
- *  float is spendable at the counter, an activation deposit is held and refundable and is not. */
-export type FundingPurpose = 'float' | 'activation';
+/** What the money is FOR. Different obligations, which must never share an account — a shop's float is spendable at
+ *  the counter, an activation deposit is held and refundable and is not. And `door` (the user, 2026-10-27: "Mobile money
+ *  first"): what a PERSON pays first for one load to their own door — held for that load alone, never a balance: it pays
+ *  the driver's price, and what is left goes back to the number it came from. */
+export type FundingPurpose = 'float' | 'activation' | 'door';
 
 /** Who is putting money in. Each kind knows its own sister, its own currency and its own deposit account;
  *  see the registered `FundingPayer` below, which is where that knowledge stays. */
-export type FundingPayerKind = 'agent' | 'vendor';
+export type FundingPayerKind = 'agent' | 'vendor' | 'person';
 
 export class Funding {
   fundingId: string;

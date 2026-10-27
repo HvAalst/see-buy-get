@@ -39,10 +39,12 @@ export interface PayoutDestinationRefusal {
 
 /**
  * Told by whoever keeps payees' payout numbers (registered at boot, as the payee gate is): where this payee is paid
- * in a country of this way, or why not. `full` is asked only by the rail, at the moment it sends.
+ * in a country of this way, or why not — or nothing, for a payee whose number it does not keep (a person owed back what
+ * their load to their door did not use is paid to the number they paid from, kept beside that load: 2026-10-27).
+ * `full` is asked only by the rail, at the moment it sends.
  */
 export interface PayoutDestinations {
-  of(payeeId: string, way: PayoutWay, now: number): PayoutDestination | PayoutDestinationRefusal;
+  of(payeeId: string, way: PayoutWay, now: number): PayoutDestination | PayoutDestinationRefusal | undefined;
   full(payeeId: string, numberId: string): string | undefined;
 }
 

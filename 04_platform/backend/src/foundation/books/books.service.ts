@@ -224,6 +224,9 @@ export class BooksService {
       ACCOUNT_CODES.PAYABLE_TAX,
       ACCOUNT_CODES.PAYABLE_CLAIM,
       ACCOUNT_CODES.PAYABLE_GROUP,
+      // A person's prepayment for one load, and what it did not use: theirs, waiting (2026-10-27).
+      ACCOUNT_CODES.DEPOSIT_PERSON,
+      ACCOUNT_CODES.PAYABLE_PERSON,
     ];
     const mine = [...this.accounts.values()].filter((a) => a.entityId === entityId && a.currency === ccy);
     const sumMinor = (pick: (code: AccountCode) => boolean) => mine.filter((a) => pick(a.code)).reduce((s, a) => s + this.balanceMinorOf(a.accountId), 0);
