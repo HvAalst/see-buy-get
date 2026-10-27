@@ -4,6 +4,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import {
   HUB_CARRIER_CM,
+  HUB_CARRIER_EMPTY_KG,
   HUB_CARRIER_KG,
   HUB_CARRIER_KINDS,
   HUB_CARRIER_MAX_KINDS,
@@ -77,9 +78,10 @@ export class HubCarrierService {
       }
       if (!Number.isInteger(item.maxKg) || item.maxKg < HUB_CARRIER_KG.min || item.maxKg > HUB_CARRIER_KG.max) throw new GlosError('INVALID_INPUT', `Say what ${name} may carry in whole kilograms, from ${HUB_CARRIER_KG.min} to ${HUB_CARRIER_KG.max}`, field('maxKg'));
       if (carrierHolds(item).holds < 1) throw new GlosError('INVALID_INPUT', `${name} would hold less than one parcel of size M: check its size and what it may carry`, field('maxKg'));
+      if (item.emptyKg != null && (!Number.isInteger(item.emptyKg) || item.emptyKg < HUB_CARRIER_EMPTY_KG.min || item.emptyKg > HUB_CARRIER_EMPTY_KG.max)) throw new GlosError('INVALID_INPUT', `Say what ${name} weighs empty in whole kilograms, from ${HUB_CARRIER_EMPTY_KG.min} to ${HUB_CARRIER_EMPTY_KG.max} — or leave it out`, field('emptyKg'));
       const kept = item.carrierId ? before.get(item.carrierId) : undefined;
       if (item.carrierId && !kept) throw new GlosError('NOT_FOUND', `${name} is not on your list any more: add it as a new kind`, field('carrierId'));
-      const same = kept && kept.kind === item.kind && kept.name === name && kept.lengthCm === item.lengthCm && kept.widthCm === item.widthCm && kept.heightCm === item.heightCm && kept.maxKg === item.maxKg;
+      const same = kept && kept.kind === item.kind && kept.name === name && kept.lengthCm === item.lengthCm && kept.widthCm === item.widthCm && kept.heightCm === item.heightCm && kept.maxKg === item.maxKg && kept.emptyKg === (item.emptyKg ?? undefined);
       return {
         carrierId: kept?.carrierId ?? `hc_${randomBytes(6).toString('hex')}`,
         kind: item.kind,
@@ -88,6 +90,7 @@ export class HubCarrierService {
         widthCm: item.widthCm,
         heightCm: item.heightCm,
         maxKg: item.maxKg,
+        ...(item.emptyKg != null ? { emptyKg: item.emptyKg } : {}),
         // A kind sent back unchanged keeps when and by whom it was said.
         saidAt: same ? kept.saidAt : at,
         saidBy: same ? kept.saidBy : by,
@@ -107,6 +110,7 @@ export class HubCarrierService {
       widthCm: c.widthCm,
       heightCm: c.heightCm,
       maxKg: c.maxKg,
+      ...(c.emptyKg != null ? { emptyKg: c.emptyKg } : {}),
       ...carrierHolds(c),
       saidAt: c.saidAt,
       saidBy: c.saidBy,
