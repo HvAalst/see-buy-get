@@ -12,6 +12,9 @@ const MESSAGES: Array<[string, MessageKey]> = [
   ['parcel.lost · parcel.found', 'vendor.store.cbInfo.ev.lost'],
   ['parcel.unclaimed', 'vendor.store.cbInfo.ev.unclaimed'],
   ['hub_arrival.received · hub_arrival.missed', 'vendor.store.cbInfo.ev.hub'],
+  ['load.taken · load.picked_up · load.delivered', 'vendor.store.cbInfo.ev.load'],
+  ['load.delivery_failed · load.refusal_decided', 'vendor.store.cbInfo.ev.loadDoor'],
+  ['load.handed_back · load.cancelled', 'vendor.store.cbInfo.ev.loadBack'],
   ['balance_topped_up · balance_returned', 'vendor.store.cbInfo.ev.balance'],
   ['test', 'vendor.store.cbInfo.ev.test'],
 ];

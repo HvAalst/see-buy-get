@@ -9232,6 +9232,24 @@ describe('PUDO Light', () => {
       expect(vendors.balanceOf(vendor.vendorId)).toBeLessThan(before);
     });
 
+    it('a store’s own system hears its load: taken, at the door, the decision — and the return as a load of its own (the user, 2026-10-27)', async () => {
+      const flush = () => new Promise((r) => setImmediate(r));
+      vendorCallback.onModuleInit();
+      const vendor = vendors.register({ name: 'HookedVendor', callbackUrl: 'https://hooked.example/hook', secret: 'whsec' });
+      vendors.topUp(vendor.vendorId, 500);
+      const { d, f } = onTheRoad({ shipperDid: vendor.vendorId, externalOrderId: 'BIG-77' });
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused', note: 'Wrong colour' }, T0);
+      dispatch.decideRefusal(f.freightId, vendor.did, { choice: 'back' }, T0 + H);
+      await flush();
+      const heard = vendors.outboxFor(vendor.vendorId).map((c) => ({ event: c.event, data: JSON.parse(c.body).data as Record<string, unknown> }));
+      expect(heard.map((h) => h.event)).toEqual(expect.arrayContaining(['load.taken', 'load.picked_up', 'load.delivery_failed', 'load.refusal_decided']));
+      expect(heard.find((h) => h.event === 'load.delivery_failed')?.data).toMatchObject({ code: f.code, externalOrderId: 'BIG-77', attempt: { outcome: 'refused', note: 'Wrong colour' } });
+      const decided = heard.find((h) => h.event === 'load.refusal_decided')?.data as { refusal?: { decision?: { choice: string; returnCode?: string } } };
+      expect(decided.refusal?.decision).toMatchObject({ choice: 'back' });
+      // The return is the store's load too: heard as taken over, under its own code, pointing at the first.
+      expect(heard.some((h) => h.event === 'load.picked_up' && h.data.code === decided.refusal?.decision?.returnCode && h.data.returnOf === f.code)).toBe(true);
+    });
+
     it('is the sender’s to decide: not staff, not a stranger', () => {
       const { d, f } = onTheRoad();
       dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0);

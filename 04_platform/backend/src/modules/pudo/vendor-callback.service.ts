@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { MAX_HOOK_ATTEMPTS, tryDelivery } from '../../foundation/outbound/hook-delivery';
+import { DispatchService } from './dispatch.service';
 import { ParcelService } from './parcel.service';
 import { VendorService } from './vendor.service';
 
@@ -26,6 +27,20 @@ const EVENT_STATUS: Record<string, string> = {
 };
 
 /**
+ * A STORE'S HEAVY ORDERS SENT AS FREIGHT (the user, 2026-10-27: "Store's system hears loads"): what its own system hears of
+ * each load — by the names a business's system hears them — where the load's shipper is the store. A return of refused
+ * goods is a load of the store's too, so it is heard as its own.
+ */
+const LOAD_EVENTS: Record<string, string> = {
+  [GlosEvent.Pudo.FreightHandedBack]: 'load.handed_back',
+  [GlosEvent.Pudo.FreightPickedUp]: 'load.picked_up',
+  [GlosEvent.Pudo.FreightDeliveryFailed]: 'load.delivery_failed',
+  [GlosEvent.Pudo.FreightRefusalDecided]: 'load.refusal_decided',
+  [GlosEvent.Pudo.FreightDelivered]: 'load.delivered',
+  [GlosEvent.Pudo.FreightCancelled]: 'load.cancelled',
+};
+
+/**
  * VendorCallbackService (PUDO → e-commerce). POSTS HMAC-signed status callbacks to the originating
  * vendor as an inbound parcel hits its milestones — ready_for_pickup (so the store notifies the
  * buyer), collected (order closed), disputed. This is the outbound half of the click-and-collect
@@ -41,12 +56,20 @@ export class VendorCallbackService implements OnModuleInit, OnModuleDestroy {
     private readonly events: EventBus,
     private readonly parcels: ParcelService,
     private readonly vendors: VendorService,
+    @Optional() private readonly dispatch?: DispatchService,
   ) {}
 
   onModuleInit(): void {
     for (const topic of Object.keys(EVENT_STATUS)) {
       this.events.subscribe<{ parcelId: string }>(topic, (e) => this.relay(topic, e.payload.parcelId));
     }
+    for (const topic of Object.keys(LOAD_EVENTS)) {
+      this.events.subscribe<{ freightId: string }>(topic, (e) => this.relayLoad(LOAD_EVENTS[topic], e.payload.freightId));
+    }
+    // A carrier took it: claimed from the board, an accepted price, or an office's own driver.
+    this.events.subscribe<{ kind?: string; ref?: string }>(GlosEvent.Pudo.LoadClaimed, (e) => {
+      if (e.payload.kind === 'freight' && e.payload.ref) this.relayLoad('load.taken', e.payload.ref);
+    });
     this.timer = setInterval(() => void this.drain(), DRAIN_MS);
     this.timer.unref?.();
   }
@@ -85,6 +108,30 @@ export class VendorCallbackService implements OnModuleInit, OnModuleDestroy {
     }
     if (sent || failed) this.logger.log(`store callbacks: ${sent} delivered, ${failed} given up on`);
     return { sent, failed };
+  }
+
+  /** A load of the store's, as its system hears it: where it stands, its last attempt at the door, and a refusal's outcome. */
+  relayLoad(event: string, freightId: string): void {
+    let f;
+    try {
+      f = this.dispatch?.requireFreightPublic(freightId);
+    } catch {
+      return;
+    }
+    if (!f?.shipperDid || !this.vendors.has(f.shipperDid)) return;
+    const last = f.deliveryAttempts?.at(-1);
+    this.vendors.notify(f.shipperDid, event, {
+      freightId: f.freightId,
+      code: f.code,
+      externalOrderId: f.externalOrderId,
+      status: f.status,
+      destLabel: f.destLabel,
+      ...(f.trackingKey ? { trackingKey: f.trackingKey } : {}),
+      ...(event === 'load.delivery_failed' && last ? { attempt: { outcome: last.outcome, at: last.at, ...(last.note ? { note: last.note } : {}) } } : {}),
+      ...(f.refusal ? { refusal: { at: f.refusal.at, decideBy: f.refusal.decideBy, ...(f.refusal.decision ? { decision: { choice: f.refusal.decision.choice, ...(f.refusal.decision.byDeadline ? { byDeadline: true } : {}), ...(f.refusal.decision.returnLeg ? { returnCode: f.refusal.decision.returnLeg.code } : {}) } } : {}) } } : {}),
+      ...(f.returnOf ? { returnOf: f.returnOf.code } : {}),
+      ...(f.proofOfDelivery ? { receivedBy: f.proofOfDelivery.receiverName, deliveredAt: f.deliveredAt } : {}),
+    });
   }
 
   private relay(topic: string, parcelId: string): void {
