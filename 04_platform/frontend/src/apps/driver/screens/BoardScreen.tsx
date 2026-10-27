@@ -319,6 +319,12 @@ export function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; 
             <span>{t('common.paidDirect.shipperUnpaid', { n: row.shipperUnpaid })}</span>
           </p>
         ) : null}
+        {row.shipperDisputed ? (
+          <p class="meta">
+            <Icon name="info" size={21} class="meta__ic" />
+            <span>{t('common.paidDirect.shipperDisputed', { n: row.shipperDisputed })}</span>
+          </p>
+        ) : null}
         <p class="meta">
           <Icon name="pin" size={21} class="meta__ic" />
           <span>{t('driver.board.from', { where: row.pickupLabel })}</span>

@@ -142,6 +142,7 @@ export const GlosEvent = {
     FreightPosted: 'pudo.freight_posted',
     FreightAssigned: 'pudo.freight_assigned',
     FreightInstructed: 'pudo.freight_instructed',
+    FreightNotPaidAnswered: 'pudo.freight_not_paid_answered', // the shipper answers a driver's "not paid": it paid, with a reference (2026-10-27); the driver and their fleet's office are told
     FreightNotPaidDirect: 'pudo.freight_not_paid_direct', // delivered, and its carrier says the shipper has not paid yet (2026-10-27); the shipper is told
     FreightPaidDirectAsked: 'pudo.freight_paid_direct_asked', // delivered three days ago and nothing said: its carrier is asked whether it was paid
     FreightPaidDirect: 'pudo.freight_paid_direct', // a load settled between the parties: its carrier says the shipper paid it (2026-10-27); the shipper is told

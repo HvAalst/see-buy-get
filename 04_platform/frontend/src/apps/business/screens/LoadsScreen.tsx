@@ -20,6 +20,7 @@ import { LoadClaimPanel } from './LoadClaim';
 import { LoadPapers } from './LoadPapers';
 import { LoadSeals } from './LoadSeals';
 import { LoadRefusal } from './LoadRefusal';
+import { LoadPaidAnswer } from './LoadPaidAnswer';
 import { LoadDoor } from './LoadDoor';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
 import { publicRequest } from '../../../lib/sbg';
@@ -660,6 +661,8 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
 
       {/* Refused at the door: where the goods go, the business's to say — or what became of them (the user, 2026-10-27). */}
       <LoadRefusal row={row} client={client} business={business} act={act} onChanged={onChanged} />
+      {/* A driver said it was not paid: the business answers that it paid, with a reference — both sides heard (2026-10-27). */}
+      <LoadPaidAnswer row={row} client={client} act={act} onChanged={onChanged} />
       {/* At the door: every attempt the driver made, and what the driver is told — the business's to add to (2026-10-27). */}
       <LoadDoor row={row} client={client} act={act} onChanged={onChanged} />
 

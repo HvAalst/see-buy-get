@@ -77,6 +77,8 @@ export interface DriverJobRow {
   paidDirectAt?: string;
   /** …or, delivered, said NOT paid yet, at this time (absent once said paid). */
   notPaidDirectAt?: string;
+  /** …and the shipper's answer that it paid: its reference, and when. */
+  shipperAnswer?: { at: string; reference: string };
   /** FP8 — what an upheld claim took back from that pay. The earning above is what was agreed; net is the difference. */
   clawback?: number;
   claimedAt?: string;
@@ -272,6 +274,8 @@ export interface Claimable {
   paidByShipper?: boolean;
   /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later (2026-10-27). Absent: none. */
   shipperUnpaid?: number;
+  /** …and on how many of its loads said not paid the shipper answers that it paid, with a reference: disputed, not unpaid. */
+  shipperDisputed?: number;
   /** …and the driver, or their fleet's office, said it was paid: when and how much. */
   paidDirect?: PaidDirectView;
   /** A return: refused goods carried on as this new load — the load they were refused on. */
@@ -333,6 +337,8 @@ export interface BoardRow {
   paidByShipper?: boolean;
   /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later (2026-10-27). Absent: none. */
   shipperUnpaid?: number;
+  /** …and on how many of its loads said not paid the shipper answers that it paid, with a reference: disputed, not unpaid. */
+  shipperDisputed?: number;
   code: string;
   description: string;
   pickupLabel: string;
@@ -391,6 +397,8 @@ export interface OfferView {
   paidByShipper?: boolean;
   /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later (2026-10-27). Absent: none. */
   shipperUnpaid?: number;
+  /** …and on how many of its loads said not paid the shipper answers that it paid, with a reference: disputed, not unpaid. */
+  shipperDisputed?: number;
   kind: ClaimKind;
   ref: string;
   pickupLabel: string;

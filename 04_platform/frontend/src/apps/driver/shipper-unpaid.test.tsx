@@ -42,6 +42,15 @@ describe('the shipper drivers say has not paid them', () => {
     expect(clean).not.toContain('meta--warn');
   });
 
+  it('a load the shipper answered it paid is said as disputed — beside, never inside, the unpaid count', () => {
+    const html = renderToString(<BoardCard row={row({ paidByShipper: true, shipperUnpaid: 1, shipperDisputed: 2 })} currency="KES" onPropose={noop} onAsk={noop} />);
+    expect(html).toContain(said(1));
+    expect(html).toContain(t('common.paidDirect.shipperDisputed', { n: 2 }));
+    const disputedOnly = renderToString(<BoardCard row={row({ paidByShipper: true, shipperDisputed: 1 })} currency="KES" onPropose={noop} onAsk={noop} />);
+    expect(disputedOnly).toContain(t('common.paidDirect.shipperDisputed', { n: 1 }));
+    expect(disputedOnly).not.toContain('meta--warn');
+  });
+
   it('is said on an offer too', () => {
     expect(renderToString(<OfferCard offer={offer({ paidByShipper: true, shipperUnpaid: 1 })} now={Date.now()} currency="KES" />)).toContain(said(1));
     expect(renderToString(<OfferCard offer={offer({ paidByShipper: true })} now={Date.now()} currency="KES" />)).not.toContain('meta--warn');

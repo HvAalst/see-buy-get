@@ -2823,6 +2823,12 @@ export class FreightDeliveryFailedDto {
  * The sender decides what happens to goods refused at the door (the user, 2026-10-27): back to where they were picked up,
  * to another place it names — where, on the map, and who to ask for — or given up.
  */
+/** The shipper's answer to a driver's "not paid yet" (2026-10-27): it paid, and how it can be checked. */
+export class AnswerNotPaidDto {
+  /** An M-Pesa code, a bank reference, or when and to whom cash was handed. */
+  @IsString() @MaxLength(80) reference!: string;
+}
+
 export class DecideRefusalDto {
   @IsIn(['back', 'elsewhere', 'give_up']) choice!: 'back' | 'elsewhere' | 'give_up';
   @IsOptional() @IsString() @MaxLength(120) destLabel?: string;

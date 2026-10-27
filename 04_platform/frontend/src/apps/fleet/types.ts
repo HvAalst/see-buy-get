@@ -232,6 +232,8 @@ export interface FleetJobRow {
   paidDirectAt?: string;
   /** …or, delivered, said NOT paid yet, at this time (absent once said paid). */
   notPaidDirectAt?: string;
+  /** …and the shipper's answer that it paid: its reference, and when. */
+  shipperAnswer?: { at: string; reference: string };
   /** FP8 — what an upheld claim took back from this haul's pay. */
   clawback?: number;
   claimedAt?: string;
@@ -294,6 +296,8 @@ export interface DispatchRow {
   paidByShipper?: boolean;
   /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later. Absent: none. */
   shipperUnpaid?: number;
+  /** …and on how many of its loads said not paid the shipper answers that it paid: disputed, not unpaid. */
+  shipperDisputed?: number;
 }
 
 export interface DispatchView {

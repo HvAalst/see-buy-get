@@ -227,6 +227,9 @@ export function createAgentApi(sbg: SbgClient) {
     /** FP3 — withdraw a posted load before the goods are taken over. The reason goes on the consignment note. */
     cancelFreight: (freightId: string, reason: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/cancel', { params: { path: { id: freightId } }, body: { reason } })),
     /** Refused at the door (the user, 2026-10-27): the sender says where the goods go — back, another place, or given up. */
+    /** A driver said this load was not paid: the sender answers that it paid, with a reference (2026-10-27). */
+    answerNotPaid: (freightId: string, reference: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/not-paid-direct/answer', { params: { path: { id: freightId } }, body: { reference } })),
     decideRefusal: (freightId: string, body: { choice: 'back' | 'elsewhere' | 'give_up'; destLabel?: string; destLocation?: { lat: number; lng: number }; contactName?: string; contactPhone?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/refusal', { params: { path: { id: freightId } }, body })),
     /** FP7 — the sender's instructions (CMR box 13): rewritten before pickup, added to on the road. */

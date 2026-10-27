@@ -29,6 +29,8 @@ import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancel
 
 /* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
 /** A load the poster pays its driver for directly: its carrier says it was paid (2026-10-27). */
+/** The shipper answers a driver's "not paid": it paid, with a reference. */
+interface FreightNotPaidAnswered { freightId: string; code: string; reference: string; amount: number; currency: string; driverDid?: string; officeDid?: string; destLabel?: string }
 /** Delivered three days ago, nothing said: its carrier is asked whether it was paid. */
 interface FreightPaidDirectAsked { freightId: string; code: string; amount: number; currency: string; driverDid: string; officeDid?: string; destLabel?: string }
 interface FreightPaidDirectEvent { freightId: string; code: string; amount: number; currency: string; by: 'driver' | 'office'; driverName?: string; posterDid?: string; destLabel?: string }
@@ -411,6 +413,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<FreightPaidDirectEvent>(GlosEvent.Pudo.FreightPaidDirect, (e) => this.onFreightPaidDirect(e.payload));
     this.events.subscribe<FreightPaidDirectEvent>(GlosEvent.Pudo.FreightNotPaidDirect, (e) => this.onFreightNotPaidDirect(e.payload));
     this.events.subscribe<FreightPaidDirectAsked>(GlosEvent.Pudo.FreightPaidDirectAsked, (e) => this.onFreightPaidDirectAsked(e.payload));
+    this.events.subscribe<FreightNotPaidAnswered>(GlosEvent.Pudo.FreightNotPaidAnswered, (e) => this.onFreightNotPaidAnswered(e.payload));
     // FP7 (driver) — the sender changed the instructions on a load they hold: what to do at the door has changed.
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; amended: boolean; text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }>(GlosEvent.Pudo.FreightInstructed, (e) => this.onFreightInstructed(e.payload));
     // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
@@ -1004,6 +1007,18 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-not-paid notify failed for ${p.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** To the driver, and the office of the fleet that carried it: the shipper answers that it paid, with a reference to check. */
+  private async onFreightNotPaidAnswered(p: FreightNotPaidAnswered): Promise<void> {
+    const body = `The shipper answers that it paid ${p.currency} ${p.amount.toLocaleString('en')} for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''} — its reference: ${p.reference}. If the money reached you, say it was paid, under Earnings. Until then drivers who look at its loads see both what was said and its answer.`;
+    for (const did of [p.driverDid, p.officeDid].filter((x): x is string => Boolean(x))) {
+      try {
+        await this.notifications.notify(did, { kind: 'freight_paid_direct', title: `Load ${p.code}: the shipper says it paid`, body, link: '/', tag: `freight:${p.freightId}:answered`, data: { freightId: p.freightId } });
+      } catch (err) {
+        this.logger.warn(`not-paid-answered notify failed for ${p.freightId}: ${(err as Error).message}`);
+      }
     }
   }
 

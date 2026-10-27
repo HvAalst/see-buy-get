@@ -229,6 +229,12 @@ export function OfferCard({ offer, now, currency }: { offer: OfferView; now: num
             <span>{t('common.paidDirect.shipperUnpaid', { n: offer.shipperUnpaid })}</span>
           </p>
         ) : null}
+        {offer.shipperDisputed ? (
+          <p class="meta">
+            <Icon name="info" size={21} class="meta__ic" />
+            <span>{t('common.paidDirect.shipperDisputed', { n: offer.shipperDisputed })}</span>
+          </p>
+        ) : null}
         <p class="meta">
           <Icon name="weight" size={21} class="meta__ic" />
           <span>

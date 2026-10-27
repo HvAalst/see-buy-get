@@ -576,6 +576,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/dispatch/freight/:id/delivery-failed': 'support',
   'POST sbg/dispatch/freight/:id/hand-back': 'support',
   'POST sbg/dispatch/freight/:id/not-paid-direct': 'none',
+  'POST sbg/dispatch/freight/:id/not-paid-direct/answer': 'none',
   'POST sbg/dispatch/freight/:id/paid-direct': 'none',
   'POST sbg/dispatch/freight/:id/held': 'none',
   'POST sbg/dispatch/freight/:id/let-go': 'none',

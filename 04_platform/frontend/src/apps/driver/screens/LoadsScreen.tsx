@@ -126,6 +126,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {c.paidByShipper ? <span class="load__meta">{c.paidDirect ? paidDirectLine(c.paidDirect, t, state.session.currency) : t('driver.paidByShipper')}</span> : null}
                   {/* What drivers say of this shipper: loads not paid, still unpaid a week after they said so (2026-10-27). */}
                   {c.shipperUnpaid && !c.paidDirect ? <span class="load__warn">{t('common.paidDirect.shipperUnpaid', { n: c.shipperUnpaid })}</span> : null}
+                  {c.shipperDisputed && !c.paidDirect ? <span class="load__meta">{t('common.paidDirect.shipperDisputed', { n: c.shipperDisputed })}</span> : null}
                   {/* Round 37 — loaded onto them by their pass, its seal not read yet: received nowhere until it is. */}
                   {control === 'onboard' && c.bagSeal && !c.bagSeal.taken && !c.held ? <span class="load__warn">{t('driver.bag.notRead')}</span> : null}
                 </span>

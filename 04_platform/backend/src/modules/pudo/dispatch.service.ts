@@ -182,6 +182,8 @@ export interface DriverJobRow {
   paidDirectAt?: string;
   /** …or, delivered, said it was NOT paid yet, at this time (absent once said paid). */
   notPaidDirectAt?: string;
+  /** …and the shipper's answer that it paid: its reference, and when (absent once said paid). */
+  shipperAnswer?: { at: string; reference: string };
   /** FP8 — what an upheld claim took back from that pay. */
   clawback?: number;
   claimedAt?: string;
@@ -195,7 +197,7 @@ function jobDate(f: Freight): string {
 }
 
 export function driverJobRowOf(f: Freight): DriverJobRow {
-  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, ...(f.lockedCurrency ? { currency: f.lockedCurrency } : {}), paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.paidDirect ? { paidDirectAt: f.paidDirect.at } : {}), ...(f.notPaidDirect && !f.paidDirect ? { notPaidDirectAt: f.notPaidDirect.at } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
+  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, ...(f.lockedCurrency ? { currency: f.lockedCurrency } : {}), paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.paidDirect ? { paidDirectAt: f.paidDirect.at } : {}), ...(f.notPaidDirect && !f.paidDirect ? { notPaidDirectAt: f.notPaidDirect.at } : {}), ...(f.paidDirectAnswer && !f.paidDirect ? { shipperAnswer: { at: f.paidDirectAnswer.at, reference: f.paidDirectAnswer.reference } } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
 }
 
 export interface DriverJobsSummary {
@@ -323,7 +325,9 @@ function paidWord(f: Freight): string {
   if (f.driverPaid) return 'yes';
   if (f.settlement !== 'between_parties') return 'no';
   if (f.paidDirect) return `by the shipper, confirmed ${f.paidDirect.at.slice(0, 10)}`;
-  return f.notPaidDirect ? `by the shipper, NOT paid as of ${f.notPaidDirect.at.slice(0, 10)}` : 'by the shipper';
+  if (!f.notPaidDirect) return 'by the shipper';
+  const answer = f.paidDirectAnswer ? `; the shipper says it paid (${f.paidDirectAnswer.reference})` : '';
+  return `by the shipper, NOT paid as of ${f.notPaidDirect.at.slice(0, 10)}${answer}`;
 }
 
 export function fleetJobsToCsv(rows: Freight[], nameOf: (did: string) => string): string {
@@ -386,7 +390,7 @@ export class DispatchService {
   // so — unlike the ephemeral offer bulletin — it must survive a restart.
   private readonly freights = new PersistentMap<string, Freight>('pudo-freights');
   /** How many of each shipper's matched loads are said unpaid after a week — read at most once a minute (unpaidByShipper). */
-  private unpaid?: { at: number; counts: Map<string, number> };
+  private unpaid?: { at: number; counts: Map<string, { unpaid: number; disputed: number }> };
 
   /** Loads paid for first by a person, billed and given back through what they paid (registerPrepaid, 2026-10-27). */
   private prepaid?: PrepaidShipper;
@@ -906,6 +910,7 @@ export class DispatchService {
       ref: load.ref,
       ...(load.paidByShipper ? { paidByShipper: true } : {}),
       ...(load.shipperUnpaid ? { shipperUnpaid: load.shipperUnpaid } : {}),
+      ...(load.shipperDisputed ? { shipperDisputed: load.shipperDisputed } : {}),
       pickupLabel: load.pickupLabel,
       pickupLocation: load.pickupLocation,
       destLabel: load.destLabel,
@@ -1763,7 +1768,7 @@ export class DispatchService {
         // A match (2026-10-27): the poster pays the driver directly — and, once the driver says so, that it was paid.
         ...(f.settlement === 'between_parties' ? { paysDriverDirect: true } : {}),
         ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}),
-        ...(f.notPaidDirect && !f.paidDirect ? { notPaidDirect: f.notPaidDirect } : {}),
+        ...(f.notPaidDirect && !f.paidDirect ? { notPaidDirect: f.notPaidDirect, ...(f.paidDirectAnswer ? { paidDirectAnswer: f.paidDirectAnswer } : { canAnswerNotPaid: true }) } : {}),
         // Made by this business, or by the one the load was sent to (under a term that passed it the risk).
         ...(f.claim ? { claim: { ...f.claim, by: this.claimRaisedBy(f) } } : {}),
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
@@ -3763,25 +3768,54 @@ export class DispatchService {
    * account that posted the loads (a business's people share one), read at most once a minute and again whenever a load is
    * said paid or not.
    */
-  private unpaidByShipper(now: number): Map<string, number> {
+  private unpaidByShipper(now: number): Map<string, { unpaid: number; disputed: number }> {
     if (this.unpaid && now >= this.unpaid.at && now - this.unpaid.at < 60_000) return this.unpaid.counts;
-    const counts = new Map<string, number>();
+    const counts = new Map<string, { unpaid: number; disputed: number }>();
     const before = now - UNPAID_SHOWN_AFTER_D * 86_400_000;
     for (const f of this.freights.values()) {
       if (f.settlement !== 'between_parties' || !f.notPaidDirect || f.paidDirect || Date.parse(f.notPaidDirect.at) > before) continue;
       const shipper = f.postedByDid ?? f.shipperDid;
-      if (shipper) counts.set(shipper, (counts.get(shipper) ?? 0) + 1);
+      if (!shipper) continue;
+      // Both sides heard (2026-10-27): a load the shipper answered it paid is DISPUTED, never counted as unpaid.
+      const c = counts.get(shipper) ?? { unpaid: 0, disputed: 0 };
+      if (f.paidDirectAnswer) c.disputed += 1;
+      else c.unpaid += 1;
+      counts.set(shipper, c);
     }
     this.unpaid = { at: now, counts };
     return counts;
   }
 
   /** On a matched load, before it is taken: how many of its shipper's loads are said unpaid after a week. Nothing when none. */
-  private shipperUnpaidOf(f: Freight, now: number): { shipperUnpaid?: number } {
+  private shipperUnpaidOf(f: Freight, now: number): { shipperUnpaid?: number; shipperDisputed?: number } {
     const shipper = f.postedByDid ?? f.shipperDid;
     if (f.settlement !== 'between_parties' || !shipper) return {};
-    const n = this.unpaidByShipper(now).get(shipper) ?? 0;
-    return n > 0 ? { shipperUnpaid: n } : {};
+    const c = this.unpaidByShipper(now).get(shipper);
+    return { ...(c?.unpaid ? { shipperUnpaid: c.unpaid } : {}), ...(c?.disputed ? { shipperDisputed: c.disputed } : {}) };
+  }
+
+  /**
+   * THE SHIPPER ANSWERS (the user, 2026-10-27: "build the shipper answer as a fair principle"): a driver said a load was not
+   * paid; the shipper — signed in as itself, never staff in its name — answers that it paid, with a reference that can be
+   * checked (an M-Pesa code, a bank reference, or when and to whom cash was handed). Its word stands beside the driver's: the
+   * driver and their fleet's office are told and see it, and drivers deciding on its next loads see such a load as DISPUTED,
+   * not unpaid. We judge neither, and no money moves through us. One answer, as there is one "not paid"; a driver who then
+   * says it was paid closes it.
+   */
+  answerNotPaidDirect(freightId: string, input: { reference: string; byName?: string }, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (!f.notPaidDirect || f.paidDirect) throw new GlosError('INVALID_STATE', f.paidDirect ? 'Its driver said it was paid: there is nothing to answer.' : 'Nobody said this load was not paid: there is nothing to answer.');
+    if (f.paidDirectAnswer) throw new GlosError('INVALID_STATE', `You answered on ${f.paidDirectAnswer.at.slice(0, 10)} that you paid (${f.paidDirectAnswer.reference}): one answer is kept, as one "not paid" is.`);
+    const reference = String(input.reference ?? '').trim().replace(/\s+/g, ' ');
+    if (reference.length < 3) throw new GlosError('FIELD_REQUIRED', 'Give the reference the driver can check: an M-Pesa code, a bank reference, or when and to whom you handed cash', { field: 'reference' });
+    f.paidDirectAnswer = { at: new Date(now).toISOString(), reference: reference.slice(0, 80), ...(input.byName?.trim() ? { byName: input.byName.trim().slice(0, 80) } : {}) };
+    this.freights.set(f.freightId, f);
+    this.unpaid = undefined;
+    const carrier = this.carrierOf(f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightNotPaidAnswered, { freightId: f.freightId, code: f.code, reference: f.paidDirectAnswer.reference, amount: f.lockedPrice ?? 0, currency: lockedCurrencyOf(f), driverDid: f.claimedBy, ...(carrier && carrier !== f.claimedBy ? { officeDid: carrier } : {}), destLabel: f.destLabel }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
   }
 
   /**

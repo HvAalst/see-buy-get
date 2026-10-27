@@ -30,7 +30,7 @@ import type { GeoPoint } from '../../shared/geo';
 import { peopleApi } from './people';
 import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from './staff';
 import { setOutboxActor } from '../../shared/outbox';
-import type { NotPaidView, PaidDirectView } from '../../shared/paidDirect';
+import type { NotPaidView, PaidAnswerView, PaidDirectView } from '../../shared/paidDirect';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import type {
   AgentLedgerRow,
@@ -112,6 +112,9 @@ export interface PostedFreight {
   paysDriverDirect?: boolean;
   paidDirect?: PaidDirectView;
   notPaidDirect?: NotPaidView;
+  /** …and the shop's answer that it paid, with a reference; or that it may still answer. */
+  paidDirectAnswer?: PaidAnswerView;
+  canAnswerNotPaid?: boolean;
   /** CL1 — the agreed term, the place it names, and who a loss in transit belongs to. */
   incoterm?: string;
   namedPlace?: string;
@@ -1725,6 +1728,19 @@ export function useAgentApp() {
     [client, pushToast, t, loadPosted],
   );
 
+  /** A driver said this load was not paid: the shop answers that it paid, with a reference (2026-10-27). The refusal in words, or null. */
+  const answerNotPaid = useCallback(
+    async (freightId: string, reference: string): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.answerNotPaid(freightId, reference);
+      if (r.error) return refusalSentence(r.error);
+      pushToast({ tone: 'ok', icon: 'check', title: t('common.paidDirect.answerDone') });
+      await loadPosted();
+      return null;
+    },
+    [client, pushToast, t, loadPosted],
+  );
+
   /** FP6 — the shop's verdict on the carrier, once the load is delivered. Last wins on the same load. */
   const rateFreight = useCallback(
     async (freightId: string, body: { stars: number; issues?: string[] }) => {
@@ -2546,6 +2562,7 @@ export function useAgentApp() {
       rateFreight,
       setFreightInstructions,
       decideRefusal,
+      answerNotPaid,
       openFreightClaim,
       loadConsignments,
       openConsignment,

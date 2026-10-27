@@ -1,5 +1,5 @@
 import type { SystemMessage, SystemView } from './system';
-import type { NotPaidView, PaidDirectView } from '../../shared/paidDirect';
+import type { NotPaidView, PaidAnswerView, PaidDirectView } from '../../shared/paidDirect';
 import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { Gs1DisputeView } from './gs1Dispute';
 import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
@@ -261,6 +261,9 @@ export interface PostedLoad {
   paysDriverDirect?: boolean;
   paidDirect?: PaidDirectView;
   notPaidDirect?: NotPaidView;
+  /** …and its answer that it paid, with a reference; or that it may still answer. */
+  paidDirectAnswer?: PaidAnswerView;
+  canAnswerNotPaid?: boolean;
   /** Round 26 — in one country, on the road: when it is expected, and at what pace. Absent where its carrier's plan has the hour. */
   arrival?: ArrivalView;
 }

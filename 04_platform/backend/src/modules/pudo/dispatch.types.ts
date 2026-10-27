@@ -506,6 +506,18 @@ export class NotPaidDirect {
   @ApiProperty({ enum: ['driver', 'office'] }) by: 'driver' | 'office';
 }
 
+/**
+ * BOTH SIDES HEARD (the user, 2026-10-27: "build the shipper answer as a fair principle"): a driver said NOT paid, and the
+ * shipper answers that it paid — with a reference that can be checked, and when. Its word beside the driver's; we judge neither.
+ */
+export class PaidDirectAnswer {
+  at: string;
+  /** An M-Pesa code, a bank reference, or when and to whom cash was handed. */
+  reference: string;
+  /** Who in the shipper answered, where its people share one account. */
+  @ApiPropertyOptional() byName?: string;
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -745,6 +757,8 @@ export class Freight {
   @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
   /** …or, delivered, that it was NOT paid yet. Said paid later, paid is what stands. */
   @ApiPropertyOptional({ type: NotPaidDirect }) notPaidDirect?: NotPaidDirect;
+  /** …and the shipper's answer: it paid, with a reference. Both stand side by side until the carrier says it was paid. */
+  @ApiPropertyOptional({ type: PaidDirectAnswer }) paidDirectAnswer?: PaidDirectAnswer;
   /** When its carrier was asked whether it was paid, PAID_DIRECT_ASK_H after delivery — once. */
   @ApiPropertyOptional() paidDirectAskedAt?: string;
   /** Which person in a business posted it — the business's DID is shared by everybody in it. */
@@ -1002,6 +1016,8 @@ export class BoardRow {
   @ApiPropertyOptional() paidByShipper?: boolean;
   /** …and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none. */
   @ApiPropertyOptional() shipperUnpaid?: number;
+  /** …and on how many of its loads said not paid the shipper answered that it paid, with a reference: disputed, not unpaid. */
+  @ApiPropertyOptional() shipperDisputed?: number;
   code: string;
   description: string;
   pickupLabel: string;
@@ -1491,6 +1507,10 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
   /** …or, delivered, says it was NOT paid yet (absent once said paid). */
   @ApiPropertyOptional({ type: NotPaidDirect }) notPaidDirect?: NotPaidDirect;
+  /** …and the shipper's answer that it paid, with its reference (absent once said paid). */
+  @ApiPropertyOptional({ type: PaidDirectAnswer }) paidDirectAnswer?: PaidDirectAnswer;
+  /** Said not paid, not yet answered: the shipper may answer that it paid. */
+  @ApiPropertyOptional() canAnswerNotPaid?: boolean;
 }
 
 /** FP3b — what the sender gets back for opening a claim. */
@@ -1604,6 +1624,8 @@ export class Claimable {
   @ApiPropertyOptional() paidByShipper?: boolean;
   /** …and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none. */
   @ApiPropertyOptional() shipperUnpaid?: number;
+  /** …and on how many of its loads said not paid the shipper answered that it paid, with a reference: disputed, not unpaid. */
+  @ApiPropertyOptional() shipperDisputed?: number;
   /** …and the driver, or their fleet's office, said it was paid: when and how much. Until then the driver may say so. */
   @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
   /** Freight crossing a border whose shipper has not yet signed its commercial invoice: it cannot be taken over yet. */
@@ -1726,6 +1748,8 @@ export class Offer {
   @ApiPropertyOptional() paidByShipper?: boolean;
   /** …and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none. */
   @ApiPropertyOptional() shipperUnpaid?: number;
+  /** …and on how many of its loads said not paid the shipper answered that it paid, with a reference: disputed, not unpaid. */
+  @ApiPropertyOptional() shipperDisputed?: number;
   driverDid: string;
   kind: ClaimableKind;
   ref: string;

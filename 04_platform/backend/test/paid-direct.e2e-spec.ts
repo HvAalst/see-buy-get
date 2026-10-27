@@ -221,4 +221,49 @@ describe('a matched load, paid: the carrier says so', () => {
     expect(onBoard(again)?.shipperUnpaid).toBeUndefined();
     expect(onBoard(again, Date.now() + 8 * 86_400_000)?.shipperUnpaid).toBeUndefined();
   });
+
+  it('both sides heard: the shipper answers a driver’s “not paid” with a reference — the driver is told, and drivers see it as disputed, not unpaid', async () => {
+    const biz = await aShipper();
+    const stranger = await aShipper();
+    const driver = await aDriverOf();
+    const dispatch = app.get(DispatchService);
+    const { freightId, code } = await aMatchedLoad(biz, driver.did);
+    const answer = (token: string, reference: string) => http().post(`/v1/sbg/dispatch/freight/${freightId}/not-paid-direct/answer`).set(bearer(token)).send({ reference });
+    // Nothing to answer before a driver says it was not paid.
+    expect((await answer(biz, 'QJK4TR21XY')).status).toBe(400);
+    stored().set(freightId, { ...stored().get(freightId), status: 'delivered', deliveredAt: new Date().toISOString() });
+    await http().post(`/v1/sbg/dispatch/freight/${freightId}/not-paid-direct`).set(bearer(driver.token)).expect(201);
+    expect(await posted(biz, freightId)).toMatchObject({ canAnswerNotPaid: true });
+
+    // Only the shipper, as itself: another business is told there is no such load, staff answer nothing in its name, a blank reference is no answer.
+    expect((await answer(stranger, 'QJK4TR21XY')).status).toBe(404);
+    const staff = await answer(operator, 'QJK4TR21XY');
+    expect([staff.status, staff.body.detail]).toEqual([403, 'Whether a load was paid is the shipper’s to answer, signed in as the shipper. Staff answer nothing in its name']);
+    expect((await answer(biz, '  ')).status).toBe(400);
+
+    // The shipper answers: on its load, to the driver, in the driver's register.
+    const said = (await answer(biz, '  QJK4TR21XY   paid at the gate ').expect(201)).body;
+    expect(said.paidDirectAnswer).toMatchObject({ reference: 'QJK4TR21XY paid at the gate', at: expect.any(String) });
+    const row = await posted(biz, freightId);
+    expect(row).toMatchObject({ notPaidDirect: expect.any(Object), paidDirectAnswer: said.paidDirectAnswer });
+    expect(row.canAnswerNotPaid).toBeUndefined();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await inbox(driver.token)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'freight_paid_direct', title: `Load ${code}: the shipper says it paid` })]));
+    const jobs = (await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/jobs`).set(bearer(driver.token)).expect(200)).body.items;
+    expect(jobs.find((j: { freightId: string }) => j.freightId === freightId)).toMatchObject({ notPaidDirectAt: expect.any(String), shipperAnswer: { reference: 'QJK4TR21XY paid at the gate' } });
+    // One answer, as there is one "not paid".
+    expect((await answer(biz, 'ANOTHER123')).status).toBe(400);
+
+    // A week on: drivers see the load as disputed, never as unpaid.
+    const next = (await http().post('/v1/sbg/dispatch/freight').set(bearer(biz)).send({ description: 'Cut stone, wrapped', pickupLocation: { lat: -1.31, lng: 36.84 }, pickupLabel: 'Mawe quarry', destLabel: 'Athi River site', destLocation: { lat: -1.45, lng: 36.98 }, weightKg: 800, packaging: 'piece', packages: 1 }).expect(201)).body.freightId as string;
+    const seen = dispatch.board({ from: { lat: -1.31, lng: 36.84 }, radiusKm: 50 }, Date.now() + 8 * 86_400_000).find((r) => r.freightId === next)!;
+    expect(seen.shipperUnpaid).toBeUndefined();
+    expect(seen.shipperDisputed).toBe(1);
+
+    // The driver says it was paid after all: nothing stands against the shipper.
+    await tick(freightId, driver.token).expect(201);
+    const after = dispatch.board({ from: { lat: -1.31, lng: 36.84 }, radiusKm: 50 }, Date.now() + 8 * 86_400_000).find((r) => r.freightId === next)!;
+    expect(after.shipperDisputed).toBeUndefined();
+    expect((await posted(biz, freightId)).paidDirectAnswer).toBeUndefined();
+  });
 });

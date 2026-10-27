@@ -19385,6 +19385,38 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/not-paid-direct/answer": {
+      "post": {
+        "operationId": "Sbg.answerNotPaidFreight",
+        "summary": "",
+        "description": "THE SHIPPER ANSWERS A DRIVER'S \"NOT PAID\" (the user, 2026-10-27: \"build the shipper answer as a fair principle\"): it paid,\nwith a reference that can be checked. The sender's own word, signed in as the sender: staff answer nothing in its name.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerNotPaidDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/claim": {
       "post": {
         "operationId": "Sbg.freightClaim",
@@ -47710,6 +47742,26 @@
           "at"
         ]
       },
+      "PaidDirectAnswer": {
+        "type": "object",
+        "properties": {
+          "byName": {
+            "type": "string",
+            "description": "Who in the shipper answered, where its people share one account."
+          },
+          "at": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "An M-Pesa code, a bank reference, or when and to whom cash was handed."
+          }
+        },
+        "required": [
+          "at",
+          "reference"
+        ]
+      },
       "ClientRef": {
         "type": "object",
         "properties": {
@@ -48543,6 +48595,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/NotPaidDirect"
+              }
+            ]
+          },
+          "paidDirectAnswer": {
+            "description": "…and the shipper's answer: it paid, with a reference. Both stand side by side until the carrier says it was paid.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaidDirectAnswer"
               }
             ]
           },
@@ -51780,6 +51840,10 @@
             "type": "number",
             "description": "…and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none."
           },
+          "shipperDisputed": {
+            "type": "number",
+            "description": "…and on how many of its loads said not paid the shipper answered that it paid, with a reference: disputed, not unpaid."
+          },
           "cargoClass": {
             "type": "string",
             "enum": [
@@ -53330,6 +53394,18 @@
               }
             ]
           },
+          "paidDirectAnswer": {
+            "description": "…and the shipper's answer that it paid, with its reference (absent once said paid).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaidDirectAnswer"
+              }
+            ]
+          },
+          "canAnswerNotPaid": {
+            "type": "boolean",
+            "description": "Said not paid, not yet answered: the shipper may answer that it paid."
+          },
           "freightId": {
             "type": "string"
           },
@@ -53802,6 +53878,19 @@
           "code"
         ]
       },
+      "AnswerNotPaidDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "description": "An M-Pesa code, a bank reference, or when and to whom cash was handed.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "reference"
+        ]
+      },
       "OpenFreightClaimDto": {
         "type": "object",
         "properties": {
@@ -54187,6 +54276,10 @@
           "shipperUnpaid": {
             "type": "number",
             "description": "…and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none."
+          },
+          "shipperDisputed": {
+            "type": "number",
+            "description": "…and on how many of its loads said not paid the shipper answered that it paid, with a reference: disputed, not unpaid."
           },
           "border": {
             "description": "CA6 — for a load that crosses a border: where it may cross, when, what to carry, and the limits.",

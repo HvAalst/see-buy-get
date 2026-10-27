@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, ErrorNote, GlanceNumber, Icon, PaidDirectSheet, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
-import { maySayNotPaid, maySayPaid, paidWhen } from '../../../shared/paidDirect';
+import { maySayNotPaid, maySayPaid, paidWhen, shipperAnswerLine } from '../../../shared/paidDirect';
 import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { cash, settlementLines } from '../logic';
@@ -199,6 +199,8 @@ function JobRow({ j, currency, onSayPaid, onSayNotPaid }: { j: DriverJobRow; cur
         {j.paidDirectAt ? <span class="row__meta">{t('driver.earn.paidDirectLine', { when: paidWhen(j.paidDirectAt) })}</span> : null}
         {/* Delivered, said NOT paid yet (2026-10-27): when — they may still say it was paid. */}
         {j.notPaidDirectAt ? <span class="row__meta row__s--danger">{t('driver.earn.notPaidDirectLine', { when: paidWhen(j.notPaidDirectAt) })}</span> : null}
+        {/* …and the shipper's answer, beside it: if the money reached them, they say it was paid (2026-10-27). */}
+        {j.shipperAnswer ? <span class="row__meta">{shipperAnswerLine(j.shipperAnswer, t)}</span> : null}
         {maySayPaid(j) ? (
           <span class="row__meta">
             <Button variant="link" full={false} onClick={onSayPaid}>

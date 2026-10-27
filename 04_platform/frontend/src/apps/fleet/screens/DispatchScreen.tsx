@@ -119,6 +119,7 @@ function LoadRow({ row, driver, state, actions }: { row: DispatchRow; driver: { 
         {/* A match: who pays the driver it is put on — and what drivers say of this shipper (2026-10-27). */}
         {row.paidByShipper ? <span class="row__s">{t('fleet.dispatch.paidByShipper')}</span> : null}
         {row.shipperUnpaid ? <span class="row__s row__s--warn">{t('common.paidDirect.shipperUnpaid', { n: row.shipperUnpaid })}</span> : null}
+        {row.shipperDisputed ? <span class="row__s">{t('common.paidDirect.shipperDisputed', { n: row.shipperDisputed })}</span> : null}
         {kind === 'negotiate' ? <span class="row__s">{t('fleet.dispatch.negotiate')}</span> : null}
         {row.blockers.length ? (
           <span class="chips" style="margin-top:4px">

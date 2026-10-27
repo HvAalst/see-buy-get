@@ -19,6 +19,23 @@ export interface NotPaidView {
   by: 'driver' | 'office';
 }
 
+/** The shipper's answer to a driver's "not paid": it paid, with a reference the driver can check (2026-10-27). */
+export interface PaidAnswerView {
+  at: string;
+  reference: string;
+  byName?: string;
+}
+
+/** The shipper's own answer, as it reads it back on its load. */
+export function ownAnswerLine(a: PaidAnswerView, t: Translate): string {
+  return t('common.paidDirect.ownAnswer', { reference: a.reference, when: paidWhen(a.at) });
+}
+
+/** The carrier's side: what the shipper answered, beside what the carrier said. */
+export function shipperAnswerLine(a: { at: string; reference: string }, t: Translate): string {
+  return t('common.paidDirect.shipperAnswered', { reference: a.reference, when: paidWhen(a.at) });
+}
+
 /** When it was said, short: "27 Oct, 14:05". */
 export function paidWhen(at: string): string {
   return new Date(at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });

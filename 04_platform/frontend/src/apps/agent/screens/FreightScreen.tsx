@@ -13,7 +13,7 @@ import { utcMoment } from '../../../shared/refusal';
 import { OffersSection } from './OffersSection';
 import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
 import { money } from '../logic';
-import { shipperPaidLine } from '../../../shared/paidDirect';
+import { ownAnswerLine, shipperPaidLine } from '../../../shared/paidDirect';
 
 export interface FreightScreenProps {
   state: AgentState;
@@ -210,6 +210,8 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       ) : null}
       {/* Refused at the door: where the goods go is the shop's to say, as the sender — or what became of them. */}
       {load.refusal ? <RefusalCard refusal={load.refusal} pickupLabel={load.pickupLabel ?? ''} canDecide={Boolean(load.canDecideRefusal)} decide={(body) => actions.decideRefusal(load.freightId, body)} geocode={(q) => actions.geocodePlace(q)} near={state.agent?.location ?? null} /> : null}
+      {/* A driver said it was not paid: the shop answers that it paid, with a reference — both sides heard (2026-10-27). */}
+      {load.notPaidDirect ? <PaidAnswerCard load={load} actions={actions} /> : null}
       {/* FP3b — every failed attempt, and the claim: the two things a shop rings about. */}
       {load.attempts?.length ? (
         <Card tone="soft">
@@ -455,6 +457,44 @@ function PriceRow({ p, load, state, actions, onTake }: { p: FreightPrice; load: 
  * link and a QR that answer where the load is and who will be at the door, and nothing more. Share where the
  * phone can, copy where it cannot.
  */
+/** A driver said this load was not paid; the shop answers that it paid, with a reference the driver can check. One answer. */
+function PaidAnswerCard({ load, actions }: { load: PostedFreight; actions: AgentActions }) {
+  const t = useT();
+  const [reference, setReference] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const send = async () => {
+    setBusy(true);
+    setProblem(await actions.answerNotPaid(load.freightId, reference.trim()));
+    setBusy(false);
+  };
+  return (
+    <Card tone="soft">
+      <p class="card__note">{shipperPaidLine(load, t)}</p>
+      {load.paidDirectAnswer ? <p class="card__note">{ownAnswerLine(load.paidDirectAnswer, t)}</p> : null}
+      {load.canAnswerNotPaid ? (
+        <>
+          <div class="field">
+            <label class="field__label" for={`paid-ref-${load.freightId}`}>
+              {t('common.paidDirect.answerLabel')}
+            </label>
+            <input id={`paid-ref-${load.freightId}`} class="input" maxLength={80} value={reference} onInput={(e) => setReference(e.currentTarget.value)} />
+            <p class="hint">{t('common.paidDirect.answerHint')}</p>
+          </div>
+          {problem ? (
+            <p class="hint" role="alert">
+              {problem}
+            </p>
+          ) : null}
+          <Button busy={busy} disabled={reference.trim().length < 3} onClick={() => void send()}>
+            {t('common.paidDirect.answerSend')}
+          </Button>
+        </>
+      ) : null}
+    </Card>
+  );
+}
+
 function TrackingSheet({ load, open, onClose }: { load: PostedFreight; open: boolean; onClose: () => void }) {
   const t = useT();
   const [copied, setCopied] = useState(false);
