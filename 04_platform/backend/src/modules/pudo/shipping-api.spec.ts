@@ -841,6 +841,23 @@ describe('the public shipping quote', () => {
       expect(shipping.callOffPreview(made.shipmentId, caller)).toMatchObject({ outcome: 'no', why: `It is on its way back already, as ${called.returnShipmentId}.` });
     });
 
+    it('at a hub, not handed in at a shop: names where it comes back to — a collection point, or its own door as a load (2026-10-27)', () => {
+      const { from } = domesticPair();
+      const { store, caller } = merchant();
+      const made = mint(order({ externalOrderId: 'SO-PICK' }), caller);
+      const hub = mdps.register({ name: 'Naivasha Hub', zones: ['Nairobi', 'Kisumu'], location: { lat: -0.72, lng: 36.43 } }, { approvedBy: 'staff' });
+      Object.assign(parcels.get(made.shipmentId), { status: 'At_MDP', atMdpId: hub.mdpId, originAgentDid: undefined });
+      vendors.setCollectionPoint(store.vendorId, { label: 'Warehouse gate 2', zone: 'Nairobi', location: { lat: -1.3, lng: 36.85 } });
+      expect(shipping.callOffPreview(made.shipmentId, caller)).toEqual({ parcelId: made.shipmentId, outcome: 'pick', atHub: 'Naivasha Hub', door: 'Warehouse gate 2' });
+      expect(shipping.callOffPreview(made.shipmentId, caller, from.did)).toMatchObject({ outcome: 'bring_back', backTo: 'Nairobi CBD' });
+      const door = shipping.callOffPreview(made.shipmentId, caller, 'door');
+      expect(door).toMatchObject({ outcome: 'to_door', backTo: 'Warehouse gate 2', currency: 'KES' });
+      // Without saying where, it is refused and nothing changes.
+      expect(() => shipping.cancelShipment(made.shipmentId, caller, 'buyer cancelled')).toThrow(/say where it comes back to/);
+      const called = shipping.cancelShipment(made.shipmentId, caller, 'buyer cancelled', { backTo: 'door', maxSpend: door.suggestedMax });
+      expect(called).toMatchObject({ status: 'Returned', cancellable: false, returnLoad: expect.stringMatching(/^FRT-/) });
+    });
+
     it('cannot cancel a stranger’s shipment either', () => {
       domesticPair();
       const mine = merchant();

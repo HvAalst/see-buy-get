@@ -106,6 +106,8 @@ export interface VendorOrderRow {
   returnParcelId?: string;
   /** The parcel bringing back one called off at a hub: that one, which the store collects again at the shop it handed it in at. */
   returnOf?: string;
+  /** Called off at a hub and going to the store's own door as a load: that load's code. */
+  returnLoadCode?: string;
 }
 
 /**
@@ -310,6 +312,7 @@ export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
     // Called off at a hub: the two parcels read as one story — the one coming back, and the one it brings back.
     ...(p.returnParcelId ? { returnParcelId: p.returnParcelId } : {}),
     ...(p.returnOf ? { returnOf: p.returnOf.parcelId } : {}),
+    ...(p.returnLoad ? { returnLoadCode: p.returnLoad.code } : {}),
   };
 }
 
@@ -3188,6 +3191,33 @@ export class ParcelService implements OnApplicationBootstrap {
     this.media.anchorParcelTerminal(parcel.parcelId);
     this.persist(parcel);
     return { calledOff: parcel, back };
+  }
+
+  /**
+   * A STORE'S PARCEL CALLED OFF AT A HUB, GOING TO THE STORE'S OWN DOOR AS A LOAD (the user, 2026-10-27: "As a load to its
+   * door"): closed as Returned, pointing at the load that carries it, and out of any bag. The hub holds the box until it hands
+   * it to the load's driver, by their pass (handOnHome).
+   */
+  closeAsGoingHome(parcelId: string, load: { freightId: string; code: string }, hubName: string, by: string, reason: string | undefined, now: number = Date.now()): Parcel {
+    const parcel = this.require(parcelId);
+    this.refuseIfHeld(parcel);
+    if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `${parcelId} is not at a hub`);
+    parcel.status = 'Returned';
+    parcel.returnLoad = { freightId: load.freightId, code: load.code };
+    parcel.toteId = undefined;
+    this.scan(parcel, 'Returned', by, `called off by the store at ${hubName} · going to its door as load ${load.code}${reason ? ` · ${reason}` : ''}`, { at: new Date(now).toISOString() });
+    this.media.anchorParcelTerminal(parcel.parcelId);
+    this.persist(parcel);
+    return parcel;
+  }
+
+  /** A box going to its store's door, handed on: by the hub to the load's driver, then by the driver to the store. Custody only. */
+  handOnHome(parcelId: string, to: { kind: CustodyKind; id: string }, note: string, at: string): Parcel {
+    const parcel = this.require(parcelId);
+    if (parcel.status !== 'Returned' || !parcel.returnLoad) throw new GlosError('INVALID_STATE', `${parcelId} is not going to its store's door`);
+    this.handTo(parcel, to.kind, to.id, note, { at });
+    this.persist(parcel);
+    return parcel;
   }
 
   /**

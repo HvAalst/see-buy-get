@@ -217,6 +217,9 @@ export const ERROR_CODES = {
   // A store called this parcel off at a hub: it goes back to its shop under a NEW label, put over the old one there (the user,
   // 2026-10-27: "Comes back, store pays"). Its old label scanned, the floor is told which label to put on it.
   NEW_LABEL: { status: 409, title: 'It goes on under a new label' },
+  // …or to the store's own door as a load (the user, 2026-10-27: "As a load to its door"): kept aside at the hub, and
+  // handed only to the driver who took that load, by their pass.
+  SET_ASIDE: { status: 409, title: 'Set it aside for its driver' },
   INVITE_LIMIT: { status: 409, title: 'Too many open invites' },
   IDEMPOTENCY_REUSED: { status: 409, title: 'That idempotency key was used for a different request' },
   QUOTE_SPENT: { status: 409, title: 'That quote has already been used' },

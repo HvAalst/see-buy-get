@@ -46,7 +46,7 @@ import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE
 import { Router, ROUTER } from './router';
 import { groupOf, laneDrive, lanesOf, tripKmh, type LaneDrive, type LaneTrip } from './lane-times';
 import { handedAt } from './observed-at';
-import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DOOR_GUIDE_DEADHEAD_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -541,7 +541,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; returnOf?: FreightLink; betweenParties?: boolean }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string } }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -665,6 +665,8 @@ export class DispatchService {
       ...(input.emptyRun ? { emptyRun: true } : {}),
       // Refused goods carried on as a new load (the user, 2026-10-27): the load they were refused on.
       ...(input.returnOf ? { returnOf: { freightId: input.returnOf.freightId, code: input.returnOf.code } } : {}),
+      // A store's parcel called off at a hub, going to the store's own door as this load (2026-10-27).
+      ...(input.bringsBack ? { bringsBack: { parcelId: input.bringsBack.parcelId, atMdpId: input.bringsBack.atMdpId, hubName: input.bringsBack.hubName } } : {}),
       // BL1 — uncleared goods. The country defaults to the leg's own, because a bond is held where the
       // wheels turn; it is stated separately only so a caller cannot quietly mean a different one.
       ...(input.bonded ? { bonded: true, bondCountry: (input.bondCountry ?? input.pickupCountry ?? '').toUpperCase() } : {}),
@@ -1733,6 +1735,7 @@ export class DispatchService {
         // Refused at the door (the user, 2026-10-27): by when the sender decides, what it decided, and where "back" is.
         ...(f.refusal ? { refusal: f.refusal, canDecideRefusal: (f.status === 'in_transit' || (f.status === 'delivered' && Boolean(f.refusal.part))) && !f.refusal.decision, pickupLabel: f.pickupLabel } : {}),
         ...(f.returnOf ? { returnOf: f.returnOf } : {}),
+        ...(f.bringsBack ? { bringsBack: f.bringsBack } : {}),
         // Made by this business, or by the one the load was sent to (under a term that passed it the risk).
         ...(f.claim ? { claim: { ...f.claim, by: this.claimRaisedBy(f) } } : {}),
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
@@ -2996,6 +2999,9 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected claimed`);
+    // A store's parcel waiting at a hub (2026-10-27): the hub hands it over first, by the driver's pass — the box is the hub's
+    // to hand on, and it hands it to nobody but the driver who took this load.
+    if (f.bringsBack && !f.bringsBack.handedAt) throw new GlosError('SET_ASIDE', `Parcel ${f.bringsBack.parcelId} waits at ${f.bringsBack.hubName}: show your pass at its counter, and they hand it to you first`, { parcelId: f.bringsBack.parcelId });
     // Round 35 — held under the tamper protocol: not taken over until operations releases it.
     this.refuseIfHeld(f);
     // A load reserved ahead of its date can't be picked up before it — the cargo (or the consolidated lot)
@@ -3344,6 +3350,63 @@ export class DispatchService {
   }
 
   /**
+   * THE MOST TO ALLOW FOR A LOAD TO A STORE'S DOOR, SUGGESTED (the user, 2026-10-27: "As a load to its door"): what a car
+   * (or the smallest body that holds the box where a car cannot) would be paid at its busiest, from DOOR_GUIDE_DEADHEAD_KM away, over the road from
+   * the hub to the door — as the store would be billed it. A suggestion only: each driver's own figures decide the price,
+   * and none may take the load above what the store allows.
+   */
+  doorGuide(input: { from: GeoPoint; to: GeoPoint; weightKg: number; fragile: boolean; shipperDid: string }): { suggestedMax: number; vehicleClass: string } {
+    // A car's, or the smallest body that holds it where a car cannot: room for a bicycle, a motorbike, a tuk-tuk or a car to take it.
+    const order = ['car', 'van', 'truck'] as const;
+    const cls = order.find((c) => VEHICLE_SPEC[c].maxParcelKg >= input.weightKg && (!input.fragile || VEHICLE_SPEC[c].allowsFragile)) ?? 'truck';
+    const price = computeFreightPrice({
+      baseFee: VEHICLE_SPEC[cls].defaultBaseFee,
+      ratePerKm: DEFAULT_PRICE_PER_KM,
+      deadheadKm: DOOR_GUIDE_DEADHEAD_KM,
+      tripKm: round1(this.router.roadKm(input.from, input.to)),
+      multiplier: DEFAULT_MAX_MULTIPLIER,
+    });
+    return { suggestedMax: Math.max(1, Math.ceil(this.shipperBill(price.total, { shipperDid: input.shipperDid }).gross)), vehicleClass: cls };
+  }
+
+  /**
+   * A HUB HANDS A STORE'S PARCEL TO THE DRIVER WHO TOOK ITS LOAD (2026-10-27), by their pass: nobody else's, and not before a
+   * driver has taken the load. Refused, in words the counter can act on, before anything is written. Answers the driver.
+   */
+  handBringsBack(freightId: string, mdpId: string, badgeId: string, byName: string, now: number = Date.now()): { load: Freight; driverDid: string } {
+    const f = this.requireFreight(freightId);
+    if (!f.bringsBack || f.bringsBack.atMdpId !== mdpId) throw new GlosError('NOT_FOUND', 'No parcel waits here for that load');
+    if (f.bringsBack.handedAt) throw new GlosError('INVALID_STATE', `Parcel ${f.bringsBack.parcelId} was handed to its driver already`);
+    if (f.status === 'available' || f.status === 'scheduled') throw new GlosError('INVALID_STATE', `No driver has taken load ${f.code} yet: hand it to the one who has`);
+    if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Load ${f.code} is ${f.status}`);
+    const driver = this.fleet.resolveBadge(String(badgeId ?? '').trim());
+    if (!driver || driver.driverDid !== f.claimedBy) throw new GlosError('FORBIDDEN', `That pass is not the driver of load ${f.code}: hand it only to the driver who took it`);
+    f.bringsBack = { ...f.bringsBack, handedAt: new Date(now).toISOString(), handedBy: byName.slice(0, 80) };
+    this.freights.set(f.freightId, f);
+    return { load: f, driverDid: driver.driverDid };
+  }
+
+  /**
+   * THE MOST A STORE PAYS FOR ITS PARCEL'S WAY TO ITS DOOR, RAISED (2026-10-27) — while no driver has taken the load: it cannot
+   * be withdrawn (the goods would wait at the hub for nobody), so a figure nobody takes it for is raised instead. Only up,
+   * only its own load, and only what its balance covers. Drivers near the hub are told again.
+   */
+  raiseMaxSpend(freightId: string, vendorId: string, amount: number): Freight {
+    const f = this.requireFreight(freightId);
+    if (!f.bringsBack || f.shipperDid !== vendorId) throw new GlosError('NOT_FOUND', 'No load of yours brings a parcel back');
+    if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Load ${f.code} was taken already: its price is fixed`);
+    const most = Math.round(Number(amount) * 100) / 100;
+    if (!Number.isFinite(most) || most <= (f.maxSpend ?? 0)) throw new GlosError('INVALID_INPUT', `Say more than ${f.maxSpend ?? 0}: the most can only be raised`, { field: 'maxSpend' });
+    if (this.vendors.balanceOf(vendorId) + 1e-9 < most) throw new GlosError('WALLET_INSUFFICIENT', `Top up first: your balance does not cover ${most}`);
+    f.maxSpend = most;
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightPosted, { freightId: f.freightId, code: f.code, pickupLocation: f.pickupLocation, destLabel: f.destLabel, weightKg: f.weightKg, cargoClass: f.cargoClass }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
+  }
+
+  /**
    * THE 48 HOURS (the user, 2026-10-27: "Back after 2 days"). A sender who has not decided is told, REFUSAL_REMIND_H hours
    * before the end, what happens with no answer — while there is still time to give one; at the end the goods go back to
    * where they were picked up, at the sender's cost. Each once. Answers what it did, for a test with a fixed clock.
@@ -3648,6 +3711,8 @@ export class DispatchService {
     if (f.status === 'cancelled') throw new GlosError('INVALID_STATE', 'This load is already cancelled');
     if (f.status === 'delivered') throw new GlosError('INVALID_STATE', 'This load is delivered — a problem with the goods is a claim, not a cancellation');
     if (f.status === 'in_transit') throw new GlosError('INVALID_STATE', 'The goods are already on the road — a load that has been taken over cannot be cancelled; talk to the driver');
+    // The only way home for a store's parcel called off at a hub: withdrawn, the goods would wait there for nobody.
+    if (f.bringsBack) throw new GlosError('INVALID_STATE', `This load brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}: it is not withdrawn. If no driver takes it, the store raises the most it pays`);
     const at = new Date(now).toISOString();
     let refunded: number | undefined;
     if (f.paidStatus === 'billed' && f.shipperDid && this.vendors.has(f.shipperDid)) {
@@ -4148,7 +4213,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

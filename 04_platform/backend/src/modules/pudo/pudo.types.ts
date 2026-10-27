@@ -1192,6 +1192,8 @@ export class Parcel {
    * goes over the old one at that hub.
    */
   returnOf?: { parcelId: string; atMdpId: string; at: string };
+  /** Called off at a hub and going to the store's own door as a load (2026-10-27: "As a load to its door"): that load. */
+  returnLoad?: { freightId: string; code: string };
   /**
    * When the free collection window ran out — the start of the holding-fee clock.
    *

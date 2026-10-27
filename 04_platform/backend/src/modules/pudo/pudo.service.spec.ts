@@ -10745,11 +10745,11 @@ describe('PUDO Light', () => {
         expect(parcels.get(poor.id).status).toBe('At_MDP');
         expect(orders()).toBe(count);
 
-        // Collected from the store's own door, or handed in at a hub: no shop to bring it back to — it carries on.
+        // Collected from the store's own door, or handed in at a hub: the store says where it comes back to first (2026-10-27).
         const dock = atHub('COR2');
         parcels.get(dock.id).originAgentDid = undefined;
-        expect(dock.callOffs.preview(dock.vendor.vendorId, dock.id)).toEqual({ parcelId: dock.id, outcome: 'no', why: 'It was not handed in at a shop, so there is no shop to bring it back to: it carries on to the buyer.' });
-        expect(() => dock.callOffs.callOff(dock.vendor.vendorId, dock.id, 'COR2 Store')).toThrow(/no shop to bring it back to/);
+        expect(dock.callOffs.preview(dock.vendor.vendorId, dock.id)).toEqual({ parcelId: dock.id, outcome: 'pick', atHub: dock.hub.name });
+        expect(() => dock.callOffs.callOff(dock.vendor.vendorId, dock.id, 'COR2 Store')).toThrow(/say where it comes back to/);
 
         // The shop it was handed in at is not taking parcels for now — held over its ID, as no new parcel may name it. One that
         // has put no money in yet is still named, as it is by any store's order.
@@ -10781,6 +10781,116 @@ describe('PUDO Light', () => {
         expect(oneWay.callOffs.preview(oneWay.vendor.vendorId, oneWay.id).why).toBe('COR5 Hub sends nothing toward NorthTown, so it cannot come back to COR5 Origin: it carries on to the buyer.');
         expect(() => oneWay.callOffs.callOff(oneWay.vendor.vendorId, oneWay.id, 'COR5 Store')).toThrow(/sends nothing toward NorthTown/);
         expect(parcels.get(oneWay.id).status).toBe('At_MDP');
+      });
+
+      /**
+       * NOT HANDED IN AT A SHOP — collected at the store's own door, or handed in at a hub (the user, 2026-10-27: "let the store
+       * pick"; "the store door could be a location as well"; "As a load to its door").
+       */
+      const noShop = (tag: string, opts: { dock?: boolean; topUp?: number } = {}) => {
+        const at = atHub(tag, { topUp: opts.topUp });
+        parcels.get(at.id).originAgentDid = undefined; // collected at the store's door, or handed in at a hub
+        if (opts.dock) vendors.setCollectionPoint(at.vendor.vendorId, { label: `${tag} gate 2`, zone: 'NorthTown', location: { lat: -1.21, lng: 36.81 } });
+        const withLoads = new CallOffService(parcels, vendors, routing, agents, mdps, totes, undefined, dispatch, events, drivers);
+        return { ...at, withLoads };
+      };
+
+      it('not handed in at a shop: the store picks the shop it comes back to, and is told the price first', () => {
+        const { origin, dest, hub, vendor, id, callOffs } = noShop('CPK');
+        expect(callOffs.preview(vendor.vendorId, id)).toEqual({ parcelId: id, outcome: 'pick', atHub: hub.name });
+        expect(() => callOffs.callOff(vendor.vendorId, id, 'CPK Store')).toThrow(/say where it comes back to/);
+        // Any shop that takes parcels and that the hub sends toward; the price for that one.
+        const ask = callOffs.preview(vendor.vendorId, id, origin.did);
+        expect(ask).toMatchObject({ outcome: 'bring_back', backTo: origin.shopName, atHub: hub.name });
+        expect(callOffs.preview(vendor.vendorId, id, dest.did)).toMatchObject({ outcome: 'bring_back', backTo: dest.shopName });
+        expect(callOffs.preview(vendor.vendorId, id, 'did:glos:nobody')).toEqual({ parcelId: id, outcome: 'no', why: 'There is no such shop: pick one from the list.' });
+        // A shop still signing up receives nothing.
+        const joining = agents.register({ shopName: 'CPK Joining', zone: 'NorthTown', location: { lat: -1.2, lng: 36.8 }, landmark: 'x', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'J J', nationalId: 'ID-CPK-J', mobile: '+254700999881', deviceImei: 'IMEI-CPK-J', requirements: eligibleReqs() });
+        expect(callOffs.preview(vendor.vendorId, id, joining.did)).toMatchObject({ outcome: 'no', why: 'CPK Joining is not taking parcels: pick another shop.' });
+        const done = callOffs.callOff(vendor.vendorId, id, 'CPK Store', undefined, Date.now(), { backTo: origin.did });
+        expect(done).toMatchObject({ outcome: 'bring_back', backTo: origin.shopName, amount: ask.amount });
+        expect(parcels.get(done.returnParcelId!)).toMatchObject({ destAgentDid: origin.did, status: 'At_MDP', returnOf: expect.objectContaining({ parcelId: id }) });
+      });
+
+      it('handed in at a shop: back to that shop — no other place is picked for it', () => {
+        const { dest, vendor, id, callOffs } = atHub('CPS');
+        expect(callOffs.preview(vendor.vendorId, id, dest.did)).toEqual({ parcelId: id, outcome: 'no', why: 'It goes back to the shop it was handed in at: no other place is chosen for it.' });
+        expect(callOffs.preview(vendor.vendorId, id, 'door')).toMatchObject({ outcome: 'no' });
+      });
+
+      it('to its own door, as a load: offered where the store has a door on the map, with the most to allow suggested', () => {
+        const { hub, vendor, id, withLoads, callOffs } = noShop('CPD', { dock: true });
+        // Without loads open here, the door is not offered.
+        expect(callOffs.preview(vendor.vendorId, id)).toEqual({ parcelId: id, outcome: 'pick', atHub: hub.name });
+        expect(withLoads.preview(vendor.vendorId, id)).toEqual({ parcelId: id, outcome: 'pick', atHub: hub.name, door: 'CPD gate 2' });
+        const ask = withLoads.preview(vendor.vendorId, id, 'door');
+        expect(ask).toMatchObject({ outcome: 'to_door', backTo: 'CPD gate 2', atHub: hub.name, currency: 'KES' });
+        expect(ask.suggestedMax).toBeGreaterThan(0);
+        // No door on the map: not offered, and refused if asked for.
+        const bare = noShop('CPN');
+        expect(bare.withLoads.preview(bare.vendor.vendorId, bare.id)).toEqual({ parcelId: bare.id, outcome: 'pick', atHub: bare.hub.name });
+        expect(bare.withLoads.preview(bare.vendor.vendorId, bare.id, 'door').why).toMatch(/no place on the map/);
+      });
+
+      it('to its door: refused before anything moves without the most it allows, or a balance that covers it', () => {
+        const { vendor, id, withLoads } = noShop('CPR', { dock: true });
+        const loads = () => dispatch.postedBy(vendor.vendorId).length;
+        expect(() => withLoads.callOff(vendor.vendorId, id, 'CPR Store', undefined, Date.now(), { backTo: 'door' })).toThrow(/Say the most you will pay a driver/);
+        expect(() => withLoads.callOff(vendor.vendorId, id, 'CPR Store', undefined, Date.now(), { backTo: 'door', maxSpend: 10_000 })).toThrow(/Top up first — you allow up to 10000.00 KES/);
+        expect(parcels.get(id).status).toBe('At_MDP');
+        expect(loads()).toBe(0);
+      });
+
+      it('to its door: a load from the hub, set aside there and handed only to the driver who took it, by their pass — then the store holds it again', () => {
+        const { hub, vendor, id, sorted, withLoads } = noShop('CPL', { dock: true });
+        withLoads.onModuleInit();
+        void sorted;
+        const most = withLoads.preview(vendor.vendorId, id, 'door').suggestedMax!;
+        const done = withLoads.callOff(vendor.vendorId, id, 'CPL Store', 'Buyer cancelled', Date.now(), { backTo: 'door', maxSpend: most });
+        expect(done).toMatchObject({ parcelId: id, status: 'Returned', outcome: 'to_door', amount: most, currency: 'KES', backTo: 'CPL gate 2', atHub: hub.name });
+        const load = dispatch.requireFreightPublic(done.returnLoadId!);
+        expect(load).toMatchObject({ code: done.returnLoadCode, status: 'available', shipperDid: vendor.vendorId, pickupLabel: hub.name, destLabel: 'CPL gate 2', packages: 1, maxSpend: most, bringsBack: { parcelId: id, atMdpId: hub.mdpId, hubName: hub.name } });
+        expect(parcels.get(id)).toMatchObject({ status: 'Returned', returnLoad: { freightId: load.freightId, code: load.code } });
+        expect(parcels.get(id).scans.at(-1)!.note).toContain(`going to its door as load ${load.code} · Buyer cancelled`);
+        // The hub keeps it aside: listed for its driver, and its label scanned says so.
+        expect(withLoads.handoversAt(hub.mdpId)).toEqual([expect.objectContaining({ parcelId: id, load: expect.objectContaining({ code: load.code, status: 'available' }) })]);
+        let aside: GlosError | undefined;
+        try {
+          mdps.sortParcel(hub.mdpId, id);
+        } catch (e) {
+          aside = e as GlosError;
+        }
+        expect(aside?.code).toBe('SET_ASIDE');
+        // Not withdrawn: it is the box's only way home. The most can be raised instead — only up, only by the store.
+        expect(() => dispatch.cancelFreight(load.freightId, { did: vendor.vendorId, role: 'shipper' }, 'changed my mind')).toThrow(/it is not withdrawn/);
+        expect(() => withLoads.raiseMaxSpend(vendor.vendorId, load.freightId, most - 0.5)).toThrow(/can only be raised/);
+        expect(() => withLoads.raiseMaxSpend('ven_stranger', load.freightId, most + 1)).toThrow(/No load of yours/);
+        expect(withLoads.raiseMaxSpend(vendor.vendorId, load.freightId, most + 1)).toEqual({ freightId: load.freightId, code: load.code, maxSpend: most + 1 });
+        // Not handed over before a driver has taken it.
+        expect(() => withLoads.handToDriver(hub.mdpId, id, 'NOBODY', 'Floor')).toThrow(/No driver has taken load/);
+        // A rider on a motorbike takes it, at their price — at most what the store allows.
+        const rider = drivers.register({ displayName: 'CPL Rider', fullName: 'CPL R', nationalId: 'ID-CPL-R', mobile: '+254700998877', licenceClasses: ['motorcycle'] });
+        const bike = vehicles.register({ plate: 'CPL-M', vehicleClass: 'motorcycle', ownerName: 'R' });
+        fleet.couple(rider.did, bike.vehicleId);
+        const before = vendors.balanceOf(vendor.vendorId);
+        claimFreight(rider.did, load.pickupLocation, load.freightId);
+        const taken = dispatch.requireFreightPublic(load.freightId);
+        expect(taken.status).toBe('claimed');
+        expect(vendors.balanceOf(vendor.vendorId)).toBeLessThan(before);
+        expect(before - vendors.balanceOf(vendor.vendorId)).toBeLessThanOrEqual(most + 1);
+        // Its driver cannot take it over until the hub hands it over; the hub hands it only to its driver.
+        expect(() => dispatch.pickupFreight(load.freightId, rider.did, { confirmed: requiredLoadKeys(taken), securementPhotoId: photoBy(rider.did) })).toThrow(/show your pass at its counter/);
+        const other = coupleTipper('CPLX', { min: 0.8, max: 1.5 });
+        expect(() => withLoads.handToDriver(hub.mdpId, id, drivers.get(other.did).badgeId!, 'Floor')).toThrow(/That pass is not the driver of load/);
+        expect(withLoads.handToDriver(hub.mdpId, id, drivers.get(rider.did).badgeId!, 'Floor')).toEqual([]);
+        expect(parcels.get(id).custody?.at(-1)).toMatchObject({ holderKind: 'driver', holderId: rider.did });
+        expect(() => withLoads.handToDriver(hub.mdpId, id, drivers.get(rider.did).badgeId!, 'Floor')).toThrow(/No box called off here|handed to its driver already/);
+        // Taken over, delivered at the store's door: the store holds its goods again.
+        dispatch.pickupFreight(load.freightId, rider.did, { confirmed: requiredLoadKeys(taken), securementPhotoId: photoBy(rider.did) });
+        dispatch.deliverFreight(load.freightId, rider.did, { confirmed: requiredUnloadKeys(), receiverName: 'Wanjiku at the gate', podPhotoId: photoBy(rider.did) });
+        expect(parcels.get(id).custody?.at(-1)).toMatchObject({ holderKind: 'sender', holderId: vendor.vendorId, note: "back at the store's door, received by Wanjiku at the gate" });
+        expect(withLoads.preview(vendor.vendorId, id)).toEqual({ parcelId: id, outcome: 'no', why: `It is on its way back already, to your door as load ${load.code}.` });
+        expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
       });
 
       it('before it leaves the shop it was handed in at, calling off is withdrawing it, its money back in full — and on the road, it cannot be', () => {

@@ -172,6 +172,8 @@ export interface PublicShipment {
   returnShipmentId?: string;
   /** The shipment this one brings back — called off at a hub, the store collects it again at the shop it handed it in at. */
   returnOf?: string;
+  /** Called off at a hub and going to the store's own door as a load: that load's code. */
+  returnLoad?: string;
 }
 
 export interface MintedShipment {
@@ -508,7 +510,7 @@ export class ShippingApiService {
    * — an "edit" that quietly re-prices a shipment a buyer already paid for is the worst version of this
    * feature. Cancel it and create the new one, so the re-price is visible and consented to.
    */
-  cancelShipment(shipmentId: string, caller: Caller, reason?: string): PublicShipment {
+  cancelShipment(shipmentId: string, caller: Caller, reason?: string, choice: { backTo?: string; maxSpend?: number } = {}): PublicShipment {
     if (!ApiKeyService.canMint(caller) || !caller.vendorId) {
       throw new GlosError('FORBIDDEN', 'Cancelling needs a secret key (sk_…) — a publishable key can only ask for prices');
     }
@@ -519,7 +521,7 @@ export class ShippingApiService {
     // `by` names the store, not a person: the network's audit trail records WHO asked, and through this
     // door the answer is a merchant's own system rather than anybody at a counter.
     // At a hub it is not withdrawn but brought back, at the store's cost (2026-10-27): the same door as the store's app.
-    if (this.callOffs) this.callOffs.callOff(caller.vendorId, parcel.parcelId, `vendor:${caller.vendorId}`, reason?.trim() || 'cancelled by the store');
+    if (this.callOffs) this.callOffs.callOff(caller.vendorId, parcel.parcelId, `vendor:${caller.vendorId}`, reason?.trim() || 'cancelled by the store', Date.now(), choice);
     else this.parcels.cancel(parcel.parcelId, `vendor:${caller.vendorId}`, reason?.trim() || 'cancelled by the store');
     return this.publicShipmentOf(this.parcels.get(parcel.parcelId));
   }
@@ -528,12 +530,12 @@ export class ShippingApiService {
    * What calling it off would do now, asked before calling it off (2026-10-27): withdrawn with its price given back, before it
    * left the shop it was handed in at; at a hub, brought back to that shop as a new shipment, at what cost; or why it cannot be.
    */
-  callOffPreview(shipmentId: string, caller: Caller): CallOffView {
+  callOffPreview(shipmentId: string, caller: Caller, backTo?: string): CallOffView {
     if (!caller.vendorId) throw new GlosError('FORBIDDEN', 'Reading a shipment needs your key — a shipment belongs to the store that created it');
     if (shipmentId.startsWith('test_')) throw new GlosError('NOT_FOUND', 'That is a simulated shipment from a test key — nothing was created, so there is nothing to call off');
     const parcel = this.ownedParcel(shipmentId, caller.vendorId);
     if (!this.callOffs) throw new GlosError('INVALID_STATE', 'Calling off is not open here');
-    return this.callOffs.preview(caller.vendorId, parcel.parcelId);
+    return this.callOffs.preview(caller.vendorId, parcel.parcelId, backTo?.trim() || undefined);
   }
 
   /** The caller's own shipment, or nothing they can distinguish from one that never existed. */
@@ -653,6 +655,7 @@ export class ShippingApiService {
       ...(parcel.sscc ? { sscc: parcel.sscc } : {}),
       ...(parcel.returnParcelId ? { returnShipmentId: parcel.returnParcelId } : {}),
       ...(parcel.returnOf ? { returnOf: parcel.returnOf.parcelId } : {}),
+      ...(parcel.returnLoad ? { returnLoad: parcel.returnLoad.code } : {}),
     };
   }
 

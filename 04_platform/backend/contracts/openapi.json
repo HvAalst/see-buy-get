@@ -4879,6 +4879,135 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/loads/{freightId}/max-spend": {
+      "post": {
+        "operationId": "CallOff.raiseMaxSpend",
+        "summary": "",
+        "description": "The most the store pays for its parcel's way to its door, raised while no driver has taken the load (2026-10-27): the load\ncannot be withdrawn — the goods would wait at the hub for nobody — so a figure nobody takes it for is raised instead.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "freightId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RaiseMaxSpendDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaxSpendView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/handovers": {
+      "get": {
+        "operationId": "CallOff.handovers",
+        "summary": "",
+        "description": "The boxes called off at this hub waiting for the driver of the load that takes them to their store's door. Its floor's.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HubHandoverView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/handovers/{parcelId}": {
+      "post": {
+        "operationId": "CallOff.handToDriver",
+        "summary": "",
+        "description": "The hub hands one to the driver who took its load — by their pass, scanned at the counter. Its floor's act: not staff's.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandToDriverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HubHandoverView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/parcels/{parcelId}/label": {
       "get": {
         "operationId": "CallOff.hubLabel",
@@ -35746,7 +35875,7 @@
           },
           "outcome": {
             "type": "object",
-            "description": "`refund`: withdrawn, its price given back. `bring_back`: turned round at the hub, a new parcel the store pays for. `no`: it cannot be."
+            "description": "`refund`: withdrawn, its price given back. `bring_back`: turned round at the hub, a new parcel to a shop, at `amount`.\n`pick`: not handed in at a shop — the store says where it comes back to (a shop, or `door`) and is told the price then.\n`to_door`: to the store's own door as a load, at the driver's price, at most what the store allows. `no`: it cannot be."
           },
           "amount": {
             "type": "number",
@@ -35757,10 +35886,18 @@
           },
           "backTo": {
             "type": "string",
-            "description": "bring_back: the shop it comes back to — the one it was handed in at — and the hub it is turned round at."
+            "description": "bring_back: the shop it comes back to. to_door: the store's door. And the hub it is turned round at."
           },
           "atHub": {
             "type": "string"
+          },
+          "door": {
+            "type": "string",
+            "description": "pick: the store's own door, where it has one on the map — a place it can come back to besides a shop."
+          },
+          "suggestedMax": {
+            "type": "number",
+            "description": "to_door: the most we suggest allowing a driver. A suggestion: each driver's own price decides, at most what is allowed."
           },
           "why": {
             "type": "string",
@@ -35779,6 +35916,16 @@
             "type": "string",
             "description": "Why, in the store's words — kept on the parcel's history.",
             "maxLength": 200
+          },
+          "backTo": {
+            "type": "string",
+            "description": "Where it comes back to, for a parcel not handed in at a shop: a shop's id, or `door` — the store's own.",
+            "maxLength": 120
+          },
+          "maxSpend": {
+            "type": "number",
+            "description": "To its door: the most the store pays a driver for it.",
+            "minimum": 0.01
           }
         }
       },
@@ -35790,21 +35937,27 @@
           },
           "status": {
             "type": "string",
-            "description": "Voided (withdrawn) or Returned (on its way back as another parcel)."
+            "description": "Voided (withdrawn) or Returned (on its way back as another parcel, or as a load to the store's door)."
           },
           "outcome": {
             "type": "object"
           },
           "amount": {
             "type": "number",
-            "description": "refund: what came back. bring_back: what bringing it back cost."
+            "description": "refund: what came back. bring_back: what bringing it back cost. to_door: the most the store allows a driver."
           },
           "currency": {
             "type": "string"
           },
           "returnParcelId": {
             "type": "string",
-            "description": "bring_back: the parcel bringing it back, the shop it comes back to and the hub it was turned round at."
+            "description": "bring_back: the parcel bringing it back. to_door: the load bringing it to the store's door."
+          },
+          "returnLoadId": {
+            "type": "string"
+          },
+          "returnLoadCode": {
+            "type": "string"
           },
           "backTo": {
             "type": "string"
@@ -35819,6 +35972,96 @@
           "outcome",
           "amount",
           "currency"
+        ]
+      },
+      "RaiseMaxSpendDto": {
+        "type": "object",
+        "properties": {
+          "maxSpend": {
+            "type": "number",
+            "minimum": 0.01
+          }
+        },
+        "required": [
+          "maxSpend"
+        ]
+      },
+      "MaxSpendView": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "maxSpend": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "freightId",
+          "code",
+          "maxSpend"
+        ]
+      },
+      "HubHandoverLoad": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "driverName": {
+            "type": "string",
+            "description": "The driver who took it, once one has: the one the hub hands the box to, by their pass."
+          }
+        },
+        "required": [
+          "freightId",
+          "code",
+          "status"
+        ]
+      },
+      "HubHandoverView": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "size": {
+            "type": "string"
+          },
+          "calledOffAt": {
+            "type": "string"
+          },
+          "load": {
+            "$ref": "#/components/schemas/HubHandoverLoad"
+          }
+        },
+        "required": [
+          "parcelId",
+          "size",
+          "calledOffAt",
+          "load"
+        ]
+      },
+      "HandToDriverDto": {
+        "type": "object",
+        "properties": {
+          "badge": {
+            "type": "string",
+            "description": "The pass of the driver who took the load: scanned at the counter.",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "badge"
         ]
       },
       "PhygitalLabel": {
@@ -43644,6 +43887,19 @@
               }
             }
           },
+          "returnLoad": {
+            "type": "object",
+            "properties": {
+              "freightId": {
+                "required": true,
+                "type": "string"
+              },
+              "code": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "unclaimedAt": {
             "type": "string",
             "description": "When the free collection window ran out — the start of the holding-fee clock.\n\nDistinct from readyAt, and the distinction is the whole feature: readyAt is when the wait began,\nthis is when the wait stopped being free. An extension resets readyAt and CLEARS this, because a\nreceiver who bought more time is inside a free window again by definition."
@@ -43720,6 +43976,7 @@
           "papersSeen",
           "acceptedAt",
           "returnOf",
+          "returnLoad",
           "scans"
         ]
       },
@@ -46763,6 +47020,32 @@
           "decideBy"
         ]
       },
+      "FreightBringsBack": {
+        "type": "object",
+        "properties": {
+          "handedAt": {
+            "type": "string"
+          },
+          "handedBy": {
+            "type": "string",
+            "description": "Who at the hub handed it over."
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "atMdpId": {
+            "type": "string"
+          },
+          "hubName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "atMdpId",
+          "hubName"
+        ]
+      },
       "FreightClaim": {
         "type": "object",
         "properties": {
@@ -47640,6 +47923,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/FreightLink"
+              }
+            ]
+          },
+          "bringsBack": {
+            "description": "A store's parcel called off at a hub, going back to the store's own door as this load (2026-10-27).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightBringsBack"
               }
             ]
           },
@@ -52298,6 +52589,14 @@
               }
             ]
           },
+          "bringsBack": {
+            "description": "A store's own parcel called off at a hub, brought to its door as this load; and the most it allows, which it may raise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightBringsBack"
+              }
+            ]
+          },
           "claim": {
             "description": "FP3b — the sender's claim, as far as it has got.",
             "allOf": [
@@ -55859,6 +56158,16 @@
           "reason": {
             "type": "string",
             "maxLength": 200
+          },
+          "backTo": {
+            "type": "string",
+            "description": "At a hub, for a shipment not handed in at a shop: where it comes back to — a collection point's id, or `door`.",
+            "maxLength": 120
+          },
+          "maxSpend": {
+            "type": "number",
+            "description": "To the store's door: the most it pays a driver for it.",
+            "minimum": 0.01
           }
         }
       },

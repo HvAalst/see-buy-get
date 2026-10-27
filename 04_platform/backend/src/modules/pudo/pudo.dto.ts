@@ -1077,6 +1077,10 @@ export class PublicQuoteDto {
 /** Why it was called off. Optional and free text — a store's own words, kept on the audit trail. */
 export class CancelShipmentDto {
   @IsOptional() @IsString() @MaxLength(200) reason?: string;
+  /** At a hub, for a shipment not handed in at a shop: where it comes back to — a collection point's id, or `door`. */
+  @IsOptional() @IsString() @MaxLength(120) backTo?: string;
+  /** To the store's door: the most it pays a driver for it. */
+  @IsOptional() @IsNumber() @Min(0.01) maxSpend?: number;
 }
 
 export class MintShipmentDto {

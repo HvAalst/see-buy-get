@@ -130,6 +130,8 @@ export class VendorCallbackService implements OnModuleInit, OnModuleDestroy {
       ...(event === 'load.delivery_failed' && last ? { attempt: { outcome: last.outcome, at: last.at, ...(last.note ? { note: last.note } : {}) } } : {}),
       ...(f.refusal ? { refusal: { at: f.refusal.at, decideBy: f.refusal.decideBy, ...(f.refusal.part ? { part: f.refusal.part } : {}), ...(f.refusal.decision ? { decision: { choice: f.refusal.decision.choice, ...(f.refusal.decision.byDeadline ? { byDeadline: true } : {}), ...(f.refusal.decision.returnLeg ? { returnCode: f.refusal.decision.returnLeg.code } : {}) } } : {}) } } : {}),
       ...(f.returnOf ? { returnOf: f.returnOf.code } : {}),
+      // A store's own parcel called off at a hub, brought to its door as this load (2026-10-27).
+      ...(f.bringsBack ? { bringsBack: f.bringsBack.parcelId } : {}),
       ...(f.proofOfDelivery ? { receivedBy: f.proofOfDelivery.receiverName, deliveredAt: f.deliveredAt } : {}),
     });
   }

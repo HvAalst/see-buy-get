@@ -227,6 +227,27 @@ export class FreightLink {
   code: string;
 }
 
+/**
+ * A STORE'S PARCEL CALLED OFF AT A HUB, GOING BACK TO THE STORE'S OWN DOOR (the user, 2026-10-27: "As a load to its door"):
+ * the load that carries it — the parcel, the hub it waits at, and when the hub handed it to the driver who took the load,
+ * by their pass. Until then the driver cannot take the load over: the box is the hub's to hand on.
+ */
+export class FreightBringsBack {
+  parcelId: string;
+  atMdpId: string;
+  hubName: string;
+  @ApiPropertyOptional() handedAt?: string;
+  /** Who at the hub handed it over. */
+  @ApiPropertyOptional() handedBy?: string;
+}
+
+/** The same, as its driver reads it: where to collect the box, and whether the hub has handed it over yet. */
+export class FreightCollectAtHub {
+  parcelId: string;
+  hubName: string;
+  handed: boolean;
+}
+
 /** What the sender decided — or, with no answer in time, what the deadline did: back to where they were picked up. */
 export class FreightRefusalDecision {
   @ApiProperty({ enum: REFUSAL_CHOICES }) choice: RefusalChoice;
@@ -572,6 +593,8 @@ export class Freight {
   @ApiPropertyOptional({ type: FreightRefusal }) refusal?: FreightRefusal;
   /** A RETURN: refused goods carried on as a new load by the driver who held them — the load they were refused on. */
   @ApiPropertyOptional({ type: FreightLink }) returnOf?: FreightLink;
+  /** A store's parcel called off at a hub, going back to the store's own door as this load (2026-10-27). */
+  @ApiPropertyOptional({ type: FreightBringsBack }) bringsBack?: FreightBringsBack;
   /** FP3b — the sender's claim against the delivered goods, and how it ended. One per load. */
   @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for
@@ -1372,6 +1395,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional() pickupLabel?: string;
   /** A return: the load its goods were refused on. */
   @ApiPropertyOptional({ type: FreightLink }) returnOf?: FreightLink;
+  /** A store's own parcel called off at a hub, brought to its door as this load; and the most it allows, which it may raise. */
+  @ApiPropertyOptional({ type: FreightBringsBack }) bringsBack?: FreightBringsBack;
   /** FP3b — the sender's claim, as far as it has got. */
   @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
   /** FP6 — the shareable key behind the tracking link, and the link itself, so the shipper can hand it on. */
@@ -1539,6 +1564,8 @@ export class Claimable {
   @ApiPropertyOptional() refusedPart?: number;
   /** A return: refused goods carried on as this new load — the load they were refused on. */
   @ApiPropertyOptional({ type: FreightLink }) returnOf?: FreightLink;
+  /** A store's parcel to collect at a hub's counter, which hands it over by the driver's pass (2026-10-27). */
+  @ApiPropertyOptional({ type: FreightCollectAtHub }) collectAtHub?: FreightCollectAtHub;
   /** Held by the police, customs or another authority on the road, as its driver said: until they say it was let go. */
   @ApiPropertyOptional({ type: HeldByAuthority }) heldByAuthority?: HeldByAuthority;
   ref: string; // toteCode | freightId — the API identifier the pickup/load/deliver calls use

@@ -736,6 +736,10 @@ export class MdpService {
     const parcel = this.parcels.get(parcelId);
     // Called off at this hub by its store (2026-10-27): the box still wears its old label. Told which label to put on it, and
     // nothing is sorted under the old one.
+    // …or going to its store's own door as a load: set aside, for the driver who took that load.
+    if (parcel.status === 'Returned' && parcel.returnLoad && parcel.atMdpId === mdpId) {
+      throw new GlosError('SET_ASIDE', `${parcelId} was called off by its store: it goes to the store's door as load ${parcel.returnLoad.code}. Set it aside, and hand it only to the driver who comes for it — scan their pass at the counter.`, { parcelId, loadCode: parcel.returnLoad.code });
+    }
     if (parcel.status === 'Returned' && parcel.returnParcelId) {
       const back = this.parcels.get(parcel.returnParcelId);
       if (back.status === 'At_MDP' && back.atMdpId === mdpId) {

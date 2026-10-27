@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
@@ -7,7 +7,7 @@ import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { zplOut } from '../../foundation/label/zpl';
 import { CallOffService } from './call-off.service';
-import { CallOffDto, CallOffView, CalledOffView } from './call-off.types';
+import { CallOffDto, CallOffView, CalledOffView, HandToDriverDto, HubHandoverView, MaxSpendView, RaiseMaxSpendDto } from './call-off.types';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import type { PhygitalLabel } from './pudo.types';
@@ -30,9 +30,9 @@ export class CallOffController {
   /** What calling the order off would do now: its money back in full; brought back to the shop it was handed in at, at a price; or why not. */
   @Scopes('vendor:read:self')
   @Get('vendors/:id/orders/:parcelId/call-off')
-  preview(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult): CallOffView {
+  preview(@Param('id') id: string, @Param('parcelId') parcelId: string, @Query('backTo') backTo: string | undefined, @Actor() actor: IntrospectionResult): CallOffView {
     this.assertStoreReads(id, actor);
-    return this.callOffs.preview(id, parcelId);
+    return this.callOffs.preview(id, parcelId, backTo?.trim() || undefined);
   }
 
   /** The store calls the order off. Staff change nothing in a store's name — and at a hub, calling off spends the store's money. */
@@ -40,7 +40,37 @@ export class CallOffController {
   @Post('vendors/:id/orders/:parcelId/call-off')
   callOff(@Param('id') id: string, @Param('parcelId') parcelId: string, @Body() dto: CallOffDto, @Actor() actor: IntrospectionResult): CalledOffView {
     const store = this.assertStoreSelf(id, actor);
-    return this.callOffs.callOff(id, parcelId, actor?.actorName?.trim() || store.name, dto.reason?.trim() || 'called off by the store');
+    return this.callOffs.callOff(id, parcelId, actor?.actorName?.trim() || store.name, dto.reason?.trim() || 'called off by the store', Date.now(), { backTo: dto.backTo?.trim() || undefined, maxSpend: dto.maxSpend });
+  }
+
+  /**
+   * The most the store pays for its parcel's way to its door, raised while no driver has taken the load (2026-10-27): the load
+   * cannot be withdrawn — the goods would wait at the hub for nobody — so a figure nobody takes it for is raised instead.
+   */
+  @Scopes('vendor:manage:self')
+  @Post('vendors/:id/loads/:freightId/max-spend')
+  raiseMaxSpend(@Param('id') id: string, @Param('freightId') freightId: string, @Body() dto: RaiseMaxSpendDto, @Actor() actor: IntrospectionResult): MaxSpendView {
+    this.assertStoreSelf(id, actor);
+    return this.callOffs.raiseMaxSpend(id, freightId, dto.maxSpend);
+  }
+
+  /** The boxes called off at this hub waiting for the driver of the load that takes them to their store's door. Its floor's. */
+  @Roles('mdp', 'operator')
+  @Get('mdps/:id/handovers')
+  @AtTheCounter()
+  handovers(@Param('id') id: string, @Actor() actor: IntrospectionResult): HubHandoverView[] {
+    this.assertHub(id, actor);
+    return this.callOffs.handoversAt(id);
+  }
+
+  /** The hub hands one to the driver who took its load — by their pass, scanned at the counter. Its floor's act: not staff's. */
+  @Roles('mdp', 'operator')
+  @Post('mdps/:id/handovers/:parcelId')
+  @AtTheCounter()
+  handToDriver(@Param('id') id: string, @Param('parcelId') parcelId: string, @Body() dto: HandToDriverDto, @Actor() actor: IntrospectionResult): HubHandoverView[] {
+    const hub = this.assertHub(id, actor);
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A hub hands over at its own counter, signed in as the hub. Staff hand nothing over in its name');
+    return this.callOffs.handToDriver(id, parcelId, dto.badge, actor?.actorName?.trim() || hub.name);
   }
 
   /** The new label of a parcel turned round at this hub — to print and put over the old one. Its floor's. */

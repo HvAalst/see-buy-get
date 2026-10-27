@@ -139,15 +139,15 @@ export class ShippingApiController {
   @Public()
   @RateLimit(120, 60)
   @Get('shipments/:shipmentId/call-off')
-  callOffPreview(@Param('shipmentId') shipmentId: string, @CallerKey() caller: Caller): CallOffView {
-    return this.shipping.callOffPreview(shipmentId, caller);
+  callOffPreview(@Param('shipmentId') shipmentId: string, @Query('backTo') backTo: string | undefined, @CallerKey() caller: Caller): CallOffView {
+    return this.shipping.callOffPreview(shipmentId, caller, backTo);
   }
 
   @Public()
   @RateLimit(30, 60)
   @Post('shipments/:shipmentId/cancel')
   cancelShipment(@Param('shipmentId') shipmentId: string, @Body() dto: CancelShipmentDto, @CallerKey() caller: Caller) {
-    return this.shipping.cancelShipment(shipmentId, caller, dto.reason);
+    return this.shipping.cancelShipment(shipmentId, caller, dto.reason, { backTo: dto.backTo?.trim() || undefined, maxSpend: dto.maxSpend });
   }
 
   /**
