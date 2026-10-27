@@ -2421,7 +2421,7 @@ export const enTowerSupport = {
   'tower.withdraw.voidTag': 'Withdrawn where it is',
   'tower.withdraw.voidBooked': 'It was never handed in: it is withdrawn, and nothing was paid for it.',
   'tower.withdraw.voidAtShop': 'It has not left {shop}: it is withdrawn there, and the shop gives back what was paid at its counter.',
-  'tower.withdraw.turnRound': 'It is at {hub}. It goes back to {shop}, the shop it was handed in at, as a new parcel to its sender, who pays {amount} in cash there as they collect it. What was carried to the hub is not given back. The sender and the receiver are told in the app; the hub puts a new label on it.',
+  'tower.withdraw.turnRound': 'It is at {hub}. It goes back to {shop}, the shop it was handed in at, as a new parcel to its sender, who pays {amount} in cash there as they collect it. What was carried to the hub is not given back. The sender and the receiver are told in their app, where they have one; the hub puts a new label on it.',
   'tower.withdraw.reasonLabel': 'Why — kept on its history',
   'tower.withdraw.confirmTurn': 'Turn it round to {shop}',
   'tower.withdraw.confirmVoid': 'Withdraw it',
