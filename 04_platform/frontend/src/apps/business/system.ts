@@ -42,6 +42,7 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   'load.held': 'business.system.event.held',
   'load.let_go': 'business.system.event.letGo',
   'load.delivery_failed': 'business.system.event.deliveryFailed',
+  'load.refusal_decided': 'business.system.event.refusalDecided',
   'load.delivered': 'business.system.event.delivered',
   'load.cancelled': 'business.system.event.cancelled',
   'load.claim_opened': 'business.system.event.claimOpened',

@@ -262,6 +262,16 @@ export function createVendorApi(sbg: SbgClient) {
     returns: (vendorId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/returns', { params: { path: { id: vendorId } } })),
 
+    /** Its heavy orders sent as freight, each load and where it stands — listed under the store's own id too. */
+    loads: () => sbg.request((c) => c.GET('/v1/sbg/dispatch/posted', {})),
+
+    /** Refused at the door (the user, 2026-10-27): the store says where the goods go — back, another place, or given up. */
+    decideRefusal: (freightId: string, body: { choice: 'back' | 'elsewhere' | 'give_up'; destLabel?: string; destLocation?: { lat: number; lng: number }; contactName?: string; contactPhone?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/refusal', { params: { path: { id: freightId } }, body })),
+
+    /** Where a typed place is: for "to another place". */
+    geocode: (q: string) => sbg.request((c) => c.GET('/v1/sbg/geocode', { params: { query: { q } } })),
+
     /** Yes — mint the journey home, bill this store, and hand the shop its shelf slot back. */
     acceptReturn: (vendorId: string, offerId: string) =>
       sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/returns/{offerId}/accept', { params: { path: { id: vendorId, offerId } } })),

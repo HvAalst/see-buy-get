@@ -17,7 +17,8 @@ import { onOutboxSent } from '../../shared/outbox';
 import type { TamperUnit, UnitHold } from '../../shared/tamper';
 import type { BagClosedWith } from '../../shared/bagSeal';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the shop's active locale
-import { errorSentence } from '../../shared/ui';
+import { errorSentence, refusalSentence } from '../../shared/ui';
+import type { RefusalBody } from '../../shared/RefusalCard';
 import type { IconName } from '../../shared/ui/Icon';
 import { agentConfig, clearDid, createAgentClient, purgeAgentTokens, readDid, readEmail, saveDid, saveEmail } from './api';
 import { signal } from '../../shared/feedback';
@@ -87,6 +88,13 @@ export interface PostedFreight {
   canCancel: boolean;
   /** FP3b — the doors the driver stood at and could not hand over at. */
   attempts?: Array<{ outcome: 'absent' | 'refused' | 'unreachable'; note?: string; at: string }>;
+  /** Refused at the door (the user, 2026-10-27): by when the shop says where the goods go, and what it said. */
+  refusal?: import('../../shared/refusal').Refusal;
+  canDecideRefusal?: boolean;
+  /** Where it was picked up — where "back" takes refused goods. */
+  pickupLabel?: string;
+  /** A return: the load its goods were refused on. */
+  returnOf?: { freightId: string; code: string };
   /** FP3b — the shop's claim, as far as it has got. */
   claim?: FreightClaim;
   /** True while a claim may still be made: delivered, none yet, within the window. */
@@ -1699,6 +1707,19 @@ export function useAgentApp() {
     [client, run, fail, pushToast, t, loadPosted],
   );
 
+  /** Refused at the door (the user, 2026-10-27): the shop, as the sender, says where the goods go. The refusal in words, or null. */
+  const decideRefusal = useCallback(
+    async (freightId: string, body: RefusalBody): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.decideRefusal(freightId, body);
+      if (r.error) return refusalSentence(r.error);
+      pushToast({ tone: 'ok', icon: 'truck', title: t(body.choice === 'give_up' ? 'refusal.done.giveUp' : body.choice === 'back' ? 'refusal.done.back' : 'refusal.done.elsewhere') });
+      await loadPosted();
+      return null;
+    },
+    [client, pushToast, t, loadPosted],
+  );
+
   /** FP6 — the shop's verdict on the carrier, once the load is delivered. Last wins on the same load. */
   const rateFreight = useCallback(
     async (freightId: string, body: { stars: number; issues?: string[] }) => {
@@ -2516,6 +2537,7 @@ export function useAgentApp() {
       cancelFreight,
       rateFreight,
       setFreightInstructions,
+      decideRefusal,
       openFreightClaim,
       loadConsignments,
       openConsignment,

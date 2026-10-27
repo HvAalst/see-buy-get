@@ -1,0 +1,46 @@
+/**
+ * REFUSED AT THE DOOR (the user, 2026-10-27) — the sender decides where the goods go and pays the way: back to where they
+ * were picked up, to another place, or given up; the driver holding them carries them on as a new load; with no answer in
+ * 48 hours they go back. Said the same way wherever a sender reads its load: the Business app, the Shop app's counter
+ * bookings, a store's heavy orders. Each of those apps adds these (its english.ts).
+ */
+export const enRefusal = {
+  'refusal.status': 'Refused',
+  'refusal.head': 'Refused at the door',
+  'refusal.what': 'The receiver refused it {when}.',
+  'refusal.whatWhy': 'The receiver refused it {when}: “{note}”.',
+  'refusal.ask': 'The driver keeps the goods until you say where they go, and you pay the way. With no answer by {by}, they go back to {pickup}, at your cost.',
+  'refusal.back': 'Back to {pickup}',
+  'refusal.elsewhere': 'To another place',
+  'refusal.giveUp': 'Give them up',
+  'refusal.backTitle': 'Back to {pickup}?',
+  'refusal.backBody': 'The driver who has them brings them back, as a new load at their vehicle’s price. You pay it.',
+  'refusal.backYes': 'Bring them back',
+  'refusal.elsewhereTitle': 'Where the goods go',
+  'refusal.elsewhereBody': 'The driver who has them takes them there, as a new load at their vehicle’s price. You pay it.',
+  'refusal.placeLabel': 'Where',
+  'refusal.placeHint': 'Words a driver can find: the place, the street, a landmark.',
+  'refusal.mapLabel': 'Where the goods go, on the map',
+  'refusal.find': 'Find on the map',
+  'refusal.note.idle': 'Type the place, then find it — or put the pin on the map.',
+  'refusal.note.pinned': 'The pin is where the driver takes them.',
+  'refusal.note.found': 'Found: {where}. Move the pin if the door is elsewhere.',
+  'refusal.note.notFound': 'That place was not found: put the pin on the map yourself.',
+  'refusal.contactName': 'Who to ask for there (optional)',
+  'refusal.contactPhone': 'Their phone (optional)',
+  'refusal.send': 'Send them there',
+  'refusal.giveUpTitle': 'Give the goods up?',
+  'refusal.giveUpBody': 'Nothing travels. The receiver may keep them if it will; otherwise the carrier disposes of them, and any cost of that is yours.',
+  'refusal.giveUpYes': 'Give them up',
+  'refusal.notNow': 'Not now',
+  'refusal.decided.back': 'Going back to {place} as load {code}.',
+  'refusal.decided.elsewhere': 'Going to {place} as load {code}.',
+  'refusal.decided.deadline': 'No answer within 48 hours: going back to {place} as load {code}, at your cost.',
+  'refusal.decided.giveUp': 'You gave the goods up: the receiver may keep them; otherwise the carrier disposes of them, at your cost.',
+  'refusal.err.place': 'Say where the goods go, in words a driver can find.',
+  'refusal.err.pin': 'Show where the goods go on the map.',
+  'refusal.returnOf': 'Return of load {code}, refused at the door.',
+  'refusal.done.back': 'The goods are on their way back.',
+  'refusal.done.elsewhere': 'The goods are on their way there.',
+  'refusal.done.giveUp': 'The goods are given up.',
+};

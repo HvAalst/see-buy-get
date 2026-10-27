@@ -21,6 +21,7 @@ const TAG_WORD: Record<ReturnType<typeof orderTag>, MessageKey> = {
   onRoad: 'fleet.orders.tag.onRoad',
   delivered: 'fleet.orders.tag.delivered',
   withdrawn: 'fleet.orders.tag.withdrawn',
+  refused: 'fleet.orders.tag.refused',
   late: 'fleet.orders.tag.late',
   offeredToYou: 'fleet.orders.tag.offeredToYou',
   onOffer: 'fleet.orders.tag.onOffer',

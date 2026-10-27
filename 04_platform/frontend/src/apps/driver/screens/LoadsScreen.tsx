@@ -16,6 +16,7 @@ import { FoundSection } from './Found';
 import { foundBody, foundProblem, noneFound, unloadItemsAfter, type FoundForm } from '../found';
 import { inspectionBody, inspectionReady, type InspectionLook } from '../inspection';
 import { heldLine } from '../../../shared/tamper';
+import { utcMoment } from '../../../shared/refusal';
 import { invoicePaperRef, keepPaper, keptPaper } from '../../../shared/keptPapers';
 import { BagReportSheet } from '../../../shared/BagSealFields';
 import { receiptBody } from '../../../shared/bagSeal';
@@ -113,6 +114,9 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {c.sealMissing ? <span class="load__warn">{t('driver.loads.sealMissingShort')}</span> : null}
                   {/* Round 35 — held under the tamper protocol: said on the card, before the walk to the gate. */}
                   {c.held ? <span class="load__warn">{t('driver.loads.heldShort')}</span> : null}
+                  {/* Refused at the door (the user, 2026-10-27): the goods stay aboard until the sender says where they go. */}
+                  {c.refusedUntil ? <span class="load__warn">{t('driver.loads.refusedShort', { by: utcMoment(c.refusedUntil) })}</span> : null}
+                  {c.returnOf ? <span class="load__meta">{t('driver.loads.returnOf', { code: c.returnOf.code })}</span> : null}
                   {/* Round 37 — loaded onto them by their pass, its seal not read yet: received nowhere until it is. */}
                   {control === 'onboard' && c.bagSeal && !c.bagSeal.taken && !c.held ? <span class="load__warn">{t('driver.bag.notRead')}</span> : null}
                 </span>
@@ -459,6 +463,8 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
           {isPickup && claim.sealMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.sealMissingTitle')} detail={t('driver.loads.sealMissingDetail', { why: claim.sealMissing })} /> : null}
           {/* Round 35 — held under the tamper protocol: it changes hands with nobody until operations releases it. */}
           {held ? <Note tone="warn" icon="warning" title={t('common.tamper.heldTitle')} detail={`${heldLine(held, t)} ${t('common.tamper.heldWait')}`} /> : null}
+          {/* Refused at the door: kept aboard until the sender says where the goods go; taken after all, delivered as usual. */}
+          {!isPickup && claim.refusedUntil ? <Note tone="warn" icon="warning" title={t('driver.loads.refusedTitle')} detail={t('driver.loads.refusedDetail', { by: utcMoment(claim.refusedUntil) })} /> : null}
           {/* FP7 — the sender's instructions, at the gate where they are acted on. */}
           {hasInstructions(claim.instructions) ? (
             <Card title={t('common.instructions.title')} tone="soft">

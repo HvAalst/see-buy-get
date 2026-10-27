@@ -19,6 +19,7 @@ import { NoteFile, NoteLinksPanel } from './LoadNote';
 import { LoadClaimPanel } from './LoadClaim';
 import { LoadPapers } from './LoadPapers';
 import { LoadSeals } from './LoadSeals';
+import { LoadRefusal } from './LoadRefusal';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
 import { publicRequest } from '../../../lib/sbg';
 
@@ -35,6 +36,7 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
   taken: { label: 'business.loads.stage.taken', tone: 'info' },
   moving: { label: 'business.loads.stage.moving', tone: 'info' },
   delivered: { label: 'business.loads.stage.delivered', tone: 'ok' },
+  refused: { label: 'refusal.status', tone: 'warn' },
   cancelled: { label: 'business.loads.stage.cancelled', tone: 'quiet' },
 };
 
@@ -544,6 +546,12 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
               </dd>
             </div>
           ) : null}
+          {row.returnOf ? (
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.loads.fact.return')}</dt>
+              <dd class="cons__factv">{t('refusal.returnOf', { code: row.returnOf.code })}</dd>
+            </div>
+          ) : null}
           {row.partOf ? (
             <div class="cons__fact">
               <dt class="cons__factk">{t('business.loads.fact.order')}</dt>
@@ -643,6 +651,9 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
         </div>
         {kept === 'not_yet' ? <p class="chint">{t('business.note.notYet')}</p> : null}
       </section>
+
+      {/* Refused at the door: where the goods go, the business's to say — or what became of them (the user, 2026-10-27). */}
+      <LoadRefusal row={row} client={client} business={business} act={act} onChanged={onChanged} />
 
       {/* A problem with the goods delivered: the business's claim, where it is the one to make it (claim.ts). */}
       {stage === 'delivered' ? <LoadClaimPanel row={row} client={client} act={act} onChanged={onChanged} /> : null}

@@ -302,6 +302,8 @@ export function freightStatusPresentation(status: FreightTrackView['status'], t:
       return { word: t('send.freight.onRoad'), icon: 'truck', tone: 'info' };
     case 'delivered':
       return { word: t('send.freight.delivered'), icon: 'check', tone: 'ok' };
+    case 'refused':
+      return { word: t('send.freight.refused'), icon: 'block', tone: 'danger' };
     case 'cancelled':
       return { word: t('send.freight.withdrawn'), icon: 'block', tone: 'danger' };
   }

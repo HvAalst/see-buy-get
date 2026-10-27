@@ -9,7 +9,7 @@ import { abroadLine, carrierLine, dueLine, inboundState, inboundTitle, isStillEx
 import { mayAct } from '../logic';
 import { InboundDetail } from './InboundDetail';
 
-const STATE_TAG: Record<InboundState, string> = { booked: 'quiet', carrier: 'info', on_its_way: 'info', delivered: 'ok', withdrawn: 'quiet' };
+const STATE_TAG: Record<InboundState, string> = { booked: 'quiet', carrier: 'info', on_its_way: 'info', delivered: 'ok', refused: 'warn', withdrawn: 'quiet' };
 
 /**
  * COMING IN (inbound, reading A; the user, 2026-10-25: "Yes, A then B"). Which of the business's own places receive

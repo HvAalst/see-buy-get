@@ -14469,6 +14469,7 @@
                 "claimed",
                 "in_transit",
                 "delivered",
+                "refused",
                 "cancelled"
               ],
               "type": "string"
@@ -14580,6 +14581,7 @@
                 "claimed",
                 "in_transit",
                 "delivered",
+                "refused",
                 "cancelled"
               ],
               "type": "string"
@@ -14691,6 +14693,7 @@
                 "claimed",
                 "in_transit",
                 "delivered",
+                "refused",
                 "cancelled"
               ],
               "type": "string"
@@ -18692,6 +18695,45 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/refusal": {
+      "post": {
+        "operationId": "Sbg.decideFreightRefusal",
+        "summary": "",
+        "description": "REFUSED AT THE DOOR (the user, 2026-10-27): the sender decides what happens to the goods — back to where they were\npicked up, to another place it names, or given up — and pays the way; the driver holding them carries them on. The\nsender's own word: staff decide nothing in its name.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideRefusalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefusalDecidedView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/claim": {
       "post": {
         "operationId": "Sbg.freightClaim",
@@ -18877,6 +18919,7 @@
                 "cold_chain_broken",
                 "delivered",
                 "not_delivered",
+                "refused",
                 "claimed",
                 "answered",
                 "cancelled"
@@ -18962,6 +19005,7 @@
                 "cold_chain_broken",
                 "delivered",
                 "not_delivered",
+                "refused",
                 "claimed",
                 "answered",
                 "cancelled"
@@ -19076,6 +19120,7 @@
                 "cold_chain_broken",
                 "delivered",
                 "not_delivered",
+                "refused",
                 "claimed",
                 "answered",
                 "cancelled"
@@ -19671,6 +19716,7 @@
                 "claimed",
                 "in_transit",
                 "delivered",
+                "refused",
                 "cancelled"
               ],
               "type": "string"
@@ -19774,6 +19820,7 @@
                 "claimed",
                 "in_transit",
                 "delivered",
+                "refused",
                 "cancelled"
               ],
               "type": "string"
@@ -19877,6 +19924,7 @@
                 "claimed",
                 "in_transit",
                 "delivered",
+                "refused",
                 "cancelled"
               ],
               "type": "string"
@@ -33127,6 +33175,7 @@
               "claimed",
               "in_transit",
               "delivered",
+              "refused",
               "cancelled"
             ]
           },
@@ -33162,6 +33211,28 @@
         },
         "required": [
           "outcome",
+          "at"
+        ]
+      },
+      "FreightTrackRefused": {
+        "type": "object",
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "back",
+              "elsewhere",
+              "give_up"
+            ]
+          },
+          "returnCode": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
           "at"
         ]
       },
@@ -33216,6 +33287,7 @@
               "claimed",
               "in_transit",
               "delivered",
+              "refused",
               "cancelled"
             ]
           },
@@ -33659,6 +33731,7 @@
               "claimed",
               "in_transit",
               "delivered",
+              "refused",
               "cancelled"
             ]
           },
@@ -33708,6 +33781,14 @@
                 "type": "object"
               }
             }
+          },
+          "refused": {
+            "description": "Refused at the door: when, and once decided what became of the goods. Never the receiver's reason: between the parties.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightTrackRefused"
+              }
+            ]
           },
           "partOf": {
             "description": "This is one load of an order that comes in several — and all of them, each with where it has got to.",
@@ -45920,6 +46001,94 @@
           "at"
         ]
       },
+      "FreightLink": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "freightId",
+          "code"
+        ]
+      },
+      "FreightRefusalDecision": {
+        "type": "object",
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "back",
+              "elsewhere",
+              "give_up"
+            ]
+          },
+          "by": {
+            "type": "string",
+            "description": "The sender's account. Absent where the deadline decided."
+          },
+          "byDeadline": {
+            "type": "boolean",
+            "description": "Nobody answered within the 48 hours."
+          },
+          "destLabel": {
+            "type": "string",
+            "description": "Where the goods go. Absent where they were given up."
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoPoint"
+          },
+          "returnLeg": {
+            "description": "The new load they travel on.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightLink"
+              }
+            ]
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "choice",
+          "at"
+        ]
+      },
+      "FreightRefusal": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "remindedAt": {
+            "type": "string",
+            "description": "When the sender was told what happens with no answer."
+          },
+          "decision": {
+            "$ref": "#/components/schemas/FreightRefusalDecision"
+          },
+          "at": {
+            "type": "string",
+            "description": "When the driver wrote it down at the door, and the receiver's reason as the driver wrote it."
+          },
+          "decideBy": {
+            "type": "string",
+            "description": "By when the sender decides. After it the goods go back to where they were picked up, at the sender's cost."
+          }
+        },
+        "required": [
+          "at",
+          "decideBy"
+        ]
+      },
       "FreightClaim": {
         "type": "object",
         "properties": {
@@ -46784,6 +46953,22 @@
               "$ref": "#/components/schemas/FreightDeliveryAttempt"
             }
           },
+          "refusal": {
+            "description": "Refused at the door: the sender decides, and the load closes as refused once they have — or the deadline has.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightRefusal"
+              }
+            ]
+          },
+          "returnOf": {
+            "description": "A RETURN: refused goods carried on as a new load by the driver who held them — the load they were refused on.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightLink"
+              }
+            ]
+          },
           "claim": {
             "description": "FP3b — the sender's claim against the delivered goods, and how it ended. One per load.",
             "allOf": [
@@ -46989,6 +47174,7 @@
               "claimed",
               "in_transit",
               "delivered",
+              "refused",
               "cancelled"
             ]
           },
@@ -51359,6 +51545,7 @@
               "claimed",
               "in_transit",
               "delivered",
+              "refused",
               "cancelled"
             ]
           },
@@ -51412,6 +51599,30 @@
             "items": {
               "$ref": "#/components/schemas/FreightDeliveryAttempt"
             }
+          },
+          "refusal": {
+            "description": "Refused at the door: by when the sender decides, and what was decided.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightRefusal"
+              }
+            ]
+          },
+          "canDecideRefusal": {
+            "type": "boolean",
+            "description": "Refused, on the road, nothing decided yet: the sender may decide now."
+          },
+          "pickupLabel": {
+            "type": "string",
+            "description": "Where it was picked up — where \"back\" takes the goods."
+          },
+          "returnOf": {
+            "description": "A return: the load its goods were refused on.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightLink"
+              }
+            ]
           },
           "claim": {
             "description": "FP3b — the sender's claim, as far as it has got.",
@@ -51899,6 +52110,7 @@
               "claimed",
               "in_transit",
               "delivered",
+              "refused",
               "cancelled"
             ]
           },
@@ -51944,6 +52156,70 @@
         },
         "required": [
           "outcome"
+        ]
+      },
+      "DecideRefusalDto": {
+        "type": "object",
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "back",
+              "elsewhere",
+              "give_up"
+            ]
+          },
+          "destLabel": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "destLocation": {
+            "$ref": "#/components/schemas/GeoDto"
+          },
+          "contactName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "contactPhone": {
+            "type": "string",
+            "maxLength": 32
+          }
+        },
+        "required": [
+          "choice"
+        ]
+      },
+      "RefusalDecidedView": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "available",
+              "ordered",
+              "claimed",
+              "in_transit",
+              "delivered",
+              "refused",
+              "cancelled"
+            ]
+          },
+          "refusal": {
+            "$ref": "#/components/schemas/FreightRefusal"
+          },
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "refusal",
+          "freightId",
+          "code"
         ]
       },
       "OpenFreightClaimDto": {
@@ -60459,6 +60735,7 @@
               "claimed",
               "in_transit",
               "delivered",
+              "refused",
               "cancelled"
             ]
           },

@@ -2,6 +2,7 @@ import { Card, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { carrierLine, expectedLine, freightLadder, freightLadderIndex, freightStatusPresentation, freightWithdrawnLine, stepTime } from '../logic';
 import type { FreightTrackView } from '../types';
+import { utcMoment } from '../../../shared/refusal';
 import { arrivalWords, crossingWords, passageWords } from '../../../shared/passages';
 
 /**
@@ -102,6 +103,13 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
       {view.receiverName ? <p class="scr__lede">{t('send.freight.receivedBy', { name: view.receiverName })}</p> : null}
       {/* Put back with the rest of its order: said as that — it was not withdrawn, it is coming with the others. */}
       {view.rejoined ? <p class="scr__lede">{t('send.freight.rejoined')}</p> : view.cancelled ? <p class="scr__lede">{freightWithdrawnLine(view.cancelled, t)}</p> : null}
+      {/* Refused at the door: and what became of the goods, once the sender said — never the receiver's reason. */}
+      {view.refused ? (
+        <p class="scr__lede">
+          {t('send.freight.refusedLine', { when: utcMoment(view.refused.at) })}
+          {view.refused.returnCode ? ` ${t('send.freight.refusedOn', { code: view.refused.returnCode })}` : view.refused.choice === 'give_up' ? ` ${t('send.freight.refusedGivenUp')}` : ''}
+        </p>
+      ) : null}
 
       {/* AN ORDER IN SEVERAL LOADS: which one this link is for, and where every one of them has got to. */}
       {view.partOf && view.loads?.length ? (

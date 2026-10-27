@@ -23,6 +23,7 @@ import { enPages } from './en.pages';
 import { enFront } from './en.front';
 import { enPrivacy } from './en.privacy';
 import { enAbbr } from './en.abbr';
+import { enRefusal } from './en.refusal';
 
 export const enApps = {
   ...enAgent,
@@ -40,4 +41,5 @@ export const enApps = {
   ...enFront,
   ...enPrivacy,
   ...enAbbr,
+  ...enRefusal,
 };

@@ -12,6 +12,26 @@ import { downscaleImage } from '../../shared/media';
 import type { Gs1DisputeView } from '../../shared/gs1';
 import type { StoreGs1Api } from './gs1';
 import type { IconName } from '../../shared/ui/Icon';
+import { refusalSentence } from '../../shared/ui/ErrorNote';
+import type { RefusalBody } from '../../shared/RefusalCard';
+import type { Refusal } from '../../shared/refusal';
+
+/** One of its heavy orders sent as freight, as the store's list reads it (GET dispatch/posted). */
+export interface VendorLoad {
+  freightId: string;
+  code: string;
+  description: string;
+  destLabel: string;
+  weightKg: number;
+  status: string;
+  /** Refused at the door (the user, 2026-10-27): by when the store says where the goods go, and what it said. */
+  refusal?: Refusal;
+  canDecideRefusal?: boolean;
+  /** Where it was picked up — where "back" takes refused goods. */
+  pickupLabel?: string;
+  /** A return: the load its goods were refused on. */
+  returnOf?: { freightId: string; code: string };
+}
 import {
   clearCreds,
   createVendorClient,
@@ -167,6 +187,8 @@ export interface VendorState {
   /** Returns this store has been asked to decide on. Loaded with the orders, because that is where a
    *  store operator already looks and a decision nobody sees is a decision nobody makes. */
   returns: ReturnOfferView[];
+  /** Its heavy orders sent as freight, and where each stands — refused at the door among them (the user, 2026-10-27). */
+  loads: VendorLoad[];
   quote: QuoteView | null;
   quoteState: 'idle' | 'loading' | 'ready' | 'error';
   minted: MintView | null;
@@ -216,6 +238,7 @@ const INITIAL: VendorState = {
   hubOptions: null,
   originState: 'idle',
   returns: [],
+  loads: [],
   quote: null,
   quoteState: 'idle',
   minted: null,
@@ -363,7 +386,7 @@ export function useVendorApp() {
       // The register page loads on its own (ordersEpoch-guarded) path; the header counts come from the
       // store-wide stats endpoint, NOT the filtered page. Both run alongside the checkouts inbox.
       void fetchOrdersWith(stateRef.current.orderQuery);
-      const [statsR, checkoutsR, returnsR, fundingR] = await Promise.all([client.api.orderStats(creds.vendorId), client.api.checkouts(creds.vendorId), client.api.returns(creds.vendorId), client.api.funding(creds.vendorId)]);
+      const [statsR, checkoutsR, returnsR, fundingR, loadsR] = await Promise.all([client.api.orderStats(creds.vendorId), client.api.checkouts(creds.vendorId), client.api.returns(creds.vendorId), client.api.funding(creds.vendorId), client.api.loads()]);
       if (superseded()) return;
       setState((s) => ({
         ...s,
@@ -372,6 +395,7 @@ export function useVendorApp() {
         orderStats: statsR.error ? s.orderStats : (narrow<OrderStats>(statsR.data) ?? s.orderStats),
         checkouts: checkoutsR.error ? s.checkouts : (narrow<CheckoutRow[]>(checkoutsR.data) ?? []),
         returns: returnsR.error ? s.returns : (narrow<{ items: ReturnOfferView[] }>(returnsR.data)?.items ?? []),
+        loads: loadsR.error ? s.loads : (narrow<{ items: VendorLoad[] }>(loadsR.data)?.items ?? []),
         // A prepayment still waiting on the provider — the answer to "why is my balance still low".
         funding: fundingR.error ? s.funding : (narrow<{ open: VendorFundingView | null }>(fundingR.data)?.open ?? null),
         // What a prepayment costs, carried on the same read so the sheet never has to ask separately.
@@ -1003,6 +1027,32 @@ export function useVendorApp() {
     [client, creds, run, fail, pushToast, refresh],
   );
 
+  /** Refused at the door (the user, 2026-10-27): the store says where the goods go. The refusal in words, or null. */
+  const decideRefusal = useCallback(
+    async (freightId: string, body: RefusalBody): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.decideRefusal(freightId, body);
+      if (r.error) return refusalSentence(r.error);
+      pushToast({ tone: 'ok', icon: 'truck', title: t(body.choice === 'give_up' ? 'refusal.done.giveUp' : body.choice === 'back' ? 'refusal.done.back' : 'refusal.done.elsewhere') });
+      await refresh();
+      return null;
+    },
+    [client, pushToast, refresh],
+  );
+
+  /** Where a typed place is, for "to another place": a stand-in for a name nobody found is not a place. */
+  const geocodePlace = useCallback(
+    async (q: string): Promise<{ location: { lat: number; lng: number }; confidence: 'exact' | 'approx' | 'fallback'; matched?: string } | null> => {
+      const query = q.trim();
+      if (!client || !query) return null;
+      const r = await client.api.geocode(query);
+      if (r.error || !r.data) return null;
+      const found = narrow<{ location: { lat: number; lng: number }; confidence: 'exact' | 'approx' | 'fallback'; matched?: string }>(r.data);
+      return found.confidence === 'fallback' ? null : found;
+    },
+    [client],
+  );
+
   /** Round 27 — an order's label, opened to print again: the store's own, once paid. */
   const printOrderLabel = useCallback(
     async (parcelId: string) => {
@@ -1403,6 +1453,8 @@ export function useVendorApp() {
       exportOrders,
       savePolicy,
       answerReturn,
+      decideRefusal,
+      geocodePlace,
       saveCallback,
       sendCallback,
       setCallbackCode,

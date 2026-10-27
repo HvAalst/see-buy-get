@@ -184,6 +184,15 @@ export interface ClientRef {
 export interface PostedLoad {
   freightId: string;
   code: string;
+  /** FP3b — the doors the driver stood at and could not hand over at, most recent last. */
+  attempts?: Array<{ outcome: 'absent' | 'refused' | 'unreachable'; note?: string; at: string }>;
+  /** Refused at the door (the user, 2026-10-27): by when the business says where the goods go, and what it said. */
+  refusal?: import('../../shared/refusal').Refusal;
+  canDecideRefusal?: boolean;
+  /** Where it was picked up — where "back" takes refused goods. */
+  pickupLabel?: string;
+  /** A return: the load its goods were refused on. */
+  returnOf?: { freightId: string; code: string };
   /** The money its prices are in: the business’s own, stamped when it was posted. */
   currency?: string;
   /** One load of an order its carrier brings in several: which one, of how many, of which order. */

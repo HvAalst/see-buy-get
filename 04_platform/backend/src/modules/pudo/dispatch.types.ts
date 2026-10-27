@@ -1520,6 +1520,10 @@ export class Claimable {
   @ApiPropertyOptional({ type: UnitHold }) held?: UnitHold;
   /** Round 35 — tampering was reported at the receiver's door: the seals may be said not as the note says once released. */
   @ApiPropertyOptional() doorReported?: boolean;
+  /** Refused at the door, and the sender not yet decided: until when the driver keeps the goods (the user, 2026-10-27). */
+  @ApiPropertyOptional() refusedUntil?: string;
+  /** A return: refused goods carried on as this new load — the load they were refused on. */
+  @ApiPropertyOptional({ type: FreightLink }) returnOf?: FreightLink;
   /** Held by the police, customs or another authority on the road, as its driver said: until they say it was let go. */
   @ApiPropertyOptional({ type: HeldByAuthority }) heldByAuthority?: HeldByAuthority;
   ref: string; // toteCode | freightId — the API identifier the pickup/load/deliver calls use

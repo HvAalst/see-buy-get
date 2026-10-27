@@ -137,10 +137,12 @@ export function ordersApi(sbg: SbgClient, did: string) {
 /* ------------------------------------------------------------------- logic -- */
 
 /** What an order's tag says, from the facts on it. `late` outranks everything but done and withdrawn. */
-export type OrderTag = 'unplanned' | 'planned' | 'onTruck' | 'onRoad' | 'delivered' | 'withdrawn' | 'late' | 'offeredToYou' | 'onOffer' | 'withPartner' | 'onBoard';
+export type OrderTag = 'unplanned' | 'planned' | 'onTruck' | 'onRoad' | 'delivered' | 'refused' | 'withdrawn' | 'late' | 'offeredToYou' | 'onOffer' | 'withPartner' | 'onBoard';
 
 export function orderTag(o: Pick<FleetOrder, 'status' | 'late' | 'planned'> & Partial<Pick<FleetOrder, 'role' | 'handOn'>>): OrderTag {
   if (o.status === 'delivered') return 'delivered';
+  // Refused at the door, closed once the sender said where the goods go: they travel on as a new load (2026-10-27).
+  if (o.status === 'refused') return 'refused';
   if (o.status === 'cancelled') return 'withdrawn';
   // Something a partner is asking: that it is waiting for an answer comes before anything about its day.
   if (o.role === 'offered') return 'offeredToYou';
@@ -167,6 +169,7 @@ export const TAG_TONE: Record<OrderTag, 'ok' | 'info' | 'warn' | 'danger' | 'idl
   onTruck: 'info',
   onRoad: 'info',
   delivered: 'ok',
+  refused: 'warn',
   withdrawn: 'idle',
   late: 'danger',
 };

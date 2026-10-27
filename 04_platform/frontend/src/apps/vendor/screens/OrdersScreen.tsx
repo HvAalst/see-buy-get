@@ -14,6 +14,8 @@ import { ConversationList, ConversationSheet } from '../../../shared/conversatio
 import type { ChatThread } from '../../../shared/conversation/logic';
 import type { NetworkPoint, OrderRow } from '../types';
 import { ssccWords } from '../gs1';
+import { RefusalCard } from '../../../shared/RefusalCard';
+import { utcMoment } from '../../../shared/refusal';
 
 export interface OrdersScreenProps {
   state: VendorState;
@@ -135,6 +137,31 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
       {/* Parcels nobody came for, above the register because they are the only thing here waiting on a
           DECISION rather than on the network. Both numbers are shown, because "pay to bring it back" is
           not a question anybody can answer without what it is worth and what the trip costs. */}
+      {/* Its heavy orders sent as freight: where each stands — and, refused at the door, the store's to say where the goods go. */}
+      {state.loads.length ? (
+        <Card title={t('vendor.loads.title')} aside={<span class="row__count">{state.loads.length}</span>}>
+          <p class="card__note">{t('vendor.loads.lede')}</p>
+          <div class="rows" role="list">
+            {state.loads.map((l) => (
+              <div key={l.freightId} class="row row--static" role="listitem">
+                <span class="row__body">
+                  <span class="row__t">
+                    {l.code} — {l.description}
+                  </span>
+                  <span class="row__s">{t('vendor.loads.line', { status: t(`vendor.loads.status.${l.status}` as never), dest: l.destLabel, kg: l.weightKg })}</span>
+                  {l.canDecideRefusal && l.refusal ? <span class="row__s row__s--warn">{t('vendor.loads.refusedRow', { by: utcMoment(l.refusal.decideBy) })}</span> : null}
+                  {l.returnOf ? <span class="row__s">{t('refusal.returnOf', { code: l.returnOf.code })}</span> : null}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+      {state.loads
+        .filter((l) => l.refusal)
+        .map((l) => (
+          <RefusalCard key={`refused-${l.freightId}`} title={t('vendor.loads.refusedTitle', { code: l.code })} refusal={l.refusal!} pickupLabel={l.pickupLabel ?? ''} canDecide={Boolean(l.canDecideRefusal)} decide={(body) => actions.decideRefusal(l.freightId, body)} geocode={actions.geocodePlace} near={state.vendor?.location ?? null} />
+        ))}
       {state.returns.length ? (
         <Card title={t('vendor.returns.title')} aside={<span class="row__count">{state.returns.length}</span>}>
           <p class="card__note">{t('vendor.returns.lede')}</p>

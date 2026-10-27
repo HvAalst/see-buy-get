@@ -156,7 +156,7 @@ export function inboundApi(sbg: SbgClient): InboundApi {
 }
 
 /** Where a load coming in stands, in one word the list can colour: waiting for a carrier, coming, here, or not coming. */
-export type InboundState = 'booked' | 'carrier' | 'on_its_way' | 'delivered' | 'withdrawn';
+export type InboundState = 'booked' | 'carrier' | 'on_its_way' | 'delivered' | 'refused' | 'withdrawn';
 
 export function inboundState(row: Pick<InboundRow, 'status'>): InboundState {
   switch (row.status) {
@@ -166,6 +166,8 @@ export function inboundState(row: Pick<InboundRow, 'status'>): InboundState {
       return 'on_its_way';
     case 'delivered':
       return 'delivered';
+    case 'refused':
+      return 'refused';
     case 'cancelled':
       return 'withdrawn';
     default:

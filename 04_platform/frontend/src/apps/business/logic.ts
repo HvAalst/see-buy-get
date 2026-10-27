@@ -123,9 +123,11 @@ export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
  * WHERE A LOAD HAS GOT, as one word for its list. `posted` waiting for a carrier · `offers` carriers have named
  * prices · `taken` a carrier has it · `moving` picked up · `delivered` · `cancelled`.
  */
-export type LoadStage = 'ordered' | 'posted' | 'offers' | 'taken' | 'moving' | 'delivered' | 'cancelled';
+export type LoadStage = 'ordered' | 'posted' | 'offers' | 'taken' | 'moving' | 'delivered' | 'refused' | 'cancelled';
 export function loadStage(l: { status: string; openProposals: number; pickedUpAt?: string; deliveredAt?: string; cancelledAt?: string; carrier?: unknown }): LoadStage {
   if (l.cancelledAt || l.status === 'cancelled') return 'cancelled';
+  // Refused at the door, and closed once the business said where the goods go (or the 48 hours did).
+  if (l.status === 'refused') return 'refused';
   if (l.deliveredAt || l.status === 'delivered') return 'delivered';
   if (l.pickedUpAt || l.status === 'in_transit') return 'moving';
   if (l.carrier || l.status === 'claimed') return 'taken';

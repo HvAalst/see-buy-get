@@ -7,6 +7,8 @@ import { hasInstructions } from '../../../shared/instructions';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
 import { MyBookingsSection } from './MyBookingsSection';
+import { RefusalCard } from '../../../shared/RefusalCard';
+import { utcMoment } from '../../../shared/refusal';
 import { OffersSection } from './OffersSection';
 import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
 import { money } from '../logic';
@@ -135,6 +137,9 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         {/* FP8 — a driver gave it back: the latest, with their reason, while the load is still looking for a carrier. */}
         {f.handBacks?.length && !f.pickedUpAt ? <span class="row__s">{t('agent.freight.handBackLine', { when: formatDate(f.handBacks[f.handBacks.length - 1].at), reason: f.handBacks[f.handBacks.length - 1].reason })}</span> : null}
         {f.attempts?.length && f.status === 'in_transit' ? <span class="row__s">{attemptLine(f.attempts[f.attempts.length - 1], t)}</span> : null}
+        {/* Refused at the door: the shop's to say where the goods go, by when (the user, 2026-10-27). */}
+        {f.canDecideRefusal && f.refusal ? <span class="row__s row__s--warn">{t('agent.freight.refusedRow', { by: utcMoment(f.refusal.decideBy) })}</span> : null}
+        {f.returnOf ? <span class="row__s">{t('refusal.returnOf', { code: f.returnOf.code })}</span> : null}
         {f.claim ? <span class="row__s">{claimLine(f.claim, t, f.currency)}</span> : null}
         {/* FP6 — who has it, and what the shop said of them. */}
         {f.carrier ? <span class="row__s">{t('agent.freight.carrierLine', { driver: f.carrier.driverName ?? t('agent.freight.carrierUnknown'), plate: f.carrier.plate ?? '' })}</span> : null}
@@ -199,6 +204,8 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
           {!load.pickedUpAt && !load.cancelledAt ? <p class="card__note">{t('agent.freight.handBackAdvice')}</p> : null}
         </Card>
       ) : null}
+      {/* Refused at the door: where the goods go is the shop's to say, as the sender — or what became of them. */}
+      {load.refusal ? <RefusalCard refusal={load.refusal} pickupLabel={load.pickupLabel ?? ''} canDecide={Boolean(load.canDecideRefusal)} decide={(body) => actions.decideRefusal(load.freightId, body)} geocode={(q) => actions.geocodePlace(q)} near={state.agent?.location ?? null} /> : null}
       {/* FP3b — every failed attempt, and the claim: the two things a shop rings about. */}
       {load.attempts?.length ? (
         <Card tone="soft">
@@ -207,7 +214,7 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
               {attemptLine(a, t)}
             </p>
           ))}
-          {load.status === 'in_transit' ? <p class="card__note">{t('agent.freight.attemptAdvice')}</p> : null}
+          {load.status === 'in_transit' && !load.refusal ? <p class="card__note">{t('agent.freight.attemptAdvice')}</p> : null}
         </Card>
       ) : null}
       {load.claim ? (
