@@ -227,3 +227,16 @@
 .chip--tap.chip--on {
   color: var(--blue);
 }
+
+/* 2026-10-27 — the most a store pays for its parcel's way to its door, raised in the row of its load. */
+.raise {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.raise__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

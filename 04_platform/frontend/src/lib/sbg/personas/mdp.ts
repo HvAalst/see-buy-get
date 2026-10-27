@@ -28,6 +28,12 @@ export function createMdpApi(sbg: SbgClient) {
     hubLabelZpl: (mdpId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/parcels/{parcelId}/label.zpl', { params: { path: { id: mdpId, parcelId } }, parseAs: 'text' })),
 
+    /** 2026-10-27 — the boxes called off here going to their store's door as a load, kept aside for that load's driver. */
+    handovers: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/handovers', { params: { path: { id: mdpId } } })),
+    /** …handed to that driver, their pass scanned at the counter. */
+    handToDriver: (mdpId: string, parcelId: string, badge: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/handovers/{parcelId}', { params: { path: { id: mdpId, parcelId } }, body: { badge } })),
+
     /** Every parcel in At_MDP (the app keeps only its own hub's; empty `agent` = no filter). */
     parcelsAtMdp: () => sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_MDP', agent: '' } } })),
 

@@ -117,6 +117,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {/* Refused at the door (the user, 2026-10-27): the goods stay aboard until the sender says where they go. */}
                   {/* …or a part refused at the handover, the load delivered: those packages stay with the driver until then. */}
                   {c.refusedUntil ? <span class="load__warn">{c.refusedPart ? t('driver.loads.refusedPartShort', { n: c.refusedPart, by: utcMoment(c.refusedUntil) }) : t('driver.loads.refusedShort', { by: utcMoment(c.refusedUntil) })}</span> : null}
+                  {/* A store's parcel called off at a hub, to its door (2026-10-27): collected at the hub's counter, by the pass. */}
+                  {c.collectAtHub && !c.collectAtHub.handed ? <span class="load__warn">{t('driver.loads.collectAtHub', { parcel: c.collectAtHub.parcelId, hub: c.collectAtHub.hubName })}</span> : null}
                   {c.returnOf ? <span class="load__meta">{t('driver.loads.returnOf', { code: c.returnOf.code })}</span> : null}
                   {/* Round 37 — loaded onto them by their pass, its seal not read yet: received nowhere until it is. */}
                   {control === 'onboard' && c.bagSeal && !c.bagSeal.taken && !c.held ? <span class="load__warn">{t('driver.bag.notRead')}</span> : null}
@@ -464,6 +466,7 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               : t('driver.loads.gateBodyDeliver', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })}
           </p>
           {isPickup && claim.invoiceMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.invoiceMissingTitle')} detail={t('driver.loads.invoiceMissingDetail')} /> : null}
+          {isPickup && claim.collectAtHub && !claim.collectAtHub.handed ? <Note tone="warn" icon="warning" title={t('driver.loads.collectFirstTitle')} detail={t('driver.loads.collectFirstDetail', { parcel: claim.collectAtHub.parcelId, hub: claim.collectAtHub.hubName })} /> : null}
           {isPickup && claim.sealMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.sealMissingTitle')} detail={t('driver.loads.sealMissingDetail', { why: claim.sealMissing })} /> : null}
           {/* Round 35 — held under the tamper protocol: it changes hands with nobody until operations releases it. */}
           {held ? <Note tone="warn" icon="warning" title={t('common.tamper.heldTitle')} detail={`${heldLine(held, t)} ${t('common.tamper.heldWait')}`} /> : null}

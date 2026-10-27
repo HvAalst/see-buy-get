@@ -13,7 +13,7 @@ import { openSvg } from '../../shared/openPage';
 import { holdPhoto } from '../../shared/heldPhotos';
 import { errorSentence } from '../../shared/ui';
 import type { UnitHold } from '../../shared/tamper';
-import type { DropView, LoadView, MdpView, NewToteView, ParcelRow, RatesView, SortView, ToteView } from './types';
+import type { DropView, HubHandover, LoadView, MdpView, NewToteView, ParcelRow, RatesView, SortView, ToteView } from './types';
 import { clearStaff, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from '../agent/staff';
 import { peopleApi } from '../agent/people';
 
@@ -67,6 +67,10 @@ export interface MdpState {
   staff: StaffAtCounter | null;
   /** 2026-10-27 — an old label scanned of a parcel its store called off here: which new label goes over it. */
   relabel: { oldId: string; newId: string } | null;
+  /** 2026-10-27 — the boxes called off here going to their store's door, kept aside for that load's driver. */
+  handovers: HubHandover[];
+  /** …and the one whose old label was just scanned at the sort. */
+  aside: { parcelId: string; loadCode: string } | null;
 }
 
 const EMPTY_FORM = { dropCode: '', sortId: '', loadCode: '', badge: '', arrivalCode: '' };
@@ -96,6 +100,8 @@ const INITIAL: MdpState = {
   staff: null,
   drop: {},
   relabel: null,
+  handovers: [],
+  aside: null,
 };
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
@@ -199,11 +205,13 @@ export function useMdpApp() {
         return;
       }
 
-      const [totesR, parcelsR, arrivalsR] = await Promise.all([
+      const [totesR, parcelsR, arrivalsR, handoversR] = await Promise.all([
         client.api.totesAt(hub.mdpId),
         client.api.parcelsAtMdp(),
         // Reading B — what stores bring in bulk. Read where the floor is open: a hub not yet approved takes nothing in.
         floorOpen(hub) ? client.api.arrivals(hub.mdpId) : Promise.resolve(null),
+        // Boxes called off here going to their store's door, kept aside for their driver (2026-10-27).
+        client.api.handovers(hub.mdpId),
       ]);
       if (superseded()) return;
       if (totesR.error) {
@@ -223,6 +231,7 @@ export function useMdpApp() {
         totes,
         inbound: inbound ?? s.inbound,
         arrivals: arrivalsR && !arrivalsR.error ? (narrow<HubArrivalsView>(arrivalsR.data) ?? s.arrivals) : s.arrivals,
+        handovers: handoversR.error ? s.handovers : (narrow<HubHandover[]>(handoversR.data) ?? []),
         queue: inbound ? addToQueue(s.queue, unsortedAt(inbound, hub.mdpId).map((p) => p.parcelId)) : s.queue,
         error: null,
         stale: false,
@@ -558,6 +567,12 @@ export function useMdpApp() {
         signal('error');
         // Called off here by its store (2026-10-27): the box wears its old label. Said which label to put over it, and the
         // queue holds the new one in its place.
+        // …or going to its store's own door as a load: set aside for that load's driver, and off the sort queue.
+        if (r.error.code === 'SET_ASIDE') {
+          const loadCode = String((r.error.params as { loadCode?: string } | undefined)?.loadCode ?? '');
+          setState((s) => ({ ...s, aside: { parcelId: id, loadCode }, queue: dropFromQueue(s.queue, id), form: { ...s.form, sortId: '' }, error: null }));
+          return;
+        }
         if (r.error.code === 'NEW_LABEL') {
           const newId = String((r.error.params as { returnParcelId?: string } | undefined)?.returnParcelId ?? '');
           setState((s) => ({ ...s, relabel: newId ? { oldId: id, newId } : s.relabel, queue: newId ? addToQueue(dropFromQueue(s.queue, id), [newId]) : dropFromQueue(s.queue, id), form: { ...s.form, sortId: '' }, error: null }));
@@ -614,6 +629,27 @@ export function useMdpApp() {
   );
 
   const dismissRelabel = useCallback(() => setState((s) => ({ ...s, relabel: null })), []);
+
+  /** 2026-10-27 — a box going to its store's door handed to the driver who took its load: their pass, scanned at the counter. */
+  const handToDriver = useCallback(
+    async (parcelId: string, badge: string) => {
+      const hub = stateRef.current.hub;
+      if (!client || !hub) return;
+      await run(`hand:${parcelId}`, async () => {
+        const r = await client.api.handToDriver(hub.mdpId, parcelId, badge);
+        if (r.error) {
+          signal('error');
+          return fail(r.error);
+        }
+        signal('ok');
+        setState((s) => ({ ...s, handovers: narrow<HubHandover[]>(r.data) ?? [], aside: s.aside?.parcelId === parcelId ? null : s.aside }));
+        pushToast({ tone: 'ok', icon: 'truck', title: t('mdp.handover.handed', { parcel: parcelId }) });
+      });
+    },
+    [client, run, fail, pushToast],
+  );
+
+  const dismissAside = useCallback(() => setState((s) => ({ ...s, aside: null })), []);
 
   const openTamper = useCallback((parcelId: string | null) => {
     setState((s) => ({ ...s, tamper: parcelId === null ? null : { parcelId, photoRef: '', note: '' }, error: null }));
@@ -951,6 +987,8 @@ export function useMdpApp() {
       printNewLabel,
       thermalNewLabel,
       dismissRelabel,
+      handToDriver,
+      dismissAside,
       submitLoad,
       submitNewTote,
       sendPapers,

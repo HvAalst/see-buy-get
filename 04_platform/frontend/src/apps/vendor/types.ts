@@ -130,12 +130,19 @@ export interface OrderRow {
   returnParcelId?: string;
   /** The order bringing back one called off at a hub — collected by the store itself, at that shop. */
   returnOf?: string;
+  /** Called off at a hub and coming to the store's own door as a load: that load's code (2026-10-27). */
+  returnLoadCode?: string;
 }
 
 /** What calling an order off would do now (2026-10-27): withdrawn with its money back; brought back from a hub at a price; or why not. */
 export interface CallOffView {
   parcelId: string;
-  outcome: 'refund' | 'bring_back' | 'no';
+  /** pick: not handed in at a shop — the store says where it comes back to. to_door: its own door, as a load. */
+  outcome: 'refund' | 'bring_back' | 'pick' | 'to_door' | 'no';
+  /** pick: the store's own door, where it has one on the map. */
+  door?: string;
+  /** to_door: the most we suggest allowing a driver. */
+  suggestedMax?: number;
   amount?: number;
   currency?: string;
   /** bring_back: the shop it comes back to — the one it was handed in at — and the hub it is at. */
@@ -148,10 +155,12 @@ export interface CallOffView {
 export interface CalledOffView {
   parcelId: string;
   status: string;
-  outcome: 'refund' | 'bring_back';
+  outcome: 'refund' | 'bring_back' | 'to_door';
   amount: number;
   currency: string;
   returnParcelId?: string;
+  returnLoadId?: string;
+  returnLoadCode?: string;
   backTo?: string;
   atHub?: string;
 }

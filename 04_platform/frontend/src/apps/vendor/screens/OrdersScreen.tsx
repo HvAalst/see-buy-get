@@ -18,6 +18,7 @@ import { RefusalCard } from '../../../shared/RefusalCard';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { utcMoment } from '../../../shared/refusal';
 import { CallOffBlock } from './CallOff';
+import { BringsBackLine } from './BringsBack';
 
 export interface OrdersScreenProps {
   state: VendorState;
@@ -153,6 +154,8 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
                   <span class="row__s">{t('vendor.loads.line', { status: t(`vendor.loads.status.${l.status}` as never), dest: l.destLabel, kg: l.weightKg })}</span>
                   {l.canDecideRefusal && l.refusal ? <span class="row__s row__s--warn">{t('vendor.loads.refusedRow', { by: utcMoment(l.refusal.decideBy) })}</span> : null}
                   {l.returnOf ? <span class="row__s">{t('refusal.returnOf', { code: l.returnOf.code })}</span> : null}
+                  {/* One of its own parcels, called off at a hub and coming to its door (2026-10-27). */}
+                  {l.bringsBack ? <BringsBackLine load={l} state={state} actions={actions} /> : null}
                 </span>
               </div>
             ))}
@@ -379,6 +382,7 @@ function OrderRowItem({ o, selected, onToggle, onOpen }: { o: OrderRow; selected
           {/* Called off at a hub (2026-10-27): the two orders read as one story. */}
           {o.returnParcelId ? <span class="row__s">{t('vendor.order.comingBackAs', { id: o.returnParcelId })}</span> : null}
           {o.returnOf ? <span class="row__s">{t('vendor.order.bringsBack', { id: o.returnOf })}</span> : null}
+          {o.returnLoadCode ? <span class="row__s">{t('vendor.order.comingToDoorAs', { code: o.returnLoadCode })}</span> : null}
         </span>
         <span class="row__end">
           <Pill tone={paid.tone === 'ok' ? 'ok' : 'warn'} dot>
@@ -580,6 +584,12 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
               <Button variant="link" full={false} onClick={() => void actions.openOrder(d.returnParcelId!)}>
                 {d.returnParcelId}
               </Button>
+            </div>
+          ) : null}
+          {d.returnLoadCode ? (
+            <div class="kv">
+              <span>{t('vendor.order.comingToDoor')}</span>
+              <b class="mono-t">{d.returnLoadCode}</b>
             </div>
           ) : null}
           {d.returnOf ? (

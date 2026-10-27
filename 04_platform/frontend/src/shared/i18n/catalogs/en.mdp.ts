@@ -98,6 +98,18 @@ export const enMdp = {
   'mdp.relabel.print': 'Print the new label',
   'mdp.relabel.thermal': 'For a thermal label printer',
   'mdp.relabel.done': 'Done',
+  // …or going to its store's own door as a load (the user, 2026-10-27: "As a load to its door").
+  'mdp.handover.title': 'Called off here: set aside for its driver',
+  'mdp.handover.lede': 'Its store called it off: it goes to the store’s own door as a load. Keep it aside, and hand it only to the driver who took that load — scan their pass first.',
+  'mdp.handover.scanned': '{parcel} was called off by its store: it goes to the store’s door as load {code}. Set it aside, and hand it only to the driver who comes for it.',
+  'mdp.handover.row': '{parcel} → load {code}',
+  'mdp.handover.waiting': 'No driver has taken load {code} yet.',
+  'mdp.handover.taken': 'A driver has taken load {code}: scan their pass to hand it over.',
+  'mdp.handover.takenBy': '{name} has taken load {code}: scan their pass to hand it over.',
+  'mdp.handover.passLabel': 'The driver’s pass',
+  'mdp.handover.passScan': 'Scan the pass',
+  'mdp.handover.hand': 'Hand it over',
+  'mdp.handover.handed': '{parcel} handed to its driver',
   // Round 35 — a parcel found cut or opened (the tamper protocol).
   'mdp.tamper.open': 'Packaging cut or opened? Report it',
   'mdp.tamper.title': 'Packaging cut or opened',

@@ -59,6 +59,14 @@ export interface ParcelRow {
   returnOf?: { parcelId: string; atMdpId: string; at: string };
 }
 
+/** A box called off here, going to its store's door as a load: kept aside for that load's driver (2026-10-27). */
+export interface HubHandover {
+  parcelId: string;
+  size: string;
+  calledOffAt: string;
+  load: { freightId: string; code: string; status: string; driverName?: string };
+}
+
 export interface NextHop {
   type: 'pudo' | 'mdp';
   id: string;

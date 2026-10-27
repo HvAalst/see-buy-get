@@ -142,10 +142,14 @@ export function createVendorApi(sbg: SbgClient) {
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}/label.zpl', { params: { path: { id: vendorId, parcelId } }, parseAs: 'text' })),
 
     /** 2026-10-27 — what calling an order off would do now, and doing it: withdrawn with its money back, or brought back from a hub at a price. */
-    callOffPreview: (vendorId: string, parcelId: string) =>
-      sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}/call-off', { params: { path: { id: vendorId, parcelId } } })),
-    callOff: (vendorId: string, parcelId: string, reason?: string) =>
-      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/orders/{parcelId}/call-off', { params: { path: { id: vendorId, parcelId } }, body: reason ? { reason } : {} })),
+    callOffPreview: (vendorId: string, parcelId: string, backTo?: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}/call-off', { params: { path: { id: vendorId, parcelId }, query: backTo ? { backTo } : {} } })),
+    /** Not handed in at a shop: `backTo` a shop's id, or `door` — its own, as a load, at most `maxSpend`. */
+    callOff: (vendorId: string, parcelId: string, body: { reason?: string; backTo?: string; maxSpend?: number }) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/orders/{parcelId}/call-off', { params: { path: { id: vendorId, parcelId } }, body })),
+    /** The most it pays for a parcel's way to its door, raised while no driver has taken the load. */
+    raiseMaxSpend: (vendorId: string, freightId: string, maxSpend: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/loads/{freightId}/max-spend', { params: { path: { id: vendorId, freightId } }, body: { maxSpend } })),
 
     /** DT — the parcel's planned journey (origin PUDO → MDP(s) → dest PUDO), for the twin view after minting. */
     parcelRoute: (parcelId: string) =>

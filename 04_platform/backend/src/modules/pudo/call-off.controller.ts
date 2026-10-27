@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Header, Param, Post, Query, Res } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
@@ -30,6 +31,7 @@ export class CallOffController {
   /** What calling the order off would do now: its money back in full; brought back to the shop it was handed in at, at a price; or why not. */
   @Scopes('vendor:read:self')
   @Get('vendors/:id/orders/:parcelId/call-off')
+  @ApiQuery({ name: 'backTo', required: false, description: 'Not handed in at a shop: the id of a shop, or door (the store’s own)' })
   preview(@Param('id') id: string, @Param('parcelId') parcelId: string, @Query('backTo') backTo: string | undefined, @Actor() actor: IntrospectionResult): CallOffView {
     this.assertStoreReads(id, actor);
     return this.callOffs.preview(id, parcelId, backTo?.trim() || undefined);

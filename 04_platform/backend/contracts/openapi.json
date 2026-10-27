@@ -4818,6 +4818,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "backTo",
+            "required": false,
+            "in": "query",
+            "description": "Not handed in at a shop: the id of a shop, or door (the store’s own)",
+            "schema": {}
           }
         ],
         "responses": {
@@ -23243,6 +23250,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "backTo",
+            "required": false,
+            "in": "query",
+            "description": "At a hub, for a shipment not handed in at a shop: a collection point id, or door",
+            "schema": {}
           }
         ],
         "responses": {

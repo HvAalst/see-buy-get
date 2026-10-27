@@ -139,6 +139,7 @@ export class ShippingApiController {
   @Public()
   @RateLimit(120, 60)
   @Get('shipments/:shipmentId/call-off')
+  @ApiQuery({ name: 'backTo', required: false, description: 'At a hub, for a shipment not handed in at a shop: a collection point id, or door' })
   callOffPreview(@Param('shipmentId') shipmentId: string, @Query('backTo') backTo: string | undefined, @CallerKey() caller: Caller): CallOffView {
     return this.shipping.callOffPreview(shipmentId, caller, backTo);
   }

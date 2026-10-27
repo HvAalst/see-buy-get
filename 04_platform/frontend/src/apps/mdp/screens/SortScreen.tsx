@@ -5,6 +5,7 @@ import { bagLine, fillPercent, fillingBags, placeLine, sortSummary, swatchIndex 
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { TamperSheet } from './TamperSheet';
 import { RelabelCard } from './RelabelCard';
+import { HandoverCard } from './HandoverCard';
 
 export interface SortScreenProps {
   state: MdpState;
@@ -34,6 +35,8 @@ export function SortScreen({ state, actions }: SortScreenProps) {
 
       {/* 2026-10-27 — a parcel its store called off here: its new label, printed and put over the old one, then sorted. */}
       <RelabelCard state={state} actions={actions} />
+      {/* …or going to its store's own door as a load: kept aside, handed to that load's driver by their pass. */}
+      <HandoverCard state={state} actions={actions} />
 
       {last ? (
         <section class={`place place--${swatchIndex(last.nextDestination.id)}`} aria-live="polite">

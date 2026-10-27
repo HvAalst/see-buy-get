@@ -261,6 +261,8 @@ export interface Claimable {
   refusedUntil?: string;
   /** A part refused at the handover, the load delivered: how many packages the driver keeps until then (2026-10-27). */
   refusedPart?: number;
+  /** A store's parcel to collect at a hub's counter, which hands it over by the driver's pass (2026-10-27). */
+  collectAtHub?: { parcelId: string; hubName: string; handed: boolean };
   /** A return: refused goods carried on as this new load — the load they were refused on. */
   returnOf?: { freightId: string; code: string };
   /** Round 37 — a bag, to the driver holding it: how it was closed (never the number), what a reading is checked against, read yet. */
