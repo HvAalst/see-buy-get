@@ -23,6 +23,8 @@ export interface PayoutRow {
   /** How it is paid — its country's way — and, by M-Pesa, the payee's own number it was raised to, masked. */
   way?: 'mpesa' | 'by_hand';
   destination?: { masked: string };
+  /** What it pays: a provider's earnings, or what a person is owed back from a load to their door they paid for first (2026-10-27). */
+  owed?: 'payable.provider' | 'payable.person';
   /** Our id for its request to a live rail: present once it went through M-Pesa itself, not a stand-in. */
   railRef?: string;
   /** What the rail left unsaid: no answer, a queue that timed out, a result not taken at its word. */

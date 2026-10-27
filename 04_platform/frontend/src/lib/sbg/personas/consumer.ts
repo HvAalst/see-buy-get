@@ -73,6 +73,16 @@ export function createConsumerApi(sbg: SbgClient) {
     respondToNotice: (id: string, choice: 'coming' | 'proxy' | 'relinquish' | 'not-mine', note?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/collection-response', { params: { path: { id } }, body: { choice, note } })),
 
+    /**
+     * 2026-10-27 — their goods coming back from a hub, to their own door, paid first by mobile money: what it would be (with
+     * a place, the most to allow suggested), asking M-Pesa for it, and giving it up.
+     */
+    doorPreview: (id: string, to?: { lat: number; lng: number }) =>
+      sbg.request((c) => c.GET('/v1/sbg/identity/parcels/{id}/door', { params: { path: { id }, query: to ? { lat: String(to.lat), lng: String(to.lng) } : {} } })),
+    door: (id: string, body: { lat: number; lng: number; label: string; maxSpend: number; phone: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/door', { params: { path: { id } }, body })),
+    doorCancel: (id: string) => sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/door/cancel', { params: { path: { id } } })),
+
     /** Name somebody to collect instead. The code comes back HERE, because passing it on is the point. */
     nominateCollector: (id: string, name: string, phone?: string) =>
       sbg.request((c) => c.POST('/v1/sbg/identity/parcels/{id}/nominate-collector', { params: { path: { id } }, body: { name, phone } })),

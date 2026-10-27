@@ -2414,6 +2414,7 @@ export const enTowerSupport = {
   'tower.support.papersSeen': 'crosses a border · papers seen at the counter {at}',
   'tower.support.papersNotSeen': 'crosses a border · papers not looked for yet',
   'tower.support.reissue': 'Reissue the release code',
+  'tower.money.personRefund': 'Owed back to a person: what their door delivery did not use',
   'tower.withdraw.hint': 'A person’s parcel that has gone no further than a hub can be withdrawn. You are told first what that would do.',
   'tower.withdraw.ask': 'Withdraw this parcel…',
   'tower.withdraw.noTag': 'Not withdrawn',

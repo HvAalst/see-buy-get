@@ -37,7 +37,8 @@ import {
 import { pickPhoneFromContacts, readSmsOtp } from '../../shared/device';
 import { classifyParcel } from './api';
 import { carriersOf, cleanPhone, codeReady, followLanding, normalizeKey, parseDims, phoneReady, EMPTY_DIMS, type DimsForm } from './logic';
-import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult } from './types';
+import type { AnyTrackView, AuthResult, ClassifyView, ConsumerParcelView, DoorPreview, InviteSummary, InviteView, MintResult, MyParcels, NetworkPoint, PersonRole, PersonView, PlaceFound, QuoteView, SwitchResult } from './types';
+import { refusalSentence } from '../../shared/ui/ErrorNote';
 
 export type Screen = 'send' | 'track' | 'parcels' | 'account';
 export type WizardStep = 'parcel' | 'from' | 'to' | 'quote' | 'book' | 'done';
@@ -925,6 +926,59 @@ export function useSendApp() {
   );
 
   /**
+   * THEIR OWN DOOR, PAID FIRST BY MOBILE MONEY (2026-10-27): what it would be — with a place, the most to allow suggested —
+   * or the server's reason it cannot be. Null where it could not be asked.
+   */
+  const doorPreview = useCallback(
+    async (id: string, to?: { lat: number; lng: number }): Promise<DoorPreview | null> => {
+      if (!client) return null;
+      const r = await client.api.doorPreview(id, to);
+      if (r.error) {
+        if (isSignInRequired(r.error)) signOutRef.current(r.error);
+        return null;
+      }
+      return narrow<DoorPreview>(r.data);
+    },
+    [client],
+  );
+
+  /** Ask M-Pesa for it: the box is held at the hub meanwhile. Answers the server's refusal in its own words, or nothing. */
+  const requestDoor = useCallback(
+    async (id: string, body: { lat: number; lng: number; label: string; maxSpend: number; phone: string }): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.door(id, body);
+      if (r.error) {
+        if (isSignInRequired(r.error)) {
+          signOutRef.current(r.error);
+          return null;
+        }
+        return refusalSentence(r.error);
+      }
+      void openParcel(id);
+      return null;
+    },
+    [client, openParcel],
+  );
+
+  /** Give it up: before paying, at once; with no driver yet, to the shop instead — all of it back. */
+  const cancelDoor = useCallback(
+    async (id: string): Promise<string | null> => {
+      if (!client) return null;
+      const r = await client.api.doorCancel(id);
+      if (r.error) {
+        if (isSignInRequired(r.error)) {
+          signOutRef.current(r.error);
+          return null;
+        }
+        return refusalSentence(r.error);
+      }
+      void openParcel(id);
+      return null;
+    },
+    [client, openParcel],
+  );
+
+  /**
    * Rate the store this parcel came from.
    *
    * The parcel id is remembered locally so the card can thank them and stop asking — the twin does not
@@ -1233,6 +1287,9 @@ export function useSendApp() {
       // my parcels + account
       loadParcels,
       openParcel,
+      doorPreview,
+      requestDoor,
+      cancelDoor,
     rateStore,
     respondToNotice,
     nominateCollector,

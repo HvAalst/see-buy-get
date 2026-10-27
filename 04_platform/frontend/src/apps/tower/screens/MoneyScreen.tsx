@@ -120,6 +120,7 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
                 <tr key={row.payoutId}>
                   <td>
                     <span class="ctbl__mono">{row.payeeDid?.slice(0, 22) ?? '—'}…</span>
+                    {row.owed === 'payable.person' ? <span class="ctag ctag--info" style="display:inline-block;margin-left:6px">{t('tower.money.personRefund')}</span> : null}
                     {payoutHow(row, t) ? <span class="ctbl__sub" style="display:block">{payoutHow(row, t)}</span> : null}
                   </td>
                   <td class="ctbl__num ctbl__strong">

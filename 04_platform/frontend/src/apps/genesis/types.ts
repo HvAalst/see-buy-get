@@ -317,6 +317,8 @@ export interface ConsumerParcelView {
   returnParcelId?: string;
   /** The receiver's side of one turned round: it went back to its sender, and will not come. */
   wentBack?: boolean;
+  /** Their goods coming to their own door, paid first by mobile money (2026-10-27): where that stands. */
+  door?: DoorView;
   payAtCollection?: { amount: number; currency: string };
 }
 
@@ -375,6 +377,36 @@ export interface DisputeOutcome {
  * An address or a place, found (GET /v1/sbg/geocode). A house is `exact`; a street, a suburb or a town is `approx`, its
  * middle. What nothing finds is an error (NOT_FOUND), never a stand-in point.
  */
+/** A load to their own door, paid first by mobile money (2026-10-27: "Mobile money first"), as the server says it stands. */
+export interface DoorView {
+  state: 'awaiting' | 'posted' | 'taken' | 'delivered' | 'lapsed' | 'to_shop' | 'reversed';
+  label: string;
+  maxSpend: number;
+  currency: string;
+  phoneMasked: string;
+  until?: string;
+  instructions?: string;
+  pushed?: boolean;
+  reference?: string;
+  paid?: number;
+  loadCode?: string;
+  billed?: number;
+  owedBack?: number;
+  canSendToShop?: boolean;
+  shopName?: string;
+  shopParcelId?: string;
+}
+
+/** What bringing it to their door would be: the most to allow suggested — or why not. */
+export interface DoorPreview {
+  outcome: 'door' | 'no';
+  suggestedMax?: number;
+  currency?: string;
+  atHub?: string;
+  maxKm?: number;
+  why?: string;
+}
+
 export interface PlaceFound {
   location: { lat: number; lng: number };
   confidence: 'exact' | 'approx' | 'fallback';

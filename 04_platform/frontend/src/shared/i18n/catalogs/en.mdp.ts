@@ -99,9 +99,9 @@ export const enMdp = {
   'mdp.relabel.thermal': 'For a thermal label printer',
   'mdp.relabel.done': 'Done',
   // …or going to its store's own door as a load (the user, 2026-10-27: "As a load to its door").
-  'mdp.handover.title': 'Called off here: set aside for its driver',
-  'mdp.handover.lede': 'Its store called it off: it goes to the store’s own door as a load. Keep it aside, and hand it only to the driver who took that load — scan their pass first.',
-  'mdp.handover.scanned': '{parcel} was called off by its store: it goes to the store’s door as load {code}. Set it aside, and hand it only to the driver who comes for it.',
+  'mdp.handover.title': 'Going to a door: set aside for its driver',
+  'mdp.handover.lede': 'It goes to a door as a load — its store’s, or the door of the person it belongs to. Keep it aside, and hand it only to the driver who took that load — scan their pass first.',
+  'mdp.handover.scanned': '{parcel} goes to a door as load {code}. Set it aside, and hand it only to the driver who comes for it.',
   'mdp.handover.row': '{parcel} → load {code}',
   'mdp.handover.waiting': 'No driver has taken load {code} yet.',
   'mdp.handover.taken': 'A driver has taken load {code}: scan their pass to hand it over.',

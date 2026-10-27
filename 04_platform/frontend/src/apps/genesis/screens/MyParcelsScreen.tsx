@@ -9,6 +9,7 @@ import { TaxInvoicesCard } from '../../../shared/TaxInvoicesCard';
 import { errorSentence, Button, Card, Checklist, CodeCard, ErrorNote, Icon, Note, Pill, PushPrompt, ReadAloud, Sheet } from '../../../shared/ui';
 import { formatMoney, useT } from '../../../shared/i18n';
 import { PhotoField } from './PhotoField';
+import { DoorBlock, doorUnderWay } from './DoorDelivery';
 import { LADDER, disputeOutcomeWords, isOffLadder, ladderIndex, lateLine, parcelRowLine, relationWord, sortForPerson, statusPresentation, stepTime } from '../logic';
 import { MERCHANT_TAGS, POSITIVE_TAGS, type MerchantTag } from '../../../lib/sbg/personas/consumer';
 import type { ConsumerParcelView, FreightShipmentView, ParcelStatus } from '../types';
@@ -343,7 +344,7 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
         <Note tone="info" icon="repeat" title={t('send.parcels.withdrawnTitle')} detail={parcel.returnParcelId ? t('send.parcels.withdrawnSender', { id: parcel.returnParcelId }) : t('send.parcels.withdrawnReceiver')} />
       ) : null}
       {/* …and the parcel taking them back: what the counter asks for in cash as they are collected. */}
-      {parcel.returnOf && parcel.status !== 'Delivered' ? (
+      {parcel.returnOf && parcel.status !== 'Delivered' && !doorUnderWay(parcel) ? (
         <Note
           tone={parcel.payAtCollection ? 'warn' : 'info'}
           icon={parcel.payAtCollection ? 'wallet' : 'repeat'}
@@ -351,6 +352,9 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
           detail={t('send.parcels.comesBackDetail', { id: parcel.returnOf })}
         />
       ) : null}
+
+      {/* …or to their own door, paid first by mobile money (2026-10-27: "Mobile money first"). */}
+      {parcel.returnOf ? <DoorBlock parcel={parcel} state={state} actions={actions} /> : null}
 
       {parcel.relation === 'received' && parcel.sentToOldNumber ? <Note tone="info" icon="info" title={t('send.parcels.oldNumber.title')} detail={t('send.parcels.oldNumber.detail')} /> : null}
 
