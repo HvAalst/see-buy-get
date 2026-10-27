@@ -1815,6 +1815,7 @@ export class ParcelService implements OnApplicationBootstrap {
     this.endCustody(parcel); // undone at the counter: the network is not holding it any more
     this.scan(parcel, 'Voided', agentDid, 'voided + refunded');
     this.reverseIntakeCharge(parcel, agentDid);
+    this.refundStore(parcel, 'voided at the counter: given back in full');
     void this.events.publish(GlosEvent.Pudo.ParcelVoided, { parcelId, agentDid }, { source: 'pudo' }).catch(() => undefined);
     return parcel;
   }
@@ -1827,7 +1828,13 @@ export class ParcelService implements OnApplicationBootstrap {
    * agent cash here (its billing is the vendor's), so nothing to reverse.
    */
   private reverseIntakeCharge(parcel: Parcel, agentDid: string): void {
-    if (parcel.paymentMode !== 'cash') return;
+    if (parcel.paymentMode !== 'cash') {
+      // Taken in "prepaid" — a store's parcel, or a walk-up nobody paid for at the counter: what the shop was paid for taking
+      // it in is taken back, as for a sender's own parcel (the user, 2026-10-26: "Refund and take back"). The store's own
+      // money comes back by refundStore.
+      if (parcel.intakeLabour) this.gate.clawbackLabour(agentDid, parcel.intakeLabour, parcel.parcelId);
+      return;
+    }
     if (parcel.senderMobile === 'app') {
       // The locked price the shop remitted, and the tax inside it — reversed together, because a voided
       // sale un-owes its tax as surely as it un-earns its revenue.
@@ -1844,6 +1851,16 @@ export class ParcelService implements OnApplicationBootstrap {
       const bill = taxOn(parcel.intakeCharge ?? WHOLESALE, parcel.taxPct ?? 0);
       this.gate.refund(agentDid, bill.gross, parcel.parcelId, bill.tax);
     }
+  }
+
+  /**
+   * A STORE'S PARCEL CALLED OFF before it has left the shop it was handed in at, or before it was handed in at all: what
+   * the store paid for it, given back in full — the mirror of the charge, tax, risk cover and exchange buffer as they were
+   * stamped at mint. Nothing where nothing was paid.
+   */
+  private refundStore(parcel: Parcel, why: string): void {
+    if (!parcel.vendorId || parcel.paidStatus !== 'ParcelPaid' || !(parcel.shipmentCost && parcel.shipmentCost > 0)) return;
+    this.vendors.rebate(parcel.vendorId, parcel.parcelId, parcel.shipmentCost, why, parcel.shipmentTax ?? 0, parcel.shipmentProvision ?? 0, parcel.fx?.buffer ?? 0);
   }
 
   /** Reverse logistics: cancel a parcel that has NOT yet been delivered/picked up. Refunds a cash
@@ -1874,6 +1891,10 @@ export class ParcelService implements OnApplicationBootstrap {
     // Only a parcel a SHOP took in has an intake charge to reverse — a dock parcel never had one, because
     // no shop ever handled it.
     if (parcel.status === 'At_PUDO' && parcel.originAgentDid) this.reverseIntakeCharge(parcel, parcel.originAgentDid);
+    // A store's parcel called off before it has left the shop it was handed in at — or before it was handed in at all: the
+    // store's money back in full (the user, 2026-10-26: "Refund and take back"). Once a hub or a driver has it, what was
+    // carried is not given back.
+    if (parcel.status === 'Created' || parcel.status === 'At_PUDO') this.refundStore(parcel, parcel.status === 'Created' ? 'called off before it was handed in: given back in full' : 'called off at the counter: given back in full');
     parcel.status = 'Voided';
     this.media.anchorParcelTerminal(parcel.parcelId); // S26: shipment-proof retention starts at this terminal state
     this.scan(parcel, 'Voided', by, reason ? `cancelled · ${reason}` : 'cancelled');

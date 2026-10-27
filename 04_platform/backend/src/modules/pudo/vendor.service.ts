@@ -448,7 +448,7 @@ export class VendorService {
    * the books for money the customer no longer paid — the sister would eventually remit tax on a sale that
    * was partly undone, out of its own pocket, and nothing would show why.
    */
-  rebate(vendorId: string, parcelId: string, amount: number, note = 'flexible-route rebate', tax = 0, provision = 0): Vendor {
+  rebate(vendorId: string, parcelId: string, amount: number, note = 'flexible-route rebate', tax = 0, provision = 0, fxBuffer = 0): Vendor {
     const vendor = this.get(vendorId);
     if (amount <= 0) return vendor;
     const collected = Number.isFinite(tax) ? Math.min(Math.max(Math.round(tax * 100) / 100, 0), amount) : 0;
@@ -457,10 +457,13 @@ export class VendorService {
     // ceiling held for it, so a slice of the cover was collected against a journey that never happened —
     // leaving it in the pool would be provisioning against a shipment nobody made.
     const risk = Number.isFinite(provision) ? Math.min(Math.max(Math.round(provision * 100) / 100, 0), Math.max(0, net)) : 0;
+    // The exchange buffer it was charged, given back out of FX gain/loss, where billShipment booked it — never out of revenue.
+    const buffer = Number.isFinite(fxBuffer) ? Math.min(Math.max(Math.round(fxBuffer * 100) / 100, 0), Math.max(0, Math.round((net - risk) * 100) / 100)) : 0;
     // The over-hold was never earned: revenue is given back, the tax on it is un-owed, and the deposit
     // restored.
     const entryId = this.post(vendor, 'rebate', parcelId, [
-      ...(net - risk > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: Math.round((net - risk) * 100) / 100 }] : []),
+      ...(net - risk - buffer > 0 ? [{ code: ACCOUNT_CODES.REVENUE, amount: Math.round((net - risk - buffer) * 100) / 100 }] : []),
+      ...(buffer > 0 ? [{ code: ACCOUNT_CODES.FX_GAINLOSS, amount: buffer }] : []),
       ...(risk > 0 ? [{ code: ACCOUNT_CODES.PROVISION_CLAIMS, amount: risk }] : []),
       ...(collected > 0 ? [{ code: ACCOUNT_CODES.PAYABLE_TAX, amount: collected }] : []),
       { code: ACCOUNT_CODES.DEPOSIT_VENDOR, counterparty: vendorId, amount: -amount },

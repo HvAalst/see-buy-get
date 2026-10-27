@@ -491,8 +491,9 @@ export class ShippingApiService {
    *
    * Needs a SECRET key for the same reason minting does: a credential that can undo a shipment must never
    * sit in a page. The rules are the network's own, not a second set invented for the API — a parcel can be
-   * cancelled while it is Created, At_PUDO or At_MDP, and the money is reversed by the same path an
-   * operator's cancellation uses. Refusing later is not a limitation to apologise for: once somebody is
+   * cancelled while it is Created, At_PUDO or At_MDP, and the money moves by the same path an operator's
+   * cancellation uses: called off before it has left the shop it was handed in at, the store's money comes back in
+   * full and the shop's take-in pay goes back; at a hub, what was carried is not given back. Refusing later is not a limitation to apologise for: once somebody is
    * carrying it, calling it off is a conversation and not an API call.
    *
    * THERE IS NO AMEND, deliberately. Changing where a parcel goes, or how big it is, changes what it costs

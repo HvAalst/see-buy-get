@@ -10282,6 +10282,48 @@ describe('PUDO Light', () => {
       expect(paidTo(dest.did)).toEqual([0.15]);
     });
 
+    /**
+     * A STORE'S PARCEL CALLED OFF (the user, 2026-10-26: "Refund and take back"). Before, nothing came back: the reversal
+     * returned early for every parcel that was not paid in cash at the counter, though the API promised it.
+     */
+    it('a store’s parcel called off before it was handed in is given back in full, as a register line that says so', () => {
+      const { vendor, res } = mintInbound('RFC');
+      const id = res.parcel.parcelId;
+      const paid = parcels.get(id).shipmentCost!;
+      expect(paid).toBeGreaterThan(0);
+      const afterMint = vendors.balanceOf(vendor.vendorId);
+      parcels.cancel(id, `vendor:${vendor.vendorId}`, 'the buyer changed their mind');
+      expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(afterMint + paid, 2);
+      expect(vendors.settlementsFor(vendor.vendorId).some((r) => r.type === 'REBATE' && r.parcelId === id && r.amount === paid && /called off before it was handed in/.test(r.note ?? ''))).toBe(true);
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('called off — or voided — at the shop that took it in: the store given back in full, and the shop’s take-in pay taken back', () => {
+      for (const how of ['cancel', 'void'] as const) {
+        const { origin, vendor, res } = mintInbound(`RF${how}`);
+        const id = res.parcel.parcelId;
+        const store = vendors.balanceOf(vendor.vendorId);
+        const shop = agents.balance(origin.did) ?? 0;
+        parcels.intakeInbound(id, origin.did);
+        expect(agents.balance(origin.did) ?? 0).toBeGreaterThan(shop);
+        if (how === 'cancel') parcels.cancel(id, 'ops', 'test');
+        else parcels.void(id, origin.did, photoBy(origin.did));
+        expect(parcels.get(id).status).toBe('Voided');
+        expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(store + parcels.get(id).shipmentCost!, 2);
+        expect(agents.balance(origin.did) ?? 0).toBeCloseTo(shop, 2);
+      }
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('once a hub has it, what was carried is not given back', () => {
+      const { vendor, res } = mintInbound('RFH');
+      const id = res.parcel.parcelId;
+      const afterMint = vendors.balanceOf(vendor.vendorId);
+      parcels.get(id).status = 'At_MDP';
+      parcels.cancel(id, 'ops', 'test');
+      expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(afterMint, 2);
+    });
+
     it('handing a batch to the driver pays that shop’s company’s figure — and a step paid nothing writes no row', () => {
       set({ handoverFee: 55 });
       const { badge } = mkFleetDriver('AMH');
