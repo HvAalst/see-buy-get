@@ -219,7 +219,8 @@ export class PersonDoorService implements OnModuleInit {
         return { entryId: entry.entryId };
       } catch (err) {
         this.logger.warn(`door load not posted for ${req.parcelId}: ${(err as Error).message}`);
-        this.lapse(req, 'it could not be posted', now);
+        // Paid, but it can no longer go: the refund below is what they are told, not that no payment came.
+        this.lapse(req, 'it could not be posted', now, false);
       }
     }
     // Arrived after the time ran out, a second time, or with no load to pay for: all of it goes back.
@@ -407,7 +408,7 @@ export class PersonDoorService implements OnModuleInit {
   }
 
   /** The time ran out, or they gave up before paying: the box goes on to the shop, as it would have. */
-  private lapse(req: DoorRequest, why: string, now: number): void {
+  private lapse(req: DoorRequest, why: string, now: number, tellPerson = true): void {
     req.state = 'lapsed';
     req.closedAt = new Date(now).toISOString();
     this.requests.set(req.requestId, req);
@@ -420,7 +421,7 @@ export class PersonDoorService implements OnModuleInit {
     }
     this.parcels.releaseDoorHold(req.parcelId, `its sender's payment for a load to their door: ${why}`, now);
     this.tellHub(req.mdpId, `${req.parcelId}: sort it`, `No payment came for a load to its sender's door (${why}). Sort it as its label says.`, req.parcelId);
-    this.tell(req.personDid, 'It comes to the shop', `No payment came for a load to your door (${why}). Parcel ${req.parcelId} comes to ${req.shopName ?? 'the shop'} as before: collect it there with its code.`, req.parcelId);
+    if (tellPerson) this.tell(req.personDid, 'It comes to the shop', `No payment came for a load to your door (${why}). Parcel ${req.parcelId} comes to ${req.shopName ?? 'the shop'} as before: collect it there with its code.`, req.parcelId);
   }
 
   /** No driver has taken the load: the box goes to the shop instead — the parcel first, then the load — and all of it is owed back. */

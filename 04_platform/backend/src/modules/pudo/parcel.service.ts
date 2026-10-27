@@ -1249,7 +1249,9 @@ export class ParcelService implements OnApplicationBootstrap {
       // sender). On the one turned round, its sender reads which parcel takes it back; its receiver only that it went back —
       // the goods are not theirs to follow.
       ...(p.returnOf ? { returnOf: p.returnOf.parcelId } : {}),
-      ...(p.returnParcelId || p.returnLoad ? (relation === 'sent' && p.returnParcelId ? { returnParcelId: p.returnParcelId } : relation === 'received' ? { wentBack: true } : {}) : {}),
+      // …except goods already on their way back to their sender (returnOf): those are the reader's own, coming to them — to a
+      // shop, or to their own door as a load (2026-10-27).
+      ...(p.returnParcelId || p.returnLoad ? (relation === 'sent' && p.returnParcelId ? { returnParcelId: p.returnParcelId } : relation === 'received' && !p.returnOf ? { wentBack: true } : {}) : {}),
       // The closed-window facts, receiver-only — see ConsumerParcelView. The owed figure is DERIVED here
       // rather than left to the app, so the number somebody reads on their phone and the number the
       // counter asks for cannot come from two different pieces of arithmetic.

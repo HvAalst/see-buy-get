@@ -162,6 +162,8 @@ function FreightGroup({ items }: { items: FreightShipmentView[] }) {
 function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParcelView; state: SendState; actions: SendActions; client: SbgClient | null }) {
   const t = useT();
   const pres = statusPresentation(parcel.status, t);
+  // On its way to their own door, paid first (2026-10-27): said as that, not as a parcel going back to a shop.
+  const toDoor = Boolean(parcel.door && (parcel.door.state === 'posted' || parcel.door.state === 'taken'));
   const at = ladderIndex(parcel.status);
   const off = isOffLadder(parcel.status);
   const stepFor = (s: ParcelStatus) => parcel.timeline.find((x) => x.status === s || (s === 'Created' && x.status === 'CREATED'));
@@ -215,9 +217,11 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
       <section class={`now now--${pres.tone}`} aria-live="polite">
         <Icon name={pres.icon} size={34} class="now__ic" />
         <span class="now__body">
-          <span class="now__word">{pres.word}</span>
+          <span class="now__word">{toDoor ? t('send.door.statusWord') : pres.word}</span>
           <span class="now__sub">
-            {parcel.status === 'Unclaimed'
+            {toDoor
+              ? t('send.door.statusSub', { label: parcel.door!.label })
+              : parcel.status === 'Unclaimed'
               ? t('send.parcels.unclaimedIn', { zone: parcel.destZone })
               : parcel.status === 'Ready_For_Pickup'
               ? t('send.parcels.readyIn', { zone: parcel.destZone })

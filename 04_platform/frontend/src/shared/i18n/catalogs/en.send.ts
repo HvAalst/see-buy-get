@@ -102,6 +102,8 @@ export const enSend = {
   'send.parcels.comesBackTitle': 'Your goods, coming back',
   'send.parcels.comesBackDetail': 'It brings back your parcel {id}, withdrawn at a hub, to the shop you handed it in at. The shop asks for the way back as it hands it over.',
   'send.door.offer': 'Bring it to my door instead',
+  'send.door.statusWord': 'Coming to your door',
+  'send.door.statusSub': 'As a load to {label}',
   'send.door.offerHint': 'You pay first by M-Pesa, up to the most you allow. A driver brings it to your door; what they charge less comes back to your number.',
   'send.door.sheetTitle': 'To your door',
   'send.door.where': 'Where is your door?',

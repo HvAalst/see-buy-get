@@ -131,6 +131,8 @@ describe('a person’s own door, paid first by mobile money, over the wire', () 
     await settle();
     const posted = (await http().get(`/v1/sbg/identity/parcels/${backId}`).set(sender).expect(200)).body.door;
     expect(posted).toMatchObject({ state: 'posted', paid: said.suggestedMax, loadCode: expect.stringMatching(/^FRT-/), canSendToShop: true });
+    // Their own goods, coming to them: never told they will not come.
+    expect((await http().get(`/v1/sbg/identity/parcels/${backId}`).set(sender).expect(200)).body.wentBack).toBeUndefined();
     const load = app.get(DispatchService).bringsBackLoads().find((f) => f.bringsBack?.parcelId === backId)!;
     expect(load).toMatchObject({ status: 'available', maxSpend: said.suggestedMax, sellerEntityId: app.get(EntityService).requireForJurisdiction('KE').entityId, instructions: expect.objectContaining({ contactPhone: senderPhone }) });
     expect(load.shipperDid).toBeUndefined();
