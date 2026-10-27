@@ -8608,7 +8608,7 @@ describe('PUDO Light', () => {
     dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
     const deliver = (exceptions: Array<{ kind: string; count: number; photoRefs?: string[] }>) => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Peter Otieno', podPhotoId: photoBy(d.did), exceptions });
     // Each refusal says what to do, and leaves the load on the road.
-    expect(() => deliver([{ kind: 'lost', count: 1 }])).toThrow(/short, over, damaged or wrong/);
+    expect(() => deliver([{ kind: 'lost', count: 1 }])).toThrow(/short, over, damaged, wrong or refused/);
     expect(() => deliver([{ kind: 'short', count: 2 }, { kind: 'short', count: 1 }])).toThrow(/once/);
     expect(() => deliver([{ kind: 'short', count: 0 }])).toThrow(/one or more/);
     expect(() => deliver([{ kind: 'short', count: 1.5 }])).toThrow(/one or more/);

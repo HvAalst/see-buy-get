@@ -31,7 +31,7 @@ export class CallOffController {
   @Scopes('vendor:read:self')
   @Get('vendors/:id/orders/:parcelId/call-off')
   preview(@Param('id') id: string, @Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult): CallOffView {
-    this.assertStore(id, actor, 'read');
+    this.assertStoreReads(id, actor);
     return this.callOffs.preview(id, parcelId);
   }
 
@@ -39,7 +39,7 @@ export class CallOffController {
   @Scopes('vendor:manage:self')
   @Post('vendors/:id/orders/:parcelId/call-off')
   callOff(@Param('id') id: string, @Param('parcelId') parcelId: string, @Body() dto: CallOffDto, @Actor() actor: IntrospectionResult): CalledOffView {
-    const store = this.assertStore(id, actor, 'change');
+    const store = this.assertStoreSelf(id, actor);
     return this.callOffs.callOff(id, parcelId, actor?.actorName?.trim() || store.name, dto.reason?.trim() || 'called off by the store');
   }
 
@@ -63,14 +63,19 @@ export class CallOffController {
     return zplOut(res, this.parcels.labelZplFor(parcelId));
   }
 
-  /** The store itself, signed in as itself. Staff read a store under Stores and change nothing in its name. */
-  private assertStore(id: string, actor: IntrospectionResult, as: 'read' | 'change') {
+  /** The store itself, signed in as itself — and, calling off at a hub, spending its own money. Staff change nothing in its name. */
+  private assertStoreSelf(id: string, actor: IntrospectionResult) {
     const store = this.vendors.get(id); // 404 if unknown
-    if (actor?.role === 'operator') {
-      throw new GlosError('FORBIDDEN', as === 'read' ? 'A store’s own orders are the store’s: staff read a parcel under Find a parcel' : 'A store calls off its own orders, signed in as that store. Staff change nothing in its name');
-    }
-    if (!actor?.did || actor.did !== store.did) throw new GlosError('FORBIDDEN', as === 'read' ? 'This store is not yours to view' : 'This store is not yours to change');
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A store makes its own changes, signed in as that store. Staff read a store under Stores and change nothing in its name');
+    if (!actor?.did || actor.did !== store.did) throw new GlosError('FORBIDDEN', 'This store is not yours to change');
     return store;
+  }
+
+  /** …and reads its own orders. Staff read a parcel under Find a parcel. */
+  private assertStoreReads(id: string, actor: IntrospectionResult): void {
+    const store = this.vendors.get(id); // 404 if unknown
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A store’s own records are the store’s: its buyers, its collection codes, its messages to its systems. Staff read a store under Stores, and a parcel under Find a parcel');
+    if (!actor?.did || actor.did !== store.did) throw new GlosError('FORBIDDEN', 'This store is not yours to view');
   }
 
   /** The hub itself, from its own sign-in; staff may read what its floor reads. */
