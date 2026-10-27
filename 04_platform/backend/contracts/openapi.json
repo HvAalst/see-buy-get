@@ -4571,6 +4571,72 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/carriers": {
+      "get": {
+        "operationId": "HubCarrier.read",
+        "summary": "",
+        "description": "The kinds the hub keeps, each with what it holds, worked out.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubCarriersView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "HubCarrier.write",
+        "summary": "",
+        "description": "Its owner writes the list, whole. Not its people, and not network staff: what a hub moves bags on is its own word.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHubCarriersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubCarriersView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/risk-register": {
       "get": {
         "operationId": "RiskRegister.register",
@@ -34872,6 +34938,160 @@
             "description": "Its number and gate on its public page too."
           }
         }
+      },
+      "HubCarrierView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "cage",
+              "crate",
+              "other"
+            ]
+          },
+          "boundBy": {
+            "type": "string",
+            "description": "Which of the two decides what it holds: its space, or what it may carry.",
+            "enum": [
+              "space",
+              "weight"
+            ]
+          },
+          "carrierId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "lengthCm": {
+            "type": "number"
+          },
+          "widthCm": {
+            "type": "number"
+          },
+          "heightCm": {
+            "type": "number"
+          },
+          "maxKg": {
+            "type": "number"
+          },
+          "holds": {
+            "type": "number",
+            "description": "WORKED OUT: how many parcels of size M it holds — the lesser of its space and its rating, to one decimal."
+          },
+          "bags": {
+            "type": "number",
+            "description": "…and how many full bags that is."
+          },
+          "saidAt": {
+            "type": "string"
+          },
+          "saidBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "boundBy",
+          "carrierId",
+          "name",
+          "lengthCm",
+          "widthCm",
+          "heightCm",
+          "maxKg",
+          "holds",
+          "bags",
+          "saidAt",
+          "saidBy"
+        ]
+      },
+      "HubCarriersView": {
+        "type": "object",
+        "properties": {
+          "carriers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubCarrierView"
+            }
+          },
+          "mdpId": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "carriers",
+          "mdpId",
+          "basis"
+        ]
+      },
+      "HubCarrierInput": {
+        "type": "object",
+        "properties": {
+          "carrierId": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pallet",
+              "cage",
+              "crate",
+              "other"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "lengthCm": {
+            "type": "number",
+            "minimum": 20,
+            "maximum": 300
+          },
+          "widthCm": {
+            "type": "number",
+            "minimum": 20,
+            "maximum": 300
+          },
+          "heightCm": {
+            "type": "number",
+            "minimum": 20,
+            "maximum": 300
+          },
+          "maxKg": {
+            "type": "number",
+            "minimum": 10,
+            "maximum": 3000
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "lengthCm",
+          "widthCm",
+          "heightCm",
+          "maxKg"
+        ]
+      },
+      "SetHubCarriersDto": {
+        "type": "object",
+        "properties": {
+          "carriers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubCarrierInput"
+            }
+          }
+        },
+        "required": [
+          "carriers"
+        ]
       },
       "RiskCellView": {
         "type": "object",

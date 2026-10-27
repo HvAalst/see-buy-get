@@ -10,6 +10,7 @@ import { HUB_PEOPLE_WORDS } from '../staffWords';
 import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient } from '../../../lib/sbg';
 import { HubReachCard } from './HubReachCard';
+import { CarriersCard } from './CarriersCard';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -181,6 +182,9 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
 
       {/* When the hub is open and how to reach it: what drivers and stores working with it see; its owner writes it. */}
       <HubReachCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />
+
+      {/* What it moves bags on to other hubs (D11): its pallets, cages and crates; what each holds is worked out. */}
+      <CarriersCard sbg={sbg ?? null} mdpId={hub?.mdpId} staff={Boolean(state.staff)} />
 
       {/* The hub's people work the floor; its fee and its people are the owner's (the server refuses them those doors). */}
       {state.staff ? null : (

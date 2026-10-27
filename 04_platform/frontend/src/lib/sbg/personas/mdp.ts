@@ -1,4 +1,5 @@
 import type { SbgClient } from '../client';
+import type { components } from '../schema';
 import { createMediaApi } from './media';
 
 /**
@@ -85,6 +86,13 @@ export function createMdpApi(sbg: SbgClient) {
     /** Its owner writes it — a merge: a field left out stays, an empty one goes, hours sent as null go. */
     setContact: (mdpId: string, body: { openingHours?: Record<string, { open: string; close: string } | null> | null; phone?: string; phoneAlt?: string; askFor?: string; gate?: string; email?: string; publish?: boolean }) =>
       sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/contact', { params: { path: { id: mdpId } }, body: body as never })),
+
+    /** What the hub moves bags on between hubs (D11): its kinds, each with what it holds, worked out by the server. */
+    carriers: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/carriers', { params: { path: { id: mdpId } } })),
+
+    /** Its owner writes the list, whole: a kind with its id is that kind changed, one without is new, one left out is off. */
+    setCarriers: (mdpId: string, carriers: components['schemas']['HubCarrierInput'][]) =>
+      sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/carriers', { params: { path: { id: mdpId } }, body: { carriers } })),
 
     /** Register a fresh laminated tote into this hub's pool. */
     newTote: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/totes', { params: { path: { id: mdpId } } })),
