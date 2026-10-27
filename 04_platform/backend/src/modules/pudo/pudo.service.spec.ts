@@ -10315,6 +10315,26 @@ describe('PUDO Light', () => {
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 
+    it('gives back nothing for a parcel the store never paid for', () => {
+      const origin = onboardAgent('RFU Origin', 'NorthTown', 50);
+      const dest = onboardAgent('RFU Dest', 'NorthTown', 50);
+      const vendor = vendors.register({ name: 'RFUVendor' });
+      const res = controller.createInbound({ vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700112', size: 'M', contentPhotoRef: photoOf(vendor.vendorId) } as never, { role: 'genesis', did: vendor.did } as never) as { parcel: { parcelId: string }; paid: boolean };
+      expect(res.paid).toBe(false);
+      parcels.cancel(res.parcel.parcelId, `vendor:${vendor.vendorId}`, 'not wanted');
+      expect(vendors.balanceOf(vendor.vendorId)).toBe(0);
+    });
+
+    it('gives an exchange buffer back out of FX gain/loss, where it was booked — never out of revenue', () => {
+      const { vendor } = mintInbound('RFB');
+      const fx = books.balance(KE(), ACCOUNT_CODES.FX_GAINLOSS);
+      const revenue = books.balance(KE(), ACCOUNT_CODES.REVENUE);
+      vendors.rebate(vendor.vendorId, 'PUD-RFB-X', 10, 'given back', 0, 0, 2);
+      expect(Math.round((books.balance(KE(), ACCOUNT_CODES.FX_GAINLOSS) - fx) * 100) / 100).toBe(2);
+      expect(Math.round((books.balance(KE(), ACCOUNT_CODES.REVENUE) - revenue) * 100) / 100).toBe(8);
+      expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+    });
+
     it('once a hub has it, what was carried is not given back', () => {
       const { vendor, res } = mintInbound('RFH');
       const id = res.parcel.parcelId;
