@@ -197,6 +197,8 @@ export function HubHandIn({ api, vendorId, onWork, onMoney, lead = false }: { ap
                   </label>
                   <input id={`hub-bringer-${w.mdpId}`} class="input" maxLength={80} value={open.bringer} onInput={(e) => setBooking({ ...open, bringer: e.currentTarget.value })} />
                   <p class="hint">{t('vendor.hub.bringerHint')}</p>
+                  {/* D11 — the empties go back with the van that brought them (the user, 2026-10-26: "Back with the van"). */}
+                  <p class="hint">{t('vendor.hub.emptiesHint')}</p>
                 </div>
                 <div class="scr__cta">
                   <Button busy={busy} disabled={!bookingReady(open)} onClick={() => void book(w.hubName)}>
@@ -230,6 +232,7 @@ export function HubHandIn({ api, vendorId, onWork, onMoney, lead = false }: { ap
                   {a.state === 'receiving' ? <span class="dockrow__sub">{t('vendor.hub.progress', { done: a.scannedCount, all: a.parcels.length })}</span> : null}
                   {a.finished?.missing.length ? <span class="dockrow__sub">{t('vendor.hub.missing', { n: a.finished.missing.length })}</span> : null}
                   {a.state === 'missed' ? <span class="dockrow__sub">{t('vendor.hub.missedLine', { hub: a.hubName })}</span> : null}
+                  {a.emptiesBack ? <span class="dockrow__sub">{t('vendor.hub.emptiesBack', { units: t(`vendor.hub.units.${a.unitKind}` as never, { n: a.emptiesBack.units }) })}</span> : null}
                   {receivingPaid(a.fee) != null ? (
                     <span class="dockrow__sub">
                       {[

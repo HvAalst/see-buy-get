@@ -744,6 +744,22 @@ export function useMdpApp() {
     [client, run, fail, pushToast],
   );
 
+  /** D11 — the store's empties counted out at the door, onto the van that brought them (the user, 2026-10-26: "Back with the van"). */
+  const emptiesBack = useCallback(
+    async (units: number) => {
+      const at = arrivalAt();
+      if (!client || !at) return;
+      await run('arrival-empties', async () => {
+        const r = await client.api.emptiesBack(at.mdpId, at.id, units);
+        if (r.error) return fail(r.error);
+        const a = narrow<HubArrival>(r.data);
+        if (a) setState((s) => ({ ...s, arrivals: replaceArrival(s.arrivals, a) }));
+        pushToast({ tone: 'ok', icon: 'truck', title: t('mdp.toast.emptiesBack', { units: a ? unitsLine(a.unitKind, units, t) : String(units) }) });
+      });
+    },
+    [client, run, fail, pushToast],
+  );
+
   /**
    * One parcel scanned in off the units, by its label — our QR, its tracking key, or its own barcode (the box finds the
    * parcel by it). From that scan it is the hub's: it joins the parcels waiting for their sort. The last one ends it.
@@ -893,6 +909,7 @@ export function useMdpApp() {
       setPrice,
       openArrival,
       receiveArrival,
+      emptiesBack,
       scanArrival,
       finishArrival,
       missedArrival,

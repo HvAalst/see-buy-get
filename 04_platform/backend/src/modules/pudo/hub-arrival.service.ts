@@ -358,6 +358,24 @@ export class HubArrivalService {
     return this.viewOf(a, now, 'hub');
   }
 
+  /**
+   * D11 — THE EMPTIES GO BACK WITH THE VAN (the user, 2026-10-26: "Back with the van"): once the units are unloaded, the hub
+   * counts the store's empty pallets, cages or sacks out at its door, onto the van that brought them — once, and no more than
+   * came. Nothing more is tracked: no exchange of pallets, no return trip, no custody of an empty.
+   */
+  emptiesBack(mdpId: string, arrivalId: string, units: number, by: string, now: number = Date.now()): HubArrivalView {
+    this.mdps.working(mdpId);
+    const a = this.hubArrival(mdpId, arrivalId);
+    if (!a.received) throw new GlosError('INVALID_STATE', a.state === 'expected' ? 'Take it in at the door first' : closedWhy(a));
+    if (a.emptiesBack) throw new GlosError('INVALID_STATE', `Counted out already: ${unitsInWords(a.units.kind, a.emptiesBack.units)} went back with the van`);
+    if (!Number.isInteger(units) || units < 0 || units > a.received.units) {
+      throw new GlosError('INVALID_INPUT', `Count the empties that went back with the van: from none to the ${a.received.units} that came`, { field: 'units' });
+    }
+    a.emptiesBack = { units, at: new Date(now).toISOString(), by };
+    this.arrivals.set(a.arrivalId, a);
+    return this.viewOf(a, now, 'hub');
+  }
+
   /* ---------------------------------------------------------------------------------------------- inside -- */
 
   private close(a: HubArrival, hub: Mdp, by: string, now: number): void {
@@ -387,7 +405,8 @@ export class HubArrivalService {
     // What the hub saw at its door goes to the store, as a receiver's findings go to the sender (D9).
     const seen = a.received?.note ? ` At the door: “${a.received.note}”` : '';
     try {
-      await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}${receivingLine(a)}`, link: '/vendor/', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
+      const empties = a.emptiesBack ? ` ${unitsInWords(a.units.kind, a.emptiesBack.units)} went back with your van.` : '';
+      await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}${empties}${receivingLine(a)}`, link: '/vendor/', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
     } catch (err) {
       this.logger.warn(`hub arrival notice failed for ${a.arrivalId}: ${(err as Error).message}`);
     }
@@ -446,7 +465,7 @@ export class HubArrivalService {
           ? {
               takenIn: a.scanned.map(order),
               missing: (a.finished?.missing ?? []).map(order),
-              ...(a.received ? { atTheDoor: { units: a.received.units, ...(a.received.note ? { note: a.received.note } : {}) } } : {}),
+              ...(a.received ? { atTheDoor: { units: a.received.units, ...(a.received.note ? { note: a.received.note } : {}), ...(a.emptiesBack ? { emptiesBack: a.emptiesBack.units } : {}) } } : {}),
             }
           : { parcels: a.parcelIds.map(order) }),
       });
@@ -634,6 +653,7 @@ export class HubArrivalService {
       ...(a.withdrawn ? { withdrawn: a.withdrawn } : {}),
       ...(a.missed ? { missed: a.missed } : {}),
       ...(a.fee ? { fee: this.feeView(a.fee, reader) } : {}),
+      ...(a.emptiesBack ? { emptiesBack: a.emptiesBack } : {}),
       // On the hub's own clock (D10): due today there, or its day gone with nothing taken in at the door.
       ...(open ? { today: a.expectedOn === today, late: a.state === 'expected' && a.expectedOn < today } : {}),
     };

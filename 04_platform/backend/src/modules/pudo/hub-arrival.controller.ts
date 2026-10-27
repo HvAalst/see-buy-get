@@ -5,7 +5,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { HubArrivalService } from './hub-arrival.service';
-import { BookHubArrivalDto, HubArrivalScan, HubArrivalView, HubArrivals, HubBulkView, HubOptions, ReceiveHubArrivalDto, ScanHubArrivalDto, SetHubBulkDto, StoreHubArrivals } from './hub-arrival.types';
+import { BookHubArrivalDto, EmptiesBackDto, HubArrivalScan, HubArrivalView, HubArrivals, HubBulkView, HubOptions, ReceiveHubArrivalDto, ScanHubArrivalDto, SetHubBulkDto, StoreHubArrivals } from './hub-arrival.types';
 import { MdpService } from './mdp.service';
 import { CounterLogInterceptor } from './shop-staff.controller';
 import { classifySize, measuredFactor } from './pudo.config';
@@ -140,6 +140,15 @@ export class HubArrivalController {
   missedArrival(@Param('id') id: string, @Param('arrivalId') arrivalId: string, @Actor() actor: IntrospectionResult): HubArrivalView {
     const hub = this.hubActs(id, actor);
     return this.arrivals.missed(id, arrivalId, actor?.actorName?.trim() || hub);
+  }
+
+  /** D11 — the store's empties counted out at the door, onto the van that brought them (the user, 2026-10-26: "Back with the van"). */
+  @Roles('mdp', 'operator')
+  @Post('mdps/:id/arrivals/:arrivalId/empties')
+  @AtTheCounter()
+  emptiesBack(@Param('id') id: string, @Param('arrivalId') arrivalId: string, @Body() dto: EmptiesBackDto, @Actor() actor: IntrospectionResult): HubArrivalView {
+    const hub = this.hubActs(id, actor);
+    return this.arrivals.emptiesBack(id, arrivalId, dto.units, actor?.actorName?.trim() || hub);
   }
 
   /* ---------------------------------------------------------------------------------------------- inside -- */

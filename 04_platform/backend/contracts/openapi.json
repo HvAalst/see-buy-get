@@ -4458,6 +4458,53 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/arrivals/{arrivalId}/empties": {
+      "post": {
+        "operationId": "HubArrival.emptiesBack",
+        "summary": "",
+        "description": "D11 — the store's empties counted out at the door, onto the van that brought them (the user, 2026-10-26: \"Back with the van\").",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "arrivalId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptiesBackDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubArrivalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/contact": {
       "get": {
         "operationId": "HubContact.read",
@@ -34394,6 +34441,25 @@
           "currency"
         ]
       },
+      "HubArrivalEmpties": {
+        "type": "object",
+        "properties": {
+          "units": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "units",
+          "at",
+          "by"
+        ]
+      },
       "HubArrivalView": {
         "type": "object",
         "properties": {
@@ -34445,6 +34511,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/HubArrivalFeeView"
+              }
+            ]
+          },
+          "emptiesBack": {
+            "description": "D11 — the empties counted out at the door, onto the van that brought them. Absent: not counted out yet.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HubArrivalEmpties"
               }
             ]
           },
@@ -34676,6 +34750,19 @@
           "parcelId",
           "destination",
           "already"
+        ]
+      },
+      "EmptiesBackDto": {
+        "type": "object",
+        "properties": {
+          "units": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "units"
         ]
       },
       "HubContactView": {

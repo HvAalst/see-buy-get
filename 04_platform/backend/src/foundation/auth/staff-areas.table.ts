@@ -22,6 +22,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/mdps/:id/arrivals/:arrivalId/scan': 'support',
   'POST sbg/mdps/:id/arrivals/:arrivalId/finish': 'support',
   'POST sbg/mdps/:id/arrivals/:arrivalId/missed': 'support',
+  'POST sbg/mdps/:id/arrivals/:arrivalId/empties': 'support',
   'GET sbg/mdps/:id/contact': 'support',
   'PUT sbg/mdps/:id/contact': 'none',
   'POST sbg/business/me/inbound/:freightId/close': 'none',

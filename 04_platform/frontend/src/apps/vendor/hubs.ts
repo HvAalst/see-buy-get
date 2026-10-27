@@ -129,6 +129,8 @@ export interface HubArrivalView {
   late?: boolean;
   /** The hub's receiving fee on it (D12): what the store paid and what came back. Absent: none for its kind. */
   fee?: HubArrivalFeeView;
+  /** D11 — its empties, counted out at the hub's door onto the van that brought them. */
+  emptiesBack?: { units: number; at: string; by: string };
 }
 
 export interface HubWaiting {

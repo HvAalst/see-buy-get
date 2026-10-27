@@ -22,6 +22,7 @@ export function ArrivalScreen({ state, actions }: { state: MdpState; actions: Md
   const [units, setUnits] = useState(a ? String(a.units) : '');
   const [note, setNote] = useState('');
   const [confirm, setConfirm] = useState<'finish' | 'missed' | null>(null);
+  const [empties, setEmpties] = useState<string | null>(null);
 
   if (!a) {
     return (
@@ -161,6 +162,32 @@ export function ArrivalScreen({ state, actions }: { state: MdpState; actions: Md
             </Button>
           ) : null}
         </Card>
+      ) : null}
+
+      {/* D11 — the store's empties go back with the van that brought them: counted out at the door, once (the user, 2026-10-26). */}
+      {a.received && (a.state === 'receiving' || a.state === 'received') ? (
+        a.emptiesBack ? (
+          <p class="card__note">{t('mdp.arrival.emptiesDone', { units: unitsLine(a.unitKind, a.emptiesBack.units, t), who: a.emptiesBack.by })}</p>
+        ) : (
+          <Card title={t('mdp.arrival.emptiesTitle')}>
+            <p class="card__note">{t('mdp.arrival.emptiesBody')}</p>
+            <div class="field">
+              <label class="field__label" for="arrival-empties">
+                {t('mdp.arrival.emptiesLabel')}
+              </label>
+              <input id="arrival-empties" class="input" type="number" inputMode="numeric" min={0} max={a.received.units} value={empties ?? String(a.received.units)} onInput={(e) => setEmpties(e.currentTarget.value)} />
+            </div>
+            <Button
+              variant="outline"
+              chevron={false}
+              busy={state.busy === 'arrival-empties'}
+              disabled={!/^\d+$/.test((empties ?? String(a.received.units)).trim()) || Number(empties ?? a.received.units) > a.received.units}
+              onClick={() => void actions.emptiesBack(Number(empties ?? a.received!.units))}
+            >
+              {t('mdp.arrival.emptiesCta')}
+            </Button>
+          </Card>
+        )
       ) : null}
 
       {a.state === 'withdrawn' ? <Note tone="info" icon="info" title={t('mdp.arrival.withdrawnLine')} /> : null}
