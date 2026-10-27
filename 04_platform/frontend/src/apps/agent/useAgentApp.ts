@@ -2224,8 +2224,11 @@ export function useAgentApp() {
       const again = await client.api.parcel(f.parcel!.parcelId);
       setRelease({ parcel: again.error ? f.parcel : narrow<ParcelView>(again.data), otp: '' });
       pushToast({ tone: 'ok', icon: 'check', title: t('agent.toast.delivered'), detail: t('agent.toast.deliveredDetail') });
+      // Off the shelf, and the float moved — the release fee in, and a way back taken in cash out (2026-10-27): read again.
+      void loadShopParcels();
+      void refresh();
     });
-  }, [client, did, run, fail, pushToast, setRelease]);
+  }, [client, did, run, fail, pushToast, setRelease, loadShopParcels, refresh]);
 
   const submitRating = useCallback(async () => {
     if (!client) return;
