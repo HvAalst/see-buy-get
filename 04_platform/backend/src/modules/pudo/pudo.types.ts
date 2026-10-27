@@ -1183,9 +1183,15 @@ export class Parcel {
   /** When the people on it were told it is running late (see runningLate). Once, and set even when there was nobody
    *  to tell, for the same reason as the reminder above. */
   lateToldAt?: string;
-  /** The journey home, for a parcel nobody came for. Present only on a 'Returned' one — the two read as
-   *  one story rather than as an abandonment and an unexplained new shipment. */
+  /** The journey home, for a parcel nobody came for — or one its store called off at a hub. Present only on a 'Returned'
+   *  one — the two read as one story rather than as an abandonment and an unexplained new shipment. */
   returnParcelId?: string;
+  /**
+   * CALLED OFF AT A HUB (the user, 2026-10-27: "Comes back, store pays"): on the parcel bringing a store's goods back to the
+   * shop they were handed in at — the one called off, the hub it was turned round at, and when. The same box: its new label
+   * goes over the old one at that hub.
+   */
+  returnOf?: { parcelId: string; atMdpId: string; at: string };
   /**
    * When the free collection window ran out — the start of the holding-fee clock.
    *

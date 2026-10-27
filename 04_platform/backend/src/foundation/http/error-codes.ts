@@ -214,6 +214,9 @@ export const ERROR_CODES = {
   // A parcel staff declared lost, scanned at a counter: it turned up. Kept safe and told to SeeBuyGet, who mark it
   // found; then the ordinary step works.
   PARCEL_LOST: { status: 409, title: 'This parcel was declared lost' },
+  // A store called this parcel off at a hub: it goes back to its shop under a NEW label, put over the old one there (the user,
+  // 2026-10-27: "Comes back, store pays"). Its old label scanned, the floor is told which label to put on it.
+  NEW_LABEL: { status: 409, title: 'It goes on under a new label' },
   INVITE_LIMIT: { status: 409, title: 'Too many open invites' },
   IDEMPOTENCY_REUSED: { status: 409, title: 'That idempotency key was used for a different request' },
   QUOTE_SPENT: { status: 409, title: 'That quote has already been used' },

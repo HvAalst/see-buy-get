@@ -4797,6 +4797,162 @@
         }
       }
     },
+    "/v1/sbg/vendors/{id}/orders/{parcelId}/call-off": {
+      "get": {
+        "operationId": "CallOff.preview",
+        "summary": "",
+        "description": "What calling the order off would do now: its money back in full; brought back to the shop it was handed in at, at a price; or why not.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallOffView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "CallOff.callOff",
+        "summary": "",
+        "description": "The store calls the order off. Staff change nothing in a store's name — and at a hub, calling off spends the store's money.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallOffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalledOffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/parcels/{parcelId}/label": {
+      "get": {
+        "operationId": "CallOff.hubLabel",
+        "summary": "",
+        "description": "The new label of a parcel turned round at this hub — to print and put over the old one. Its floor's.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhygitalLabel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/parcels/{parcelId}/label.zpl": {
+      "get": {
+        "operationId": "CallOff.hubLabelZpl",
+        "summary": "",
+        "description": "The same label for the hub's thermal label printer (ZPL), sent to the printer as it is.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/risk-register": {
       "get": {
         "operationId": "RiskRegister.register",
@@ -22945,11 +23101,38 @@
         }
       }
     },
+    "/v1/sbg/shipping/shipments/{shipmentId}/call-off": {
+      "get": {
+        "operationId": "ShippingApi.callOffPreview",
+        "summary": "",
+        "description": "Call it off, while it still can be.\n\nA secret key, for the reason minting needs one: a credential that can undo a shipment must never sit\nin a page. The window is the network's own — Created, At_PUDO or At_MDP — and once somebody is\ncarrying it, calling it off is a conversation rather than an API call. Before it left the shop it was handed\nin at, its price comes back in full; AT A HUB it is brought back to that shop as a new shipment the store pays\nfor (`returnShipmentId` on the answer) — ask `GET …/call-off` first for what it would cost.\n\nTHERE IS NO AMEND, deliberately. Moving a parcel's destination or changing its size changes what it\ncosts, and an \"edit\" that quietly re-prices something a buyer already paid for is the worst possible\nversion of this call. Cancel and create the replacement, so the new price is seen and agreed.",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallOffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/shipping/shipments/{shipmentId}/cancel": {
       "post": {
         "operationId": "ShippingApi.cancelShipment",
-        "summary": "",
-        "description": "Call it off, while it still can be.\n\nA secret key, for the reason minting needs one: a credential that can undo a shipment must never sit\nin a page. The window is the network's own — Created, At_PUDO or At_MDP — and once somebody is\ncarrying it, calling it off is a conversation rather than an API call.\n\nTHERE IS NO AMEND, deliberately. Moving a parcel's destination or changing its size changes what it\ncosts, and an \"edit\" that quietly re-prices something a buyer already paid for is the worst possible\nversion of this call. Cancel and create the replacement, so the new price is seen and agreed.",
         "parameters": [
           {
             "name": "shipmentId",
@@ -35531,6 +35714,108 @@
           "weightKg"
         ]
       },
+      "CallOffView": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "object",
+            "description": "`refund`: withdrawn, its price given back. `bring_back`: turned round at the hub, a new parcel the store pays for. `no`: it cannot be."
+          },
+          "amount": {
+            "type": "number",
+            "description": "refund: what comes back to the store's balance (nothing for one never paid). bring_back: what bringing it back costs."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "backTo": {
+            "type": "string",
+            "description": "bring_back: the shop it comes back to — the one it was handed in at — and the hub it is turned round at."
+          },
+          "atHub": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string",
+            "description": "no: why, in a sentence."
+          }
+        },
+        "required": [
+          "parcelId",
+          "outcome"
+        ]
+      },
+      "CallOffDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why, in the store's words — kept on the parcel's history.",
+            "maxLength": 200
+          }
+        }
+      },
+      "CalledOffView": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Voided (withdrawn) or Returned (on its way back as another parcel)."
+          },
+          "outcome": {
+            "type": "object"
+          },
+          "amount": {
+            "type": "number",
+            "description": "refund: what came back. bring_back: what bringing it back cost."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "returnParcelId": {
+            "type": "string",
+            "description": "bring_back: the parcel bringing it back, the shop it comes back to and the hub it was turned round at."
+          },
+          "backTo": {
+            "type": "string"
+          },
+          "atHub": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "status",
+          "outcome",
+          "amount",
+          "currency"
+        ]
+      },
+      "PhygitalLabel": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "qrPayload": {
+            "type": "string"
+          },
+          "svg": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "qrPayload",
+          "svg"
+        ]
+      },
       "RiskCellView": {
         "type": "object",
         "properties": {
@@ -42609,25 +42894,6 @@
           "qty"
         ]
       },
-      "PhygitalLabel": {
-        "type": "object",
-        "properties": {
-          "parcelId": {
-            "type": "string"
-          },
-          "qrPayload": {
-            "type": "string"
-          },
-          "svg": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "parcelId",
-          "qrPayload",
-          "svg"
-        ]
-      },
       "ParcelStopFee": {
         "type": "object",
         "properties": {
@@ -43335,7 +43601,24 @@
           },
           "returnParcelId": {
             "type": "string",
-            "description": "The journey home, for a parcel nobody came for. Present only on a 'Returned' one — the two read as\n one story rather than as an abandonment and an unexplained new shipment."
+            "description": "The journey home, for a parcel nobody came for — or one its store called off at a hub. Present only on a 'Returned'\n one — the two read as one story rather than as an abandonment and an unexplained new shipment."
+          },
+          "returnOf": {
+            "type": "object",
+            "properties": {
+              "parcelId": {
+                "required": true,
+                "type": "string"
+              },
+              "atMdpId": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
           },
           "unclaimedAt": {
             "type": "string",
@@ -43412,6 +43695,7 @@
           "floorPaidAhead",
           "papersSeen",
           "acceptedAt",
+          "returnOf",
           "scans"
         ]
       },

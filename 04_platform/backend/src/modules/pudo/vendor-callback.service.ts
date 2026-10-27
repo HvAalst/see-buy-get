@@ -152,6 +152,9 @@ export class VendorCallbackService implements OnModuleInit, OnModuleDestroy {
       binSlot: parcel.binSlot,
       disputeReason: parcel.disputeReason,
       ...(parcel.held ? { held: { finding: parcel.held.finding, where: parcel.held.where, since: parcel.held.since } } : {}),
+      // Called off at a hub (2026-10-27): a parcel the store never made itself brings back one it did — named, so its system
+      // can tie the two together.
+      ...(parcel.returnOf ? { returnOf: parcel.returnOf.parcelId } : {}),
     });
   }
 }

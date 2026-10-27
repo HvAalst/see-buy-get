@@ -8,6 +8,7 @@ import { RoutingService } from './routing.service';
 import { CorridorService } from './corridor.service';
 import { ShelfService } from './shelf.service';
 import { ShippingApiService, type MintInput } from './shipping-api.service';
+import { CallOffService } from './call-off.service';
 import { ParcelInvoiceService } from './parcel-invoice.service';
 import { QuoteBookService } from './quote-book.service';
 import { TRADE_CREDIT_LIMIT } from './pudo.config';
@@ -76,6 +77,7 @@ describe('the public shipping quote', () => {
   let apiKeys: ApiKeyService;
   let parcels: ParcelService;
   let quoteBook: QuoteBookService;
+  let mdps: MdpService;
 
   /** Round 30 — a store's real photo of the contents, as the order door requires: one we hold, its own. */
   let photoOf: (vendorId: string) => string;
@@ -88,7 +90,7 @@ describe('the public shipping quote', () => {
       providers: [
         AgentService, WalletGateService, CorridorService, ParcelService, MonitorService, RatingService,
         GraduationService, VendorService, VendorCallbackService, ShelfService, RoutingService, MdpService, BagClosureService,
-        BagPlanService, ForthcomingService, DockService, ShippingApiService, ParcelInvoiceService, ToteService, ConsignmentService,
+        BagPlanService, ForthcomingService, DockService, ShippingApiService, CallOffService, ParcelInvoiceService, ToteService, ConsignmentService,
         VehicleService, DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService,
         FleetManagerService, MediaService, CargoService, DigitalTwinService, TrackingService,
         TrackingContextService, NormalizationService, ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
@@ -112,6 +114,7 @@ describe('the public shipping quote', () => {
     apiKeys = moduleRef.get(ApiKeyService);
     parcels = moduleRef.get(ParcelService);
     quoteBook = moduleRef.get(QuoteBookService);
+    mdps = moduleRef.get(MdpService);
     moduleRef.get(BooksService).reset();
   });
 
@@ -812,7 +815,30 @@ describe('the public shipping quote', () => {
       const { caller } = merchant();
       const made = mint(order(), caller);
       parcels.get(made.shipmentId).status = 'On_Bus';
-      expect(() => shipping.cancelShipment(made.shipmentId, caller)).toThrow(/Cannot cancel/);
+      expect(() => shipping.cancelShipment(made.shipmentId, caller)).toThrow(/cannot be called off on the road/);
+      expect(shipping.callOffPreview(made.shipmentId, caller)).toMatchObject({ outcome: 'no', why: 'A driver is carrying it: it cannot be called off on the road.' });
+    });
+
+    it('at a hub, says first what bringing it back costs — then brings it back to the shop it was handed in at as a new shipment (2026-10-27)', () => {
+      const { from } = domesticPair();
+      const { store, caller } = merchant();
+      const made = mint(order({ externalOrderId: 'SO-HUB' }), caller);
+      // Taken in at the shop, and on at a hub serving both towns.
+      parcels.intakeInbound(made.shipmentId, from.did);
+      const hub = mdps.register({ name: 'Naivasha Hub', zones: ['Nairobi', 'Kisumu'], location: { lat: -0.72, lng: 36.43 } }, { approvedBy: 'staff' });
+      Object.assign(parcels.get(made.shipmentId), { status: 'At_MDP', atMdpId: hub.mdpId });
+      // Before: refunded in full while it was at the shop; now, brought back at a price.
+      const ask = shipping.callOffPreview(made.shipmentId, caller);
+      expect(ask).toMatchObject({ outcome: 'bring_back', backTo: 'Nairobi CBD', atHub: 'Naivasha Hub', currency: 'KES' });
+      const before = vendors.balanceOf(store.vendorId);
+      const called = shipping.cancelShipment(made.shipmentId, caller, 'the buyer cancelled');
+      expect(called).toMatchObject({ shipmentId: made.shipmentId, status: 'Returned', cancellable: false, returnShipmentId: expect.stringMatching(/^PUD-/) });
+      expect(vendors.balanceOf(store.vendorId)).toBeCloseTo(before - ask.amount!, 2);
+      // The shipment bringing it back is the store's own to read: its price, and which one it brings back.
+      const back = shipping.shipment(called.returnShipmentId!, caller);
+      expect(back).toMatchObject({ status: 'At_MDP', externalOrderId: 'SO-HUB', returnOf: made.shipmentId, paid: true, price: { currency: 'KES', amount: ask.amount } });
+      // And the preview, asked again, says it is on its way back.
+      expect(shipping.callOffPreview(made.shipmentId, caller)).toMatchObject({ outcome: 'no', why: `It is on its way back already, as ${called.returnShipmentId}.` });
     });
 
     it('cannot cancel a stranger’s shipment either', () => {

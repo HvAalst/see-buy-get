@@ -734,6 +734,14 @@ export class MdpService {
   sortParcel(mdpId: string, parcelId: string): { parcelId: string; nextDestination: NextHop; toteCode: string; toteId: string; fillPct: number } {
     const mdp = this.working(mdpId);
     const parcel = this.parcels.get(parcelId);
+    // Called off at this hub by its store (2026-10-27): the box still wears its old label. Told which label to put on it, and
+    // nothing is sorted under the old one.
+    if (parcel.status === 'Returned' && parcel.returnParcelId) {
+      const back = this.parcels.get(parcel.returnParcelId);
+      if (back.status === 'At_MDP' && back.atMdpId === mdpId) {
+        throw new GlosError('NEW_LABEL', `${parcelId} was called off by its store: it goes back as ${back.parcelId}. Print its new label, put it over the old one, then scan ${back.parcelId}.`, { parcelId, returnParcelId: back.parcelId });
+      }
+    }
     if (parcel.status !== 'At_MDP') throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, must be At_MDP to sort`);
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: not sorted on
     if (!parcel.destAgentDid) throw new GlosError('INVALID_STATE', 'Parcel has no destination PUDO to sort toward');

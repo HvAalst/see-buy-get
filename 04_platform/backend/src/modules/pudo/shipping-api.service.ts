@@ -6,6 +6,8 @@ import { AgentService } from './agent.service';
 import { ShelfService } from './shelf.service';
 import { RoutingService, type ShipmentQuote } from './routing.service';
 import { QuoteBookService, type HeldQuote } from './quote-book.service';
+import { CallOffService } from './call-off.service';
+import type { CallOffView } from './call-off.types';
 import { ParcelService } from './parcel.service';
 import { VendorService } from './vendor.service';
 import { MediaService } from './media.service';
@@ -166,6 +168,10 @@ export interface PublicShipment {
   createdAt: string;
   /** Round 29 — its SSCC, where the store holds a GS1 company prefix: given once it is paid, printed on its label. */
   sscc?: string;
+  /** Called off at a hub (2026-10-27): the shipment bringing it back to the shop it was handed in at. */
+  returnShipmentId?: string;
+  /** The shipment this one brings back — called off at a hub, the store collects it again at the shop it handed it in at. */
+  returnOf?: string;
 }
 
 export interface MintedShipment {
@@ -206,6 +212,8 @@ export class ShippingApiService {
     @Inject(ROUTER) private readonly router: Router,
     // A store parcel's papers abroad (round 13): its commercial invoice, checked with the declaration and kept with the parcel.
     @Optional() private readonly invoices?: ParcelInvoiceService,
+    // Called off at a hub, brought back at the store's cost (2026-10-27). Optional for the specs that build this by hand.
+    @Optional() private readonly callOffs?: CallOffService,
   ) {}
 
   /**
@@ -510,8 +518,22 @@ export class ShippingApiService {
     const parcel = this.ownedParcel(shipmentId, caller.vendorId);
     // `by` names the store, not a person: the network's audit trail records WHO asked, and through this
     // door the answer is a merchant's own system rather than anybody at a counter.
-    this.parcels.cancel(parcel.parcelId, `vendor:${caller.vendorId}`, reason?.trim() || 'cancelled by the store');
+    // At a hub it is not withdrawn but brought back, at the store's cost (2026-10-27): the same door as the store's app.
+    if (this.callOffs) this.callOffs.callOff(caller.vendorId, parcel.parcelId, `vendor:${caller.vendorId}`, reason?.trim() || 'cancelled by the store');
+    else this.parcels.cancel(parcel.parcelId, `vendor:${caller.vendorId}`, reason?.trim() || 'cancelled by the store');
     return this.publicShipmentOf(this.parcels.get(parcel.parcelId));
+  }
+
+  /**
+   * What calling it off would do now, asked before calling it off (2026-10-27): withdrawn with its price given back, before it
+   * left the shop it was handed in at; at a hub, brought back to that shop as a new shipment, at what cost; or why it cannot be.
+   */
+  callOffPreview(shipmentId: string, caller: Caller): CallOffView {
+    if (!caller.vendorId) throw new GlosError('FORBIDDEN', 'Reading a shipment needs your key — a shipment belongs to the store that created it');
+    if (shipmentId.startsWith('test_')) throw new GlosError('NOT_FOUND', 'That is a simulated shipment from a test key — nothing was created, so there is nothing to call off');
+    const parcel = this.ownedParcel(shipmentId, caller.vendorId);
+    if (!this.callOffs) throw new GlosError('INVALID_STATE', 'Calling off is not open here');
+    return this.callOffs.preview(caller.vendorId, parcel.parcelId);
   }
 
   /** The caller's own shipment, or nothing they can distinguish from one that never existed. */
@@ -629,6 +651,8 @@ export class ShippingApiService {
       cancellable: ['Created', 'At_PUDO', 'At_MDP'].includes(parcel.status),
       createdAt: parcel.acceptedAt,
       ...(parcel.sscc ? { sscc: parcel.sscc } : {}),
+      ...(parcel.returnParcelId ? { returnShipmentId: parcel.returnParcelId } : {}),
+      ...(parcel.returnOf ? { returnOf: parcel.returnOf.parcelId } : {}),
     };
   }
 

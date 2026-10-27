@@ -106,6 +106,8 @@ import { LEDGER_ADAPTER } from '../../foundation/ledger/ledger.types';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { ReturnService } from './return.service';
+import { CallOffService } from './call-off.service';
+import { GlosError } from '../../foundation/http/glos-error';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { SandboxPayoutRail } from '../../foundation/payouts/sandbox-rail.adapter';
@@ -10538,13 +10540,178 @@ describe('PUDO Light', () => {
       expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
     });
 
-    it('once a hub has it, what was carried is not given back', () => {
+    it('a store’s parcel at a hub is not withdrawn — not by staff, and nothing given back (2026-10-27: “Comes back, store pays”)', () => {
       const { vendor, res } = mintInbound('RFH');
       const id = res.parcel.parcelId;
       const afterMint = vendors.balanceOf(vendor.vendorId);
       parcels.get(id).status = 'At_MDP';
-      parcels.cancel(id, 'ops', 'test');
+      expect(() => parcels.cancel(id, 'ops', 'test')).toThrow(/not withdrawn: the store calls it off/);
+      expect(parcels.get(id).status).toBe('At_MDP');
       expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(afterMint, 2);
+    });
+
+    /**
+     * CALLED OFF AT A HUB (the user, 2026-10-27: "Comes back, store pays"): turned round where it is, to the shop it was handed
+     * in at, as a new parcel the store pays for — what was carried is not given back, and the goods never sit nowhere.
+     */
+    describe('a store’s parcel called off at a hub', () => {
+      const atHub = (tag: string, opts: { sort?: boolean; topUp?: number; oneWay?: boolean; hook?: boolean } = {}) => {
+        const origin = onboardAgent(`${tag} Origin`, 'NorthTown', 50);
+        const dest = onboardAgent(`${tag} Dest`, 'SouthTown', 50);
+        // A hub serving both areas: it sorts the parcel on to the buyer's shop, and back to the one it was handed in at.
+        const hub = mdps.register({ name: `${tag} Hub`, zones: opts.oneWay ? ['SouthTown'] : ['SouthTown', 'NorthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
+        const vendor = vendors.register({ name: `${tag}Store`, ownerPhone: '+254700777', ...(opts.hook ? { callbackUrl: 'https://hooked.example/co', secret: 'whsec' } : {}) });
+        const quote = routing.quoteShipment(origin.did, dest.did, 'M');
+        vendors.topUp(vendor.vendorId, opts.topUp ?? 500);
+        const parcel = parcels.createInbound({ vendorId: vendor.vendorId, externalOrderId: `ORD-${tag}`, originAgentDid: origin.did, destAgentDid: dest.did, buyerMobile: '+254700333', size: 'M', contentPhotoRef: photoOf(vendor.vendorId), shippingPolicy: vendor.shippingPolicy, quote }).parcel;
+        const bag = totes.register(origin.did);
+        totes.assign(bag.code, hub.mdpId, hub.name);
+        parcels.intakeInbound(parcel.parcelId, origin.did);
+        mdps.fillTote(bag.code, parcel.parcelId);
+        closeForTest(bag.code);
+        mdps.loadBag(bag.code, `BUS-${tag}`);
+        mdps.dropBag(hub.mdpId, bag.code, receivedAtHub(hub.mdpId));
+        const sorted = opts.sort ? mdps.sortParcel(hub.mdpId, parcel.parcelId) : undefined;
+        const callOffs = new CallOffService(parcels, vendors, routing, agents, mdps, totes);
+        return { origin, dest, hub, vendor, id: parcel.parcelId, sorted, callOffs };
+      };
+
+      it('says first what it would do and cost — and writes nothing', () => {
+        const { origin, hub, vendor, id, callOffs } = atHub('COP');
+        const before = vendors.balanceOf(vendor.vendorId);
+        const view = callOffs.preview(vendor.vendorId, id);
+        expect(view).toMatchObject({ parcelId: id, outcome: 'bring_back', backTo: origin.shopName, atHub: hub.name, currency: 'KES' });
+        expect(view.amount).toBeGreaterThan(0);
+        expect(parcels.get(id).status).toBe('At_MDP');
+        expect(vendors.balanceOf(vendor.vendorId)).toBe(before);
+        // Another store reads it as not there.
+        const other = vendors.register({ name: 'COPOther' });
+        expect(() => callOffs.preview(other.vendorId, id)).toThrow(/No order/);
+      });
+
+      it('turns it round where it is: a new parcel to the shop it was handed in at, the store billed what it was told — nothing given back', () => {
+        const { origin, hub, vendor, id, callOffs } = atHub('COT');
+        const told = callOffs.preview(vendor.vendorId, id).amount!;
+        const before = vendors.balanceOf(vendor.vendorId);
+        const done = callOffs.callOff(vendor.vendorId, id, 'COT Store', 'the buyer cancelled the order');
+        expect(done).toMatchObject({ parcelId: id, status: 'Returned', outcome: 'bring_back', amount: told, backTo: origin.shopName, atHub: hub.name });
+        const old = parcels.get(id);
+        const back = parcels.get(done.returnParcelId!);
+        // The one called off: closed, pointing at the one bringing it back.
+        expect(old).toMatchObject({ status: 'Returned', returnParcelId: back.parcelId });
+        expect(old.scans.at(-1)!.note).toContain(`called off by the store at ${hub.name} · going back as ${back.parcelId} · the buyer cancelled the order`);
+        // The one bringing it back: the same box, at the hub from its first moment, to the shop it was handed in at, for the store.
+        expect(back).toMatchObject({ status: 'At_MDP', atMdpId: hub.mdpId, handInMdpId: hub.mdpId, destAgentDid: origin.did, vendorId: vendor.vendorId, externalOrderId: 'ORD-COT', paidStatus: 'ParcelPaid', size: old.size, weightKg: old.weightKg, receiverMobile: '+254700777' });
+        expect(back.returnOf).toEqual({ parcelId: id, atMdpId: hub.mdpId, at: expect.any(String) });
+        expect(back.custody).toEqual([expect.objectContaining({ holderKind: 'hub', holderId: hub.name })]);
+        expect(back.label).toBeDefined();
+        // Billed exactly what it was told; nothing of the first given back.
+        expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before - told, 2);
+        expect(back.shipmentCost).toBe(told);
+        expect(vendors.settlementsFor(vendor.vendorId).some((r) => r.type === 'REBATE' && r.parcelId === id)).toBe(false);
+        // Not again.
+        expect(() => callOffs.callOff(vendor.vendorId, id, 'COT Store')).toThrow(`It is on its way back already, as ${back.parcelId}.`);
+        expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+      });
+
+      it('sorted already: out of its bag, and the floor told which label to put on it — then it is sorted back', () => {
+        const { origin, hub, vendor, id, sorted, callOffs } = atHub('COS', { sort: true });
+        expect(totes.requireByCode(sorted!.toteCode).parcels).toContain(id);
+        const done = callOffs.callOff(vendor.vendorId, id, 'COS Store');
+        const backId = done.returnParcelId!;
+        // The bag goes on without it.
+        expect(totes.requireByCode(sorted!.toteCode).parcels).not.toContain(id);
+        expect(parcels.get(id).toteId).toBeUndefined();
+        // Its old label scanned: which label to put on it, and nothing sorted.
+        let refused: GlosError | undefined;
+        try {
+          mdps.sortParcel(hub.mdpId, id);
+        } catch (e) {
+          refused = e as GlosError;
+        }
+        expect(refused?.code).toBe('NEW_LABEL');
+        expect(refused?.message).toContain(`it goes back as ${backId}`);
+        expect(refused?.params).toEqual({ parcelId: id, returnParcelId: backId });
+        // The hub prints the new label — this parcel's only, while it is there.
+        expect(parcels.hubLabel(hub.mdpId, backId).svg).toContain(backId);
+        expect(() => parcels.hubLabel(hub.mdpId, id)).toThrow(/No parcel turned round here/);
+        const elsewhere = mdps.register({ name: 'COS Other Hub', zones: ['WestTown'], location: { lat: -1.3, lng: 36.9 } }, { approvedBy: 'staff' });
+        expect(() => parcels.hubLabel(elsewhere.mdpId, backId)).toThrow(/No parcel turned round here/);
+        // Come on to another hub under its new label, it is not that hub's to print.
+        parcels.get(backId).atMdpId = elsewhere.mdpId;
+        expect(() => parcels.hubLabel(elsewhere.mdpId, backId)).toThrow(/No parcel turned round here/);
+        parcels.get(backId).atMdpId = hub.mdpId;
+        // Under the new label it is sorted like any parcel there, toward the shop it was handed in at.
+        const again = mdps.sortParcel(hub.mdpId, backId);
+        expect(again.parcelId).toBe(backId);
+        expect([origin.did, origin.zone]).toContain(again.nextDestination.type === 'pudo' ? again.nextDestination.id : again.nextDestination.zone);
+        // Sorted and still at the hub: its label can be printed again, should the first one tear.
+        expect(() => parcels.hubLabel(hub.mdpId, backId)).not.toThrow();
+        expect(books.balances(KE())).toEqual({ balanced: true, drift: 0 });
+      });
+
+      it('refused before anything moves: a store that cannot pay, a parcel not handed in at a shop, a shop not taking parcels, one held', () => {
+        // Topped up with exactly the first journey's price: nothing left for the way back.
+        const probe = atHub('COR0');
+        const price = parcels.get(probe.id).shipmentCost!;
+        const poor = atHub('COR1', { topUp: price });
+        expect(vendors.balanceOf(poor.vendor.vendorId)).toBeCloseTo(0, 2);
+        const orders = () => parcels.list({}).filter((p) => p.vendorId === poor.vendor.vendorId).length;
+        const count = orders();
+        expect(() => poor.callOffs.callOff(poor.vendor.vendorId, poor.id, 'COR1 Store')).toThrow(/Top up first — bringing it back to COR1 Origin costs/);
+        expect(parcels.get(poor.id).status).toBe('At_MDP');
+        expect(orders()).toBe(count);
+
+        // Collected from the store's own door, or handed in at a hub: no shop to bring it back to — it carries on.
+        const dock = atHub('COR2');
+        parcels.get(dock.id).originAgentDid = undefined;
+        expect(dock.callOffs.preview(dock.vendor.vendorId, dock.id)).toEqual({ parcelId: dock.id, outcome: 'no', why: 'It was not handed in at a shop, so there is no shop to bring it back to: it carries on to the buyer.' });
+        expect(() => dock.callOffs.callOff(dock.vendor.vendorId, dock.id, 'COR2 Store')).toThrow(/no shop to bring it back to/);
+
+        // The shop it was handed in at is not taking parcels for now.
+        const closed = atHub('COR3');
+        agents.get(closed.origin.did).status = 'SUSPENDED' as never;
+        expect(closed.callOffs.preview(closed.vendor.vendorId, closed.id).why).toBe('COR3 Origin is not taking parcels for now, so it cannot come back there: it carries on to the buyer.');
+
+        // Held under the tamper protocol: operations first.
+        const held = atHub('COR4');
+        parcels.get(held.id).held = { exceptionId: 'EX-1', finding: 'wrap_cut', where: 'at the hub', since: new Date().toISOString() } as never;
+        expect(held.callOffs.preview(held.vendor.vendorId, held.id).outcome).toBe('no');
+        expect(() => held.callOffs.callOff(held.vendor.vendorId, held.id, 'COR4 Store')).toThrow(/held/);
+        expect(parcels.get(held.id).status).toBe('At_MDP');
+      });
+
+      it('the store’s own system hears the parcel bringing it back, by the one it brings back', async () => {
+        vendorCallback.onModuleInit();
+        const { vendor, id, callOffs } = atHub('COH', { hook: true });
+        const done = callOffs.callOff(vendor.vendorId, id, 'COH Store');
+        await new Promise((r) => setImmediate(r));
+        const heard = vendors.outboxFor(vendor.vendorId).map((c) => ({ event: c.event, data: JSON.parse(c.body).data as Record<string, unknown> }));
+        expect(heard).toContainEqual({ event: 'parcel_paid', data: expect.objectContaining({ parcelId: done.returnParcelId, externalOrderId: 'ORD-COH', returnOf: id }) });
+      });
+
+      it('refused where the hub sends nothing toward the shop it was handed in at: the goods would wait there with nowhere to go', () => {
+        const oneWay = atHub('COR5', { oneWay: true });
+        expect(oneWay.callOffs.preview(oneWay.vendor.vendorId, oneWay.id).why).toBe('COR5 Hub sends nothing toward NorthTown, so it cannot come back to COR5 Origin: it carries on to the buyer.');
+        expect(() => oneWay.callOffs.callOff(oneWay.vendor.vendorId, oneWay.id, 'COR5 Store')).toThrow(/sends nothing toward NorthTown/);
+        expect(parcels.get(oneWay.id).status).toBe('At_MDP');
+      });
+
+      it('before it leaves the shop it was handed in at, calling off is withdrawing it, its money back in full — and on the road, it cannot be', () => {
+        const { vendor, res } = mintInbound('COW');
+        const id = res.parcel.parcelId;
+        const callOffs = new CallOffService(parcels, vendors, routing, agents, mdps, totes);
+        const paid = parcels.get(id).shipmentCost!;
+        expect(callOffs.preview(vendor.vendorId, id)).toEqual({ parcelId: id, outcome: 'refund', amount: paid, currency: 'KES' });
+        const before = vendors.balanceOf(vendor.vendorId);
+        expect(callOffs.callOff(vendor.vendorId, id, 'COW Store')).toEqual({ parcelId: id, status: 'Voided', outcome: 'refund', amount: paid, currency: 'KES' });
+        expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before + paid, 2);
+
+        const road = mintInbound('COX');
+        parcels.get(road.res.parcel.parcelId).status = 'On_Bus';
+        expect(callOffs.preview(road.vendor.vendorId, road.res.parcel.parcelId)).toEqual({ parcelId: road.res.parcel.parcelId, outcome: 'no', why: 'A driver is carrying it: it cannot be called off on the road.' });
+        expect(() => callOffs.callOff(road.vendor.vendorId, road.res.parcel.parcelId, 'COX Store')).toThrow(/cannot be called off on the road/);
+      });
     });
 
     it('handing a batch to the driver pays that shop’s company’s figure — and a step paid nothing writes no row', () => {

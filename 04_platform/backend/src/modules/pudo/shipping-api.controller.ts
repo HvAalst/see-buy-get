@@ -9,6 +9,7 @@ import { OwnIdempotency } from '../../foundation/http/idempotency.interceptor';
 import { Public } from '../../foundation/auth/public.decorator';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 import { ShippingApiService } from './shipping-api.service';
+import { CallOffView } from './call-off.types';
 import { ApiKeyGuard, CallerKey } from './api-key.guard';
 import type { Caller } from './api-key.service';
 import { CancelShipmentDto, MintShipmentDto, PublicQuoteDto, ShippingPhotoDto } from './pudo.dto';
@@ -122,12 +123,26 @@ export class ShippingApiController {
    *
    * A secret key, for the reason minting needs one: a credential that can undo a shipment must never sit
    * in a page. The window is the network's own — Created, At_PUDO or At_MDP — and once somebody is
-   * carrying it, calling it off is a conversation rather than an API call.
+   * carrying it, calling it off is a conversation rather than an API call. Before it left the shop it was handed
+   * in at, its price comes back in full; AT A HUB it is brought back to that shop as a new shipment the store pays
+   * for (`returnShipmentId` on the answer) — ask `GET …/call-off` first for what it would cost.
    *
    * THERE IS NO AMEND, deliberately. Moving a parcel's destination or changing its size changes what it
    * costs, and an "edit" that quietly re-prices something a buyer already paid for is the worst possible
    * version of this call. Cancel and create the replacement, so the new price is seen and agreed.
    */
+  /**
+   * What calling it off would do now (2026-10-27) — asked before calling it off, since at a hub calling off costs: it is brought
+   * back to the shop it was handed in at, as a new shipment the store pays for. `refund` with what comes back, `bring_back`
+   * with the price, the shop and the hub, or `no` with why.
+   */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('shipments/:shipmentId/call-off')
+  callOffPreview(@Param('shipmentId') shipmentId: string, @CallerKey() caller: Caller): CallOffView {
+    return this.shipping.callOffPreview(shipmentId, caller);
+  }
+
   @Public()
   @RateLimit(30, 60)
   @Post('shipments/:shipmentId/cancel')

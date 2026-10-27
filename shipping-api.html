@@ -530,8 +530,35 @@
   <p>You can cancel while the shipment is <code>Created</code>, <code>At_PUDO</code> or <code>At_MDP</code>
   — that is, until somebody is actually carrying it. <code>cancellable</code> on the read above tells you
   before you try. Past that point it is a conversation rather than an API call, and you get
-  <code>INVALID_STATE</code>. Money already taken is reversed the same way an operator's cancellation
-  reverses it.</p>
+  <code>INVALID_STATE</code>, with why in <code>detail</code>.</p>
+  <p><b>What it does to your money depends on where it is.</b></p>
+  <ul class="plain">
+    <li><b>Not yet handed in, or still at the shop it was handed in at</b> (<code>Created</code>, <code>At_PUDO</code>):
+      it is withdrawn (<code>Voided</code>) and its price comes back to your balance in full.</li>
+    <li><b>At a hub</b> (<code>At_MDP</code>): it is not withdrawn — the goods would sit at the hub belonging to no
+      journey. It is turned round there and brought back to the shop it was handed in at, as a <b>new shipment you
+      pay for</b>; what it cost to get it to the hub is not given back. The hub prints its new label and puts it over
+      the old one. The answer comes back <code>Returned</code>, with <code>returnShipmentId</code>: the new shipment,
+      yours to read like any other (it says <code>returnOf</code>, the one it brings back), collected at that shop with
+      its own collection code. Your balance must cover it, or you get <code>WALLET_INSUFFICIENT</code> and nothing
+      changes. It cannot be brought back where it was not handed in at a shop, or where that shop is not taking
+      parcels: then it carries on to your buyer, and you get <code>INVALID_STATE</code> saying so.</li>
+  </ul>
+
+  <h3>What would calling it off do? Ask first</h3>
+<pre><code>curl https://api.seebuyget.example/v1/sbg/shipping/shipments/PUD-A1B2C3D4E5/call-off \
+  -H "X-SBG-Key: sk_live_…"</code></pre>
+<pre><code>{
+  "parcelId": "PUD-A1B2C3D4E5",
+  "outcome": "bring_back",
+  "amount": 180.00,
+  "currency": "KES",
+  "backTo": "Nairobi CBD",
+  "atHub": "Naivasha Hub"
+}</code></pre>
+  <p>Changes nothing. <code>outcome</code> is <code>refund</code> (with the <code>amount</code> that would come back),
+  <code>bring_back</code> (with what bringing it back would cost, the shop it would come back to and the hub it is at), or
+  <code>no</code> (with <code>why</code>). The price of bringing it back is today's: asked again later, it may differ.</p>
 
   <h3>There is no amend, on purpose</h3>
   <p>Moving a shipment's destination or changing its size changes what it costs. An "edit" that quietly
@@ -587,6 +614,9 @@ content-type: application/json
       it; your buyer cannot collect it meanwhile.</li>
     <li><code>released</code> — operations released it: it goes on as usual. What was found stays on its record.</li>
   </ul>
+  <p>A shipment brought back from a hub after you called it off is one you never created yourself: its callbacks carry
+  <code>data.returnOf</code>, the shipment it brings back, so your system can tie the two together. Its
+  <code>ready_for_pickup</code> carries the code <b>you</b> collect it with, at the shop you handed it in at.</p>
 
   <h3>Checking it really came from us</h3>
   <p>Every callback is signed: <b>HMAC-SHA256 over the exact request body</b>, keyed with your store

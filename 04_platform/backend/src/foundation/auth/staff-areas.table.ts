@@ -28,6 +28,12 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/mdps/:id/carriers': 'support',
   'PUT sbg/mdps/:id/carriers': 'none',
   'GET sbg/mdps/:id/carrier-moves': 'support',
+  // 2026-10-27 — a store's parcel called off at a hub: its new label, printed there (staff read what the floor reads), and the
+  // store's own call-off, said first and then done (staff change nothing in a store's name).
+  'GET sbg/mdps/:id/parcels/:parcelId/label': 'support',
+  'GET sbg/mdps/:id/parcels/:parcelId/label.zpl': 'support',
+  'GET sbg/vendors/:id/orders/:parcelId/call-off': 'none',
+  'POST sbg/vendors/:id/orders/:parcelId/call-off': 'none',
   'POST sbg/mdps/:id/carrier-moves': 'none',
   'POST sbg/mdps/:id/carrier-moves/:moveId/done': 'none',
   'POST sbg/mdps/:id/carrier-moves/:moveId/return-job': 'none',

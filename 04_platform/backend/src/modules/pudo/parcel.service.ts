@@ -102,6 +102,10 @@ export interface VendorOrderRow {
   trackingKey?: string;
   binSlot?: string;
   createdAt: string;
+  /** Called off at a hub (2026-10-27): the parcel bringing it back. */
+  returnParcelId?: string;
+  /** The parcel bringing back one called off at a hub: that one, which the store collects again at the shop it handed it in at. */
+  returnOf?: string;
 }
 
 /**
@@ -303,6 +307,9 @@ export function vendorOrderRowOf(p: Parcel): VendorOrderRow {
     createdAt: p.acceptedAt,
     // Round 35 — held under the tamper protocol: the store whose goods they are sees what was found, where, since when.
     ...(p.held ? { held: p.held } : {}),
+    // Called off at a hub: the two parcels read as one story — the one coming back, and the one it brings back.
+    ...(p.returnParcelId ? { returnParcelId: p.returnParcelId } : {}),
+    ...(p.returnOf ? { returnOf: p.returnOf.parcelId } : {}),
   };
 }
 
@@ -584,6 +591,8 @@ export function operationalParcelView(p: Parcel, holding?: { amount: number; cur
       : {}),
     // Round 35 — held under the tamper protocol: the shop and the hub holding it see that it is set apart, and why.
     ...(p.held ? { held: p.held } : {}),
+    // Called off at a hub (2026-10-27): the box it is, under its old label — the hub puts this one's label over that one.
+    ...(p.returnOf ? { returnOf: p.returnOf } : {}),
     unclaimedAt: p.unclaimedAt,
     /**
      * What is owed for the shelf slot, right now.
@@ -1891,6 +1900,12 @@ export class ParcelService implements OnApplicationBootstrap {
     // Only a parcel a SHOP took in has an intake charge to reverse — a dock parcel never had one, because
     // no shop ever handled it.
     if (parcel.status === 'At_PUDO' && parcel.originAgentDid) this.reverseIntakeCharge(parcel, parcel.originAgentDid);
+    // A STORE'S PARCEL AT A HUB IS NOT WITHDRAWN (the user, 2026-10-27: "Comes back, store pays"): the store calls it off and
+    // it is turned round there, to the shop it was handed in at, at the store's cost (CallOffService). Withdrawn here, the
+    // goods would sit at the hub belonging to no journey — and staff do not spend a store's money on bringing it back.
+    if (parcel.status === 'At_MDP' && parcel.vendorId) {
+      throw new GlosError('INVALID_STATE', 'A store’s parcel at a hub is not withdrawn: the store calls it off, and it comes back to the shop it was handed in at, at the store’s cost');
+    }
     // A store's parcel called off before it has left the shop it was handed in at — or before it was handed in at all: the
     // store's money back in full (the user, 2026-10-26: "Refund and take back"). Once a hub or a driver has it, what was
     // carried is not given back.
@@ -1910,7 +1925,7 @@ export class ParcelService implements OnApplicationBootstrap {
    * Generates the handover collection code AND a public tracking key, persists the label, and books the
    * split/contribution settlement (buyer's capped share + the vendor's share).
    */
-  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
+  createInbound(input: { vendorId: string; externalOrderId?: string; originAgentDid?: string; originZone?: string; handInMdpId?: string; destAgentDid: string; buyerMobile: string; buyerEmail?: string; size?: ParcelSize; dimensionsCm?: { l: number; w: number; h: number }; weightKg?: number; contentPhotoRef: string; fragile?: boolean; natureCode?: CargoNature; items?: Array<{ name: string; qty: number }>; subtotal?: number; declaredValue?: number; customsCurrency?: string; shippingPolicy: ShippingPolicy; routeMode?: 'flexible' | 'locked'; quote: ShipmentQuote; photoOfParcel?: string; returnOf?: Parcel['returnOf'] }): { parcel: Parcel; label: PhygitalLabel | null; paid: boolean } {
     const dest = this.agents.get(input.destAgentDid);
     this.requireSellable(input.quote, [input.originAgentDid, input.destAgentDid]);
     const vendor = this.vendors.get(input.vendorId); // the store IS the birthplace — read it, don't infer it
@@ -2003,6 +2018,8 @@ export class ParcelService implements OnApplicationBootstrap {
       committedNodeDid: input.originAgentDid,
       // Reading B — handed in at a hub by the store, in bulk: the hub that takes it in.
       ...(input.handInMdpId ? { handInMdpId: input.handInMdpId } : {}),
+      // Called off at a hub (2026-10-27): born bringing back the one called off — so the first word of it says so.
+      ...(input.returnOf ? { returnOf: input.returnOf } : {}),
       originZone,
       destZone: dest.zone,
       destAgentDid: input.destAgentDid,
@@ -3107,6 +3124,81 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   // --- internals ---
+
+  /**
+   * A STORE'S PARCEL CALLED OFF AT A HUB (the user, 2026-10-27: "Comes back, store pays"): the goods turn round where they are,
+   * to the shop they were handed in at, as a NEW parcel the store pays for — what was carried is not given back. The same box:
+   * its new label is printed at the hub and put over the old one, and from there it is sorted like any parcel there. The one
+   * called off is closed as Returned, pointing at the one bringing it back, which points back at it. CallOffService decides it
+   * may and prices it; this writes it, the new parcel first — refused there, nothing changes.
+   */
+  turnBackAtHub(
+    parcelId: string,
+    input: { quote: ShipmentQuote; hub: { mdpId: string; name: string; zone: string }; toAgentDid: string; receiverMobile: string; shippingPolicy: ShippingPolicy; by: string; reason?: string },
+    now: number = Date.now(),
+  ): { calledOff: Parcel; back: Parcel } {
+    const parcel = this.require(parcelId);
+    this.refuseIfHeld(parcel);
+    if (parcel.status !== 'At_MDP' || parcel.atMdpId !== input.hub.mdpId) throw new GlosError('INVALID_STATE', `${parcelId} is not at ${input.hub.name}`);
+    if (!parcel.vendorId) throw new GlosError('INVALID_STATE', `${parcelId} is not a store’s parcel`);
+    const at = new Date(now).toISOString();
+    const { parcel: back, paid } = this.createInbound({
+      vendorId: parcel.vendorId,
+      externalOrderId: parcel.externalOrderId,
+      originZone: input.hub.zone,
+      handInMdpId: input.hub.mdpId,
+      destAgentDid: input.toAgentDid,
+      // The store collects its own goods again: its own number, not the buyer's.
+      buyerMobile: input.receiverMobile,
+      // THE SAME BOX, as a return of an uncollected parcel is: copied, never re-measured, and its photo the first leg's.
+      size: parcel.size,
+      dimensionsCm: parcel.dimensionsCm,
+      weightKg: parcel.weightKg,
+      declaredValue: parcel.declaredValue,
+      contentPhotoRef: parcel.contentPhotoRef ?? 'return',
+      photoOfParcel: parcel.parcelId,
+      fragile: parcel.fragile,
+      natureCode: parcel.natureCode,
+      items: parcel.items,
+      shippingPolicy: input.shippingPolicy,
+      routeMode: 'locked',
+      quote: input.quote,
+      returnOf: { parcelId: parcel.parcelId, atMdpId: input.hub.mdpId, at },
+    });
+    if (!paid) {
+      // The balance was checked before this was asked, and moved in between. Nothing is left behind half-made.
+      back.status = 'Voided';
+      this.scan(back, 'Voided', 'network', 'not paid: bringing it back could not be paid for');
+      this.persist(back);
+      throw new GlosError('WALLET_INSUFFICIENT', `Top up first — bringing it back costs ${(back.shipmentCost ?? 0).toFixed(2)} ${parcelCurrency(back)}`);
+    }
+    const step: Step = { at };
+    // At the hub from its first moment: the goods never went back to the store, so they were never in its hands.
+    back.status = 'At_MDP';
+    back.atMdpId = input.hub.mdpId;
+    back.custody = [{ holderId: input.hub.name, holderKind: 'hub', from: at, note: `called off by the store: turned round here — the goods of ${parcel.parcelId}` }];
+    this.scan(back, 'At_MDP', input.hub.name, `called off at ${input.hub.name}: the goods of ${parcel.parcelId}, going back · its new label goes over the old one`, step);
+    this.persist(back);
+    // The one called off: closed, pointing at the one bringing it back, and out of any bag.
+    parcel.status = 'Returned';
+    parcel.returnParcelId = back.parcelId;
+    parcel.toteId = undefined;
+    this.scan(parcel, 'Returned', input.by, `called off by the store at ${input.hub.name} · going back as ${back.parcelId}${input.reason ? ` · ${input.reason}` : ''}`, step);
+    this.media.anchorParcelTerminal(parcel.parcelId);
+    this.persist(parcel);
+    return { calledOff: parcel, back };
+  }
+
+  /**
+   * The label of a parcel turned round at this hub — printed there and put over the old one (2026-10-27). Only that: a hub
+   * prints no other parcel's label, and one that has left reads as not there.
+   */
+  hubLabel(mdpId: string, parcelId: string): PhygitalLabel {
+    const p = this.parcels.get(parcelId);
+    if (!p || !p.returnOf || p.returnOf.atMdpId !== mdpId || p.status !== 'At_MDP' || p.atMdpId !== mdpId) throw new GlosError('NOT_FOUND', `No parcel turned round here is ${parcelId}`);
+    if (!p.label) throw new GlosError('INVALID_STATE', 'Its label is not issued yet');
+    return p.label;
+  }
 
   /**
    * READING B — A STORE'S PARCEL TAKEN IN AT A HUB, scanned off the pallet or carton it came on: the store parts with it
