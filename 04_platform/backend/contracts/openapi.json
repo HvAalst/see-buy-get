@@ -4637,6 +4637,166 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/carrier-moves": {
+      "get": {
+        "operationId": "HubCarrier.moveList",
+        "summary": "",
+        "description": "D11 — its carriers on the move: its own, away; and other hubs', come to it. The floor works these, so its people read them.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarrierMovesView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "HubCarrier.send",
+        "summary": "",
+        "description": "Carriers go with a driver to another hub — the pass scanned, as for a bag — and what happens to them there. Its floor's act.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendCarriersDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarrierMoveView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/carrier-moves/{moveId}/done": {
+      "post": {
+        "operationId": "HubCarrier.moveDone",
+        "summary": "",
+        "description": "The other hub did what was said: counted back out to the driver, taken in as left, or kept aside. Its floor's act.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "moveId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarriersDoneDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarrierMoveView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/mdps/{id}/carrier-moves/{moveId}/return-job": {
+      "post": {
+        "operationId": "HubCarrier.returnJob",
+        "summary": "",
+        "description": "The return job for its carriers kept aside at another hub (the user, 2026-10-27: \"Post it as a job\"): a load any driver\nmay take, which the hub pays — its owner's to post, as its fee is.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "moveId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarrierReturnJobDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarrierMoveView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/risk-register": {
       "get": {
         "operationId": "RiskRegister.register",
@@ -35032,6 +35192,9 @@
               "other"
             ]
           },
+          "emptyKg": {
+            "type": "number"
+          },
           "boundBy": {
             "type": "string",
             "description": "Which of the two decides what it holds: its space, or what it may carry.",
@@ -35126,6 +35289,11 @@
               "other"
             ]
           },
+          "emptyKg": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 500
+          },
           "name": {
             "type": "string",
             "maxLength": 40
@@ -35172,6 +35340,195 @@
         },
         "required": [
           "carriers"
+        ]
+      },
+      "CarrierMoveJob": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "postedAt": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "The return job's own status on the board."
+          }
+        },
+        "required": [
+          "freightId",
+          "code",
+          "postedAt",
+          "status"
+        ]
+      },
+      "CarrierMoveView": {
+        "type": "object",
+        "properties": {
+          "driverName": {
+            "type": "string"
+          },
+          "wayBack": {
+            "type": "string",
+            "enum": [
+              "with_driver",
+              "left",
+              "return_job"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "on_the_way",
+              "with_driver",
+              "left",
+              "kept",
+              "returning",
+              "home"
+            ]
+          },
+          "doneAt": {
+            "type": "string"
+          },
+          "doneCount": {
+            "type": "number"
+          },
+          "job": {
+            "$ref": "#/components/schemas/CarrierMoveJob"
+          },
+          "homeAt": {
+            "type": "string"
+          },
+          "emptyKg": {
+            "type": "number",
+            "description": "What one weighs empty, as the owner said — what a return job is posted at."
+          },
+          "moveId": {
+            "type": "string"
+          },
+          "ownerMdpId": {
+            "type": "string"
+          },
+          "ownerName": {
+            "type": "string"
+          },
+          "toMdpId": {
+            "type": "string"
+          },
+          "toName": {
+            "type": "string"
+          },
+          "carrierName": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "sentAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wayBack",
+          "state",
+          "moveId",
+          "ownerMdpId",
+          "ownerName",
+          "toMdpId",
+          "toName",
+          "carrierName",
+          "count",
+          "sentAt"
+        ]
+      },
+      "CarrierMovesView": {
+        "type": "object",
+        "properties": {
+          "away": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CarrierMoveView"
+            }
+          },
+          "here": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CarrierMoveView"
+            }
+          },
+          "mdpId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "away",
+          "here",
+          "mdpId"
+        ]
+      },
+      "SendCarriersDto": {
+        "type": "object",
+        "properties": {
+          "wayBack": {
+            "type": "string",
+            "enum": [
+              "with_driver",
+              "left",
+              "return_job"
+            ]
+          },
+          "carrierId": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "count": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "toMdpId": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "driverBadgeId": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "wayBack",
+          "carrierId",
+          "count",
+          "toMdpId",
+          "driverBadgeId"
+        ]
+      },
+      "CarriersDoneDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 50
+          }
+        }
+      },
+      "CarrierReturnJobDto": {
+        "type": "object",
+        "properties": {
+          "weightKg": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 25000
+          }
+        },
+        "required": [
+          "weightKg"
         ]
       },
       "RiskCellView": {
