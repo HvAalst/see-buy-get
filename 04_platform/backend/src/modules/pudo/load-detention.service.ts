@@ -72,7 +72,7 @@ export class LoadDetentionService implements OnModuleInit {
     };
     this.held.set(d.detentionId, d);
     const held = heldView(d);
-    void this.events.publish(GlosEvent.Pudo.FreightHeld, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, carrierDid: this.dispatch.carrierOf(f), held }, { source: 'pudo' }).catch(() => undefined);
+    void this.events.publish(GlosEvent.Pudo.FreightHeld, { freightId: f.freightId, code: f.code, driverDid, posterDid: this.dispatch.senderDidOf(f), carrierDid: this.dispatch.carrierOf(f), held }, { source: 'pudo' }).catch(() => undefined);
     this.cases?.sync(now);
     return { held, replayed: false };
   }
@@ -90,7 +90,7 @@ export class LoadDetentionService implements OnModuleInit {
     const done: LoadDetention = { ...open, letGo: { at: step.at, ...(step.receivedAt ? { receivedAt: step.receivedAt } : {}), ...(words(input.note) ? { note: words(input.note) } : {}) } };
     this.held.set(done.detentionId, done);
     const held = heldView(done);
-    void this.events.publish(GlosEvent.Pudo.FreightLetGo, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, carrierDid: this.dispatch.carrierOf(f), held }, { source: 'pudo' }).catch(() => undefined);
+    void this.events.publish(GlosEvent.Pudo.FreightLetGo, { freightId: f.freightId, code: f.code, driverDid, posterDid: this.dispatch.senderDidOf(f), carrierDid: this.dispatch.carrierOf(f), held }, { source: 'pudo' }).catch(() => undefined);
     this.cases?.sync(now);
     return { held, replayed: false };
   }

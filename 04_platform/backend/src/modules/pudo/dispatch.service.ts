@@ -3144,7 +3144,7 @@ export class DispatchService {
     // FP2 — the consignment closes: whoever documents and bills it is told.
     // …and whoever sent it is told it arrived. Not the carrier's own office for an order it typed in itself: its
     // customer is not ours to write to, and the office saw its own driver hand it over.
-    const sender = f.postedByDid ?? (f.shipperDid && this.vendors.has(f.shipperDid) ? this.vendors.get(f.shipperDid).did : f.shipperDid);
+    const sender = this.senderDidOf(f);
     const posterDid = sender && sender !== f.contract?.fleetDid && sender !== f.claimedBy ? sender : undefined;
     void this.events
       .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName, ...(exceptions.length ? { exceptions: exceptions.map(({ kind, count }) => ({ kind, count })) } : {}), ...(timing ? { timing, orderedFor: f.deliverOn } : {}) }, { source: 'pudo' })
@@ -3198,7 +3198,7 @@ export class DispatchService {
     f.deliveryAttempts = [...(f.deliveryAttempts ?? []), { outcome: input.outcome, ...(note ? { note: note.slice(0, 500) } : {}), at, by: driverDid }];
     this.freights.set(f.freightId, f);
     void this.events
-      .publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, posterDid: f.postedByDid ?? f.shipperDid, outcome: input.outcome, note, destLabel: f.destLabel, attempts: f.deliveryAttempts.length }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, posterDid: this.senderDidOf(f), outcome: input.outcome, note, destLabel: f.destLabel, attempts: f.deliveryAttempts.length }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }
@@ -3306,7 +3306,7 @@ export class DispatchService {
     f.claim = { ...c, state: 'resolved', decision: 'report_only', award: 0, note: FREIGHT_REPORT_ONLY_NOTE, decidedBy: 'the record', decidedAt: new Date(now).toISOString() };
     this.freights.set(f.freightId, f);
     void this.events
-      .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: 'report_only', award: 0, note: FREIGHT_REPORT_ONLY_NOTE, posterDid: f.postedByDid ?? f.shipperDid, claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: 'report_only', award: 0, note: FREIGHT_REPORT_ONLY_NOTE, posterDid: this.senderDidOf(f), claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
       .catch(() => undefined);
   }
 
@@ -3383,7 +3383,7 @@ export class DispatchService {
     f.claim = { ...c, state: 'resolved', decision: input.decision, award, note: note.slice(0, 1000), ...(input.by ? { decidedBy: input.by } : {}), decidedAt: at, ...(funding ? { funding } : {}), ...(paidTo ? { paidTo } : {}) };
     this.freights.set(f.freightId, f);
     void this.events
-      .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: input.decision, award, note, posterDid: f.postedByDid ?? f.shipperDid, claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: f.freightId, code: f.code, decision: input.decision, award, note, posterDid: this.senderDidOf(f), claimantDid: c.raisedBy, driverDid: f.claimedBy }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }
@@ -3417,7 +3417,7 @@ export class DispatchService {
     for (const k of ['claimedBy', 'carrierDid', 'claimedAt', 'lockedPrice', 'priceBreakdown', 'priceOrigin', 'lockedAt', 'paidStatus', 'billed', 'assignedBy', 'carriedBy', 'driverPaid'] as const) delete (f as unknown as Record<string, unknown>)[k];
     this.freights.set(f.freightId, f);
     void this.events
-      .publish(GlosEvent.Pudo.FreightHandedBack, { freightId: f.freightId, code: f.code, driverDid, driverName: this.driverNameOf(driverDid), reason: why, posterDid: f.postedByDid ?? f.shipperDid, managerDid: assignedBy?.managerDid, destLabel: f.destLabel }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightHandedBack, { freightId: f.freightId, code: f.code, driverDid, driverName: this.driverNameOf(driverDid), reason: why, posterDid: this.senderDidOf(f), managerDid: assignedBy?.managerDid, destLabel: f.destLabel }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }
@@ -3487,7 +3487,7 @@ export class DispatchService {
       // Round 25 — told to whoever can act on it: the shipper, and the office of the fleet carrying it (see the listeners).
       const reading = { celsius: c, at: read.at, band, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}) };
       void this.events
-        .publish(GlosEvent.Pudo.FreightTempBreach, { freightId: f.freightId, code: f.code, celsius: c, band, driverDid, readAt: read.at, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}), reading, posterDid: f.postedByDid ?? f.shipperDid, carrierDid: this.carrierOf(f) }, { source: 'pudo' })
+        .publish(GlosEvent.Pudo.FreightTempBreach, { freightId: f.freightId, code: f.code, celsius: c, band, driverDid, readAt: read.at, ...(read.receivedAt ? { receivedAt: read.receivedAt } : {}), reading, posterDid: this.senderDidOf(f), carrierDid: this.carrierOf(f) }, { source: 'pudo' })
         .catch(() => undefined);
     }
     this.freights.set(f.freightId, f);
@@ -3518,7 +3518,7 @@ export class DispatchService {
     if (!replayed) atPost?.keep(passage.at, passage.post);
     const view = passageView(passage);
     if (!replayed) {
-      void this.events.publish(GlosEvent.Pudo.FreightPassed, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, passage: view }, { source: 'pudo' }).catch(() => undefined);
+      void this.events.publish(GlosEvent.Pudo.FreightPassed, { freightId: f.freightId, code: f.code, driverDid, posterDid: this.senderDidOf(f), passage: view }, { source: 'pudo' }).catch(() => undefined);
     }
     const crossing = this.passages.crossingOf(f, now, this.laneDriveFor(f, now));
     return { passage: view, ...(crossing ? { crossing } : {}), replayed };
@@ -3537,7 +3537,7 @@ export class DispatchService {
     // Round 35 — an exception under the tamper protocol: the load held until operations releases it, operations told now.
     this.tamper?.sealBroken(f, driverDid, broken, now);
     void this.events
-      .publish(GlosEvent.Pudo.FreightSealBroken, { freightId: f.freightId, code: f.code, driverDid, posterDid: f.postedByDid ?? f.shipperDid, seal: view }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightSealBroken, { freightId: f.freightId, code: f.code, driverDid, posterDid: this.senderDidOf(f), seal: view }, { source: 'pudo' })
       .catch(() => undefined);
     return view;
   }
@@ -3698,6 +3698,15 @@ export class DispatchService {
    * read from the driver's fleet as it stands, which is what every reader did before — and still right for
    * them, because no driver could move fleets until the carrier was recorded.
    */
+  /**
+   * WHO SENT IT, as somebody who can be told: the account that posted it, or — for a store's order turned into freight,
+   * whose shipper is the store's RECORD — the store's own account. Never the record id: a notice addressed to it is filed
+   * where no bell reads, and a store was told of none of its loads' troubles (found 2026-10-27).
+   */
+  senderDidOf(f: Pick<Freight, 'postedByDid' | 'shipperDid'>): string | undefined {
+    return f.postedByDid ?? (f.shipperDid && this.vendors.has(f.shipperDid) ? this.vendors.get(f.shipperDid).did : f.shipperDid);
+  }
+
   carrierOf(f: Freight): string | undefined {
     if (f.carrierDid) return f.carrierDid;
     return f.claimedBy ? this.carrierDidOf(f.claimedBy) : undefined;

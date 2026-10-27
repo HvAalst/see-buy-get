@@ -9063,6 +9063,31 @@ describe('PUDO Light', () => {
     expect(dispatch.postedBy('did:shop:p').find((r) => r.freightId === f.freightId)?.canClaim).toBe(true);
   });
 
+  it('tells a STORE of its load’s troubles by its own account, never by its record id (found 2026-10-27: a store was told of none)', () => {
+    const pickup = { lat: -1.88, lng: 36.38 };
+    const d = coupleTipper('DF2', { min: 0.8, max: 1.5 });
+    const vendor = vendors.register({ name: 'TroubleVendor' });
+    vendors.topUp(vendor.vendorId, 500);
+    // A store's heavy order turned into freight names the store's RECORD as its shipper.
+    const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 200, packaging: 'loose', shipperDid: vendor.vendorId });
+    expect(f.shipperDid).toBe(vendor.vendorId);
+    const told: Array<{ posterDid?: string }> = [];
+    events.subscribe(GlosEvent.Pudo.FreightHandedBack, (e) => {
+      told.push(e.payload as { posterDid?: string });
+    });
+    events.subscribe(GlosEvent.Pudo.FreightDeliveryFailed, (e) => {
+      told.push(e.payload as { posterDid?: string });
+    });
+    claimFreight(d.did, pickup, f.freightId);
+    dispatch.handBack(f.freightId, d.did, 'The truck broke down');
+    claimFreight(d.did, pickup, f.freightId);
+    dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
+    dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused', note: 'Not what was ordered' });
+    expect(told).toHaveLength(2);
+    // The store's bell reads by the store's account: that is who each notice is addressed to.
+    for (const notice of told) expect(notice.posterDid).toBe(vendor.did);
+  });
+
   /**
    * THE RULE HOLDS FOR FREIGHT TOO (the user, 2026-10-13). A claim is decided by staff, with an award, only where the
    * company that billed the load has STATED COVER for dedicated freight. Everywhere else — a load settled between the

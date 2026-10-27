@@ -319,7 +319,7 @@ export class TamperService implements OnModuleInit {
     else this.parcels.unhold(unit.id, staff.name, words);
     const f = unit.type === 'load' ? (this.dispatch.requireFreightPublic(unit.id) as Freight) : undefined;
     void this.events
-      .publish(GlosEvent.Pudo.UnitReleased, { unitType: unit.type, unitId: unit.id, ref, reason: words, ...(f ? { code: f.code, posterDid: f.postedByDid ?? f.shipperDid } : { parcelId: unit.id }) }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.UnitReleased, { unitType: unit.type, unitId: unit.id, ref, reason: words, ...(f ? { code: f.code, posterDid: this.dispatch.senderDidOf(f) } : { parcelId: unit.id }) }, { source: 'pudo' })
       .catch(() => undefined);
     return this.unitView(unit.type, unit.id, 'staff');
   }
@@ -410,7 +410,7 @@ export class TamperService implements OnModuleInit {
           stage: e.stage,
           where: e.where,
           at: e.at,
-          ...(f ? { posterDid: f.postedByDid ?? f.shipperDid } : {}),
+          ...(f ? { posterDid: this.dispatch.senderDidOf(f) } : {}),
           ...(p ? { parcelId: p.parcelId } : {}),
           ...(p?.vendorId ? { vendorId: p.vendorId, externalOrderId: p.externalOrderId } : {}),
         },
