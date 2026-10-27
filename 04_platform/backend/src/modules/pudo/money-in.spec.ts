@@ -31,6 +31,9 @@ const CREDITS_MONEY = [
   'this.vendors.topUp(',
   'this.vendors.topUpConfirmed(',
   'this.vendors.reverseTopUp(',
+  // A person's prepayment for one load to their door (2026-10-27): only FundingService.confirm reaches it.
+  'this.doors.paid(',
+  'this.doors.reversed(',
 ];
 
 /** The body with comments stripped: a method named in a comment is prose, not a call. */
@@ -68,6 +71,12 @@ describe('money is created by a confirmed payment, never by a request', () => {
     expect(crediting).toEqual([]);
   });
 
+  it('nor does the Send app: a person asks to be prompted for a payment, and the rail says when it came', () => {
+    const identity = readFileSync(join(__dirname, 'identity.controller.ts'), 'utf8');
+    expect(identity).toContain("@Post('parcels/:id/door')");
+    expect(identity).not.toMatch(/\.paid\(|\.reversed\(/);
+  });
+
   it('turns a top-up into a request for payment, not a payment', () => {
     // Both money-in routes must ASK. `funding.open` writes no journal entry — see funding.service.ts.
     for (const key of ['POST agents/:did/top-up', 'POST vendors/:id/top-up']) {
@@ -101,7 +110,8 @@ describe('the credit path has one way in', () => {
   it('says in the crediting methods themselves that a rail calls them', () => {
     // A comment is not a guard. It is here because the next person to read `topUp` needs to know why it
     // is not the obvious entry point, and the census above is what actually holds the line.
-    for (const file of ['wallet-gate.service.ts', 'vendor.service.ts']) {
+    expect(PAYERS).toContain("this.funding.register('person'");
+    for (const file of ['wallet-gate.service.ts', 'vendor.service.ts', 'person-door.service.ts']) {
       expect(readFileSync(join(__dirname, file), 'utf8')).toContain('A PAYMENT RAIL CALLS THIS');
     }
   });

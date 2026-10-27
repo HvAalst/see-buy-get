@@ -62,13 +62,20 @@ export class PayoutService {
     this.destinations.push(destinations);
   }
 
-  /** Where this payee is paid, from whichever source keeps its number — or nothing, where none does. */
+  /**
+   * Where this payee is paid, from whichever source keeps its number. A number one source keeps wins over another source's
+   * refusal (a person owed back what their door load did not use has no payout number, and needs none); only where none has
+   * a number is a refusal said — and nothing, where no source knows the payee.
+   */
   private destinationOf(payeeId: string, way: PayoutWay, now: number): PayoutDestination | PayoutDestinationRefusal | undefined {
+    let refused: PayoutDestinationRefusal | undefined;
     for (const source of this.destinations) {
       const found = source.of(payeeId, way, now);
-      if (found) return found;
+      if (!found) continue;
+      if (!isRefusal(found)) return found;
+      refused ??= found;
     }
-    return undefined;
+    return refused;
   }
 
   constructor(

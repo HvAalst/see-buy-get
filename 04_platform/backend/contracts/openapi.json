@@ -21055,6 +21055,113 @@
         }
       }
     },
+    "/v1/sbg/identity/parcels/{id}/door": {
+      "get": {
+        "operationId": "Identity.doorPreview",
+        "summary": "",
+        "description": "THEIR OWN DOOR, PAID FIRST BY MOBILE MONEY (the user, 2026-10-27: \"Mobile money first\"): for goods coming back to them\nfrom a hub, what it would be — with `lat`/`lng`, the most to allow suggested. Nothing is written.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lng",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "lat",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorPreview"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Identity.door",
+        "summary": "",
+        "description": "Ask for it: the box is held at the hub, and M-Pesa asks them for the most they allow. Limited: each one prompts a phone.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoorRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/parcels/{id}/door/cancel": {
+      "post": {
+        "operationId": "Identity.doorCancel",
+        "summary": "",
+        "description": "Give it up: before paying, at once; with a load no driver has taken, to the shop instead — all of it back.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoorView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/parcels/{id}/pod": {
       "post": {
         "operationId": "Identity.addPod",
@@ -41684,6 +41791,14 @@
               "by_hand"
             ]
           },
+          "owed": {
+            "type": "string",
+            "description": "WHAT IS PAID: a provider's earnings (`payable.provider`), or what a person is owed back from a load to their door they\npaid for first (`payable.person`, 2026-10-27). Absent on payouts raised before there were two: a provider's.",
+            "enum": [
+              "payable.provider",
+              "payable.person"
+            ]
+          },
           "destination": {
             "description": "Where it goes, where the way needs a number of the payee's: the masked number it was raised to, and which one.",
             "allOf": [
@@ -44194,6 +44309,15 @@
               }
             }
           },
+          "doorHold": {
+            "type": "object",
+            "properties": {
+              "until": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
           "unclaimedAt": {
             "type": "string",
             "description": "When the free collection window ran out — the start of the holding-fee clock.\n\nDistinct from readyAt, and the distinction is the whole feature: readyAt is when the wait began,\nthis is when the wait stopped being free. An extension resets readyAt and CLEARS this, because a\nreceiver who bought more time is inside a free window again by definition."
@@ -44272,6 +44396,7 @@
           "returnOf",
           "returnLoad",
           "payAtCollection",
+          "doorHold",
           "scans"
         ]
       },
@@ -48104,6 +48229,10 @@
               "ODR",
               "HUM"
             ]
+          },
+          "sellerEntityId": {
+            "type": "string",
+            "description": "WHICH COMPANY SOLD THIS LOAD, where its shipper has none of its own to say so: a person paying first for a load to their\nown door (2026-10-27) — the company of the country its hub is in. Its fee, its tax and its cover price the load."
           },
           "pickupCountry": {
             "type": "string",
@@ -54271,6 +54400,149 @@
           "destPudoDid",
           "dimensionsCm",
           "weightKg"
+        ]
+      },
+      "DoorPreview": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "door",
+              "no"
+            ]
+          },
+          "suggestedMax": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "atHub": {
+            "type": "string"
+          },
+          "maxKm": {
+            "type": "number",
+            "description": "How far from the hub a door may be, in kilometres."
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "DoorRequestDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "label": {
+            "type": "string",
+            "description": "Their door, in words a driver can find — a street, a gate, a landmark.",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "maxSpend": {
+            "type": "number",
+            "description": "The most they allow a driver, asked for by mobile money now.",
+            "minimum": 1
+          },
+          "phone": {
+            "type": "string",
+            "description": "The number they pay from, which the driver calls at their door.",
+            "minLength": 7,
+            "maxLength": 20
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "label",
+          "maxSpend",
+          "phone"
+        ]
+      },
+      "DoorView": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "awaiting",
+              "posted",
+              "taken",
+              "delivered",
+              "lapsed",
+              "to_shop",
+              "reversed"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "maxSpend": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "phoneMasked": {
+            "type": "string"
+          },
+          "until": {
+            "type": "string",
+            "description": "awaiting: pay by then, and what the payment rail asked."
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "pushed": {
+            "type": "boolean"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "paid": {
+            "type": "number"
+          },
+          "loadCode": {
+            "type": "string"
+          },
+          "billed": {
+            "type": "number",
+            "description": "taken: what the driver charged, out of what was paid."
+          },
+          "owedBack": {
+            "type": "number",
+            "description": "What goes back to their number."
+          },
+          "canSendToShop": {
+            "type": "boolean",
+            "description": "posted, no driver yet: they may send it to the shop instead, all of it back."
+          },
+          "shopName": {
+            "type": "string"
+          },
+          "shopParcelId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "label",
+          "maxSpend",
+          "currency",
+          "phoneMasked"
         ]
       },
       "PodDto": {

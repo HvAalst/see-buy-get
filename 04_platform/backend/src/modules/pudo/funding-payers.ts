@@ -7,6 +7,7 @@ import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { WalletGateService } from './wallet-gate.service';
 import { AgentService } from './agent.service';
 import { VendorService } from './vendor.service';
+import { PersonDoorService } from './person-door.service';
 
 /**
  * WHO CAN PUT MONEY IN, and which account it lands in when a rail confirms it.
@@ -36,6 +37,8 @@ export class FundingPayerRegistrar implements OnModuleInit {
     /** @Optional so the many specs that hand-list this module's providers keep compiling — the
      *  established pattern here, and the reason 334 tests once went red in one edit. */
     @Optional() private readonly notifications?: NotificationService,
+    // A person paying first for a load to their own door (2026-10-27: "Mobile money first"). Optional, as above.
+    @Optional() private readonly doors?: PersonDoorService,
   ) {}
 
   onModuleInit(): void {
@@ -74,6 +77,19 @@ export class FundingPayerRegistrar implements OnModuleInit {
         this.tellStore(vendorId, 'balance_returned', c, done.vendor.balance);
         return { entryId: done.entryId };
       },
+    });
+
+    this.registerPerson();
+  }
+
+  /** …and the person: a prepayment for ONE load to their door, never a balance (PersonDoorService). */
+  private registerPerson(): void {
+    const doors = this.doors;
+    if (!doors) return;
+    this.funding.register('person', {
+      resolve: (personDid) => doors.resolvePayer(personDid),
+      credit: (personDid, c) => doors.paid(personDid, c),
+      reverse: (personDid, c) => doors.reversed(personDid, c),
     });
   }
 

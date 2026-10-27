@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Optional, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Optional, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
+import { PersonDoorService } from './person-door.service';
+import { DoorPreview, DoorRequestDto, DoorView } from './person-door.types';
 import { AgreementService } from '../../foundation/documents/agreement.service';
 import { countryOfPhone } from '../../foundation/countries/catalogue';
 import { RateLimit, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
@@ -54,6 +57,8 @@ export class IdentityController {
     private readonly fleets: FleetManagerService,
     // 2026-10-25 — every sign-up agrees to the terms of use, the data notice and the cookie statement that count now.
     @Optional() private readonly agreements?: AgreementService,
+    // 2026-10-27 — their goods coming back from a hub, to their own door, paid first by mobile money.
+    @Optional() private readonly doors?: PersonDoorService,
   ) {}
 
   /**
@@ -371,7 +376,46 @@ export class IdentityController {
   @Get('parcels/:id')
   parcel(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
     const person = this.persons.requireByDid(actor.did!);
-    return this.parcels.consumerParcel(id, person);
+    const view = this.parcels.consumerParcel(id, person);
+    // Their own door, paid first (2026-10-27): where it stands, beside the parcel it brings.
+    const door = this.doors?.viewFor(person.personDid, id);
+    return door ? { ...view, door } : view;
+  }
+
+  /**
+   * THEIR OWN DOOR, PAID FIRST BY MOBILE MONEY (the user, 2026-10-27: "Mobile money first"): for goods coming back to them
+   * from a hub, what it would be — with `lat`/`lng`, the most to allow suggested. Nothing is written.
+   */
+  @Roles('consumer')
+  @Get('parcels/:id/door')
+  @ApiQuery({ name: 'lat', required: false })
+  @ApiQuery({ name: 'lng', required: false })
+  doorPreview(@Param('id') id: string, @Query('lat') lat: string | undefined, @Query('lng') lng: string | undefined, @Actor() actor: IntrospectionResult): DoorPreview {
+    const to = lat != null && lng != null && lat !== '' && lng !== '' ? { lat: Number(lat), lng: Number(lng) } : undefined;
+    return this.doorsOrRefuse(actor).preview(actor.did!, id, to);
+  }
+
+  /** Ask for it: the box is held at the hub, and M-Pesa asks them for the most they allow. Limited: each one prompts a phone. */
+  @Roles('consumer')
+  @UseGuards(RateLimitGuard)
+  @RateLimit(10, 15 * 60)
+  @Post('parcels/:id/door')
+  door(@Param('id') id: string, @Body() dto: DoorRequestDto, @Actor() actor: IntrospectionResult): Promise<DoorView> {
+    return this.doorsOrRefuse(actor).request(actor.did!, id, { to: { lat: dto.lat, lng: dto.lng }, label: dto.label, maxSpend: dto.maxSpend, phone: dto.phone });
+  }
+
+  /** Give it up: before paying, at once; with a load no driver has taken, to the shop instead — all of it back. */
+  @Roles('consumer')
+  @Post('parcels/:id/door/cancel')
+  doorCancel(@Param('id') id: string, @Actor() actor: IntrospectionResult): DoorView {
+    return this.doorsOrRefuse(actor).cancel(actor.did!, id);
+  }
+
+  private doorsOrRefuse(actor: IntrospectionResult): PersonDoorService {
+    // Their own act, and their own money: staff ask for nothing in a person's name (they read the parcel under Find a parcel).
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A person asks for their own door, from their own app. Staff read the parcel under Find a parcel');
+    if (!this.doors) throw new GlosError('INVALID_STATE', 'Bringing it to your door is not open here');
+    return this.doors;
   }
 
   /** The receiver attaches their own delivered-state photo (proof of what they received) — S23. */
