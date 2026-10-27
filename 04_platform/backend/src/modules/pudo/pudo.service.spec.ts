@@ -11092,6 +11092,9 @@ describe('PUDO Light', () => {
         expect(parcels.consumerParcel(id, as(sender))).toMatchObject({ status: 'Returned', returnParcelId: back.parcelId });
         expect(parcels.consumerParcel(id, as(sender)).collectToken).toBeUndefined();
         expect(parcels.consumerParcel(id, as(receiver)).collectToken).toBeUndefined();
+        // Its receiver reads that it went back — not which parcel takes the goods: they are not theirs to follow.
+        expect(parcels.consumerParcel(id, as(receiver))).toMatchObject({ status: 'Returned', wentBack: true });
+        expect(parcels.consumerParcel(id, as(receiver)).returnParcelId).toBeUndefined();
         // Not the receiver's: they never see the parcel going back.
         expect([...parcels.partyTo(as(receiver)).received, ...parcels.partyTo(as(receiver)).sent].map((v) => v.parcelId)).not.toContain(back.parcelId);
         // Nothing of the first given back — and nothing taken for the way back until it is collected.

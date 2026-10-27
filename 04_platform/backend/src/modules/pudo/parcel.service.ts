@@ -1245,9 +1245,11 @@ export class ParcelService implements OnApplicationBootstrap {
       ...(p.dispute || p.lost ? { damageReport: { number: `DCR-${p.parcelId}` } } : {}),
       // Declared lost by staff after a search, and found again: when, and in the words staff wrote — never who.
       ...(p.lost ? { lost: { declaredAt: p.lost.declaredAt, reason: p.lost.reason, ...(p.lost.foundAt ? { foundAt: p.lost.foundAt, foundNote: p.lost.foundNote } : {}) } } : {}),
-      // Turned round at a hub (2026-10-27): which parcel takes the goods back to their sender — read from either one.
+      // Turned round at a hub (2026-10-27): on the parcel taking goods back, the one it takes back (its only party is their
+      // sender). On the one turned round, its sender reads which parcel takes it back; its receiver only that it went back —
+      // the goods are not theirs to follow.
       ...(p.returnOf ? { returnOf: p.returnOf.parcelId } : {}),
-      ...(p.returnParcelId ? { returnParcelId: p.returnParcelId } : {}),
+      ...(p.returnParcelId || p.returnLoad ? (relation === 'sent' && p.returnParcelId ? { returnParcelId: p.returnParcelId } : relation === 'received' ? { wentBack: true } : {}) : {}),
       // The closed-window facts, receiver-only — see ConsumerParcelView. The owed figure is DERIVED here
       // rather than left to the app, so the number somebody reads on their phone and the number the
       // counter asks for cannot come from two different pieces of arithmetic.

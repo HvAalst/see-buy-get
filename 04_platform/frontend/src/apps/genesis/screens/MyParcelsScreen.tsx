@@ -339,8 +339,8 @@ function ParcelDetail({ parcel, state, actions, client }: { parcel: ConsumerParc
       {/* It came by the number they moved off. The sender does not know there is a new one, and only they can say. */}
       {/* WITHDRAWN AT A HUB (2026-10-27): the goods go back to their sender as another parcel, with a code of its own. To the
           sender it says where that parcel is; to the receiver, that it will not come. */}
-      {parcel.returnParcelId ? (
-        <Note tone="info" icon="repeat" title={t('send.parcels.withdrawnTitle')} detail={parcel.relation === 'sent' ? t('send.parcels.withdrawnSender', { id: parcel.returnParcelId }) : t('send.parcels.withdrawnReceiver')} />
+      {parcel.returnParcelId || parcel.wentBack ? (
+        <Note tone="info" icon="repeat" title={t('send.parcels.withdrawnTitle')} detail={parcel.returnParcelId ? t('send.parcels.withdrawnSender', { id: parcel.returnParcelId }) : t('send.parcels.withdrawnReceiver')} />
       ) : null}
       {/* …and the parcel taking them back: what the counter asks for in cash as they are collected. */}
       {parcel.returnOf && parcel.status !== 'Delivered' ? (

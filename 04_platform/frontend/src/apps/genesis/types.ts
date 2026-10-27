@@ -315,6 +315,8 @@ export interface ConsumerParcelView {
    */
   returnOf?: string;
   returnParcelId?: string;
+  /** The receiver's side of one turned round: it went back to its sender, and will not come. */
+  wentBack?: boolean;
   payAtCollection?: { amount: number; currency: string };
 }
 

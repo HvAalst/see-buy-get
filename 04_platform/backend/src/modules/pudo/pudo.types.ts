@@ -908,9 +908,11 @@ export interface ConsumerParcelView {
    * The receiver's — on such a parcel, its sender.
    */
   payAtCollection?: { amount: number; currency: string };
-  /** Turned round at a hub: the parcel this one takes back to its sender — or, on that one, the parcel taking it back. */
+  /** Turned round at a hub: the parcel this one takes back to its sender — or, on that one and to its sender, the parcel
+   *  taking it back. Its receiver reads only `wentBack`: it went back to its sender, and will not come. */
   returnOf?: string;
   returnParcelId?: string;
+  wentBack?: boolean;
 }
 
 /** One stop's own fee as the parcel was sold, in its own money (Parcel.stopFees): what a hub is paid at its sort. */
