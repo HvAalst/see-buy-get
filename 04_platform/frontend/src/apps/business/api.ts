@@ -1,4 +1,5 @@
 import type { SystemMessage, SystemView } from './system';
+import type { PaidDirectView } from '../../shared/paidDirect';
 import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { Gs1DisputeView } from './gs1Dispute';
 import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
@@ -256,6 +257,9 @@ export interface PostedLoad {
   heldByAuthority?: HeldByAuthorityView;
   /** Round 25 — its cold chain broken on the road: the reading that broke it, the band, when — and when it reached us, if later. */
   coldChainBroken?: { celsius: number; at: string; minC: number; maxC: number; receivedAt?: string };
+  /** A match: the business pays the driver directly — and, once the carrier says so, that it was paid (2026-10-27). */
+  paysDriverDirect?: boolean;
+  paidDirect?: PaidDirectView;
   /** Round 26 — in one country, on the road: when it is expected, and at what pace. Absent where its carrier's plan has the hour. */
   arrival?: ArrivalView;
 }

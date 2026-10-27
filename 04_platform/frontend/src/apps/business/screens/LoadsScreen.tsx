@@ -29,6 +29,7 @@ const priced = (amount: number, currency?: string): string => (currency ? quoteF
 import { SentFor } from './SentFor';
 import { codeOf, type ReceivingPointNamed } from '../inbound';
 import type { BusinessActions } from '../useBusinessApp';
+import { shipperPaidLine } from '../../../shared/paidDirect';
 
 const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
   ordered: { label: 'business.loads.stage.ordered', tone: 'info' },
@@ -611,7 +612,11 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
           {row.agreedPrice != null ? (
             <div class="cons__fact">
               <dt class="cons__factk">{t('business.loads.fact.agreed')}</dt>
-              <dd class="cons__factv">{priced(row.agreedPrice, row.currency)}</dd>
+              <dd class="cons__factv">
+                {priced(row.agreedPrice, row.currency)}
+                {/* A match (2026-10-27): the business pays the driver directly — and, once the carrier says so, that it did. */}
+                {shipperPaidLine(row, t) ? <span class="biz-road__line chint">{shipperPaidLine(row, t)}</span> : null}
+              </dd>
             </div>
           ) : null}
           {row.deliveredAt ? (

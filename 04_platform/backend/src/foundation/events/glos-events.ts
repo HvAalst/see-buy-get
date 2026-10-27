@@ -142,6 +142,7 @@ export const GlosEvent = {
     FreightPosted: 'pudo.freight_posted',
     FreightAssigned: 'pudo.freight_assigned',
     FreightInstructed: 'pudo.freight_instructed',
+    FreightPaidDirect: 'pudo.freight_paid_direct', // a load settled between the parties: its carrier says the shipper paid it (2026-10-27); the shipper is told
     FreightHandedBack: 'pudo.freight_handed_back', // FP8 — a driver gave a claimed load back before pickup; the sender (and the office that put it on them) is told // FP7 — the sender's instructions changed on a load a driver holds; the driver is told // FP5 — the fleet office put a load on one of its drivers; the driver is told
     NoteFrozen: 'pudo.note_frozen', // a copy of a consignment note was frozen — the trigger for delivering the bundle to a party's own storage
     NoteExpiringSoon: 'pudo.note_expiring_soon', // a consignment note reaches the end of its retention window — the parties are told while they can still export it

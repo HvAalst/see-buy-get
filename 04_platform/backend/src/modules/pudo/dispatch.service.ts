@@ -178,6 +178,8 @@ export interface DriverJobRow {
   paid: boolean; // driverPaid
   /** B2 — the shipper pays the carrier for this one directly; nothing is owed by us, now or later. */
   direct?: boolean;
+  /** …and the driver, or their fleet's office, said it was paid, at this time (2026-10-27). */
+  paidDirectAt?: string;
   /** FP8 — what an upheld claim took back from that pay. */
   clawback?: number;
   claimedAt?: string;
@@ -191,7 +193,7 @@ function jobDate(f: Freight): string {
 }
 
 export function driverJobRowOf(f: Freight): DriverJobRow {
-  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, ...(f.lockedCurrency ? { currency: f.lockedCurrency } : {}), paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
+  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, ...(f.lockedCurrency ? { currency: f.lockedCurrency } : {}), paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.paidDirect ? { paidDirectAt: f.paidDirect.at } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
 }
 
 export interface DriverJobsSummary {
@@ -314,10 +316,17 @@ export function lockedCurrencyOf(f: Pick<Freight, 'lockedCurrency'>): string {
   return f.lockedCurrency ?? NETWORK_CURRENCY;
 }
 
+/** The register's "paid" column: by us, by the shipper (and when the carrier said it was), or not yet. */
+function paidWord(f: Freight): string {
+  if (f.driverPaid) return 'yes';
+  if (f.settlement !== 'between_parties') return 'no';
+  return f.paidDirect ? `by the shipper, confirmed ${f.paidDirect.at.slice(0, 10)}` : 'by the shipper';
+}
+
 export function fleetJobsToCsv(rows: Freight[], nameOf: (did: string) => string): string {
   return toCsv(
     ['Driver', 'Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Currency', 'Booked', 'Claimed', 'Delivered'],
-    rows.map((f) => [nameOf(f.claimedBy ?? ''), f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : lockedCurrencyOf(f), f.driverPaid ? 'yes' : f.settlement === 'between_parties' ? 'by the shipper' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+    rows.map((f) => [nameOf(f.claimedBy ?? ''), f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : lockedCurrencyOf(f), paidWord(f), f.claimedAt ?? '', f.deliveredAt ?? '']),
   );
 }
 
@@ -334,7 +343,7 @@ function filterJobsFor(rows: Freight[], mine: (f: Freight) => boolean, q: Driver
 export function driverJobsToCsv(rows: Freight[]): string {
   return toCsv(
     ['Job', 'Description', 'Destination', 'Status', 'Class', 'Weight kg', 'Earning', 'Currency', 'Paid', 'Claimed', 'Delivered'],
-    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : lockedCurrencyOf(f), f.driverPaid ? 'yes' : f.settlement === 'between_parties' ? 'by the shipper' : 'no', f.claimedAt ?? '', f.deliveredAt ?? '']),
+    rows.map((f) => [f.code, f.description, f.destLabel, f.status, f.cargoClass, f.weightKg, f.lockedPrice ?? '', f.lockedPrice == null ? '' : lockedCurrencyOf(f), paidWord(f), f.claimedAt ?? '', f.deliveredAt ?? '']),
   );
 }
 
@@ -1743,6 +1752,9 @@ export class DispatchService {
         ...(f.refusal ? { refusal: f.refusal, canDecideRefusal: (f.status === 'in_transit' || (f.status === 'delivered' && Boolean(f.refusal.part))) && !f.refusal.decision, pickupLabel: f.pickupLabel } : {}),
         ...(f.returnOf ? { returnOf: f.returnOf } : {}),
         ...(f.bringsBack ? { bringsBack: f.bringsBack } : {}),
+        // A match (2026-10-27): the poster pays the driver directly — and, once the driver says so, that it was paid.
+        ...(f.settlement === 'between_parties' ? { paysDriverDirect: true } : {}),
+        ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}),
         // Made by this business, or by the one the load was sent to (under a term that passed it the risk).
         ...(f.claim ? { claim: { ...f.claim, by: this.claimRaisedBy(f) } } : {}),
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
@@ -3693,6 +3705,27 @@ export class DispatchService {
    * as if untouched — except that the hand-back is on the record, with the reason, and the sender and the
    * office that assigned it are told. From pickup on the goods are on the truck and this is no longer the word.
    */
+  /**
+   * THE CARRIER SAYS IT WAS PAID (the user, 2026-10-27: "Driver ticks 'paid'"). On a load settled between the parties the
+   * shipper pays the carrier directly, at the price agreed here; the driver it is on — or the office of the fleet that
+   * carries it — says it was paid, and when. Their word, on the record for both sides: the shipper sees it on its load and is
+   * told. No money moves through us and nothing on our books changes. Said once: a second tick answers with the first.
+   */
+  confirmPaidDirect(freightId: string, by: 'driver' | 'office', now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.settlement !== 'between_parties') throw new GlosError('INVALID_STATE', 'SeeBuyGet pays the carrier for this load — there is no payment between you and the shipper to confirm');
+    if (f.paidDirect) return f;
+    if (!(f.status === 'claimed' || f.status === 'in_transit' || f.status === 'delivered') || f.lockedPrice == null) {
+      throw new GlosError('INVALID_STATE', `This load is ${f.status}: a payment is confirmed on a load a driver has taken, at the price agreed`);
+    }
+    f.paidDirect = { at: new Date(now).toISOString(), amount: f.lockedPrice, currency: lockedCurrencyOf(f), by };
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightPaidDirect, { freightId: f.freightId, code: f.code, amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, driverName: this.driverNameOf(f.claimedBy ?? ''), posterDid: this.senderDidOf(f), destLabel: f.destLabel }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
+  }
+
   handBack(freightId: string, driverDid: string, reason: string, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     const why = (reason ?? '').trim();
@@ -4302,7 +4335,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

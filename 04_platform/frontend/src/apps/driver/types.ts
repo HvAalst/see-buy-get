@@ -2,6 +2,7 @@ import type { BorderAdviceView } from './border';
 import type { PassageForDriver } from './passage';
 import type { SealToFind } from '../../shared/seals';
 import type { UnitHold } from '../../shared/tamper';
+import type { PaidDirectView } from '../../shared/paidDirect';
 /**
  * Local view types for the driver app.
  *
@@ -72,6 +73,8 @@ export interface DriverJobRow {
   paid: boolean;
   /** B2 — the shipper pays the carrier for this haul directly; nothing is owed by SeeBuyGet. */
   direct?: boolean;
+  /** …and the driver, or their fleet's office, said it was paid, at this time (2026-10-27). */
+  paidDirectAt?: string;
   /** FP8 — what an upheld claim took back from that pay. The earning above is what was agreed; net is the difference. */
   clawback?: number;
   claimedAt?: string;
@@ -265,6 +268,8 @@ export interface Claimable {
   collectAtHub?: { parcelId: string; hubName: string; handed: boolean };
   /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */
   paidByShipper?: boolean;
+  /** …and the driver, or their fleet's office, said it was paid: when and how much. */
+  paidDirect?: PaidDirectView;
   /** A return: refused goods carried on as this new load — the load they were refused on. */
   returnOf?: { freightId: string; code: string };
   /** Round 37 — a bag, to the driver holding it: how it was closed (never the number), what a reading is checked against, read yet. */

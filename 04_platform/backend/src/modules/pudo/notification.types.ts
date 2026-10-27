@@ -170,6 +170,8 @@ export const NOTIFICATION_KINDS = [
    * delivered and what goes back to their number, no driver yet, or the time to pay ran out. In their app, never a text.
    */
   'door_delivery',
+  /** A load the poster pays its driver for directly: the driver, or their fleet's office, says it was paid (2026-10-27). To the poster. */
+  'freight_paid_direct',
   /** A fleet offered this driver a place, or took the offer back. Only the driver can answer it, so only they are told. */
   'fleet_offer',
   /**

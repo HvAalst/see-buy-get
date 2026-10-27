@@ -5977,6 +5977,23 @@ export class SbgController {
     return { freightId: out.freightId, code: out.code, status: out.status };
   }
 
+  /**
+   * THE CARRIER SAYS IT WAS PAID (the user, 2026-10-27: "Driver ticks 'paid'"): on a load the shipper pays its carrier for
+   * directly, the driver it is on — or the office of their fleet — says the price agreed here was paid. Their word, never
+   * staff's: a member of staff cannot say somebody else was paid. Nothing moves through us.
+   */
+  @Roles('driver', 'fleet_manager')
+  @Post('dispatch/freight/:id/paid-direct')
+  paidDirectFreight(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the driver it is on, or their fleet’s office, says they were paid');
+    const f = this.dispatch.requireFreightPublic(id);
+    // The office of the fleet it was taken FOR (the carrier of record, fixed at the claim), whoever the driver drives for now.
+    const by = actor?.did && actor.did === f.claimedBy ? 'driver' : this.isFleetOffice(actor, this.dispatch.carrierOf(f)) ? 'office' : undefined;
+    if (!by) throw new GlosError('FORBIDDEN', 'This load is not on you');
+    const out = this.dispatch.confirmPaidDirect(id, by);
+    return { freightId: out.freightId, code: out.code, paidDirect: out.paidDirect };
+  }
+
   /** FP8 — the driver's own hours, as the app says them: on duty, the limit, whether it is passed. */
   @Roles('driver', 'fleet_manager', 'operator')
   @Get('fleet/drivers/:did/hours')

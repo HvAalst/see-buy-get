@@ -28,6 +28,8 @@ import { FINDING_WORDS, type TamperFinding } from './tamper.types';
 import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancelReason } from './departure.types';
 
 /* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
+/** A load the poster pays its driver for directly: its carrier says it was paid (2026-10-27). */
+interface FreightPaidDirectEvent { freightId: string; code: string; amount: number; currency: string; by: 'driver' | 'office'; driverName?: string; posterDid?: string; destLabel?: string }
 interface SpaceSold { departureId: string; bookingId: string; managerDid: string; lineName: string; shipperDid: string; description: string; weightKg: number; price: number; currency: string }
 interface VehicleChanged { departureId: string; managerDid: string; company: string; lineName: string; fromPlate: string; toPlate: string; fromClass: string; toClass: string; shippers: string[] }
 interface FleetChange { driverDid: string; driverName: string; fromManagerDid?: string; toManagerDid: string; toCompany: string }
@@ -403,6 +405,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; byName?: string; pickupLabel: string; destLabel: string; weightKg: number; earning?: number }>(GlosEvent.Pudo.FreightAssigned, (e) => this.onFreightAssigned(e.payload));
     // FP8 (sender + office) — a driver gave a claimed load back: it is on the market again, and here is why.
     this.events.subscribe<{ freightId: string; code: string; driverName?: string; reason: string; posterDid?: string; managerDid?: string; destLabel?: string }>(GlosEvent.Pudo.FreightHandedBack, (e) => this.onFreightHandedBack(e.payload));
+    // A load the poster pays its driver for directly: the driver, or their fleet's office, says it was paid (2026-10-27).
+    this.events.subscribe<FreightPaidDirectEvent>(GlosEvent.Pudo.FreightPaidDirect, (e) => this.onFreightPaidDirect(e.payload));
     // FP7 (driver) — the sender changed the instructions on a load they hold: what to do at the door has changed.
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; amended: boolean; text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }>(GlosEvent.Pudo.FreightInstructed, (e) => this.onFreightInstructed(e.payload));
     // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
@@ -960,6 +964,24 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-assigned notify failed for ${payload.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** To the poster: the carrier says it was paid the price agreed for this load. Their word, on the load for both sides. */
+  private async onFreightPaidDirect(p: FreightPaidDirectEvent): Promise<void> {
+    if (!p.posterDid) return;
+    const who = p.by === 'office' ? `${p.driverName ? `${p.driverName}’s` : 'The driver’s'} fleet` : (p.driverName ?? 'The driver');
+    try {
+      await this.notifications.notify(p.posterDid, {
+        kind: 'freight_paid_direct',
+        title: `Load ${p.code}: the driver says they were paid`,
+        body: `${who} says you paid ${p.currency} ${p.amount.toLocaleString('en')} for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''}, the price agreed. It is on the load for you both. SeeBuyGet carries no money for this load.`,
+        link: '/',
+        tag: `freight:${p.freightId}:paid-direct`,
+        data: { freightId: p.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`freight-paid-direct notify failed for ${p.freightId}: ${(err as Error).message}`);
     }
   }
 

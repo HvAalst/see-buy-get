@@ -551,6 +551,7 @@ export const enDriver = {
   'driver.earn.paid': 'Paid',
   'driver.earn.owed': 'Owed',
   'driver.earn.direct': 'The shipper pays you',
+  'driver.earn.paidDirectLine': 'The shipper paid — said on {when}',
   'driver.paidByShipper': 'The shipper pays you directly, at the price agreed here. SeeBuyGet pays nothing for this load.',
   'driver.earn.dateChip': '{from} → {to}',
   'driver.earn.filterTitle': 'Filter jobs',

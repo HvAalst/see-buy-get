@@ -16623,6 +16623,28 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/paid-direct": {
+      "post": {
+        "operationId": "Sbg.paidDirectFreight",
+        "summary": "",
+        "description": "THE CARRIER SAYS IT WAS PAID (the user, 2026-10-27: \"Driver ticks 'paid'\"): on a load the shipper pays its carrier for\ndirectly, the driver it is on — or the office of their fleet — says the price agreed here was paid. Their word, never\nstaff's: a member of staff cannot say somebody else was paid. Nothing moves through us.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/hours": {
       "get": {
         "operationId": "Sbg.driverHours",
@@ -47580,6 +47602,34 @@
           "txId"
         ]
       },
+      "PaidDirect": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who said so: the driver it was on, or the office of the fleet that carried it.",
+            "enum": [
+              "driver",
+              "office"
+            ]
+          },
+          "at": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "description": "The price agreed here: what the carrier says it was paid."
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "amount"
+        ]
+      },
       "ClientRef": {
         "type": "object",
         "properties": {
@@ -48398,6 +48448,14 @@
             "description": "B2 — WHO SETTLES THIS HAUL, stamped when it is posted and never re-derived.\n\n`between_parties`: the shipper pays the carrier directly, or through its own payment network, and nothing is\naccrued for the carrier on any of our books at delivery. Every load a customer's business posts is this (the\nuser, 2026-10-04: \"we don't handle their payments at all\"). Absent: the network's older rule — a carrier we\ncontract with is owed their earning on delivery whoever the shipper was.",
             "enum": [
               "between_parties"
+            ]
+          },
+          "paidDirect": {
+            "description": "Settled between the parties, and the carrier says it was paid: when, how much (the price agreed here), and who said so.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaidDirect"
+              }
             ]
           },
           "postedByName": {
@@ -53153,6 +53211,18 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/LoadArrival"
+              }
+            ]
+          },
+          "paysDriverDirect": {
+            "type": "boolean",
+            "description": "A match: the poster pays the driver directly, at the price agreed here — SeeBuyGet holds no money for it."
+          },
+          "paidDirect": {
+            "description": "…and the driver, or their fleet's office, says it was paid: when and how much. Their word, not ours.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaidDirect"
               }
             ]
           },

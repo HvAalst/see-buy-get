@@ -1344,6 +1344,21 @@ export function useFleetApp() {
     [client, managerDid, run, fail, refresh],
   );
 
+  /** A haul the shipper pays the fleet for directly: the office says it was paid, the price agreed (the user, 2026-10-27:
+   *  "Driver ticks 'paid'" — the driver, or the office of the fleet that carries it). The shipper sees it, with the time. */
+  const sayPaid = useCallback(
+    async (freightId: string) => {
+      if (!client) return;
+      await run(`paid:${freightId}`, async () => {
+        const r = await client.api.paidDirect(freightId);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('common.paidDirect.toast'), detail: t('common.paidDirect.toastDetail') });
+        void fetchEarningsWith(stateRef.current.earnQuery);
+      });
+    },
+    [client, run, fail, pushToast, fetchEarningsWith],
+  );
+
   const uncouple = useCallback(
     async (driverDid: string) => {
       if (!client) return;
@@ -1417,6 +1432,7 @@ export function useFleetApp() {
       waiveWait,
       queryEarnings,
       exportEarnings,
+      sayPaid,
       openDispatch,
       setDispatchDriver,
       setDispatchRadius,

@@ -13,6 +13,7 @@ import { utcMoment } from '../../../shared/refusal';
 import { OffersSection } from './OffersSection';
 import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
 import { money } from '../logic';
+import { shipperPaidLine } from '../../../shared/paidDirect';
 
 export interface FreightScreenProps {
   state: AgentState;
@@ -130,6 +131,8 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
         <span class="row__s">{t('agent.freight.statusLine', { status: f.status.replace('_', ' '), kg: f.weightKg, dest: f.destLabel })}</span>
         {f.maxSpend != null ? <span class="row__s">{t('agent.freight.budget', { amount: money(f.maxSpend, f.currency) })}</span> : null}
         {f.agreedPrice != null ? <span class="row__s">{t('agent.freight.agreed', { amount: money(f.agreedPrice, f.currency) })}</span> : null}
+        {/* A match (2026-10-27): the shop pays the driver directly — and, once the carrier says so, that it did. */}
+        {f.agreedPrice != null && shipperPaidLine(f, t) ? <span class="row__s">{shipperPaidLine(f, t)}</span> : null}
         {f.scheduledPickupAt ? <span class="row__s">{formatDate(f.scheduledPickupAt)}</span> : null}
         {/* FP3 — what became of it: who signed for the goods, or that the shop withdrew it. */}
         {f.receiverName && f.deliveredAt ? <span class="row__s">{t('agent.freight.receivedBy', { name: f.receiverName, when: formatDate(f.deliveredAt) })}</span> : null}

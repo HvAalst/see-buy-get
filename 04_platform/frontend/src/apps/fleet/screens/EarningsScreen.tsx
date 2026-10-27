@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Chip, DocumentButton, ErrorNote, Explainer, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
+import { Button, Card, Chip, DocumentButton, ErrorNote, Explainer, GlanceNumber, Icon, PaidDirectSheet, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
+import { maySayPaid, paidWhen } from '../../../shared/paidDirect';
 import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EARN_LIMIT, type EarningsQuery, type FleetActions, type FleetState } from '../useFleetApp';
@@ -48,6 +49,7 @@ const statusWord = (status: string, t: Translate) => (STATUS_WORD_KEYS[status] ?
 export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   const t = useT();
   const [filterOpen, setFilterOpen] = useState(false);
+  const [paidFor, setPaidFor] = useState<FleetJobRow | null>(null); // a haul the shipper pays the fleet for directly, being said paid
   const [searchText, setSearchText] = useState(state.earnQuery.q);
   const debounced = useDebounced(searchText, 300);
   const q = state.earnQuery;
@@ -173,7 +175,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
           ) : (
             <div class={`rows${state.earnState === 'loading' ? ' rows--loading' : ''}`} role="list">
               {state.earnRows.map((j) => (
-                <JobRow key={j.freightId} j={j} currency={currency} actions={actions} />
+                <JobRow key={j.freightId} j={j} currency={currency} actions={actions} onSayPaid={() => setPaidFor(j)} />
               ))}
             </div>
           )}
@@ -191,6 +193,19 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => (sum ? t('fleet.earn.aloud', { earned: money(sum.earned, currency), owed: money(sum.settlement?.owed ?? 0, currency), settled: money(sum.settlement?.settled ?? 0, currency) }) : t('fleet.earn.aloudEmpty'))} label={t('fleet.readAloud')} />
       </div>
+
+      <PaidDirectSheet
+        open={!!paidFor}
+        office
+        code={paidFor?.code ?? ''}
+        amount={paidFor ? money(paidFor.earning, paidFor.currency ?? currency) : ''}
+        busy={Boolean(paidFor) && state.busy === `paid:${paidFor?.freightId}`}
+        onYes={() => {
+          const j = paidFor;
+          if (j) void actions.sayPaid(j.freightId).then(() => setPaidFor(null));
+        }}
+        onClose={() => setPaidFor(null)}
+      />
 
       <FilterSheet
         open={filterOpen}
@@ -210,7 +225,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   );
 }
 
-function JobRow({ j, currency, actions }: { j: FleetJobRow; currency?: string; actions: FleetActions }) {
+function JobRow({ j, currency, actions, onSayPaid }: { j: FleetJobRow; currency?: string; actions: FleetActions; onSayPaid: () => void }) {
   const t = useT();
   const when = j.deliveredAt ?? j.claimedAt;
   return (
@@ -229,6 +244,15 @@ function JobRow({ j, currency, actions }: { j: FleetJobRow; currency?: string; a
         </span>
         {/* FP8 — an upheld claim took part of this haul's pay back. */}
         {j.clawback ? <span class="row__meta row__s--danger">{t('fleet.earn.clawbackLine', { amount: money(j.clawback, j.currency ?? currency) })}</span> : null}
+        {/* A haul the shipper pays the fleet for directly (2026-10-27): said paid, when — or the button to say so once it is. */}
+        {j.paidDirectAt ? <span class="row__meta">{t('fleet.earn.paidDirectLine', { when: paidWhen(j.paidDirectAt) })}</span> : null}
+        {maySayPaid(j) ? (
+          <span class="row__meta">
+            <Button variant="link" full={false} onClick={onSayPaid}>
+              {t('common.paidDirect.askOffice')}
+            </Button>
+          </span>
+        ) : null}
         <span class="row__meta">
           <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(j.freightId)} />
         </span>

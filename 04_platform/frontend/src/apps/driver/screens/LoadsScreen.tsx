@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, HubReach, Icon, Note, OpenInMaps, PhotoField, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { DocumentButton, Button, Card, CheckGate, Checklist, ErrorNote, GlanceNumber, HubReach, Icon, Note, OpenInMaps, PaidDirectSheet, PhotoField, Pill, ReadAloud, ScanField, Sheet } from '../../../shared/ui';
+import { paidDirectLine } from '../../../shared/paidDirect';
 import { capLine } from '../../../shared/custodyCap';
 import { LoadFinderContext, useLoadFinder, type LoadFinder } from '../../../shared/loadFinder';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
@@ -38,6 +39,7 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
   const [tempFor, setTempFor] = useState<Claimable | null>(null); // S33b — the freight whose temperature we're logging
   const [passage, setPassage] = useState<{ claim: Claimable; kind: PassageKind } | null>(null); // round 14 — a border or a hub being said
   const [brokenFor, setBrokenFor] = useState<Claimable | null>(null); // round 15 — a seal found broken on the road
+  const [paidFor, setPaidFor] = useState<Claimable | null>(null); // a load the shipper pays for directly, being said paid
   const [tamper, setTamper] = useState<TamperTarget | null>(null); // round 35 — tampering found: the load held, operations told
   const [heldFor, setHeldFor] = useState<Claimable | null>(null); // held by the police or customs: being said
   const [readFor, setReadFor] = useState<Claimable | null>(null); // round 37 — a bag loaded onto them by their pass, to read
@@ -120,7 +122,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {/* A store's parcel called off at a hub, to its door (2026-10-27): collected at the hub's counter, by the pass. */}
                   {c.collectAtHub && !c.collectAtHub.handed ? <span class="load__warn">{t('driver.loads.collectAtHub', { parcel: c.collectAtHub.parcelId, hub: c.collectAtHub.hubName })}</span> : null}
                   {c.returnOf ? <span class="load__meta">{t('driver.loads.returnOf', { code: c.returnOf.code })}</span> : null}
-                  {c.paidByShipper ? <span class="load__meta">{t('driver.paidByShipper')}</span> : null}
+                  {/* A match: the shipper pays the driver directly — and, once said, that it did (2026-10-27). */}
+                  {c.paidByShipper ? <span class="load__meta">{c.paidDirect ? paidDirectLine(c.paidDirect, t, state.session.currency) : t('driver.paidByShipper')}</span> : null}
                   {/* Round 37 — loaded onto them by their pass, its seal not read yet: received nowhere until it is. */}
                   {control === 'onboard' && c.bagSeal && !c.bagSeal.taken && !c.held ? <span class="load__warn">{t('driver.bag.notRead')}</span> : null}
                 </span>
@@ -186,6 +189,14 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {control === 'deliver' && c.passage ? <PassageStrip claim={c} state={state} onSay={(kind) => setPassage({ claim: c, kind })} onBroken={() => setBrokenFor(c)} /> : null}
                   {/* Held by the police or customs on the road — and let go. */}
                   {control === 'deliver' ? <HeldStrip claim={c} state={state} actions={actions} onSay={() => setHeldFor(c)} /> : null}
+                  {/* A match (the user, 2026-10-27: "Driver ticks 'paid'"): once the shipper has paid, the driver says so — on the record for both. */}
+                  {c.paidByShipper && !c.paidDirect && c.lockedPrice != null ? (
+                    <div class="load__nav">
+                      <Button full={false} onClick={() => setPaidFor(c)}>
+                        {t('common.paidDirect.ask')}
+                      </Button>
+                    </div>
+                  ) : null}
                   {/* FP2 — the consignment note travels with the load; the driver can show it at any gate. */}
                   <div class="load__nav">
                     <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(c.ref)} kept={state.driver?.did ? { get: () => keptPaper(state.driver!.did, c.ref), put: (html) => keepPaper(state.driver!.did, c.ref, html, c.status) } : undefined} />
@@ -249,6 +260,18 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
       <div class="scr__foot">
         <ReadAloud text={() => loadsSummary(state.claims, state.remaining, t)} />
       </div>
+
+      <PaidDirectSheet
+        open={!!paidFor}
+        code={paidFor?.code ?? paidFor?.ref ?? ''}
+        amount={paidFor ? cash(paidFor.lockedPrice, state.session.currency) : ''}
+        busy={Boolean(paidFor) && state.busy === `paid:${paidFor?.ref}`}
+        onYes={() => {
+          const c = paidFor;
+          if (c) void actions.sayPaid(c.ref).then(() => setPaidFor(null));
+        }}
+        onClose={() => setPaidFor(null)}
+      />
 
       <Sheet open={!!pick} onClose={() => setPick(null)} title={t('driver.loads.pickSheetTitle')}>
         {pick ? (

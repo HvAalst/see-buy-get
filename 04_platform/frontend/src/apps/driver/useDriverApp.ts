@@ -1880,6 +1880,22 @@ export function useDriverApp() {
     [client, run, fail, pushToast, refresh],
   );
 
+  /** A load the shipper pays them for directly: they say it was paid, the price agreed (the user, 2026-10-27: "Driver ticks
+   *  'paid'"). On the record for both sides; their loads and their register read it back. */
+  const sayPaid = useCallback(
+    async (ref: string) => {
+      if (!client) return;
+      await run(`paid:${ref}`, async () => {
+        const r = await client.api.paidDirect(ref);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'check', title: t('common.paidDirect.toast'), detail: t('common.paidDirect.toastDetail') });
+        await refresh();
+        void fetchJobsWith(stateRef.current.jobsQuery);
+      });
+    },
+    [client, run, fail, pushToast, refresh, fetchJobsWith],
+  );
+
   /** S33b — log a temperature reading for a cold-chain freight in transit. An out-of-band reading warns the
    *  driver (and flags the load for the control tower). */
   const logTemp = useCallback(
@@ -2181,6 +2197,7 @@ export function useDriverApp() {
       deliverFreight,
       failDelivery,
       handBack,
+      sayPaid,
       logTemp,
       sayPassage,
       sayHeld,

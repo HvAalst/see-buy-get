@@ -487,6 +487,19 @@ export class InboundReceiver {
   siteName: string;
 }
 
+/**
+ * A LOAD SETTLED BETWEEN THE PARTIES, PAID (the user, 2026-10-27: "Driver ticks 'paid'"): the carrier says the shipper paid it the
+ * price agreed here, and when. Their word, on the record for both sides; no money moved through SeeBuyGet.
+ */
+export class PaidDirect {
+  at: string;
+  /** The price agreed here: what the carrier says it was paid. */
+  amount: number;
+  @ApiPropertyOptional() currency?: string;
+  /** Who said so: the driver it was on, or the office of the fleet that carried it. */
+  @ApiProperty({ enum: ['driver', 'office'] }) by: 'driver' | 'office';
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -722,6 +735,8 @@ export class Freight {
    * contract with is owed their earning on delivery whoever the shipper was.
    */
   @ApiPropertyOptional({ enum: ['between_parties'] }) settlement?: 'between_parties';
+  /** Settled between the parties, and the carrier says it was paid: when, how much (the price agreed here), and who said so. */
+  @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
   /** Which person in a business posted it — the business's DID is shared by everybody in it. */
   @ApiPropertyOptional() postedByName?: string;
   /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
@@ -1458,6 +1473,10 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: ColdChainBreachView }) coldChainBroken?: ColdChainBreachView;
   /** Round 26 — in one country, on the road: when it is expected, and the pace that rests on. Absent where its carrier's plan has the hour. */
   @ApiPropertyOptional({ type: LoadArrival }) arrival?: LoadArrival;
+  /** A match: the poster pays the driver directly, at the price agreed here — SeeBuyGet holds no money for it. */
+  @ApiPropertyOptional() paysDriverDirect?: boolean;
+  /** …and the driver, or their fleet's office, says it was paid: when and how much. Their word, not ours. */
+  @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
 }
 
 /** FP3b — what the sender gets back for opening a claim. */
@@ -1569,6 +1588,8 @@ export class Claimable {
    * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.
    */
   @ApiPropertyOptional() paidByShipper?: boolean;
+  /** …and the driver, or their fleet's office, said it was paid: when and how much. Until then the driver may say so. */
+  @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
   /** Freight crossing a border whose shipper has not yet signed its commercial invoice: it cannot be taken over yet. */
   invoiceMissing?: boolean;
   /** Round 38 — the load's commercial invoice is this driver's to show at the border: across one, from pickup on. */

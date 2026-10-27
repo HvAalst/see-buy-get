@@ -228,6 +228,8 @@ export interface FleetJobRow {
   paid: boolean;
   /** B2 — the shipper pays the carrier for this haul directly; nothing is owed by SeeBuyGet. */
   direct?: boolean;
+  /** …and the driver, or the office, said it was paid, at this time (2026-10-27). */
+  paidDirectAt?: string;
   /** FP8 — what an upheld claim took back from this haul's pay. */
   clawback?: number;
   claimedAt?: string;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Chip, ErrorNote, GlanceNumber, Icon, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
+import { Button, Card, Chip, ErrorNote, GlanceNumber, Icon, PaidDirectSheet, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
+import { maySayPaid, paidWhen } from '../../../shared/paidDirect';
 import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { cash, settlementLines } from '../logic';
@@ -47,6 +48,7 @@ function statusWord(status: string, t: Translate): string {
 export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   const t = useT();
   const [filterOpen, setFilterOpen] = useState(false);
+  const [paidFor, setPaidFor] = useState<DriverJobRow | null>(null); // a haul the shipper pays for directly, being said paid
   const [searchText, setSearchText] = useState(state.jobsQuery.q);
   const debounced = useDebounced(searchText, 300);
   const q = state.jobsQuery;
@@ -128,7 +130,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
           ) : (
             <div class={`rows${state.jobsState === 'loading' ? ' rows--loading' : ''}`} role="list">
               {state.jobs.map((j) => (
-                <JobRow key={j.freightId} j={j} currency={currency} />
+                <JobRow key={j.freightId} j={j} currency={currency} onSayPaid={() => setPaidFor(j)} />
               ))}
             </div>
           )}
@@ -147,12 +149,23 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
         <ReadAloud text={() => (sum ? t('driver.earn.aloud', { earned: cash(sum.earned, currency), paid: cash(sum.paid, currency), unpaid: cash(sum.unpaid, currency), delivered: sum.delivered }) : t('driver.earn.aloudEmpty'))} label={t('driver.readAloud')} />
       </div>
 
+      <PaidDirectSheet
+        open={!!paidFor}
+        code={paidFor?.code ?? ''}
+        amount={paidFor ? cash(paidFor.earning, paidFor.currency ?? currency) : ''}
+        busy={Boolean(paidFor) && state.busy === `paid:${paidFor?.freightId}`}
+        onYes={() => {
+          const j = paidFor;
+          if (j) void actions.sayPaid(j.freightId).then(() => setPaidFor(null));
+        }}
+        onClose={() => setPaidFor(null)}
+      />
       <JobFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} query={q} onApply={(patch) => { actions.queryJobs(patch); setFilterOpen(false); }} onClearAll={() => { resetAll(); setFilterOpen(false); }} />
     </div>
   );
 }
 
-function JobRow({ j, currency }: { j: DriverJobRow; currency?: string }) {
+function JobRow({ j, currency, onSayPaid }: { j: DriverJobRow; currency?: string; onSayPaid: () => void }) {
   const t = useT();
   const when = j.deliveredAt ?? j.claimedAt;
   return (
@@ -169,6 +182,15 @@ function JobRow({ j, currency }: { j: DriverJobRow; currency?: string }) {
         </span>
         {/* FP8 — an upheld claim took part of this pay back. The agreed figure stays; the line says what left. */}
         {j.clawback ? <span class="row__meta row__s--danger">{t('driver.earn.clawbackLine', { amount: cash(j.clawback, j.currency ?? currency) })}</span> : null}
+        {/* A haul the shipper pays for directly (2026-10-27): said paid, when — or the button to say so once it is. */}
+        {j.paidDirectAt ? <span class="row__meta">{t('driver.earn.paidDirectLine', { when: paidWhen(j.paidDirectAt) })}</span> : null}
+        {maySayPaid(j) ? (
+          <span class="row__meta">
+            <Button variant="link" full={false} onClick={onSayPaid}>
+              {t('common.paidDirect.ask')}
+            </Button>
+          </span>
+        ) : null}
       </span>
       <span class="row__end">
         <b class="amt amt--in">{cash(j.earning, j.currency ?? currency)}</b>

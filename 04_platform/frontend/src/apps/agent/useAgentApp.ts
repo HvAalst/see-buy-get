@@ -30,6 +30,7 @@ import type { GeoPoint } from '../../shared/geo';
 import { peopleApi } from './people';
 import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from './staff';
 import { setOutboxActor } from '../../shared/outbox';
+import type { PaidDirectView } from '../../shared/paidDirect';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import type {
   AgentLedgerRow,
@@ -107,6 +108,9 @@ export interface PostedFreight {
   canRate: boolean;
   /** FP8 — the times a driver handed this load back before pickup, oldest first. Reason and time only. */
   handBacks?: Array<{ reason: string; at: string }>;
+  /** A match: the shop pays the driver from the customer's cash — and, once the carrier says so, that it was paid (2026-10-27). */
+  paysDriverDirect?: boolean;
+  paidDirect?: PaidDirectView;
   /** CL1 — the agreed term, the place it names, and who a loss in transit belongs to. */
   incoterm?: string;
   namedPlace?: string;

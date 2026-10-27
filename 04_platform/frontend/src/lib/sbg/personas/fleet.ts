@@ -18,6 +18,8 @@ export function createFleetApi(sbg: SbgClient) {
 
     /** FP2 — the consignment note of a load one of the fleet's drivers carried. */
     freightNote: (freightId: string) => sbg.request((c) => c.GET('/v1/sbg/dispatch/freight/{id}/consignment-note.html', { params: { path: { id: freightId } }, parseAs: 'text' })),
+    /** A haul the shipper pays the fleet for directly: the office says it was paid, the price agreed (2026-10-27). */
+    paidDirect: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/paid-direct', { params: { path: { id: freightId } } })),
 
     /** FP1 — the fleet's earnings register: every driver's hauls, paged; the totals by driver and month + the money; CSV. */
     earnings: (did: string, query: Record<string, string | undefined>) =>
