@@ -39,6 +39,12 @@ export class LoadPostingService {
   ) {}
 
   post(dto: RegisterFreightDto, actor: IntrospectionResult, checkOnly = false): Freight {
+    // A PERSON HAS NO WAY TO PAY FOR A LOAD YET (found 2026-10-27): posted here from the Send app, it was a load nobody is
+    // billed for and the network pays its driver at delivery — the free freight IdentityController already refuses for a send
+    // too big for a parcel. Refused before anything is worked out.
+    if (actor?.role === 'consumer') {
+      throw new GlosError('FORBIDDEN', 'Booking your own freight in the Send app is coming. Until then, a shop books it at its counter, or a business posts it.');
+    }
     // FB0b — the DTO carries dimensions as {l,w,h} (the shape every other measured route uses); the service
     // takes the orientation-free tuple. Convert here, as createInbound/accept already do.
     const dimensionsCm: [number, number, number] | undefined = dto.dimensionsCm ? [dto.dimensionsCm.l, dto.dimensionsCm.w, dto.dimensionsCm.h] : undefined;
