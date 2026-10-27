@@ -94,6 +94,20 @@ export function createMdpApi(sbg: SbgClient) {
     setCarriers: (mdpId: string, carriers: components['schemas']['HubCarrierInput'][]) =>
       sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/carriers', { params: { path: { id: mdpId } }, body: { carriers } })),
 
+    /** D11 — its carriers on the move: its own, away; other hubs', come to it. */
+    carrierMoves: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/carrier-moves', { params: { path: { id: mdpId } } })),
+
+    /** Carriers go with a driver (the pass scanned) to another hub, and how they come back. */
+    sendCarriers: (mdpId: string, body: components['schemas']['SendCarriersDto']) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/carrier-moves', { params: { path: { id: mdpId } }, body })),
+
+    /** The other hub did what was said: counted out to the driver (how many), taken in as left, or kept aside. */
+    carriersDone: (mdpId: string, moveId: string, count?: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/carrier-moves/{moveId}/done', { params: { path: { id: mdpId, moveId } }, body: count != null ? { count } : {} })),
+
+    /** The owner posts the return job for its carriers kept aside at another hub: what they weigh together. */
+    carrierReturnJob: (mdpId: string, moveId: string, weightKg: number) =>
+      sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/carrier-moves/{moveId}/return-job', { params: { path: { id: mdpId, moveId } }, body: { weightKg } })),
+
     /** Register a fresh laminated tote into this hub's pool. */
     newTote: (mdpId: string) => sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/totes', { params: { path: { id: mdpId } } })),
 

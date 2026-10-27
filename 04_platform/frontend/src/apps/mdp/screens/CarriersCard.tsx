@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { createMdpApi, narrow, type SbgClient, type SbgError } from '../../../lib/sbg';
 import { useT } from '../../../shared/i18n';
 import { Button, Card, ErrorNote, Icon, Note, refusalSentence, Sheet } from '../../../shared/ui';
+import { CarrierMovesCard } from './CarrierMovesCard';
 import { CARRIER_KINDS, CARRIER_MAX_KINDS, carrierForm, carrierHoldsLine, carrierInput, carrierSizeLine, listWith, type CarrierForm, type CarrierKind, type HubCarriersView, type HubCarrierView } from '../carriers';
 
 /**
@@ -55,6 +56,8 @@ export function CarriersCard({ sbg, mdpId, staff }: { sbg: SbgClient | null; mdp
           </div>
         )}
       </Card>
+      {/* D11 — its carriers on the move between hubs, and other hubs' come to it. */}
+      <CarrierMovesCard sbg={sbg} mdpId={mdpId} staff={staff} kinds={view.carriers} />
       {editing && api && mdpId ? (
         <CarrierSheet
           carrier={editing === 'new' ? undefined : editing}
@@ -129,7 +132,7 @@ function CarrierSheet({ carrier, onClose, save, onSaved }: { carrier?: HubCarrie
     await send({ put: made.input });
   };
 
-  const size = (id: 'lengthCm' | 'widthCm' | 'heightCm' | 'maxKg', label: string) => (
+  const size = (id: 'lengthCm' | 'widthCm' | 'heightCm' | 'maxKg' | 'emptyKg', label: string) => (
     <div class="field">
       <label class="field__label" for={`carrier-${id}`}>
         {label}
@@ -163,6 +166,7 @@ function CarrierSheet({ carrier, onClose, save, onSaved }: { carrier?: HubCarrie
       {size('widthCm', t('mdp.carriers.widthLabel'))}
       {size('heightCm', t('mdp.carriers.heightLabel'))}
       {size('maxKg', t('mdp.carriers.kgLabel'))}
+      {size('emptyKg', t('mdp.carriers.emptyLabel'))}
       {problem ? <Note tone="danger" icon="warning" title={problem} /> : null}
       <Button chevron={false} busy={busy} onClick={() => void submit()}>
         {t('mdp.carriers.save')}
