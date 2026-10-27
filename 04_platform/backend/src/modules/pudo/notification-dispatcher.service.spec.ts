@@ -823,6 +823,27 @@ describe('NotificationDispatcher — FP3b: the sender whose load could not be de
     expect(inbox[0].body).toContain('nobody was there to receive it — "Gate locked". The driver still has the goods.');
   });
 
+  it('tells the sender of goods refused at the door that it decides where they go, and by when — with no answer, back at its cost', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: 'frt_8', code: 'FRT-008', posterDid: 'did:shop:p', outcome: 'refused', note: 'Wrong colour', destLabel: 'Riverside Corner', attempts: 1, decideBy: '2026-10-29T08:00:00.000Z', pickupLabel: 'Depot' });
+    const [n] = notifications.inboxFor('did:shop:p');
+    expect(n).toMatchObject({ kind: 'freight_problem', title: 'Load FRT-008 was refused at the door' });
+    expect(n.body).toBe('The driver was at Riverside Corner and the receiver refused it — "Wrong colour". The driver keeps the goods until you say where they go: back to Depot, to another place, or given up — you pay the way. With no answer by 29 Oct at 08:00 UTC, they go back to Depot, at your cost.');
+  });
+
+  it('reminds the sender before the 48 hours end; tells the driver what to do with the goods, and the sender where the deadline sent them', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightRefusalReminder, { freightId: 'frt_8', code: 'FRT-008', decideBy: '2026-10-29T08:00:00.000Z', pickupLabel: 'Depot', destLabel: 'Riverside Corner', posterDid: 'did:shop:p' });
+    expect(notifications.inboxFor('did:shop:p')[0]).toMatchObject({ title: 'Load FRT-008: the refused goods go back by 29 Oct at 08:00 UTC', body: 'The goods refused at Riverside Corner go back to Depot by 29 Oct at 08:00 UTC, at your cost — unless you say they go to another place, or that you give them up.' });
+    await events.publish(GlosEvent.Pudo.FreightRefusalDecided, { freightId: 'frt_8', code: 'FRT-008', choice: 'back', byDeadline: true, driverDid: 'did:driver:d', posterDid: 'did:shop:p', destLabel: 'Depot', returnFreightId: 'frt_9', returnCode: 'FRT-009' });
+    expect(notifications.inboxFor('did:driver:d')[0]).toMatchObject({ kind: 'load_instructions', title: 'Load FRT-008: take the goods to Depot', body: 'No answer in 48 hours: they go back to where they were picked up. Carry the refused goods to Depot as load FRT-009 — it is in your loads, at your vehicle’s price. Deliver it as any other.' });
+    expect(notifications.inboxFor('did:shop:p')[0]).toMatchObject({ title: 'Load FRT-008: the refused goods are going back', body: 'With no answer in 48 hours, the goods refused at the door go back to Depot as load FRT-009, at your cost.' });
+    // Given up by the sender itself: the driver told what that means; the sender, who decided, is not told again.
+    await events.publish(GlosEvent.Pudo.FreightRefusalDecided, { freightId: 'frt_7', code: 'FRT-007', choice: 'give_up', byDeadline: false, driverDid: 'did:driver:e', posterDid: 'did:shop:q' });
+    expect(notifications.inboxFor('did:driver:e')[0].body).toBe('The sender gave the refused goods up. The receiver may keep them if it will; otherwise your company disposes of them, and any cost of that is the sender’s.');
+    expect(notifications.inboxFor('did:shop:q')).toHaveLength(0);
+  });
+
   it('tells the claimant the decision, the money when there is any, and the reason', async () => {
     const { events, notifications } = harness({});
     await events.publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: 'frt_7', code: 'FRT-007', decision: 'partly_upheld', award: 120, note: 'Two boxes short of the manifest', posterDid: 'did:shop:p', claimantDid: 'ven_1' });

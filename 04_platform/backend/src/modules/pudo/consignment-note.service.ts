@@ -192,6 +192,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     // Round 15 — the seals: each with what became of it; a broken one, or one not as written at the door, observed in box 18.
     const seals = this.dispatch.sealsOnNote?.(f.freightId, opts.sealNumbers ?? Boolean(f.pickedUpAt)) ?? { lines: [], observations: [] };
     reservations.push(...seals.observations);
+    // Refused goods carried on as a new load: where they were refused, and that they never left the vehicle.
+    if (f.returnOf) reservations.push(`Carried on from load ${f.returnOf.code}, refused by its consignee at ${f.pickupLabel}: taken over ${when(f.pickedUpAt ?? f.createdAt)} without leaving the vehicle`);
     // Round 35 — each exception under the tamper protocol, where and when, and its release by operations.
     reservations.push(...(this.dispatch.tamperOnNote?.(f.freightId) ?? []));
     const carriage = this.carriageOf(f, opts.consignee);
@@ -254,6 +256,7 @@ export class ConsignmentNoteService implements OnModuleInit {
             : {}),
       },
       ...(f.cancellation ? { cancelled: { at: f.cancellation.at, reason: f.cancellation.reason, by: f.cancellation.role === 'operator' ? 'network' : 'sender' } } : {}),
+      ...(f.refusal?.decision ? { refused: { line: refusedLine(f) } } : {}),
       ...(f.trackingKey ? { trackingUrl: `${appUrl('send')}?track=${encodeURIComponent(f.trackingKey)}` } : {}),
     };
   }
@@ -274,6 +277,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.pickedUpAt) steps.push({ status: 'in_transit', at: f.pickedUpAt });
     if (f.deliveredAt) steps.push({ status: 'delivered', at: f.deliveredAt });
     if (f.cancellation) steps.push({ status: 'cancelled', at: f.cancellation.at });
+    if (f.refusal?.decision) steps.push({ status: 'refused', at: f.refusal.decision.at });
     // WHEN, for whoever is waiting at the door: the day from the start; the hour only once it is on the road, from
     // the plan it went out on — and not after a door nobody answered, when that hour has passed.
     const coming = f.status === 'ordered' || f.status === 'available' || f.status === 'claimed' || f.status === 'in_transit';
@@ -307,6 +311,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),
       ...(f.proofOfDelivery?.receiverName ? { receiverName: f.proofOfDelivery.receiverName } : {}),
       ...(f.cancellation ? { cancelled: { at: f.cancellation.at, by: f.cancellation.role === 'operator' ? 'network' : f.contract && f.cancellation.by === f.contract.fleetDid ? 'carrier' : 'sender' } } : {}),
+      ...(f.refusal ? { refused: { at: f.refusal.at, ...(f.refusal.decision ? { choice: f.refusal.decision.choice, ...(f.refusal.decision.returnLeg ? { returnCode: f.refusal.decision.returnLeg.code } : {}) } : {}) } } : {}),
       // Held on the way by an authority, as its driver said: since when, never by whom — whoever holds the link reads it.
       ...(() => {
         const held = this.dispatch.heldByAuthority?.(f);
@@ -540,7 +545,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       c ? `<b>${e(c.by)}</b><br>${e(when(c.at))}<br><span class="how">${e(c.how)}</span>${c.reservations ? `<br><b>${e(c.reservations)}</b>` : ''}${c.remarks ? `<br>${e(c.remarks)}` : ''}` : `<span class="empty">${e(missing)}</span>`;
     const cancelledLine = n.cancelled ? `Cancelled by the ${n.cancelled.by} ${when(n.cancelled.at)} — ${n.cancelled.reason}` : '';
     // Box 24 before delivery: every failed attempt, then the honest gap. After: the confirmation, then the claim.
-    const box24missing = n.cancelled ? cancelledLine : n.attempts.length ? `Not yet delivered — ${n.attempts.length} attempt(s), see box 18` : 'Not yet delivered';
+    const box24missing = n.cancelled ? cancelledLine : n.refused ? n.refused.line : n.attempts.length ? `Not yet delivered — ${n.attempts.length} attempt(s), see box 18` : 'Not yet delivered';
     const claimLines = n.claim ? `<div class="claim"><b>${e(n.claim.line)}</b>${n.claim.decision ? `<br>${e(n.claim.decision)}` : '<br><span class="empty">Not yet decided</span>'}</div>` : '';
     const qr = n.trackingUrl ? `<svg viewBox="0 0 120 120" width="120" height="120" aria-label="Tracking code">${qrSvgGroup(n.trackingUrl, 0, 0, 120)}</svg>` : '';
     const g = n.goods;
@@ -638,6 +643,21 @@ function when(iso: string): string {
 
 export function escapeHtml(value: string): string {
   return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/**
+ * REFUSED, AS BOX 24 SAYS IT (the user, 2026-10-27): when the consignee refused the goods and why, as the driver wrote it —
+ * and what the sender decided, or the 48 hours did: the load they went on, or that they were given up.
+ */
+export function refusedLine(f: Pick<Freight, 'refusal'>): string {
+  const r = f.refusal!;
+  const d = r.decision;
+  const what = !d
+    ? 'The sender has not yet said what happens to the goods'
+    : d.choice === 'give_up'
+      ? 'The sender gave the goods up'
+      : `${d.byDeadline ? 'With no answer from the sender within 48 hours, the goods were taken back' : d.choice === 'back' ? 'The sender had the goods taken back' : 'The sender had the goods taken'} to ${d.destLabel}${d.returnLeg ? ` as load ${d.returnLeg.code}` : ''}`;
+  return `Refused by the consignee ${when(r.at)}${r.note ? ` — ${r.note}` : ''}. ${what}${d ? `, ${when(d.at)}` : ''}.`;
 }
 
 /** A reload, as box 18 says it: when, onto what, after what — and on whose word. */

@@ -177,7 +177,7 @@ export class TrackLoad {
   no: number;
   code: string;
   weightKg: number;
-  @ApiProperty({ enum: ['scheduled', 'available', 'ordered', 'claimed', 'in_transit', 'delivered', 'cancelled'] }) status: 'scheduled' | 'available' | 'ordered' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
+  @ApiProperty({ enum: ['scheduled', 'available', 'ordered', 'claimed', 'in_transit', 'delivered', 'refused', 'cancelled'] }) status: 'scheduled' | 'available' | 'ordered' | 'claimed' | 'in_transit' | 'delivered' | 'refused' | 'cancelled';
 }
 
 /** What splitting an order, or putting it back together, answers with: its loads as they now stand. */
@@ -192,7 +192,8 @@ export class OrderLoads {
   @ApiProperty({ type: [OrderLoad] }) loads: OrderLoad[];
 }
 
-export const FREIGHT_STATUSES = ['scheduled', 'available', 'ordered', 'claimed', 'in_transit', 'delivered', 'cancelled'] as const;
+/** `refused`: refused at the door, and closed once the sender decided — or the deadline did (FreightRefusal). Terminal. */
+export const FREIGHT_STATUSES = ['scheduled', 'available', 'ordered', 'claimed', 'in_transit', 'delivered', 'refused', 'cancelled'] as const;
 export type FreightStatus = (typeof FREIGHT_STATUSES)[number];
 
 /** FP3b — a delivery the driver could not make: they were there, the goods were not handed over, and why. */
@@ -204,6 +205,68 @@ export class FreightDeliveryAttempt {
   note?: string;
   at: string;
   by?: string;
+}
+
+/**
+ * REFUSED AT THE DOOR (the user, 2026-10-27). The sender decides what happens to the goods and pays the way — as CMR has
+ * it, the carrier follows the sender's instructions and is paid for them: back to where they were picked up, to another
+ * place the sender names, or given up. The driver holding them carries them, as a NEW load with its own note and custody;
+ * the load they were refused on closes as refused, with the reason. With no answer in 48 hours they go back to where they
+ * were picked up, at the sender's cost — and the sender is told before. Given up, the receiver may keep them if it will;
+ * otherwise the carrier disposes of them, any cost of that the sender's, and nothing more is kept.
+ */
+export const REFUSAL_CHOICES = ['back', 'elsewhere', 'give_up'] as const;
+export type RefusalChoice = (typeof REFUSAL_CHOICES)[number];
+/** How long a sender has to decide; and how long before the end of that it is told what happens with no answer. */
+export const REFUSAL_DECIDE_H = 48;
+export const REFUSAL_REMIND_H = 12;
+
+/** One load, by its id and its code: a return and the load its goods were refused on point at each other. */
+export class FreightLink {
+  freightId: string;
+  code: string;
+}
+
+/** What the sender decided — or, with no answer in time, what the deadline did: back to where they were picked up. */
+export class FreightRefusalDecision {
+  @ApiProperty({ enum: REFUSAL_CHOICES }) choice: RefusalChoice;
+  at: string;
+  /** The sender's account. Absent where the deadline decided. */
+  @ApiPropertyOptional() by?: string;
+  /** Nobody answered within the 48 hours. */
+  @ApiPropertyOptional() byDeadline?: boolean;
+  /** Where the goods go. Absent where they were given up. */
+  @ApiPropertyOptional() destLabel?: string;
+  @ApiPropertyOptional({ type: GeoPoint }) destLocation?: GeoPoint;
+  /** The new load they travel on. */
+  @ApiPropertyOptional({ type: FreightLink }) returnLeg?: FreightLink;
+}
+
+/** On the tracking page: refused at the door, and — once decided — the load the goods went back on, or that they were given up. */
+export class FreightTrackRefused {
+  at: string;
+  @ApiPropertyOptional({ enum: REFUSAL_CHOICES }) choice?: RefusalChoice;
+  @ApiPropertyOptional() returnCode?: string;
+}
+
+export class FreightRefusal {
+  /** When the driver wrote it down at the door, and the receiver's reason as the driver wrote it. */
+  at: string;
+  @ApiPropertyOptional() by?: string;
+  @ApiPropertyOptional() note?: string;
+  /** By when the sender decides. After it the goods go back to where they were picked up, at the sender's cost. */
+  decideBy: string;
+  /** When the sender was told what happens with no answer. */
+  @ApiPropertyOptional() remindedAt?: string;
+  @ApiPropertyOptional({ type: FreightRefusalDecision }) decision?: FreightRefusalDecision;
+}
+
+/** The answer to the sender's decision: the load as it closed, and what was decided. */
+export class RefusalDecidedView {
+  freightId: string;
+  code: string;
+  @ApiProperty({ enum: FREIGHT_STATUSES }) status: FreightStatus;
+  @ApiProperty({ type: FreightRefusal }) refusal: FreightRefusal;
 }
 
 /**
@@ -492,6 +555,10 @@ export class Freight {
   @ApiPropertyOptional() cancellation?: { by: string; role: 'shipper' | 'operator'; reason: string; at: string; refunded?: number };
   /** FP3b — every time the driver stood at the door and could not hand over. The load stays in transit. */
   @ApiPropertyOptional({ type: [FreightDeliveryAttempt] }) deliveryAttempts?: FreightDeliveryAttempt[];
+  /** Refused at the door: the sender decides, and the load closes as refused once they have — or the deadline has. */
+  @ApiPropertyOptional({ type: FreightRefusal }) refusal?: FreightRefusal;
+  /** A RETURN: refused goods carried on as a new load by the driver who held them — the load they were refused on. */
+  @ApiPropertyOptional({ type: FreightLink }) returnOf?: FreightLink;
   /** FP3b — the sender's claim against the delivered goods, and how it ended. One per load. */
   @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for
@@ -1284,6 +1351,14 @@ export class PostedFreightRow {
   canCancel: boolean;
   /** FP3b — the door the driver stood at and could not hand over at, most recent last. */
   @ApiPropertyOptional({ type: [FreightDeliveryAttempt] }) attempts?: FreightDeliveryAttempt[];
+  /** Refused at the door: by when the sender decides, and what was decided. */
+  @ApiPropertyOptional({ type: FreightRefusal }) refusal?: FreightRefusal;
+  /** Refused, on the road, nothing decided yet: the sender may decide now. */
+  @ApiPropertyOptional() canDecideRefusal?: boolean;
+  /** Where it was picked up — where "back" takes the goods. */
+  @ApiPropertyOptional() pickupLabel?: string;
+  /** A return: the load its goods were refused on. */
+  @ApiPropertyOptional({ type: FreightLink }) returnOf?: FreightLink;
   /** FP3b — the sender's claim, as far as it has got. */
   @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
   /** FP6 — the shareable key behind the tracking link, and the link itself, so the shipper can hand it on. */
@@ -1632,6 +1707,8 @@ export class FreightTrackView {
   receiverName?: string;
   /** Withdrawn: when, and by the sender, the network or — on a run — the carrier. Never the reason: that is between the parties. */
   @ApiPropertyOptional() cancelled?: { at: string; by: 'sender' | 'network' | 'carrier' };
+  /** Refused at the door: when, and once decided what became of the goods. Never the receiver's reason: between the parties. */
+  @ApiPropertyOptional({ type: FreightTrackRefused }) refused?: FreightTrackRefused;
   /** This is one load of an order that comes in several — and all of them, each with where it has got to. */
   @ApiPropertyOptional({ type: LoadOf }) partOf?: LoadOf;
   @ApiPropertyOptional({ type: [TrackLoad] }) loads?: TrackLoad[];

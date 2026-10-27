@@ -101,4 +101,6 @@ export interface ConsignmentNote {
   copy?: 'consignee';
   /** FP3 — the load was withdrawn before taking over. Boxes 23 and 24 then say so instead of "not yet". */
   cancelled?: { at: string; reason: string; by: 'sender' | 'network' };
+  /** Refused by the consignee, and what the sender decided (the user, 2026-10-27). Box 24 then says so instead of "not yet". */
+  refused?: { line: string };
 }

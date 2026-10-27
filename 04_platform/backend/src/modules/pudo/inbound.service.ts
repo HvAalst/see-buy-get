@@ -141,7 +141,7 @@ export class InboundService implements OnModuleInit {
     if (imp?.held) return said('held', imp.held.since, imp.port);
     const border = [...(track.passages ?? [])].reverse().find((p) => p.kind === 'at_border' || p.kind === 'cleared_border');
     if (border?.kind === 'cleared_border') return said('cleared', border.at, border.post);
-    if (f.status === 'delivered' || f.status === 'cancelled') return {};
+    if (f.status === 'delivered' || f.status === 'refused' || f.status === 'cancelled') return {};
     if (track.heldOnTheWay) return said('held', track.heldOnTheWay.since);
     if (border?.kind === 'at_border') return said('at_border', border.at, border.post);
     if (f.bonded) return said('under_bond');
@@ -277,7 +277,7 @@ function pointOf(site: Site): ReceivingPointView {
 }
 
 function isDone(f: Freight): boolean {
-  return f.status === 'delivered' || f.status === 'cancelled';
+  return f.status === 'delivered' || f.status === 'refused' || f.status === 'cancelled';
 }
 
 /** When a load still coming is expected to move: its day under a contract, its pickup date, or when it was posted. */

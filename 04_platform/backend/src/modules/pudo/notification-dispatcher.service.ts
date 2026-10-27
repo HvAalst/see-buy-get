@@ -47,6 +47,34 @@ function utcWords(iso: string): string {
   return `on ${offerDay(iso)} at ${iso.slice(11, 16)} UTC`;
 }
 
+/** "by 29 Oct at 07:56 UTC" — the end of a time to answer, said the same way. */
+function byWords(iso: string): string {
+  return `by ${offerDay(iso)} at ${iso.slice(11, 16)} UTC`;
+}
+
+/** Refused at the door: the sender told before the 48 hours end (DispatchService.sweepRefusals). */
+interface RefusalReminder {
+  freightId: string;
+  code: string;
+  decideBy: string;
+  pickupLabel: string;
+  destLabel?: string;
+  posterDid?: string;
+}
+
+/** …and what was decided — by the sender, or by the deadline (DispatchService.decideRefusal). */
+interface RefusalDecided {
+  freightId: string;
+  code: string;
+  choice: 'back' | 'elsewhere' | 'give_up';
+  byDeadline: boolean;
+  driverDid?: string;
+  posterDid?: string;
+  destLabel?: string;
+  returnFreightId?: string;
+  returnCode?: string;
+}
+
 /** Round 25 — a cold chain broken on the road, as dispatch publishes it (FreightTempBreach). */
 interface ColdChainBroken {
   freightId: string;
@@ -431,7 +459,10 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // The fleet's own licence or cover: a document it sent was recorded, or turned down with a reason.
     this.events.subscribe<FleetPaperChecked>(GlosEvent.Pudo.FleetPaperChecked, (e) => this.onFleetPaperChecked(e.payload));
     // FP3b (sender) — the driver is at the door and cannot hand over: the sender is the one who can fix it.
-    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
+    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number; decideBy?: string; pickupLabel?: string }>(GlosEvent.Pudo.FreightDeliveryFailed, (e) => this.onFreightDeliveryFailed(e.payload));
+    // Refused at the door (the user, 2026-10-27): the sender told before the 48 hours end; the decision told to the driver.
+    this.events.subscribe<RefusalReminder>(GlosEvent.Pudo.FreightRefusalReminder, (e) => this.onFreightRefusalReminder(e.payload));
+    this.events.subscribe<RefusalDecided>(GlosEvent.Pudo.FreightRefusalDecided, (e) => this.onFreightRefusalDecided(e.payload));
     // Round 15 — a seal on its load found broken on the road: the shipper is told at once.
     this.events.subscribe<{ freightId: string; code: string; posterDid?: string; seal?: { number?: string; broken?: { cause?: string; note?: string } } }>(GlosEvent.Pudo.FreightSealBroken, (e) => this.onFreightSealBroken(e.payload));
     this.events.subscribe<HeldOnTheRoad>(GlosEvent.Pudo.FreightHeld, (e) => this.onFreightHeld(e.payload, false));
@@ -741,14 +772,18 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     });
   }
 
-  private async onFreightDeliveryFailed(payload: { freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number }): Promise<void> {
+  private async onFreightDeliveryFailed(payload: { freightId: string; code: string; posterDid?: string; outcome: string; note?: string; destLabel?: string; attempts: number; decideBy?: string; pickupLabel?: string }): Promise<void> {
     if (!payload.posterDid) return;
     const why = payload.outcome === 'absent' ? 'nobody was there to receive it' : payload.outcome === 'refused' ? 'the receiver refused it' : 'the driver could not reach the place';
+    // Refused: the sender decides where the goods go, and pays the way (the user, 2026-10-27) — said with the time to answer.
+    const refused = payload.outcome === 'refused' && payload.decideBy && payload.pickupLabel;
     try {
       await this.notifications.notify(payload.posterDid, {
         kind: 'freight_problem',
-        title: `Load ${payload.code} could not be delivered`,
-        body: `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The driver still has the goods. Ring the receiver, or message the driver about where to take it.`,
+        title: refused ? `Load ${payload.code} was refused at the door` : `Load ${payload.code} could not be delivered`,
+        body: refused
+          ? `The driver was at ${payload.destLabel ?? 'the destination'} and the receiver refused it${payload.note ? ` — "${payload.note}"` : ''}. The driver keeps the goods until you say where they go: back to ${payload.pickupLabel}, to another place, or given up — you pay the way. With no answer ${byWords(payload.decideBy!)}, they go back to ${payload.pickupLabel}, at your cost.`
+          : `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The driver still has the goods. Ring the receiver, or message the driver about where to take it.`,
         link: '/',
         tag: `freight:${payload.freightId}:attempt${payload.attempts}`,
         data: { freightId: payload.freightId },
@@ -900,6 +935,57 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       } catch (err) {
         this.logger.warn(`freight-handed-back notify failed for ${payload.freightId}: ${(err as Error).message}`);
       }
+    }
+  }
+
+  /** Before the 48 hours end: what happens with no answer, while there is still time to give one. */
+  private async onFreightRefusalReminder(p: RefusalReminder): Promise<void> {
+    if (!p.posterDid) return;
+    try {
+      await this.notifications.notify(p.posterDid, {
+        kind: 'freight_problem',
+        title: `Load ${p.code}: the refused goods go back ${byWords(p.decideBy)}`,
+        body: `The goods refused at ${p.destLabel ?? 'the door'} go back to ${p.pickupLabel} ${byWords(p.decideBy)}, at your cost — unless you say they go to another place, or that you give them up.`,
+        link: '/',
+        tag: `freight:${p.freightId}:refusal-reminder`,
+        data: { freightId: p.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`refusal reminder failed for ${p.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * What became of refused goods: the driver told what to do with them — carry them on as the new load, or that they were
+   * given up — and the sender told where the deadline sent them, when it was the deadline that decided.
+   */
+  private async onFreightRefusalDecided(p: RefusalDecided): Promise<void> {
+    try {
+      if (p.driverDid) {
+        await this.notifications.notify(p.driverDid, {
+          kind: 'load_instructions',
+          title: p.choice === 'give_up' ? `Load ${p.code}: the goods are given up` : `Load ${p.code}: take the goods to ${p.destLabel}`,
+          body:
+            p.choice === 'give_up'
+              ? 'The sender gave the refused goods up. The receiver may keep them if it will; otherwise your company disposes of them, and any cost of that is the sender’s.'
+              : `${p.byDeadline ? 'No answer in 48 hours: they go back to where they were picked up. ' : 'The sender decided. '}Carry the refused goods to ${p.destLabel} as load ${p.returnCode} — it is in your loads, at your vehicle’s price. Deliver it as any other.`,
+          link: '/',
+          tag: `freight:${p.freightId}:refusal`,
+          data: { freightId: p.returnFreightId ?? p.freightId },
+        });
+      }
+      if (p.byDeadline && p.posterDid && p.returnCode) {
+        await this.notifications.notify(p.posterDid, {
+          kind: 'freight_problem',
+          title: `Load ${p.code}: the refused goods are going back`,
+          body: `With no answer in 48 hours, the goods refused at the door go back to ${p.destLabel} as load ${p.returnCode}, at your cost.`,
+          link: '/',
+          tag: `freight:${p.freightId}:refusal`,
+          data: { freightId: p.returnFreightId ?? p.freightId },
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`refusal decided notify failed for ${p.freightId}: ${(err as Error).message}`);
     }
   }
 

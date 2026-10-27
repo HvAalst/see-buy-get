@@ -1207,7 +1207,7 @@ export class AgentLedgerQueryDto {
 /** FP1 — the fleet's register: the driver's filters, plus which driver. */
 export class FleetEarningsQueryDto {
   @IsOptional() @IsString() q?: string;
-  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered', 'cancelled']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
+  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered', 'refused', 'cancelled']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered' | 'refused' | 'cancelled';
   @IsOptional() @IsIn(['paid', 'unpaid']) paid?: 'paid' | 'unpaid';
   @IsOptional() @IsString() driver?: string;
   @IsOptional() @IsString() from?: string;
@@ -1219,7 +1219,7 @@ export class FleetEarningsQueryDto {
 
 export class DriverJobsQueryDto {
   @IsOptional() @IsString() q?: string; // job code / description / destination / tracking / order ref
-  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered', 'cancelled']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered' | 'cancelled';
+  @IsOptional() @IsIn(['available', 'claimed', 'in_transit', 'delivered', 'refused', 'cancelled']) status?: 'available' | 'claimed' | 'in_transit' | 'delivered' | 'refused' | 'cancelled';
   @IsOptional() @IsIn(['paid', 'unpaid']) paid?: 'paid' | 'unpaid';
   @IsOptional() @IsString() from?: string; // ISO or YYYY-MM-DD (inclusive)
   @IsOptional() @IsString() to?: string;
@@ -2813,6 +2813,18 @@ export class FreightDeliveryFailedDto {
   @IsOptional() @IsString() driverDid?: string;
   @IsIn(['absent', 'refused', 'unreachable']) outcome!: 'absent' | 'refused' | 'unreachable';
   @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+
+/**
+ * The sender decides what happens to goods refused at the door (the user, 2026-10-27): back to where they were picked up,
+ * to another place it names — where, on the map, and who to ask for — or given up.
+ */
+export class DecideRefusalDto {
+  @IsIn(['back', 'elsewhere', 'give_up']) choice!: 'back' | 'elsewhere' | 'give_up';
+  @IsOptional() @IsString() @MaxLength(120) destLabel?: string;
+  @IsOptional() @ValidateNested() @Type(() => GeoDto) destLocation?: GeoDto;
+  @IsOptional() @IsString() @MaxLength(80) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(32) contactPhone?: string;
 }
 
 /** FP3b — the sender's claim against a delivered load. */

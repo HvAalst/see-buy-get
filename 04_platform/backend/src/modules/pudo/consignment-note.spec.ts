@@ -99,6 +99,23 @@ describe('the consignment note', () => {
     expect(chtml).not.toContain('Not yet delivered');
   });
 
+  it('refused by the consignee: box 24 says when and why, and what the sender decided — or that the 48 hours did (the user, 2026-10-27)', () => {
+    const refusal = { at: '2026-10-27T08:00:00Z', by: 'did:drv:amos', note: 'Wrong colour', decideBy: '2026-10-29T08:00:00Z' };
+    freights.fr_1 = base({ status: 'refused', pickedUpAt: '2026-10-27T06:00:00Z', deliveryAttempts: [{ outcome: 'refused', note: 'Wrong colour', at: '2026-10-27T08:00:00Z', by: 'did:drv:amos' }], refusal: { ...refusal, decision: { choice: 'back', at: '2026-10-27T10:00:00Z', by: 'did:shop:a1', destLabel: 'Depot', returnLeg: { freightId: 'fr_2', code: 'FRT-0002' } } } });
+    const n = service.build(freights.fr_1);
+    expect(n.refused?.line).toBe('Refused by the consignee 27 Oct 2026, 08:00 UTC — Wrong colour. The sender had the goods taken back to Depot as load FRT-0002, 27 Oct 2026, 10:00 UTC.');
+    const html = service.htmlFor(n);
+    expect(html).toContain('as load FRT-0002');
+    expect(html).not.toContain('Not yet delivered');
+    freights.fr_1 = base({ status: 'refused', refusal: { ...refusal, decision: { choice: 'back', at: '2026-10-29T08:00:00Z', byDeadline: true, destLabel: 'Depot', returnLeg: { freightId: 'fr_2', code: 'FRT-0002' } } } });
+    expect(service.build(freights.fr_1).refused?.line).toContain('With no answer from the sender within 48 hours, the goods were taken back to Depot as load FRT-0002');
+    freights.fr_1 = base({ status: 'refused', refusal: { ...refusal, decision: { choice: 'give_up', at: '2026-10-27T10:00:00Z', by: 'did:shop:a1' } } });
+    expect(service.build(freights.fr_1).refused?.line).toContain('The sender gave the goods up');
+    // …and the load they went on says, in box 18, where it came from.
+    freights.fr_2 = base({ freightId: 'fr_2', status: 'in_transit', pickupLabel: 'Riverside Corner', pickedUpAt: '2026-10-27T10:00:00Z', returnOf: { freightId: 'fr_1', code: 'FRT-0001' } });
+    expect(service.build(freights.fr_2).reservations).toContain('Carried on from load FRT-0001, refused by its consignee at Riverside Corner: taken over 27 Oct 2026, 10:00 UTC without leaving the vehicle');
+  });
+
   it('FP3b: failed attempts and the claim show in box 24', () => {
     freights.fr_1 = base({ status: 'in_transit', pickedUpAt: '2026-09-14T09:00:00Z', deliveryAttempts: [{ outcome: 'absent', note: 'Gate locked', at: '2026-09-14T11:00:00Z', by: 'did:drv:amos' }] });
     const n = service.build(freights.fr_1);

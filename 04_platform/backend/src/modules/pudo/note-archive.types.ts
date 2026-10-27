@@ -23,7 +23,7 @@ import type { ConsignmentNote } from './consignment-note.types';
  */
 
 /** The moments that produce a copy. Each one is a party signing, or a party saying something on the note. */
-export const NOTE_STAGES = ['taken_over', 'reloaded', 'seal_changed', 'cold_chain_broken', 'delivered', 'not_delivered', 'claimed', 'answered', 'cancelled'] as const;
+export const NOTE_STAGES = ['taken_over', 'reloaded', 'seal_changed', 'cold_chain_broken', 'delivered', 'not_delivered', 'refused', 'claimed', 'answered', 'cancelled'] as const;
 export type NoteStage = (typeof NOTE_STAGES)[number];
 
 /** Which door the carriage came through. Both produce the same document; they differ in who priced it. */
@@ -237,6 +237,7 @@ export const STAGE_WORDS: Record<NoteStage, string> = {
   cold_chain_broken: 'The cold chain broke on the road',
   delivered: 'Delivered',
   not_delivered: 'Could not be delivered',
+  refused: 'Refused by the consignee — the sender decided',
   claimed: 'Claim raised by the sender',
   answered: 'Answered',
   cancelled: 'Cancelled',

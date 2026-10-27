@@ -5,7 +5,7 @@ import { clockAt, minutesOf, momentAt, utcDay } from './fleet-clock';
 import { windowOf, windowWords } from './delivery-window';
 import type { ContractRef } from './carriage-contract.types';
 import type { ClientRef } from './business-client.types';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PersonService } from './person.service';
 import { isFor, readerOf, waitsAt, type Addressed, type Reader } from './addressed-to';
 import { TransitAuthorityService, transitRefusal } from './transit-authority.service';
@@ -50,7 +50,7 @@ import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DEFAULT_WORK_RADIUS_
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
-import { RECEIVING_EXCEPTIONS, type ReceivingException, type ReceivingExceptionKind } from './dispatch.types';
+import { RECEIVING_EXCEPTIONS, REFUSAL_CHOICES, REFUSAL_DECIDE_H, REFUSAL_REMIND_H, type FreightLink, type ReceivingException, type ReceivingExceptionKind, type RefusalChoice } from './dispatch.types';
 import { exceptionViewsOf } from './receiving';
 import { BoardRow, Claimable, ClaimableKind, DeskNumber, DeliveryTiming, FleetOrderRow, Freight, FreightCommitMode, FreightProposal, FreightShipmentView, FreightStatus, LeftOutOfPlan, MarketRow, MarketSeries, Offer, OutsideWindow, PlannedAbout, PostedFreightRow, RoutePlan, RunningLate, shipperWhy, DeliveryFailure, FreightClaimKind, FreightClaimDecision, FreightClaimQueueRow, DELIVERY_FAILURES, FREIGHT_CLAIM_KINDS, FREIGHT_CLAIM_DECISIONS , FreightReload, ColdChainBreachView, InboundReceiver } from './dispatch.types';
 import { paginate, textMatch, toCsv, withinDates, type Page } from './query';
@@ -541,7 +541,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; returnOf?: FreightLink }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -662,6 +662,8 @@ export class DispatchService {
       // Y2 — a box going home is a load whose subject is the CONTAINER, and an empty one says so.
       ...(input.containerNo ? { containerNo: input.containerNo } : {}),
       ...(input.emptyRun ? { emptyRun: true } : {}),
+      // Refused goods carried on as a new load (the user, 2026-10-27): the load they were refused on.
+      ...(input.returnOf ? { returnOf: { freightId: input.returnOf.freightId, code: input.returnOf.code } } : {}),
       // BL1 — uncleared goods. The country defaults to the leg's own, because a bond is held where the
       // wheels turn; it is stated separately only so a caller cannot quietly mean a different one.
       ...(input.bonded ? { bonded: true, bondCountry: (input.bondCountry ?? input.pickupCountry ?? '').toUpperCase() } : {}),
@@ -682,7 +684,8 @@ export class DispatchService {
     // Ping nearby drivers NOW for a ship-now load OR an early-claimable scheduled one (so a scarce truck can
     // commit ahead of the date). A no-early-claim scheduled load stays silent until due (publishReadyFreight).
     // A contract order pings nobody: it is not for whoever is nearby.
-    if (!contract && (!scheduled || allowEarlyClaim)) {
+    // …nor a return of refused goods: they are aboard the vehicle of the driver who carries them on.
+    if (!contract && !input.returnOf && (!scheduled || allowEarlyClaim)) {
       void this.events
         .publish(GlosEvent.Pudo.FreightPosted, { freightId: freight.freightId, code: freight.code, pickupLocation: freight.pickupLocation, destLabel: freight.destLabel, weightKg: freight.weightKg, cargoClass: freight.cargoClass }, { source: 'pudo' })
         .catch(() => undefined);
@@ -1331,19 +1334,7 @@ export class DispatchService {
     //  - 'unpaid'         a bulletin freight with no shipper, or a store no sister of ours settles (it stands in a
     //                     country we only match) — settled off-platform between shipper and carrier.
     // The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
-    if (f.shipperDid && this.vendors.has(f.shipperDid) && this.vendors.settlesWithUs(f.shipperDid)) {
-      const bill = this.shipperBill(earning, f);
-      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, bill.gross, 0, bill.tax, bill.provision);
-      f.paidStatus = paid ? 'billed' : 'billing_failed';
-      // Stamped at the instant of charging, so a release reverses THIS, not whatever the rates resolve to
-      // whenever the release happens to run. Kept even on a failed billing: what the shipper owes is a real
-      // debt for a Local Admin to collect, and it is only collectable if somebody can say what it was.
-      // The cover the billing company has stated, stamped with the bill: a company that states cover later does not
-      // thereby owe it on a load it billed before, and one that withdraws it does not thereby escape what it promised.
-      f.billed = { ...bill, coverLimit: this.freightCoverStated(f) };
-    } else {
-      f.paidStatus = 'unpaid';
-    }
+    this.settleShipper(f, earning);
     // Its shipper was told it is on no vehicle. It is on one now, and that is said.
     this.tellOnDriver(f);
     this.freights.set(f.freightId, f);
@@ -1738,6 +1729,9 @@ export class DispatchService {
         cancelledAt: f.cancelledAt,
         canCancel: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed',
         ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts } : {}),
+        // Refused at the door (the user, 2026-10-27): by when the sender decides, what it decided, and where "back" is.
+        ...(f.refusal ? { refusal: f.refusal, canDecideRefusal: f.status === 'in_transit' && !f.refusal.decision, pickupLabel: f.pickupLabel } : {}),
+        ...(f.returnOf ? { returnOf: f.returnOf } : {}),
         // Made by this business, or by the one the load was sent to (under a term that passed it the risk).
         ...(f.claim ? { claim: { ...f.claim, by: this.claimRaisedBy(f) } } : {}),
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
@@ -3127,17 +3121,9 @@ export class DispatchService {
     // Same adopt-not-link rule as the securement photo (S29): only the driver's own, unattached upload is taken.
     this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     for (const ref of exceptions.flatMap((x) => x.photoRefs ?? [])) this.media.adopt(ref, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
-    // S34 — pay the driver their LOCKED earning on delivery, exactly once. A system-level ledger outflow
-    // (drivers hold no agent wallet). A legacy/bulletin freight claimed before pricing (no lockedPrice) is skipped.
-    // B2 — never for a haul settled between the parties: the shipper pays the carrier, and a payable on our books
-    // would be a second debt for the same work, owed by a company that never held the money.
-    if (f.lockedPrice != null && !f.driverPaid && f.claimedBy && f.settlement !== 'between_parties') {
-      // WHO it was owed to, read in the same turn the payout resolves it and kept on the load: a claim upheld
-      // weeks later takes the money back from this party, not from a fleet the driver has joined since.
-      const payee = this.drivers.payeeOrNone(f.claimedBy);
-      if (this.gate.driverPayout(f.claimedBy, f.lockedPrice) && payee.entityId) f.driverPayee = { payeeDid: payee.payeeDid, entityId: payee.entityId };
-      f.driverPaid = true;
-    }
+    this.payTheRoad(f);
+    // Refused at an earlier attempt, then taken after all: nothing is left for the sender to decide. The attempt stays.
+    if (f.refusal && !f.refusal.decision) delete f.refusal;
     // S33 — delivery is terminal: start the securement photo's retention clock (shipment-proof bin).
     this.media.anchorFreightTerminal(f.freightId);
     this.freights.set(f.freightId, f);
@@ -3196,11 +3182,209 @@ export class DispatchService {
     const note = input.note?.trim();
     const at = new Date(now).toISOString();
     f.deliveryAttempts = [...(f.deliveryAttempts ?? []), { outcome: input.outcome, ...(note ? { note: note.slice(0, 500) } : {}), at, by: driverDid }];
+    // REFUSED (the user, 2026-10-27): the sender decides what happens to the goods, within REFUSAL_DECIDE_H hours — the first
+    // refusal starts the clock, and a second at the same door does not restart it.
+    if (input.outcome === 'refused' && !f.refusal) f.refusal = { at, ...(driverDid ? { by: driverDid } : {}), ...(note ? { note: note.slice(0, 500) } : {}), decideBy: new Date(now + REFUSAL_DECIDE_H * 3_600_000).toISOString() };
     this.freights.set(f.freightId, f);
     void this.events
-      .publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, posterDid: this.senderDidOf(f), outcome: input.outcome, note, destLabel: f.destLabel, attempts: f.deliveryAttempts.length }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, posterDid: this.senderDidOf(f), outcome: input.outcome, note, destLabel: f.destLabel, attempts: f.deliveryAttempts.length, ...(f.refusal && !f.refusal.decision ? { decideBy: f.refusal.decideBy, pickupLabel: f.pickupLabel } : {}) }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
+  }
+
+  /**
+   * THE SENDER DECIDES WHAT HAPPENS TO GOODS REFUSED AT THE DOOR (the user, 2026-10-27) — and pays the way: as CMR has it,
+   * the carrier follows the sender's instructions and is paid for them.
+   *  - back, to where they were picked up; elsewhere, to a place the sender names: the driver who holds them carries them
+   *    as a NEW load, with its own note and custody, taken over where they were refused (carryOnAsReturn);
+   *  - give_up: nothing travels. The receiver may keep them if it will; otherwise the carrier disposes of them, any cost of
+   *    that the sender's, and nothing more is kept.
+   * Either way the load they were refused on closes as refused, with the reason — and its road is paid: it was driven to the
+   * door. `by` absent: the deadline decided — with no answer in REFUSAL_DECIDE_H hours the goods go back (sweepRefusals).
+   */
+  decideRefusal(freightId: string, by: string | undefined, input: { choice: RefusalChoice; destLabel?: string; destLocation?: { lat: number; lng: number }; contactName?: string; contactPhone?: string }, now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.status !== 'in_transit' || !f.refusal) throw new GlosError('INVALID_STATE', 'Nothing was refused on this load: there is nothing to decide');
+    if (f.refusal.decision) throw new GlosError('INVALID_STATE', 'What happens to these goods was decided already');
+    if (!REFUSAL_CHOICES.includes(input.choice)) throw new GlosError('INVALID_INPUT', 'Say whether the goods go back, go to another place, or are given up', { field: 'choice' });
+    // Where they go, and who carries them — refused before anything is written.
+    let dest: { label: string; location: GeoPoint } | undefined;
+    if (input.choice === 'back') dest = { label: f.pickupLabel, location: { lat: f.pickupLocation.lat, lng: f.pickupLocation.lng } };
+    else if (input.choice === 'elsewhere') {
+      const label = input.destLabel?.trim() ?? '';
+      if (label.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say where the goods go, in words a driver can find', { field: 'destLabel' });
+      const p = input.destLocation;
+      if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng) || Math.abs(p.lat) > 90 || Math.abs(p.lng) > 180) throw new GlosError('FIELD_REQUIRED', 'Show where the goods go on the map', { field: 'destLocation' });
+      dest = { label: label.slice(0, 120), location: { lat: p.lat, lng: p.lng } };
+    }
+    const holder = f.claimedBy;
+    if (dest && !holder) throw new GlosError('INVALID_STATE', 'Nobody holds the goods to carry them on');
+    // The new load first: if it cannot be made, the refused one is left as it was, still waiting on the sender.
+    const ret = dest ? this.carryOnAsReturn(f, dest, input, now) : undefined;
+    const at = new Date(now).toISOString();
+    f.status = 'refused';
+    this.payTheRoad(f);
+    this.media.anchorFreightTerminal(f.freightId);
+    f.refusal = {
+      ...f.refusal,
+      decision: {
+        choice: input.choice,
+        at,
+        ...(by ? { by } : { byDeadline: true }),
+        ...(dest ? { destLabel: dest.label, destLocation: dest.location } : {}),
+        ...(ret ? { returnLeg: { freightId: ret.freightId, code: ret.code } } : {}),
+      },
+    };
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightRefusalDecided, { freightId: f.freightId, code: f.code, choice: input.choice, byDeadline: !by, driverDid: holder, posterDid: this.senderDidOf(f), ...(dest ? { destLabel: dest.label } : {}), ...(ret ? { returnFreightId: ret.freightId, returnCode: ret.code } : {}) }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
+  }
+
+  /**
+   * REFUSED GOODS RIDE ON as a new load — its own code, note and custody — taken over where they were refused, by the driver
+   * who holds them, in the vehicle they are in. Priced as any claim is: that vehicle's own figures and the market there, now,
+   * over the road to where they go, nothing to drive empty first. Settled as the first was: a store billed, a business
+   * between the parties. Offered to nobody: the goods are aboard, and the carrier follows the sender's instructions.
+   */
+  private carryOnAsReturn(f: Freight, dest: { label: string; location: GeoPoint }, contact: { contactName?: string; contactPhone?: string }, now: number): Freight {
+    const holder = f.claimedBy!;
+    const inIt = vehicleNow(f);
+    const vehicle = this.fleet.vehicleForDriver(holder) ?? (inIt ? this.fleet.vehicleOf(inIt.vehicleId) : undefined);
+    if (!vehicle) throw new GlosError('INVALID_STATE', 'The vehicle the goods are in cannot be found');
+    // Where they were refused: the door it was going to. A load posted without a place on the map has no other point but
+    // its pickup — the only place of it anybody marked.
+    const from = f.destLocation ?? f.pickupLocation;
+    const ret = this.registerFreight(
+      {
+        description: f.description,
+        pickupLocation: from,
+        pickupLabel: f.destLabel,
+        destLabel: dest.label,
+        destLocation: dest.location,
+        weightKg: f.weightKg,
+        fragile: f.fragile,
+        ...(f.packaging ? { packaging: f.packaging } : {}),
+        ...(f.packages ? { packages: f.packages } : {}),
+        natureCode: f.natureCode,
+        ...(f.dimensionsCm ? { dimensionsCm: f.dimensionsCm } : {}),
+        ...(f.heightM ? { heightM: f.heightM } : {}),
+        ...(f.indivisible ? { indivisible: true } : {}),
+        ...(f.postedByDid ? { postedByDid: f.postedByDid } : {}),
+        ...(f.postedByName ? { postedByName: f.postedByName } : {}),
+        ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
+        ...(f.shipperDid ? { shipperDid: f.shipperDid } : {}),
+        ...(f.destCountry ? { pickupCountry: f.destCountry } : {}),
+        ...(dest.label === f.pickupLabel && f.pickupCountry ? { destCountry: f.pickupCountry } : {}),
+        ...(contact.contactName?.trim() ? { contactName: contact.contactName.trim() } : {}),
+        ...(contact.contactPhone?.trim() ? { contactPhone: contact.contactPhone.trim() } : {}),
+        ...(f.externalOrderId ? { externalOrderId: f.externalOrderId } : {}),
+        returnOf: { freightId: f.freightId, code: f.code },
+      },
+      now,
+    );
+    const at = new Date(now).toISOString();
+    const profile = this.pricingProfile(vehicle);
+    const breakdown = computeFreightPrice({
+      baseFee: profile.baseFee,
+      ratePerKm: profile.ratePerKm,
+      deadheadKm: 0,
+      tripKm: round1(this.router.roadKm(from, dest.location)),
+      multiplier: freightMultiplier(new Date(now), { min: profile.min, max: profile.max }, this.market.factorFor(from, now)),
+    });
+    ret.status = 'in_transit';
+    ret.claimedBy = holder;
+    const carrierDid = f.carrierDid ?? this.carrierDidOf(holder);
+    if (carrierDid) ret.carrierDid = carrierDid;
+    ret.carriedBy = f.carriedBy ?? { vehicleClass: vehicle.vehicleClass, truckSubtype: vehicle.truckSubtype as TruckSubtype | undefined };
+    ret.claimedAt = at;
+    ret.lockedAt = at;
+    ret.priceBreakdown = breakdown;
+    ret.lockedPrice = breakdown.total;
+    const lockedIn = this.drivers.rateCurrencyForDriver(holder);
+    if (lockedIn) ret.lockedCurrency = lockedIn;
+    ret.priceOrigin = 'computed';
+    ret.driverPaid = false;
+    this.settleShipper(ret, breakdown.total);
+    // Taken over where they were refused, without leaving the vehicle: the same driver, in the vehicle they are in now.
+    ret.pickedUpAt = at;
+    ret.carriage = { vehicleId: vehicle.vehicleId, plate: vehicle.plate, vehicleClass: vehicle.vehicleClass, driverDid: holder, ...(f.carriage?.managerDid ? { managerDid: f.carriage.managerDid } : {}), at };
+    this.anchorCustody(ret, 'picked_up');
+    this.freights.set(ret.freightId, ret);
+    void this.events.publish(GlosEvent.Pudo.FreightPickedUp, { freightId: ret.freightId, code: ret.code, driverDid: holder }, { source: 'pudo' }).catch(() => undefined);
+    return ret;
+  }
+
+  /**
+   * THE 48 HOURS (the user, 2026-10-27: "Back after 2 days"). A sender who has not decided is told, REFUSAL_REMIND_H hours
+   * before the end, what happens with no answer — while there is still time to give one; at the end the goods go back to
+   * where they were picked up, at the sender's cost. Each once. Answers what it did, for a test with a fixed clock.
+   */
+  sweepRefusals(now: number = Date.now()): { reminded: string[]; decided: string[] } {
+    const reminded: string[] = [];
+    const decided: string[] = [];
+    for (const f of [...this.freights.values()]) {
+      if (f.status !== 'in_transit' || !f.refusal || f.refusal.decision) continue;
+      const end = Date.parse(f.refusal.decideBy);
+      if (now >= end) {
+        try {
+          this.decideRefusal(f.freightId, undefined, { choice: 'back' }, now);
+          decided.push(f.freightId);
+        } catch (err) {
+          new Logger(DispatchService.name).warn(`refused goods of ${f.code} could not be sent back: ${(err as Error).message}`);
+        }
+      } else if (!f.refusal.remindedAt && now >= end - REFUSAL_REMIND_H * 3_600_000) {
+        f.refusal = { ...f.refusal, remindedAt: new Date(now).toISOString() };
+        this.freights.set(f.freightId, f);
+        void this.events
+          .publish(GlosEvent.Pudo.FreightRefusalReminder, { freightId: f.freightId, code: f.code, decideBy: f.refusal.decideBy, pickupLabel: f.pickupLabel, destLabel: f.destLabel, posterDid: this.senderDidOf(f) }, { source: 'pudo' })
+          .catch(() => undefined);
+        reminded.push(f.freightId);
+      }
+    }
+    return { reminded, decided };
+  }
+
+  /**
+   * THE ROAD PAID, ONCE: the driver's LOCKED earning, at delivery — or when a refused load closes, for it was driven to the
+   * door. A system-level ledger outflow (drivers hold no agent wallet); a legacy or bulletin freight claimed before pricing
+   * (no lockedPrice) is skipped. Never for a haul settled between the parties: the shipper pays the carrier, and a payable on
+   * our books would be a second debt for the same work, owed by a company that never held the money.
+   */
+  private payTheRoad(f: Freight): void {
+    if (f.lockedPrice != null && !f.driverPaid && f.claimedBy && f.settlement !== 'between_parties') {
+      // WHO it was owed to, read in the same turn the payout resolves it and kept on the load: a claim upheld
+      // weeks later takes the money back from this party, not from a fleet the driver has joined since.
+      const payee = this.drivers.payeeOrNone(f.claimedBy);
+      if (this.gate.driverPayout(f.claimedBy, f.lockedPrice) && payee.entityId) f.driverPayee = { payeeDid: payee.payeeDid, entityId: payee.entityId };
+      f.driverPaid = true;
+    }
+  }
+
+  /**
+   * Settle the shipper at the lock: a diverted vendor order (shipperDid = the vendor) is billed its earning + the platform
+   * fee from its prepaid balance. THREE distinct states, so an uncollected debt is never silent:
+   *  - 'billed'         a known shipper whose prepaid balance covered the charge;
+   *  - 'billing_failed' a known shipper whose balance fell SHORT — a real debt for a Local Admin to collect;
+   *  - 'unpaid'         a bulletin freight with no shipper, or a store no sister of ours settles (it stands in a
+   *                     country we only match) — settled off-platform between shipper and carrier.
+   * The driver is still paid on delivery in every case — labour done is owed regardless of shipper collection.
+   */
+  private settleShipper(f: Freight, earning: number): void {
+    if (f.shipperDid && this.vendors.has(f.shipperDid) && this.vendors.settlesWithUs(f.shipperDid)) {
+      const bill = this.shipperBill(earning, f);
+      const { paid } = this.vendors.billShipment(f.shipperDid, f.freightId, bill.gross, 0, bill.tax, bill.provision);
+      f.paidStatus = paid ? 'billed' : 'billing_failed';
+      // Stamped at the instant of charging, so a release reverses THIS, not whatever the rates resolve to
+      // whenever the release happens to run. Kept even on a failed billing: what the shipper owes is a real
+      // debt for a Local Admin to collect, and it is only collectable if somebody can say what it was.
+      // The cover the billing company has stated, stamped with the bill: a company that states cover later does not
+      // thereby owe it on a load it billed before, and one that withdraws it does not thereby escape what it promised.
+      f.billed = { ...bill, coverLimit: this.freightCoverStated(f) };
+    } else {
+      f.paidStatus = 'unpaid';
+    }
   }
 
   /**

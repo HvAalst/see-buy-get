@@ -9089,6 +9089,159 @@ describe('PUDO Light', () => {
   });
 
   /**
+   * REFUSED AT THE DOOR (the user, 2026-10-27): the sender decides — back, elsewhere, or given up — and pays the way; the
+   * driver holding the goods carries them on as a NEW load; with no answer in 48 hours they go back to the pickup.
+   */
+  describe('refused at the door', () => {
+    const pickup = { lat: -1.88, lng: 36.38 };
+    const door = { lat: -1.95, lng: 36.5 };
+    const T0 = Date.parse('2026-10-27T08:00:00Z');
+    const H = 3_600_000;
+    let n = 0;
+    const onTheRoad = (extra: Record<string, unknown> = { postedByDid: 'did:shop:rf' }) => {
+      n += 1;
+      const d = coupleTipper(`RF${n}`, { min: 0.8, max: 1.5 });
+      const f = dispatch.registerFreight({ description: 'Cement', pickupLocation: pickup, pickupLabel: 'Depot', destLabel: 'Site', destLocation: door, weightKg: 200, packaging: 'loose', ...extra });
+      claimFreight(d.did, pickup, f.freightId);
+      dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did) });
+      return { d, f };
+    };
+
+    it('asks the sender, with 48 hours to answer — and a second refusal at the same door does not restart the clock', () => {
+      const { d, f } = onTheRoad();
+      const failed: Array<Record<string, unknown>> = [];
+      events.subscribe(GlosEvent.Pudo.FreightDeliveryFailed, (e) => {
+        failed.push(e.payload as Record<string, unknown>);
+      });
+      const refused = dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused', note: 'Not what was ordered' }, T0);
+      expect(refused.status).toBe('in_transit');
+      expect(refused.refusal).toMatchObject({ at: '2026-10-27T08:00:00.000Z', by: d.did, note: 'Not what was ordered', decideBy: '2026-10-29T08:00:00.000Z' });
+      expect(failed[0]).toMatchObject({ outcome: 'refused', decideBy: '2026-10-29T08:00:00.000Z', pickupLabel: 'Depot' });
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0 + 3 * H);
+      expect(dispatch.requireFreightPublic(f.freightId).refusal?.decideBy).toBe('2026-10-29T08:00:00.000Z');
+      // Nobody there is not a refusal: nothing to decide.
+      const other = onTheRoad();
+      expect(dispatch.failDelivery(other.f.freightId, other.d.did, { outcome: 'absent' }, T0).refusal).toBeUndefined();
+      expect(() => dispatch.decideRefusal(other.f.freightId, 'did:shop:rf', { choice: 'back' }, T0)).toThrow(/Nothing was refused/);
+      // The sender's row: theirs to decide now, and where "back" takes them.
+      expect(dispatch.postedBy('did:shop:rf').find((r) => r.freightId === f.freightId)).toMatchObject({ canDecideRefusal: true, pickupLabel: 'Depot', refusal: expect.objectContaining({ decideBy: '2026-10-29T08:00:00.000Z' }) });
+    });
+
+    it('back: the driver holding them carries them on as a NEW load, priced at their vehicle; the first closes refused, its road paid', () => {
+      const { d, f } = onTheRoad();
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused', note: 'Not what was ordered' }, T0);
+      const decided: Array<Record<string, unknown>> = [];
+      events.subscribe(GlosEvent.Pudo.FreightRefusalDecided, (e) => {
+        decided.push(e.payload as Record<string, unknown>);
+      });
+      // Offered to nobody: the goods are already aboard.
+      const posted: string[] = [];
+      events.subscribe(GlosEvent.Pudo.FreightPosted, (e) => {
+        posted.push(String((e.payload as { freightId?: string }).freightId));
+      });
+      const closed = dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'back' }, T0 + 2 * H);
+      expect(posted).toEqual([]);
+      expect(closed.status).toBe('refused');
+      expect(closed.driverPaid).toBe(true);
+      expect(closed.refusal?.decision).toMatchObject({ choice: 'back', by: 'did:shop:rf', destLabel: 'Depot', destLocation: pickup });
+      const leg = closed.refusal!.decision!.returnLeg!;
+      const ret = dispatch.requireFreightPublic(leg.freightId);
+      expect(ret).toMatchObject({ status: 'in_transit', claimedBy: d.did, pickupLabel: 'Site', pickupLocation: door, destLabel: 'Depot', destLocation: pickup, returnOf: { freightId: f.freightId, code: f.code }, postedByDid: 'did:shop:rf', weightKg: 200, description: 'Cement', driverPaid: false });
+      expect(ret.code).not.toBe(f.code);
+      expect(ret.lockedPrice).toBeGreaterThan(0);
+      expect(ret.priceBreakdown).toMatchObject({ deadheadKm: 0 });
+      expect(ret.carriage).toMatchObject({ driverDid: d.did });
+      expect(decided).toEqual([expect.objectContaining({ freightId: f.freightId, choice: 'back', byDeadline: false, driverDid: d.did, returnFreightId: ret.freightId, returnCode: ret.code, destLabel: 'Depot' })]);
+      // Decided once; the sender's row now says what became of it.
+      expect(() => dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'give_up' }, T0 + 3 * H)).toThrow(/Nothing was refused/);
+      expect(dispatch.postedBy('did:shop:rf').find((r) => r.freightId === f.freightId)).toMatchObject({ status: 'refused', canDecideRefusal: false });
+      expect(dispatch.postedBy('did:shop:rf').find((r) => r.freightId === ret.freightId)).toMatchObject({ returnOf: { code: f.code } });
+      // The return is delivered as any other load, and its road paid then.
+      const done = dispatch.deliverFreight(ret.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Depot clerk', podPhotoId: photoBy(d.did) });
+      expect(done).toMatchObject({ status: 'delivered', driverPaid: true });
+    });
+
+    it('elsewhere: to the place the sender names, on the map, with who to ask for there', () => {
+      const { d, f } = onTheRoad();
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0);
+      expect(() => dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'elsewhere', destLabel: 'X' }, T0)).toThrow(/Say where the goods go/);
+      expect(() => dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'elsewhere', destLabel: 'Second shop, Thika Road' }, T0)).toThrow(/Show where the goods go on the map/);
+      // Refused before anything was written: still waiting on the sender.
+      expect(dispatch.requireFreightPublic(f.freightId)).toMatchObject({ status: 'in_transit' });
+      const other = { lat: -1.22, lng: 36.89 };
+      const closed = dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'elsewhere', destLabel: 'Second shop, Thika Road', destLocation: other, contactName: 'Wanjiru', contactPhone: '+254700123456' }, T0 + H);
+      const ret = dispatch.requireFreightPublic(closed.refusal!.decision!.returnLeg!.freightId);
+      expect(ret).toMatchObject({ destLabel: 'Second shop, Thika Road', destLocation: other, status: 'in_transit', claimedBy: d.did });
+      expect(JSON.stringify(ret.instructions ?? {})).toContain('Wanjiru');
+    });
+
+    it('given up: nothing travels, the first closes refused and its road is paid; the driver is told', () => {
+      const { d, f } = onTheRoad();
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0);
+      const before = dispatch.postedBy('did:shop:rf').length;
+      const closed = dispatch.decideRefusal(f.freightId, 'did:shop:rf', { choice: 'give_up' }, T0 + H);
+      expect(closed).toMatchObject({ status: 'refused', driverPaid: true });
+      expect(closed.refusal?.decision).toEqual(expect.objectContaining({ choice: 'give_up', by: 'did:shop:rf' }));
+      expect(closed.refusal?.decision?.returnLeg).toBeUndefined();
+      expect(dispatch.postedBy('did:shop:rf')).toHaveLength(before); // no new load
+    });
+
+    it('the 48 hours: told 12 hours before the end, once — then back to the pickup at the end, by the deadline', () => {
+      const { d, f } = onTheRoad();
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0);
+      const reminders: Array<Record<string, unknown>> = [];
+      events.subscribe(GlosEvent.Pudo.FreightRefusalReminder, (e) => {
+        reminders.push(e.payload as Record<string, unknown>);
+      });
+      expect(dispatch.sweepRefusals(T0 + 35 * H)).toEqual({ reminded: [], decided: [] });
+      expect(dispatch.sweepRefusals(T0 + 36 * H).reminded).toEqual([f.freightId]);
+      expect(dispatch.sweepRefusals(T0 + 40 * H).reminded).toEqual([]);
+      expect(reminders).toEqual([expect.objectContaining({ freightId: f.freightId, decideBy: '2026-10-29T08:00:00.000Z', pickupLabel: 'Depot', destLabel: 'Site', posterDid: 'did:shop:rf' })]);
+      const swept = dispatch.sweepRefusals(T0 + 48 * H);
+      expect(swept.decided).toEqual([f.freightId]);
+      const closed = dispatch.requireFreightPublic(f.freightId);
+      expect(closed.status).toBe('refused');
+      expect(closed.refusal?.decision).toMatchObject({ choice: 'back', byDeadline: true, destLabel: 'Depot' });
+      expect(closed.refusal?.decision?.by).toBeUndefined();
+      expect(dispatch.requireFreightPublic(closed.refusal!.decision!.returnLeg!.freightId)).toMatchObject({ status: 'in_transit', destLabel: 'Depot', claimedBy: d.did });
+      expect(dispatch.sweepRefusals(T0 + 50 * H)).toEqual({ reminded: [], decided: [] });
+    });
+
+    it('taken after all: a delivery after a refusal leaves nothing to decide, and the 48 hours do nothing', () => {
+      const { d, f } = onTheRoad();
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0);
+      const done = dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Site foreman', podPhotoId: photoBy(d.did) }, T0 + H);
+      expect(done.status).toBe('delivered');
+      expect(done.refusal).toBeUndefined();
+      expect(done.deliveryAttempts).toEqual([expect.objectContaining({ outcome: 'refused' })]);
+      expect(dispatch.sweepRefusals(T0 + 49 * H)).toEqual({ reminded: [], decided: [] });
+    });
+
+    it('a store pays the way back as it paid the way there: its return billed from its balance', () => {
+      const vendor = vendors.register({ name: 'RefusedVendor' });
+      vendors.topUp(vendor.vendorId, 500);
+      const { d, f } = onTheRoad({ shipperDid: vendor.vendorId });
+      expect(dispatch.requireFreightPublic(f.freightId).paidStatus).toBe('billed');
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0);
+      const before = vendors.balanceOf(vendor.vendorId);
+      // The store decides as itself.
+      const row = controller.decideFreightRefusal(f.freightId, { choice: 'back' } as never, { role: 'vendor', did: vendor.did } as never);
+      expect(row).toMatchObject({ status: 'refused', refusal: expect.objectContaining({ decision: expect.objectContaining({ choice: 'back', by: vendor.did }) }) });
+      const ret = dispatch.requireFreightPublic(row.refusal.decision!.returnLeg!.freightId);
+      expect(ret).toMatchObject({ shipperDid: vendor.vendorId, paidStatus: 'billed' });
+      expect(vendors.balanceOf(vendor.vendorId)).toBeLessThan(before);
+    });
+
+    it('is the sender’s to decide: not staff, not a stranger', () => {
+      const { d, f } = onTheRoad();
+      dispatch.failDelivery(f.freightId, d.did, { outcome: 'refused' }, T0);
+      expect(() => controller.decideFreightRefusal(f.freightId, { choice: 'back' } as never, { role: 'operator', did: 'did:staff:1' } as never)).toThrow(/Staff decide nothing in its name/);
+      expect(() => controller.decideFreightRefusal(f.freightId, { choice: 'back' } as never, { role: 'agent', did: 'did:shop:stranger' } as never)).toThrow(/Freight not found/);
+      expect(controller.decideFreightRefusal(f.freightId, { choice: 'give_up' } as never, { role: 'agent', did: 'did:shop:rf' } as never).status).toBe('refused');
+    });
+  });
+
+  /**
    * THE RULE HOLDS FOR FREIGHT TOO (the user, 2026-10-13). A claim is decided by staff, with an award, only where the
    * company that billed the load has STATED COVER for dedicated freight. Everywhere else — a load settled between the
    * parties, or billed by a company that has stated nothing — the claim closes itself the moment it is made, and the

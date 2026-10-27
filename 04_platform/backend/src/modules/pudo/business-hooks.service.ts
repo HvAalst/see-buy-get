@@ -27,6 +27,8 @@ const TOPICS: ReadonlyArray<[string, BusinessHookEvent, (p: Record<string, unkno
   [GlosEvent.Pudo.FreightHandedBack, 'load.handed_back', (p) => String(p.freightId ?? '')],
   [GlosEvent.Pudo.FreightPickedUp, 'load.picked_up', (p) => String(p.freightId ?? '')],
   [GlosEvent.Pudo.FreightDeliveryFailed, 'load.delivery_failed', (p) => String(p.freightId ?? '')],
+  // Refused at the door: what the business decided — or the 48 hours did — and the load the goods went back on.
+  [GlosEvent.Pudo.FreightRefusalDecided, 'load.refusal_decided', (p) => String(p.freightId ?? '')],
   [GlosEvent.Pudo.FreightDelivered, 'load.delivered', (p) => String(p.freightId ?? '')],
   [GlosEvent.Pudo.FreightCancelled, 'load.cancelled', (p) => String(p.freightId ?? '')],
   [GlosEvent.Pudo.FreightClaimOpened, 'load.claim_opened', (p) => String(p.freightId ?? '')],

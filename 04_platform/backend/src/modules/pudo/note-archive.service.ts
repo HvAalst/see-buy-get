@@ -89,6 +89,7 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
       [GlosEvent.Pudo.FreightPickedUp, 'taken_over', 'The carrier took the goods over'],
       [GlosEvent.Pudo.FreightDelivered, 'delivered', 'The goods were handed over and the receiver was recorded'],
       [GlosEvent.Pudo.FreightDeliveryFailed, 'not_delivered', 'The carrier was at the door and could not hand over'],
+      [GlosEvent.Pudo.FreightRefusalDecided, 'refused', 'The consignee refused the goods, and the sender decided what became of them'],
       [GlosEvent.Pudo.FreightCancelled, 'cancelled', 'The load was withdrawn'],
       [GlosEvent.Pudo.FreightClaimOpened, 'claimed', 'The sender raised a claim against the delivered goods'],
     ];

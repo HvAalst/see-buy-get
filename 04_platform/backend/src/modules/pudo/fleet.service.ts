@@ -11,7 +11,7 @@ import { VehicleService } from './vehicle.service';
 import { CLASS_TO_CORRIDOR_VEHICLE } from './fleet.config';
 import { MAX_SNOOZE_MIN, MAX_WORK_RADIUS_KM, NEAR_LOCATED_H } from './pudo.config';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { Assignment, DeclaredLeg, DeclaredWork, ResolvedBadge } from './fleet.types';
+import { Assignment, DeclaredLeg, DeclaredWork, ResolvedBadge, type Vehicle } from './fleet.types';
 import { GeoPoint } from './pudo.types';
 import { haversineKm } from './geo';
 import { handedAt } from './observed-at';
@@ -743,6 +743,15 @@ export class FleetService {
       maxParcelKg: vehicle.maxParcelKg,
       allowsFragile: vehicle.allowsFragile,
     };
+  }
+
+  /** A vehicle by its id, or nothing: refused goods are priced on the vehicle they are in, whoever is coupled to it now. */
+  vehicleOf(vehicleId: string): Vehicle | undefined {
+    try {
+      return this.vehicles.get(vehicleId);
+    } catch {
+      return undefined;
+    }
   }
 
   /** The vehicle the driver is currently coupled to (for dispatch capacity + handling rules). */
