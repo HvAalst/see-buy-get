@@ -96,6 +96,8 @@ export interface MailParams {
   'staff-two-step': { name: string; what: string; next: string; when: string };
   /** Who is on staff changed, or somebody asked for it to: said to members of staff. */
   'staff-account-news': { what: string; next: string; when: string };
+  /** The system raised a company's payout run this morning: one member of staff with the money role checks it and approves sending (2026-10-27). */
+  'payout-run-waiting': { company: string; day: string; count: number; total: string; skipped: number };
   'access-removed': { email: string; what: string; removedBy: string; when: string };
   'fleet-code-issued': { company: string; when: string; byStaff: boolean };
   /** A fleet that signed itself up on the front page: its papers were received, approved, sent back with the reason, or it is active. */
@@ -816,6 +818,26 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: 'Open the operator console', href: appUrl('console') },
       ],
       reason: 'You are getting this email because you have a SeeBuyGet staff account, and who is on staff decides who can approve what. We always tell you — this email cannot be turned off.',
+    }),
+  },
+
+  'payout-run-waiting': {
+    title: 'The morning payout run waits for approval',
+    sentWhen: 'The system raised a company’s payout run at 06:00 on that company’s own clock, with at least one payout in it — to every member of staff who holds the money role.',
+    wired: true,
+    // A notice: a run nobody approved is still waiting a day later.
+    sendLater: 24,
+    sample: { company: 'SeeBuyGet Kenya', day: '2026-10-28', count: 7, total: 'KES 18,420.00', skipped: 1 },
+    build: (p) => ({
+      subject: `SeeBuyGet: ${p.count} ${p.count === 1 ? 'payout' : 'payouts'} for ${p.company} wait for approval`,
+      preheader: `Raised by the morning run for ${p.day}: ${p.total} in all. Nothing is sent until somebody approves it.`,
+      blocks: [
+        { kind: 'heading', text: 'The morning payout run waits for you' },
+        { kind: 'paragraph', text: `The morning run raised ${p.count} ${p.count === 1 ? 'payout' : 'payouts'} for ${p.company}, for ${p.day}: what providers earned, and what people are owed back. Nothing is sent until one member of staff with the money role checks them and approves sending.` },
+        { kind: 'facts', rows: [['Company', p.company], ['For', p.day], ['Payouts', String(p.count)], ['In all', p.total], ...(p.skipped ? [['Skipped', `${p.skipped} — the console says who, and why`] as [string, string]] : [])] },
+        { kind: 'button', label: 'Open Money in the operator console', href: appUrl('console') },
+      ],
+      reason: 'You are getting this email because you hold the money role on SeeBuyGet staff: a payout raised and never approved is somebody not paid.',
     }),
   },
 

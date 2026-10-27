@@ -500,6 +500,12 @@ export class PaidDirect {
   @ApiProperty({ enum: ['driver', 'office'] }) by: 'driver' | 'office';
 }
 
+/** Delivered, and the carrier says the shipper has NOT paid the price agreed yet: when, and who said so (2026-10-27). */
+export class NotPaidDirect {
+  at: string;
+  @ApiProperty({ enum: ['driver', 'office'] }) by: 'driver' | 'office';
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -737,6 +743,10 @@ export class Freight {
   @ApiPropertyOptional({ enum: ['between_parties'] }) settlement?: 'between_parties';
   /** Settled between the parties, and the carrier says it was paid: when, how much (the price agreed here), and who said so. */
   @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
+  /** …or, delivered, that it was NOT paid yet. Said paid later, paid is what stands. */
+  @ApiPropertyOptional({ type: NotPaidDirect }) notPaidDirect?: NotPaidDirect;
+  /** When its carrier was asked whether it was paid, PAID_DIRECT_ASK_H after delivery — once. */
+  @ApiPropertyOptional() paidDirectAskedAt?: string;
   /** Which person in a business posted it — the business's DID is shared by everybody in it. */
   @ApiPropertyOptional() postedByName?: string;
   /** B4 — the client an expeditor sent this for, as their agent. The client is the SENDER on the note. A copy, not a link. */
@@ -1477,6 +1487,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional() paysDriverDirect?: boolean;
   /** …and the driver, or their fleet's office, says it was paid: when and how much. Their word, not ours. */
   @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
+  /** …or, delivered, says it was NOT paid yet (absent once said paid). */
+  @ApiPropertyOptional({ type: NotPaidDirect }) notPaidDirect?: NotPaidDirect;
 }
 
 /** FP3b — what the sender gets back for opening a claim. */

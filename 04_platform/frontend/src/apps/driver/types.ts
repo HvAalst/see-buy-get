@@ -75,6 +75,8 @@ export interface DriverJobRow {
   direct?: boolean;
   /** …and the driver, or their fleet's office, said it was paid, at this time (2026-10-27). */
   paidDirectAt?: string;
+  /** …or, delivered, said NOT paid yet, at this time (absent once said paid). */
+  notPaidDirectAt?: string;
   /** FP8 — what an upheld claim took back from that pay. The earning above is what was agreed; net is the difference. */
   clawback?: number;
   claimedAt?: string;

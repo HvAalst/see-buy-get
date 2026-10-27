@@ -24,6 +24,12 @@ export class RefusedGoodsSweeper implements OnApplicationBootstrap, OnModuleDest
       } catch (err) {
         this.logger.warn(`the refused-goods sweep did not run: ${(err as Error).message}`);
       }
+      // A matched load delivered three days ago that nobody said was paid: its carrier is asked (2026-10-27).
+      try {
+        this.dispatch.sweepUnconfirmedPay();
+      } catch (err) {
+        this.logger.warn(`the were-you-paid sweep did not run: ${(err as Error).message}`);
+      }
     }, SWEEP_MS);
     this.timer.unref?.();
   }

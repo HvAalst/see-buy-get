@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maySayPaid, paidDirectLine, paidWhen, shipperPaidLine } from './paidDirect';
+import { maySayNotPaid, maySayPaid, paidDirectLine, paidWhen, shipperPaidLine } from './paidDirect';
 import { t } from './i18n';
 import { cash } from './money';
 
@@ -19,6 +19,9 @@ describe('a matched load, paid: said the same in every app', () => {
     expect(shipperPaidLine({ paysDriverDirect: true, paidDirect: { at, amount: 4200, currency: 'KES', by: 'driver' } }, t)).toBe(`The driver says you paid ${kes}, on ${when}.`);
     expect(shipperPaidLine({ paysDriverDirect: true, paidDirect: { at, amount: 4200, by: 'office' }, currency: 'KES' }, t)).toBe(`The carrier’s fleet says you paid ${kes}, on ${when}.`);
     expect(shipperPaidLine({}, t)).toBeNull();
+    // Delivered and NOT paid yet, as the driver said: with the price agreed; paid later, paid is what is said.
+    expect(shipperPaidLine({ paysDriverDirect: true, notPaidDirect: { at, by: 'driver' }, agreedPrice: 4200, currency: 'KES' }, t)).toBe(`The driver says you have not paid ${kes} yet, as of ${when}. You pay them directly.`);
+    expect(shipperPaidLine({ paysDriverDirect: true, notPaidDirect: { at, by: 'driver' }, paidDirect: { at, amount: 4200, currency: 'KES', by: 'driver' } }, t)).toBe(`The driver says you paid ${kes}, on ${when}.`);
   });
 
   it('offers "I was paid" only on a matched load with a price, taken and not withdrawn, and not said yet', () => {
@@ -30,5 +33,11 @@ describe('a matched load, paid: said the same in every app', () => {
     expect(maySayPaid({ ...row, direct: false })).toBe(false);
     expect(maySayPaid({ ...row, status: 'cancelled' })).toBe(false);
     expect(maySayPaid({ ...row, earning: undefined })).toBe(false);
+    // "Not paid yet" only once delivered, and only while nothing is said either way.
+    expect(maySayNotPaid({ ...row, status: 'delivered' })).toBe(true);
+    expect(maySayNotPaid(row)).toBe(false);
+    expect(maySayNotPaid({ ...row, status: 'delivered', notPaidDirectAt: at })).toBe(false);
+    expect(maySayNotPaid({ ...row, status: 'delivered', paidDirectAt: at })).toBe(false);
+    expect(maySayPaid({ ...row, status: 'delivered', notPaidDirectAt: at } as never)).toBe(true);
   });
 });

@@ -13,6 +13,12 @@ export interface PaidDirectView {
   by: 'driver' | 'office';
 }
 
+/** Delivered, and the carrier says the shipper has NOT paid yet: when, and who said so (2026-10-27). */
+export interface NotPaidView {
+  at: string;
+  by: 'driver' | 'office';
+}
+
 /** When it was said, short: "27 Oct, 14:05". */
 export function paidWhen(at: string): string {
   return new Date(at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -28,12 +34,19 @@ export function paidDirectLine(p: PaidDirectView, t: Translate, currency?: strin
  * The shipper's side, on its own load: that it pays the driver directly, and — once the carrier says so — that it was paid.
  * Nothing on a load SeeBuyGet pays the driver for.
  */
-export function shipperPaidLine(row: { paysDriverDirect?: boolean; paidDirect?: PaidDirectView; currency?: string }, t: Translate): string | null {
+export function shipperPaidLine(row: { paysDriverDirect?: boolean; paidDirect?: PaidDirectView; notPaidDirect?: NotPaidView; agreedPrice?: number; currency?: string }, t: Translate): string | null {
   if (row.paidDirect) {
     const vars = { amount: cash(row.paidDirect.amount, row.paidDirect.currency ?? row.currency), when: paidWhen(row.paidDirect.at) };
     return row.paidDirect.by === 'office' ? t('common.paidDirect.shipperOffice', vars) : t('common.paidDirect.shipperDriver', vars);
   }
+  // Delivered, and the carrier says it has not been paid (2026-10-27): said plainly, with the price agreed.
+  if (row.notPaidDirect) return t('common.paidDirect.shipperNotPaid', { amount: cash(row.agreedPrice ?? 0, row.currency), when: paidWhen(row.notPaidDirect.at) });
   return row.paysDriverDirect ? t('common.paidDirect.shipperPays') : null;
+}
+
+/** May the carrier say it was NOT paid yet: delivered, a matched load with a price, nothing said either way. */
+export function maySayNotPaid(row: { direct?: boolean; status: string; earning?: number | null; paidDirectAt?: string; notPaidDirectAt?: string }): boolean {
+  return Boolean(row.direct) && row.status === 'delivered' && row.earning != null && !row.paidDirectAt && !row.notPaidDirectAt;
 }
 
 /**

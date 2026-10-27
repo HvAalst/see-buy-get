@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, DocumentButton, ErrorNote, Explainer, GlanceNumber, Icon, PaidDirectSheet, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
-import { maySayPaid, paidWhen } from '../../../shared/paidDirect';
+import { maySayNotPaid, maySayPaid, paidWhen } from '../../../shared/paidDirect';
 import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EARN_LIMIT, type EarningsQuery, type FleetActions, type FleetState } from '../useFleetApp';
@@ -50,6 +50,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   const t = useT();
   const [filterOpen, setFilterOpen] = useState(false);
   const [paidFor, setPaidFor] = useState<FleetJobRow | null>(null); // a haul the shipper pays the fleet for directly, being said paid
+  const [notPaidFor, setNotPaidFor] = useState<FleetJobRow | null>(null); // …or, delivered, said not paid yet
   const [searchText, setSearchText] = useState(state.earnQuery.q);
   const debounced = useDebounced(searchText, 300);
   const q = state.earnQuery;
@@ -175,7 +176,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
           ) : (
             <div class={`rows${state.earnState === 'loading' ? ' rows--loading' : ''}`} role="list">
               {state.earnRows.map((j) => (
-                <JobRow key={j.freightId} j={j} currency={currency} actions={actions} onSayPaid={() => setPaidFor(j)} />
+                <JobRow key={j.freightId} j={j} currency={currency} actions={actions} onSayPaid={() => setPaidFor(j)} onSayNotPaid={() => setNotPaidFor(j)} />
               ))}
             </div>
           )}
@@ -206,6 +207,19 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
         }}
         onClose={() => setPaidFor(null)}
       />
+      <PaidDirectSheet
+        open={!!notPaidFor}
+        notPaid
+        office
+        code={notPaidFor?.code ?? ''}
+        amount={notPaidFor ? money(notPaidFor.earning, notPaidFor.currency ?? currency) : ''}
+        busy={Boolean(notPaidFor) && state.busy === `notpaid:${notPaidFor?.freightId}`}
+        onYes={() => {
+          const j = notPaidFor;
+          if (j) void actions.sayNotPaid(j.freightId).then(() => setNotPaidFor(null));
+        }}
+        onClose={() => setNotPaidFor(null)}
+      />
 
       <FilterSheet
         open={filterOpen}
@@ -225,7 +239,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   );
 }
 
-function JobRow({ j, currency, actions, onSayPaid }: { j: FleetJobRow; currency?: string; actions: FleetActions; onSayPaid: () => void }) {
+function JobRow({ j, currency, actions, onSayPaid, onSayNotPaid }: { j: FleetJobRow; currency?: string; actions: FleetActions; onSayPaid: () => void; onSayNotPaid: () => void }) {
   const t = useT();
   const when = j.deliveredAt ?? j.claimedAt;
   return (
@@ -246,11 +260,18 @@ function JobRow({ j, currency, actions, onSayPaid }: { j: FleetJobRow; currency?
         {j.clawback ? <span class="row__meta row__s--danger">{t('fleet.earn.clawbackLine', { amount: money(j.clawback, j.currency ?? currency) })}</span> : null}
         {/* A haul the shipper pays the fleet for directly (2026-10-27): said paid, when — or the button to say so once it is. */}
         {j.paidDirectAt ? <span class="row__meta">{t('fleet.earn.paidDirectLine', { when: paidWhen(j.paidDirectAt) })}</span> : null}
+        {/* Delivered, said NOT paid yet (2026-10-27): when — they may still say it was paid. */}
+        {j.notPaidDirectAt ? <span class="row__meta row__s--danger">{t('fleet.earn.notPaidDirectLine', { when: paidWhen(j.notPaidDirectAt) })}</span> : null}
         {maySayPaid(j) ? (
           <span class="row__meta">
             <Button variant="link" full={false} onClick={onSayPaid}>
               {t('common.paidDirect.askOffice')}
             </Button>
+            {maySayNotPaid(j) ? (
+              <Button variant="link" full={false} onClick={onSayNotPaid}>
+                {t('common.paidDirect.notYetPaid')}
+              </Button>
+            ) : null}
           </span>
         ) : null}
         <span class="row__meta">

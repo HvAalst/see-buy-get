@@ -147,4 +147,40 @@ describe('a matched load, paid: the carrier says so', () => {
     stored().set(freightId, { ...billed, settlement: 'between_parties', status: 'available', lockedPrice: undefined });
     expect(() => app.get(DispatchService).confirmPaidDirect(freightId, 'driver')).toThrow(/a payment is confirmed on a load a driver has taken/);
   });
+
+  it('delivered three days ago and nothing said: the driver is asked once; "not paid yet" is told to the shipper; paid later is what stands', async () => {
+    const biz = await aShipper();
+    const driver = await aDriverOf();
+    const { freightId, code } = await aMatchedLoad(biz, driver.did);
+    const dispatch = app.get(DispatchService);
+    const notPaid = (token: string) => http().post(`/v1/sbg/dispatch/freight/${freightId}/not-paid-direct`).set(bearer(token));
+    // On the road, "not paid" is not said yet.
+    const early = await notPaid(driver.token);
+    expect([early.status, early.body.code]).toEqual([400, 'INVALID_STATE']);
+    const deliveredAt = Date.now() - 73 * 3_600_000;
+    stored().set(freightId, { ...stored().get(freightId), status: 'delivered', deliveredAt: new Date(deliveredAt).toISOString() });
+    // Under three days: not asked. Three days: asked, once.
+    expect(dispatch.sweepUnconfirmedPay(deliveredAt + 71 * 3_600_000)).not.toContain(freightId);
+    expect(dispatch.sweepUnconfirmedPay()).toContain(freightId);
+    expect(dispatch.sweepUnconfirmedPay()).not.toContain(freightId);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await inbox(driver.token)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'freight_paid_direct', title: `Were you paid for load ${code}?` })]));
+
+    // Not paid yet: staff cannot say it; the driver does — the shipper sees it on its load and is told.
+    expect((await notPaid(operator)).status).toBe(403);
+    const said = (await notPaid(driver.token).expect(201)).body;
+    expect(said.notPaidDirect).toMatchObject({ by: 'driver', at: expect.any(String) });
+    expect((await posted(biz, freightId)).notPaidDirect).toEqual(said.notPaidDirect);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await inbox(biz)).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'freight_paid_direct', title: `Load ${code}: the driver says they were not paid` })]));
+    const jobs = (await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/jobs`).set(bearer(driver.token)).expect(200)).body.items;
+    expect(jobs.find((j: { freightId: string }) => j.freightId === freightId)).toMatchObject({ direct: true, notPaidDirectAt: said.notPaidDirect.at });
+
+    // Paid after all: paid is what stands, and "not paid" can no longer be said.
+    await tick(freightId, driver.token).expect(201);
+    const row = await posted(biz, freightId);
+    expect(row.paidDirect).toMatchObject({ amount: 4200, by: 'driver' });
+    expect(row.notPaidDirect).toBeUndefined();
+    expect((await notPaid(driver.token)).status).toBe(400);
+  });
 });

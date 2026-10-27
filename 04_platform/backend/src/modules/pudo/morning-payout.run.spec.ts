@@ -1,4 +1,6 @@
 import type { EntityService } from '../../foundation/entity/entity.service';
+import type { OperatorAccountService } from '../../foundation/entity/operator-account.service';
+import type { MailService } from '../../foundation/mail/mail.service';
 import { sameSigner } from '../../foundation/entity/same-person';
 import type { PayoutService } from '../../foundation/payouts/payout.service';
 import { MORNING_RUN_SIGNER, MorningPayoutRun } from './morning-payout.run';
@@ -39,6 +41,26 @@ describe('the morning payout run', () => {
     expect(run.tick(at('2026-11-02T04:00:00Z'))).toEqual([]);
     expect(run.tick(at('2026-11-02T04:10:00Z'))).toEqual([]);
     expect(runFor).toHaveBeenCalledTimes(1);
+  });
+
+  it('a run with payouts in it is emailed to every member of staff who holds the money role — a run with none, to nobody', () => {
+    const sent: Array<{ to: string; params: Record<string, unknown> }> = [];
+    const mail = { send: jest.fn(async (_t: string, to: { address: string }, params: Record<string, unknown>) => (sent.push({ to: to.address, params }), true)) } as unknown as MailService;
+    const staff = { list: () => [
+      { email: 'amina@sbg.example', name: 'Amina', roles: ['money', 'support'] },
+      { email: 'otieno@sbg.example', name: 'Otieno', roles: ['support'] },
+      { email: 'baraka@sbg.example', name: 'Baraka', roles: ['money'] },
+    ] } as unknown as OperatorAccountService;
+    const runFor = jest.fn(() => ({ day: 'x', raised: [{ amount: 1200 }, { amount: 350.5 }], skipped: [{}] }));
+    const run = new MorningPayoutRun({ sisters: () => [{ entityId: 'ent_ke_mr3', jurisdiction: 'KE', name: 'SeeBuyGet Kenya', currency: 'KES' }] } as unknown as EntityService, { runFor } as unknown as PayoutService, staff, mail);
+    run.tick(at('2026-10-28T03:05:00Z'));
+    expect(sent.map((s) => s.to)).toEqual(['amina@sbg.example', 'baraka@sbg.example']);
+    expect(sent[0].params).toEqual({ company: 'SeeBuyGet Kenya', day: '2026-10-28', count: 2, total: 'KES 1,550.50', skipped: 1 });
+    expect((mail.send as jest.Mock).mock.calls[0][0]).toBe('payout-run-waiting');
+    // The next morning, nothing to pay: nobody is emailed.
+    runFor.mockImplementationOnce(() => ({ day: 'y', raised: [], skipped: [] }));
+    run.tick(at('2026-10-29T03:05:00Z'));
+    expect(sent).toHaveLength(2);
   });
 
   it('the system is not a person: one member of staff may approve what it raised', () => {

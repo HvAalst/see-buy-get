@@ -1359,6 +1359,20 @@ export function useFleetApp() {
     [client, run, fail, pushToast, fetchEarningsWith],
   );
 
+  /** …or, delivered, NOT paid yet (2026-10-27): the shipper is told and sees it on the load. */
+  const sayNotPaid = useCallback(
+    async (freightId: string) => {
+      if (!client) return;
+      await run(`notpaid:${freightId}`, async () => {
+        const r = await client.api.notPaidDirect(freightId);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'info', icon: 'info', title: t('common.paidDirect.notPaidToast'), detail: t('common.paidDirect.notPaidToastDetail') });
+        void fetchEarningsWith(stateRef.current.earnQuery);
+      });
+    },
+    [client, run, fail, pushToast, fetchEarningsWith],
+  );
+
   const uncouple = useCallback(
     async (driverDid: string) => {
       if (!client) return;
@@ -1433,6 +1447,7 @@ export function useFleetApp() {
       queryEarnings,
       exportEarnings,
       sayPaid,
+      sayNotPaid,
       openDispatch,
       setDispatchDriver,
       setDispatchRadius,

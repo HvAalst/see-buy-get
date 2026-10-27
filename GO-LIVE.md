@@ -188,8 +188,14 @@ The repository → Settings → Secrets and variables → Actions:
   ```
 
   It holds the keys that unlock the stored data; they can never be made again.
-- [ ] **The first staff account:** open https://ops.seebuyget.com → the setup-key link under the sign-in form → enter
-  `GLOS_CLIENT_SECRET` from that file.
+- [ ] **The first staff account:** open https://ops.seebuyget.com → "Who is signing in": **Setup key** → enter
+  `GLOS_CLIENT_SECRET` from that file (no root SSH at hand: DigitalOcean → the Droplet → Access → Droplet Console, then
+  `grep '^GLOS_CLIENT_SECRET=' /opt/seebuyget/.env`). On the one screen it opens, give your name and email: your account
+  is made with every role, and its first password is shown **once** — into the password manager. Then sign out, choose
+  **Network staff**, sign in with it: the first time, scan the QR code with an authenticator app and enter its 6-digit
+  code (two-step sign-in is required of staff on this server); then change the password in Settings. From then on the
+  setup key makes nobody alone; a colleague is asked for by you, approved by the key, and chooses a password from an
+  emailed link — so ZeptoMail first.
 - [ ] **Texts and email:** put the Twilio and ZeptoMail keys in `/opt/seebuyget/.env`, then:
 
   ```powershell

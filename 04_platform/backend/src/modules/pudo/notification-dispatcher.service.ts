@@ -29,6 +29,8 @@ import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancel
 
 /* The payloads the run's events carry, as published in DepartureService and FleetManagerService. */
 /** A load the poster pays its driver for directly: its carrier says it was paid (2026-10-27). */
+/** Delivered three days ago, nothing said: its carrier is asked whether it was paid. */
+interface FreightPaidDirectAsked { freightId: string; code: string; amount: number; currency: string; driverDid: string; officeDid?: string; destLabel?: string }
 interface FreightPaidDirectEvent { freightId: string; code: string; amount: number; currency: string; by: 'driver' | 'office'; driverName?: string; posterDid?: string; destLabel?: string }
 interface SpaceSold { departureId: string; bookingId: string; managerDid: string; lineName: string; shipperDid: string; description: string; weightKg: number; price: number; currency: string }
 interface VehicleChanged { departureId: string; managerDid: string; company: string; lineName: string; fromPlate: string; toPlate: string; fromClass: string; toClass: string; shippers: string[] }
@@ -407,6 +409,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ freightId: string; code: string; driverName?: string; reason: string; posterDid?: string; managerDid?: string; destLabel?: string }>(GlosEvent.Pudo.FreightHandedBack, (e) => this.onFreightHandedBack(e.payload));
     // A load the poster pays its driver for directly: the driver, or their fleet's office, says it was paid (2026-10-27).
     this.events.subscribe<FreightPaidDirectEvent>(GlosEvent.Pudo.FreightPaidDirect, (e) => this.onFreightPaidDirect(e.payload));
+    this.events.subscribe<FreightPaidDirectEvent>(GlosEvent.Pudo.FreightNotPaidDirect, (e) => this.onFreightNotPaidDirect(e.payload));
+    this.events.subscribe<FreightPaidDirectAsked>(GlosEvent.Pudo.FreightPaidDirectAsked, (e) => this.onFreightPaidDirectAsked(e.payload));
     // FP7 (driver) — the sender changed the instructions on a load they hold: what to do at the door has changed.
     this.events.subscribe<{ freightId: string; code: string; driverDid: string; amended: boolean; text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }>(GlosEvent.Pudo.FreightInstructed, (e) => this.onFreightInstructed(e.payload));
     // FP3 (driver) — a load they had claimed was withdrawn by its sender: their day just changed, tell them why.
@@ -982,6 +986,41 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       });
     } catch (err) {
       this.logger.warn(`freight-paid-direct notify failed for ${p.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** To the poster: the carrier says the price agreed has not been paid. The poster pays them directly; we carry no money. */
+  private async onFreightNotPaidDirect(p: FreightPaidDirectEvent): Promise<void> {
+    if (!p.posterDid) return;
+    const who = p.by === 'office' ? `${p.driverName ? `${p.driverName}’s` : 'The driver’s'} fleet` : (p.driverName ?? 'The driver');
+    try {
+      await this.notifications.notify(p.posterDid, {
+        kind: 'freight_paid_direct',
+        title: `Load ${p.code}: the driver says they were not paid`,
+        body: `${who} says the price agreed for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''}, ${p.currency} ${p.amount.toLocaleString('en')}, has not been paid. You pay them directly; once you have, they say so and you see it on the load. SeeBuyGet carries no money for this load.`,
+        link: '/',
+        tag: `freight:${p.freightId}:not-paid`,
+        data: { freightId: p.freightId },
+      });
+    } catch (err) {
+      this.logger.warn(`freight-not-paid notify failed for ${p.freightId}: ${(err as Error).message}`);
+    }
+  }
+
+  /** To the driver, and the office of the fleet that carried it: delivered three days ago, were you paid? */
+  private async onFreightPaidDirectAsked(p: FreightPaidDirectAsked): Promise<void> {
+    const money = `${p.currency} ${p.amount.toLocaleString('en')}`;
+    const to = p.destLabel ? ` to ${p.destLabel}` : '';
+    const asks: Array<[string, string, string]> = [
+      [p.driverDid, `Were you paid for load ${p.code}?`, `It was delivered${to} three days ago; the shipper pays you directly, ${money}, the price agreed. Say whether you were paid, under Earnings: the shipper sees what you say.`],
+      ...(p.officeDid ? [[p.officeDid, `Was your fleet paid for load ${p.code}?`, `It was delivered${to} three days ago; the shipper pays your fleet directly, ${money}, the price agreed. Say whether you were paid, under Earnings: the shipper sees what you say.`] as [string, string, string]] : []),
+    ];
+    for (const [did, title, body] of asks) {
+      try {
+        await this.notifications.notify(did, { kind: 'freight_paid_direct', title, body, link: '/', tag: `freight:${p.freightId}:paid-asked`, data: { freightId: p.freightId } });
+      } catch (err) {
+        this.logger.warn(`were-you-paid notify failed for ${p.freightId}: ${(err as Error).message}`);
+      }
     }
   }
 

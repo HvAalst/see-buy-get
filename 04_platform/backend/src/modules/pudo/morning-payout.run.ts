@@ -1,5 +1,8 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
+import type { Entity } from '../../foundation/entity/entity.types';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { OperatorAccountService } from '../../foundation/entity/operator-account.service';
+import { MailService } from '../../foundation/mail/mail.service';
 import type { Signer } from '../../foundation/entity/same-person';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -31,6 +34,9 @@ export class MorningPayoutRun implements OnApplicationBootstrap, OnModuleDestroy
   constructor(
     private readonly entities: EntityService,
     private readonly payouts: PayoutService,
+    // Who is told a run waits: the members of staff who hold the money role (2026-10-27).
+    @Optional() private readonly staff?: OperatorAccountService,
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -54,11 +60,28 @@ export class MorningPayoutRun implements OnApplicationBootstrap, OnModuleDestroy
       try {
         const run = this.payouts.runFor(entity.entityId, now, MORNING_RUN_SIGNER);
         out.push({ entityId: entity.entityId, day: local.day, raised: run.raised.length, skipped: run.skipped.length });
+        if (run.raised.length) this.tellMoneyStaff(entity, local.day, run, now);
       } catch (err) {
         this.logger.warn(`the morning payout run for ${entity.entityId} was not raised: ${(err as Error).message}`);
       }
     }
     return out;
+  }
+
+  /**
+   * A RUN NOBODY APPROVES PAYS NOBODY: every member of staff who holds the money role is emailed that this company's run
+   * waits — how many, how much, how many skipped — and opens the console to approve it. Nothing to say for a run that raised
+   * nothing. Email is where they are reached at six in the morning; the console's Money screen holds the rest.
+   */
+  private tellMoneyStaff(entity: Entity, day: string, run: { raised: Array<{ amount?: number }>; skipped: unknown[] }, now: number): void {
+    const total = run.raised.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const money = `${entity.currency ? `${entity.currency} ` : ''}${total.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    for (const member of this.staff?.list(now) ?? []) {
+      if (!member.roles?.includes('money')) continue;
+      void this.mail
+        ?.send('payout-run-waiting', { address: member.email, name: member.name }, { company: entity.name, day, count: run.raised.length, total: money, skipped: run.skipped.length }, now)
+        .catch((err: Error) => this.logger.warn(`the morning run's email to ${member.email} was not sent: ${err.message}`));
+    }
   }
 
   /** When this company's morning run was last raised, by its own clock's day — for the console. */

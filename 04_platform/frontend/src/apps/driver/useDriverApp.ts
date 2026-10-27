@@ -1896,6 +1896,20 @@ export function useDriverApp() {
     [client, run, fail, pushToast, refresh, fetchJobsWith],
   );
 
+  /** …or, delivered, NOT paid yet (2026-10-27): the shipper is told and sees it on the load. */
+  const sayNotPaid = useCallback(
+    async (ref: string) => {
+      if (!client) return;
+      await run(`notpaid:${ref}`, async () => {
+        const r = await client.api.notPaidDirect(ref);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'info', icon: 'info', title: t('common.paidDirect.notPaidToast'), detail: t('common.paidDirect.notPaidToastDetail') });
+        void fetchJobsWith(stateRef.current.jobsQuery);
+      });
+    },
+    [client, run, fail, pushToast, fetchJobsWith],
+  );
+
   /** S33b — log a temperature reading for a cold-chain freight in transit. An out-of-band reading warns the
    *  driver (and flags the load for the control tower). */
   const logTemp = useCallback(
@@ -2198,6 +2212,7 @@ export function useDriverApp() {
       failDelivery,
       handBack,
       sayPaid,
+      sayNotPaid,
       logTemp,
       sayPassage,
       sayHeld,

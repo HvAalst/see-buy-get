@@ -379,6 +379,8 @@ export function createDriverApi(sbg: SbgClient) {
 
     /** A load the shipper pays them for directly: they say it was paid, the price agreed (2026-10-27). The shipper sees it. */
     paidDirect: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/paid-direct', { params: { path: { id: freightId } } })),
+    /** …or, delivered, not paid yet: the shipper is told. */
+    notPaidDirect: (freightId: string) => sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/not-paid-direct', { params: { path: { id: freightId } } })),
 
     /** FP8 — the driver hands a claimed load back before pickup: back on the market, the sender told why. */
     handBack: (freightId: string, reason: string) =>

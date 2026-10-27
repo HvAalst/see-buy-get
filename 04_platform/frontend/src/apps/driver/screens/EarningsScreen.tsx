@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Chip, ErrorNote, GlanceNumber, Icon, PaidDirectSheet, Pager, Pill, ReadAloud, SearchInput, Sheet } from '../../../shared/ui';
-import { maySayPaid, paidWhen } from '../../../shared/paidDirect';
+import { maySayNotPaid, maySayPaid, paidWhen } from '../../../shared/paidDirect';
 import { useDebounced } from '../../../shared/useDebounced';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { cash, settlementLines } from '../logic';
@@ -49,6 +49,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
   const t = useT();
   const [filterOpen, setFilterOpen] = useState(false);
   const [paidFor, setPaidFor] = useState<DriverJobRow | null>(null); // a haul the shipper pays for directly, being said paid
+  const [notPaidFor, setNotPaidFor] = useState<DriverJobRow | null>(null); // …or, delivered, said not paid yet
   const [searchText, setSearchText] = useState(state.jobsQuery.q);
   const debounced = useDebounced(searchText, 300);
   const q = state.jobsQuery;
@@ -130,7 +131,7 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
           ) : (
             <div class={`rows${state.jobsState === 'loading' ? ' rows--loading' : ''}`} role="list">
               {state.jobs.map((j) => (
-                <JobRow key={j.freightId} j={j} currency={currency} onSayPaid={() => setPaidFor(j)} />
+                <JobRow key={j.freightId} j={j} currency={currency} onSayPaid={() => setPaidFor(j)} onSayNotPaid={() => setNotPaidFor(j)} />
               ))}
             </div>
           )}
@@ -160,12 +161,24 @@ export function EarningsScreen({ state, actions }: EarningsScreenProps) {
         }}
         onClose={() => setPaidFor(null)}
       />
+      <PaidDirectSheet
+        open={!!notPaidFor}
+        notPaid
+        code={notPaidFor?.code ?? ''}
+        amount={notPaidFor ? cash(notPaidFor.earning, notPaidFor.currency ?? currency) : ''}
+        busy={Boolean(notPaidFor) && state.busy === `notpaid:${notPaidFor?.freightId}`}
+        onYes={() => {
+          const j = notPaidFor;
+          if (j) void actions.sayNotPaid(j.freightId).then(() => setNotPaidFor(null));
+        }}
+        onClose={() => setNotPaidFor(null)}
+      />
       <JobFilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} query={q} onApply={(patch) => { actions.queryJobs(patch); setFilterOpen(false); }} onClearAll={() => { resetAll(); setFilterOpen(false); }} />
     </div>
   );
 }
 
-function JobRow({ j, currency, onSayPaid }: { j: DriverJobRow; currency?: string; onSayPaid: () => void }) {
+function JobRow({ j, currency, onSayPaid, onSayNotPaid }: { j: DriverJobRow; currency?: string; onSayPaid: () => void; onSayNotPaid: () => void }) {
   const t = useT();
   const when = j.deliveredAt ?? j.claimedAt;
   return (
@@ -184,11 +197,18 @@ function JobRow({ j, currency, onSayPaid }: { j: DriverJobRow; currency?: string
         {j.clawback ? <span class="row__meta row__s--danger">{t('driver.earn.clawbackLine', { amount: cash(j.clawback, j.currency ?? currency) })}</span> : null}
         {/* A haul the shipper pays for directly (2026-10-27): said paid, when — or the button to say so once it is. */}
         {j.paidDirectAt ? <span class="row__meta">{t('driver.earn.paidDirectLine', { when: paidWhen(j.paidDirectAt) })}</span> : null}
+        {/* Delivered, said NOT paid yet (2026-10-27): when — they may still say it was paid. */}
+        {j.notPaidDirectAt ? <span class="row__meta row__s--danger">{t('driver.earn.notPaidDirectLine', { when: paidWhen(j.notPaidDirectAt) })}</span> : null}
         {maySayPaid(j) ? (
           <span class="row__meta">
             <Button variant="link" full={false} onClick={onSayPaid}>
               {t('common.paidDirect.ask')}
             </Button>
+            {maySayNotPaid(j) ? (
+              <Button variant="link" full={false} onClick={onSayNotPaid}>
+                {t('common.paidDirect.notYetPaid')}
+              </Button>
+            ) : null}
           </span>
         ) : null}
       </span>

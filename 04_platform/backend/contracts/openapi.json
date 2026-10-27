@@ -16645,6 +16645,28 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/not-paid-direct": {
+      "post": {
+        "operationId": "Sbg.notPaidDirectFreight",
+        "summary": "",
+        "description": "…or, delivered, NOT paid yet (2026-10-27): the shipper is told. The same people may say it, and nobody else.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/hours": {
       "get": {
         "operationId": "Sbg.driverHours",
@@ -47669,6 +47691,25 @@
           "amount"
         ]
       },
+      "NotPaidDirect": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "enum": [
+              "driver",
+              "office"
+            ]
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at"
+        ]
+      },
       "ClientRef": {
         "type": "object",
         "properties": {
@@ -48496,6 +48537,18 @@
                 "$ref": "#/components/schemas/PaidDirect"
               }
             ]
+          },
+          "notPaidDirect": {
+            "description": "…or, delivered, that it was NOT paid yet. Said paid later, paid is what stands.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotPaidDirect"
+              }
+            ]
+          },
+          "paidDirectAskedAt": {
+            "type": "string",
+            "description": "When its carrier was asked whether it was paid, PAID_DIRECT_ASK_H after delivery — once."
           },
           "postedByName": {
             "type": "string",
@@ -53262,6 +53315,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/PaidDirect"
+              }
+            ]
+          },
+          "notPaidDirect": {
+            "description": "…or, delivered, says it was NOT paid yet (absent once said paid).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotPaidDirect"
               }
             ]
           },

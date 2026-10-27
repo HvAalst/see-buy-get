@@ -230,6 +230,8 @@ export interface FleetJobRow {
   direct?: boolean;
   /** …and the driver, or the office, said it was paid, at this time (2026-10-27). */
   paidDirectAt?: string;
+  /** …or, delivered, said NOT paid yet, at this time (absent once said paid). */
+  notPaidDirectAt?: string;
   /** FP8 — what an upheld claim took back from this haul's pay. */
   clawback?: number;
   claimedAt?: string;

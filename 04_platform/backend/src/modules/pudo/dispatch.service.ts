@@ -46,7 +46,7 @@ import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE
 import { Router, ROUTER } from './router';
 import { groupOf, laneDrive, lanesOf, tripKmh, type LaneDrive, type LaneTrip } from './lane-times';
 import { handedAt } from './observed-at';
-import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DOOR_GUIDE_DEADHEAD_KM, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DOOR_GUIDE_DEADHEAD_KM, PAID_DIRECT_ASK_H, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -180,6 +180,8 @@ export interface DriverJobRow {
   direct?: boolean;
   /** …and the driver, or their fleet's office, said it was paid, at this time (2026-10-27). */
   paidDirectAt?: string;
+  /** …or, delivered, said it was NOT paid yet, at this time (absent once said paid). */
+  notPaidDirectAt?: string;
   /** FP8 — what an upheld claim took back from that pay. */
   clawback?: number;
   claimedAt?: string;
@@ -193,7 +195,7 @@ function jobDate(f: Freight): string {
 }
 
 export function driverJobRowOf(f: Freight): DriverJobRow {
-  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, ...(f.lockedCurrency ? { currency: f.lockedCurrency } : {}), paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.paidDirect ? { paidDirectAt: f.paidDirect.at } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
+  return { freightId: f.freightId, code: f.code, description: f.description, destLabel: f.destLabel, status: f.status, cargoClass: f.cargoClass, weightKg: f.weightKg, earning: f.status === 'cancelled' ? undefined : f.lockedPrice, ...(f.lockedCurrency ? { currency: f.lockedCurrency } : {}), paid: Boolean(f.driverPaid), ...(f.settlement === 'between_parties' ? { direct: true } : {}), ...(f.paidDirect ? { paidDirectAt: f.paidDirect.at } : {}), ...(f.notPaidDirect && !f.paidDirect ? { notPaidDirectAt: f.notPaidDirect.at } : {}), ...(f.clawback ? { clawback: f.clawback.amount } : {}), claimedAt: f.claimedAt, deliveredAt: f.deliveredAt, createdAt: f.createdAt };
 }
 
 export interface DriverJobsSummary {
@@ -320,7 +322,8 @@ export function lockedCurrencyOf(f: Pick<Freight, 'lockedCurrency'>): string {
 function paidWord(f: Freight): string {
   if (f.driverPaid) return 'yes';
   if (f.settlement !== 'between_parties') return 'no';
-  return f.paidDirect ? `by the shipper, confirmed ${f.paidDirect.at.slice(0, 10)}` : 'by the shipper';
+  if (f.paidDirect) return `by the shipper, confirmed ${f.paidDirect.at.slice(0, 10)}`;
+  return f.notPaidDirect ? `by the shipper, NOT paid as of ${f.notPaidDirect.at.slice(0, 10)}` : 'by the shipper';
 }
 
 export function fleetJobsToCsv(rows: Freight[], nameOf: (did: string) => string): string {
@@ -1755,6 +1758,7 @@ export class DispatchService {
         // A match (2026-10-27): the poster pays the driver directly — and, once the driver says so, that it was paid.
         ...(f.settlement === 'between_parties' ? { paysDriverDirect: true } : {}),
         ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}),
+        ...(f.notPaidDirect && !f.paidDirect ? { notPaidDirect: f.notPaidDirect } : {}),
         // Made by this business, or by the one the load was sent to (under a term that passed it the risk).
         ...(f.claim ? { claim: { ...f.claim, by: this.claimRaisedBy(f) } } : {}),
         canClaim: f.status === 'delivered' && !f.claim && (f.deliveredAt ? Date.now() - new Date(f.deliveredAt).getTime() <= FREIGHT_CLAIM_WINDOW_DAYS * 86_400_000 : true),
@@ -3724,6 +3728,46 @@ export class DispatchService {
       .publish(GlosEvent.Pudo.FreightPaidDirect, { freightId: f.freightId, code: f.code, amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, driverName: this.driverNameOf(f.claimedBy ?? ''), posterDid: this.senderDidOf(f), destLabel: f.destLabel }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
+  }
+
+  /**
+   * NOT PAID YET (2026-10-27, after "Driver ticks 'paid'"): delivered, and the shipper has not paid the price agreed — the
+   * driver it was on, or the office of the fleet that carried it, says so. The shipper is told and sees it on its load. Their
+   * word, and no money moves through us; said paid later, paid is what stands. Said once.
+   */
+  sayNotPaidDirect(freightId: string, by: 'driver' | 'office', now: number = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (f.settlement !== 'between_parties') throw new GlosError('INVALID_STATE', 'SeeBuyGet pays the carrier for this load — there is no payment between you and the shipper to speak of');
+    if (f.paidDirect) throw new GlosError('INVALID_STATE', 'It was said paid already.');
+    if (f.status !== 'delivered' || f.lockedPrice == null) throw new GlosError('INVALID_STATE', `This load is ${f.status}: say it was not paid once it is delivered`);
+    if (f.notPaidDirect) return f;
+    f.notPaidDirect = { at: new Date(now).toISOString(), by };
+    this.freights.set(f.freightId, f);
+    void this.events
+      .publish(GlosEvent.Pudo.FreightNotPaidDirect, { freightId: f.freightId, code: f.code, amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, driverName: this.driverNameOf(f.claimedBy ?? ''), posterDid: this.senderDidOf(f), destLabel: f.destLabel }, { source: 'pudo' })
+      .catch(() => undefined);
+    return f;
+  }
+
+  /**
+   * WERE YOU PAID? A load settled between the parties, delivered PAID_DIRECT_ASK_H ago, about which nobody has said a word:
+   * its driver — and the office of the fleet that carried it — is asked, once. Every ten minutes (RefusedGoodsSweeper).
+   */
+  sweepUnconfirmedPay(now: number = Date.now()): string[] {
+    const asked: string[] = [];
+    for (const f of [...this.freights.values()]) {
+      if (f.settlement !== 'between_parties' || f.status !== 'delivered' || f.paidDirect || f.notPaidDirect || f.paidDirectAskedAt || f.lockedPrice == null || !f.claimedBy) continue;
+      const delivered = Date.parse(f.deliveredAt ?? '');
+      if (!Number.isFinite(delivered) || now - delivered < PAID_DIRECT_ASK_H * 3_600_000) continue;
+      f.paidDirectAskedAt = new Date(now).toISOString();
+      this.freights.set(f.freightId, f);
+      const carrier = this.carrierOf(f);
+      void this.events
+        .publish(GlosEvent.Pudo.FreightPaidDirectAsked, { freightId: f.freightId, code: f.code, amount: f.lockedPrice, currency: lockedCurrencyOf(f), driverDid: f.claimedBy, ...(carrier && carrier !== f.claimedBy ? { officeDid: carrier } : {}), destLabel: f.destLabel }, { source: 'pudo' })
+        .catch(() => undefined);
+      asked.push(f.freightId);
+    }
+    return asked;
   }
 
   handBack(freightId: string, driverDid: string, reason: string, now: number = Date.now()): Freight {

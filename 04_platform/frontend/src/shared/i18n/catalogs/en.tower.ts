@@ -2303,8 +2303,8 @@ export const enTowerMoney = {
 
   'tower.money.payoutsTitle': 'What {name} has raised',
   'tower.money.run': 'Run today’s payouts',
-  'tower.money.morning.ran': 'The system raises this run every morning at {at}, on the company’s own clock — last on {day}. One member of staff checks it and approves sending.',
-  'tower.money.morning.notYet': 'The system raises this run every morning at {at}, on the company’s own clock — it has not run yet. One member of staff checks it and approves sending.',
+  'tower.money.morning.ran': 'The system raises this run every morning at {at}, on the company’s own clock — last on {day} — and emails the staff who hold the money role when it has payouts in it. One of them checks it and approves sending.',
+  'tower.money.morning.notYet': 'The system raises this run every morning at {at}, on the company’s own clock — it has not run yet — and emails the staff who hold the money role when it has payouts in it. One of them checks it and approves sending.',
   'tower.money.emptyTitle': 'Nobody has been paid yet',
   'tower.money.emptyBody': 'And nobody is waiting: no payout has been raised for this company. Running one raises what today’s work owes, and skips anybody the cover cannot carry — it says who, and why.',
   'tower.money.col.payee': 'Payee',

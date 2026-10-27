@@ -95,6 +95,9 @@ export const DOOR_LOAD_REMIND_H = 24;
  */
 export const DOOR_PAY_WINDOW_MIN = 15;
 export const DOOR_MAX_KM = 100;
+
+/** A load settled between the parties, delivered this long ago and not said paid: its carrier is asked, once, whether it was (2026-10-27). */
+export const PAID_DIRECT_ASK_H = 72;
 /**
  * "NEAR ME" FOR A QUOTE (the user, 2026-10-25: "the asker should be able to filter quotations from 'near me'"): the
  * carriers within this many kilometres of the asker — on shift and placed there by their phone in the last

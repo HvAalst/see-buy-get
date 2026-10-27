@@ -5985,13 +5985,26 @@ export class SbgController {
   @Roles('driver', 'fleet_manager')
   @Post('dispatch/freight/:id/paid-direct')
   paidDirectFreight(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    const out = this.dispatch.confirmPaidDirect(id, this.paidDirectBy(id, actor));
+    return { freightId: out.freightId, code: out.code, paidDirect: out.paidDirect };
+  }
+
+  /** …or, delivered, NOT paid yet (2026-10-27): the shipper is told. The same people may say it, and nobody else. */
+  @Roles('driver', 'fleet_manager')
+  @Post('dispatch/freight/:id/not-paid-direct')
+  notPaidDirectFreight(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    const out = this.dispatch.sayNotPaidDirect(id, this.paidDirectBy(id, actor));
+    return { freightId: out.freightId, code: out.code, notPaidDirect: out.notPaidDirect };
+  }
+
+  /** Who may speak of a matched load's payment: the driver it is on, or the office of the fleet it was taken FOR. Never staff. */
+  private paidDirectBy(id: string, actor: IntrospectionResult): 'driver' | 'office' {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the driver it is on, or their fleet’s office, says they were paid');
     const f = this.dispatch.requireFreightPublic(id);
-    // The office of the fleet it was taken FOR (the carrier of record, fixed at the claim), whoever the driver drives for now.
+    // The carrier of record, fixed at the claim, whoever the driver drives for now.
     const by = actor?.did && actor.did === f.claimedBy ? 'driver' : this.isFleetOffice(actor, this.dispatch.carrierOf(f)) ? 'office' : undefined;
     if (!by) throw new GlosError('FORBIDDEN', 'This load is not on you');
-    const out = this.dispatch.confirmPaidDirect(id, by);
-    return { freightId: out.freightId, code: out.code, paidDirect: out.paidDirect };
+    return by;
   }
 
   /** FP8 — the driver's own hours, as the app says them: on duty, the limit, whether it is passed. */
