@@ -277,7 +277,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.pickedUpAt) steps.push({ status: 'in_transit', at: f.pickedUpAt });
     if (f.deliveredAt) steps.push({ status: 'delivered', at: f.deliveredAt });
     if (f.cancellation) steps.push({ status: 'cancelled', at: f.cancellation.at });
-    if (f.refusal?.decision) steps.push({ status: 'refused', at: f.refusal.decision.at });
+    // A part refused leaves the load delivered: its step is the delivery's.
+    if (f.refusal?.decision && !f.refusal.part) steps.push({ status: 'refused', at: f.refusal.decision.at });
     // WHEN, for whoever is waiting at the door: the day from the start; the hour only once it is on the road, from
     // the plan it went out on — and not after a door nobody answered, when that hour has passed.
     const coming = f.status === 'ordered' || f.status === 'available' || f.status === 'claimed' || f.status === 'in_transit';
@@ -311,7 +312,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts.map((a) => ({ outcome: a.outcome, at: a.at })) } : {}),
       ...(f.proofOfDelivery?.receiverName ? { receiverName: f.proofOfDelivery.receiverName } : {}),
       ...(f.cancellation ? { cancelled: { at: f.cancellation.at, by: f.cancellation.role === 'operator' ? 'network' : f.contract && f.cancellation.by === f.contract.fleetDid ? 'carrier' : 'sender' } } : {}),
-      ...(f.refusal ? { refused: { at: f.refusal.at, ...(f.refusal.decision ? { choice: f.refusal.decision.choice, ...(f.refusal.decision.returnLeg ? { returnCode: f.refusal.decision.returnLeg.code } : {}) } : {}) } } : {}),
+      ...(f.refusal ? { refused: { at: f.refusal.at, ...(f.refusal.part ? { part: f.refusal.part } : {}), ...(f.refusal.decision ? { choice: f.refusal.decision.choice, ...(f.refusal.decision.returnLeg ? { returnCode: f.refusal.decision.returnLeg.code } : {}) } : {}) } } : {}),
       // Held on the way by an authority, as its driver said: since when, never by whom — whoever holds the link reads it.
       ...(() => {
         const held = this.dispatch.heldByAuthority?.(f);
@@ -657,7 +658,9 @@ export function refusedLine(f: Pick<Freight, 'refusal'>): string {
     : d.choice === 'give_up'
       ? 'The sender gave the goods up'
       : `${d.byDeadline ? 'With no answer from the sender within 48 hours, the goods were taken back' : d.choice === 'back' ? 'The sender had the goods taken back' : 'The sender had the goods taken'} to ${d.destLabel}${d.returnLeg ? ` as load ${d.returnLeg.code}` : ''}`;
-  return `Refused by the consignee ${when(r.at)}${r.note ? ` — ${r.note}` : ''}. ${what}${d ? `, ${when(d.at)}` : ''}.`;
+  // A PART refused at the handover (2026-10-27): how many, of how many the note counts. The rest was delivered.
+  const refused = r.part ? `${r.part.packages} of the ${r.part.of} packages refused by the consignee` : 'Refused by the consignee';
+  return `${refused} ${when(r.at)}${r.note ? ` — ${r.note}` : ''}. ${what}${d ? `, ${when(d.at)}` : ''}.`;
 }
 
 /** A reload, as box 18 says it: when, onto what, after what — and on whose word. */

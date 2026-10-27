@@ -1731,7 +1731,7 @@ export class DispatchService {
         canCancel: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed',
         ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts } : {}),
         // Refused at the door (the user, 2026-10-27): by when the sender decides, what it decided, and where "back" is.
-        ...(f.refusal ? { refusal: f.refusal, canDecideRefusal: f.status === 'in_transit' && !f.refusal.decision, pickupLabel: f.pickupLabel } : {}),
+        ...(f.refusal ? { refusal: f.refusal, canDecideRefusal: (f.status === 'in_transit' || (f.status === 'delivered' && Boolean(f.refusal.part))) && !f.refusal.decision, pickupLabel: f.pickupLabel } : {}),
         ...(f.returnOf ? { returnOf: f.returnOf } : {}),
         // Made by this business, or by the one the load was sent to (under a term that passed it the risk).
         ...(f.claim ? { claim: { ...f.claim, by: this.claimRaisedBy(f) } } : {}),
@@ -2984,7 +2984,8 @@ export class DispatchService {
     const totes = this.bagsHeldBy(driverDid)
       .map((t) => this.wrapTote(t.code, driverDid))
       .filter((c): c is Claimable => c != null);
-    const freight = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit')).map((f) => this.wrapFreight(f));
+    // …and a delivered load whose refused part they keep until the sender says where it goes (2026-10-27).
+    const freight = [...this.freights.values()].filter((f) => f.claimedBy === driverDid && (f.status === 'claimed' || f.status === 'in_transit' || (f.status === 'delivered' && Boolean(f.refusal?.part) && !f.refusal?.decision))).map((f) => this.wrapFreight(f));
     return [...totes, ...freight];
   }
 
@@ -3123,8 +3124,21 @@ export class DispatchService {
     this.media.adopt(podPhotoId, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     for (const ref of exceptions.flatMap((x) => x.photoRefs ?? [])) this.media.adopt(ref, driverDid ?? '', { type: 'freight', id: f.freightId }, 'pod');
     this.payTheRoad(f);
-    // Refused at an earlier attempt, then taken after all: nothing is left for the sender to decide. The attempt stays.
-    if (f.refusal && !f.refusal.decision) delete f.refusal;
+    // Refused at an earlier attempt, then taken after all: nothing is left for the sender to decide. The attempt stays —
+    // unless a PART was refused at this handover (the user, 2026-10-27: "Refusal rules, for the part"): the rest is delivered,
+    // and the sender decides what happens to those packages as for goods refused whole; the 48 hours run from the first
+    // refusal there was.
+    const refusedPart = exceptions.find((x) => x.kind === 'refused')?.count ?? 0;
+    const earlier = f.refusal && !f.refusal.decision ? f.refusal : undefined;
+    if (refusedPart && f.packages) {
+      f.refusal = {
+        at: earlier?.at ?? f.deliveredAt,
+        ...(driverDid ? { by: driverDid } : {}),
+        ...(earlier?.note ? { note: earlier.note } : {}),
+        decideBy: earlier?.decideBy ?? new Date(Date.parse(f.deliveredAt) + REFUSAL_DECIDE_H * 3_600_000).toISOString(),
+        part: { packages: refusedPart, of: f.packages },
+      };
+    } else if (earlier) delete f.refusal;
     // S33 — delivery is terminal: start the securement photo's retention clock (shipment-proof bin).
     this.media.anchorFreightTerminal(f.freightId);
     this.freights.set(f.freightId, f);
@@ -3134,7 +3148,7 @@ export class DispatchService {
     const sender = this.senderDidOf(f);
     const posterDid = sender && sender !== f.contract?.fleetDid && sender !== f.claimedBy ? sender : undefined;
     void this.events
-      .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName, ...(exceptions.length ? { exceptions: exceptions.map(({ kind, count }) => ({ kind, count })) } : {}), ...(timing ? { timing, orderedFor: f.deliverOn } : {}) }, { source: 'pudo' })
+      .publish(GlosEvent.Pudo.FreightDelivered, { freightId: f.freightId, code: f.code, driverDid: f.claimedBy, ...(posterDid ? { posterDid } : {}), description: f.description, destLabel: f.destLabel, receivedBy: f.proofOfDelivery.receiverName, ...(exceptions.length ? { exceptions: exceptions.map(({ kind, count }) => ({ kind, count })) } : {}), ...(timing ? { timing, orderedFor: f.deliverOn } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: { packages: f.refusal.part.packages, of: f.refusal.part.of, decideBy: f.refusal.decideBy, pickupLabel: f.pickupLabel } } : {}) }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
   }
@@ -3150,7 +3164,7 @@ export class DispatchService {
     const said = new Map<ReceivingExceptionKind, ReceivingException>();
     for (const line of lines) {
       const kind = line.kind as ReceivingExceptionKind;
-      if (!RECEIVING_EXCEPTIONS.includes(kind)) throw new GlosError('INVALID_INPUT', 'Say what was not as the note says: short, over, damaged or wrong', { field: 'exceptions' });
+      if (!RECEIVING_EXCEPTIONS.includes(kind)) throw new GlosError('INVALID_INPUT', 'Say what was not as the note says: short, over, damaged, wrong or refused', { field: 'exceptions' });
       if (said.has(kind)) throw new GlosError('INVALID_INPUT', `Say “${kind}” once, with how many packages`, { field: 'exceptions' });
       if (!Number.isInteger(line.count) || line.count < 1) throw new GlosError('INVALID_INPUT', `Count the packages ${kind}: one or more`, { field: 'exceptions' });
       const photos = [...new Set((line.photoRefs ?? []).filter((r) => typeof r === 'string' && r.length > 0))];
@@ -3165,6 +3179,10 @@ export class DispatchService {
       for (const k of ['damaged', 'wrong'] as const) {
         if (count(k) > came) throw new GlosError('INVALID_INPUT', `${count(k)} ${k}, and ${came} came: count only what came`, { field: 'exceptions' });
       }
+      // A PART refused (2026-10-27): what came less what was refused is what was handed over — and something must be.
+      if (count('refused') >= came) throw new GlosError('INVALID_INPUT', `${count('refused')} refused, and ${came} came. If the receiver refused them all, nothing was handed over: say so at the door instead of delivering`, { field: 'exceptions' });
+    } else if (count('refused')) {
+      throw new GlosError('INVALID_INPUT', 'The note counts no packages, so a part cannot be refused by count. If the receiver refused it all, say so at the door instead of delivering', { field: 'exceptions' });
     }
     return RECEIVING_EXCEPTIONS.flatMap((k) => (said.has(k) ? [said.get(k)!] : []));
   }
@@ -3205,7 +3223,9 @@ export class DispatchService {
    */
   decideRefusal(freightId: string, by: string | undefined, input: { choice: RefusalChoice; destLabel?: string; destLocation?: { lat: number; lng: number }; contactName?: string; contactPhone?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
-    if (f.status !== 'in_transit' || !f.refusal) throw new GlosError('INVALID_STATE', 'Nothing was refused on this load: there is nothing to decide');
+    // Refused whole, the goods still on the road; or a PART refused at the handover of a load delivered (2026-10-27).
+    const part = f.status === 'delivered' ? f.refusal?.part : undefined;
+    if (!f.refusal || (f.status !== 'in_transit' && !part)) throw new GlosError('INVALID_STATE', 'Nothing was refused on this load: there is nothing to decide');
     if (f.refusal.decision) throw new GlosError('INVALID_STATE', 'What happens to these goods was decided already');
     if (!REFUSAL_CHOICES.includes(input.choice)) throw new GlosError('INVALID_INPUT', 'Say whether the goods go back, go to another place, or are given up', { field: 'choice' });
     // Where they go, and who carries them — refused before anything is written.
@@ -3221,11 +3241,15 @@ export class DispatchService {
     const holder = f.claimedBy;
     if (dest && !holder) throw new GlosError('INVALID_STATE', 'Nobody holds the goods to carry them on');
     // The new load first: if it cannot be made, the refused one is left as it was, still waiting on the sender.
-    const ret = dest ? this.carryOnAsReturn(f, dest, input, now) : undefined;
+    const ret = dest ? this.carryOnAsReturn(f, dest, input, now, part) : undefined;
     const at = new Date(now).toISOString();
-    f.status = 'refused';
-    this.payTheRoad(f);
-    this.media.anchorFreightTerminal(f.freightId);
+    // Refused whole, the load closes as refused and its road is paid: it was driven to the door. A part: the load was
+    // delivered, and its road paid then — it stays delivered.
+    if (!part) {
+      f.status = 'refused';
+      this.payTheRoad(f);
+      this.media.anchorFreightTerminal(f.freightId);
+    }
     f.refusal = {
       ...f.refusal,
       decision: {
@@ -3249,7 +3273,7 @@ export class DispatchService {
    * over the road to where they go, nothing to drive empty first. Settled as the first was: a store billed, a business
    * between the parties. Offered to nobody: the goods are aboard, and the carrier follows the sender's instructions.
    */
-  private carryOnAsReturn(f: Freight, dest: { label: string; location: GeoPoint }, contact: { contactName?: string; contactPhone?: string }, now: number): Freight {
+  private carryOnAsReturn(f: Freight, dest: { label: string; location: GeoPoint }, contact: { contactName?: string; contactPhone?: string }, now: number, part?: { packages: number; of: number }): Freight {
     const holder = f.claimedBy!;
     const inIt = vehicleNow(f);
     const vehicle = this.fleet.vehicleForDriver(holder) ?? (inIt ? this.fleet.vehicleOf(inIt.vehicleId) : undefined);
@@ -3264,14 +3288,16 @@ export class DispatchService {
         pickupLabel: f.destLabel,
         destLabel: dest.label,
         destLocation: dest.location,
-        weightKg: f.weightKg,
+        // A PART refused: its share of the weight by the note's count, and only its packages — the measurements of the whole
+        // are not theirs.
+        weightKg: part ? Math.max(0.1, Math.round(((f.weightKg * part.packages) / part.of) * 10) / 10) : f.weightKg,
         fragile: f.fragile,
         ...(f.packaging ? { packaging: f.packaging } : {}),
-        ...(f.packages ? { packages: f.packages } : {}),
+        ...(part ? { packages: part.packages } : f.packages ? { packages: f.packages } : {}),
         natureCode: f.natureCode,
-        ...(f.dimensionsCm ? { dimensionsCm: f.dimensionsCm } : {}),
-        ...(f.heightM ? { heightM: f.heightM } : {}),
-        ...(f.indivisible ? { indivisible: true } : {}),
+        ...(f.dimensionsCm && !part ? { dimensionsCm: f.dimensionsCm } : {}),
+        ...(f.heightM && !part ? { heightM: f.heightM } : {}),
+        ...(f.indivisible && !part ? { indivisible: true } : {}),
         ...(f.postedByDid ? { postedByDid: f.postedByDid } : {}),
         ...(f.postedByName ? { postedByName: f.postedByName } : {}),
         ...(f.onBehalfOf ? { onBehalfOf: f.onBehalfOf } : {}),
@@ -3326,7 +3352,7 @@ export class DispatchService {
     const reminded: string[] = [];
     const decided: string[] = [];
     for (const f of [...this.freights.values()]) {
-      if (f.status !== 'in_transit' || !f.refusal || f.refusal.decision) continue;
+      if (!f.refusal || f.refusal.decision || !(f.status === 'in_transit' || (f.status === 'delivered' && f.refusal.part))) continue;
       const end = Date.parse(f.refusal.decideBy);
       if (now >= end) {
         try {
@@ -4122,7 +4148,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

@@ -128,7 +128,7 @@ export class VendorCallbackService implements OnModuleInit, OnModuleDestroy {
       destLabel: f.destLabel,
       ...(f.trackingKey ? { trackingKey: f.trackingKey } : {}),
       ...(event === 'load.delivery_failed' && last ? { attempt: { outcome: last.outcome, at: last.at, ...(last.note ? { note: last.note } : {}) } } : {}),
-      ...(f.refusal ? { refusal: { at: f.refusal.at, decideBy: f.refusal.decideBy, ...(f.refusal.decision ? { decision: { choice: f.refusal.decision.choice, ...(f.refusal.decision.byDeadline ? { byDeadline: true } : {}), ...(f.refusal.decision.returnLeg ? { returnCode: f.refusal.decision.returnLeg.code } : {}) } } : {}) } } : {}),
+      ...(f.refusal ? { refusal: { at: f.refusal.at, decideBy: f.refusal.decideBy, ...(f.refusal.part ? { part: f.refusal.part } : {}), ...(f.refusal.decision ? { decision: { choice: f.refusal.decision.choice, ...(f.refusal.decision.byDeadline ? { byDeadline: true } : {}), ...(f.refusal.decision.returnLeg ? { returnCode: f.refusal.decision.returnLeg.code } : {}) } } : {}) } } : {}),
       ...(f.returnOf ? { returnOf: f.returnOf.code } : {}),
       ...(f.proofOfDelivery ? { receivedBy: f.proofOfDelivery.receiverName, deliveredAt: f.deliveredAt } : {}),
     });

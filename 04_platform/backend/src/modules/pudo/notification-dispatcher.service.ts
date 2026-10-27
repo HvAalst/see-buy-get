@@ -430,7 +430,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     // A carrier's accepted plan leaves an order on no vehicle — or has it on one after all. Its shipper is told.
     this.events.subscribe<OrderLeftOut>(GlosEvent.Pudo.OrderLeftOut, (e) => this.onOrderLeftOut(e.payload));
     // A load reached the other end: whoever sent it is told, as the shipper of a run always was.
-    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; exceptions?: Array<{ kind: ReceivingExceptionKind; count: number }> }>(GlosEvent.Pudo.FreightDelivered, (e) => this.onFreightDelivered(e.payload));
+    this.events.subscribe<{ freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; exceptions?: Array<{ kind: ReceivingExceptionKind; count: number }>; refusedPart?: { packages: number; of: number; decideBy: string; pickupLabel?: string } }>(GlosEvent.Pudo.FreightDelivered, (e) => this.onFreightDelivered(e.payload));
     // A carrier's plan for the day has an order outside the window its shipper asked for — or inside it after all.
     this.events.subscribe<OrderWindowPlanned>(GlosEvent.Pudo.OrderWindowPlanned, (e) => this.onOrderWindowPlanned(e.payload));
     this.events.subscribe<BookingGivenBack>(GlosEvent.Pudo.DepartureBookingCancelled, (e) => this.onBookingGivenBack(e.payload));
@@ -1172,11 +1172,23 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   }
 
   /** A load reached the other end. Whoever sent it hears it once, with who signed for it — and (D9) what they found not as the note says. */
-  private async onFreightDelivered(p: { freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; exceptions?: Array<{ kind: ReceivingExceptionKind; count: number }>; timing?: DeliveryTiming; orderedFor?: string }): Promise<void> {
+  private async onFreightDelivered(p: { freightId: string; code: string; posterDid?: string; description?: string; destLabel?: string; receivedBy?: string; exceptions?: Array<{ kind: ReceivingExceptionKind; count: number }>; timing?: DeliveryTiming; orderedFor?: string; refusedPart?: { packages: number; of: number; decideBy: string; pickupLabel?: string } }): Promise<void> {
     if (!p.posterDid) return;
     const when = p.timing ? ` at ${p.timing.at}` : '';
     const goods = p.description ? `: ${p.description.replace(/\.+$/, '')}` : '';
-    await this.tell(p.posterDid, { kind: 'freight_delivered', title: `${p.code} was delivered`, body: `Handed over${when}${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.${againstWhatWasAsked(p.timing, p.orderedFor)}${p.exceptions?.length ? ` The receiver found ${exceptionsInWords(p.exceptions)}: it is on the consignment note.` : ''}`, tag: `freight:${p.freightId}:delivered`, data: { freightId: p.freightId } });
+    // What the receiver found — and, said apart, a part it refused (2026-10-27): the sender decides where those go.
+    const found = (p.exceptions ?? []).filter((e) => e.kind !== 'refused');
+    const r = p.refusedPart;
+    const refused = r
+      ? ` ${r.packages} of the ${r.of} packages were refused: the driver keeps them until you say where they go — back to ${r.pickupLabel ?? 'where they were picked up'}, to another place, or given up — you pay the way. With no answer ${byWords(r.decideBy)}, they go back to ${r.pickupLabel ?? 'where they were picked up'}, at your cost.`
+      : '';
+    await this.tell(p.posterDid, {
+      kind: r ? 'freight_problem' : 'freight_delivered',
+      title: r ? `${p.code} was delivered — ${r.packages} of ${r.of} packages refused` : `${p.code} was delivered`,
+      body: `Handed over${when}${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.${againstWhatWasAsked(p.timing, p.orderedFor)}${found.length ? ` The receiver found ${exceptionsInWords(found)}: it is on the consignment note.` : ''}${refused}`,
+      tag: `freight:${p.freightId}:delivered`,
+      data: { freightId: p.freightId },
+    });
   }
 
   private async onOrderHandedOn(p: OrderHandedOn): Promise<void> {

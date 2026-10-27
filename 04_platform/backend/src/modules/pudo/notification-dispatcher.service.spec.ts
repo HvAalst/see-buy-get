@@ -841,6 +841,14 @@ describe('NotificationDispatcher — FP3b: the sender whose load could not be de
     // Given up by the sender itself: the driver told what that means; the sender, who decided, is not told again.
     await events.publish(GlosEvent.Pudo.FreightRefusalDecided, { freightId: 'frt_7', code: 'FRT-007', choice: 'give_up', byDeadline: false, driverDid: 'did:driver:e', posterDid: 'did:shop:q' });
     expect(notifications.inboxFor('did:driver:e')[0].body).toBe('The sender gave the refused goods up. The receiver may keep them if it will; otherwise your company disposes of them, and any cost of that is the sender’s.');
+  });
+
+  it('tells the sender of a part refused at the handover, with the delivery: where those packages go is theirs to say, and by when (2026-10-27)', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightDelivered, { freightId: 'frt_10', code: 'FRT-010', posterDid: 'did:shop:r', destLabel: 'Riverside Corner', receivedBy: 'Wanjiru', exceptions: [{ kind: 'short', count: 1 }, { kind: 'refused', count: 2 }], refusedPart: { packages: 2, of: 10, decideBy: '2026-10-29T08:00:00.000Z', pickupLabel: 'Depot' } });
+    const n = notifications.inboxFor('did:shop:r')[0];
+    expect(n).toMatchObject({ kind: 'freight_problem', title: 'FRT-010 was delivered — 2 of 10 packages refused' });
+    expect(n.body).toBe('Handed over to Wanjiru at Riverside Corner. The receiver found 1 package short: it is on the consignment note. 2 of the 10 packages were refused: the driver keeps them until you say where they go — back to Depot, to another place, or given up — you pay the way. With no answer by 29 Oct at 08:00 UTC, they go back to Depot, at your cost.');
     expect(notifications.inboxFor('did:shop:q')).toHaveLength(0);
   });
 

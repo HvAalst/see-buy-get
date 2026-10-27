@@ -242,11 +242,19 @@ export class FreightRefusalDecision {
   @ApiPropertyOptional({ type: FreightLink }) returnLeg?: FreightLink;
 }
 
+/** A PART refused at the handover (2026-10-27): how many packages, of how many the note counts. The rest was delivered. */
+export class FreightRefusalPart {
+  packages: number;
+  of: number;
+}
+
 /** On the tracking page: refused at the door, and — once decided — the load the goods went back on, or that they were given up. */
 export class FreightTrackRefused {
   at: string;
   @ApiPropertyOptional({ enum: REFUSAL_CHOICES }) choice?: RefusalChoice;
   @ApiPropertyOptional() returnCode?: string;
+  /** Only a part was refused: the rest was delivered. */
+  @ApiPropertyOptional({ type: FreightRefusalPart }) part?: FreightRefusalPart;
 }
 
 export class FreightRefusal {
@@ -259,6 +267,8 @@ export class FreightRefusal {
   /** When the sender was told what happens with no answer. */
   @ApiPropertyOptional() remindedAt?: string;
   @ApiPropertyOptional({ type: FreightRefusalDecision }) decision?: FreightRefusalDecision;
+  /** Only a part was refused, at the handover: the load was delivered, and these packages stay with the driver. */
+  @ApiPropertyOptional({ type: FreightRefusalPart }) part?: FreightRefusalPart;
 }
 
 /** The answer to the sender's decision: the load as it closed, and what was decided. */
@@ -348,9 +358,12 @@ export class FreightClaim {
  *   over    — more came than the note says
  *   damaged — came damaged; with a photograph, always
  *   wrong   — came, and are not the goods the note describes
+ *   refused — came, and the receiver would not take them (the user, 2026-10-27: "Refusal rules, for the part"): the rest is
+ *             delivered and signed for, these stay with the driver, and the sender decides what happens to them as for goods
+ *             refused whole — within 48 hours, carried on by the same driver as a new load. Only against the note's own count.
  * The receiver's own words go where they always went: the remarks beside the name.
  */
-export const RECEIVING_EXCEPTIONS = ['short', 'over', 'damaged', 'wrong'] as const;
+export const RECEIVING_EXCEPTIONS = ['short', 'over', 'damaged', 'wrong', 'refused'] as const;
 export type ReceivingExceptionKind = (typeof RECEIVING_EXCEPTIONS)[number];
 
 export class ReceivingException {
@@ -1522,6 +1535,8 @@ export class Claimable {
   @ApiPropertyOptional() doorReported?: boolean;
   /** Refused at the door, and the sender not yet decided: until when the driver keeps the goods (the user, 2026-10-27). */
   @ApiPropertyOptional() refusedUntil?: string;
+  /** A part refused at the handover: how many packages the driver keeps until then. The load itself was delivered. */
+  @ApiPropertyOptional() refusedPart?: number;
   /** A return: refused goods carried on as this new load — the load they were refused on. */
   @ApiPropertyOptional({ type: FreightLink }) returnOf?: FreightLink;
   /** Held by the police, customs or another authority on the road, as its driver said: until they say it was let go. */

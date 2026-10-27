@@ -13,6 +13,7 @@ const WORDS: Record<ReceivingExceptionKind, (n: number) => string> = {
   over: (n) => `${PACKAGES(n)} more than the note says`,
   damaged: (n) => `${PACKAGES(n)} damaged`,
   wrong: (n) => `${PACKAGES(n)} not the goods the note describes`,
+  refused: (n) => `${PACKAGES(n)} refused`,
 };
 
 /** "3 packages short, 2 packages damaged" — in the note's order, as they are kept. Empty where nothing was found. */
