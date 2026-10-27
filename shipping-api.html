@@ -290,7 +290,9 @@
     it counts as. A box of 50 × 40 × 30 cm weighing 6 kg is priced as 7.6 kg. The answer says which one set the price in
     <code>parcel.chargedBy</code>, so you can tell your buyer why a big, light box costs more. Many carriers divide by
     5,000 or 6,000; we divide by 7,875, so a box counts as lighter here. Send real measurements: without them a parcel
-    is priced at its whole size tier.
+    is priced at its whole size tier. How it reaches the price: the road part is <code>km × rate per km × countsAsKg ÷ 5</code>,
+    where the rate is the carriers' own per-kilometre rate for a 5 kg medium parcel — the dearest of those that can carry it
+    in <code>price.amount</code>, the cheapest in <code>price.minimum</code>. The shops' and hubs' fees do not change with size.
   </div>
 
   <h3>Response</h3>

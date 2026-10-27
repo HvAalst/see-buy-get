@@ -121,7 +121,7 @@ export const en = {
   'common.sizePrice.byWeight': 'Priced by its weight, {weighs} kg — by its size it counts as less ({counts} kg).',
   'common.sizePrice.wholeBag': 'Priced as a whole bag, the most one parcel is charged: by its size it counts as {counts} kg.',
   'common.sizePrice.whyTitle': 'Size or weight, whichever is more',
-  'common.sizePrice.whyRule': 'A box counts by its size as length × width × height in centimetres, divided by 7,875: a box of 45 × 35 × 25 cm counts as 5 kg. The price is set by whichever is more — what it weighs, or what it counts as by its size — because a big, light box takes room in the bag that nothing else can use.',
+  'common.sizePrice.whyRule': 'A box counts by its size as length × width × height in centimetres, divided by 7,875: a box of 45 × 35 × 25 cm counts as 5 kg. The price is set by whichever is more — what it weighs, or what it counts as by its size — because a big, light box takes room in the bag that nothing else can use. The road part of the price is the kilometres × a driver’s rate per kilometre × what it counts as, divided by 5.',
   'common.sizePrice.whyMore': 'Help has it in full: “See why a big, light parcel costs more”.',
   'common.paidDirect.ask': 'I was paid',
   'common.paidDirect.askOffice': 'We were paid',

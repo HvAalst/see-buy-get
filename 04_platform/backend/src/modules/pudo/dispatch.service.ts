@@ -4633,8 +4633,29 @@ export class DispatchService {
     const from = this.pickupPlace(tote.locationId);
     const to = this.destinationPlace(tote);
     const resolved = Boolean(from && to);
-    const haul = computeToteHaul({ ratePerKm, tripKm: resolved ? this.router.roadKm(from!.loc, to!.loc) : 0, units: tote.unitsUsed });
+    const haul = computeToteHaul({ ratePerKm, tripKm: resolved ? this.router.roadKm(from!.loc, to!.loc) : 0, units: this.chargedUnitsOf(tote) });
     return { ...haul, basis: resolved ? 'measured' : 'unresolved' };
+  }
+
+  /**
+   * WHAT THE BAG'S PARCELS WERE CHARGED FOR THE ROAD, in medium-equivalents — what its driver is paid on. Each parcel by the
+   * factor its price was quoted at: its measurement where it was measured, else its size. Found 2026-10-27, answering how
+   * size reaches a price: the pay counted every parcel by its size TIER while a measured parcel's price followed its
+   * measurement, so a 2 kg shoebox charged 0.4 of a medium paid its driver a whole one, out of the network's own pocket —
+   * against computeToteHaul's own rule that the two sides are counted in one unit. Room in the bag is still counted by the
+   * tier (Tote.unitsUsed). A bag whose parcels cannot all be read is paid on its fill, as before.
+   */
+  private chargedUnitsOf(tote: Tote): number {
+    if (!this.parcels || !tote.parcels?.length) return tote.unitsUsed;
+    let units = 0;
+    for (const id of tote.parcels) {
+      try {
+        units += ParcelService.transportFactorOf(this.parcels.get(id));
+      } catch {
+        return tote.unitsUsed;
+      }
+    }
+    return Math.round(units * 1000) / 1000;
   }
 
   /**

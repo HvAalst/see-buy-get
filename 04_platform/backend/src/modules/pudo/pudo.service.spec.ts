@@ -4046,6 +4046,22 @@ describe('PUDO Light', () => {
       expect(haul.road).toBeCloseTo(haul.tripKm * 0.1 * 2, 2);
     });
 
+    it('pays the road on what each parcel was CHARGED — a measured shoebox by its measurement, not its size tier (2026-10-27)', () => {
+      // Found answering how size reaches a price: the pay counted every parcel by its tier, so a 2 kg shoebox in the
+      // medium tier — charged 0.4 of a medium on its measurement — paid its driver a whole medium, out of our own pocket.
+      const dest = onboardAgent('Haul Dest M', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
+      const { origin, d, bag } = bagRun('M', { destinationNodeId: dest.did, parcels: 2 });
+      const store = (parcels as unknown as { parcels: { get(id: string): Record<string, unknown>; set(id: string, p: Record<string, unknown>): void } }).parcels;
+      store.set('HAUL-M-0', { ...store.get('HAUL-M-0'), transportFactor: 0.4 });
+      const [offer] = dispatch.suggest(d.did, { from: origin.location, to: dest.location }).filter((o) => o.ref === bag.code);
+      dispatch.claim(offer.offerId);
+      const haul = totes.requireByCode(bag.code).haul!;
+      expect(haul.units).toBe(1.4); // 0.4 for the measured shoebox + 1 for the medium nobody measured
+      expect(haul.road).toBeCloseTo(haul.tripKm * 0.1 * 1.4, 2);
+      // The room in the bag is still counted by the tier: two mediums.
+      expect(totes.requireByCode(bag.code).unitsUsed).toBe(2);
+    });
+
     it('pays the handling on LOAD and the road on ARRIVAL — a journey not yet made is not owed', () => {
       const dest = onboardAgent('Haul Dest B', 'SouthTown', 50); agents.setLocation(dest.did, { lat: -1.35, lng: 36.95 });
       const { origin, d, bag } = bagRun('B', { destinationNodeId: dest.did });
