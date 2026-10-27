@@ -63,6 +63,11 @@ const MOST_WAITING = 5;
 /** How long an ask may take before the gazetteer answers instead. */
 const TIMEOUT_MS = 6_000;
 
+/** A Nominatim-compatible reverse lookup (format=jsonv2, addressdetails=1) — only what is read: the country. */
+interface NominatimPlace {
+  address?: { country_code?: string };
+}
+
 /** One hit of a Nominatim-compatible search (format=jsonv2, addressdetails=1) — only what is read. */
 interface NominatimHit {
   lat?: string;
@@ -91,6 +96,8 @@ interface NominatimHit {
 export class AddressSearchService {
   private readonly logger = new Logger(AddressSearchService.name);
   private readonly kept = new Map<string, { at: number; found: GeocodeResult | null }>();
+  /** The country a pin was found in, by the pin to four places (about ten metres) — none where the service found none. */
+  private readonly countries = new Map<string, { at: number; country?: string }>();
   private nextAt = 0;
   private waiting = 0;
   /** The platform's fetch; a test puts its own here. */
@@ -121,21 +128,56 @@ export class AddressSearchService {
     return found ?? known;
   }
 
+  /**
+   * THE COUNTRY A PIN IS IN (the user, 2026-10-27: "Look up the pin's country"), as the service reads it — ISO-3166 alpha-2,
+   * upper case. Nothing where no service is set, where it cannot be reached, is slow or busy, or finds no country there (the
+   * sea): a caller then falls back to its own rule, never to a guess.
+   */
+  async countryAt(at: { lat: number; lng: number }, now: number = Date.now()): Promise<string | undefined> {
+    const lat = Number(at?.lat);
+    const lng = Number(at?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+    const base = this.base();
+    if (!base) return undefined;
+    const id = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+    const kept = this.countries.get(id);
+    if (kept && now - kept.at < KEEP_MS) return kept.country;
+    if (this.waiting >= MOST_WAITING) return undefined;
+    const place = (await this.fetchJson(base, 'reverse', new URLSearchParams({ lat: String(lat), lon: String(lng), format: 'jsonv2', zoom: '3', addressdetails: '1' }))) as NominatimPlace | undefined;
+    if (place === undefined) return undefined; // no answer: kept nowhere, asked again next time
+    const code = String(place?.address?.country_code ?? '').trim().toUpperCase();
+    const country = /^[A-Z]{2}$/.test(code) ? code : undefined;
+    this.countries.set(id, { at: now, ...(country ? { country } : {}) });
+    if (this.countries.size > KEEP_MOST) this.countries.delete(this.countries.keys().next().value!);
+    return country;
+  }
+
   /** The gazetteer's answer when it is a real place — never its stand-in for a name it does not know. */
   private offlineHit(q: string): GeocodeResult | null {
     const hit = this.offline.geocode(q);
     return hit.confidence === 'fallback' ? null : hit;
   }
 
-  /** Ask the service, one ask at a time and no faster than it allows. `null` = it found nothing; `undefined` = no answer. */
+  /** Search the service. `null` = it found nothing; `undefined` = no answer. */
   private async ask(base: string, q: string, codes: string[]): Promise<GeocodeResult | null | undefined> {
+    const params = new URLSearchParams({ q, format: 'jsonv2', addressdetails: '1', limit: '1' });
+    if (codes.length) params.set('countrycodes', codes.join(','));
+    const hits = (await this.fetchJson(base, 'search', params)) as NominatimHit[] | undefined;
+    if (hits === undefined) return undefined;
+    const hit = Array.isArray(hits) ? hits[0] : undefined;
+    const lat = Number(hit?.lat);
+    const lng = Number(hit?.lon);
+    if (!hit || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { location: { lat, lng }, confidence: hit.address?.house_number ? 'exact' : 'approx', ...(hit.display_name ? { matched: hit.display_name } : {}) };
+  }
+
+  /** Ask the service, one ask at a time and no faster than it allows. `undefined` = no answer: out of reach, slow or refused. */
+  private async fetchJson(base: string, path: 'search' | 'reverse', params: URLSearchParams): Promise<unknown> {
     this.waiting++;
     try {
       const wait = this.nextAt - Date.now();
       this.nextAt = Math.max(Date.now(), this.nextAt) + SPACING_MS;
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      const params = new URLSearchParams({ q, format: 'jsonv2', addressdetails: '1', limit: '1' });
-      if (codes.length) params.set('countrycodes', codes.join(','));
       const key = process.env.GLOS_GEOCODER_KEY?.trim();
       if (key) params.set('key', key);
       const ctl = new AbortController();
@@ -143,22 +185,17 @@ export class AddressSearchService {
       try {
         // Named, as OpenStreetMap's own service asks of every app that uses it.
         const site = (process.env.SBG_PUBLIC_URL ?? '').trim() || 'https://seebuyget.com';
-        const res = await this.fetcher(`${base}/search?${params}`, { signal: ctl.signal, headers: { 'User-Agent': `SeeBuyGet (${site})`, Accept: 'application/json' } });
+        const res = await this.fetcher(`${base}/${path}?${params}`, { signal: ctl.signal, headers: { 'User-Agent': `SeeBuyGet (${site})`, Accept: 'application/json' } });
         if (!res.ok) {
-          this.logger.warn(`The geocoder answered ${res.status}; the offline gazetteer answers instead`);
+          this.logger.warn(`The geocoder answered ${res.status} to a ${path}; answered without it`);
           return undefined;
         }
-        const hits = (await res.json()) as NominatimHit[];
-        const hit = Array.isArray(hits) ? hits[0] : undefined;
-        const lat = Number(hit?.lat);
-        const lng = Number(hit?.lon);
-        if (!hit || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        return { location: { lat, lng }, confidence: hit.address?.house_number ? 'exact' : 'approx', ...(hit.display_name ? { matched: hit.display_name } : {}) };
+        return await res.json();
       } finally {
         clearTimeout(timer);
       }
     } catch (e) {
-      this.logger.warn(`The geocoder could not be reached (${(e as Error).message}); the offline gazetteer answers instead`);
+      this.logger.warn(`The geocoder could not be reached (${(e as Error).message}); answered without it`);
       return undefined;
     } finally {
       this.waiting--;

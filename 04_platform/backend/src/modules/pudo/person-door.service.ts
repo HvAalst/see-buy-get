@@ -27,6 +27,17 @@ import { DoorPreview, DoorRequest, DoorView } from './person-door.types';
 import type { Parcel } from './pudo.types';
 import { RoutingService } from './routing.service';
 import { ToteService } from './tote.service';
+import { AddressSearchService } from './geocoder';
+
+/** A country's name in English, from its ISO code — the code itself where the runtime has no name for it. */
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+function countryName(code: string): string {
+  try {
+    return regionNames.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -70,6 +81,8 @@ export class PersonDoorService implements OnModuleInit {
     private readonly agents: AgentService,
     @Optional() private readonly notifications?: NotificationService,
     @Optional() private readonly events?: EventBus,
+    // Which country a door's pin is in (the user, 2026-10-27: "Look up the pin's country").
+    @Optional() private readonly places?: AddressSearchService,
   ) {}
 
   onModuleInit(): void {
@@ -90,14 +103,14 @@ export class PersonDoorService implements OnModuleInit {
   /* ------------------------------------------------------------------ asking -- */
 
   /** What bringing it to their door would be — or why not. With `to`, the most to allow, suggested. Nothing is written. */
-  preview(personDid: string, parcelId: string, to?: { lat: number; lng: number }): DoorPreview {
+  async preview(personDid: string, parcelId: string, to?: { lat: number; lng: number }): Promise<DoorPreview> {
     const p = this.theirs(personDid, parcelId);
     const why = this.whyNot(p, personDid);
     if (why) return { outcome: 'no', why };
     const hub = this.mdps.require(p.atMdpId!);
     const { entityId, currency } = this.sellerOf(hub.mdpId);
     if (!to) return { outcome: 'door', atHub: hub.name, currency, maxKm: DOOR_MAX_KM };
-    const far = this.tooFar(hub.mdpId, hub.name, to, p);
+    const far = await this.whereNot(hub.mdpId, hub.name, to, p);
     if (far) return { outcome: 'no', why: far };
     const end = this.routing.hubEnd(hub.mdpId);
     const suggestedMax = this.dispatch.doorGuide({ from: end.location, to, weightKg: p.weightKg, fragile: p.fragile ?? false, shipperDid: '', sellerEntityId: entityId }).suggestedMax;
@@ -113,7 +126,7 @@ export class PersonDoorService implements OnModuleInit {
     const why = this.whyNot(p, personDid);
     if (why) throw new GlosError('INVALID_STATE', why);
     const hub = this.mdps.require(p.atMdpId!);
-    const far = this.tooFar(hub.mdpId, hub.name, input.to, p);
+    const far = await this.whereNot(hub.mdpId, hub.name, input.to, p);
     if (far) throw new GlosError('INVALID_INPUT', far, { field: 'location' });
     const label = String(input.label ?? '').trim();
     if (label.length < 2) throw new GlosError('FIELD_REQUIRED', 'Say where your door is — a street, a gate, a landmark a driver can find', { field: 'label' });
@@ -499,9 +512,19 @@ export class PersonDoorService implements OnModuleInit {
     return undefined;
   }
 
-  private tooFar(mdpId: string, hubName: string, to: { lat: number; lng: number }, p: Parcel): string | undefined {
+  /**
+   * WHERE A DOOR CANNOT BE (the user, 2026-10-27: "Look up the pin's country"): in another country than the hub — the map
+   * service says which country the pin is in, and a driver brings it only within the hub's. Where the service cannot say (none
+   * set, out of reach, the sea), the older rule stands: no further than DOOR_MAX_KM from the hub.
+   */
+  private async whereNot(mdpId: string, hubName: string, to: { lat: number; lng: number }, p: Parcel): Promise<string | undefined> {
     const end = this.routing.hubEnd(mdpId);
     if (!Number.isFinite(Number(to?.lat)) || !Number.isFinite(Number(to?.lng))) return 'Put your door on the map';
+    const country = await this.places?.countryAt({ lat: Number(to.lat), lng: Number(to.lng) });
+    if (country) {
+      const home = String(end.country ?? '').toUpperCase();
+      return country === home ? undefined : `Your door is in ${countryName(country)}, and ${hubName} is in ${countryName(home)}: a driver brings it only within ${countryName(home)}. Collect it at ${this.shopNameOf(p) ?? 'the shop'} instead.`;
+    }
     return haversineKm(end.location, { lat: Number(to.lat), lng: Number(to.lng) }) > DOOR_MAX_KM ? `A door delivery goes no further than ${DOOR_MAX_KM} km from ${hubName}: collect it at ${this.shopNameOf(p) ?? 'the shop'} instead.` : undefined;
   }
 

@@ -390,7 +390,7 @@ export class IdentityController {
   @Get('parcels/:id/door')
   @ApiQuery({ name: 'lat', required: false })
   @ApiQuery({ name: 'lng', required: false })
-  doorPreview(@Param('id') id: string, @Query('lat') lat: string | undefined, @Query('lng') lng: string | undefined, @Actor() actor: IntrospectionResult): DoorPreview {
+  doorPreview(@Param('id') id: string, @Query('lat') lat: string | undefined, @Query('lng') lng: string | undefined, @Actor() actor: IntrospectionResult): Promise<DoorPreview> {
     const to = lat != null && lng != null && lat !== '' && lng !== '' ? { lat: Number(lat), lng: Number(lng) } : undefined;
     return this.doorsOrRefuse(actor).preview(actor.did!, id, to);
   }

@@ -75,4 +75,43 @@ describe('finding an address', () => {
     expect(await unreachable.search('Westlands')).toMatchObject({ matched: 'Westlands' });
     expect(await unreachable.search('12 Nowhere Lane, Atlantis')).toBeNull();
   });
+
+  /* The country a pin is in (the user, 2026-10-27: "Look up the pin's country"): a door across a border is refused by it. */
+  it('reads the country a pin is in from the service, asked as it asks to be asked, and keeps it', async () => {
+    process.env.GLOS_GEOCODER_URL = 'https://geo.example.org/';
+    process.env.GLOS_GEOCODER_KEY = 'k-9';
+    const { svc, asked } = serviceAnswering({ address: { country_code: 'tz', state: 'Arusha' } });
+    const now = Date.now();
+    expect(await svc.countryAt({ lat: -3.3869, lng: 36.683 }, now)).toBe('TZ');
+    const url = new URL(asked[0].url);
+    expect(`${url.origin}${url.pathname}`).toBe('https://geo.example.org/reverse');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ lat: '-3.3869', lon: '36.683', format: 'jsonv2', zoom: '3', addressdetails: '1', key: 'k-9' });
+    expect(asked[0].headers['User-Agent']).toMatch(/^SeeBuyGet \(/);
+    // The same pin, to ten metres, within the day: not asked again.
+    expect(await svc.countryAt({ lat: -3.38691, lng: 36.68301 }, now + 3_600_000)).toBe('TZ');
+    expect(asked).toHaveLength(1);
+  });
+
+  it('says no country where none is set, where it cannot be reached or refuses, or where it finds none — never a guess', async () => {
+    delete process.env.GLOS_GEOCODER_URL;
+    const none = serviceAnswering({ address: { country_code: 'ke' } });
+    expect(await none.svc.countryAt({ lat: -1.28, lng: 36.82 })).toBeUndefined();
+    expect(none.asked).toHaveLength(0);
+    process.env.GLOS_GEOCODER_URL = 'https://geo.example.org';
+    expect(await serviceAnswering({ error: 'busy' }, false).svc.countryAt({ lat: -1.28, lng: 36.82 })).toBeUndefined();
+    expect(await serviceAnswering({ error: 'Unable to geocode' }).svc.countryAt({ lat: -4.5, lng: 40.5 })).toBeUndefined(); // the sea
+    expect(await serviceAnswering({ address: { country_code: 'kenya' } }).svc.countryAt({ lat: -1.28, lng: 36.82 })).toBeUndefined();
+    const unreachable = new AddressSearchService(new GazetteerGeocoder());
+    let calls = 0;
+    unreachable.fetcher = async () => {
+      calls++;
+      throw new Error('getaddrinfo ENOTFOUND');
+    };
+    expect(await unreachable.countryAt({ lat: -1.28, lng: 36.82 })).toBeUndefined();
+    // Out of reach is not kept: asked again next time.
+    expect(await unreachable.countryAt({ lat: -1.28, lng: 36.82 })).toBeUndefined();
+    expect(calls).toBe(2);
+    expect(await unreachable.countryAt({ lat: Number.NaN, lng: 36.82 })).toBeUndefined();
+    expect(calls).toBe(2);
+  });
 });

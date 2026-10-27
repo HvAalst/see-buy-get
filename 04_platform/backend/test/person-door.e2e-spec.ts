@@ -16,6 +16,7 @@ import { ParcelService } from '../src/modules/pudo/parcel.service';
 import { PersonDoorService } from '../src/modules/pudo/person-door.service';
 import { PersonService } from '../src/modules/pudo/person.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
+import { AddressSearchService } from '../src/modules/pudo/geocoder';
 import { shopPhotoOver } from './content-photo';
 import { declared } from './declared';
 import { AGREED } from './agreed';
@@ -180,6 +181,46 @@ describe('a person’s own door, paid first by mobile money, over the wire', () 
       expect(owed(ACCOUNT_CODES.PAYABLE_PERSON, personDid)).toBeCloseTo(0, 2);
     }
     expect(app.get(BooksService).balances(app.get(EntityService).requireForJurisdiction('KE').entityId)).toEqual({ balanced: true, drift: 0 });
+  });
+
+  it('a door in another country is refused, as the map service reads the pin; where it cannot say, no further than 100 km', async () => {
+    const { sender, backId, shop, hubId } = await goodsComingBack();
+    const places = app.get(AddressSearchService);
+    const fetcher = places.fetcher;
+    const before = process.env.GLOS_GEOCODER_URL;
+    // The service answers by the pin: Arusha is in Tanzania, everything else here in Kenya — unless it is out of reach.
+    let reachable = true;
+    const asked: string[] = [];
+    places.fetcher = async (url) => {
+      asked.push(url);
+      if (!reachable) throw new Error('offline');
+      const lat = Number(new URL(url).searchParams.get('lat'));
+      return { ok: true, status: 200, json: async () => ({ address: { country_code: lat < -3 ? 'tz' : 'ke' } }) };
+    };
+    process.env.GLOS_GEOCODER_URL = 'https://geo.example.org';
+    try {
+      const arusha = { lat: -3.3869, lng: 36.683 };
+      const nakuru = { lat: -0.3031, lng: 36.08 };
+      // Across the border: refused, by name, before anything is held or asked.
+      const across = (await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(arusha).set(sender).expect(200)).body;
+      const hubName = app.get(MdpService).require(hubId).name;
+      expect(across).toEqual({ outcome: 'no', why: `Your door is in Tanzania, and ${hubName} is in Kenya: a driver brings it only within Kenya. Collect it at ${shop.name} instead.` });
+      const refused = await http().post(`/v1/sbg/identity/parcels/${backId}/door`).set(sender).send({ ...arusha, label: 'Gate 1', maxSpend: 900, phone: '+254712345678' });
+      expect([refused.status, refused.body.code]).toEqual([400, 'INVALID_INPUT']);
+      expect(app.get(ParcelService).get(backId).doorHold).toBeUndefined();
+      expect(asked.some((u) => u.startsWith('https://geo.example.org/reverse?'))).toBe(true);
+      // In the hub's country, beyond 100 km: the country decides, so it is offered.
+      expect((await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(nakuru).set(sender).expect(200)).body).toMatchObject({ outcome: 'door', suggestedMax: expect.any(Number) });
+      // The service out of reach: the older rule stands — no further than 100 km from the hub.
+      reachable = false;
+      const far = { lat: -0.3032, lng: 36.0801 };
+      expect((await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(far).set(sender).expect(200)).body).toMatchObject({ outcome: 'no', why: expect.stringContaining('no further than 100 km') });
+      expect((await http().get(`/v1/sbg/identity/parcels/${backId}/door`).query(near).set(sender).expect(200)).body).toMatchObject({ outcome: 'door' });
+    } finally {
+      places.fetcher = fetcher;
+      if (before === undefined) delete process.env.GLOS_GEOCODER_URL;
+      else process.env.GLOS_GEOCODER_URL = before;
+    }
   });
 
   it('paid too late: the box went on to the shop, and the payment goes back whole', async () => {
