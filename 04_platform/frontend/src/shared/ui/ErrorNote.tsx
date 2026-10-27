@@ -107,7 +107,8 @@ const OVERRIDE: Record<string, string> = {
  * Refusals whose one useful fact only the server has — how long a lock has left to run. Its sentence was written
  * for the person reading it and IS the message; the shared line could only say "for now".
  */
-const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED', 'PARCEL_LOST', 'COUNTRY_NOT_OPEN', 'AGREEMENT_REQUIRED']);
+// NEW_LABEL (2026-10-27): which new label goes over the old one is the server's to say — a parcel called off at a hub.
+const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED', 'PARCEL_LOST', 'COUNTRY_NOT_OPEN', 'AGREEMENT_REQUIRED', 'NEW_LABEL']);
 
 export function errorSentence(error: SbgError): string {
   if (SERVER_SAYS.has(error.code) && error.detail?.trim()) return error.detail.trim();

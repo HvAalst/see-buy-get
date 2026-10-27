@@ -141,6 +141,12 @@ export function createVendorApi(sbg: SbgClient) {
     orderLabelZpl: (vendorId: string, parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}/label.zpl', { params: { path: { id: vendorId, parcelId } }, parseAs: 'text' })),
 
+    /** 2026-10-27 — what calling an order off would do now, and doing it: withdrawn with its money back, or brought back from a hub at a price. */
+    callOffPreview: (vendorId: string, parcelId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/vendors/{id}/orders/{parcelId}/call-off', { params: { path: { id: vendorId, parcelId } } })),
+    callOff: (vendorId: string, parcelId: string, reason?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vendors/{id}/orders/{parcelId}/call-off', { params: { path: { id: vendorId, parcelId } }, body: reason ? { reason } : {} })),
+
     /** DT — the parcel's planned journey (origin PUDO → MDP(s) → dest PUDO), for the twin view after minting. */
     parcelRoute: (parcelId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/parcels/{id}/route', { params: { path: { id: parcelId } } })),

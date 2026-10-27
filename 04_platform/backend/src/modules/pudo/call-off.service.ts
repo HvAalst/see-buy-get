@@ -97,7 +97,12 @@ export class CallOffService {
     if (!p.atMdpId) return { why: 'Nobody recorded which hub has it: SeeBuyGet looks into it.' };
     if (!p.originAgentDid) return { why: 'It was not handed in at a shop, so there is no shop to bring it back to: it carries on to the buyer.' };
     const shop = this.agents.get(p.originAgentDid);
-    if (!this.agents.takesNew(shop)) return { why: `${shop.shopName} is not taking parcels for now, so it cannot come back there: it carries on to the buyer.` };
+    // The same test as any new parcel naming a shop: held over its ID, its licence lapsed, or resting, it is named by none.
+    try {
+      this.agents.assertNamedAtMint(shop.did);
+    } catch {
+      return { why: `${shop.shopName} is not taking parcels for now, so it cannot come back there: it carries on to the buyer.` };
+    }
     const hub = this.mdps.require(p.atMdpId);
     // The hub must be able to sort it toward that shop — to it, or to the hub serving its area — or the goods would wait there
     // under a new label with nowhere to go.

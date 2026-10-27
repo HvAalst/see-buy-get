@@ -17,6 +17,7 @@ import { ssccWords } from '../gs1';
 import { RefusalCard } from '../../../shared/RefusalCard';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { utcMoment } from '../../../shared/refusal';
+import { CallOffBlock } from './CallOff';
 
 export interface OrdersScreenProps {
   state: VendorState;
@@ -375,6 +376,9 @@ function OrderRowItem({ o, selected, onToggle, onOpen }: { o: OrderRow; selected
           <span class="row__meta">{`${st.word} · ${o.size} → ${o.destZone}${o.shipmentCost != null ? ` · ${money(o.shipmentCost, o.currency)}` : ''}`}</span>
           {/* Round 35 — held under the tamper protocol: what was found and where, until SeeBuyGet operations releases it. */}
           {o.held ? <span class="row__s row__s--warn">{heldLine(o.held, t)}</span> : null}
+          {/* Called off at a hub (2026-10-27): the two orders read as one story. */}
+          {o.returnParcelId ? <span class="row__s">{t('vendor.order.comingBackAs', { id: o.returnParcelId })}</span> : null}
+          {o.returnOf ? <span class="row__s">{t('vendor.order.bringsBack', { id: o.returnOf })}</span> : null}
         </span>
         <span class="row__end">
           <Pill tone={paid.tone === 'ok' ? 'ok' : 'warn'} dot>
@@ -569,6 +573,26 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
             <span>{t('vendor.order.status')}</span>
             <b>{st.word}</b>
           </div>
+          {/* Called off at a hub (2026-10-27): the order bringing it back, and the one it brings back — each a tap away. */}
+          {d.returnParcelId ? (
+            <div class="kv">
+              <span>{t('vendor.order.comingBack')}</span>
+              <Button variant="link" full={false} onClick={() => void actions.openOrder(d.returnParcelId!)}>
+                {d.returnParcelId}
+              </Button>
+            </div>
+          ) : null}
+          {d.returnOf ? (
+            <>
+              <div class="kv">
+                <span>{t('vendor.order.bringsBackLabel')}</span>
+                <Button variant="link" full={false} onClick={() => void actions.openOrder(d.returnOf!)}>
+                  {d.returnOf}
+                </Button>
+              </div>
+              <p class="hint">{t('vendor.order.bringsBackHint')}</p>
+            </>
+          ) : null}
           <div class="kv">
             <span>{t('vendor.order.sizeZone')}</span>
             <b>{`${d.size} → ${d.destZone}`}</b>
@@ -631,7 +655,8 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
               </Button>
             </div>
           ) : null}
-          {d.collectionCode ? <CodeCard label={t('vendor.buyerCollectionCode')} code={d.collectionCode} scanAs="collect" /> : null}
+          {/* The store collects an order bringing its goods back itself: its own code, not a buyer's. */}
+          {d.collectionCode ? <CodeCard label={t(d.returnOf ? 'vendor.order.yourCode' : 'vendor.buyerCollectionCode')} code={d.collectionCode} scanAs="collect" /> : null}
           {/* The damage claim report on this order: the store reads it, keeps the file, and hands it on — the same three things the receiver has. */}
           {d.damageReport ? <DamageReportCard client={client} parcelId={d.parcelId} number={d.damageReport.number} /> : null}
           {d.scans?.length ? (
@@ -648,6 +673,7 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
               ))}
             </div>
           ) : null}
+          <CallOffBlock d={d} state={state} actions={actions} />
           <Button variant="link" onClick={actions.closeOrder}>
             {t('vendor.close')}
           </Button>

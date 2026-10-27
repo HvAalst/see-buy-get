@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import { bagLine, fillPercent, fillingBags, placeLine, sortSummary, swatchIndex } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { TamperSheet } from './TamperSheet';
+import { RelabelCard } from './RelabelCard';
 
 export interface SortScreenProps {
   state: MdpState;
@@ -30,6 +31,9 @@ export function SortScreen({ state, actions }: SortScreenProps) {
       <Explainer who={state.hub?.did} id="mdp.sort.how" text={t('mdp.sort.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
+
+      {/* 2026-10-27 — a parcel its store called off here: its new label, printed and put over the old one, then sorted. */}
+      <RelabelCard state={state} actions={actions} />
 
       {last ? (
         <section class={`place place--${swatchIndex(last.nextDestination.id)}`} aria-live="polite">

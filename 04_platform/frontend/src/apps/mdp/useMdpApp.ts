@@ -8,6 +8,8 @@ import { clearDid, createMdpClient, mdpConfig, purgeMdpTokens, readDid, readEmai
 import { addToQueue, dropFromQueue, findMyHub, floorOpen, money, unsortedAt } from './logic';
 import { onIt, replaceArrival, unitsLine, type HubArrival, type HubArrivalScan, type HubArrivalsView, type HubBulk } from './arrivals';
 import { downscaleImage } from '../../shared/media';
+import { downloadZpl } from '../../shared/download';
+import { openSvg } from '../../shared/openPage';
 import { holdPhoto } from '../../shared/heldPhotos';
 import { errorSentence } from '../../shared/ui';
 import type { UnitHold } from '../../shared/tamper';
@@ -63,6 +65,8 @@ export interface MdpState {
   drop: { bag?: { closedWith?: 'seal' | 'photo'; held?: UnitHold } | null; mismatch?: string };
   /** One of the hub's people working its floor on this device, under their own name; null for the hub's own sign-in. */
   staff: StaffAtCounter | null;
+  /** 2026-10-27 — an old label scanned of a parcel its store called off here: which new label goes over it. */
+  relabel: { oldId: string; newId: string } | null;
 }
 
 const EMPTY_FORM = { dropCode: '', sortId: '', loadCode: '', badge: '', arrivalCode: '' };
@@ -91,6 +95,7 @@ const INITIAL: MdpState = {
   tamper: null,
   staff: null,
   drop: {},
+  relabel: null,
 };
 
 const isOffline = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
@@ -551,6 +556,13 @@ export function useMdpApp() {
       const r = await client.api.sort(hub.mdpId, id);
       if (r.error) {
         signal('error');
+        // Called off here by its store (2026-10-27): the box wears its old label. Said which label to put over it, and the
+        // queue holds the new one in its place.
+        if (r.error.code === 'NEW_LABEL') {
+          const newId = String((r.error.params as { returnParcelId?: string } | undefined)?.returnParcelId ?? '');
+          setState((s) => ({ ...s, relabel: newId ? { oldId: id, newId } : s.relabel, queue: newId ? addToQueue(dropFromQueue(s.queue, id), [newId]) : dropFromQueue(s.queue, id), form: { ...s.form, sortId: '' }, error: null }));
+          return;
+        }
         // An unknown or mis-scanned sticker must not stay queued forever — but only a
         // definitive verdict (not found / wrong state) removes it.
         if (r.error.code === 'NOT_FOUND' || r.error.code === 'INVALID_STATE') {
@@ -565,10 +577,43 @@ export function useMdpApp() {
         last: sorted,
         queue: dropFromQueue(s.queue, id),
         form: { ...s.form, sortId: '' },
+        // Sorted under its new label: nothing left to say about the old one.
+        relabel: s.relabel?.newId === id ? null : s.relabel,
       }));
       await refresh();
     });
   }, [client, run, fail, refresh]);
+
+  /** 2026-10-27 — the new label of a parcel its store called off here: printed, to put over the old one. */
+  const printNewLabel = useCallback(
+    async (parcelId: string) => {
+      const hub = stateRef.current.hub;
+      if (!client || !hub) return;
+      await run(`label:${parcelId}`, async () => {
+        const r = await client.api.hubLabel(hub.mdpId, parcelId);
+        if (r.error) return fail(r.error);
+        const svg = narrow<{ svg?: string }>(r.data)?.svg;
+        if (svg) openSvg(svg);
+      });
+    },
+    [client, run, fail],
+  );
+
+  /** …and for a thermal label printer: sent to it as it is. */
+  const thermalNewLabel = useCallback(
+    async (parcelId: string) => {
+      const hub = stateRef.current.hub;
+      if (!client || !hub) return;
+      await run(`thermal:${parcelId}`, async () => {
+        const r = await client.api.hubLabelZpl(hub.mdpId, parcelId);
+        if (r.error) return fail(r.error);
+        downloadZpl(`label-${parcelId}`, String(r.data ?? ''));
+      });
+    },
+    [client, run, fail],
+  );
+
+  const dismissRelabel = useCallback(() => setState((s) => ({ ...s, relabel: null })), []);
 
   const openTamper = useCallback((parcelId: string | null) => {
     setState((s) => ({ ...s, tamper: parcelId === null ? null : { parcelId, photoRef: '', note: '' }, error: null }));
@@ -903,6 +948,9 @@ export function useMdpApp() {
       reportBag,
       closeBag,
       submitSort,
+      printNewLabel,
+      thermalNewLabel,
+      dismissRelabel,
       submitLoad,
       submitNewTote,
       sendPapers,

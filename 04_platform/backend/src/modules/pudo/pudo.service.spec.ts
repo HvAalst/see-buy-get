@@ -10668,9 +10668,12 @@ describe('PUDO Light', () => {
         expect(dock.callOffs.preview(dock.vendor.vendorId, dock.id)).toEqual({ parcelId: dock.id, outcome: 'no', why: 'It was not handed in at a shop, so there is no shop to bring it back to: it carries on to the buyer.' });
         expect(() => dock.callOffs.callOff(dock.vendor.vendorId, dock.id, 'COR2 Store')).toThrow(/no shop to bring it back to/);
 
-        // The shop it was handed in at is not taking parcels for now.
+        // The shop it was handed in at is not taking parcels for now — held over its ID, as no new parcel may name it. One that
+        // has put no money in yet is still named, as it is by any store's order.
         const closed = atHub('COR3');
-        agents.get(closed.origin.did).status = 'SUSPENDED' as never;
+        agents.get(closed.origin.did).status = 'APPROVED_UNFUNDED';
+        expect(closed.callOffs.preview(closed.vendor.vendorId, closed.id).outcome).toBe('bring_back');
+        agents.get(closed.origin.did).idHold = { reference: 'ID-DISPUTE-1', at: new Date().toISOString() };
         expect(closed.callOffs.preview(closed.vendor.vendorId, closed.id).why).toBe('COR3 Origin is not taking parcels for now, so it cannot come back there: it carries on to the buyer.');
 
         // Held under the tamper protocol: operations first.

@@ -126,6 +126,34 @@ export interface OrderRow {
   createdAt?: string;
   /** Round 35 — held under the tamper protocol: what was found, where, since when. */
   held?: UnitHold;
+  /** Called off at a hub (2026-10-27): the order bringing it back to the shop it was handed in at. */
+  returnParcelId?: string;
+  /** The order bringing back one called off at a hub — collected by the store itself, at that shop. */
+  returnOf?: string;
+}
+
+/** What calling an order off would do now (2026-10-27): withdrawn with its money back; brought back from a hub at a price; or why not. */
+export interface CallOffView {
+  parcelId: string;
+  outcome: 'refund' | 'bring_back' | 'no';
+  amount?: number;
+  currency?: string;
+  /** bring_back: the shop it comes back to — the one it was handed in at — and the hub it is at. */
+  backTo?: string;
+  atHub?: string;
+  why?: string;
+}
+
+/** What calling it off did. */
+export interface CalledOffView {
+  parcelId: string;
+  status: string;
+  outcome: 'refund' | 'bring_back';
+  amount: number;
+  currency: string;
+  returnParcelId?: string;
+  backTo?: string;
+  atHub?: string;
 }
 
 /** Store-wide shipment counts for the console header + spoken summary — over the WHOLE store, never a page. */

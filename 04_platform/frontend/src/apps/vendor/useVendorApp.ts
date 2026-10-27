@@ -48,10 +48,12 @@ import {
   vendorSession,
   vendorConfig,
 } from './api';
-import { EMPTY_MINT, dimsComplete, fromHandoff, measureOf, type MintForm } from './logic';
+import { EMPTY_MINT, dimsComplete, fromHandoff, measureOf, money, type MintForm } from './logic';
 import type {
   ApiKeyRow,
   CallbackRow,
+  CallOffView,
+  CalledOffView,
   CheckoutRow,
   DockPlan,
   IssuedKey,
@@ -166,6 +168,8 @@ export interface VendorState {
   checkouts: CheckoutRow[];
   detail: OrderDetail | null;
   detailState: 'idle' | 'loading' | 'ready';
+  /** 2026-10-27 — an order the store asked to call off, and what doing it would do: said before it is done. */
+  callOff: { parcelId: string; view: CallOffView } | null;
   settlement: SettlementRow[];
   callbacks: CallbackRow[];
   apiKeys: ApiKeyRow[];
@@ -225,6 +229,7 @@ const INITIAL: VendorState = {
   checkouts: [],
   detail: null,
   detailState: 'idle',
+  callOff: null,
   settlement: [],
   callbacks: [],
   apiKeys: [],
@@ -1155,8 +1160,47 @@ export function useVendorApp() {
   );
 
   const closeOrder = useCallback(() => {
-    setState((s) => ({ ...s, detail: null, detailState: 'idle' }));
+    setState((s) => ({ ...s, detail: null, detailState: 'idle', callOff: null }));
   }, []);
+
+  /** 2026-10-27 — what calling the order off would do and cost, asked before anything is done. */
+  const askCallOff = useCallback(
+    async (parcelId: string) => {
+      if (!client || !creds) return;
+      await run(`calloff-ask:${parcelId}`, async () => {
+        const r = await client.api.callOffPreview(creds.vendorId, parcelId);
+        if (r.error) return fail(r.error);
+        setState((s) => ({ ...s, callOff: { parcelId, view: narrow<CallOffView>(r.data) } }));
+      });
+    },
+    [client, creds, run, fail],
+  );
+
+  const cancelCallOff = useCallback(() => setState((s) => ({ ...s, callOff: null })), []);
+
+  /** Call it off: withdrawn and its money back, or brought back from the hub at the price it was told — then read again. */
+  const confirmCallOff = useCallback(
+    async (parcelId: string, reason?: string) => {
+      if (!client || !creds) return;
+      await run(`calloff:${parcelId}`, async () => {
+        const r = await client.api.callOff(creds.vendorId, parcelId, reason);
+        if (r.error) {
+          setState((s) => ({ ...s, callOff: null }));
+          return fail(r.error);
+        }
+        const done = narrow<CalledOffView>(r.data);
+        pushToast(
+          done.outcome === 'bring_back'
+            ? { tone: 'ok', icon: 'repeat', title: t('vendor.callOff.doneBack', { shop: done.backTo ?? '' }), detail: t('vendor.callOff.doneBackDetail', { id: done.returnParcelId ?? '', amount: money(done.amount, done.currency) }) }
+            : { tone: 'ok', icon: 'check', title: done.amount ? t('vendor.callOff.doneRefund', { amount: money(done.amount, done.currency) }) : t('vendor.callOff.doneRefundNothing') },
+        );
+        setState((s) => ({ ...s, callOff: null }));
+        await refresh();
+        await openOrder(parcelId);
+      });
+    },
+    [client, creds, run, fail, pushToast, refresh, openOrder],
+  );
 
   /** Export the WHOLE current-filter result set (every page) as a CSV download — the server renders it
    *  (owner-scoped, with the same columns + formula-injection guard as the multi-select export). */
@@ -1450,6 +1494,9 @@ export function useVendorApp() {
       saveLocation,
       openOrder,
       closeOrder,
+      askCallOff,
+      cancelCallOff,
+      confirmCallOff,
       exportOrders,
       savePolicy,
       answerReturn,

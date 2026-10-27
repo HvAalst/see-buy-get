@@ -55,6 +55,8 @@ export interface ParcelRow {
   atMdpId?: string;
   /** Round 35 — held under the tamper protocol: set apart here, sorted once operations releases it. */
   held?: UnitHold;
+  /** 2026-10-27 — called off here by its store: the box it is, under its old label. Its new label goes over that one. */
+  returnOf?: { parcelId: string; atMdpId: string; at: string };
 }
 
 export interface NextHop {

@@ -23,6 +23,11 @@ export function createMdpApi(sbg: SbgClient) {
     /** Totes currently at this hub. (Empty `status` = no status filter, per the backend.) */
     totesAt: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/totes', { params: { query: { location: mdpId, status: '' } } })),
 
+    /** 2026-10-27 — the new label of a parcel its store called off here: printed, and put over the old one. */
+    hubLabel: (mdpId: string, parcelId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/parcels/{parcelId}/label', { params: { path: { id: mdpId, parcelId } } })),
+    hubLabelZpl: (mdpId: string, parcelId: string) =>
+      sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/parcels/{parcelId}/label.zpl', { params: { path: { id: mdpId, parcelId } }, parseAs: 'text' })),
+
     /** Every parcel in At_MDP (the app keeps only its own hub's; empty `agent` = no filter). */
     parcelsAtMdp: () => sbg.request((c) => c.GET('/v1/sbg/parcels', { params: { query: { status: 'At_MDP', agent: '' } } })),
 
