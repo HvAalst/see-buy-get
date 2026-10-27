@@ -96,6 +96,7 @@ export const enVendor = {
   'vendor.callOff.findShop': 'Or a shop: find one by its name or area',
   'vendor.callOff.noShops': 'No shop taking parcels matches that.',
   'vendor.callOff.pickAgain': 'Pick another place',
+  'vendor.callOff.orDoor': 'Or to your own door: {door}',
   'vendor.callOff.toDoor': 'It is at {hub}. It comes to {door} as a load: the first driver whose vehicle fits takes it, at their price, never more than you allow. We suggest allowing {suggested}. What it cost to get it to the hub is not given back.',
   'vendor.callOff.mostLabel': 'The most you pay a driver ({currency})',
   'vendor.callOff.confirmDoor': 'Bring it to my door, up to {amount}',

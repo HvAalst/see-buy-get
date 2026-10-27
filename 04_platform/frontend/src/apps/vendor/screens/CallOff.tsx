@@ -168,6 +168,12 @@ export function CallOffBlock({ d, state, actions }: { d: OrderDetail; state: Ven
           </Button>
         </>
       )}
+      {/* Back to the shop it was handed in at — or its own door, where it has one (2026-10-27). */}
+      {view.outcome === 'bring_back' && view.door && !asked.backTo ? (
+        <Button variant="link" onClick={() => ask('door')}>
+          {t('vendor.callOff.orDoor', { door: view.door })}
+        </Button>
+      ) : null}
       {pickAgain}
       {keep}
     </div>

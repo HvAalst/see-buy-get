@@ -42,7 +42,7 @@ type Door = { label: string; location: GeoPoint; country: string };
 type WayBack =
   | { why: string }
   | { kind: 'pick'; hub: Mdp; door?: Door }
-  | { kind: 'shop'; hub: Mdp; shop: Agent; quote: ShipmentQuote; price: number }
+  | { kind: 'shop'; hub: Mdp; shop: Agent; quote: ShipmentQuote; price: number; door?: Door }
   | { kind: 'door'; hub: Mdp; door: Door; guide: number; currency: string };
 
 /**
@@ -89,7 +89,8 @@ export class CallOffService implements OnModuleInit {
     if ('why' in way) return { parcelId, outcome: 'no', why: way.why };
     if (way.kind === 'pick') return { parcelId, outcome: 'pick', atHub: way.hub.name, ...(way.door ? { door: way.door.label } : {}) };
     if (way.kind === 'door') return { parcelId, outcome: 'to_door', atHub: way.hub.name, backTo: way.door.label, suggestedMax: way.guide, currency: way.currency };
-    return { parcelId, outcome: 'bring_back', amount: way.price, currency: way.quote.currency, backTo: way.shop.shopName, atHub: way.hub.name };
+    // Back to the shop it was handed in at — and, where the store has a door on the map, its door too.
+    return { parcelId, outcome: 'bring_back', amount: way.price, currency: way.quote.currency, backTo: way.shop.shopName, atHub: way.hub.name, ...(way.door ? { door: way.door.label } : {}) };
   }
 
   /** Call it off: withdrawn and refunded, or turned round at the hub that has it — or refused, saying why. */
@@ -230,23 +231,18 @@ export class CallOffService implements OnModuleInit {
     if (p.held) return { why: 'It is held: operations decide what happens to it first.' };
     if (!p.atMdpId) return { why: 'Nobody recorded which hub has it: SeeBuyGet looks into it.' };
     const hub = this.mdps.require(p.atMdpId);
+    const door = this.dispatch ? this.doorOf(vendorId) : undefined;
+    // Its own door, wherever it was handed in (the user, 2026-10-27: "parcel return to a door should be optional too").
+    if (backTo === 'door') return this.doorWay(p, vendorId, hub, door);
     if (p.originAgentDid) {
-      // Handed in at a shop: back to that shop (the user, 2026-10-27), whatever else is asked.
-      if (backTo && backTo !== p.originAgentDid) return { why: 'It goes back to the shop it was handed in at: no other place is chosen for it.' };
-      return this.toShop(p, hub, this.agents.get(p.originAgentDid), false);
+      // Handed in at a shop: back to that shop (the user, 2026-10-27) — or the store's door, above. No other shop.
+      if (backTo && backTo !== p.originAgentDid) return { why: 'It goes back to the shop it was handed in at, or to your own door: no other shop is chosen for it.' };
+      const way = this.toShop(p, hub, this.agents.get(p.originAgentDid), false);
+      return 'why' in way || !door || way.kind !== 'shop' ? way : { ...way, door };
     }
     // NOT HANDED IN AT A SHOP — collected at the store's own door, or handed in at a hub: the store says where it comes back
     // to (the user, 2026-10-27: "let the store pick"; "the store door could be a location as well").
-    const door = this.dispatch ? this.doorOf(vendorId) : undefined;
     if (!backTo) return { kind: 'pick', hub, ...(door ? { door } : {}) };
-    if (backTo === 'door') {
-      if (!this.dispatch) return { why: 'Bringing it to your door is not open here: pick a shop.' };
-      if (!door) return { why: 'Your store has no place on the map to bring it to: put its pin on the map under My store, or pick a shop.' };
-      const end = this.routing.hubEnd(hub.mdpId);
-      if (end.country !== door.country) return { why: 'Coming back to your door it would cross a border, which needs papers of its own: pick a shop on this side.' };
-      const guide = this.dispatch.doorGuide({ from: end.location, to: door.location, weightKg: p.weightKg, fragile: p.fragile ?? false, shipperDid: vendorId }).suggestedMax;
-      return { kind: 'door', hub, door, guide, currency: this.vendors.currencyOf(this.vendors.get(vendorId)) ?? parcelCurrency(p) };
-    }
     let shop: Agent;
     try {
       shop = this.agents.get(backTo);
@@ -254,6 +250,16 @@ export class CallOffService implements OnModuleInit {
       return { why: 'There is no such shop: pick one from the list.' };
     }
     return this.toShop(p, hub, shop, true);
+  }
+
+  /** The way to the store's own door as a load, worked out — or why there is none. */
+  private doorWay(p: Parcel, vendorId: string, hub: Mdp, door: Door | undefined): WayBack {
+    if (!this.dispatch) return { why: 'Bringing it to your door is not open here: pick a shop.' };
+    if (!door) return { why: 'Your store has no place on the map to bring it to: put its pin on the map under My store, or pick a shop.' };
+    const end = this.routing.hubEnd(hub.mdpId);
+    if (end.country !== door.country) return { why: 'Coming back to your door it would cross a border, which needs papers of its own: pick a shop on this side.' };
+    const guide = this.dispatch.doorGuide({ from: end.location, to: door.location, weightKg: p.weightKg, fragile: p.fragile ?? false, shipperDid: vendorId }).suggestedMax;
+    return { kind: 'door', hub, door, guide, currency: this.vendors.currencyOf(this.vendors.get(vendorId)) ?? parcelCurrency(p) };
   }
 
   /** The way back to a shop, worked out — or why there is none. `picked`: the store chose it, so it must be one that receives. */

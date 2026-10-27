@@ -10812,10 +10812,23 @@ describe('PUDO Light', () => {
         expect(parcels.get(done.returnParcelId!)).toMatchObject({ destAgentDid: origin.did, status: 'At_MDP', returnOf: expect.objectContaining({ parcelId: id }) });
       });
 
-      it('handed in at a shop: back to that shop — no other place is picked for it', () => {
+      it('handed in at a shop: back to that shop — no other shop is picked for it', () => {
         const { dest, vendor, id, callOffs } = atHub('CPS');
-        expect(callOffs.preview(vendor.vendorId, id, dest.did)).toEqual({ parcelId: id, outcome: 'no', why: 'It goes back to the shop it was handed in at: no other place is chosen for it.' });
+        expect(callOffs.preview(vendor.vendorId, id, dest.did)).toEqual({ parcelId: id, outcome: 'no', why: 'It goes back to the shop it was handed in at, or to your own door: no other shop is chosen for it.' });
+        // No loads open here: its door is not offered.
         expect(callOffs.preview(vendor.vendorId, id, 'door')).toMatchObject({ outcome: 'no' });
+      });
+
+      it('handed in at a shop: its own door too, where it has one on the map (the user, 2026-10-27: “parcel return to a door should be optional too”)', () => {
+        const { origin, hub, vendor, id } = atHub('CPT');
+        vendors.setCollectionPoint(vendor.vendorId, { label: 'CPT gate 2', zone: 'NorthTown', location: { lat: -1.21, lng: 36.81 } });
+        const withLoads = new CallOffService(parcels, vendors, routing, agents, mdps, totes, undefined, dispatch, events, drivers);
+        expect(withLoads.preview(vendor.vendorId, id)).toMatchObject({ outcome: 'bring_back', backTo: origin.shopName, atHub: hub.name, door: 'CPT gate 2' });
+        const ask = withLoads.preview(vendor.vendorId, id, 'door');
+        expect(ask).toMatchObject({ outcome: 'to_door', backTo: 'CPT gate 2' });
+        const done = withLoads.callOff(vendor.vendorId, id, 'CPT Store', undefined, Date.now(), { backTo: 'door', maxSpend: ask.suggestedMax });
+        expect(done).toMatchObject({ outcome: 'to_door', returnLoadCode: expect.stringMatching(/^FRT-/) });
+        expect(parcels.get(id)).toMatchObject({ status: 'Returned', returnLoad: expect.objectContaining({ code: done.returnLoadCode }) });
       });
 
       it('to its own door, as a load: offered where the store has a door on the map, with the most to allow suggested', () => {
