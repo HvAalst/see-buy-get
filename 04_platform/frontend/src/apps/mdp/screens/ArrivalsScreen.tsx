@@ -124,8 +124,8 @@ function BulkCard({ bulk, staff, onEdit }: { bulk?: HubBulk; staff: boolean; onE
 }
 
 /**
- * THE HUB'S WORD, written by its owner: the days and hours it receives — or whenever it is working — and how many vans it
- * can unload at once. Checked as the server checks it before it is sent; the server's refusal is shown here, where it was
+ * THE HUB'S WORD, written by its owner: the days and hours it receives — or whenever it is working — and how many arrivals
+ * it can unload at once. Checked as the server checks it before it is sent; the server's refusal is shown here, where it was
  * asked. Stopping asks first: stores can no longer book, and what they booked still comes.
  */
 function BulkSheet({ bulk, opening, currency, busy, onClose, onSave }: { bulk?: HubBulk; opening?: HubArrivalsView['openingHours']; currency?: string; busy: boolean; onClose: () => void; onSave: MdpActions['setBulk'] }) {

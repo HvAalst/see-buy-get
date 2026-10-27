@@ -748,7 +748,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       await this.notifications.notify(payload.posterDid, {
         kind: 'freight_problem',
         title: `Load ${payload.code} could not be delivered`,
-        body: `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The goods are still on the van. Ring the receiver, or message the driver about where to take it.`,
+        body: `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The driver still has the goods. Ring the receiver, or message the driver about where to take it.`,
         link: '/',
         tag: `freight:${payload.freightId}:attempt${payload.attempts}`,
         data: { freightId: payload.freightId },

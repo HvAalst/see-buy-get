@@ -814,13 +814,13 @@ describe('NotificationDispatcher — FP3: the driver whose claimed load was with
 });
 
 describe('NotificationDispatcher — FP3b: the sender whose load could not be delivered, and the claimant whose claim was decided', () => {
-  it('tells the sender what happened at the door, and that the goods are still on the van', async () => {
+  it('tells the sender what happened at the door, and that the driver still has the goods', async () => {
     const { events, notifications } = harness({});
     await events.publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: 'frt_7', code: 'FRT-007', posterDid: 'did:shop:p', outcome: 'absent', note: 'Gate locked', destLabel: 'Riverside Corner', attempts: 1 });
     const inbox = notifications.inboxFor('did:shop:p');
     expect(inbox).toHaveLength(1);
     expect(inbox[0]).toMatchObject({ kind: 'freight_problem', title: 'Load FRT-007 could not be delivered' });
-    expect(inbox[0].body).toContain('nobody was there to receive it — "Gate locked". The goods are still on the van.');
+    expect(inbox[0].body).toContain('nobody was there to receive it — "Gate locked". The driver still has the goods.');
   });
 
   it('tells the claimant the decision, the money when there is any, and the reason', async () => {

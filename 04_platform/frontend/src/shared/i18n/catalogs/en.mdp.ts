@@ -333,7 +333,7 @@ export const enMdp = {
   'mdp.bulk.anyHourHint': 'Without set hours, stores may book any day: you receive whenever the hub is working.',
   'mdp.bulk.closedOn': '{day}: closed',
   'mdp.bulk.doorsLabel': 'Doors (optional)',
-  'mdp.bulk.doorsHint': 'How many vans or trucks you can unload at once.',
+  'mdp.bulk.doorsHint': 'How many arrivals you can unload at once.',
   'mdp.bulk.save': 'Save',
   'mdp.bulk.notNow': 'Not now',
   'mdp.bulk.stop': 'Stop taking parcels in bulk',

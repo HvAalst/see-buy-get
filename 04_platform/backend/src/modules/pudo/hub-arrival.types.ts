@@ -77,7 +77,7 @@ export interface HubArrival {
   /** The day it is to come, on the hub's own clock. */
   expectedOn: string;
   reference?: string;
-  /** Who brings it, in the store's words: its own van, a carrier's name. */
+  /** Who brings it, in the store's words: its own people, a carrier's name. */
   bringer?: string;
   state: HubArrivalState;
   createdAt: string;

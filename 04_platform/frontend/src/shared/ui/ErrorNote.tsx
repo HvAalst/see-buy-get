@@ -94,7 +94,7 @@ const SAY: Record<string, string> = {
 /** Codes that deserve their own sentence, more specific than the shared say-key. */
 const OVERRIDE: Record<string, string> = {
   NOT_COUPLED: 'You are not on shift. Scan a vehicle first.',
-  ALREADY_COUPLED: 'You are already on a shift, or that van is taken.',
+  ALREADY_COUPLED: 'You are already on a shift, or that vehicle is taken.',
   CARRIER_NOT_TRADING: 'This carrier is not taking new work right now.', // the detail names the reason
   REASON_REQUIRED: 'Say why first — the other side is shown your reason.',
   CANNOT_COUPLE: 'That shift cannot start.', // FP4 — the detail names the paper, or the status

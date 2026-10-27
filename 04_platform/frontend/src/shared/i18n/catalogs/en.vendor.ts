@@ -685,7 +685,7 @@ export const enVendor = {
   'vendor.hub.notTaking': '{hub} no longer takes parcels in bulk: ship these again from a shop, or from a hub that does.',
   'vendor.hub.refLabel': 'Your reference (optional)',
   'vendor.hub.bringerLabel': 'Who brings it (optional)',
-  'vendor.hub.bringerHint': 'Your own van, or the carrier’s name.',
+  'vendor.hub.bringerHint': 'Your own people, or the carrier’s name.',
   'vendor.hub.send': 'Book it',
   'vendor.hub.cancel': 'Not now',
   'vendor.hub.booked': 'Booked: {hub} expects it {day}.',
