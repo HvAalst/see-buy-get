@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, needsReceipt, payoutHow, payoutTone, payoutWho, runSummary, waitsForRail } from './settlement';
+import { FUNDING_ACTIONS, MORNING_RUN, PAYOUT_ACTIONS, fundingLine, fundingTone, morningRunLine, needsReceipt, payoutHow, payoutTone, payoutWho, runSummary, waitsForRail } from './settlement';
 
 /**
  * Paying people.
@@ -135,6 +135,11 @@ describe('who raised a payout, and who approved it', () => {
     expect(payoutWho({ status: 'submitted', requestedBy: { name: 'Amina' }, approvedBy: { name: 'Otieno' } }, t)).toBe('tower.money.who.approved(raised=Amina,approved=Otieno)');
     expect(payoutWho({ status: 'requested' }, t)).toBeNull();
   });
+
+  it('a payout the morning run raised says one member of staff approves it, and names both once approved', () => {
+    expect(payoutWho({ status: 'requested', requestedBy: { name: MORNING_RUN } }, t)).toBe('tower.money.who.morning');
+    expect(payoutWho({ status: 'submitted', requestedBy: { name: MORNING_RUN }, approvedBy: { name: 'Otieno' } }, t)).toBe(`tower.money.who.approved(raised=${MORNING_RUN},approved=Otieno)`);
+  });
 });
 
 describe('how a payout is paid', () => {
@@ -162,5 +167,13 @@ describe('a payout M-Pesa is working on', () => {
     expect(waitsForRail(sent, at('2026-10-19T10:30:00Z'))).toBe(false);
     expect(waitsForRail({ status: 'submitted', submittedAt: '2026-10-18T10:00:00Z' }, at('2026-10-18T12:00:00Z'))).toBe(false);
     expect(waitsForRail({ ...sent, status: 'settled' }, at('2026-10-18T12:00:00Z'))).toBe(false);
+  });
+});
+
+describe('the morning run, over the payouts', () => {
+  it('says the system raises it every morning, when it last did, and that one member of staff approves', () => {
+    expect(morningRunLine({ at: '06:00', lastRanOn: '2026-10-28' }, t)).toBe('tower.money.morning.ran(at=06:00,day=2026-10-28)');
+    expect(morningRunLine({ at: '06:00', lastRanOn: null }, t)).toBe('tower.money.morning.notYet(at=06:00)');
+    expect(morningRunLine(null, t)).toBeNull();
   });
 });

@@ -28,7 +28,7 @@ import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type InterestCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
 import type { ExpiringItem } from './company';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
-import { runSummary, type FundingAction, type FundingRow, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
+import { runSummary, type FundingAction, type FundingRow, type MorningRun, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
 import type { HelpOption } from './pictures';
 import { approvedSays } from './connections';
 import { staffListOf } from './staff';
@@ -188,6 +188,8 @@ export interface TowerState {
   /* ---- money: the selected company's books and payouts, and the network ledger ---- */
   books: BooksView | null;
   payouts: PayoutRow[] | null;
+  /** When the system last raised the selected company's morning payout run (2026-10-27). Null until read. */
+  morningRun: MorningRun | null;
   /** Money coming IN: what shops and stores have asked to pay, newest first. Null until read. */
   funding: FundingRow[] | null;
   /** …and what arrived with nobody's name on it. Staff only; never posted to any book. */
@@ -506,6 +508,7 @@ const INITIAL: TowerState = {
   apiBase: resolveBaseUrl(),
   books: null,
   payouts: null,
+  morningRun: null,
   funding: null,
   unmatched: [],
   finance: null,
@@ -721,6 +724,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       ...s,
       books: books.error ? null : narrow<BooksView>(books.data),
       payouts: payouts.error ? null : (narrow<{ items: PayoutRow[] }>(payouts.data)?.items ?? []),
+      morningRun: payouts.error ? null : (narrow<{ morningRun?: MorningRun }>(payouts.data)?.morningRun ?? null),
       // Operator-only, so a company administrator simply never gets one — and the screen renders no
       // ledger rather than an empty one, which would say the network's books were empty.
       finance: finance.error ? null : narrow<FinanceView>(finance.data),

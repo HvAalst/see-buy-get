@@ -80,6 +80,7 @@ import { DamageReportService } from './damage-report.service';
 import { RoutingService, publicQuote, type QuoteCarriers } from './routing.service';
 import { HubArrivalService } from './hub-arrival.service';
 import { HubContactService } from './hub-contact.service';
+import { MorningPayoutRun } from './morning-payout.run';
 import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { ConsignmentService } from './consignment.service';
@@ -332,6 +333,8 @@ export class SbgController {
     @Optional() private readonly hubArrivals?: HubArrivalService,
     // A hub's opening hours and how to reach it, on its public page as far as it chose (the user, 2026-10-26).
     @Optional() private readonly hubContacts?: HubContactService,
+    // The payout run the system raises every morning (the user, 2026-10-27: "Morning run, one approves").
+    @Optional() private readonly morningRun?: MorningPayoutRun,
   ) {}
 
   /**
@@ -2136,7 +2139,8 @@ export class SbgController {
   @Get('entities/:entityId/payouts')
   listPayouts(@Param('entityId') entityId: string, @Actor() actor: IntrospectionResult) {
     this.requireReach(actor, entityId);
-    return { items: this.payouts.list({ entityId }) };
+    // When the system last raised this company's morning run, by its own clock's day: staff see whether six o'clock came.
+    return { items: this.payouts.list({ entityId }), morningRun: { at: '06:00', lastRanOn: this.morningRun?.lastRanOn(entityId) ?? null } };
   }
 
   /**

@@ -63,15 +63,32 @@ export function payoutHow(row: Pick<PayoutRow, 'way' | 'destination'>, t: Transl
   return null;
 }
 
+/** The name the system's morning payout run raises under (MorningPayoutRun on the server). */
+export const MORNING_RUN = 'SeeBuyGet morning run';
+
 /**
  * WHO, under a payout's state: who raised it and, once it went to the rail, who approved it — two different members of
- * staff. A raised one says plainly that somebody else approves it, so the person who raised it is not left wondering
- * why the button refuses them.
+ * staff, or the morning run and one member of staff. A raised one says plainly that somebody else approves it, so the
+ * person who raised it is not left wondering why the button refuses them.
  */
 export function payoutWho(row: Pick<PayoutRow, 'status' | 'requestedBy' | 'approvedBy'>, t: Translate): string | null {
   if (row.approvedBy) return t('tower.money.who.approved', { raised: row.requestedBy?.name ?? '—', approved: row.approvedBy.name });
+  // Raised by the system every morning (2026-10-27: "Morning run, one approves"): one member of staff approves it.
+  if (row.status === 'requested' && row.requestedBy?.name === MORNING_RUN) return t('tower.money.who.morning');
   if (row.status === 'requested' && row.requestedBy) return t('tower.money.who.raised', { name: row.requestedBy.name });
   return null;
+}
+
+/** The system's morning run for one company: the hour it raises at, and the day it last did (its own clock's). */
+export interface MorningRun {
+  at: string;
+  lastRanOn: string | null;
+}
+
+/** Over the payouts: the system raises this run every morning, and when it last did — staff see whether six o'clock came. */
+export function morningRunLine(run: MorningRun | null, t: Translate): string | null {
+  if (!run) return null;
+  return run.lastRanOn ? t('tower.money.morning.ran', { at: run.at, day: run.lastRanOn }) : t('tower.money.morning.notYet', { at: run.at });
 }
 
 export type PayoutAction = 'submit' | 'settle' | 'fail' | 'reverse';

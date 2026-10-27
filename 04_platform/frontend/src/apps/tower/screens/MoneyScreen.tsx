@@ -3,7 +3,7 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import { amount } from '../queues';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, needsReceipt, payoutHow, payoutTone, payoutWho, waitsForRail, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, morningRunLine, needsReceipt, payoutHow, payoutTone, payoutWho, waitsForRail, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { TaxInvoicesPanel } from './TaxInvoicesPanel';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -86,6 +86,8 @@ export function MoneyScreen({ state, actions }: { state: TowerState; actions: To
             </button>
           ) : null}
         </div>
+
+        {morningRunLine(state.morningRun, t) ? <p class="cons__caveat">{morningRunLine(state.morningRun, t)}</p> : null}
 
         {state.done ? (
           <p class="twr-done">

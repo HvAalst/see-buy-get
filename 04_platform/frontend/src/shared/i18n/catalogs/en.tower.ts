@@ -2303,6 +2303,8 @@ export const enTowerMoney = {
 
   'tower.money.payoutsTitle': 'What {name} has raised',
   'tower.money.run': 'Run today’s payouts',
+  'tower.money.morning.ran': 'The system raises this run every morning at {at}, on the company’s own clock — last on {day}. One member of staff checks it and approves sending.',
+  'tower.money.morning.notYet': 'The system raises this run every morning at {at}, on the company’s own clock — it has not run yet. One member of staff checks it and approves sending.',
   'tower.money.emptyTitle': 'Nobody has been paid yet',
   'tower.money.emptyBody': 'And nobody is waiting: no payout has been raised for this company. Running one raises what today’s work owes, and skips anybody the cover cannot carry — it says who, and why.',
   'tower.money.col.payee': 'Payee',
@@ -2882,6 +2884,7 @@ export const enTowerBusinesses = {
   'tower.approvals.recordDeclared': 'clean record declared',
   'tower.approvals.recordNot': 'no clean record declared',
   'tower.money.who.raised': 'Raised by {name}: another member of staff approves it',
+  'tower.money.who.morning': 'Raised by the morning run at 06:00: a member of staff checks it and approves sending',
   'tower.money.who.approved': 'Raised by {raised}, approved by {approved}',
   'tower.nav.cases': 'Cases',
   'tower.cases.title': 'What is on fire',
