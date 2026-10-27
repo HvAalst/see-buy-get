@@ -26,6 +26,9 @@ const WHY_NOT: Partial<Record<ParcelStatus, string>> = {
   Lost: 'It was declared lost.',
 };
 
+/** The parcel bringing goods back to the store is the store's own goods on their way to it: there is nothing to call off. */
+const BRINGS_BACK = 'It brings your goods back to you: collect it at the shop you handed it in at. It cannot be called off.';
+
 type Plan = { hub: Mdp; shop: Agent; quote: ShipmentQuote; price: number };
 
 /**
@@ -53,6 +56,7 @@ export class CallOffService {
   /** What calling it off would do now. */
   preview(vendorId: string, parcelId: string): CallOffView {
     const p = this.owned(vendorId, parcelId);
+    if (p.returnOf) return { parcelId, outcome: 'no', why: BRINGS_BACK };
     if (WITHDRAWN_BEFORE.includes(p.status)) return { parcelId, outcome: 'refund', amount: this.refundOf(p), currency: parcelCurrency(p) };
     if (p.status !== 'At_MDP') return { parcelId, outcome: 'no', why: this.whyNot(p) };
     const plan = this.planBack(p);
@@ -63,6 +67,7 @@ export class CallOffService {
   /** Call it off: withdrawn and refunded, or turned round at the hub that has it — or refused, saying why. */
   callOff(vendorId: string, parcelId: string, by: string, reason?: string, now: number = Date.now()): CalledOffView {
     const p = this.owned(vendorId, parcelId);
+    if (p.returnOf) throw new GlosError('INVALID_STATE', BRINGS_BACK);
     if (WITHDRAWN_BEFORE.includes(p.status)) {
       const amount = this.refundOf(p);
       const done = this.parcels.cancel(parcelId, by, reason);

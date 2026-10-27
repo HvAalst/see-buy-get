@@ -656,7 +656,8 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
             </div>
           ) : null}
           {/* The store collects an order bringing its goods back itself: its own code, not a buyer's. */}
-          {d.collectionCode ? <CodeCard label={t(d.returnOf ? 'vendor.order.yourCode' : 'vendor.buyerCollectionCode')} code={d.collectionCode} scanAs="collect" /> : null}
+          {/* Never for an order nobody will collect: withdrawn, or on its way back under another number. */}
+          {d.collectionCode && d.status !== 'Voided' && d.status !== 'Returned' ? <CodeCard label={t(d.returnOf ? 'vendor.order.yourCode' : 'vendor.buyerCollectionCode')} code={d.collectionCode} scanAs="collect" /> : null}
           {/* The damage claim report on this order: the store reads it, keeps the file, and hands it on — the same three things the receiver has. */}
           {d.damageReport ? <DamageReportCard client={client} parcelId={d.parcelId} number={d.damageReport.number} /> : null}
           {d.scans?.length ? (

@@ -10605,6 +10605,10 @@ describe('PUDO Light', () => {
         expect(back.returnOf).toEqual({ parcelId: id, atMdpId: hub.mdpId, at: expect.any(String) });
         expect(back.custody).toEqual([expect.objectContaining({ holderKind: 'hub', holderId: hub.name })]);
         expect(back.label).toBeDefined();
+        // Sold at no checkout: no buyer paid for it. And it is not called off: it is the store's own goods, coming to it.
+        expect(back.buyerCharge).toBeUndefined();
+        expect(callOffs.preview(vendor.vendorId, back.parcelId)).toEqual({ parcelId: back.parcelId, outcome: 'no', why: 'It brings your goods back to you: collect it at the shop you handed it in at. It cannot be called off.' });
+        expect(() => callOffs.callOff(vendor.vendorId, back.parcelId, 'COT Store')).toThrow(/It cannot be called off/);
         // Billed exactly what it was told; nothing of the first given back.
         expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(before - told, 2);
         expect(back.shipmentCost).toBe(told);

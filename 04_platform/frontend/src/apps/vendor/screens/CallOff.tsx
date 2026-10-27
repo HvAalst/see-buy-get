@@ -23,7 +23,8 @@ const CALLABLE = ['Created', 'At_PUDO', 'At_MDP'];
 export function CallOffBlock({ d, state, actions }: { d: OrderDetail; state: VendorState; actions: VendorActions }) {
   const t = useT();
   const [reason, setReason] = useState('');
-  if (!CALLABLE.includes(d.status)) return null;
+  // The order bringing goods back to the store is not called off: they are the store's own, on their way to it.
+  if (!CALLABLE.includes(d.status) || d.returnOf) return null;
   const asked = state.callOff?.parcelId === d.parcelId ? state.callOff.view : null;
   if (!asked) {
     return (

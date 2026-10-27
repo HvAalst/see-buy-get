@@ -2000,7 +2000,8 @@ export class ParcelService implements OnApplicationBootstrap {
     // premium for cover they chose to buy. The premium is its OWN line and never hides inside the fee.
     const shipmentCost = Math.round((chosen.gross + cover.premium) * 100) / 100;
     const platformFee = Math.round((chosen.total - chosen.base) * 100) / 100;
-    const buyerCharge = this.buyerCharge(input.shippingPolicy, shipmentCost, input.subtotal ?? 0);
+    // A parcel bringing a store's goods back (called off at a hub) was sold at no checkout: no buyer paid anything for it.
+    const buyerCharge = input.returnOf ? undefined : this.buyerCharge(input.shippingPolicy, shipmentCost, input.subtotal ?? 0);
 
     const parcel: Parcel = {
       parcelId,
