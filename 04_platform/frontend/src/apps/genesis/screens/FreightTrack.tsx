@@ -106,7 +106,7 @@ export function FreightTrack({ view }: { view: FreightTrackView }) {
       {/* Refused at the door: and what became of the goods, once the sender said — never the receiver's reason. */}
       {view.refused ? (
         <p class="scr__lede">
-          {t('send.freight.refusedLine', { when: utcMoment(view.refused.at) })}
+          {view.refused.part ? t('send.freight.refusedPartLine', { n: view.refused.part.packages, of: view.refused.part.of, when: utcMoment(view.refused.at) }) : t('send.freight.refusedLine', { when: utcMoment(view.refused.at) })}
           {view.refused.returnCode ? ` ${t('send.freight.refusedOn', { code: view.refused.returnCode })}` : view.refused.choice === 'give_up' ? ` ${t('send.freight.refusedGivenUp')}` : ''}
         </p>
       ) : null}

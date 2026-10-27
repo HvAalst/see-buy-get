@@ -56,6 +56,7 @@ export function FoundSection({
                   disabled={busy}
                 />
                 {k === 'damaged' && (countOf(form.counts[k]) ?? 0) > 0 ? <p class="hint">{t('driver.found.notIntact')}</p> : null}
+                {k === 'refused' && (countOf(form.counts[k]) ?? 0) > 0 ? <p class="hint">{t('driver.found.refusedKept')}</p> : null}
                 {photo && (countOf(form.counts[k]) ?? 0) > 0 ? (
                   <>
                     <p class="hint">{t(photo)}</p>

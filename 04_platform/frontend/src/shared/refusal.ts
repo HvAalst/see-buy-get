@@ -12,6 +12,8 @@ export interface Refusal {
   decideBy: string;
   remindedAt?: string;
   decision?: { choice: RefusalChoice; at: string; by?: string; byDeadline?: boolean; destLabel?: string; destLocation?: { lat: number; lng: number }; returnLeg?: { freightId: string; code: string } };
+  /** Only a part refused, at the handover (2026-10-27): the rest was delivered. */
+  part?: { packages: number; of: number };
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -24,7 +26,12 @@ export function utcMoment(iso: string): string {
 
 /** What a refusal card says: what happened at the door, then what to do and by when — or what became of the goods. */
 export function refusalSays(r: Refusal, pickupLabel: string, t: Translate): string[] {
-  const what = r.note ? t('refusal.whatWhy', { when: `on ${utcMoment(r.at)}`, note: r.note }) : t('refusal.what', { when: `on ${utcMoment(r.at)}` });
+  // A part refused at the handover: how many of how many, the rest delivered (the user, 2026-10-27: "Refusal rules, for the part").
+  const what = r.part
+    ? t('refusal.whatPart', { n: r.part.packages, of: r.part.of, when: `on ${utcMoment(r.at)}` })
+    : r.note
+      ? t('refusal.whatWhy', { when: `on ${utcMoment(r.at)}`, note: r.note })
+      : t('refusal.what', { when: `on ${utcMoment(r.at)}` });
   const d = r.decision;
   if (!d) return [what, t('refusal.ask', { by: utcMoment(r.decideBy), pickup: pickupLabel })];
   if (d.choice === 'give_up') return [what, t('refusal.decided.giveUp')];

@@ -115,7 +115,8 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {/* Round 35 — held under the tamper protocol: said on the card, before the walk to the gate. */}
                   {c.held ? <span class="load__warn">{t('driver.loads.heldShort')}</span> : null}
                   {/* Refused at the door (the user, 2026-10-27): the goods stay aboard until the sender says where they go. */}
-                  {c.refusedUntil ? <span class="load__warn">{t('driver.loads.refusedShort', { by: utcMoment(c.refusedUntil) })}</span> : null}
+                  {/* …or a part refused at the handover, the load delivered: those packages stay with the driver until then. */}
+                  {c.refusedUntil ? <span class="load__warn">{c.refusedPart ? t('driver.loads.refusedPartShort', { n: c.refusedPart, by: utcMoment(c.refusedUntil) }) : t('driver.loads.refusedShort', { by: utcMoment(c.refusedUntil) })}</span> : null}
                   {c.returnOf ? <span class="load__meta">{t('driver.loads.returnOf', { code: c.returnOf.code })}</span> : null}
                   {/* Round 37 — loaded onto them by their pass, its seal not read yet: received nowhere until it is. */}
                   {control === 'onboard' && c.bagSeal && !c.bagSeal.taken && !c.held ? <span class="load__warn">{t('driver.bag.notRead')}</span> : null}
@@ -573,7 +574,11 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                     ? t('driver.found.problem.photo')
                     : foundWrong.kind === 'none_came'
                       ? t('driver.found.problem.noneCame', { n: foundWrong.packages })
-                      : t('driver.found.problem.moreThanCame', { came: foundWrong.came })}
+                      : foundWrong.kind === 'refused_no_count'
+                        ? t('driver.found.problem.refusedNoCount')
+                        : foundWrong.kind === 'all_refused'
+                          ? t('driver.found.problem.allRefused', { came: foundWrong.came })
+                          : t('driver.found.problem.moreThanCame', { came: foundWrong.came })}
               </p>
             ) : null}
           </div>

@@ -9,6 +9,9 @@ export const enRefusal = {
   'refusal.head': 'Refused at the door',
   'refusal.what': 'The receiver refused it {when}.',
   'refusal.whatWhy': 'The receiver refused it {when}: “{note}”.',
+  // A part refused at the handover (the user, 2026-10-27: "Refusal rules, for the part").
+  'refusal.headPart': 'Part refused at the door',
+  'refusal.whatPart': 'The rest was delivered; the receiver refused {n, plural, one {# package} other {# packages}} of the {of} {when}.',
   'refusal.ask': 'The driver keeps the goods until you say where they go, and you pay the way. With no answer by {by}, they go back to {pickup}, at your cost.',
   'refusal.back': 'Back to {pickup}',
   'refusal.elsewhere': 'To another place',

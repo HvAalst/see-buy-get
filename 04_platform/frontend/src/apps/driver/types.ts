@@ -259,6 +259,8 @@ export interface Claimable {
   doorReported?: boolean;
   /** Refused at the door, the sender not yet decided: until when the driver keeps the goods (the user, 2026-10-27). */
   refusedUntil?: string;
+  /** A part refused at the handover, the load delivered: how many packages the driver keeps until then (2026-10-27). */
+  refusedPart?: number;
   /** A return: refused goods carried on as this new load — the load they were refused on. */
   returnOf?: { freightId: string; code: string };
   /** Round 37 — a bag, to the driver holding it: how it was closed (never the number), what a reading is checked against, read yet. */

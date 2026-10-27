@@ -321,6 +321,7 @@ export const enSend = {
   'send.freight.withdrawn': 'Withdrawn',
   'send.freight.refused': 'Refused at the door',
   'send.freight.refusedLine': 'Refused at the door on {when}.',
+  'send.freight.refusedPartLine': '{n, plural, one {# package} other {# packages}} of the {of} refused at the door on {when}; the rest was delivered.',
   'send.freight.refusedOn': 'The goods go on as load {code}.',
   'send.freight.refusedGivenUp': 'The sender gave the goods up.',
   'send.freight.line': 'Load {ref} · {kg} kg · {pickup} → {dest}',

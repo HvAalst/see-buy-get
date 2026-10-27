@@ -125,7 +125,7 @@ export interface FreightTrackView {
   receiverName?: string;
   cancelled?: { at: string; by: 'sender' | 'network' | 'carrier' };
   /** Refused at the door (the user, 2026-10-27): when, and once decided, the load the goods went on — or that they were given up. */
-  refused?: { at: string; choice?: 'back' | 'elsewhere' | 'give_up'; returnCode?: string };
+  refused?: { at: string; choice?: 'back' | 'elsewhere' | 'give_up'; returnCode?: string; part?: { packages: number; of: number } };
   /** One load of an order its carrier brings in several — and all of them, each with where it has got to. */
   partOf?: { rootCode: string; no: number; of: number; orderKg: number };
   loads?: Array<{ no: number; code: string; weightKg: number; status: FreightTrackView['status'] }>;

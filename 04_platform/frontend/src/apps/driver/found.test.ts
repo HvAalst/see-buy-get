@@ -51,6 +51,16 @@ describe('what the receiver found, at the door (D9)', () => {
     expect(keys(unloadItemsAfter(items, form({ damaged: '2' }), false))).toEqual(keys(items));
   });
 
+  it('a part refused (2026-10-27): only against the note’s own count, and never all that came — sent with the rest', () => {
+    expect(foundProblem(form({ refused: '2' }), 10)).toBeNull();
+    expect(foundBody(form({ refused: '2' }))).toEqual([{ kind: 'refused', count: 2 }]);
+    expect(foundProblem(form({ refused: '2' }))).toEqual({ kind: 'refused_no_count' });
+    expect(foundProblem(form({ refused: '10' }), 10)).toEqual({ kind: 'all_refused', came: 10 });
+    expect(foundProblem(form({ short: '1', refused: '9' }), 10)).toEqual({ kind: 'all_refused', came: 9 });
+    expect(t('driver.found.problem.allRefused', { came: 9 })).toMatch(/^9 packages came and all were refused\?/);
+    expect(t('driver.loads.refusedPartShort', { n: 1, by: '29 Oct at 08:00 UTC' })).toBe('Delivered, with 1 package refused: keep it until the sender says where it goes — by 29 Oct at 08:00 UTC.');
+  });
+
   it('has words for every kind and every photo', () => {
     for (const k of FOUND_KINDS) {
       expect(t(FOUND_KEYS[k].label)).not.toBe(FOUND_KEYS[k].label);

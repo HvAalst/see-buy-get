@@ -6,7 +6,7 @@ import type { MessageKey } from './i18n';
  * describes — the photographs on the note counted, never handed out. Said one way in every app that shows it: the
  * receiver's Coming in, the sender's Loads, the counter's freight list.
  */
-export type FoundKind = 'short' | 'over' | 'damaged' | 'wrong';
+export type FoundKind = 'short' | 'over' | 'damaged' | 'wrong' | 'refused';
 
 export interface FoundLine {
   kind: FoundKind;
@@ -19,6 +19,8 @@ const KEYS: Record<FoundKind, MessageKey> = {
   over: 'common.found.over',
   damaged: 'common.found.damaged',
   wrong: 'common.found.wrong',
+  // A part the receiver refused (2026-10-27): the rest was delivered, the sender decides where these go.
+  refused: 'common.found.refused',
 };
 
 type Translate = (key: MessageKey, params?: Record<string, string | number>) => string;

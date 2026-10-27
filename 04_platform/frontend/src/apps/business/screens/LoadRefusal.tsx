@@ -46,7 +46,7 @@ export function LoadRefusal({ row, client, business, act, onChanged }: { row: Po
   return (
     <section class="cons__panel">
       <div class="cons__panelhead">
-        <span class="cons__panelt">{t('refusal.head')}</span>
+        <span class="cons__panelt">{t(r.part ? 'refusal.headPart' : 'refusal.head')}</span>
         {r.decision ? null : <span class="ctag ctag--warn">{t('refusal.status')}</span>}
       </div>
       {refusalSays(r, pickup, t).map((line) => (

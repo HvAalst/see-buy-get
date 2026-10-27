@@ -7,8 +7,10 @@ import type { MessageKey } from '../../shared/i18n';
  * same rules (DispatchService.receivingExceptionsOf); they are said here before the tap, so nobody stands at a gate with a
  * refusal and a truck waiting.
  */
-export type FoundKind = 'short' | 'over' | 'damaged' | 'wrong';
-export const FOUND_KINDS: readonly FoundKind[] = ['short', 'over', 'damaged', 'wrong'];
+export type FoundKind = 'short' | 'over' | 'damaged' | 'wrong' | 'refused';
+/** 'refused' (the user, 2026-10-27: "Refusal rules, for the part"): packages the receiver would not take — they stay with the
+ *  driver, the rest is delivered, and the sender decides where they go within 48 hours. */
+export const FOUND_KINDS: readonly FoundKind[] = ['short', 'over', 'damaged', 'wrong', 'refused'];
 
 /** What the driver typed: a count for each kind (empty, or 0, is none), and a photograph of the damaged — and of the wrong, where taken. */
 export interface FoundForm {
@@ -16,7 +18,7 @@ export interface FoundForm {
   photos: Partial<Record<FoundKind, string>>;
 }
 
-export const noneFound = (): FoundForm => ({ counts: { short: '', over: '', damaged: '', wrong: '' }, photos: {} });
+export const noneFound = (): FoundForm => ({ counts: { short: '', over: '', damaged: '', wrong: '', refused: '' }, photos: {} });
 
 /** What each kind is called on the sheet, and what its photograph is called where it has one. */
 export const FOUND_KEYS: Record<FoundKind, { label: MessageKey; photo?: MessageKey }> = {
@@ -24,6 +26,7 @@ export const FOUND_KEYS: Record<FoundKind, { label: MessageKey; photo?: MessageK
   over: { label: 'driver.found.over' },
   damaged: { label: 'driver.found.damaged', photo: 'driver.found.damagedPhoto' },
   wrong: { label: 'driver.found.wrong', photo: 'driver.found.wrongPhoto' },
+  refused: { label: 'driver.found.refused' },
 };
 
 /** A count as typed: a whole number, nothing for an empty box or 0, NaN for anything that is not a whole number. */
@@ -36,7 +39,7 @@ export function countOf(raw: string | undefined): number | undefined {
 }
 
 /** Why what was written cannot go on the note yet — in the order the server would say it — or null when it can. */
-export type FoundProblem = { kind: 'count'; what: FoundKind } | { kind: 'photo' } | { kind: 'none_came'; packages: number } | { kind: 'more_than_came'; what: 'damaged' | 'wrong'; came: number } | null;
+export type FoundProblem = { kind: 'count'; what: FoundKind } | { kind: 'photo' } | { kind: 'none_came'; packages: number } | { kind: 'more_than_came'; what: 'damaged' | 'wrong'; came: number } | { kind: 'refused_no_count' } | { kind: 'all_refused'; came: number } | null;
 
 export function foundProblem(form: FoundForm, packages?: number): FoundProblem {
   for (const k of FOUND_KINDS) {
@@ -49,6 +52,11 @@ export function foundProblem(form: FoundForm, packages?: number): FoundProblem {
     if (n('short') >= packages) return { kind: 'none_came', packages };
     const came = packages - n('short') + n('over');
     for (const k of ['damaged', 'wrong'] as const) if (n(k) > came) return { kind: 'more_than_came', what: k, came };
+    // A part refused: something must still be handed over — all of it refused is a door, not a delivery.
+    if (n('refused') >= came) return { kind: 'all_refused', came };
+  } else if (n('refused') > 0) {
+    // Refused by count needs the note's own count.
+    return { kind: 'refused_no_count' };
   }
   return null;
 }

@@ -18,7 +18,7 @@ export function RefusalCard({ title, refusal, pickupLabel, canDecide, decide, ge
   const [open, setOpen] = useState<RefusalChoice | null>(null);
   return (
     <>
-      <Card title={title ?? t('refusal.head')}>
+      <Card title={title ?? t(refusal.part ? 'refusal.headPart' : 'refusal.head')}>
         {refusalSays(refusal, pickupLabel, t).map((line) => (
           <p class="card__note" key={line}>
             {line}

@@ -22,6 +22,16 @@ describe('refused at the door, as a sender reads it (the user, 2026-10-27)', () 
     expect(refusalSays({ ...refused, decision: { choice: 'give_up', at: '2026-10-27T10:00:00Z', by: 'did:x' } }, 'Depot', t)[1]).toBe('You gave the goods up: the receiver may keep them; otherwise the carrier disposes of them, at your cost.');
   });
 
+  it('a part refused at the handover: how many of how many, the rest delivered — then the same choice (the user, 2026-10-27)', () => {
+    const part: Refusal = { at: '2026-10-27T08:00:00.000Z', decideBy: '2026-10-29T08:00:00.000Z', part: { packages: 2, of: 10 } };
+    expect(refusalSays(part, 'Depot', t)).toEqual([
+      'The rest was delivered; the receiver refused 2 packages of the 10 on 27 Oct at 08:00 UTC.',
+      'The driver keeps the goods until you say where they go, and you pay the way. With no answer by 29 Oct at 08:00 UTC, they go back to Depot, at your cost.',
+    ]);
+    expect(refusalSays({ ...part, part: { packages: 1, of: 10 } }, 'Depot', t)[0]).toBe('The rest was delivered; the receiver refused 1 package of the 10 on 27 Oct at 08:00 UTC.');
+    expect(t('refusal.headPart')).toBe('Part refused at the door');
+  });
+
   it('asks for another place in words and on the map before anything is sent', () => {
     const pin = { lat: -1.2, lng: 36.9 };
     expect(elsewhereBody({ label: 'X', pin, contactName: '', contactPhone: '' })).toEqual({ error: 'refusal.err.place' });

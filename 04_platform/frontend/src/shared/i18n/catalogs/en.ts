@@ -485,6 +485,7 @@ export const en = {
   'common.found.over': '{n, plural, one {# package} other {# packages}} more than the note says',
   'common.found.damaged': '{n, plural, one {# package} other {# packages}} damaged',
   'common.found.wrong': '{n, plural, one {# package} other {# packages}} not the goods on the note',
+  'common.found.refused': '{n, plural, one {# package} other {# packages}} refused',
   'common.found.line': 'The receiver found {found}',
   'account.password.title': 'Change your password',
   'account.password.email': 'Email you sign in with',
