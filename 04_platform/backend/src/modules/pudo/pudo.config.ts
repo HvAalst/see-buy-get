@@ -98,6 +98,9 @@ export const DOOR_MAX_KM = 100;
 
 /** A load settled between the parties, delivered this long ago and not said paid: its carrier is asked, once, whether it was (2026-10-27). */
 export const PAID_DIRECT_ASK_H = 72;
+
+/** A matched load said NOT paid this many days ago, and still not said paid, is shown to drivers before they take the shipper's next one (2026-10-27). */
+export const UNPAID_SHOWN_AFTER_D = 7;
 /**
  * "NEAR ME" FOR A QUOTE (the user, 2026-10-25: "the asker should be able to filter quotations from 'near me'"): the
  * carriers within this many kilometres of the asker — on shift and placed there by their phone in the last

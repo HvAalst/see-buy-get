@@ -261,7 +261,7 @@ function Unlocks({ items, currency }: { items: ReturnType<typeof unlocks>; curre
   );
 }
 
-function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; currency?: string; onPropose: () => void; onAsk: () => void }) {
+export function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; currency?: string; onPropose: () => void; onAsk: () => void }) {
   const t = useT();
   const body = row.bodyDerived;
   return (
@@ -310,6 +310,13 @@ function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; currenc
           <p class="meta">
             <Icon name="wallet" size={21} class="meta__ic" />
             <span>{t('driver.paidByShipper')}</span>
+          </p>
+        ) : null}
+        {/* What drivers say of this shipper (2026-10-27): loads not paid, still unpaid a week after they said so. */}
+        {row.shipperUnpaid ? (
+          <p class="meta meta--warn">
+            <Icon name="warning" size={21} class="meta__ic" />
+            <span>{t('common.paidDirect.shipperUnpaid', { n: row.shipperUnpaid })}</span>
           </p>
         ) : null}
         <p class="meta">

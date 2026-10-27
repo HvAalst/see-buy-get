@@ -938,6 +938,7 @@ export const enFleet = {
   'fleet.earn.pending': 'Not yet',
   'fleet.earn.direct': 'Paid by the shipper',
   'fleet.earn.paidDirectLine': 'The shipper paid — said on {when}',
+  'fleet.dispatch.paidByShipper': 'The shipper pays your fleet directly, at the price agreed here. SeeBuyGet pays nothing for this load.',
   'fleet.earn.notPaidDirectLine': 'Not paid yet — said on {when}',
   'fleet.earn.filterTitle': 'Filter hauls',
   'fleet.earn.driverLabel': 'Driver',

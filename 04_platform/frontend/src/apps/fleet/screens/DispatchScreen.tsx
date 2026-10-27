@@ -116,6 +116,9 @@ function LoadRow({ row, driver, state, actions }: { row: DispatchRow; driver: { 
         </span>
         {row.scheduledPickupAt ? <span class="row__s">{t('fleet.dispatch.scheduled', { date: formatDate(row.scheduledPickupAt) })}</span> : null}
         {row.deliveryWindow ? <span class="row__s row__s--warn">{t('common.instructions.deliver', { window: row.deliveryWindow })}</span> : null}
+        {/* A match: who pays the driver it is put on — and what drivers say of this shipper (2026-10-27). */}
+        {row.paidByShipper ? <span class="row__s">{t('fleet.dispatch.paidByShipper')}</span> : null}
+        {row.shipperUnpaid ? <span class="row__s row__s--warn">{t('common.paidDirect.shipperUnpaid', { n: row.shipperUnpaid })}</span> : null}
         {kind === 'negotiate' ? <span class="row__s">{t('fleet.dispatch.negotiate')}</span> : null}
         {row.blockers.length ? (
           <span class="chips" style="margin-top:4px">

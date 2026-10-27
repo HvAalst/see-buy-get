@@ -1000,6 +1000,8 @@ export class BoardRow {
    * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.
    */
   @ApiPropertyOptional() paidByShipper?: boolean;
+  /** …and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none. */
+  @ApiPropertyOptional() shipperUnpaid?: number;
   code: string;
   description: string;
   pickupLabel: string;
@@ -1600,6 +1602,8 @@ export class Claimable {
    * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.
    */
   @ApiPropertyOptional() paidByShipper?: boolean;
+  /** …and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none. */
+  @ApiPropertyOptional() shipperUnpaid?: number;
   /** …and the driver, or their fleet's office, said it was paid: when and how much. Until then the driver may say so. */
   @ApiPropertyOptional({ type: PaidDirect }) paidDirect?: PaidDirect;
   /** Freight crossing a border whose shipper has not yet signed its commercial invoice: it cannot be taken over yet. */
@@ -1720,6 +1724,8 @@ export class Offer {
    * money for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays.
    */
   @ApiPropertyOptional() paidByShipper?: boolean;
+  /** …and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none. */
+  @ApiPropertyOptional() shipperUnpaid?: number;
   driverDid: string;
   kind: ClaimableKind;
   ref: string;

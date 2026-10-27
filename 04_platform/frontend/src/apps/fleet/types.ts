@@ -290,6 +290,10 @@ export interface DispatchRow {
   blockers: BoardBlocker[];
   /** FP7 — the sender's delivery window, the one instruction the office dispatches against. */
   deliveryWindow?: string;
+  /** A match (2026-10-27): the shipper pays the carrier directly, at the price agreed here — SeeBuyGet pays nothing for it. */
+  paidByShipper?: boolean;
+  /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later. Absent: none. */
+  shipperUnpaid?: number;
 }
 
 export interface DispatchView {

@@ -51776,6 +51776,10 @@
             "type": "boolean",
             "description": "A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no\nmoney for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays."
           },
+          "shipperUnpaid": {
+            "type": "number",
+            "description": "…and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none."
+          },
           "cargoClass": {
             "type": "string",
             "enum": [
@@ -54179,6 +54183,10 @@
           "paidByShipper": {
             "type": "boolean",
             "description": "A MATCH (the user, 2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet holds no\nmoney for this load and pays nothing for it. Said before a driver takes it. Absent where SeeBuyGet pays."
+          },
+          "shipperUnpaid": {
+            "type": "number",
+            "description": "…and how many of this shipper's loads drivers said were NOT paid, still unpaid a week later (2026-10-27). Absent: none."
           },
           "border": {
             "description": "CA6 — for a load that crosses a border: where it may cross, when, what to carry, and the limits.",

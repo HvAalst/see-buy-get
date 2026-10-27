@@ -183,4 +183,42 @@ describe('a matched load, paid: the carrier says so', () => {
     expect(row.notPaidDirect).toBeUndefined();
     expect((await notPaid(driver.token)).status).toBe(400);
   });
+
+  it('before a driver takes a shipper’s next matched load: how many of its loads drivers said were not paid, still unpaid a week on', async () => {
+    const biz = await aShipper();
+    const other = await aShipper();
+    const driver = await aDriverOf();
+    const dispatch = app.get(DispatchService);
+    const from = { lat: -1.31, lng: 36.84 };
+    const fresh = async (shipper: string) => (await http().post('/v1/sbg/dispatch/freight').set(bearer(shipper)).send({ description: 'Cut stone, wrapped', pickupLocation: from, pickupLabel: 'Mawe quarry', destLabel: 'Athi River site', destLocation: { lat: -1.45, lng: 36.98 }, weightKg: 800, packaging: 'piece', packages: 1 }).expect(201)).body.freightId as string;
+    const onBoard = (freightId: string, now = Date.now()) => dispatch.board({ from, radiusKm: 50 }, now).find((r) => r.freightId === freightId);
+
+    // A load delivered, and its driver says it was not paid.
+    const { freightId: unpaidId } = await aMatchedLoad(biz, driver.did);
+    stored().set(unpaidId, { ...stored().get(unpaidId), status: 'delivered', deliveredAt: new Date().toISOString() });
+    await http().post(`/v1/sbg/dispatch/freight/${unpaidId}/not-paid-direct`).set(bearer(driver.token)).expect(201);
+    const next = await fresh(biz);
+    const elsewhere = await fresh(other);
+
+    // Within the week the shipper has to pay: nothing is shown.
+    expect(onBoard(next)).toMatchObject({ paidByShipper: true });
+    expect(onBoard(next)?.shipperUnpaid).toBeUndefined();
+    // A week on, still not said paid: shown on that shipper's next load — on the board and on the load a driver holds — and on nobody else's.
+    expect(onBoard(next, Date.now() + 8 * 86_400_000)?.shipperUnpaid).toBe(1);
+    expect(onBoard(elsewhere, Date.now() + 8 * 86_400_000)?.shipperUnpaid).toBeUndefined();
+    stored().set(unpaidId, { ...stored().get(unpaidId), notPaidDirect: { at: new Date(Date.now() - 8 * 86_400_000).toISOString(), by: 'driver' } });
+    (dispatch as unknown as { unpaid?: unknown }).unpaid = undefined;
+    const taker = await aDriverOf();
+    stored().set(next, { ...stored().get(next), status: 'claimed', claimedBy: taker.did, claimedAt: new Date().toISOString(), lockedPrice: 3900, lockedCurrency: 'KES' });
+    const claims = (await http().get(`/v1/sbg/fleet/drivers/${encodeURIComponent(taker.did)}/claims`).set(bearer(taker.token)).expect(200)).body.claims;
+    expect(claims.find((c: { ref: string }) => c.ref === next)).toMatchObject({ paidByShipper: true, shipperUnpaid: 1 });
+
+    // Paid after all: no longer counted.
+    await tick(unpaidId, driver.token).expect(201);
+    expect(onBoard(elsewhere)?.shipperUnpaid).toBeUndefined();
+    const again = await fresh(biz);
+    // At once — not a minute later — and for good.
+    expect(onBoard(again)?.shipperUnpaid).toBeUndefined();
+    expect(onBoard(again, Date.now() + 8 * 86_400_000)?.shipperUnpaid).toBeUndefined();
+  });
 });

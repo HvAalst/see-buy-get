@@ -138,7 +138,8 @@ export const en = {
   'common.paidDirect.notPaidYesOffice': 'Yes, we have not been paid',
   'common.paidDirect.notPaidToast': 'Said: not paid yet',
   'common.paidDirect.notPaidToastDetail': 'The shipper is told, and sees it on the load.',
-  'common.paidDirect.shipperNotPaid': 'The driver says you have not paid {amount} yet, as of {when}. You pay them directly.',
+  'common.paidDirect.shipperNotPaid': 'The driver says you have not paid {amount} yet, as of {when}. You pay them directly. Still unpaid a week later, drivers are shown it before they take your loads.',
+  'common.paidDirect.shipperUnpaid': 'Drivers say this shipper has not paid them for {n, plural, one {# load} other {# loads}}, still unpaid a week after they said so.',
   'common.paidDirect.toastDetail': 'The shipper sees it on the load, with the time.',
   // The look-and-choose picker (OptionPicker), used wherever a list is too long or too visual for a dropdown.
   'common.searchOptions': 'Search the list…',

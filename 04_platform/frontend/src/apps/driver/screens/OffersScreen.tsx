@@ -186,7 +186,7 @@ function ComingSoon({ expected }: { expected: ExpectedLoadView[] }) {
   );
 }
 
-function OfferCard({ offer, now, currency }: { offer: OfferView; now: number; currency?: string }) {
+export function OfferCard({ offer, now, currency }: { offer: OfferView; now: number; currency?: string }) {
   const t = useT();
   const left = secondsLeft(offer.expiresAt, now);
   return (
@@ -220,6 +220,13 @@ function OfferCard({ offer, now, currency }: { offer: OfferView; now: number; cu
           <p class="meta">
             <Icon name="wallet" size={21} class="meta__ic" />
             <span>{t('driver.paidByShipper')}</span>
+          </p>
+        ) : null}
+        {/* What drivers say of this shipper (2026-10-27): loads not paid, still unpaid a week after they said so. */}
+        {offer.shipperUnpaid ? (
+          <p class="meta meta--warn">
+            <Icon name="warning" size={21} class="meta__ic" />
+            <span>{t('common.paidDirect.shipperUnpaid', { n: offer.shipperUnpaid })}</span>
           </p>
         ) : null}
         <p class="meta">

@@ -84,6 +84,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* What drivers say of a shipper that pays them directly (2026-10-27): read before the load is taken, in the danger colour. */
+.meta--warn,
+.meta--warn .meta__ic {
+  color: var(--dang);
+  font-weight: 600;
+}
+
 /* S34 — the earning highlight on a freight offer. A soft positive-money panel, NOT the blue
    action colour (that stays reserved for the single Claim CTA) — the emerald reads as "this pays". */
 .offer__pay {

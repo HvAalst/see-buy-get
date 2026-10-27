@@ -46,7 +46,7 @@ import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE
 import { Router, ROUTER } from './router';
 import { groupOf, laneDrive, lanesOf, tripKmh, type LaneDrive, type LaneTrip } from './lane-times';
 import { handedAt } from './observed-at';
-import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DOOR_GUIDE_DEADHEAD_KM, PAID_DIRECT_ASK_H, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { coverFor, DEFAULT_PACKAGING, DEFAULT_PRICE_PER_KM, DOOR_GUIDE_DEADHEAD_KM, PAID_DIRECT_ASK_H, UNPAID_SHOWN_AFTER_D, DEFAULT_WORK_RADIUS_KM, DISPATCH_MAX_DETOUR_KM, DISPATCH_MAX_PICKUP_MIN, FREIGHT_NOSHOW_GRACE_H, MARKET_MIN_DEMAND, MAX_WORK_RADIUS_KM, NETWORK_CURRENCY, NETWORK_JURISDICTION, NUDGE_RADIUS_KM, OFFER_TTL_MIN, PLATFORM_FEE_PCT, taxOn, TOTE_MAX_WAIT_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { hashPhone } from '../../foundation/identity/phone';
 import { Vehicle } from './fleet.types';
@@ -385,6 +385,9 @@ export class DispatchService {
   // Durable: a freight job is a real transport obligation (a diverted P4+ order is a paid commitment),
   // so — unlike the ephemeral offer bulletin — it must survive a restart.
   private readonly freights = new PersistentMap<string, Freight>('pudo-freights');
+  /** How many of each shipper's matched loads are said unpaid after a week — read at most once a minute (unpaidByShipper). */
+  private unpaid?: { at: number; counts: Map<string, number> };
+
   /** Loads paid for first by a person, billed and given back through what they paid (registerPrepaid, 2026-10-27). */
   private prepaid?: PrepaidShipper;
   /**
@@ -902,6 +905,7 @@ export class DispatchService {
       kind: load.kind,
       ref: load.ref,
       ...(load.paidByShipper ? { paidByShipper: true } : {}),
+      ...(load.shipperUnpaid ? { shipperUnpaid: load.shipperUnpaid } : {}),
       pickupLabel: load.pickupLabel,
       pickupLocation: load.pickupLocation,
       destLabel: load.destLabel,
@@ -1471,6 +1475,7 @@ export class DispatchService {
       rows.push({
         freightId: f.freightId,
         ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}),
+        ...this.shipperUnpaidOf(f, now),
         code: f.code,
         description: f.description,
         pickupLabel: f.pickupLabel,
@@ -3724,6 +3729,7 @@ export class DispatchService {
     }
     f.paidDirect = { at: new Date(now).toISOString(), amount: f.lockedPrice, currency: lockedCurrencyOf(f), by };
     this.freights.set(f.freightId, f);
+    this.unpaid = undefined;
     void this.events
       .publish(GlosEvent.Pudo.FreightPaidDirect, { freightId: f.freightId, code: f.code, amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, driverName: this.driverNameOf(f.claimedBy ?? ''), posterDid: this.senderDidOf(f), destLabel: f.destLabel }, { source: 'pudo' })
       .catch(() => undefined);
@@ -3743,10 +3749,39 @@ export class DispatchService {
     if (f.notPaidDirect) return f;
     f.notPaidDirect = { at: new Date(now).toISOString(), by };
     this.freights.set(f.freightId, f);
+    this.unpaid = undefined;
     void this.events
       .publish(GlosEvent.Pudo.FreightNotPaidDirect, { freightId: f.freightId, code: f.code, amount: f.lockedPrice, currency: lockedCurrencyOf(f), by, driverName: this.driverNameOf(f.claimedBy ?? ''), posterDid: this.senderDidOf(f), destLabel: f.destLabel }, { source: 'pudo' })
       .catch(() => undefined);
     return f;
+  }
+
+  /**
+   * WHAT DRIVERS SAY OF A SHIPPER WHO PAYS THEM DIRECTLY (the user, 2026-10-27: "build the driver warning"): how many of its
+   * loads a driver — or the office of the fleet that carried it — said were NOT paid, and that are still not said paid
+   * UNPAID_SHOWN_AFTER_D days later: the shipper had a week. Only what was said is counted, never silence. Kept by the
+   * account that posted the loads (a business's people share one), read at most once a minute and again whenever a load is
+   * said paid or not.
+   */
+  private unpaidByShipper(now: number): Map<string, number> {
+    if (this.unpaid && now >= this.unpaid.at && now - this.unpaid.at < 60_000) return this.unpaid.counts;
+    const counts = new Map<string, number>();
+    const before = now - UNPAID_SHOWN_AFTER_D * 86_400_000;
+    for (const f of this.freights.values()) {
+      if (f.settlement !== 'between_parties' || !f.notPaidDirect || f.paidDirect || Date.parse(f.notPaidDirect.at) > before) continue;
+      const shipper = f.postedByDid ?? f.shipperDid;
+      if (shipper) counts.set(shipper, (counts.get(shipper) ?? 0) + 1);
+    }
+    this.unpaid = { at: now, counts };
+    return counts;
+  }
+
+  /** On a matched load, before it is taken: how many of its shipper's loads are said unpaid after a week. Nothing when none. */
+  private shipperUnpaidOf(f: Freight, now: number): { shipperUnpaid?: number } {
+    const shipper = f.postedByDid ?? f.shipperDid;
+    if (f.settlement !== 'between_parties' || !shipper) return {};
+    const n = this.unpaidByShipper(now).get(shipper) ?? 0;
+    return n > 0 ? { shipperUnpaid: n } : {};
   }
 
   /**
@@ -4398,7 +4433,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

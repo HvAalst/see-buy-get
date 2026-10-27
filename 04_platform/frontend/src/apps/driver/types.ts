@@ -270,6 +270,8 @@ export interface Claimable {
   collectAtHub?: { parcelId: string; hubName: string; handed: boolean };
   /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */
   paidByShipper?: boolean;
+  /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later (2026-10-27). Absent: none. */
+  shipperUnpaid?: number;
   /** …and the driver, or their fleet's office, said it was paid: when and how much. */
   paidDirect?: PaidDirectView;
   /** A return: refused goods carried on as this new load — the load they were refused on. */
@@ -329,6 +331,8 @@ export interface BoardRow {
   freightId: string;
   /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */
   paidByShipper?: boolean;
+  /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later (2026-10-27). Absent: none. */
+  shipperUnpaid?: number;
   code: string;
   description: string;
   pickupLabel: string;
@@ -385,6 +389,8 @@ export interface OfferView {
   offerId: string;
   /** A match (2026-10-27): the shipper pays the driver directly, at the price agreed here — SeeBuyGet pays nothing for it. */
   paidByShipper?: boolean;
+  /** …and how many of this shipper's loads drivers said were not paid, still unpaid a week later (2026-10-27). Absent: none. */
+  shipperUnpaid?: number;
   kind: ClaimKind;
   ref: string;
   pickupLabel: string;

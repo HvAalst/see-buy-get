@@ -20,7 +20,10 @@ describe('a matched load, paid: said the same in every app', () => {
     expect(shipperPaidLine({ paysDriverDirect: true, paidDirect: { at, amount: 4200, by: 'office' }, currency: 'KES' }, t)).toBe(`The carrier’s fleet says you paid ${kes}, on ${when}.`);
     expect(shipperPaidLine({}, t)).toBeNull();
     // Delivered and NOT paid yet, as the driver said: with the price agreed; paid later, paid is what is said.
-    expect(shipperPaidLine({ paysDriverDirect: true, notPaidDirect: { at, by: 'driver' }, agreedPrice: 4200, currency: 'KES' }, t)).toBe(`The driver says you have not paid ${kes} yet, as of ${when}. You pay them directly.`);
+    expect(shipperPaidLine({ paysDriverDirect: true, notPaidDirect: { at, by: 'driver' }, agreedPrice: 4200, currency: 'KES' }, t)).toBe(`The driver says you have not paid ${kes} yet, as of ${when}. You pay them directly. Still unpaid a week later, drivers are shown it before they take your loads.`);
+    // What drivers are shown of that shipper, before they take its next load.
+    expect(t('common.paidDirect.shipperUnpaid', { n: 1 })).toBe('Drivers say this shipper has not paid them for 1 load, still unpaid a week after they said so.');
+    expect(t('common.paidDirect.shipperUnpaid', { n: 3 })).toContain('for 3 loads');
     expect(shipperPaidLine({ paysDriverDirect: true, notPaidDirect: { at, by: 'driver' }, paidDirect: { at, amount: 4200, currency: 'KES', by: 'driver' } }, t)).toBe(`The driver says you paid ${kes}, on ${when}.`);
   });
 
