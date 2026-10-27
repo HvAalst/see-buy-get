@@ -14,6 +14,10 @@ describe('calling an order off, said first (the user, 2026-10-27: “Comes back,
     expect(says).toMatch(/^It is at Naivasha Hub. It comes back to Nairobi CBD, the shop you handed it in at, as a new parcel for .*180.*. What it cost to get it there is not given back.$/);
   });
 
+  it('a shop the store picked is not one it handed the parcel in at — said so (2026-10-27)', () => {
+    expect(callOffSays({ parcelId: 'P', outcome: 'bring_back', amount: 2, currency: 'KES', backTo: 'Riverside', atHub: 'Naivasha Hub' }, t, true)).toMatch(/^It is at Naivasha Hub. It comes back to Riverside as a new parcel for .*2.*; you collect it there. What it cost to get it to the hub is not given back.$/);
+  });
+
   it('where it cannot be, the reason as the server gave it', () => {
     expect(callOffSays({ parcelId: 'P', outcome: 'no', why: 'A driver is carrying it: it cannot be called off on the road.' }, t)).toBe('A driver is carrying it: it cannot be called off on the road.');
   });

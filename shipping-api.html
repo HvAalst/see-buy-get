@@ -541,9 +541,21 @@
       the old one. The answer comes back <code>Returned</code>, with <code>returnShipmentId</code>: the new shipment,
       yours to read like any other (it says <code>returnOf</code>, the one it brings back), collected at that shop with
       its own collection code. Your balance must cover it, or you get <code>WALLET_INSUFFICIENT</code> and nothing
-      changes. It cannot be brought back where it was not handed in at a shop, or where that shop is not taking
-      parcels: then it carries on to your buyer, and you get <code>INVALID_STATE</code> saying so.</li>
+      changes. It cannot be brought back where that shop is not taking parcels: then it carries on to your buyer, and you
+      get <code>INVALID_STATE</code> saying so.</li>
+    <li><b>At a hub, and never handed in at a shop</b> — collected at your own door, or handed in at a hub: you say where
+      it comes back to, with <code>backTo</code> in the body. Either a collection point's id (<code>pointId</code> from the
+      directory): it comes back there as above, a new shipment you pay for. Or <code>"door"</code>: your own door — your
+      collection point, or your store's pin — as a <b>load</b> posted from the hub, with <code>maxSpend</code>, the most you
+      pay a driver. The first driver whose vehicle fits takes it, at their own price and never above what you allow; you are
+      billed when a driver takes it. The answer says <code>returnLoad</code>, the load's code. The load cannot be withdrawn
+      (the goods would wait at the hub for nobody); the hub hands the box only to the driver who took it. Without
+      <code>backTo</code> you get <code>FIELD_REQUIRED</code> and nothing changes.</li>
   </ul>
+<pre><code>curl -X POST https://api.seebuyget.example/v1/sbg/shipping/shipments/PUD-A1B2C3D4E5/cancel \
+  -H "X-SBG-Key: sk_live_…" \
+  -H "content-type: application/json" \
+  -d '{ "reason": "buyer cancelled", "backTo": "door", "maxSpend": 5 }'</code></pre>
 
   <h3>What would calling it off do? Ask first</h3>
 <pre><code>curl https://api.seebuyget.example/v1/sbg/shipping/shipments/PUD-A1B2C3D4E5/call-off \
@@ -557,7 +569,10 @@
   "atHub": "Naivasha Hub"
 }</code></pre>
   <p>Changes nothing. <code>outcome</code> is <code>refund</code> (with the <code>amount</code> that would come back),
-  <code>bring_back</code> (with what bringing it back would cost, the shop it would come back to and the hub it is at), or
+  <code>bring_back</code> (with what bringing it back would cost, the shop it would come back to and the hub it is at),
+  <code>pick</code> (never handed in at a shop: ask again with <code>?backTo=</code> a collection point's id, or
+  <code>door</code> — <code>door</code> is said when you have one on the map), <code>to_door</code> (with
+  <code>suggestedMax</code>, the most we suggest allowing a driver — a suggestion: each driver's price decides), or
   <code>no</code> (with <code>why</code>). The price of bringing it back is today's: asked again later, it may differ.</p>
 
   <h3>There is no amend, on purpose</h3>
@@ -616,7 +631,9 @@ content-type: application/json
   </ul>
   <p>A shipment brought back from a hub after you called it off is one you never created yourself: its callbacks carry
   <code>data.returnOf</code>, the shipment it brings back, so your system can tie the two together. Its
-  <code>ready_for_pickup</code> carries the code <b>you</b> collect it with, at the shop you handed it in at.</p>
+  <code>ready_for_pickup</code> carries the code <b>you</b> collect it with, at the shop it comes back to. One coming to
+  your door as a load is heard by the <code>load.*</code> events, which carry <code>data.bringsBack</code>: the shipment it
+  brings back.</p>
 
   <h3>Checking it really came from us</h3>
   <p>Every callback is signed: <b>HMAC-SHA256 over the exact request body</b>, keyed with your store

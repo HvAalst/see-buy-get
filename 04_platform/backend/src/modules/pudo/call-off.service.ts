@@ -31,7 +31,7 @@ const WHY_NOT: Partial<Record<ParcelStatus, string>> = {
 };
 
 /** The parcel bringing goods back to the store is the store's own goods on their way to it: there is nothing to call off. */
-const BRINGS_BACK = 'It brings your goods back to you: collect it at the shop you handed it in at. It cannot be called off.';
+const BRINGS_BACK = 'It brings your goods back to you: collect it at the shop it goes to. It cannot be called off.';
 
 /** A shop that may receive a parcel picked for it: approved, whether or not it has put money in yet. */
 const RECEIVING: ReadonlyArray<string> = ['APPROVED_UNFUNDED', 'ACTIVE'];
@@ -157,7 +157,6 @@ export class CallOffService implements OnModuleInit {
         destCountry: way.door.country,
         ...(p.externalOrderId ? { externalOrderId: p.externalOrderId } : {}),
         maxSpend: most,
-        instructions: `Collect parcel ${p.parcelId} at ${way.hub.name}: show your pass at its counter, and they hand it to you.`,
         ...(vendor.contactMobile ? { contactName: vendor.name, contactPhone: vendor.contactMobile } : {}),
         bringsBack: { parcelId: p.parcelId, atMdpId: way.hub.mdpId, hubName: way.hub.name },
       },

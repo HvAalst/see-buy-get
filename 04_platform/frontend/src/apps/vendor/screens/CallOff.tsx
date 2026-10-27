@@ -7,9 +7,10 @@ import type { CallOffView, NetworkPoint, OrderDetail } from '../types';
 import type { VendorActions, VendorState } from '../useVendorApp';
 
 /** What calling it off would do now, in the store's words: what comes back, or what bringing it back costs — or why not. */
-export function callOffSays(view: CallOffView, t: Translate): string {
+export function callOffSays(view: CallOffView, t: Translate, picked = false): string {
   if (view.outcome === 'refund') return view.amount ? t('vendor.callOff.refund', { amount: money(view.amount, view.currency) }) : t('vendor.callOff.refundNothing');
-  if (view.outcome === 'bring_back') return t('vendor.callOff.bringBack', { hub: view.atHub ?? '', shop: view.backTo ?? '', amount: money(view.amount ?? 0, view.currency) });
+  // A shop the store picked is not one it handed the parcel in at.
+  if (view.outcome === 'bring_back') return t(picked ? 'vendor.callOff.bringBackPicked' : 'vendor.callOff.bringBack', { hub: view.atHub ?? '', shop: view.backTo ?? '', amount: money(view.amount ?? 0, view.currency) });
   if (view.outcome === 'to_door') return t('vendor.callOff.toDoor', { hub: view.atHub ?? '', door: view.backTo ?? '', suggested: money(view.suggestedMax ?? 0, view.currency) });
   if (view.outcome === 'pick') return t(view.door ? 'vendor.callOff.pickBodyDoor' : 'vendor.callOff.pickBody', { hub: view.atHub ?? '' });
   return view.why ?? '';
@@ -158,7 +159,7 @@ export function CallOffBlock({ d, state, actions }: { d: OrderDetail; state: Ven
   const no = view.outcome === 'no';
   return (
     <div class="calloff">
-      <Note tone={no ? 'warn' : 'info'} icon={no ? 'block' : view.outcome === 'bring_back' ? 'repeat' : 'wallet'} title={t(no ? 'vendor.callOff.noTitle' : 'vendor.callOff.title')} detail={callOffSays(view, t)} />
+      <Note tone={no ? 'warn' : 'info'} icon={no ? 'block' : view.outcome === 'bring_back' ? 'repeat' : 'wallet'} title={t(no ? 'vendor.callOff.noTitle' : 'vendor.callOff.title')} detail={callOffSays(view, t, Boolean(asked.backTo))} />
       {no ? null : (
         <>
           {reasonField}
