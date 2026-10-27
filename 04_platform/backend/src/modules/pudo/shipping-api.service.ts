@@ -97,7 +97,8 @@ export interface QuoteBreakdown {
 export interface PublicQuote {
   from: QuotedPoint;
   to: QuotedPoint;
-  parcel: { size: ParcelSize; weightKg: number };
+  /** `chargedBy`, when measured: whether its size or its weight set the price, and what it counts as in kg (2026-10-27). */
+  parcel: { size: ParcelSize; weightKg: number; chargedBy?: ShipmentQuote['chargedBy'] };
   /** `amount` is the ceiling — what the shipment will not cost more than. `minimum` is what it costs if
    *  the seller commits to one route. Both in `currency`, which is the selling company's money. */
   price: { currency: string; amount: number; minimum: number };
@@ -280,7 +281,8 @@ export class ShippingApiService {
     return {
       from: this.point(from),
       to: this.point(to),
-      parcel: { size, weightKg },
+      // Size or weight, whichever is more: which one set this price, said so a store can tell its buyer why (2026-10-27).
+      parcel: { size, weightKg, ...(quote.chargedBy ? { chargedBy: quote.chargedBy } : {}) },
       // The CEILING first. A buyer told 400 and charged 480 at checkout has been misled; one told 480 and
       // charged 400 has not. `flexible` is also what a store pays by default, so it is the likelier truth.
       price: { currency: quote.currency, amount: quote.flexible.total, minimum: quote.locked.total },

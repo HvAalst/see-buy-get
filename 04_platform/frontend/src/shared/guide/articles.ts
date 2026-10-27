@@ -93,6 +93,8 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'api-keys', apps: ['vendor'], group: 'account', steps: 3, notes: ['note'] },
   { id: 'send-sign-in', apps: ['send', 'home'], group: 'start', site: true, steps: 5 },
   { id: 'follow-shop-order', apps: ['send', 'vendor'], group: 'start', site: true, steps: 3, notes: ['note', 'note', 'why'] },
+  // What a parcel is priced on: its size or its weight, whichever is more (the user, 2026-10-27: "build the help article").
+  { id: 'size-price', apps: ['send', 'vendor', 'agent'], group: 'start', site: true, steps: 3, notes: ['note', 'note', 'why', 'rare'] },
   { id: 'business-sign-in', apps: ['business', 'home'], group: 'start', site: true, steps: 5 },
   { id: 'business-people', apps: ['business'], group: 'start', steps: 4 },
   { id: 'business-check', apps: ['business', 'console'], group: 'start', site: true, steps: 2, notes: ['note'] },

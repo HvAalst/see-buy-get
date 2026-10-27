@@ -63,7 +63,7 @@ import { AuthService } from '../../foundation/auth/auth.service';
 import { ShopStaffService } from './shop-staff.service';
 import {
   BAG_CAPACITY_UNITS, DIM_DIVISOR, MEDIUM_CM3, MEDIUM_KG, SIZE_LIMITS, SIZE_TRANSPORT_FACTOR, SIZE_UNITS,
-  classifySize, measuredFactor,
+  chargedByOf, classifySize, measuredFactor,
 } from './pudo.config';
 import { DigitalTwinService } from '../m7/digital-twin.service';
 import { TrackingService } from '../m4/tracking.service';
@@ -338,6 +338,22 @@ describe('dimensional weight', () => {
       // …and the many-pins endpoint the vendor's drop-off map actually calls, which quotes the same way.
       const options = controller.quoteOptions('', to.did, from.did, '', undefined, '30', '20', '10', '1.6') as unknown as { options: { quote?: { transportFactor: number } }[] };
       expect(options.options[0].quote!.transportFactor).toBe(parcel.transportFactor);
+    });
+
+    it('says, in kilograms, whether its size or its weight set the price — size or weight, whichever is more (2026-10-27)', () => {
+      const { from, to } = route();
+      type Said = { chargedBy?: unknown };
+      // The box in the question the user brought: 50 × 40 × 30 cm weighing 6 kg counts as 7.6 kg by its size (÷ 7,875, not
+      // an airline's 6,000), so its size sets the price.
+      expect((controller.quote(from.did, to.did, undefined, '50', '40', '30', '6') as unknown as Said).chargedBy).toEqual({ by: 'size', countsAsKg: 7.6, weighsKg: 6 });
+      // The same box at 9 kg: its weight sets it.
+      expect((controller.quote(from.did, to.did, undefined, '50', '40', '30', '9') as unknown as Said).chargedBy).toEqual({ by: 'weight', countsAsKg: 9, weighsKg: 9 });
+      // A parcel priced by its size band says nothing of the kind: nobody measured it.
+      expect((controller.quote(from.did, to.did, 'M') as unknown as Said).chargedBy).toBeUndefined();
+      // The most one parcel is charged is a whole bag, and that is said; without a weight there is nothing to compare.
+      expect(chargedByOf(BAG_CAPACITY_UNITS, 3)).toEqual({ by: 'size', countsAsKg: 50, weighsKg: 3, wholeBag: true });
+      expect(chargedByOf(1.2, undefined)).toBeUndefined();
+      expect(chargedByOf(Number.NaN, 2)).toBeUndefined();
     });
 
     it('believes the tape measure over a contradicting declared size', () => {

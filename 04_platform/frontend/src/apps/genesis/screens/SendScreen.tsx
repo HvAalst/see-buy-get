@@ -6,6 +6,7 @@ import type { GeoPoint } from '../../../shared/geo';
 import { carriersLine, cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPrice, mintChecklist, mintTaxLine, money, phoneReady, pointDistance, pointLine, quoteSummary, reputationLine, selectablePoints, servingSince, sizeMeta, taxLine, type Translate } from '../logic';
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
+import { SizePriceNote } from '../../../shared/SizePriceNote';
 
 export interface SendScreenProps {
   state: SendState;
@@ -432,6 +433,8 @@ function QuoteStep({ state, actions }: SendScreenProps) {
                 price. It is not — the tier is what the network will HANDLE it as; the price follows the
                 centimetres. Said only when it is true, so it never becomes a line nobody reads. */}
             {q.factorBasis === 'measured' ? <p class="card__note">{t('send.quote.measuredPrice')}</p> : null}
+            {/* …and which of the two set it, size or weight, with the rule a tap away (2026-10-27). */}
+            <SizePriceNote chargedBy={q.chargedBy} />
           </Card>
 
           {signedIn ? null : (

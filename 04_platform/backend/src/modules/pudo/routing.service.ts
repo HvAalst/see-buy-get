@@ -11,7 +11,7 @@ import type { Vehicle } from './fleet.types';
 import { Router, ROUTER } from './router';
 import { isOpenAt, nextOpenAt } from './hours';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { BORDER_DWELL_H, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NEAR_CARRIER_KM, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
+import { BORDER_DWELL_H, chargedByOf, DISPATCH_BUFFER_H, HANDOVER_BUFFER_H, NEAR_CARRIER_KM, NETWORK_JURISDICTION, SIZE_LANE, SIZE_TRANSPORT_FACTOR, SIZE_WEIGHT_KG, taxOn, VEHICLE_SPEED_KMH, withPlatformFee } from './pudo.config';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { ResolvedInsurance, ResolvedRates, ResolvedTax } from '../../foundation/entity/entity.types';
 import { currencyForJurisdiction, requireCurrencyFor } from '../../foundation/money/currency';
@@ -124,6 +124,12 @@ export interface ShipmentQuote {
    *  Stated rather than left to be inferred from the decimals — `ToteHaul.basis` set the precedent, and
    *  a merchant asking why two similar boxes priced differently deserves the answer inside the quote. */
   factorBasis: 'measured' | 'band';
+  /**
+   * A measured parcel (the user, 2026-10-27: "build the say"): whether its SIZE or its weight set the price — size or weight,
+   * whichever is more — what it counts as in kg, what it weighs, and whether it was charged as a whole bag, the most one
+   * parcel is. Absent on a parcel priced by its size band, or where the weight was not given.
+   */
+  chargedBy?: { by: 'size' | 'weight'; countsAsKg: number; weighsKg: number; wholeBag?: true };
   /**
    * The per-km rates the two prices were taken from, and WHOSE (the user, 2026-10-25: "a quote price should be taken
    * only from vehicles that can carry that load, within the unified currency range and the asker should be able to
@@ -463,7 +469,7 @@ export class RoutingService {
     };
     return {
       hops: plan.hops, nodes, legs, entityIds, sellerEntityId: sellerId, currency, fx, crossesBorder: crossings.length > 0, crossings,
-      totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', perKm, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
+      totalKm, nodeFees, size, transportFactor: factor, factorBasis: measured != null ? 'measured' : 'band', ...(measured != null && chargedByOf(measured, carriers.kg) ? { chargedBy: chargedByOf(measured, carriers.kg) } : {}), perKm, platformFeePct: feePct, rates: stack, tax: taxRule, insurance,
       flexible: leg(max), locked: leg(min),
     };
   }

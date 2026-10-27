@@ -10,6 +10,7 @@ import { chargeOf, dimsComplete, feeLines, handoffLine, money, originRows, price
 import type { NetworkPoint } from '../types';
 import { HUB_ORIGIN, hoursLine, receivingHours, receivingWords, type HubOptionView } from '../hubs';
 import type { VendorActions, VendorState } from '../useVendorApp';
+import { SizePriceNote } from '../../../shared/SizePriceNote';
 
 export interface MintScreenProps {
   state: VendorState;
@@ -523,6 +524,8 @@ function PriceStep({ state, actions }: MintScreenProps) {
           the tier's price. It is not: the tier says what the network will HANDLE the box as, and the
           price follows the centimetres the store typed. Said only when it is true. */}
       {q?.factorBasis === 'measured' ? <p class="card__note">{t('vendor.mint.measuredPrice')}</p> : null}
+      {/* …and which of the two set it, size or weight, with the rule a tap away (2026-10-27). */}
+      <SizePriceNote chargedBy={q?.chargedBy} />
 
       {state.quoteState === 'loading' ? <p class="hint">{t('vendor.mint.workingJourney')}</p> : null}
       {state.quoteState === 'error' && state.error ? <ErrorNote error={state.error} onRetry={() => void actions.pickOrigin(f.originDid)} /> : null}

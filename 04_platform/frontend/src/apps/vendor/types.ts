@@ -5,6 +5,7 @@
  */
 import type { Gs1View } from '../../shared/gs1';
 import type { UnitHold } from '../../shared/tamper';
+import type { ChargedBy } from '../../shared/sizePrice';
 
 export type ParcelSize = 'S' | 'M' | 'L' | 'HEAVY';
 export type ParcelStatus =
@@ -359,6 +360,8 @@ export interface QuoteView {
   /** Whether the transport was priced on the box the store MEASURED or on the tier it was declared as.
    *  Absent from a quote taken before this existed, which reads as the tier — the honest answer for it. */
   factorBasis?: 'measured' | 'band';
+  /** Measured: whether its size or its weight set the price, and what it counts as in kg (2026-10-27). */
+  chargedBy?: ChargedBy;
   totalKm: number;
   nodeFees: number;
   size: ParcelSize;

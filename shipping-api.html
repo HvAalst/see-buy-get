@@ -136,7 +136,8 @@
   "to":   { "pointId": "did:glos:…", "name": "Kisumu Duka", "area": "Kisumu",
             "country": "KE", "openState": "open",
             "location": { "lat": -0.09, "lng": 34.77 } },
-  "parcel": { "size": "M", "weightKg": 2 },
+  "parcel": { "size": "M", "weightKg": 2,
+              "chargedBy": { "by": "weight", "countsAsKg": 2, "weighsKg": 2 } },
   "price":  { "currency": "KES", "amount": 32.13, "minimum": 32.13 },
   "eta":    { "readyAt": "2026-08-28T08:00:00.000Z", "hours": 13.6, "arrivesWhileOpen": false },
   "route":  { "hops": ["Nairobi CBD", "Kisumu Duka"], "km": 356.2,
@@ -282,13 +283,23 @@
     under, so a quote and the shipment it becomes cannot disagree about how big the parcel was.
   </div>
 
+  <div class="note">
+    <b>Size or weight, whichever is more.</b>
+    A measured parcel counts by its size as <code>l × w × h ÷ 7875</code> kilograms — a box of 45 × 35 × 25 cm counts as
+    5 kg, the room our medium size allows for its weight — and is priced on whichever is more: what it weighs, or what
+    it counts as. A box of 50 × 40 × 30 cm weighing 6 kg is priced as 7.6 kg. The answer says which one set the price in
+    <code>parcel.chargedBy</code>, so you can tell your buyer why a big, light box costs more. Many carriers divide by
+    5,000 or 6,000; we divide by 7,875, so a box counts as lighter here. Send real measurements: without them a parcel
+    is priced at its whole size tier.
+  </div>
+
   <h3>Response</h3>
   <div class="scroll">
   <table>
     <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
     <tbody>
       <tr><td>from · to</td><td>object</td><td class="desc">The resolved collection points: <code>pointId</code>, <code>name</code>, <code>area</code>, <code>country</code>, <code>landmark</code>, <code>location</code>, <code>openState</code> — plus <code>distanceKm</code> and <code>matchedPlace</code> when an address was typed.</td></tr>
-      <tr><td>parcel</td><td>object</td><td class="desc">The <code>size</code> tier this was priced at, and the <code>weightKg</code> used.</td></tr>
+      <tr><td>parcel</td><td>object</td><td class="desc">The <code>size</code> tier this was priced at, and the <code>weightKg</code> used. With measurements, <code>chargedBy</code>: <code>by</code> (<code>size</code> or <code>weight</code> — which one set the price), <code>countsAsKg</code> (what it was priced as), <code>weighsKg</code>, and <code>wholeBag: true</code> when it was priced as a whole bag, the most one parcel is.</td></tr>
       <tr><td>price.currency</td><td>string</td><td class="desc">ISO-4217. The selling company's money — see <a href="#borders">crossing a border</a>.</td></tr>
       <tr><td>price.amount</td><td>number</td><td class="desc">The ceiling. Show this one.</td></tr>
       <tr><td>price.minimum</td><td>number</td><td class="desc">The price if the seller commits to one route.</td></tr>

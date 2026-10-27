@@ -100,7 +100,7 @@ describe('the help centre', () => {
   // should be enough, and the operational issues could live in the apps" — chosen: getting in and getting started.
   it('holds getting in and getting started only: which app, signing in, getting back in, papers, a parcel', () => {
     expect(all.map((a) => a.id).sort()).toEqual(
-      ['which-sign-in', 'shop-sign-in', 'driver-sign-in', 'fleet-sign-in', 'store-sign-in', 'send-sign-in', 'business-sign-in', 'account-recovery', 'when-to-change', 'shop-papers', 'hub-papers', 'business-check', 'follow-shop-order', 'parcel-problem'].sort(),
+      ['which-sign-in', 'shop-sign-in', 'driver-sign-in', 'fleet-sign-in', 'store-sign-in', 'send-sign-in', 'business-sign-in', 'account-recovery', 'when-to-change', 'shop-papers', 'hub-papers', 'business-check', 'follow-shop-order', 'parcel-problem', 'size-price'].sort(),
     );
     // The rest is still every app's own help.
     expect(articles().length).toBeGreaterThan(all.length + 30);

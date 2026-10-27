@@ -159,6 +159,12 @@ describe('the public shipping quote', () => {
     expect(q.price.amount).toBeGreaterThan(0);
     expect(q.eta.readyAt).toMatch(/^\d{4}-/);
     expect(q.route.hops[0]).toBe('Nairobi CBD');
+    // Size or weight, whichever is more (2026-10-27): which one set the price, so a store can tell its buyer why.
+    expect(q.parcel.chargedBy).toEqual({ by: 'weight', countsAsKg: 2, weighsKg: 2 });
+    const bigLight = shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, dimensionsCm: { l: 50, w: 40, h: 30 }, weightKg: 6 });
+    expect(bigLight.parcel.chargedBy).toEqual({ by: 'size', countsAsKg: 7.6, weighsKg: 6 });
+    // Only a tier, no tape measure: nothing of the kind is said.
+    expect(shipping.quote({ from: { country: 'KE', area: 'Nairobi' }, to: { country: 'KE', area: 'Kisumu' }, size: 'M' }).parcel.chargedBy).toBeUndefined();
     // A quote is a question. Asking it changes nothing — no parcel, no account, no slot held.
     expect(agents.list().map((a) => a.did).join()).toBe(before);
   });

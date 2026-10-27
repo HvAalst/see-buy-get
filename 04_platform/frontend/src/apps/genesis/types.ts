@@ -1,4 +1,5 @@
 import type { ArrivalView, CrossingView, PassageView } from '../../shared/passages';
+import type { ChargedBy } from '../../shared/sizePrice';
 
 /**
  * Local view types for the Send app. All four surfaces this app touches are @Public
@@ -72,6 +73,8 @@ export interface QuoteView {
   /** Whether the transport was priced on the box the sender MEASURED or on the tier it was declared as.
    *  Absent from a quote taken before this existed, which reads as the tier — the honest answer for it. */
   factorBasis?: 'measured' | 'band';
+  /** Measured: whether its size or its weight set the price, and what it counts as in kg (2026-10-27). */
+  chargedBy?: ChargedBy;
   nodes: Array<{ type: string; id: string; label: string; fee: number }>;
   legs: Array<{ from: string; to: string; km: number }>;
   totalKm: number;

@@ -383,6 +383,18 @@ export const MEDIUM_KG = MEDIUM_LIMIT.maxKg;
 export const DIM_DIVISOR = Math.round(MEDIUM_CM3 / MEDIUM_KG);
 
 /**
+ * WHAT SET A MEASURED PARCEL'S PRICE, in kilograms a person can weigh against (the user, 2026-10-27: "build the say"): the
+ * factor priced back into kg (a medium is MEDIUM_KG), and whether its SIZE or its weight set it — the box counts as more by
+ * its size than it weighs. `wholeBag`: capped at the most one parcel is charged. Nothing to say without the weight.
+ */
+export function chargedByOf(factor: number, weighsKg?: number): { by: 'size' | 'weight'; countsAsKg: number; weighsKg: number; wholeBag?: true } | undefined {
+  if (!(Number.isFinite(factor) && factor > 0) || !(typeof weighsKg === 'number' && Number.isFinite(weighsKg) && weighsKg > 0)) return undefined;
+  const countsAsKg = Math.round(factor * MEDIUM_KG * 10) / 10;
+  const weighs = Math.round(weighsKg * 10) / 10;
+  return { by: countsAsKg > weighs ? 'size' : 'weight', countsAsKg, weighsKg: weighs, ...(factor >= BAG_CAPACITY_UNITS ? { wholeBag: true as const } : {}) };
+}
+
+/**
  * The continuous transport factor for a MEASURED parcel, or `undefined` when the measurement is unusable.
  *
  * Undefined rather than a guess, and the caller falls back to the band: a zero or a nonsense dimension is
