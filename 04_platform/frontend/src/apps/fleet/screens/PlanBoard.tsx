@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Icon, Note, Pill } from '../../../shared/ui';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { PlanAdviser } from './PlanAdviser';
 import { SplitOrder } from './SplitOrder';
 import { RosterCard } from './RosterCard';
@@ -413,7 +414,9 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                 {g.orders.map((o) => (
                   <li key={o.freightId}>
                     <span class="plan__stopt">{`${o.destLabel} · ${weightWords(o.weightKg)}`}</span>
-                    <span class="plan__stops-s">{`${o.code} · ${o.description} · ${o.shipperName}${o.orderRef ? ` · ${o.orderRef}` : ''}`}</span>
+                    <span class="plan__stops-s">
+                      <Abbreviated text={`${o.code} · ${o.description} · ${o.shipperName}${o.orderRef ? ` · ${o.orderRef}` : ''}`} />
+                    </span>
                     {/* HEAVIER THAN ANY VEHICLE GOING OUT, and the office's to split: so many loads of the largest. */}
                     {o.splitInto && !plan.accepted ? (
                       <span class="plan__byhand">
@@ -551,7 +554,7 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
                           <span class="plan__stop">
                             <span class="plan__stopt">{stop.destLabel}</span>
                             <span class="plan__stops-s">
-                              {`${stop.code} · ${stop.description} · ${weightWords(stop.weightKg)}`}
+                              <Abbreviated text={`${stop.code} · ${stop.description} · ${weightWords(stop.weightKg)}`} />
                               {stop.deliveryWindow ? ` · ${t('fleet.plan.window', { window: stop.deliveryWindow })}` : ''}
                             </span>
                             {(() => {

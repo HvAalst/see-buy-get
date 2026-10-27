@@ -3,6 +3,7 @@ import type { SbgClient } from '../../../lib/sbg';
 import { Button, Card, CodeCard, ErrorNote, Explainer, Note, Pill, PlacePicker, ReadAloud, Sheet } from '../../../shared/ui';
 import type { GeoPoint } from '../../../shared/geo';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { PACKAGING_OPTIONS } from '../../agent/logic';
 import { TAG_TONE, byDay, dayOf, daySummary, dayWord, deliveredLine, hoursWords, loadLine, mayRejoin, maySplit, mayWithdraw, orderTag, ordersApi, weightWords, type Contract, type DayPlanState, type FleetOrder, type InviteIssued, type PartnerLists } from '../orders';
 import { OrderHandOn, PartnersCard } from './HandOn';
@@ -205,7 +206,7 @@ function OrderRows({ orders, onOpen, showDay }: { orders: FleetOrder[]; onOpen: 
           <button key={o.freightId} type="button" class="row" role="listitem" onClick={() => onOpen(o)}>
             <span class="row__body">
               <span class="row__t">
-                {o.code} · {o.description}
+                <Abbreviated text={`${o.code} · ${o.description}`} />
               </span>
               <span class="row__s">{`${o.pickupLabel} → ${o.destLabel} · ${weightWords(o.weightKg)}`}</span>
               {o.destLocation ? null : <span class="row__s orders__nopin">{t('fleet.orders.noPin')}</span>}

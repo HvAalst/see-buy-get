@@ -82,6 +82,12 @@ export const enAbbr = {
   'abbr.hmac.about': 'A signature made with a secret only you and we hold: it proves a message came from us, unchanged.',
   'abbr.json.name': 'JavaScript Object Notation',
   'abbr.json.about': 'The plain-text form systems send each other data in: names and their values, read by any programming language.',
+  'abbr.p4.name': 'Cargo class P4',
+  'abbr.p4.about': 'Goods up to 250 kg, or up to 120 × 100 × 180 cm: too heavy or too big for the parcel network, so they go as a load of their own, by truck — loaded by hand truck, pallet jack, tail lift or ramp.',
+  'abbr.p5.name': 'Cargo class P5',
+  'abbr.p5.about': 'Goods up to 1,000 kg, or up to 120 × 100 × 220 cm: a load of their own, by truck — loaded by pallet jack, forklift, tail lift or ramp, and strapped down.',
+  'abbr.p6.name': 'Cargo class P6',
+  'abbr.p6.about': 'Goods over 1,000 kg, or bigger than a pallet takes: a load of their own — loaded by forklift or crane, and strapped down.',
   'abbr.empties.name': 'Empty load carriers',
   'abbr.empties.about': 'The pallets, cages or sacks goods came on, once they are unloaded. A store’s go back with whoever brought them, on the same visit: the hub counts them out at its door, and nothing more is kept of them.',
 };

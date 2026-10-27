@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Explainer, ExplainerReset, Icon, Note, OpenInMaps, PlacePicker, Pill, ReadAloud, Sheet, type PlaceNote } from '../../../shared/ui';
 import { formatDate, useT, type Translate } from '../../../shared/i18n';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { narrow } from '../../../lib/sbg';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
@@ -276,7 +277,9 @@ function BoardCard({ row, currency, onPropose, onAsk }: { row: BoardRow; currenc
         {row.scheduledPickupAt ? <Pill tone="idle">{t('driver.board.scheduled', { when: formatDate(row.scheduledPickupAt) })}</Pill> : null}
       </div>
 
-      <p class="board__desc">{row.description}</p>
+      <p class="board__desc">
+        <Abbreviated text={row.description} />
+      </p>
 
       {/* The rate leads, because it is the sort key and the decision: what this is worth per kilometre
           TURNED, empty run included. Without a vehicle there is no rate, and we say that rather than show 0. */}
@@ -377,7 +380,7 @@ function ProposeSheet({ row, state, actions, onClose }: { row: BoardRow | null; 
         <>
           <p class="t-body">{t('driver.board.proposeLede')}</p>
           <p class="t-body">
-            <b>{row.code}</b> — {row.description}
+            <b>{row.code}</b> — <Abbreviated text={row.description} />
           </p>
           <div class="field">
             <label class="field__label" for="propose-price">

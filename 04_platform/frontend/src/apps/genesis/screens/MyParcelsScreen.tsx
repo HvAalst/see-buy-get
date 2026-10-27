@@ -2,6 +2,7 @@ import type { ChatThread } from '../../../shared/conversation/logic';
 import { ConversationSheet } from '../../../shared/conversation/Conversations';
 import { narrow, type SbgClient } from '../../../lib/sbg';
 import { DamageReportCard } from '../../../shared/damage/DamageReportCard';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { createFiscalApi } from '../../../lib/sbg/personas/fiscal';
 import { TaxInvoicesCard } from '../../../shared/TaxInvoicesCard';
@@ -144,7 +145,9 @@ function FreightGroup({ items }: { items: FreightShipmentView[] }) {
               <span class="row__ic"><Icon name="truck" size={24} /></span>
               <span class="row__body">
                 <span class="row__t">{fr.code}</span>
-                <span class="row__s">{t('send.parcels.freightRow', { dest: fr.destLabel, kg: fr.weightKg, cls: fr.cargoClass })}</span>
+                <span class="row__s">
+                  <Abbreviated text={t('send.parcels.freightRow', { dest: fr.destLabel, kg: fr.weightKg, cls: fr.cargoClass })} />
+                </span>
               </span>
               <span class="row__end"><Pill tone={s ? s.tone : 'info'} dot>{s ? t(s.wordKey) : fr.status}</Pill></span>
             </div>

@@ -8,6 +8,7 @@ import { ConversationList, ConversationSheet } from '../../../shared/conversatio
 import type { ChatThread } from '../../../shared/conversation/logic';
 import { MyBookingsSection } from './MyBookingsSection';
 import { RefusalCard } from '../../../shared/RefusalCard';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { utcMoment } from '../../../shared/refusal';
 import { OffersSection } from './OffersSection';
 import type { AgentActions, AgentState, FreightClaim, FreightPrice, PostedFreight } from '../useAgentApp';
@@ -124,7 +125,7 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
       </span>
       <span class="row__body">
         <span class="row__t">
-          {f.code} — {f.description}
+          <Abbreviated text={`${f.code} — ${f.description}`} />
         </span>
         <span class="row__s">{t('agent.freight.statusLine', { status: f.status.replace('_', ' '), kg: f.weightKg, dest: f.destLabel })}</span>
         {f.maxSpend != null ? <span class="row__s">{t('agent.freight.budget', { amount: money(f.maxSpend, f.currency) })}</span> : null}

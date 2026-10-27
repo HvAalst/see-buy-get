@@ -1,5 +1,6 @@
 import { Button, Card, ErrorNote, Explainer, Icon, Pill, ReadAloud } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { cash } from '../../../shared/money';
 import { blockerTone } from '../../../shared/board';
 import { boardVsMarket } from '../../../shared/market';
@@ -106,7 +107,7 @@ function LoadRow({ row, driver, state, actions }: { row: DispatchRow; driver: { 
     <div class="row row--static" role="listitem">
       <span class="row__body">
         <span class="row__t">
-          <span class="mono">{row.code}</span> · {row.description}
+          <span class="mono">{row.code}</span> · <Abbreviated text={row.description} />
         </span>
         <span class="row__s">{t('fleet.dispatch.meta', { kg: row.weightKg, pickup: row.pickupLabel, dest: row.destLabel })}</span>
         <span class="row__s">

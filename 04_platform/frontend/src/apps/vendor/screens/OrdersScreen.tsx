@@ -15,6 +15,7 @@ import type { ChatThread } from '../../../shared/conversation/logic';
 import type { NetworkPoint, OrderRow } from '../types';
 import { ssccWords } from '../gs1';
 import { RefusalCard } from '../../../shared/RefusalCard';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { utcMoment } from '../../../shared/refusal';
 
 export interface OrdersScreenProps {
@@ -146,7 +147,7 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
               <div key={l.freightId} class="row row--static" role="listitem">
                 <span class="row__body">
                   <span class="row__t">
-                    {l.code} — {l.description}
+                    <Abbreviated text={`${l.code} — ${l.description}`} />
                   </span>
                   <span class="row__s">{t('vendor.loads.line', { status: t(`vendor.loads.status.${l.status}` as never), dest: l.destLabel, kg: l.weightKg })}</span>
                   {l.canDecideRefusal && l.refusal ? <span class="row__s row__s--warn">{t('vendor.loads.refusedRow', { by: utcMoment(l.refusal.decideBy) })}</span> : null}

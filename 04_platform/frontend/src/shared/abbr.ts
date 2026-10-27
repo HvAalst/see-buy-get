@@ -53,6 +53,11 @@ export const ABBREVIATIONS = [
   'FOB',
   'CFR',
   'CIF',
+  // Our own cargo classes, where a person meets one: goods too heavy or too big for the parcel network, which go by truck
+  // (the user, 2026-10-27: "Cargo classes explained"). P0–P3 are parcels and are never shown as a code.
+  'P4',
+  'P5',
+  'P6',
   // A word of the trade: the pallets, cages or sacks goods came on, once unloaded (WRITTEN: also as it falls inside a sentence).
   'Empties',
 ] as const;
