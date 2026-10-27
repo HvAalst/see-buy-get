@@ -359,17 +359,18 @@ export class HubArrivalService {
   }
 
   /**
-   * D11 — THE EMPTIES GO BACK WITH THE VAN (the user, 2026-10-26: "Back with the van"): once the units are unloaded, the hub
-   * counts the store's empty pallets, cages or sacks out at its door, onto the van that brought them — once, and no more than
-   * came. Nothing more is tracked: no exchange of pallets, no return trip, no custody of an empty.
+   * D11 — THE EMPTIES GO BACK WITH WHOEVER BROUGHT THEM (the user, 2026-10-26; and 2026-10-27, no van presumed — a truck, a
+   * motorbike, a handcart, somebody on foot): once the units are unloaded, the hub counts the store's empty pallets, cages or
+   * sacks out at its door — once, and no more than came. Nothing more is tracked: no exchange of pallets, no return trip,
+   * no custody of an empty.
    */
   emptiesBack(mdpId: string, arrivalId: string, units: number, by: string, now: number = Date.now()): HubArrivalView {
     this.mdps.working(mdpId);
     const a = this.hubArrival(mdpId, arrivalId);
     if (!a.received) throw new GlosError('INVALID_STATE', a.state === 'expected' ? 'Take it in at the door first' : closedWhy(a));
-    if (a.emptiesBack) throw new GlosError('INVALID_STATE', `Counted out already: ${unitsInWords(a.units.kind, a.emptiesBack.units)} went back with the van`);
+    if (a.emptiesBack) throw new GlosError('INVALID_STATE', `Counted out already: ${unitsInWords(a.units.kind, a.emptiesBack.units)} went back with whoever brought them`);
     if (!Number.isInteger(units) || units < 0 || units > a.received.units) {
-      throw new GlosError('INVALID_INPUT', `Count the empties that went back with the van: from none to the ${a.received.units} that came`, { field: 'units' });
+      throw new GlosError('INVALID_INPUT', `Count the empties that went back: from none to the ${a.received.units} that came`, { field: 'units' });
     }
     a.emptiesBack = { units, at: new Date(now).toISOString(), by };
     this.arrivals.set(a.arrivalId, a);
@@ -405,7 +406,7 @@ export class HubArrivalService {
     // What the hub saw at its door goes to the store, as a receiver's findings go to the sender (D9).
     const seen = a.received?.note ? ` At the door: “${a.received.note}”` : '';
     try {
-      const empties = a.emptiesBack ? ` ${unitsInWords(a.units.kind, a.emptiesBack.units)} went back with your van.` : '';
+      const empties = a.emptiesBack ? ` ${unitsInWords(a.units.kind, a.emptiesBack.units)} handed back at its door.` : '';
       await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}${empties}${receivingLine(a)}`, link: '/vendor/', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
     } catch (err) {
       this.logger.warn(`hub arrival notice failed for ${a.arrivalId}: ${(err as Error).message}`);

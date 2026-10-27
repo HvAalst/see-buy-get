@@ -14,7 +14,8 @@ import { ReadAloud } from './ReadAloud';
  * Never inside a button, a link or a form's label: a button inside those is no button. There the term stays plain, and
  * it is explained where it first comes in the screen's own sentences.
  */
-export function Abbr({ term }: { term: Abbreviation }) {
+/** `text`: the term as it was written in the sentence ("empties"), where that is not the term itself. */
+export function Abbr({ term, text }: { term: Abbreviation; text?: string }) {
   const t = useT();
   const id = useId();
   const wrap = useRef<HTMLSpanElement>(null);
@@ -59,7 +60,7 @@ export function Abbr({ term }: { term: Abbreviation }) {
       <button
         type="button"
         class="abbr__term"
-        aria-label={t('abbr.aria', { term, name })}
+        aria-label={t('abbr.aria', { term: text ?? term, name })}
         aria-expanded={open}
         aria-controls={id}
         onClick={(e) => {
@@ -67,13 +68,13 @@ export function Abbr({ term }: { term: Abbreviation }) {
           setPinned((p) => !p);
         }}
       >
-        {term}
+        {text ?? term}
       </button>
       {open ? (
         <span id={id} ref={tip} class="abbr__tip" role="note" style={shift ? `transform:translateX(${shift}px)` : undefined}>
           <b class="abbr__name">{name}</b>
           <span class="abbr__about">{about}</span>
-          {pinned ? <ReadAloud text={() => `${term}: ${name}. ${about}`} label={t('abbr.hear')} /> : null}
+          {pinned ? <ReadAloud text={() => `${text ?? term}: ${name}. ${about}`} label={t('abbr.hear')} /> : null}
         </span>
       ) : null}
     </span>
@@ -84,5 +85,5 @@ export function Abbr({ term }: { term: Abbreviation }) {
 export function Abbreviated({ text }: { text: string }) {
   const pieces = splitAbbr(text);
   if (pieces.length === 1 && typeof pieces[0] === 'string') return <>{text}</>;
-  return <>{pieces.map((p, i) => (typeof p === 'string' ? p : <Abbr key={i} term={p.term} />))}</>;
+  return <>{pieces.map((p, i) => (typeof p === 'string' ? p : <Abbr key={i} term={p.term} text={p.text} />))}</>;
 }

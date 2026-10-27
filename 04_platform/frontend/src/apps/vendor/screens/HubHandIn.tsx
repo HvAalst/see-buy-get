@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { SbgError } from '../../../lib/sbg';
 import { formatDate, useT } from '../../../shared/i18n';
 import { Button, Card, HubReach, Note, Pill, RefusalNote, type PillTone } from '../../../shared/ui';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { arrivalWord, bookableDays, bookingReady, HUB_UNIT_KINDS, hoursLine, minutesAt, receivingCost, receivingHours, receivingPaid, receivingWords, todayAt, type ArrivalWord, type HubArrivalView, type HubsApi, type HubUnitKind, type HubWaiting, type StoreHubArrivals } from '../hubs';
 import { money } from '../logic';
 
@@ -197,8 +198,10 @@ export function HubHandIn({ api, vendorId, onWork, onMoney, lead = false }: { ap
                   </label>
                   <input id={`hub-bringer-${w.mdpId}`} class="input" maxLength={80} value={open.bringer} onInput={(e) => setBooking({ ...open, bringer: e.currentTarget.value })} />
                   <p class="hint">{t('vendor.hub.bringerHint')}</p>
-                  {/* D11 — the empties go back with the van that brought them (the user, 2026-10-26: "Back with the van"). */}
-                  <p class="hint">{t('vendor.hub.emptiesHint')}</p>
+                  {/* D11 — the empties go back with whoever brought them; "empties" explained on a tap or a click (the user, 2026-10-26/27). */}
+                  <p class="hint">
+                    <Abbreviated text={t('vendor.hub.emptiesHint')} />
+                  </p>
                 </div>
                 <div class="scr__cta">
                   <Button busy={busy} disabled={!bookingReady(open)} onClick={() => void book(w.hubName)}>

@@ -121,7 +121,7 @@ describe('reading B: a store hands its parcels in at a hub, in bulk', () => {
     const scan = (code: string) => http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${booked.arrivalId}/scan`).set(hubToken).send({ code });
     expect((await scan(ids[0]).expect(400)).body.detail).toMatch(/Count what came at the door first/);
     await http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${booked.arrivalId}/receive`).set(hubToken).send({ units: 1, note: 'One corner of the wrap torn' }).expect(201);
-    // D11 — the store's empties go back with the van that brought them: counted out at the door, once, no more than came.
+    // D11 — the store's empties go back with whoever brought them: counted out at the door, once, no more than came.
     const empties = (n: number) => http().post(`/v1/sbg/mdps/${hub.mdpId}/arrivals/${booked.arrivalId}/empties`).set(hubToken).send({ units: n });
     expect((await empties(2).expect(400)).body.detail).toMatch(/from none to the 1 that came/);
     expect((await empties(1).expect(201)).body.emptiesBack).toMatchObject({ units: 1 });

@@ -94,8 +94,8 @@ export interface HubArrival {
   /** The hub's receiving fee on it (D12). Absent: the hub charges nothing for its kind of unit. */
   fee?: HubArrivalFee;
   /**
-   * D11 — THE EMPTIES, BACK WITH THE VAN (the user, 2026-10-26: "Back with the van"): how many of the store's pallets, cages or
-   * sacks the hub counted out at its door, onto the van that brought them, once they were unloaded. Nothing more is tracked.
+   * D11 — THE EMPTIES, BACK WITH WHOEVER BROUGHT THEM (the user, 2026-10-26; 2026-10-27, no van presumed): how many of the
+   * store's pallets, cages or sacks the hub counted out at its door, once they were unloaded. Nothing more is tracked.
    */
   emptiesBack?: { units: number; at: string; by: string };
 }
@@ -201,7 +201,7 @@ export class HubArrivalMissed {
   by: string;
 }
 
-/** D11 — the store's empties counted out at the hub's door, onto the van that brought them: how many, when, by whom. */
+/** D11 — the store's empties counted out at the hub's door, to whoever brought them: how many, when, by whom. */
 export class HubArrivalEmpties {
   units: number;
   at: string;
@@ -253,7 +253,7 @@ export class HubArrivalView {
   @ApiPropertyOptional({ type: HubArrivalMissed }) missed?: HubArrivalMissed;
   /** The hub's receiving fee on it (D12), as this reader may read it. Absent: none for its kind of unit. */
   @ApiPropertyOptional({ type: HubArrivalFeeView }) fee?: HubArrivalFeeView;
-  /** D11 — the empties counted out at the door, onto the van that brought them. Absent: not counted out yet. */
+  /** D11 — the empties counted out at the door, to whoever brought them. Absent: not counted out yet. */
   @ApiPropertyOptional({ type: HubArrivalEmpties }) emptiesBack?: HubArrivalEmpties;
   /** On the hub's own clock (D10): it is expected today there, or its day has gone and it has not come. */
   @ApiPropertyOptional() today?: boolean;
@@ -319,7 +319,7 @@ export class ReceiveHubArrivalDto {
   @IsOptional() @IsString() @MaxLength(300) note?: string;
 }
 
-/** D11 — the store's empties counted out at the door, onto the van that brought them: none, up to as many as came. */
+/** D11 — the store's empties counted out at the door, to whoever brought them: none, up to as many as came. */
 export class EmptiesBackDto {
   @IsInt() @Min(0) @Max(HUB_ARRIVAL_MAX_UNITS) units!: number;
 }

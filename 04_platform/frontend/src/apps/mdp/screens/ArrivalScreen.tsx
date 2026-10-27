@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { Button, Card, Note, Pill, RefusalNote, ScanField, Sheet } from '../../../shared/ui';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { canSayMissed, feeEach, hubArrivalWord, loadLine, onIt, stillToScan, unitsLine, unitsOf, WORD_TONE } from '../arrivals';
 import { money } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
@@ -164,12 +165,18 @@ export function ArrivalScreen({ state, actions }: { state: MdpState; actions: Md
         </Card>
       ) : null}
 
-      {/* D11 — the store's empties go back with the van that brought them: counted out at the door, once (the user, 2026-10-26). */}
+      {/* D11 — the store's empties go back with whoever brought them: counted out at the door, once (the user, 2026-10-26). */}
       {a.received && (a.state === 'receiving' || a.state === 'received') ? (
         a.emptiesBack ? (
           <p class="card__note">{t('mdp.arrival.emptiesDone', { units: unitsLine(a.unitKind, a.emptiesBack.units, t), who: a.emptiesBack.by })}</p>
         ) : (
-          <Card title={t('mdp.arrival.emptiesTitle')}>
+          <Card label={t('mdp.arrival.emptiesTitle')}>
+            {/* "Empties" explained on a tap or a click (the user, 2026-10-27) — so the title is drawn here, not passed as text. */}
+            <div class="card__head">
+              <h2 class="card__title">
+                <Abbreviated text={t('mdp.arrival.emptiesTitle')} />
+              </h2>
+            </div>
             <p class="card__note">{t('mdp.arrival.emptiesBody')}</p>
             <div class="field">
               <label class="field__label" for="arrival-empties">

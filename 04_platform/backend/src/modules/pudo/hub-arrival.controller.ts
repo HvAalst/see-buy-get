@@ -142,7 +142,7 @@ export class HubArrivalController {
     return this.arrivals.missed(id, arrivalId, actor?.actorName?.trim() || hub);
   }
 
-  /** D11 — the store's empties counted out at the door, onto the van that brought them (the user, 2026-10-26: "Back with the van"). */
+  /** D11 — the store's empties counted out at the door, to whoever brought them (the user, 2026-10-26; no van presumed, 2026-10-27). */
   @Roles('mdp', 'operator')
   @Post('mdps/:id/arrivals/:arrivalId/empties')
   @AtTheCounter()

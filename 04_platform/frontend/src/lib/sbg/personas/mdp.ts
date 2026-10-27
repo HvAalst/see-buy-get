@@ -63,7 +63,7 @@ export function createMdpApi(sbg: SbgClient) {
     receiveArrival: (mdpId: string, arrivalId: string, body: { units: number; note?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/arrivals/{arrivalId}/receive', { params: { path: { id: mdpId, arrivalId } }, body })),
 
-    /** D11 — the store's empties counted out at the door, onto the van that brought them. */
+    /** D11 — the store's empties counted out at the door, to whoever brought them. */
     emptiesBack: (mdpId: string, arrivalId: string, units: number) =>
       sbg.request((c) => c.POST('/v1/sbg/mdps/{id}/arrivals/{arrivalId}/empties', { params: { path: { id: mdpId, arrivalId } }, body: { units } })),
 

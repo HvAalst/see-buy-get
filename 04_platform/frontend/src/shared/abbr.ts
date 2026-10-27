@@ -9,6 +9,9 @@ import type { MessageKey } from './i18n';
  *
  * Only the trade's own short forms. Not the ones everybody reads without thinking — PIN, ID, QR, PDF, SMS, km, kg, the
  * days of the week, a currency's code beside an amount: marking those would put a dotted line under half a screen.
+ *
+ * And a word of the trade a newcomer may not know, explained the same way: "empties" (the user, 2026-10-27: "put dots
+ * under the Empties and put up an explanation for it on click").
  */
 export const ABBREVIATIONS = [
   'GS1',
@@ -50,6 +53,8 @@ export const ABBREVIATIONS = [
   'FOB',
   'CFR',
   'CIF',
+  // A word of the trade: the pallets, cages or sacks goods came on, once unloaded (WRITTEN: also as it falls inside a sentence).
+  'Empties',
 ] as const;
 
 export type Abbreviation = (typeof ABBREVIATIONS)[number];
@@ -67,10 +72,17 @@ export const abbrAbout = (term: Abbreviation) => `abbr.${abbrSlug(term)}.about` 
 
 // The longest first, so "KRA PIN" is one term and not "KRA" and a word after it; a letter, a digit or an underscore on either
 // side is a longer word ("APIs", "VATable", a setting's name such as GLOS_ROUTER_URL), not the term.
-const ESCAPED = [...ABBREVIATIONS].sort((a, b) => b.length - a.length).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+/**
+ * A WORD OF THE GLOSSARY AS IT FALLS INSIDE A SENTENCE — the same term in small letters ("your empties"). Marked and explained
+ * as the term, once a sentence whichever way it is written; shown as written.
+ */
+const WRITTEN: Partial<Record<string, Abbreviation>> = { empties: 'Empties' };
+
+const ESCAPED = [...ABBREVIATIONS, ...Object.keys(WRITTEN)].sort((a, b) => b.length - a.length).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 const FIND = new RegExp(`(?<![A-Za-z0-9_])(${ESCAPED.join('|')})(?![A-Za-z0-9_])`, 'g');
 
-export type AbbrPiece = string | { term: Abbreviation };
+/** A term of the glossary in a sentence — with how it was written there, where that is not the term itself. */
+export type AbbrPiece = string | { term: Abbreviation; text?: string };
 
 /**
  * A sentence in pieces: its words, and each term of the glossary the first time it comes — once is enough to learn it,
@@ -81,12 +93,13 @@ export function splitAbbr(text: string): AbbrPiece[] {
   const seen = new Set<string>();
   let at = 0;
   for (const m of text.matchAll(FIND)) {
-    const term = m[1] as Abbreviation;
+    const written = m[1];
+    const term = (WRITTEN[written] ?? written) as Abbreviation;
     if (seen.has(term)) continue;
     seen.add(term);
     if (m.index! > at) out.push(text.slice(at, m.index));
-    out.push({ term });
-    at = m.index! + term.length;
+    out.push(written === term ? { term } : { term, text: written });
+    at = m.index! + written.length;
   }
   if (at < text.length) out.push(text.slice(at));
   return out;

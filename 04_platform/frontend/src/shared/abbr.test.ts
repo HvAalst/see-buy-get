@@ -33,6 +33,9 @@ describe('the trade’s short forms, said in full', () => {
     // A setting's name is one word: the URL in GLOS_ROUTER_URL is not marked.
     expect(splitAbbr('Set GLOS_ROUTER_URL to its URL.')).toEqual(['Set GLOS_ROUTER_URL to its ', { term: 'URL' }, '.']);
     expect(splitAbbr('')).toEqual([]);
+    // A word of the trade, explained however it is written in the sentence, and marked once there.
+    expect(splitAbbr('Your empties go back; Empties are counted.')).toEqual(['Your ', { term: 'Empties', text: 'empties' }, ' go back; Empties are counted.']);
+    expect(splitAbbr('Empties go back')).toEqual([{ term: 'Empties' }, ' go back']);
   });
 
   it('says every term in full, with a line on what it is', () => {

@@ -93,7 +93,7 @@ describe('a hub’s arrivals, on the hub’s own clock', () => {
     expect(later.book('v_1', { mdpId: 'mdp_1', parcelIds: ['PUD-LATER'], unitKind: 'pallet', units: 1, expectedOn: '2026-10-28' }, 'Bulk Store', AFTER)).toMatchObject({ state: 'expected', today: false });
   });
 
-  it('counts the store’s empties out at the door, onto the van that brought them: once they came, once, and no more than came (D11; the user, 2026-10-26: “Back with the van”)', () => {
+  it('counts the store’s empties out at the door, to whoever brought them: once they came, once, and no more than came (D11; the user, 2026-10-26)', () => {
     const svc = service();
     svc.setBulk('mdp_1', { open: true }, 'Owner', NOW);
     parcel('PUD-E');
@@ -102,7 +102,7 @@ describe('a hub’s arrivals, on the hub’s own clock', () => {
     svc.receive('mdp_1', a.arrivalId, { units: 2 }, 'Floor', NOW);
     expect(() => svc.emptiesBack('mdp_1', a.arrivalId, 3, 'Floor', NOW)).toThrow(/from none to the 2 that came/);
     expect(svc.emptiesBack('mdp_1', a.arrivalId, 2, 'Floor', NOW).emptiesBack).toEqual({ units: 2, at: new Date(NOW).toISOString(), by: 'Floor' });
-    expect(() => svc.emptiesBack('mdp_1', a.arrivalId, 1, 'Floor', NOW)).toThrow(/Counted out already: 2 pallets went back with the van/);
+    expect(() => svc.emptiesBack('mdp_1', a.arrivalId, 1, 'Floor', NOW)).toThrow(/Counted out already: 2 pallets went back with whoever brought them/);
     // The store reads it on its arrival.
     expect(svc.forStore('v_1', NOW).arrivals.find((x) => x.arrivalId === a.arrivalId)?.emptiesBack).toMatchObject({ units: 2, by: 'Floor' });
   });

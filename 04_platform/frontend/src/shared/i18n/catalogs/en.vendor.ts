@@ -720,9 +720,9 @@ export const enVendor = {
   'vendor.hub.feeFree': '{hub} takes these in for nothing.',
   'vendor.hub.feePaid': 'Receiving: {amount} paid',
   'vendor.hub.feeBack': '{amount} of it given back',
-  // D11 — the empties go back with the van that brought them (the user, 2026-10-26: "Back with the van").
-  'vendor.hub.emptiesHint': 'Your pallets, cages or sacks go back with the van that brings them, once the hub has unloaded them.',
-  'vendor.hub.emptiesBack': '{units} back with your van',
+  // D11 — the empties go back with whoever brought them (the user, 2026-10-26, and 2026-10-27: no van presumed).
+  'vendor.hub.emptiesHint': 'Your empties go back with whoever brings them, on the same visit, once the hub has unloaded them.',
+  'vendor.hub.emptiesBack': '{units} handed back at the hub’s door',
   'vendor.hub.missing': '{n, plural, one {# parcel was} other {# parcels were}} not there: still with you, book again.',
   'vendor.hub.withdraw': 'Withdraw',
   'vendor.hub.withdrawn': 'Withdrawn: its parcels are free to book again.',

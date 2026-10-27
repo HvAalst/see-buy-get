@@ -82,4 +82,6 @@ export const enAbbr = {
   'abbr.hmac.about': 'A signature made with a secret only you and we hold: it proves a message came from us, unchanged.',
   'abbr.json.name': 'JavaScript Object Notation',
   'abbr.json.about': 'The plain-text form systems send each other data in: names and their values, read by any programming language.',
+  'abbr.empties.name': 'Empty load carriers',
+  'abbr.empties.about': 'The pallets, cages or sacks goods came on, once they are unloaded. A store’s go back with whoever brought them, on the same visit: the hub counts them out at its door, and nothing more is kept of them.',
 };
