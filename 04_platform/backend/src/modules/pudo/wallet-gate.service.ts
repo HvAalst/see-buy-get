@@ -10,7 +10,7 @@ import { AgentService } from './agent.service';
 import { NETWORK_CURRENCY, TRADE_CREDIT_PARCELS } from './pudo.config';
 import { creditLimitOf, lockThresholdOf } from './amounts';
 import { BooksService } from '../../foundation/books/books.service';
-import { ACCOUNT_CODES, type AccountCode } from '../../foundation/books/books.types';
+import { ACCOUNT_CODES, type AccountCode, type JournalEntry } from '../../foundation/books/books.types';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { FxService } from '../../foundation/money/fx.service';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
@@ -403,7 +403,7 @@ export class WalletGateService {
   private recoverAtCost(payerEntityId: string, sellerEntityId: string | undefined, amount: number, ref: string): void {
     if (!sellerEntityId || sellerEntityId === payerEntityId || !(amount > 0)) return;
     // The performer: made whole, earning nothing. A receivable from the seller, and its expense undone.
-    this.books.post({
+    const performer = this.books.post({
       entityId: payerEntityId,
       kind: 'recharge-at-cost',
       ref,
@@ -412,12 +412,14 @@ export class WalletGateService {
         { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: -amount },
       ],
     });
-    // The seller: it collected the price for this leg, so it carries the cost of it — in its own money.
+    // The seller: it collected the price for this leg, so it carries the cost of it — in its own money. Its entry names the
+    // performer's, so the pair can be undone together, exactly as booked (see undoRecovery).
     const cost = this.fx.convert(amount, this.currencyOf(payerEntityId), this.currencyOf(sellerEntityId));
     this.books.post({
       entityId: sellerEntityId,
       kind: 'recharge-at-cost',
       ref,
+      memo: `At cost, the other half of ${performer.entryId}`,
       lines: [
         { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: cost },
         { code: ACCOUNT_CODES.INTERCOMPANY, counterparty: payerEntityId, amount: -cost },
@@ -483,17 +485,76 @@ export class WalletGateService {
     return entry;
   }
 
-  /** Reverse a labour fee when a paid intake is undone (void / cancel of a peer-send) — the exact mirror
-   *  of payLabour, so the pair nets to zero in both the float and the cost. */
-  clawbackLabour(did: string, amount: number, parcelId: string): PudoLedgerEntry | null {
-    if (amount <= 0) return null;
+  /**
+   * Reverse a labour fee when a paid intake is undone (a void, or a parcel called off at the shop) — the exact mirror of
+   * payLabour, on every path it took, so each book nets to zero:
+   *  - a shop with a company of ours: its float and that company's cost; and where ANOTHER company sold the shipment, the
+   *    recharge at cost between the two, both entries exactly as booked (undoRecovery);
+   *  - a shop with no company of ours behind it (P4): the seller booked the cost and owed the shop — it owes it no more.
+   *    Before, this path posted to the shop's company, which does not exist: voiding a store's parcel there threw.
+   * `sellerEntityId` is the one payLabour was given: the company that sold the shipment.
+   */
+  clawbackLabour(did: string, amount: number, parcelId: string, sellerEntityId?: string): PudoLedgerEntry | null {
+    if (!(amount > 0)) return null;
+    const agent = this.agents.get(did);
+    if (!this.agents.entityIdOrNone(agent)) {
+      // Nothing was owed where nobody of ours sold it (the carrier's promise): nothing to take back.
+      if (!sellerEntityId) return null;
+      const entryId = this.books.post({
+        entityId: sellerEntityId,
+        kind: 'purchased-service-reversal',
+        ref: parcelId,
+        lines: [
+          { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: -amount },
+          { code: ACCOUNT_CODES.PAYABLE_PROVIDER, counterparty: did, amount },
+        ],
+      }).entryId;
+      return this.record('LABOR_PAYOUT', '-', amount, did, parcelId, 'parcel', entryId);
+    }
     const entryId = this.postAgent(did, 'labour-clawback', parcelId, [
       { code: ACCOUNT_CODES.DEPOSIT_AGENT, counterparty: did, amount },
       { code: ACCOUNT_CODES.EXPENSE_PROVIDER_FEES, amount: -amount },
     ]);
+    this.undoRecovery(this.agents.entityIdOf(agent), sellerEntityId, parcelId, amount);
     const entry = this.record('LABOR_PAYOUT', '-', amount, did, parcelId, 'parcel', entryId);
     this.agents.refreshLock(did);
     return entry;
+  }
+
+  /**
+   * Undo a recharge at cost — the newest pair for this reference and this amount not undone yet — as it was BOOKED: each
+   * entry line for line, so the seller's side comes back at the rate it was converted at then, never today's, and neither
+   * book keeps anything of it. Nothing to undo inside one company, or where no pair was booked.
+   */
+  private undoRecovery(payerEntityId: string, sellerEntityId: string | undefined, ref: string, amount: number): void {
+    if (!sellerEntityId || sellerEntityId === payerEntityId) return;
+    const undone = new Set(this.books.journal({ ref }).filter((e) => e.kind === 'recharge-undone').map((e) => e.memo));
+    const performer = this.books
+      .journal({ entityId: payerEntityId, ref })
+      .find((e) => e.kind === 'recharge-at-cost' && !undone.has(`Undoes ${e.entryId}`) && this.intercompanyWith(e, sellerEntityId) === Math.round(amount * 100));
+    if (!performer) return;
+    const seller = this.books.journal({ entityId: sellerEntityId, ref }).find((e) => e.kind === 'recharge-at-cost' && e.memo === `At cost, the other half of ${performer.entryId}`);
+    for (const e of seller ? [performer, seller] : [performer]) {
+      this.books.post({
+        entityId: e.entityId,
+        currency: e.currency,
+        kind: 'recharge-undone',
+        ref,
+        memo: `Undoes ${e.entryId}`,
+        lines: e.lines.map((l) => {
+          const account = this.books.accountById(l.accountId)!;
+          return { code: account.code, counterparty: account.counterparty, amount: -l.amount / 100 };
+        }),
+      });
+    }
+  }
+
+  /** What an entry moved on the intercompany account with one other company, in minor units (0 where it did not). */
+  private intercompanyWith(entry: JournalEntry, otherEntityId: string): number {
+    return entry.lines.reduce((sum, l) => {
+      const account = this.books.accountById(l.accountId);
+      return account?.code === ACCOUNT_CODES.INTERCOMPANY && account.counterparty === otherEntityId ? sum + l.amount : sum;
+    }, 0);
   }
 
   // The admin overdraft was removed with the trade-credit line. It had become inert: what gates trading

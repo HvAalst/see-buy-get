@@ -1832,7 +1832,7 @@ export class ParcelService implements OnApplicationBootstrap {
       // Taken in "prepaid" — a store's parcel, or a walk-up nobody paid for at the counter: what the shop was paid for taking
       // it in is taken back, as for a sender's own parcel (the user, 2026-10-26: "Refund and take back"). The store's own
       // money comes back by refundStore.
-      if (parcel.intakeLabour) this.gate.clawbackLabour(agentDid, parcel.intakeLabour, parcel.parcelId);
+      if (parcel.intakeLabour) this.gate.clawbackLabour(agentDid, parcel.intakeLabour, parcel.parcelId, parcel.sellerEntityId);
       return;
     }
     if (parcel.senderMobile === 'app') {
@@ -1841,7 +1841,7 @@ export class ParcelService implements OnApplicationBootstrap {
       this.gate.refund(agentDid, parcel.shipmentCost ?? 0, parcel.parcelId, parcel.shipmentTax, parcel.shipmentProvision);
       // What was PAID at intake, not what the list says today. A parcel from before that was kept reads the figure
       // every company started from, which is what it was paid.
-      this.gate.clawbackLabour(agentDid, parcel.intakeLabour ?? LABOUR_FEE, parcel.parcelId);
+      this.gate.clawbackLabour(agentDid, parcel.intakeLabour ?? LABOUR_FEE, parcel.parcelId, parcel.sellerEntityId);
     } else {
       // At the rate stamped on the parcel at intake, never today's — a sister that changed its rate inside
       // the void window must not make a refund differ from the charge it reverses. A parcel from before

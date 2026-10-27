@@ -302,6 +302,23 @@ describe('crossing a border', () => {
       expect(gate.payLabour(de.did, 3, 'MAN-P4', 'manifest')).toBeNull();
     });
 
+    it('takes that debt back when the take-in is undone — the shop has no company of ours to post to, so the seller owes it no more', () => {
+      // Found 2026-10-27: a store's parcel voided or called off at such a shop threw, because the take-back posted to the
+      // shop's own company, which does not exist where we only match.
+      presence.set({ jurisdiction: 'DE', level: 'matched' });
+      const de = shop('Kiez Kiosk 6', 'Berlin', BERLIN, 'DE', 2);
+      const keEntity = entities.requireForJurisdiction('KE').entityId;
+      gate.payLabour(de.did, 5, 'PUD-P4-2', 'parcel', keEntity);
+
+      expect(gate.clawbackLabour(de.did, 5, 'PUD-P4-2', keEntity)).not.toBeNull();
+      const owed = books.outstanding(keEntity, ACCOUNT_CODES.PAYABLE_PROVIDER, 'KES').find((o) => o.counterparty === de.did);
+      expect(owed?.amount ?? 0).toBe(0);
+      expect(books.balance(keEntity, ACCOUNT_CODES.EXPENSE_PROVIDER_FEES)).toBe(0);
+      expect(books.balances(keEntity)).toEqual({ balanced: true, drift: 0 });
+      // Nothing owed under the carrier's promise, so nothing to take back.
+      expect(gate.clawbackLabour(de.did, 3, 'PUD-P4-3')).toBeNull();
+    });
+
     it('owes, but does not pay out, where money may not leave to a supplier', () => {
       presence.set({ jurisdiction: 'DE', level: 'matched' });
       const de = shop('Kiez Kiosk 3', 'Berlin', BERLIN, 'DE', 2);
@@ -869,6 +886,34 @@ describe('crossing a border', () => {
       expect(books.balance(ke, ACCOUNT_CODES.INTERCOMPANY, undefined, et)).toBe(-cost); // negative = a payable
       expect(books.balances(ke)).toEqual({ balanced: true, drift: 0 });
       expect(books.balances(et)).toEqual({ balanced: true, drift: 0 });
+    });
+
+    it('undoes both halves when the take-in is undone — the seller’s at the rate it was booked at, not today’s — and only once', () => {
+      // Found 2026-10-27: the take-back reversed the shop's float and its company's cost, and left the recharge standing, so
+      // the shop's company kept a receivable for work it was no longer paid for and the seller a cost for a sale undone.
+      const bambi = activeShop("Bambi's Super Market", 'AddisAbaba', ADDIS, 'ET');
+      const ke = entities.requireForJurisdiction('KE').entityId;
+      const et = entities.requireForJurisdiction('ET').entityId;
+
+      gate.payLabour(bambi.did, 0.3, 'PUD-XU', 'parcel', ke);
+      fx.setRate('ETB', 237.0, 'central-bank'); // the birr halves between the take-in and the void
+      gate.clawbackLabour(bambi.did, 0.3, 'PUD-XU', ke);
+
+      const settled = (entity: string, other: string) => {
+        expect(books.balance(entity, ACCOUNT_CODES.EXPENSE_PROVIDER_FEES)).toBe(0);
+        expect(books.balance(entity, ACCOUNT_CODES.INTERCOMPANY, undefined, other)).toBe(0);
+        expect(books.balances(entity)).toEqual({ balanced: true, drift: 0 });
+      };
+      settled(et, ke);
+      settled(ke, et);
+      expect(books.balance(et, ACCOUNT_CODES.DEPOSIT_AGENT, undefined, bambi.did)).toBe(0);
+      expect(books.journal({ ref: 'PUD-XU' }).filter((e) => e.kind === 'recharge-undone')).toHaveLength(2);
+
+      // Taken back a second time by mistake: the pair was undone once, and is never undone again.
+      gate.clawbackLabour(bambi.did, 0.3, 'PUD-XU', ke);
+      expect(books.journal({ ref: 'PUD-XU' }).filter((e) => e.kind === 'recharge-undone')).toHaveLength(2);
+      expect(books.balance(ke, ACCOUNT_CODES.INTERCOMPANY, undefined, et)).toBe(0);
+      expect(books.balance(et, ACCOUNT_CODES.INTERCOMPANY, undefined, ke)).toBe(0);
     });
 
     it('links the two entries by the same reference, so the pair can be found', () => {

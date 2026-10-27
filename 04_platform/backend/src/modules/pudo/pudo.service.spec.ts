@@ -10306,8 +10306,15 @@ describe('PUDO Light', () => {
         const shop = agents.balance(origin.did) ?? 0;
         parcels.intakeInbound(id, origin.did);
         expect(agents.balance(origin.did) ?? 0).toBeGreaterThan(shop);
+        // Taken back from the company that SOLD it, as it was paid (2026-10-27): the seller named, so a recharge between two
+        // companies, or a debt to a shop with no company of ours, is undone with it.
+        const seller = parcels.get(id).sellerEntityId;
+        expect(seller).toBe(KE());
+        const takeBack = jest.spyOn(gate, 'clawbackLabour');
         if (how === 'cancel') parcels.cancel(id, 'ops', 'test');
         else parcels.void(id, origin.did, photoBy(origin.did));
+        expect(takeBack).toHaveBeenCalledWith(origin.did, parcels.get(id).intakeLabour, id, seller);
+        takeBack.mockRestore();
         expect(parcels.get(id).status).toBe('Voided');
         expect(vendors.balanceOf(vendor.vendorId)).toBeCloseTo(store + parcels.get(id).shipmentCost!, 2);
         expect(agents.balance(origin.did) ?? 0).toBeCloseTo(shop, 2);
