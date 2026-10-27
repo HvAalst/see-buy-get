@@ -193,6 +193,9 @@ export interface PostedLoad {
   pickupLabel?: string;
   /** A return: the load its goods were refused on. */
   returnOf?: { freightId: string; code: string };
+  /** FP7 — box 13: what the driver is told, and whether the business may still rewrite it ('edit'), only add to it ('amend'), or neither. */
+  instructions?: import('../../shared/instructions').InstructionsView;
+  instructionsMode?: 'edit' | 'amend' | 'none';
   /** The money its prices are in: the business’s own, stamped when it was posted. */
   currency?: string;
   /** One load of an order its carrier brings in several: which one, of how many, of which order. */
