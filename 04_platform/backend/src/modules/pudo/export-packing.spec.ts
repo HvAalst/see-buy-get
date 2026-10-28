@@ -76,6 +76,13 @@ describe('a packing list read from the shipper’s own file', () => {
     expect(remembered.lines).toEqual(chosen.lines);
   });
 
+  it('finds the separator past a company name on a line of its own — tabs pasted, or a CSV file’s commas or semicolons', () => {
+    const pasted = cellsWithRows(['Thika Avocados Ltd', 'Description\tCtns', 'Avocados\t20'].join('\n'));
+    expect(pasted.cells).toEqual([['Thika Avocados Ltd'], ['Description', 'Ctns'], ['Avocados', '20']]);
+    expect(cellsWithRows(['Thika Avocados Ltd', 'Description;Ctns;Gross', 'Avocados;20;90'].join('\n')).cells[2]).toEqual(['Avocados', '20', '90']);
+    expect(readPacking(pasted.cells, { rowNumbers: pasted.rowNumbers }).check).toMatchObject({ headingRow: 2, totals: { packages: 20 } });
+  });
+
   it('counts each line as one package where no column says how many, and says so', () => {
     const r = readPacking(cellsOf('Description\tGross weight\nPallet of tea\t900\nPallet of tea\t880'));
     expect(r.check.totals).toMatchObject({ packages: 2, grossKg: 1780 });

@@ -185,8 +185,25 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
           </div>
 
           <h3 class="cons__sub">{t('business.exports.sli.goods')}</h3>
-          <p class="chint">{t('business.exports.sli.goodsHint')}</p>
-          {form.lines.map((l, i) => (
+          {sli.fromPacking ? (
+            <>
+              <p class="chint">{t('business.exports.sli.goodsFromPacking')}</p>
+              <div class="crows">
+                {(sli.goods ?? []).map((g, i) => (
+                  <div class="crow" key={i}>
+                    <span class="crow__body">
+                      <span class="crow__top">
+                        <span class="crow__name">{g.description}</span>
+                      </span>
+                      <span class="crow__sub">{t('business.exports.sli.goodsLine', { packages: g.packages.toLocaleString('en'), kind: g.packageKind, gross: g.grossKg.toLocaleString('en', { maximumFractionDigits: 1 }), marks: g.marks ?? '—', hs: g.hsCode ?? '—' })}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+          {sli.fromPacking ? null : <p class="chint">{t('business.exports.sli.goodsHint')}</p>}
+          {sli.fromPacking ? null : form.lines.map((l, i) => (
             <div class="biz-sliline" key={i}>
               <div class="biz-two">
                 {input(t('business.exports.sli.description'), l.description, (v) => line(i, { description: v }), { max: 300 })}
@@ -213,11 +230,13 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
               ) : null}
             </div>
           ))}
-          <div class="twr-panelend">
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={form.lines.length >= 30} onClick={() => set({ lines: [...form.lines, emptySliLine()] })}>
-              {t('business.exports.sli.addLine')}
-            </button>
-          </div>
+          {sli.fromPacking ? null : (
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={form.lines.length >= 30} onClick={() => set({ lines: [...form.lines, emptySliLine()] })}>
+                {t('business.exports.sli.addLine')}
+              </button>
+            </div>
+          )}
 
           {sli.hazardous ? (
             <>

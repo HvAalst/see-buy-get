@@ -93,10 +93,23 @@ export function numberOf(raw: string): number | undefined {
 const TOTAL_ROW = /^(grand\s*)?(sub\s*)?totals?\b|^sum\b|^in total\b/i;
 
 /**
+ * The separator, read off the first twenty lines rather than the first: a packing list opens with its company's name
+ * on a line of its own, which has none. Tab where any line has one (cells pasted from a spreadsheet); else whichever of
+ * ; and , the lines use more.
+ */
+export function packingDelimiterOf(text: string): string {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim()).slice(0, 20);
+  if (lines.some((l) => l.includes('\t'))) return '\t';
+  const count = (ch: string) => lines.reduce((n, l) => n + (l.split(ch).length - 1), 0);
+  if (!lines.length) return delimiterOf(text);
+  return count(';') > count(',') ? ';' : ',';
+}
+
+/**
  * Rows of cells from a CSV file's text or cells pasted from a spreadsheet — with the row number each had, blank rows
  * counted, so "row 8" in a problem is row 8 in the shipper's own sheet.
  */
-export function cellsWithRows(text: string, delimiter = delimiterOf(text)): { cells: string[][]; rowNumbers: number[] } {
+export function cellsWithRows(text: string, delimiter = packingDelimiterOf(text)): { cells: string[][]; rowNumbers: number[] } {
   const rows: string[][] = [];
   const numbers: number[] = [];
   let row: string[] = [];

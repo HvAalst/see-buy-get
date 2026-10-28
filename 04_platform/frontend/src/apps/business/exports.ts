@@ -180,6 +180,8 @@ export interface ExportDetail {
   feeState: 'none' | 'quoted' | 'accepted' | 'paid';
   /** The shipper's letter of instruction: the form (the exporter's alone), the signed versions, what signing needs. */
   sli: ExportSliView;
+  /** The packing list, imported from the shipper's own file. */
+  packing?: ExportPackingView;
 }
 
 export interface ExportRow {
@@ -257,6 +259,10 @@ export interface ExportsApi {
   signSli(exportId: string, signatory: string): Promise<Result<ExportDetail>>;
   /** A signed version's page as signed (the latest unless named), or the exporter's draft. */
   sliPage(exportId: string, which?: { version?: number; draft?: boolean }): Promise<Result<string>>;
+  checkPacking(exportId: string, body: PackingInput): Promise<Result<PackingCheck>>;
+  importPacking(exportId: string, body: PackingInput): Promise<Result<ExportDetail>>;
+  signPacking(exportId: string, signatory: string): Promise<Result<ExportDetail>>;
+  packingPage(exportId: string, which?: { version?: number; draft?: boolean }): Promise<Result<string>>;
 }
 
 export function exportsApi(sbg: SbgClient): ExportsApi {
@@ -290,6 +296,13 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     removePaper: (exportId, key) => post(`/v1/sbg/exports/${id(exportId)}/papers/${encodeURIComponent(key)}/remove`),
     saveSli: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/sli`, body),
     signSli: (exportId, signatory) => post(`/v1/sbg/exports/${id(exportId)}/sli/sign`, { signatory }),
+    checkPacking: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/packing-list/check`, body),
+    importPacking: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/packing-list`, body),
+    signPacking: (exportId, signatory) => post(`/v1/sbg/exports/${id(exportId)}/packing-list/sign`, { signatory }),
+    packingPage: (exportId, which = {}) => {
+      const q = which.draft ? '?draft=1' : which.version ? `?version=${which.version}` : '';
+      return call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/packing-list.html${q}` as never, { parseAs: 'text' } as never) as never);
+    },
     sliPage: (exportId, which = {}) => {
       const q = which.draft ? '?draft=1' : which.version ? `?version=${which.version}` : '';
       return call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/sli.html${q}` as never, { parseAs: 'text' } as never) as never);
@@ -358,6 +371,9 @@ export interface ExportSliView {
   gaps: string[];
   stale: boolean;
   hazardous: boolean;
+  /** The goods come from the packing list: worked out, not typed. */
+  fromPacking: boolean;
+  goods?: SliLine[];
 }
 
 /** A goods line as typed: every field a string until it is sent. */
@@ -466,6 +482,94 @@ export function sliBody(f: SliForm): Record<string, unknown> {
     ...(t(f.letterOfCredit) ? { letterOfCredit: t(f.letterOfCredit) } : {}),
     ...(t(f.instructions) ? { instructions: t(f.instructions) } : {}),
   };
+}
+
+/* ------------------------------------------------------------- the packing list -- */
+
+export const PACKING_FIELDS = ['marks', 'itemCode', 'description', 'hsCode', 'quantity', 'unit', 'packages', 'packageKind', 'netKg', 'grossKg', 'volumeM3', 'lengthCm', 'widthCm', 'heightCm'] as const;
+export type PackingField = (typeof PACKING_FIELDS)[number];
+export type PackingColumnUse = PackingField | 'keep' | 'ignore';
+
+export interface PackingLine {
+  marks?: string;
+  itemCode?: string;
+  description: string;
+  hsCode?: string;
+  quantity?: number;
+  unit?: string;
+  packages: number;
+  packageKind?: string;
+  netKg?: number;
+  grossKg?: number;
+  volumeM3?: number;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+  extra?: Record<string, string>;
+}
+
+export interface PackingColumn {
+  heading: string;
+  use: PackingColumnUse;
+  because: 'heading' | 'remembered' | 'chosen' | 'kept';
+  convertedFrom?: string;
+}
+
+export interface PackingTotals {
+  lines: number;
+  packages: number;
+  grossKg: number;
+  netKg: number;
+  volumeM3: number;
+}
+
+/** A file read, before anything is kept. */
+export interface PackingCheck {
+  columns: PackingColumn[];
+  headingRow: number;
+  totals: PackingTotals;
+  preview: PackingLine[];
+  problems: Array<{ row: number; says: string }>;
+  notes: string[];
+  sheet?: string;
+  refusal?: string;
+  imported: boolean;
+}
+
+export interface PackingVersion {
+  version: number;
+  signedBy: string;
+  signedAt: string;
+  fingerprint: string;
+  lines: number;
+  packages: number;
+}
+
+export interface ExportPackingView {
+  lineCount: number;
+  totals: PackingTotals;
+  preview: PackingLine[];
+  extraColumns: string[];
+  versions: PackingVersion[];
+  importedAt: string;
+  importedBy: string;
+  sourceName?: string;
+  unsigned: boolean;
+  notes: string[];
+}
+
+/** What a file is sent as: its text (a CSV file, cells pasted), or a workbook in base64 — with how its headings are matched. */
+export interface PackingInput {
+  text?: string;
+  workbook?: string;
+  mapping?: Record<string, PackingColumnUse>;
+  sourceName?: string;
+}
+
+/** "1,700 packages · 7,650 kg gross" — a list's totals in one line. */
+export function packingTotalsLine(t: PackingTotals, words: { lines: string; packages: string; gross: string; net: string; volume: string }): string {
+  const n = (x: number, dp = 1) => x.toLocaleString('en', { maximumFractionDigits: dp });
+  return [`${n(t.lines, 0)} ${words.lines}`, `${n(t.packages, 0)} ${words.packages}`, t.grossKg ? `${n(t.grossKg)} kg ${words.gross}` : '', t.netKg ? `${n(t.netKg)} kg ${words.net}` : '', t.volumeM3 ? `${n(t.volumeM3, 2)} ${words.volume}` : ''].filter(Boolean).join(' · ');
 }
 
 /** "28 Oct 2026 18:00 UTC" — a cut-off in one clock, the same for the exporter, its forwarder and the driver. */

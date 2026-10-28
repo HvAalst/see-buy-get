@@ -82,6 +82,17 @@ expeditor) — staff read, never act in its name.
     Signing is refused until complete (`sliGaps`); the page is drawn once and kept in `export-sli-copies` exactly as
     signed with its sha256; a change is a new version. **Out of date** (`sliStale`) only when a fact it carried changed
     — booking, vessel, box, port, or a weight or seal on it now different — never because one came in after signing.
+11. **EX10 — the packing list, imported** (the user, 2026-10-28: "a matter of moving data and eliminating steps … a
+    shipper doesn't want to import by hand … that should be dynamic and adaptable"; then as recommended: import it, the
+    letter summarises it). `export-packing.ts` + `export-packing.types.ts`. In: a workbook (`readWorkbook`), CSV text
+    or pasted cells (`cellsWithRows` keeps the sheet's own row numbers; the separator read off the first twenty lines),
+    or rows from the business's own system (`POST sbg/api/business/exports/:id/packing-list`, test key checks only, a
+    key never signs). Headings recognised by their common words, or as the business matched them before
+    (`export-packing-templates`, per business), or as chosen now; an unknown heading is KEPT and printed. Units in
+    headings converted; the heading block and a total row passed by. Check, then import — refused while any line has a
+    problem. Signed and frozen like the letter (`export-packing-copies`); the packing paper line is given by it or by
+    the shipper's own document. The letter's goods are `summarisePacking` (per description, HS code, package kind;
+    past thirty lines, per HS code), and the list's fingerprint is in the letter's basis — a new list outdates it.
 
 ## Not built (said, not hidden)
 Air exports — new ground, to get its own help section once the user has read into it (the user, 2026-10-28); the barge

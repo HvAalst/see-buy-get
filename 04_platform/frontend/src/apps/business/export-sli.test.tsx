@@ -63,7 +63,7 @@ const detail = (sli: Partial<ExportDetail['sli']> = {}): ExportDetail =>
   ({
     consignment: { exportId: 'exp_1', code: 'EXP-007', goodsDescription: 'Black tea', loadingPort: 'Mombasa', booking: { reference: 'MBA4471', partyName: 'Pwani Forwarders' } },
     exporterName: 'Kericho Tea',
-    sli: { versions: [], gaps: ['Fill in the form'], stale: false, hazardous: false, ...sli },
+    sli: { versions: [], gaps: ['Fill in the form'], stale: false, hazardous: false, fromPacking: false, ...sli },
   }) as unknown as ExportDetail;
 const render = (d: ExportDetail, mine = true) => renderToString(<ExportSli d={d} client={{} as BusinessClient} mine={mine} signatory="Wanjiku Mwangi" onDetail={() => undefined} />);
 const field = (key: Parameters<typeof t>[0]) => `<span class="cfield__label">${t(key)}</span>`;

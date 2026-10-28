@@ -6,6 +6,7 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
 import { ExportSli } from './ExportSli';
+import { ExportPacking } from './ExportPacking';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
@@ -390,15 +391,16 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           {p.addedBy ? <span class="crow__sub">{t('business.exports.papers.askedBy', { who: p.addedBy, when: dayWords(p.addedAt ?? '') })}</span> : null}
           {given ? <span class="crow__sub">{[p.documentTitle, p.reference].filter(Boolean).join(' — ')}</span> : null}
           {isSli && !given ? <span class="crow__sub">{t('business.exports.sli.onTheLine')}</span> : null}
+          {p.key === 'packing_list' && !given ? <span class="crow__sub">{t('business.exports.packing.onTheLine')}</span> : null}
           {p.refusedAt ? (
             <span class="crow__sub cerr">{t('business.exports.papers.refused', { who: p.refusedBy ?? '', reason: p.refusedReason ?? '' })}</span>
           ) : p.acceptedAt ? (
             <span class="crow__sub">{t('business.exports.papers.accepted', { who: p.acceptedBy ?? '' })}</span>
           ) : null}
           {/* One row of what this reader can do: open it; the exporter changes it; its agent accepts it or sends it back; whoever asked for it takes it off. */}
-          {p.documentId || (isSli && given) || changeable || giving || worded || p.removable ? (
+          {p.documentId || (isSli && given) || (p.key === 'packing_list' && given) || changeable || giving || worded || p.removable ? (
             <span class="twr-panelend">
-              {p.documentId || (isSli && given) ? (
+              {p.documentId || (isSli && given) || (p.key === 'packing_list' && given) ? (
                 <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void openPaper(p.key, p.documentTitle ?? paperName(p))}>
                   {t('business.exports.papers.open')}
                 </button>
@@ -925,6 +927,12 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </div>
         ) : null}
       </section>
+
+      {/* EX10 — the packing list, from the shipper's own file; the letter's goods are worked out from it. */}
+      <ExportPacking d={d} client={client} mine={mine} signatory={business.you.name ?? ''} onDetail={async (next) => {
+        setD(next);
+        await onChanged();
+      }} />
 
       {/* EX9 — the shipper's letter of instruction: a form, frozen on signing. */}
       <ExportSli d={d} client={client} mine={mine} signatory={business.you.name ?? ''} onDetail={async (next) => {

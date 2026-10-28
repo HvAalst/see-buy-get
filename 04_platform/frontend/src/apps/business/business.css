@@ -263,3 +263,23 @@
   flex: 1 1 220px;
   min-width: 0;
 }
+
+/* A packing list's first lines: a long row scrolls sideways on a phone rather than breaking the page. */
+.biz-packtable {
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.biz-packtable table {
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.biz-packtable th,
+.biz-packtable td {
+  padding: 4px 8px 4px 0;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.biz-packtable .r {
+  text-align: right;
+}
