@@ -14,7 +14,7 @@ should be build."
   the gate closes — and the papers and facts the forwarder needs at the port, in one file.
 - **Open to any forwarder or line:** nothing is keyed to one company; no integration is built (not a job for now).
 
-## The pieces (EX1–EX7), all on one record: the export consignment `EXP-nnn`
+## The pieces (EX1–EX8), all on one record: the export consignment `EXP-nnn`
 
 `ExportService` (`export.service.ts`, `export.types.ts`), its own store, the exporter's (a business: shipper or
 expeditor) — staff read, never act in its name.
@@ -54,6 +54,14 @@ expeditor) — staff read, never act in its name.
    exporter's, gives the export entry by its number (its own word, so it stands as accepted), and accepts each paper or
    sends it back with a reason. A paper sent back is missing until supplied again, which clears the word and tells the
    agent. Ended, the reading ends on the same call; the former appointment stays on the record.
+8. **EX6b — a box the exporter owns** (the user, 2026-10-28: "ok, great, implement it"). A shipper-owned container,
+   said when the export is recorded or later on the export (and taken back: the line's after all). No line lent it, so
+   the clock is `owned`: no free days are taken, nobody is warned, and the handover file says whose box it is.
+9. **EX8 — the clearing agent's fee.** The import's bargain as a quotation (`quote.types.ts`, subject `export`), never
+   a payment through us: the appointed agent quotes (currency of the origin country unless it says), the exporter is
+   told and agrees (the agent is told), a re-quote drops the agreement, paid or open is said by either on the
+   quotation. **One quotation per appointment** (subject id `exportId@appointedAt`): when the appointment ends its
+   quotation stays on that former appointment (`feeQuoteId`), and the next agent quotes its own from nothing.
 
 ## Not built (said, not hidden)
 Air exports — new ground, to get its own help section once the user has read into it (the user, 2026-10-28); the barge

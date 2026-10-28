@@ -1,5 +1,6 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { MessageKey, Translate } from '../../shared/i18n';
+import type { QuoteView } from '../../shared/quote';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "The missing for goods going to a port should be build"). One container leaving
@@ -65,7 +66,7 @@ export interface ExportPaperView {
 
 /** The box's clock, derived by the server on every read: detention outside the terminal, demurrage inside — days, never money. */
 export interface ExportBoxClock {
-  kind: 'detention' | 'demurrage' | 'stopped' | 'unknown';
+  kind: 'detention' | 'demurrage' | 'stopped' | 'unknown' | 'owned';
   since?: string;
   daysElapsed?: number;
   freeDays?: number;
@@ -117,7 +118,9 @@ export interface ExportConsignment {
   freeDays?: ExportFreeDays[];
   emptyOut?: { at: string; by: string };
   loaded?: { at: string; by: string };
-  formerAgents?: Array<{ entityId: string; appointedAt: string; endedAt: string; endedBy: string; reason?: string }>;
+  formerAgents?: Array<{ entityId: string; appointedAt: string; endedAt: string; endedBy: string; reason?: string; feeQuoteId?: string }>;
+  /** The box is the exporter's own (a shipper-owned container): no line's clock runs on it. */
+  ownBox?: { by: string; at: string };
   createdAt: string;
 }
 
@@ -136,6 +139,9 @@ export interface ExportDetail {
   you: ExportReader;
   exporterName: string;
   agent?: { entityId: string; name: string; appointedAt: string; appointedBy: string };
+  /** The appointed agent's fee, as a quotation between it and the exporter. */
+  fee?: QuoteView;
+  feeState: 'none' | 'quoted' | 'accepted' | 'paid';
 }
 
 export interface ExportRow {
@@ -178,6 +184,7 @@ export interface RegisterExportInput {
   loadingSiteId: string;
   terminalSiteId: string;
   emptyDepotSiteId?: string;
+  ownBox?: boolean;
 }
 
 export interface ExportsApi {
@@ -203,6 +210,9 @@ export interface ExportsApi {
   paperFile(exportId: string, key: ExportPaperKey): Promise<Result<Blob>>;
   /** The clearing agents' directory, alphabetical. */
   findAgents(): Promise<Result<{ items: ExportAgentCard[] }>>;
+  ownBox(exportId: string, own: boolean): Promise<Result<ExportDetail>>;
+  quoteFee(exportId: string, body: { amount: number; currency?: string; note?: string; reference?: string }): Promise<Result<ExportDetail>>;
+  acceptFee(exportId: string): Promise<Result<ExportDetail>>;
 }
 
 export function exportsApi(sbg: SbgClient): ExportsApi {
@@ -229,6 +239,9 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     refusePaper: (exportId, key, reason) => post(`/v1/sbg/exports/${id(exportId)}/papers/${key}/refuse`, { reason }),
     paperFile: (exportId, key) => call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/papers/${key}/file` as never, { parseAs: 'blob' } as never) as never),
     findAgents: () => call((c) => c.GET('/v1/sbg/agents/find' as never, {} as never) as never),
+    ownBox: (exportId, own) => post(`/v1/sbg/exports/${id(exportId)}/own-box`, { own }),
+    quoteFee: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/fee`, body),
+    acceptFee: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/fee/accept`),
   };
 }
 
@@ -281,6 +294,7 @@ const CLOCK_WORDS: Record<'detention' | 'demurrage', { noClaim: MessageKey; runn
  */
 export function boxLine(box: ExportBoxClock, t: Translate): { tone: 'ok' | 'warn' | 'info'; text: string } {
   if (box.kind === 'unknown') return { tone: 'info', text: t('business.exports.clock.unknown') };
+  if (box.kind === 'owned') return { tone: 'info', text: t('business.exports.clock.owned') };
   if (box.kind === 'stopped') return { tone: 'ok', text: t('business.exports.clock.stopped', { outside: box.detentionDays ?? 0, inside: box.demurrageDays ?? 0 }) };
   const words = CLOCK_WORDS[box.kind];
   const since = dayWords(box.since ?? '');

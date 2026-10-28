@@ -42,6 +42,7 @@ const detail = (over: Partial<ExportDetail> = {}, consignment: Partial<ExportDet
     box: box(),
     you: 'exporter',
     exporterName: 'Thika Coffee',
+    feeState: 'none',
     ...over,
   }) as ExportDetail;
 
@@ -119,5 +120,75 @@ describe('the export panel, from each side', () => {
     expect(html).not.toContain(field('business.exports.clock.freeOutsideLabel'));
     for (const write of ['business.exports.agent.choose', 'business.exports.papers.giveEntry'] as const) expect(html).not.toContain(t(write));
     expect(html).not.toContain(`>${t('business.exports.papers.accept')}<`);
+  });
+});
+
+/*
+ * A BOX THE EXPORTER OWNS, AND THE AGENT'S FEE (the user, 2026-10-28: "ok, great, implement it"). No line's clock on an
+ * own box; the fee is a quotation the agent sends and the exporter agrees to — nothing paid through us.
+ */
+const appointed = { entityId: 'ent_a', name: 'Pwani Clearing', appointedAt: '2026-10-28T09:00:00.000Z', appointedBy: 'Wanjiku' };
+const quote = (over: Record<string, unknown> = {}) =>
+  ({
+    quoteId: 'quo_1',
+    subject: { kind: 'export', id: 'exp_1@2026-10-28T09:00:00.000Z', code: 'EXP-007' },
+    issuer: { name: 'Pwani Clearing', entityId: 'ent_a' },
+    payer: { name: 'Thika Coffee', entityId: 'ent_x' },
+    amount: 18000,
+    currency: 'KES',
+    status: 'open',
+    history: [{ at: '2026-10-28T10:00:00.000Z', by: 'Juma', what: 'quoted' }],
+    createdAt: '2026-10-28T10:00:00.000Z',
+    createdBy: 'Juma',
+    ...over,
+  }) as unknown as ExportDetail['fee'];
+
+describe('a box the exporter owns', () => {
+  it('says no clock counts, asks for no free days, and offers to say it is the line’s after all', () => {
+    expect(boxLine(box({ kind: 'owned' }), t)).toEqual({ tone: 'info', text: t('business.exports.clock.owned') });
+    expect(boxTag(box({ kind: 'owned' }), t)).toBeNull();
+    const html = render(detail({ box: box({ kind: 'owned' }) }, { ownBox: { by: 'Wanjiku', at: '2026-10-28T08:00:00.000Z' } }));
+    expect(html).toContain(t('business.exports.clock.ownerYours'));
+    expect(html).toContain(t('business.exports.clock.lineBox'));
+    expect(html).not.toContain(field('business.exports.clock.freeOutsideLabel'));
+    expect(html).not.toContain(t('business.exports.clock.freeOutside'));
+    expect(html).not.toContain(field('business.exports.clock.emptyOutLabel'));
+    // A line's box offers the other way round.
+    expect(render(detail())).toContain(`>${t('business.exports.clock.ownBox')}<`);
+  });
+});
+
+describe('the agent’s fee, from each side', () => {
+  it('before a quotation: the exporter waits for it, the agent is asked for it', () => {
+    expect(render(detail({ agent: appointed }))).toContain(t('business.exports.fee.none', { name: 'Pwani Clearing' }));
+    const agent = render(detail({ you: 'agent', agent: appointed }));
+    expect(agent).toContain(field('business.exports.fee.amount'));
+    expect(agent).toContain(t('business.exports.fee.send'));
+  });
+
+  it('quoted: the exporter can agree, and reads the quotation; the agent can change the figure, not agree', () => {
+    const exporter = render(detail({ agent: appointed, fee: quote(), feeState: 'quoted' }));
+    expect(exporter).toContain(t('business.exports.fee.agree'));
+    expect(exporter).toContain('18,000 KES');
+    expect(exporter).not.toContain(field('business.exports.fee.amount'));
+    const agent = render(detail({ you: 'agent', agent: appointed, fee: quote(), feeState: 'quoted' }));
+    expect(agent).toContain(t('business.exports.fee.change'));
+    expect(agent).not.toContain(t('business.exports.fee.agree'));
+  });
+
+  it('agreed or paid: says who agreed, offers no second agreement and no new figure once paid', () => {
+    const agreed = render(detail({ agent: appointed, fee: quote({ agreedAt: '2026-10-28T11:00:00.000Z', agreedBy: 'Wanjiku' }), feeState: 'accepted' }));
+    expect(agreed).toContain('Agreed by Wanjiku on 28 Oct 2026.');
+    expect(agreed).not.toContain(t('business.exports.fee.agree'));
+    const paid = render(detail({ you: 'agent', agent: appointed, fee: quote({ status: 'paid', paidBy: 'Wanjiku', paidAt: '2026-10-29T08:00:00.000Z' }), feeState: 'paid' }));
+    expect(paid).not.toContain(t('business.exports.fee.change'));
+    expect(paid).not.toContain(field('business.exports.fee.amount'));
+  });
+
+  it('offers staff neither the agreement nor a figure', () => {
+    const html = render(detail({ you: 'staff', agent: appointed, fee: quote(), feeState: 'quoted' }));
+    expect(html).not.toContain(t('business.exports.fee.agree'));
+    expect(html).not.toContain(t('business.exports.fee.change'));
+    expect(html).toContain('18,000 KES');
   });
 });

@@ -5,6 +5,7 @@ import { tabAtTheTap } from '../../../shared/openPage';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
+import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
 import { boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperKey, type ExportRow } from '../exports';
@@ -128,6 +129,7 @@ function RegisterExport({ business, client, onDone }: { business: BusinessView; 
   const t = useT();
   const [form, setForm] = useState({ goods: '', from: business.country ?? '', to: '', port: '', box: '', reference: '', bookedWith: 'forwarder' as 'forwarder' | 'shipping_line', party: '', vessel: '', voyage: '', gateCutoff: '', vgmCutoff: '', docsCutoff: '', release: '' });
   const [sites, setSites] = useState({ loading: '', terminal: '', depot: '' });
+  const [ownBox, setOwnBox] = useState(false);
   const [boxes, setBoxes] = useState<Array<{ code: string; label: string }>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,6 +165,7 @@ function RegisterExport({ business, client, onDone }: { business: BusinessView; 
       loadingSiteId: sites.loading,
       terminalSiteId: sites.terminal,
       ...(sites.depot ? { emptyDepotSiteId: sites.depot } : {}),
+      ...(ownBox ? { ownBox: true } : {}),
     });
     setBusy(false);
     if (r.error) return setError(sayProblem(r.error));
@@ -193,6 +196,10 @@ function RegisterExport({ business, client, onDone }: { business: BusinessView; 
           <ConsolePick label={t('business.exports.f.box')} value={form.box} onChange={(box) => setForm({ ...form, box })} options={boxes.map((b) => ({ value: b.code, label: b.code, sub: b.label }))} placeholder="45G1" allowFree={(typed) => (/^[A-Za-z0-9]{4}$/.test(typed) ? typed.toUpperCase() : null)} />
         </div>
       </div>
+      <label class="cfield--check">
+        <input type="checkbox" checked={ownBox} onChange={() => setOwnBox((v) => !v)} />
+        <span>{t('business.exports.f.ownBox')}</span>
+      </label>
       <h3 class="cons__sub">{t('business.exports.f.bookingTitle')}</h3>
       <p class="chint">{t('business.exports.f.bookingHint')}</p>
       <div class="biz-two">
@@ -261,6 +268,8 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
   const [endReason, setEndReason] = useState('');
   const [refusing, setRefusing] = useState<Record<string, string | undefined>>({});
   const [entry, setEntry] = useState('');
+  const [fee, setFee] = useState({ amount: '', currency: '', reference: '', note: '' });
+  const [requoting, setRequoting] = useState(false);
 
   /** A paper's bytes, opened in a tab at the tap — a PDF or a photograph, which the browser already knows how to show. */
   const openPaper = async (key: ExportPaperKey, title: string) => {
@@ -388,12 +397,20 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
             'business.exports.clock.emptyOut',
             d.box.emptyOutAt ? t(d.box.emptyOutFrom === 'load' ? 'business.exports.clock.emptyOutLoad' : 'business.exports.clock.emptyOutRecorded', { when: utcWords(d.box.emptyOutAt) }) : t('business.exports.clock.notRecorded'),
           )}
-          {fact('business.exports.clock.freeOutside', outClaim ? t('business.exports.clock.claim', { days: outClaim.days, by: outClaim.by, when: dayWords(outClaim.at) }) : t('business.exports.clock.notSaid'))}
-          {fact('business.exports.clock.freeInside', inClaim ? t('business.exports.clock.claim', { days: inClaim.days, by: inClaim.by, when: dayWords(inClaim.at) }) : t('business.exports.clock.notSaid'))}
+          {fact('business.exports.clock.owner', t(c.ownBox ? 'business.exports.clock.ownerYours' : 'business.exports.clock.ownerLine'))}
+          {c.ownBox ? null : fact('business.exports.clock.freeOutside', outClaim ? t('business.exports.clock.claim', { days: outClaim.days, by: outClaim.by, when: dayWords(outClaim.at) }) : t('business.exports.clock.notSaid'))}
+          {c.ownBox ? null : fact('business.exports.clock.freeInside', inClaim ? t('business.exports.clock.claim', { days: inClaim.days, by: inClaim.by, when: dayWords(inClaim.at) }) : t('business.exports.clock.notSaid'))}
           {c.loaded ? fact('business.exports.clock.loadedAt', utcWords(c.loaded.at)) : null}
         </dl>
-        {mine ? <p class="chint"><Abbreviated text={t('business.exports.clock.hint')} /></p> : null}
+        {mine && !c.ownBox ? <p class="chint"><Abbreviated text={t('business.exports.clock.hint')} /></p> : null}
         {mine && !c.loaded ? (
+          <div class="twr-panelend">
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.ownBox(c.exportId, !c.ownBox), t(c.ownBox ? 'business.exports.clock.lineSaved' : 'business.exports.clock.ownSaved'))}>
+              {t(c.ownBox ? 'business.exports.clock.lineBox' : 'business.exports.clock.ownBox')}
+            </button>
+          </div>
+        ) : null}
+        {mine && !c.loaded && !c.ownBox ? (
           <>
             <div class="biz-two">
               <label class="cfield">
@@ -429,7 +446,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
             </div>
           </>
         ) : null}
-        {mine && !d.box.emptyOutAt && !d.timing.gatedInAt && !emptyByLoad ? (
+        {mine && !c.ownBox && !d.box.emptyOutAt && !d.timing.gatedInAt && !emptyByLoad ? (
           <div class="biz-two">
             <label class="cfield">
               <span class="cfield__label">{t('business.exports.clock.emptyOutLabel')}</span>
@@ -592,6 +609,86 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </>
         ) : null}
         {d.you === 'exporter' && c.formerAgents?.length ? <p class="chint">{t('business.exports.agent.former', { n: c.formerAgents.length })}</p> : null}
+        {/* EX8 — its fee: a quotation between the agent and the exporter, never a payment through us. */}
+        {d.agent ? (
+          <>
+            <h3 class="cons__sub">{t('business.exports.fee.title')}</h3>
+            {d.fee ? (
+              <>
+                {d.fee.agreedAt ? (
+                  <p class="chint">{t('business.exports.fee.agreed', { who: d.fee.agreedBy ?? '', when: dayWords(d.fee.agreedAt) })}</p>
+                ) : mine && d.fee.status === 'open' ? (
+                  <div class="twr-panelend">
+                    <span class="chint">{t('business.exports.fee.agreeHint')}</span>
+                    <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.acceptFee(c.exportId), t('business.exports.fee.agreedNote'))}>
+                      {t('business.exports.fee.agree')}
+                    </button>
+                  </div>
+                ) : (
+                  <p class="chint">{t('business.exports.fee.notAgreed')}</p>
+                )}
+                <QuotePanel quote={d.fee} api={client.api as never} canChange={mine || asAgent} onChanged={() => read()} />
+              </>
+            ) : d.you === 'agent' ? (
+              <p class="chint">{t('business.exports.fee.noneAgent')}</p>
+            ) : (
+              <p class="chint">{t('business.exports.fee.none', { name: d.agent.name })}</p>
+            )}
+            {asAgent && d.fee && d.fee.status === 'open' && !requoting ? (
+              <div class="twr-panelend">
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setRequoting(true)}>
+                  {t('business.exports.fee.change')}
+                </button>
+              </div>
+            ) : null}
+            {asAgent && (!d.fee || (d.fee.status === 'open' && requoting)) ? (
+              <>
+                <div class="biz-two">
+                  <label class="cfield">
+                    <span class="cfield__label">{t('business.exports.fee.amount')}</span>
+                    <input class="cinput" type="number" min={0} step="0.01" value={fee.amount} onInput={(e) => setFee({ ...fee, amount: (e.target as HTMLInputElement).value })} />
+                  </label>
+                  <label class="cfield">
+                    <span class="cfield__label">{t('business.exports.fee.currency')}</span>
+                    <input class="cinput" maxLength={3} placeholder={t('business.exports.fee.currencyPh')} value={fee.currency} onInput={(e) => setFee({ ...fee, currency: (e.target as HTMLInputElement).value.toUpperCase() })} />
+                  </label>
+                </div>
+                <div class="biz-two">
+                  <label class="cfield">
+                    <span class="cfield__label">{t('business.exports.fee.reference')}</span>
+                    <input class="cinput" maxLength={60} value={fee.reference} onInput={(e) => setFee({ ...fee, reference: (e.target as HTMLInputElement).value })} />
+                  </label>
+                  <label class="cfield">
+                    <span class="cfield__label">{t('business.exports.fee.note')}</span>
+                    <input class="cinput" maxLength={300} value={fee.note} onInput={(e) => setFee({ ...fee, note: (e.target as HTMLInputElement).value })} />
+                  </label>
+                </div>
+                <p class="chint">{t('business.exports.fee.hint')}</p>
+                <div class="twr-panelend">
+                  <button
+                    type="button"
+                    class="cbtn cbtn--primary cbtn--sm"
+                    disabled={busy || !(Number(fee.amount) > 0)}
+                    onClick={() =>
+                      void act(
+                        () =>
+                          client.exports.quoteFee(c.exportId, {
+                            amount: Number(fee.amount),
+                            ...(fee.currency.trim() ? { currency: fee.currency.trim() } : {}),
+                            ...(fee.reference.trim() ? { reference: fee.reference.trim() } : {}),
+                            ...(fee.note.trim() ? { note: fee.note.trim() } : {}),
+                          }),
+                        t('business.exports.fee.sent'),
+                      ).then(() => setRequoting(false))
+                    }
+                  >
+                    {t(d.fee ? 'business.exports.fee.resend' : 'business.exports.fee.send')}
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </>
+        ) : null}
       </section>
 
       {/* EX4 — the papers: its own documents, or a reference. */}

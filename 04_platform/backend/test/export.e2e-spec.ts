@@ -382,6 +382,8 @@ describe('an export to the port, over the wire', () => {
     // The appointment ends: its quotation stays on its record; the next agent quotes its own, from nothing.
     const ended = (await http().post(`${path}/agent/end`).set(bearer(x.token)).send({}).expect(201)).body;
     expect(ended.fee).toBeUndefined();
+    // And the export itself carries no stale stamp of a fee from an appointment that ended.
+    expect(ended.consignment.fee).toBeUndefined();
     expect(ended.feeState).toBe('none');
     expect(ended.consignment.formerAgents[0]).toMatchObject({ entityId: agent.entityId, feeQuoteId: quoteId });
     const next = await anExporter(['clearing_agent'], 'Kilindini Clearing');

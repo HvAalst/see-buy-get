@@ -20,7 +20,7 @@ export interface QuoteEvent {
 
 export interface QuoteView {
   quoteId: string;
-  subject: { kind: 'import' | 'freight' | 'booking'; id: string; code?: string };
+  subject: { kind: 'import' | 'freight' | 'booking' | 'export'; id: string; code?: string };
   issuer: QuoteParty;
   payer: QuoteParty;
   amount: number;
