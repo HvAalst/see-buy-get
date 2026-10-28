@@ -23,8 +23,9 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
     ...(has('shipper') || has('expeditor') ? (['contracts'] as Section[]) : []),
     // B4 — an expeditor's own book of the clients it sends for, as their agent.
     ...(has('expeditor') ? (['clients'] as Section[]) : []),
-    // Exports to the port (2026-10-27): whoever sends goods, or sends them for clients, out through a port.
-    ...(has('shipper') || has('expeditor') ? (['exports'] as Section[]) : []),
+    // Exports to the port (2026-10-27): whoever sends goods, or sends them for clients, out through a port — and (2026-10-28)
+    // the clearing agent appointed on one, which reads its papers there.
+    ...(has('shipper') || has('expeditor') || has('clearing_agent') ? (['exports'] as Section[]) : []),
     ...(has('importer') || has('clearing_agent') || has('expeditor') ? (['imports'] as Section[]) : []),
     ...(has('depot') ? (['yard'] as Section[]) : []),
     // Inbound, reading A — a business receiving goods at its own places: what is coming in, and the codes its suppliers write.

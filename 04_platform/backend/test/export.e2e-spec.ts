@@ -203,6 +203,9 @@ describe('an export to the port, over the wire', () => {
 
     // The free days: the exporter's figure, a whole number; staff give none in its name. A correction is a second claim.
     expect((await http().post(`${path}/free-days`).set(bearer(x.token)).send({ kind: 'detention', days: 120 })).status).toBe(400);
+    // And the record refuses it itself, whatever door it came through.
+    expect(() => app.get(ExportService).claimFreeDays(made.exportId, x.entityId, 'detention', 120, 'Wanjiku')).toThrow('Free days are a whole number of days, 0 to 90');
+    expect(() => app.get(ExportService).claimFreeDays(made.exportId, x.entityId, 'detention', 2.5, 'Wanjiku')).toThrow('Free days are a whole number of days, 0 to 90');
     const staff = await http().post(`${path}/free-days`).set(bearer(operator)).send({ kind: 'detention', days: 7 });
     expect([staff.status, staff.body.detail]).toEqual([403, 'An export is the exporter’s to write, signed in as itself: staff read it, and write nothing in its name']);
     await http().post(`${path}/free-days`).set(bearer(x.token)).send({ kind: 'detention', days: 7 }).expect(201);

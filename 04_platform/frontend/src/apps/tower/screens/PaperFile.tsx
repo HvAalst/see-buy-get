@@ -60,12 +60,20 @@ export function PaperFile({
   };
 
   /* Opened in a tab, not rendered inline: a PDF and a photograph both arrive here and the browser
-     already knows how to show either. Revoked on the next tick — the tab has the handle by then. */
+     already knows how to show either. The tab is opened AT the tap and filled once the bytes arrive
+     (2026-10-28): a tab opened after waiting for a download is blocked as a pop-up by some browsers,
+     Safari above all, and the tap seemed to do nothing. Revoked a minute later — the tab has it by then. */
   const open = async () => {
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
     const blob = await bytes();
-    if (!blob) return;
+    if (!blob) {
+      tab?.close();
+      return;
+    }
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank', 'noopener');
+    if (tab) tab.location.href = url;
+    else window.location.assign(url);
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 

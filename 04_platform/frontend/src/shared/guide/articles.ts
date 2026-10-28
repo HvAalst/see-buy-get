@@ -101,7 +101,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'business-bell', apps: ['business'], group: 'daily', steps: 3, notes: ['note', 'rare', 'note'] },
   { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note'] },
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.
-  { id: 'business-exports', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'why'] },
+  { id: 'business-exports', apps: ['business'], group: 'freight', steps: 6, notes: ['note', 'why', 'note'] },
   { id: 'business-note', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'note', 'note', 'note', 'why', 'rare', 'rare'] },
   { id: 'business-runs', apps: ['business'], group: 'freight', steps: 4 },
   { id: 'business-contracts', apps: ['business'], group: 'freight', steps: 3, notes: ['why', 'note', 'rare', 'note', 'note', 'why', 'note', 'note', 'rare'] },

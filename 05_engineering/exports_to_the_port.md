@@ -14,7 +14,7 @@ should be build."
   the gate closes — and the papers and facts the forwarder needs at the port, in one file.
 - **Open to any forwarder or line:** nothing is keyed to one company; no integration is built (not a job for now).
 
-## The pieces (EX1–EX5), all on one record: the export consignment `EXP-nnn`
+## The pieces (EX1–EX7), all on one record: the export consignment `EXP-nnn`
 
 `ExportService` (`export.service.ts`, `export.types.ts`), its own store, the exporter's (a business: shipper or
 expeditor) — staff read, never act in its name.
@@ -39,7 +39,22 @@ expeditor) — staff read, never act in its name.
 5. **EX5 — one handover file.** A printable page for the forwarder at the port: booking, cut-offs, box and type, seal
    (from the laden load), VGM, papers with their references, the road consignment note's number, when it gated in; and
    the **bill of lading number** once the forwarder issues it, recorded back so the receiving end can match it.
+6. **EX6 — the box's clock** (the user, 2026-10-28: "1 and 2 are clear addition to what you built here"). The import's
+   clock the other way round (`exportBoxClock` in `container-box.ts`): **detention** from the empty out of the depot — the
+   empty load's pickup, or, where no load of ours fetched it, the time the exporter records — until the laden box is
+   inside the gate; **demurrage** from the gate until it is **loaded on board**, recorded by the exporter from its
+   forwarder's or the line's word (never before the gate, never ahead of now). Dates and whole days, never money. The
+   free days are the exporter's claim, attributed and dated, every claim kept and the latest in force; no claim, no
+   date. The sweep tells the exporter once three days before each date and once when it passed, keyed by the date (a
+   corrected figure is a new date, warned afresh). The handover file carries the clock in words.
+7. **EX7 — a clearing agent on the export.** The exporter appoints one from the agents' directory (never itself, never
+   a silent swap — the first is ended before a second is appointed; staff appoint nobody in its name) and ends it with a
+   reason; both are told. **The appointment is the grant**, derived, never a second list: the agent finds the export in
+   its own Exports, reads the papers attached on it (`GET exports/:id/papers/:key/file`) and nothing else of the
+   exporter's, gives the export entry by its number (its own word, so it stands as accepted), and accepts each paper or
+   sends it back with a reason. A paper sent back is missing until supplied again, which clears the word and tells the
+   agent. Ended, the reading ends on the same call; the former appointment stays on the record.
 
 ## Not built (said, not hidden)
-The box's clocks for an export (detention from the empty's release) — the import side's clocks are not reused yet; a
-clearing agent appointed on an export (the import's grants); air exports; the barge leg (Y5).
+Air exports — new ground, to get its own help section once the user has read into it (the user, 2026-10-28); the barge
+leg (Y5).

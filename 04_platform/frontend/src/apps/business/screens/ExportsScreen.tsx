@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { DocumentButton } from '../../../shared/ui';
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsolePick } from '../../tower/ConsolePick';
+import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
-import { fromUtcInput, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperKey, type ExportRow } from '../exports';
+import { boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperKey, type ExportRow } from '../exports';
 import { mayAct } from '../logic';
 
 type Problem = { detail?: string; title: string } | null | undefined;
@@ -35,6 +37,8 @@ const PAPER_WORD: Record<ExportPaperKey, MessageKey> = {
 export function ExportsScreen({ business, client }: { business: BusinessView; client: BusinessClient | null }) {
   const t = useT();
   const works = mayAct(business.you.role);
+  // A business that sends goods records its exports; a clearing agent only reads the ones it was appointed to clear.
+  const sends = business.activities.some((a) => a === 'shipper' || a === 'expeditor');
   const [rows, setRows] = useState<ExportRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forming, setForming] = useState(false);
@@ -56,10 +60,11 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
       <header class="cons__head">
         <h1 class="cons__title">{t('business.exports.title')}</h1>
         <p class="cons__lede">{t('business.exports.lede')}</p>
+        {business.activities.includes('clearing_agent') ? <p class="chint">{t('business.exports.agentLede')}</p> : null}
       </header>
       {error ? <p class="cerr">{error}</p> : null}
 
-      {works && client && !forming ? (
+      {works && sends && client && !forming ? (
         <div class="twr-panelend">
           <button type="button" class="cbtn cbtn--primary" onClick={() => setForming(true)}>
             {t('business.exports.record')}
@@ -80,16 +85,17 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
 
       <section class="cons__panel">
         <div class="cons__panelhead">
-          <span class="cons__panelt">{t('business.exports.listTitle')}</span>
+          <span class="cons__panelt">{t(sends ? 'business.exports.listTitle' : 'business.exports.listTitleAgent')}</span>
         </div>
         {rows === null ? (
           <p class="cons__empty">{t('business.loading')}</p>
         ) : rows.length === 0 ? (
-          <p class="cons__empty">{t('business.exports.none')}</p>
+          <p class="cons__empty">{t(sends ? 'business.exports.none' : 'business.exports.noneAgent')}</p>
         ) : (
           <div class="crows">
             {rows.map((r) => {
               const tag = timingTag(r.timing, t);
+              const clock = boxTag(r.box, t);
               return (
                 <button type="button" class="crow" key={r.exportId} onClick={() => setOpenId(openId === r.exportId ? null : r.exportId)} aria-expanded={openId === r.exportId}>
                   <span class="crow__body">
@@ -98,7 +104,9 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
                         {r.code} — {r.goodsDescription}
                       </span>
                       <span class={`ctag ctag--${tag.tone}`}>{tag.word}</span>
+                      {clock ? <span class={`ctag ctag--${clock.tone}`}>{clock.word}</span> : null}
                     </span>
+                    {r.you === 'agent' ? <span class="crow__sub">{t('business.exports.rowFor', { exporter: r.exporterName })}</span> : null}
                     <span class="crow__sub">{t('business.exports.rowLine', { port: r.loadingPort, booking: r.bookingReference, cutoff: utcWords(r.gateCutoffAt) })}</span>
                     {r.missing ? <span class="crow__sub">{t('business.exports.rowMissing', { n: r.missing })}</span> : null}
                   </span>
@@ -229,9 +237,10 @@ function RegisterExport({ business, client, onDone }: { business: BusinessView; 
 }
 
 /** One export, step by step: the booking and its clock, the box, the empty out, the weight, the papers, the load, the file. */
-function ExportPanel({ exportId, business, client, works, onChanged }: { exportId: string; business: BusinessView; client: BusinessClient; works: boolean; onChanged: () => void | Promise<void> }) {
+/** One export, read by whoever may: the exporter writes, its appointed agent gives its word, staff read. `initial` lets a test draw it. */
+export function ExportPanel({ exportId, business, client, works, onChanged, initial }: { exportId: string; business: BusinessView; client: BusinessClient; works: boolean; onChanged: () => void | Promise<void>; initial?: ExportDetail }) {
   const t = useT();
-  const [d, setD] = useState<ExportDetail | null>(null);
+  const [d, setD] = useState<ExportDetail | null>(initial ?? null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -243,6 +252,33 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
   const [reweigh, setReweigh] = useState(false);
   const [changing, setChanging] = useState<Record<string, boolean>>({});
   const legWord = (status: string) => (LEG_WORD[status] ? t(LEG_WORD[status]) : status);
+  const [freeOut, setFreeOut] = useState('');
+  const [freeIn, setFreeIn] = useState('');
+  const [emptyAt, setEmptyAt] = useState('');
+  const [loadedAt, setLoadedAt] = useState('');
+  const [picking, setPicking] = useState(false);
+  const [endReason, setEndReason] = useState('');
+  const [refusing, setRefusing] = useState<Record<string, string | undefined>>({});
+  const [entry, setEntry] = useState('');
+
+  /**
+   * A paper's bytes, opened in a tab — a PDF or a photograph, which the browser already knows how to show. The tab is
+   * opened AT the tap and filled once the file arrives: a tab opened after waiting for a download is blocked as a pop-up
+   * by some browsers (Safari above all), and the tap would seem to do nothing.
+   */
+  const openPaper = async (key: ExportPaperKey, title: string) => {
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    const r = await client.exports.paperFile(exportId, key);
+    if (r.error || !r.data) {
+      tab?.close();
+      return setError(t('business.exports.papers.unreadable', { title }));
+    }
+    const url = URL.createObjectURL(r.data as Blob);
+    if (tab) tab.location.href = url;
+    else window.location.assign(url);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
 
   const read = useCallback(async () => {
     const r = await client.exports.detail(exportId);
@@ -251,8 +287,8 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
   }, [client, exportId]);
 
   useEffect(() => {
-    void read();
-  }, [read]);
+    if (!initial) void read();
+  }, [read, initial]);
 
   const act = async (fn: () => Promise<{ data?: ExportDetail | null; error?: Problem }>, note: string) => {
     setBusy(true);
@@ -269,6 +305,14 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
   if (!d) return error ? <p class="cerr">{error}</p> : <p class="cons__empty">{t('business.loading')}</p>;
   const c = d.consignment;
   const tag = timingTag(d.timing, t);
+  // The exporter writes; its appointed agent gives its word on the papers; staff read.
+  const mine = works && d.you === 'exporter';
+  const asAgent = works && d.you === 'agent';
+  const clock = boxLine(d.box, t);
+  const clockTag = boxTag(d.box, t);
+  const outClaim = freeDaysOf(c, 'detention');
+  const inClaim = freeDaysOf(c, 'demurrage');
+  const emptyByLoad = Boolean(d.emptyLeg && d.emptyLeg.status !== 'cancelled');
   const onRoad = Boolean(c.ladenFreightId);
   const fact = (k: MessageKey, v: string) => (
     <div class="cons__fact">
@@ -291,6 +335,7 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
         {done ? <p class="cnote">{done}</p> : null}
         {error ? <p class="cerr">{error}</p> : null}
         <dl class="cons__facts">
+          {d.you !== 'exporter' ? fact('business.exports.d.exporter', d.exporterName) : null}
           {fact('business.exports.d.booking', `${c.booking.reference} — ${c.booking.partyName}`)}
           {c.booking.vessel ? fact('business.exports.d.vessel', `${c.booking.vessel}${c.booking.voyage ? ` / ${c.booking.voyage}` : ''}`) : null}
           {fact('business.exports.d.gateCutoff', utcWords(c.booking.gateCutoffAt))}
@@ -307,8 +352,8 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
         <div class="cons__panelhead">
           <span class="cons__panelt">{t('business.exports.box.title')}</span>
         </div>
-        {c.containerNo ? <p class="cons__lede">{t('business.exports.box.number', { number: c.containerNo })}</p> : <p class="chint">{t('business.exports.box.numberHint')}</p>}
-        {works && !onRoad ? (
+        {c.containerNo ? <p class="cons__lede">{t('business.exports.box.number', { number: c.containerNo })}</p> : mine ? <p class="chint">{t('business.exports.box.numberHint')}</p> : null}
+        {mine && !onRoad ? (
           <div class="biz-two">
             <label class="cfield">
               <span class="cfield__label">{t('business.exports.box.numberLabel')}</span>
@@ -324,7 +369,7 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
         {c.emptyDepot ? (
           d.emptyLeg ? (
             <p class="cons__lede">{t('business.exports.empty.leg', { code: d.emptyLeg.code, status: legWord(d.emptyLeg.status), depot: c.emptyDepot.label })}</p>
-          ) : works && !onRoad ? (
+          ) : mine && !onRoad ? (
             <div class="twr-panelend">
               <span class="chint">{t('business.exports.empty.hint', { depot: c.emptyDepot.label, release: c.booking.emptyReleaseRef ?? '—' })}</span>
               <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.emptyLeg(c.exportId), t('business.exports.empty.posted'))}>
@@ -337,6 +382,87 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
         )}
       </section>
 
+      {/* EX6 — the box's clock: outside the terminal until the gate, inside it until loaded on board. Days, never money. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('business.exports.clock.title')}</span>
+          {clockTag ? <span class={`ctag ctag--${clockTag.tone}`}>{clockTag.word}</span> : null}
+        </div>
+        <p class="cons__lede">{clock.text}</p>
+        <dl class="cons__facts">
+          {fact(
+            'business.exports.clock.emptyOut',
+            d.box.emptyOutAt ? t(d.box.emptyOutFrom === 'load' ? 'business.exports.clock.emptyOutLoad' : 'business.exports.clock.emptyOutRecorded', { when: utcWords(d.box.emptyOutAt) }) : t('business.exports.clock.notRecorded'),
+          )}
+          {fact('business.exports.clock.freeOutside', outClaim ? t('business.exports.clock.claim', { days: outClaim.days, by: outClaim.by, when: dayWords(outClaim.at) }) : t('business.exports.clock.notSaid'))}
+          {fact('business.exports.clock.freeInside', inClaim ? t('business.exports.clock.claim', { days: inClaim.days, by: inClaim.by, when: dayWords(inClaim.at) }) : t('business.exports.clock.notSaid'))}
+          {c.loaded ? fact('business.exports.clock.loadedAt', utcWords(c.loaded.at)) : null}
+        </dl>
+        {mine ? <p class="chint"><Abbreviated text={t('business.exports.clock.hint')} /></p> : null}
+        {mine && !c.loaded ? (
+          <>
+            <div class="biz-two">
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.clock.freeOutsideLabel')}</span>
+                <input class="cinput" type="number" min={0} max={90} value={freeOut} onInput={(e) => setFreeOut((e.target as HTMLInputElement).value)} />
+              </label>
+              <div class="twr-panelend">
+                <button
+                  type="button"
+                  class="cbtn cbtn--ghost cbtn--sm"
+                  disabled={busy || freeOut.trim() === '' || !Number.isInteger(Number(freeOut))}
+                  onClick={() => void act(() => client.exports.freeDays(c.exportId, 'detention', Number(freeOut)), t('business.exports.clock.saved')).then(() => setFreeOut(''))}
+                >
+                  {t('business.exports.clock.saveFree')}
+                </button>
+              </div>
+            </div>
+            <div class="biz-two">
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.clock.freeInsideLabel')}</span>
+                <input class="cinput" type="number" min={0} max={90} value={freeIn} onInput={(e) => setFreeIn((e.target as HTMLInputElement).value)} />
+              </label>
+              <div class="twr-panelend">
+                <button
+                  type="button"
+                  class="cbtn cbtn--ghost cbtn--sm"
+                  disabled={busy || freeIn.trim() === '' || !Number.isInteger(Number(freeIn))}
+                  onClick={() => void act(() => client.exports.freeDays(c.exportId, 'demurrage', Number(freeIn)), t('business.exports.clock.saved')).then(() => setFreeIn(''))}
+                >
+                  {t('business.exports.clock.saveFree')}
+                </button>
+              </div>
+            </div>
+          </>
+        ) : null}
+        {mine && !d.box.emptyOutAt && !d.timing.gatedInAt && !emptyByLoad ? (
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.clock.emptyOutLabel')}</span>
+              <input class="cinput" type="datetime-local" value={emptyAt} onInput={(e) => setEmptyAt((e.target as HTMLInputElement).value)} />
+            </label>
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || !fromUtcInput(emptyAt)} onClick={() => void act(() => client.exports.emptyOut(c.exportId, fromUtcInput(emptyAt)!), t('business.exports.clock.emptyOutSaved')).then(() => setEmptyAt(''))}>
+                {t('business.exports.clock.save')}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {mine && d.timing.gatedInAt && !c.loaded ? (
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.clock.loadedLabel')}</span>
+              <input class="cinput" type="datetime-local" value={loadedAt} onInput={(e) => setLoadedAt((e.target as HTMLInputElement).value)} />
+            </label>
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || !fromUtcInput(loadedAt)} onClick={() => void act(() => client.exports.loaded(c.exportId, fromUtcInput(loadedAt)!), t('business.exports.clock.loadedSaved')).then(() => setLoadedAt(''))}>
+                {t('business.exports.clock.save')}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       {/* EX3 — the verified gross mass. */}
       <section class="cons__panel">
         <div class="cons__panelhead">
@@ -345,16 +471,16 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
         {c.vgm ? (
           <p class="cons__lede">{t('business.exports.vgm.declared', { kg: c.vgm.kg.toLocaleString('en'), method: c.vgm.method, who: c.vgm.signatory })}</p>
         ) : (
-          <p class="chint">{t('business.exports.vgm.hint')}</p>
+          <p class="chint">{t(mine ? 'business.exports.vgm.hint' : 'business.exports.vgm.notYet')}</p>
         )}
-        {works && c.vgm && !reweigh ? (
+        {mine && c.vgm && !reweigh ? (
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setReweigh(true)}>
               {t('business.exports.vgm.again')}
             </button>
           </div>
         ) : null}
-        {works && (!c.vgm || reweigh) ? (
+        {mine && (!c.vgm || reweigh) ? (
           <>
             <div class="biz-two">
               <label class="cfield">
@@ -402,32 +528,155 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
         ) : null}
       </section>
 
+      {/* EX7 — the clearing agent: appointed by the exporter, reads the papers attached here, gives its word on each. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('business.exports.agent.title')}</span>
+        </div>
+        {d.you === 'agent' ? (
+          <p class="cons__lede">{t('business.exports.agent.youAre', { exporter: d.exporterName, when: dayWords(d.agent?.appointedAt ?? '') })}</p>
+        ) : d.agent ? (
+          <p class="cons__lede">{t('business.exports.agent.appointed', { name: d.agent.name, when: dayWords(d.agent.appointedAt), by: d.agent.appointedBy })}</p>
+        ) : (
+          <p class="chint">{t('business.exports.agent.none')}</p>
+        )}
+        {mine && d.agent ? (
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.agent.reason')}</span>
+              <input class="cinput" maxLength={200} value={endReason} onInput={(e) => setEndReason((e.target as HTMLInputElement).value)} />
+            </label>
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.endAgent(c.exportId, endReason.trim() || undefined), t('business.exports.agent.ended', { name: d.agent?.name ?? '' })).then(() => setEndReason(''))}>
+                {t('business.exports.agent.end')}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {mine && !d.agent ? (
+          <>
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => setPicking(true)}>
+                {t('business.exports.agent.choose')}
+              </button>
+            </div>
+            {/* Chosen from the agents' directory, never typed: alphabetical, what each says beside what we have seen. */}
+            <ParticipantPicker
+              open={picking}
+              title={t('business.exports.agent.choose')}
+              actionLabel={t('business.exports.agent.appoint')}
+              onClose={() => setPicking(false)}
+              kinds={[
+                {
+                  key: 'agents',
+                  labelKey: 'business.exports.agent.kind',
+                  load: async () => {
+                    const r = await client.exports.findAgents();
+                    const items = r.data?.items ?? [];
+                    return {
+                      basis: t('business.exports.agent.basis', { n: items.length }),
+                      rows: items
+                        .filter((a) => a.entityId !== business.entityId)
+                        .map((a) => ({
+                          id: a.entityId,
+                          name: a.name,
+                          ...(a.handle ? { handle: a.handle } : {}),
+                          ...(a.country ? { country: a.country } : {}),
+                          ...(a.offer?.specialisms?.length ? { says: a.offer.specialisms.map((sp) => t(`home.agents.spec.${sp}` as never)).join(', ') } : {}),
+                          seen: a.thin ? t('business.exports.agent.new') : t('business.exports.agent.seen', { appointed: a.appointed, cleared: a.cleared }),
+                          ...(a.contact?.phone ? { phone: a.contact.phone } : {}),
+                        })),
+                    };
+                  },
+                },
+              ]}
+              onPick={(row) => {
+                setPicking(false);
+                void act(() => client.exports.appointAgent(c.exportId, row.id), t('business.exports.agent.appointedNote', { name: row.name }));
+              }}
+            />
+          </>
+        ) : null}
+        {d.you === 'exporter' && c.formerAgents?.length ? <p class="chint">{t('business.exports.agent.former', { n: c.formerAgents.length })}</p> : null}
+      </section>
+
       {/* EX4 — the papers: its own documents, or a reference. */}
       <section class="cons__panel">
         <div class="cons__panelhead">
           <span class="cons__panelt">{t('business.exports.papers.title')}</span>
         </div>
-        <p class="chint">{t('business.exports.papers.hint')}</p>
+        <p class="chint">{t(d.you === 'agent' ? 'business.exports.papers.hintAgent' : 'business.exports.papers.hint')}</p>
         <div class="crows">
           {d.papers.map((p) => {
             const draft = paper[p.key] ?? { documentId: '', reference: '' };
             const given = p.documentTitle || p.reference;
+            // Its agent's word wins the tag: sent back is a gap whatever was given; accepted is the strongest yes.
+            const paperTone = p.refusedAt ? 'warn' : given ? 'ok' : p.optional ? 'quiet' : 'warn';
+            const paperWord: MessageKey = p.refusedAt ? 'business.exports.papers.sentBack' : p.acceptedAt ? 'business.exports.papers.acceptedTag' : given ? 'business.exports.papers.given' : p.optional ? 'business.exports.papers.optional' : 'business.exports.papers.missing';
+            const changeable = mine && given && !changing[p.key];
+            // The agent gives its word on what the exporter supplied; the entry it gave itself stands as its word.
+            const worded = asAgent && given && refusing[p.key] === undefined && !(p.key === 'export_entry' && p.acceptedAt);
             return (
               <div class="crow" key={p.key}>
                 <span class="crow__body">
                   <span class="crow__top">
                     <span class="crow__name">{t(PAPER_WORD[p.key])}</span>
-                    <span class={`ctag ctag--${given ? 'ok' : p.optional ? 'quiet' : 'warn'}`}>{t(given ? 'business.exports.papers.given' : p.optional ? 'business.exports.papers.optional' : 'business.exports.papers.missing')}</span>
+                    <span class={`ctag ctag--${paperTone}`}>{t(paperWord)}</span>
                   </span>
                   {given ? <span class="crow__sub">{[p.documentTitle, p.reference].filter(Boolean).join(' — ')}</span> : null}
-                  {works && given && !changing[p.key] ? (
+                  {p.refusedAt ? (
+                    <span class="crow__sub cerr">{t('business.exports.papers.refused', { who: p.refusedBy ?? '', reason: p.refusedReason ?? '' })}</span>
+                  ) : p.acceptedAt ? (
+                    <span class="crow__sub">{t('business.exports.papers.accepted', { who: p.acceptedBy ?? '' })}</span>
+                  ) : null}
+                  {/* One row of what this reader can do: open it; the exporter changes it; its agent accepts it or sends it back. */}
+                  {p.documentId || changeable || worded ? (
                     <span class="twr-panelend">
-                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: true })}>
-                        {t('business.exports.papers.change')}
+                      {p.documentId ? (
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void openPaper(p.key, p.documentTitle ?? t(PAPER_WORD[p.key]))}>
+                          {t('business.exports.papers.open')}
+                        </button>
+                      ) : null}
+                      {changeable ? (
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: true })}>
+                          {t('business.exports.papers.change')}
+                        </button>
+                      ) : null}
+                      {worded && !p.acceptedAt ? (
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.acceptPaper(c.exportId, p.key), t('business.exports.papers.acceptedNote'))}>
+                          {t('business.exports.papers.accept')}
+                        </button>
+                      ) : null}
+                      {worded && !p.refusedAt ? (
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setRefusing({ ...refusing, [p.key]: '' })}>
+                          {t('business.exports.papers.sendBackStart')}
+                        </button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                  {asAgent && refusing[p.key] !== undefined ? (
+                    <span class="biz-paperline">
+                      <input class="cinput" maxLength={300} placeholder={t('business.exports.papers.refusePh')} value={refusing[p.key]} onInput={(e) => setRefusing({ ...refusing, [p.key]: (e.target as HTMLInputElement).value })} />
+                      <button
+                        type="button"
+                        class="cbtn cbtn--ghost cbtn--sm"
+                        disabled={busy || (refusing[p.key] ?? '').trim().length < 3}
+                        onClick={() => void act(() => client.exports.refusePaper(c.exportId, p.key, (refusing[p.key] ?? '').trim()), t('business.exports.papers.refusedNote')).then(() => setRefusing({ ...refusing, [p.key]: undefined }))}
+                      >
+                        {t('business.exports.papers.sendBack')}
                       </button>
                     </span>
                   ) : null}
-                  {works && (!given || changing[p.key]) ? (
+                  {/* The agent's own work is the export entry, by its number. */}
+                  {asAgent && p.key === 'export_entry' && !p.acceptedAt ? (
+                    <span class="biz-paperline">
+                      <input class="cinput" maxLength={80} placeholder={t('business.exports.papers.entryAgentPh')} value={entry} onInput={(e) => setEntry((e.target as HTMLInputElement).value)} />
+                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || entry.trim().length < 3} onClick={() => void act(() => client.exports.paper(c.exportId, { key: 'export_entry', reference: entry.trim() }), t('business.exports.papers.entryGiven')).then(() => setEntry(''))}>
+                        {t('business.exports.papers.giveEntry')}
+                      </button>
+                    </span>
+                  ) : null}
+                  {mine && (!given || changing[p.key]) ? (
                     <span class="biz-paperline">
                       {p.key !== 'export_entry' && d.documents.length ? (
                         <select class="cinput" value={draft.documentId} onChange={(e) => setPaper({ ...paper, [p.key]: { ...draft, documentId: (e.target as HTMLSelectElement).value } })}>
@@ -471,7 +720,7 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
               <p class="chint">{t('business.exports.laden.sealIt', { code: d.ladenLeg.code })}</p>
             )}
           </>
-        ) : works ? (
+        ) : mine ? (
           <>
             <p class="chint">{t(c.vgm ? 'business.exports.laden.hintVgm' : 'business.exports.laden.hint')}</p>
             {!c.vgm ? (
@@ -502,7 +751,7 @@ function ExportPanel({ exportId, business, client, works, onChanged }: { exportI
         </div>
         {c.billOfLading ? (
           <p class="cons__lede">{t('business.exports.bl.recorded', { number: c.billOfLading.number })}</p>
-        ) : works ? (
+        ) : mine ? (
           <div class="biz-two">
             <label class="cfield">
               <span class="cfield__label">{t('business.exports.bl.label')}</span>
