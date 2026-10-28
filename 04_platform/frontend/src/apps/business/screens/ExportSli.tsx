@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { abbrName } from '../../../shared/abbr';
 import { DocumentButton } from '../../../shared/ui';
+import { ConsolePick } from '../../tower/ConsolePick';
 import { useT } from '../../../shared/i18n';
 import type { BusinessClient } from '../api';
 import { dayWords, emptySliLine, SLI_INCOTERMS, sliBody, sliForm, utcWords, type ExportDetail, type SliForm, type SliLineForm } from '../exports';
@@ -109,14 +110,12 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
           <h3 class="cons__sub">{t('business.exports.sli.parties')}</h3>
           <p class="chint">{t('business.exports.sli.fromExport', { shipper: d.exporterName, forwarder: c.booking.partyName, booking: c.booking.reference })}</p>
           {input(t('business.exports.sli.shipperContact'), form.shipperContact, (v) => set({ shipperContact: v }), { max: 160 })}
-          <label class="cfield">
-            <span class="cfield__label">{t('business.exports.sli.consigneeKind')}</span>
-            <select class="cinput" value={form.consigneeKind} onChange={(e) => set({ consigneeKind: (e.target as HTMLSelectElement).value as SliForm['consigneeKind'] })}>
-              <option value="named">{t('business.exports.sli.kind.named')}</option>
-              <option value="to_order">{t('business.exports.sli.kind.to_order')}</option>
-              <option value="to_order_of_bank">{t('business.exports.sli.kind.to_order_of_bank')}</option>
-            </select>
-          </label>
+          <ConsolePick
+            label={t('business.exports.sli.consigneeKind')}
+            value={form.consigneeKind}
+            options={(['named', 'to_order', 'to_order_of_bank'] as const).map((k) => ({ value: k, label: t(`business.exports.sli.kind.${k}`) }))}
+            onChange={(v) => set({ consigneeKind: v as SliForm['consigneeKind'] })}
+          />
           {form.consigneeKind === 'named' ? (
             <div class="biz-two">
               {input(t('business.exports.sli.consigneeName'), form.consignee.name, (v) => set({ consignee: { ...form.consignee, name: v } }))}
@@ -147,37 +146,32 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
             {input(t('business.exports.sli.placeOfDelivery'), form.placeOfDelivery, (v) => set({ placeOfDelivery: v }), { max: 80 })}
           </div>
           <div class="biz-two">
-            <label class="cfield">
-              <span class="cfield__label">{t('business.exports.sli.incoterm')}</span>
-              <select class="cinput" value={form.incoterm} onChange={(e) => set({ incoterm: (e.target as HTMLSelectElement).value })}>
-                <option value="">{t('business.exports.sli.incotermNone')}</option>
-                {SLI_INCOTERMS.map((code) => (
-                  <option key={code} value={code}>
-                    {`${code} — ${t(abbrName(code))}`}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ConsolePick
+              label={t('business.exports.sli.incoterm')}
+              value={form.incoterm}
+              options={[{ value: '', label: t('business.exports.sli.incotermNone') }, ...SLI_INCOTERMS.map((code) => ({ value: code, label: `${code} — ${t(abbrName(code))}` }))]}
+              onChange={(incoterm) => set({ incoterm })}
+            />
             {form.incoterm ? input(t('business.exports.sli.incotermPlace'), form.incotermPlace, (v) => set({ incotermPlace: v }), { max: 80, placeholder: c.loadingPort }) : <span />}
           </div>
           <div class="biz-two">
-            <label class="cfield">
-              <span class="cfield__label">{t('business.exports.sli.freight')}</span>
-              <select class="cinput" value={form.freight} onChange={(e) => set({ freight: (e.target as HTMLSelectElement).value })}>
-                <option value="">{t('business.exports.sli.choose')}</option>
-                <option value="prepaid">{t('business.exports.sli.prepaid')}</option>
-                <option value="collect">{t('business.exports.sli.collect')}</option>
-              </select>
-            </label>
-            <label class="cfield">
-              <span class="cfield__label">{t('business.exports.sli.release')}</span>
-              <select class="cinput" value={form.blRelease} onChange={(e) => set({ blRelease: (e.target as HTMLSelectElement).value })}>
-                <option value="">{t('business.exports.sli.choose')}</option>
-                <option value="originals">{t('business.exports.sli.release.originals')}</option>
-                <option value="sea_waybill">{t('business.exports.sli.release.sea_waybill')}</option>
-                <option value="telex_release">{t('business.exports.sli.release.telex_release')}</option>
-              </select>
-            </label>
+            <ConsolePick
+              label={t('business.exports.sli.freight')}
+              value={form.freight}
+              placeholder={t('business.exports.sli.choose')}
+              options={[
+                { value: 'prepaid', label: t('business.exports.sli.prepaid') },
+                { value: 'collect', label: t('business.exports.sli.collect') },
+              ]}
+              onChange={(freight) => set({ freight })}
+            />
+            <ConsolePick
+              label={t('business.exports.sli.release')}
+              value={form.blRelease}
+              placeholder={t('business.exports.sli.choose')}
+              options={(['originals', 'sea_waybill', 'telex_release'] as const).map((k) => ({ value: k, label: t(`business.exports.sli.release.${k}`) }))}
+              onChange={(blRelease) => set({ blRelease })}
+            />
           </div>
           <div class="biz-two">
             {form.blRelease === 'originals' ? input(t('business.exports.sli.originals'), form.originals, (v) => set({ originals: v }), { type: 'number' }) : <span />}

@@ -112,7 +112,11 @@ expeditor) — staff read, never act in its name.
     refuses a code no country settles in (`isKnownCurrency`), so "KSH" cannot be stored. Payment terms are one of
     nine usual terms (advance, letters of credit, cash against documents, documents against acceptance, open account
     30/60/90, consignment) or "Other" with the exporter's own words; the stored value is the words, so a saved
-    invoice reads back either way.
+    invoice reads back either way. **Every choice on an export is the console's picker** (the user, 2026-10-28: "move
+    them to the same picker"): the letter's consignee kind, trade term (said in full on the button, "FOB — Free On
+    Board"), freight and release; each packing-list column's use; the booking party, a paper from the business's
+    documents, how the box was weighed, and the paper these goods need. `business/export-selects.test.ts` refuses a
+    native `<select>` or `<datalist>` in any `Export*.tsx` screen.
 
 ## Not built (said, not hidden)
 Air exports — new ground, to get its own help section once the user has read into it (the user, 2026-10-28); the barge

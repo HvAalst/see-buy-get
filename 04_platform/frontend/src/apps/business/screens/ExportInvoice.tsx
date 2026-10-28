@@ -171,8 +171,7 @@ export function ExportInvoice({ d, client, mine, signatory, onDetail }: { d: Exp
             <ConsolePick
               label={t('business.exports.sli.incoterm')}
               value={form.incoterm}
-              placeholder={t('business.exports.sli.incotermNone')}
-              options={SLI_INCOTERMS.map((code) => ({ value: code, label: code, sub: t(abbrName(code)) }))}
+              options={[{ value: '', label: t('business.exports.sli.incotermNone') }, ...SLI_INCOTERMS.map((code) => ({ value: code, label: `${code} — ${t(abbrName(code))}` }))]}
               onChange={(incoterm) => set({ incoterm })}
             />
             {form.incoterm ? input(t('business.exports.sli.incotermPlace'), form.incotermPlace, (v) => set({ incotermPlace: v }), { max: 80 }) : <span />}

@@ -76,8 +76,11 @@ describe('the letter on the export, from each side', () => {
     expect(html).toContain(t('business.exports.sli.sign', { n: 1 }));
     expect(html).toContain('Before it can be signed: Fill in the form.');
     expect(html).toContain('Pwani Forwarders');
-    // The trade terms said in full beside their letters.
-    expect(html).toContain('FOB — Free On Board');
+    // Every choice in the console's own picker, never the phone's popup.
+    expect(html).not.toContain('<select');
+    expect(html).toContain('cselect__btn');
+    // The trade term said in full beside its letters, on the button once chosen.
+    expect(render(detail({ draft }))).toContain('<span class="cselect__val">FOB — Free On Board</span>');
     expect(html).not.toContain(field('business.exports.sli.unNumber'));
   });
 

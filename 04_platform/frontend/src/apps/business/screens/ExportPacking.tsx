@@ -1,5 +1,7 @@
 import { useState } from 'preact/hooks';
 import { DocumentButton } from '../../../shared/ui';
+import { abbrName } from '../../../shared/abbr';
+import { ConsolePick } from '../../tower/ConsolePick';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { BusinessClient } from '../api';
@@ -261,16 +263,17 @@ export function ExportPacking({ d, client, mine, signatory, onDetail }: { d: Exp
                       </span>
                       {col.convertedFrom ? <span class="crow__sub">{t('business.exports.packing.converted', { from: col.convertedFrom })}</span> : null}
                       <span class="biz-paperline">
-                        <select class="cinput" value={mapping[col.heading] ?? col.use} onChange={(e) => {
-                            setMapping({ ...mapping, [col.heading]: (e.target as HTMLSelectElement).value as PackingColumnUse });
+                        <ConsolePick
+                          bare
+                          small
+                          label={t('business.exports.packing.useOf', { heading: col.heading })}
+                          value={mapping[col.heading] ?? col.use}
+                          options={[...PACKING_FIELDS, 'keep' as const, 'ignore' as const].map((u) => ({ value: u, label: t(USE_WORD[u]), ...(u === 'hsCode' ? { sub: t(abbrName('HS code')) } : {}) }))}
+                          onChange={(use) => {
+                            setMapping({ ...mapping, [col.heading]: use as PackingColumnUse });
                             setDirty(true);
-                          }}>
-                          {[...PACKING_FIELDS, 'keep' as const, 'ignore' as const].map((u) => (
-                            <option key={u} value={u}>
-                              {t(USE_WORD[u])}
-                            </option>
-                          ))}
-                        </select>
+                          }}
+                        />
                       </span>
                     </span>
                   </div>

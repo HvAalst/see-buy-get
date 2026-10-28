@@ -229,13 +229,15 @@ function RegisterExport({ business, client, onDone }: { business: BusinessView; 
       <p class="chint">{t('business.exports.f.bookingHint')}</p>
       <div class="biz-two">
         {field('reference', 'business.exports.f.reference', { maxLength: '60' })}
-        <label class="cfield">
-          <span class="cfield__label">{t('business.exports.f.bookedWith')}</span>
-          <select class="cinput" value={form.bookedWith} onChange={(e) => setForm({ ...form, bookedWith: (e.target as HTMLSelectElement).value as 'forwarder' | 'shipping_line' })}>
-            <option value="forwarder">{t('business.exports.f.forwarder')}</option>
-            <option value="shipping_line">{t('business.exports.f.line')}</option>
-          </select>
-        </label>
+        <ConsolePick
+          label={t('business.exports.f.bookedWith')}
+          value={form.bookedWith}
+          options={[
+            { value: 'forwarder', label: t('business.exports.f.forwarder') },
+            { value: 'shipping_line', label: t('business.exports.f.line') },
+          ]}
+          onChange={(v) => setForm({ ...form, bookedWith: v as 'forwarder' | 'shipping_line' })}
+        />
       </div>
       {field('party', 'business.exports.f.party', { maxLength: '120' })}
       <div class="biz-two">
@@ -475,14 +477,16 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           {mine && changing[p.key] ? (
             <span class="biz-paperline">
               {p.key !== 'export_entry' && d.documents.length ? (
-                <select class="cinput" value={draft.documentId} onChange={(e) => setPaper({ ...paper, [p.key]: { ...draft, documentId: (e.target as HTMLSelectElement).value } })}>
-                  <option value="">{t('business.exports.papers.pick')}</option>
-                  {d.documents.map((doc) => (
-                    <option key={doc.documentId} value={doc.documentId}>
-                      {doc.title}
-                    </option>
-                  ))}
-                </select>
+                <ConsolePick
+                  bare
+                  small
+                  label={t('business.exports.papers.pickTitle')}
+                  value={draft.documentId}
+                  placeholder={t('business.exports.papers.pick')}
+                  // A document chosen by mistake can be put back: the paper is then given by its reference alone.
+                  options={[...(draft.documentId ? [{ value: '', label: t('business.exports.papers.noDocument') }] : []), ...d.documents.map((doc) => ({ value: doc.documentId, label: doc.title }))]}
+                  onChange={(documentId) => setPaper({ ...paper, [p.key]: { ...draft, documentId } })}
+                />
               ) : null}
               <input class="cinput" maxLength={80} placeholder={t(p.key === 'export_entry' ? 'business.exports.papers.entryPh' : 'business.exports.papers.refPh')} value={draft.reference} onInput={(e) => setPaper({ ...paper, [p.key]: { ...draft, reference: (e.target as HTMLInputElement).value } })} />
               <button
@@ -688,13 +692,15 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         {mine && (!c.vgm || reweigh) ? (
           <>
             <div class="biz-two">
-              <label class="cfield">
-                <span class="cfield__label">{t('business.exports.vgm.method')}</span>
-                <select class="cinput" value={vgm.method} onChange={(e) => setVgm({ ...vgm, method: (e.target as HTMLSelectElement).value })}>
-                  <option value="1">{t('business.exports.vgm.method1')}</option>
-                  <option value="2">{t('business.exports.vgm.method2')}</option>
-                </select>
-              </label>
+              <ConsolePick
+                label={t('business.exports.vgm.method')}
+                value={vgm.method}
+                options={[
+                  { value: '1', label: t('business.exports.vgm.method1') },
+                  { value: '2', label: t('business.exports.vgm.method2') },
+                ]}
+                onChange={(method) => setVgm({ ...vgm, method })}
+              />
               <label class="cfield">
                 <span class="cfield__label">{t('business.exports.vgm.kg')}</span>
                 <input class="cinput" type="number" min={1500} max={45000} value={vgm.kg} onInput={(e) => setVgm({ ...vgm, kg: (e.target as HTMLInputElement).value })} />
@@ -902,15 +908,18 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         {/* What these goods need beyond every export's papers: asked for by the exporter, or by its agent who knows the border. */}
         {mine || asAgent ? (
           <div class="biz-paperline">
-            <select key={`ask-${d.papers.length}`} class="cinput" value={asking.key} onChange={(e) => setAsking({ ...asking, key: (e.target as HTMLSelectElement).value })}>
-              <option value="">{t('business.exports.papers.askPick')}</option>
-              {ASKED_PAPERS.filter((key) => !d.papers.some((p) => p.key === key && p.group === 'asked')).map((key) => (
-                <option key={key} value={key}>
-                  {t(PAPER_WORD[key])}
-                </option>
-              ))}
-              <option value="other">{t('business.exports.papers.askOther')}</option>
-            </select>
+            <ConsolePick
+              bare
+              small
+              label={t('business.exports.papers.askTitle')}
+              value={asking.key}
+              placeholder={t('business.exports.papers.askPick')}
+              options={[
+                ...ASKED_PAPERS.filter((key) => !d.papers.some((p) => p.key === key && p.group === 'asked')).map((key) => ({ value: key, label: t(PAPER_WORD[key]) })),
+                { value: 'other', label: t('business.exports.papers.askOther') },
+              ]}
+              onChange={(key) => setAsking({ ...asking, key })}
+            />
             {asking.key === 'other' ? (
               <input class="cinput" maxLength={80} placeholder={t('business.exports.papers.askOtherPh')} value={asking.title} onInput={(e) => setAsking({ ...asking, title: (e.target as HTMLInputElement).value })} />
             ) : null}
