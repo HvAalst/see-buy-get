@@ -135,6 +135,17 @@ function instructionsOf(input: { text?: string; contactName?: string; contactPho
 }
 
 /** FP7 — the instructions as read: the box, plus every subsequent instruction with its time. Nothing when there are none. */
+/** Dangerous goods as the sender declared them, written the one way: "UN1263", the class and group as given. */
+function dangerousOf(d: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }): { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string } {
+  const digits = /(\d{4})/.exec(d.unNumber)?.[1];
+  if (!digits) throw new GlosError('VALIDATION_FAILED', 'A UN number is UN and four digits, like UN1263', { field: 'dangerousGoods.unNumber' });
+  const name = d.properShippingName?.trim();
+  const klass = d.hazardClass?.trim();
+  if (!name) throw new GlosError('FIELD_REQUIRED', 'Give the dangerous goods’ proper shipping name, as on their safety data sheet', { field: 'dangerousGoods.properShippingName' });
+  if (!klass) throw new GlosError('FIELD_REQUIRED', 'Give the dangerous goods’ class, as on their safety data sheet', { field: 'dangerousGoods.hazardClass' });
+  return { unNumber: `UN${digits}`, properShippingName: name.slice(0, 200), hazardClass: klass.slice(0, 8), ...(d.packingGroup ? { packingGroup: d.packingGroup } : {}) };
+}
+
 function instructionsViewOf(f: Freight): { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; at?: string; amendments?: Array<{ text: string; at: string }> } | undefined {
   if (!f.instructions && !f.instructionAmendments?.length) return undefined;
   const i = f.instructions;
@@ -562,7 +573,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -697,6 +708,11 @@ export class DispatchService {
       // BL1 — uncleared goods. The country defaults to the leg's own, because a bond is held where the
       // wheels turn; it is stated separately only so a caller cannot quietly mean a different one.
       ...(input.bonded ? { bonded: true, bondCountry: (input.bondCountry ?? input.pickupCountry ?? '').toUpperCase() } : {}),
+      // The CMR check (2026-10-28): the consignee the sender named, its dangerous goods as it declared them, and its
+      // instructions for customs — boxes 2, 9 and 13, which nothing on a posted load asked for until then.
+      ...(input.consignee?.name?.trim() ? { consignee: { name: input.consignee.name.trim().slice(0, 120), ...(input.consignee.address?.trim() ? { address: input.consignee.address.trim().slice(0, 300) } : {}) } } : {}),
+      ...(input.dangerousGoods ? { dangerousGoods: dangerousOf(input.dangerousGoods) } : {}),
+      ...(input.customsInstructions?.trim() ? { customsInstructions: input.customsInstructions.trim().slice(0, 500) } : {}),
       // FP7 — box 13 at posting, when the poster said anything.
       ...(instructionsOf({ text: input.instructions, contactName: input.contactName, contactPhone: input.contactPhone, deliveryWindow: input.deliveryWindow }, input.postedByDid, now) ?? {}),
       // S34c — a positive, finite cap only; a zero/negative/NaN budget is treated as "no cap" (never a load

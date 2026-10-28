@@ -111,7 +111,22 @@ export interface LoadForm {
   weightKg: string;
   /** Inbound, reading A: delivered to another business's receiving point, by the code it found — instead of a place of its own. */
   receivingPoint?: string;
+  /** The two ends are in different countries: the consignment note then needs its consignee and its packages. */
+  crossing?: boolean;
+  consigneeName?: string;
+  consigneeAddress?: string;
+  natureCode?: string;
+  packaging?: string;
+  packages?: string;
+  unNumber?: string;
+  properShippingName?: string;
+  hazardClass?: string;
 }
+
+/** The kinds of goods that are dangerous goods, named on the note by their UN number, name, class and packing group. */
+export const DANGEROUS_NATURES = ['HAZ-CHEM', 'HAZ-BIO', 'HAZ-FLAM'] as const;
+export const isDangerousNature = (code: string | undefined) => (DANGEROUS_NATURES as readonly string[]).includes(code ?? '');
+
 export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
   const gaps: Array<keyof LoadForm> = [];
   if (!form.description.trim()) gaps.push('description');
@@ -119,6 +134,22 @@ export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
   if (!form.toSiteId && !form.receivingPoint) gaps.push('toSiteId');
   const kg = Number(form.weightKg);
   if (!(Number.isFinite(kg) && kg >= 1)) gaps.push('weightKg');
+  // THE CMR CHECK (2026-10-28): across a border the note names who receives the goods (box 2) and counts the packages
+  // (box 7) — or says the goods are in bulk. A receiving point is its own consignee.
+  if (form.crossing && !form.receivingPoint) {
+    if (!form.consigneeName?.trim()) gaps.push('consigneeName');
+    if (!form.consigneeAddress?.trim()) gaps.push('consigneeAddress');
+  }
+  if (form.crossing && form.packaging !== 'loose') {
+    const n = Number(form.packages);
+    if (!(Number.isInteger(n) && n >= 1 && n <= 500)) gaps.push('packages');
+  }
+  // Dangerous goods by their generally recognised description (box 9): the sender's own, as on the safety data sheet.
+  if (isDangerousNature(form.natureCode)) {
+    if (!/^\s*(UN)?\s*\d{4}\s*$/i.test(form.unNumber ?? '')) gaps.push('unNumber');
+    if (!form.properShippingName?.trim()) gaps.push('properShippingName');
+    if (!form.hazardClass?.trim()) gaps.push('hazardClass');
+  }
   return gaps;
 }
 

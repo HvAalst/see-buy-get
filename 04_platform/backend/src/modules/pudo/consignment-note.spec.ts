@@ -38,7 +38,7 @@ describe('the consignment note', () => {
     // Nothing said on the road yet (round 14): no border, no hub.
     { requireFreightPublic: (id: string) => freights[id] ?? (() => { throw new Error('not found'); })(), passageFacts: () => ({}) } as never,
     { get: (did: string) => ({ displayName: 'Amos K.', managerDid: did === 'did:drv:amos' ? 'did:fleet:kilima' : undefined, jurisdiction: 'KE' }) } as never,
-    { get: () => ({ companyName: 'Kilima Logistics', depotAddress: '1 Depot Rd', jurisdiction: 'KE', did: 'did:fleet:kilima' }) } as never,
+    { get: (did: string) => (did === 'did:fleet:jenga' ? { companyName: 'Jenga Freight', depotAddress: 'Enterprise Rd 4', jurisdiction: 'KE', did } : { companyName: 'Kilima Logistics', depotAddress: '1 Depot Rd', jurisdiction: 'KE', did: 'did:fleet:kilima' }) } as never,
     { get: (did: string) => ({ shopName: did === 'did:shop:a1' ? 'Mama Sarah Shop' : 'Riverside Corner', landmark: 'Next to the market', country: 'KE', did }) } as never,
     { has: (id: string) => id === 'ven_1', get: () => ({ did: 'did:store', name: 'Nairobi Threads', address: 'Biashara St 12', country: 'KE' }) } as never,
     new EventBus(),
@@ -57,7 +57,8 @@ describe('the consignment note', () => {
     const n = service.build(freights.fr_1);
     expect(n).toMatchObject({ number: 'CMR-FRT-010', kind: 'national', title: 'Consignment note (CMR layout)' });
     expect(n.sender).toMatchObject({ name: 'Mama Sarah Shop', country: 'Kenya', did: 'did:shop:a1' });
-    expect(n.consignee).toMatchObject({ name: 'Riverside Corner', address: 'As named by the sender' });
+    // Nobody named: the place, said as a place — never dressed up as an address (the CMR check, 2026-10-28).
+    expect(n.consignee).toMatchObject({ name: 'Riverside Corner', address: 'The place of delivery the sender named; who receives there was not given' });
     expect(n.carrier).toMatchObject({ name: 'Kilima Logistics', driverName: 'Amos K.', country: 'Kenya' });
     expect(n.carrier?.plate).toBeUndefined(); // not taken over yet: no vehicle on the note
     expect(n.goods).toMatchObject({ grossKg: 800, volumeM3: 2, packages: null, dangerous: false });
@@ -168,6 +169,59 @@ describe('the consignment note', () => {
       expect(page).toContain('/help/electronic-note/');
       expect((page.match(/Signed on paper:/g) ?? []).length).toBe(3);
     }
+  });
+
+  it('carries what the sender named: the consignee, dangerous goods by their recognised description, customs instructions', () => {
+    const n = service.build(
+      base({
+        pickupCountry: 'KE',
+        destCountry: 'UG',
+        natureCode: 'HAZ-CHEM',
+        consignee: { name: 'Kampala Build Co', address: 'Plot 4, Industrial Area, Kampala' },
+        dangerousGoods: { unNumber: 'UN1263', properShippingName: 'Paint', hazardClass: '3', packingGroup: 'III' },
+        customsInstructions: 'Cleared at Malaba by Pwani Clearing',
+        bonded: true,
+        bondCountry: 'KE',
+        packaging: 'drummed',
+      } as never),
+    );
+    expect(n.consignee).toEqual({ name: 'Kampala Build Co', address: 'Plot 4, Industrial Area, Kampala', country: 'Uganda' });
+    expect(n.goods).toMatchObject({ natureWords: 'Chemicals', dangerous: true, dangerousGoods: { unNumber: 'UN1263', properShippingName: 'Paint', hazardClass: '3', packingGroup: 'III' } });
+    expect(n.instructions.slice(0, 2)).toEqual(['For customs: Cleared at Malaba by Pwani Clearing', 'Uncleared goods, carried in bond: the carrier needs a transit licence of Kenya']);
+    const html = service.htmlFor(n);
+    expect(html).toContain('Dangerous goods: UN1263 Paint, class 3, packing group III');
+    expect(html).toContain('<td>Chemicals</td>');
+    expect(html).not.toContain('HAZ-CHEM ·');
+    // Dangerous, and nothing declared: the note says what is missing rather than "dangerous" alone.
+    const bare = service.htmlFor(service.build(base({ natureCode: 'HAZ-FLAM', requiredCapabilities: ['hazmat'] } as never)));
+    expect(bare).toContain('UN number, proper shipping name, class and packing group not given by the sender');
+    // Packages: loose goods are in bulk; otherwise a number the sender did not give is said so.
+    expect(service.htmlFor(service.build(base({ packaging: 'loose', packages: undefined } as never)))).toContain('<td>In bulk</td>');
+    expect(service.htmlFor(service.build(base({ packaging: 'bagged', packages: undefined } as never)))).toContain('Not stated by the sender');
+    // The seals box has no number of its own: box 6 is the marks.
+    expect(html).not.toMatch(/<span class="no">6<\/span>Seals/);
+  });
+
+  it('names the fleet the sender contracted with in box 16, and the partner that carried it in box 17', () => {
+    // Ordered from Jenga under contract, handed on to its partner Kilima, whose driver took the goods over.
+    const contract = { contractId: 'ctr_1', fleetDid: 'did:fleet:jenga', fleetName: 'Jenga Freight', shipperName: 'Thika Avocados' };
+    freights.fr_9 = base({ freightId: 'fr_9', contract, handOn: { state: 'partner', at: '2026-09-14T07:40:00Z', by: 'Wanjiru', partner: { fleetDid: 'did:fleet:kilima', fleetName: 'Kilima Logistics' }, via: { fleetDid: 'did:fleet:pwani', fleetName: 'Pwani Haulage' } }, pickedUpAt: '2026-09-14T09:00:00Z', carriage: { vehicleId: 'v1', plate: 'KDA 123A', vehicleClass: 'truck', driverDid: 'did:drv:amos' }, carrierDid: 'did:fleet:kilima' } as never);
+    const n = service.build(freights.fr_9);
+    expect(n.carrier).toEqual({ name: 'Jenga Freight', address: 'Enterprise Rd 4', country: 'Kenya', did: 'did:fleet:jenga' });
+    expect(n.successive).toEqual([expect.objectContaining({ name: 'Kilima Logistics', did: 'did:fleet:kilima', driverName: 'Amos K.', plate: 'KDA 123A', takenOverAt: '2026-09-14T09:00:00Z', via: 'Pwani Haulage' })]);
+    // Box 23 is signed by the driver who took the goods over.
+    expect(n.confirmations.carrier?.by).toBe('Amos K.');
+    const html = service.htmlFor(n);
+    expect(html).toContain('Contracted with the sender; carried by the carrier in box 17');
+    expect(html).toContain('Took the goods over 14 Sep 2026, 09:00 UTC');
+    expect(html).toContain('Passed on by Pwani Haulage');
+    // The contracted fleet answers for the order: it reads the note, and is among the parties the archive keeps.
+    expect(service.isParty(freights.fr_9, 'did:fleet:jenga')).toBe(true);
+    expect(service.partiesOf(freights.fr_9)).toContain('did:fleet:jenga');
+    // Carried by the fleet it was ordered from: box 16 only, box 17 none.
+    const own = service.build(base({ contract: { ...contract, fleetDid: 'did:fleet:kilima', fleetName: 'Kilima Logistics' } } as never));
+    expect(own.carrier).toMatchObject({ name: 'Kilima Logistics', driverName: 'Amos K.' });
+    expect(own.successive).toBeUndefined();
   });
 
   it('FP6: the tracking view shows the journey and the carrier at the door, and nothing a stranger with the link should not see', () => {

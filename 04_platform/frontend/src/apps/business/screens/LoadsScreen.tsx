@@ -9,7 +9,7 @@ import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_HELP } from '../../agent/logic';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type LoadProposal, type PostedLoad } from '../api';
-import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
+import { isDangerousNature, deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
 import { passageWords } from '../../../shared/passages';
 import { heldLine } from '../../../shared/tamper';
 import { heldByLine } from '../../../shared/heldByAuthority';
@@ -47,8 +47,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
-type Form = LoadForm & { receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
-const EMPTY: Form = { description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
+type Form = LoadForm & { consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
+const EMPTY: Form = { consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -204,7 +204,10 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const gaps = loadGaps(form);
+  // Across a border the consignment note asks more of the form (the CMR check, 2026-10-28).
+  const crossing = Boolean(form.destCountry && form.destCountry !== business.country);
+  const dangerous = isDangerousNature(form.natureCode);
+  const gaps = loadGaps({ ...form, crossing });
   const gap = (f: keyof LoadForm) => (tried && gaps.includes(f) ? <span class="cerr">{t(`business.loads.need.${f}` as MessageKey)}</span> : null);
   const siteApi = client ? (client.api as never) : null;
   // P1 — the carriers this business has a standing contract with. An order with one goes to its queue, not the board.
@@ -260,6 +263,9 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(form.packaging ? { packaging: form.packaging } : {}),
       ...(counted ? { packages: counted } : {}),
       natureCode: form.natureCode,
+      ...(form.consigneeName.trim() && !receiving ? { consignee: { name: form.consigneeName.trim(), ...(form.consigneeAddress.trim() ? { address: form.consigneeAddress.trim() } : {}) } } : {}),
+      ...(dangerous ? { dangerousGoods: { unNumber: form.unNumber.trim(), properShippingName: form.properShippingName.trim(), hazardClass: form.hazardClass.trim(), ...(form.packingGroup ? { packingGroup: form.packingGroup } : {}) } } : {}),
+      ...(crossing && form.customsInstructions.trim() ? { customsInstructions: form.customsInstructions.trim() } : {}),
       fragile: form.fragile,
       commitMode: form.commitMode,
       ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
@@ -393,12 +399,31 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
             <span class="cfield__label">{t('business.loads.f.packages')}</span>
             <input id="load-packages" class="cinput" inputMode="numeric" maxLength={3} value={form.packages} onInput={(e) => setForm((prev) => ({ ...prev, packages: (e.target as HTMLInputElement).value }))} />
             <span class="chint">{t(form.forClientId ? 'business.loads.f.packagesHintClient' : business.gs1 ? 'business.loads.f.packagesHintGs1' : 'business.loads.f.packagesHint')}</span>
+            {gap('packages')}
           </label>
           <div class="cfield">
             <CountrySelect value={form.destCountry} onChange={(destCountry) => setForm((prev) => ({ ...prev, destCountry }))} label={t('business.loads.f.destCountry')} options={countries} />
             {form.destCountry && form.destCountry !== business.country ? <span class="chint">{t('business.loads.f.crossing')}</span> : null}
           </div>
         </div>
+        {/* Box 2 of the consignment note: who receives the goods. A receiving point is its own consignee. */}
+        {receiving ? null : (
+          <>
+            <div class="biz-two">
+              <label class="cfield">
+                <span class="cfield__label">{t('business.loads.f.consigneeName')}</span>
+                <input class="cinput" maxLength={120} value={form.consigneeName} onInput={(e) => setForm((prev) => ({ ...prev, consigneeName: (e.target as HTMLInputElement).value }))} />
+                {gap('consigneeName')}
+              </label>
+              <label class="cfield">
+                <span class="cfield__label">{t('business.loads.f.consigneeAddress')}</span>
+                <input class="cinput" maxLength={300} value={form.consigneeAddress} onInput={(e) => setForm((prev) => ({ ...prev, consigneeAddress: (e.target as HTMLInputElement).value }))} />
+                {gap('consigneeAddress')}
+              </label>
+            </div>
+            <p class="chint">{t(crossing ? 'business.loads.f.consigneeHintCrossing' : 'business.loads.f.consigneeHint')}</p>
+          </>
+        )}
         <div class="biz-two">
           <ConsolePick
             label={t('business.loads.f.nature')}
@@ -450,6 +475,45 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
             />
           </label>
         </div>
+        {/* Box 9: dangerous goods by their generally recognised description — the sender's own, as on the safety data sheet. */}
+        {dangerous ? (
+          <>
+            <h3 class="cons__sub">{t('business.exports.sli.dangerous')}</h3>
+            <p class="chint">{t('business.loads.f.dangerousHint')}</p>
+            <div class="biz-two">
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.sli.unNumber')}</span>
+                <input class="cinput" maxLength={8} placeholder="UN1263" value={form.unNumber} onInput={(e) => setForm((prev) => ({ ...prev, unNumber: (e.target as HTMLInputElement).value }))} />
+                {gap('unNumber')}
+              </label>
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.sli.hazardClass')}</span>
+                <input class="cinput" maxLength={8} placeholder="3" value={form.hazardClass} onInput={(e) => setForm((prev) => ({ ...prev, hazardClass: (e.target as HTMLInputElement).value }))} />
+                {gap('hazardClass')}
+              </label>
+            </div>
+            <div class="biz-two">
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.sli.shippingName')}</span>
+                <input class="cinput" maxLength={200} value={form.properShippingName} onInput={(e) => setForm((prev) => ({ ...prev, properShippingName: (e.target as HTMLInputElement).value }))} />
+                {gap('properShippingName')}
+              </label>
+              <ConsolePick
+                label={t('business.exports.sli.packingGroup')}
+                value={form.packingGroup}
+                options={[{ value: '', label: t('business.loads.f.packingGroupNone') }, ...(['I', 'II', 'III'] as const).map((g) => ({ value: g, label: g }))]}
+                onChange={(packingGroup) => setForm((prev) => ({ ...prev, packingGroup }))}
+              />
+            </div>
+          </>
+        ) : null}
+        {/* Box 13, for customs: where it is cleared and by whom — asked only of a load that crosses a border. */}
+        {crossing ? (
+          <label class="cfield">
+            <span class="cfield__label">{t('business.loads.f.customs')}</span>
+            <input class="cinput" maxLength={500} placeholder={t('business.loads.f.customsPlaceholder')} value={form.customsInstructions} onInput={(e) => setForm((prev) => ({ ...prev, customsInstructions: (e.target as HTMLInputElement).value }))} />
+          </label>
+        ) : null}
         <label class="cfield">
           <span class="cfield__label">{t('business.loads.f.window')}</span>
           <input class="cinput" maxLength={80} value={form.deliveryWindow} placeholder={t('business.loads.f.windowPlaceholder')} onInput={(e) => setForm((prev) => ({ ...prev, deliveryWindow: (e.target as HTMLInputElement).value }))} />

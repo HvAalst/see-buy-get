@@ -37,6 +37,20 @@ class GeoDto {
   @IsNumber() lng!: number;
 }
 
+/** CMR box 2 — who receives the goods. */
+export class FreightConsigneeDto {
+  @IsString() @MaxLength(120) name!: string;
+  @IsOptional() @IsString() @MaxLength(300) address?: string;
+}
+
+/** CMR box 9 — dangerous goods by their generally recognised description, as the sender declares them. */
+export class FreightDangerousDto {
+  @Matches(/^\s*(UN)?\s*\d{4}\s*$/i, { message: 'A UN number is UN and four digits, like UN1263' }) unNumber!: string;
+  @IsString() @MaxLength(200) properShippingName!: string;
+  @IsString() @MaxLength(8) hazardClass!: string;
+  @IsOptional() @IsIn(['I', 'II', 'III']) packingGroup?: string;
+}
+
 class RequirementsDto {
   @IsNumber() @Min(0) androidVersion!: number;
   @IsBoolean() reliablePower!: boolean;
@@ -2591,6 +2605,12 @@ export class RegisterFreightDto {
   @IsOptional() @IsString() @MaxLength(12) receivingPoint?: string;
   /** The receiving business's own number for the order, when it gave one: a reference both sides understand. */
   @IsOptional() @IsString() @MaxLength(60) receiverRef?: string;
+  /** CMR box 2 (Art. 6(1)(e)) — who receives the goods, by name and address: the consignee on the note. */
+  @IsOptional() @ValidateNested() @Type(() => FreightConsigneeDto) consignee?: FreightConsigneeDto;
+  /** CMR box 9 (Art. 6(1)(f)) — dangerous goods by their generally recognised description. The sender's, never ours. */
+  @IsOptional() @ValidateNested() @Type(() => FreightDangerousDto) dangerousGoods?: FreightDangerousDto;
+  /** CMR box 13 (Art. 6(1)(j)) — the instructions for customs and other formalities. */
+  @IsOptional() @IsString() @MaxLength(500) customsInstructions?: string;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

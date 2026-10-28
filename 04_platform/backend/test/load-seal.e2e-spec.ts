@@ -181,7 +181,7 @@ describe('a seal on a load, over the wire', () => {
 
     // THE NOTE: every seal and what became of it; the break observed in box 18.
     const note = (await http().get(`/v1/sbg/dispatch/freight/${freightId}/consignment-note.html`).set(bearer(biz)).expect(200)).text;
-    expect(note).toContain('Seals — their numbers and what became of each');
+    expect(note).toContain('Seals on the load — their numbers and what became of each');
     expect(note).toMatch(/Seal 1: KE 1234-567 · ISO 17712 class H · Leghorn/);
     expect(note).toMatch(/put on by customs in place of KE 1234-567 at Malaba/);
     expect(note).toMatch(/Seal 2 \(KE7654321\) found broken on the road/);

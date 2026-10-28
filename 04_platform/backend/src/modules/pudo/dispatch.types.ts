@@ -331,6 +331,25 @@ export class FreightInstructions {
   by?: string;
 }
 
+/** CMR box 2 (Art. 6(1)(e)) — who receives the goods, as the sender named them: the consignee of the note. */
+export class FreightConsignee {
+  name: string;
+  @ApiPropertyOptional() address?: string;
+}
+
+/**
+ * CMR box 9 (Art. 6(1)(f)) — DANGEROUS GOODS BY THEIR GENERALLY RECOGNISED DESCRIPTION: the UN number, the proper shipping
+ * name, the class and the packing group, as the sender declares them. The sender's own declaration, never ours: SeeBuyGet
+ * classifies nothing.
+ */
+export class FreightDangerous {
+  /** UN and four digits: UN1263 for paint. */
+  unNumber: string;
+  properShippingName: string;
+  hazardClass: string;
+  @ApiPropertyOptional() packingGroup?: string;
+}
+
 /** FP7 — a "subsequent instruction" (CMR practice): given while the goods are on the road, appended never overwritten. */
 export class FreightInstructionAmendment {
   text: string;
@@ -690,6 +709,12 @@ export class Freight {
    */
   bonded?: boolean;
   bondCountry?: string;
+  /** CMR box 2 — the consignee the sender named (the user, 2026-10-28, on the CMR check). */
+  @ApiPropertyOptional({ type: FreightConsignee }) consignee?: FreightConsignee;
+  /** CMR box 9 — dangerous goods, as the sender declared them. */
+  @ApiPropertyOptional({ type: FreightDangerous }) dangerousGoods?: FreightDangerous;
+  /** CMR box 13 — the sender's instructions for customs and other formalities (Art. 6(1)(j)). */
+  @ApiPropertyOptional() customsInstructions?: string;
   claimedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;

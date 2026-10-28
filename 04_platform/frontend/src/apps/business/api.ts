@@ -313,6 +313,12 @@ export interface NewLoad {
   destCountry?: string;
   weightKg: number;
   packaging?: string;
+  /** CMR box 2 — who receives the goods. */
+  consignee?: { name: string; address?: string };
+  /** CMR box 9 — dangerous goods by their UN number, proper shipping name, class and packing group. */
+  dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
+  /** CMR box 13 — instructions for customs. */
+  customsInstructions?: string;
   /** How many packages: each gets a label, and an SSCC under the business's GS1 prefix. */
   packages?: number;
   natureCode?: string;

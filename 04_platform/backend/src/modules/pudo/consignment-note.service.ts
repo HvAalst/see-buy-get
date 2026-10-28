@@ -112,6 +112,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.shipperDid && this.shipperDidOf(f) === did) return true;
     const fleet = this.carrierFleetOf(f);
     if (fleet && fleet === did) return true;
+    // The fleet the sender contracted with answers for the order, whoever carried it: it reads the note.
+    if (f.contract?.fleetDid && f.contract.fleetDid === did) return true;
     return false;
   }
 
@@ -121,7 +123,7 @@ export class ConsignmentNoteService implements OnModuleInit {
    * leaves the fleet, a shop closes its account, and they are all still parties to a carriage that happened.
    */
   partiesOf(f: Freight): string[] {
-    const dids = [f.postedByDid, f.claimedBy, this.shipperDidOf(f), this.carrierFleetOf(f)];
+    const dids = [f.postedByDid, f.claimedBy, this.shipperDidOf(f), this.carrierFleetOf(f), f.contract?.fleetDid];
     return [...new Set(dids.filter((d): d is string => Boolean(d)))];
   }
 
@@ -152,7 +154,11 @@ export class ConsignmentNoteService implements OnModuleInit {
   build(f: Freight, opts: { sealNumbers?: boolean; consignee?: boolean } = {}): ConsignmentNote {
     const sender = this.senderOf(f);
     const agent = f.onBehalfOf ? this.agentOf(f.postedByDid) : undefined;
-    const carrier = this.carrierOf(f);
+    // Box 16 is who the sender contracted with; box 17 who carried it, where that is somebody else.
+    const carried = this.carrierOf(f);
+    const contracted = this.contractedCarrierOf(f, carried);
+    const carrier = contracted ?? carried;
+    const successive = contracted && carried ? [{ ...carried, ...(f.pickedUpAt ? { takenOverAt: f.pickedUpAt } : {}), ...(f.handOn?.via ? { via: f.handOn.via.fleetName } : {}) }] : undefined;
     // Which law: from the two countries, as they stood on the day the note was made out.
     const lane = roadRegimeOf(f.pickupCountry, f.destCountry, f.createdAt.slice(0, 10));
     const volume = f.dimensionsCm ? Math.round(((f.dimensionsCm[0] * f.dimensionsCm[1] * f.dimensionsCm[2]) / 1_000_000) * 1000) / 1000 : undefined;
@@ -176,6 +182,9 @@ export class ConsignmentNoteService implements OnModuleInit {
     // D9 — the photographs of what the receiver found at delivery: the damaged goods, always; the wrong ones, where taken.
     for (const x of f.proofOfDelivery?.exceptions ?? []) if (x.photoRefs?.length) documents.push(`Photo${x.photoRefs.length === 1 ? '' : 's'} of the goods found ${x.kind} at delivery (${x.photoRefs.join(', ')})`);
     const instructions: string[] = [];
+    // Box 13 first for what customs reads (Art. 6(1)(j)): the sender's own instructions for it, and a bonded load's licence.
+    if (f.customsInstructions) instructions.push(`For customs: ${f.customsInstructions}`);
+    if (f.bonded) instructions.push(`Uncleared goods, carried in bond: the carrier needs a transit licence${f.bondCountry ? ` of ${countryName(f.bondCountry)}` : ''}`);
     if (band) instructions.push(`Keep between ${band.minC} °C and ${band.maxC} °C`);
     if (f.fragile) instructions.push('Fragile — handle with care');
     if (f.indivisible) instructions.push('Indivisible load — do not split');
@@ -229,19 +238,22 @@ export class ConsignmentNoteService implements OnModuleInit {
       goods: {
         description: f.description,
         nature: f.natureCode ?? 'GEN',
+        natureWords: NATURE_WORDS[f.natureCode ?? 'GEN'] ?? f.natureCode ?? 'General goods',
         cargoClass: f.cargoClass,
         ...(f.packaging ? { packaging: f.packaging } : {}),
         packages: f.packages ?? (f.indivisible ? 1 : null),
         ...(marks?.length ? { marks } : {}),
         grossKg: f.weightKg,
         ...(volume ? { volumeM3: volume } : {}),
-        dangerous: (f.requiredCapabilities ?? []).includes('hazmat'),
+        dangerous: (f.requiredCapabilities ?? []).includes('hazmat') || Boolean(f.dangerousGoods),
+        ...(f.dangerousGoods ? { dangerousGoods: { ...f.dangerousGoods } } : {}),
         ...(band ? { temperatureBand: `${band.minC} °C to ${band.maxC} °C` } : {}),
         fragile: Boolean(f.fragile),
       },
       instructions,
       carriage,
       ...(carrier ? { carrier } : {}),
+      ...(successive ? { successive } : {}),
       // A door the carrier stood at and could not hand over at is the carrier's observation: box 18, for good.
       reservations: [...reservations, ...attempts],
       ...(seals.lines.length ? { seals: seals.lines } : {}),
@@ -251,7 +263,7 @@ export class ConsignmentNoteService implements OnModuleInit {
       confirmations: {
         // B2 — for a business, the person who posted it, for the business: its DID is everybody's in it.
         sender: { by: agentConfirmation(f.postedByName, agent, sender), at: f.createdAt, how: 'Confirmed electronically at posting' },
-        ...(f.pickedUpAt && carrier ? { carrier: { by: carrier.driverName ?? carrier.name, at: f.pickedUpAt, how: `Confirmed electronically at taking over, after the load-safety check${noSignal(f.pickupReceivedAt)}` } } : {}),
+        ...(f.pickedUpAt && (carried ?? carrier) ? { carrier: { by: (carried ?? carrier)!.driverName ?? (carried ?? carrier)!.name, at: f.pickedUpAt, how: `Confirmed electronically at taking over, after the load-safety check${noSignal(f.pickupReceivedAt)}` } } : {}),
         ...(f.proofOfDelivery
           ? { consignee: { by: f.proofOfDelivery.receiverName, at: f.proofOfDelivery.at, how: `${f.proofOfDelivery.photoRef ? 'Received in person; name recorded by the driver at delivery, with a photo of the goods as delivered' : 'Received in person; name recorded by the driver at delivery'}${noSignal(f.deliveryReceivedAt)}`, ...(f.proofOfDelivery.remarks ? { remarks: `Receiver’s remarks: ${f.proofOfDelivery.remarks}` } : {}), ...(f.proofOfDelivery.exceptions?.length ? { reservations: `Received with reservations: ${exceptionsInWords(f.proofOfDelivery.exceptions)}` } : {}) } }
           : f.deliveredAt
@@ -412,11 +424,14 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.receiver) {
       return { name: f.receiver.name, address: `${f.receiver.siteName}, by its receiving code${f.receiverRef ? ` — their order ${f.receiverRef}` : ''}`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
     }
+    // Named by the sender when it posted the load (box 2): who receives the goods, at the place of delivery.
+    if (f.consignee) return { name: f.consignee.name, address: f.consignee.address ?? `At ${f.destLabel}; address not given by the sender`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
     if (f.externalOrderId || f.buyerPhoneHash) {
       // A buyer: known to the network by a verified phone, never printed here. Delivery is to the shop they chose.
       return { name: f.externalOrderId ? `The buyer of order ${f.externalOrderId}` : 'The buyer', address: `Collects at ${f.destLabel}`, ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
     }
-    return { name: f.destLabel, address: 'As named by the sender', ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
+    // Nobody named: the place the sender gave, said as a place — never dressed up as the consignee's address.
+    return { name: f.destLabel, address: 'The place of delivery the sender named; who receives there was not given', ...(f.destCountry ? { country: countryName(f.destCountry) } : {}) };
   }
 
   private carrierOf(f: Freight): ConsignmentNote['carrier'] | undefined {
@@ -444,6 +459,20 @@ export class ConsignmentNoteService implements OnModuleInit {
       }
     }
     return { name: driverName ?? 'Carrier', ...(jurisdiction ? { country: countryName(jurisdiction) } : {}), did: f.claimedBy, ...(driverName ? { driverName } : {}), ...vehicle };
+  }
+
+  /**
+   * THE CARRIER THE SENDER CONTRACTED WITH, where it is not the one carrying: an order under a contract carried by a partner
+   * fleet or a driver from the board. Nothing when the contracted fleet carries it itself, or there is no contract.
+   */
+  private contractedCarrierOf(f: Freight, carried: ConsignmentNote['carrier'] | undefined): ConsignmentNote['carrier'] | undefined {
+    if (!f.contract || !carried || carried.did === f.contract.fleetDid) return undefined;
+    try {
+      const m = this.managers.get(f.contract.fleetDid);
+      return { name: m.companyName, ...(m.depotAddress ? { address: m.depotAddress } : {}), ...(m.jurisdiction ? { country: countryName(m.jurisdiction) } : {}), did: m.did };
+    } catch {
+      return { name: f.contract.fleetName, did: f.contract.fleetDid };
+    }
   }
 
   private agentOrNone(did: string): NoteParty | undefined {
@@ -528,8 +557,8 @@ export class ConsignmentNoteService implements OnModuleInit {
       deliveredAt: f.deliveredAt ?? new Date().toISOString(),
       ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
       ...(f.proofOfDelivery?.exceptions?.length ? { reservations: exceptionsInWords(f.proofOfDelivery.exceptions) } : {}),
-      carrier: note.carrier?.name ?? 'the carrier',
-      ...(note.carrier?.driverName ? { driver: note.carrier.driverName } : {}),
+      carrier: (note.successive?.[0] ?? note.carrier)?.name ?? 'the carrier',
+      ...((note.successive?.[0] ?? note.carrier)?.driverName ? { driver: (note.successive?.[0] ?? note.carrier)!.driverName } : {}),
       ...(note.carriage.amount != null ? { amount: note.carriage.amount, currency: note.carriage.currency ?? NETWORK_CURRENCY } : {}),
       noteNumber: note.number,
       ...(link ? { noteUrl: link.url, noteUntil: link.until } : {}),
@@ -553,7 +582,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     const claimLines = n.claim ? `<div class="claim"><b>${e(n.claim.line)}</b>${n.claim.decision ? `<br>${e(n.claim.decision)}` : '<br><span class="empty">Not yet decided</span>'}</div>` : '';
     const qr = n.trackingUrl ? `<svg viewBox="0 0 120 120" width="120" height="120" aria-label="Tracking code">${qrSvgGroup(n.trackingUrl, 0, 0, 120)}</svg>` : '';
     const g = n.goods;
-    const carrierExtra = [n.carrier?.driverName ? `Driver: ${e(n.carrier.driverName)}` : '', n.carrier?.plate ? `Vehicle: ${e(n.carrier.plate)}${n.carrier.vehicleClass ? ` (${e(n.carrier.vehicleClass)})` : ''}` : ''].filter(Boolean).join('<br>');
+    // The driver and the vehicle belong to whoever carried it: under box 17 when that is a successive carrier.
+    const carrierExtra = n.successive?.length ? 'Contracted with the sender; carried by the carrier in box 17' : [n.carrier?.driverName ? `Driver: ${e(n.carrier.driverName)}` : '', n.carrier?.plate ? `Vehicle: ${e(n.carrier.plate)}${n.carrier.vehicleClass ? ` (${e(n.carrier.vehicleClass)})` : ''}` : ''].filter(Boolean).join('<br>');
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${e(n.number)} — ${e(n.title)}</title>
 <style>
@@ -600,15 +630,15 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(1, 'Sender (name, address, country)', party(n.sender) + (n.agent ? `<br><span class="how">Booked by ${e(n.agent.name)} as agent for the sender</span>` : ''))}
   ${box(16, 'Carrier (name, address, country)', party(n.carrier, carrierExtra) || '')}
   ${box(2, 'Consignee (name, address, country)', party(n.consignee))}
-  ${box(17, 'Successive carriers', '<span class="empty">None</span>')}
+  ${box(17, 'Successive carriers', n.successive?.length ? n.successive.map((s) => party(s, [s.driverName ? `Driver: ${e(s.driverName)}` : '', s.plate ? `Vehicle: ${e(s.plate)}${s.vehicleClass ? ` (${e(s.vehicleClass)})` : ''}` : '', s.takenOverAt ? `Took the goods over ${e(when(s.takenOverAt))}` : 'Has not yet taken the goods over', s.via ? `Passed on by ${e(s.via)}` : ''].filter(Boolean).join('<br>'))).join('<hr>') : '<span class="empty">None</span>')}
   ${box(3, 'Place of delivery of the goods (place, country)', `<b>${e(n.delivery.place)}</b>${n.delivery.country ? `<br>${e(n.delivery.country)}` : ''}${n.delivery.at ? `<br>Delivered ${e(when(n.delivery.at))}` : ''}`)}
   ${box(18, 'Carrier’s reservations and observations', list(n.reservations))}
   ${box(4, 'Place and date of taking over the goods (place, country, date)', `<b>${e(n.takingOver.place)}</b>${n.takingOver.country ? `<br>${e(n.takingOver.country)}` : ''}<br>${n.takingOver.at ? e(when(n.takingOver.at)) : '<span class="empty">Not yet taken over</span>'}`)}
   ${box(19, 'Special agreements', n.kind === 'national' ? 'Carried under the network’s terms; this note stands as the consignment note where no national form applies.' : '<span class="empty">None</span>')}
   ${box(5, 'Documents attached', list(n.documents))}
   ${box(20, 'To be paid by', `${n.carriage.amount != null ? `<b>${e(String(n.carriage.amount))} ${e(n.carriage.currency ?? '')}</b><br>` : ''}${e(n.carriage.note)}`)}
-  ${box('6–12', 'Goods', `<table class="goods"><tr><th>Marks / description</th><th>Packages</th><th>Method of packing</th><th>Nature of the goods</th><th>Gross weight</th><th>Volume</th></tr><tr><td>${e(g.description)}${g.marks?.length ? `<br><span class="did">${g.marks.map((m) => e(m)).join('<br>')}</span>` : ''}${g.fragile ? '<br><i>Fragile</i>' : ''}${g.dangerous ? '<br><b>Dangerous goods</b>' : ''}</td><td>${g.packages == null ? '<span class="empty">Not stated</span>' : g.packages}</td><td>${g.packaging ? e(g.packaging) : '<span class="empty">—</span>'}</td><td>${e(g.nature)} · ${e(g.cargoClass)}${g.temperatureBand ? `<br>${e(g.temperatureBand)}` : ''}</td><td>${e(String(g.grossKg))} kg</td><td>${g.volumeM3 != null ? `${e(String(g.volumeM3))} m³` : '<span class="empty">—</span>'}</td></tr></table>`, 'wide')}
-  ${n.seals?.length ? box(6, 'Seals — their numbers and what became of each', list(n.seals), 'wide') : ''}
+  ${box('6–12', 'Goods', `<table class="goods"><tr><th>Marks / description</th><th>Packages</th><th>Method of packing</th><th>Nature of the goods</th><th>Gross weight</th><th>Volume</th></tr><tr><td>${e(g.description)}${g.marks?.length ? `<br><span class="did">${g.marks.map((m) => e(m)).join('<br>')}</span>` : ''}${g.fragile ? '<br><i>Fragile</i>' : ''}${g.dangerous ? `<br><b>${e(dangerousWords(g))}</b>` : ''}</td><td>${g.packages == null ? (g.packaging === 'loose' ? 'In bulk' : '<span class="empty">Not stated by the sender</span>') : g.packages}</td><td>${g.packaging ? e(g.packaging) : '<span class="empty">—</span>'}</td><td>${e(g.natureWords ?? g.nature)}${g.temperatureBand ? `<br>${e(g.temperatureBand)}` : ''}</td><td>${e(String(g.grossKg))} kg</td><td>${g.volumeM3 != null ? `${e(String(g.volumeM3))} m³` : '<span class="empty">—</span>'}</td></tr></table>`, 'wide')}
+  ${n.seals?.length ? box('', 'Seals on the load — their numbers and what became of each', list(n.seals), 'wide') : ''}
   ${box(13, 'Sender’s instructions', list(n.instructions))}
   ${box(14, 'Instructions as to payment for carriage', e(n.carriage.paidBy === 'sender' ? 'Carriage paid' : n.carriage.paidBy === 'between-parties' ? 'Carriage settled between the parties' : 'Not yet agreed'))}
   ${box(21, 'Established in / on', `<b>${e(n.established.place)}</b><br>${e(when(n.established.at))}`)}
@@ -620,6 +650,30 @@ export class ConsignmentNoteService implements OnModuleInit {
 <footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(electronicLine(n))}<br>How this electronic note is made out, kept intact, read, confirmed at delivery, added to and replaced by paper: ${e(helpUrl('electronic-note'))}<br>Box numbers as on the classic CMR form; the IRU’s 2007 model numbers them differently.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span><br><span class="fp">Check this copy: ${e(`${appUrl('home')}?note=${noteFingerprint(n)}`)}</span></span></footer>
 </div></body></html>`;
   }
+}
+
+/** The kinds of goods in words (CMR Art. 6(1)(f): the description in common use), never the network's codes. */
+const NATURE_WORDS: Record<string, string> = {
+  GEN: 'General goods',
+  FOD: 'Food, dry and packaged',
+  FOP: 'Food, perishable — kept cold',
+  'HAZ-CHEM': 'Chemicals',
+  'HAZ-DUST': 'Powder or dust that contaminates',
+  'HAZ-BIO': 'Biological goods',
+  'HAZ-FLAM': 'Flammable goods',
+  FRG: 'Fragile goods',
+  ODR: 'Goods with a strong smell',
+  HUM: 'Medicines and aid',
+};
+
+/**
+ * DANGEROUS GOODS AS THE NOTE SAYS THEM (box 9): "UN1263 Paint, class 3, packing group III" — or, where the sender
+ * declared none, that it did not: a box that says "dangerous" and nothing more is not the recognised description.
+ */
+export function dangerousWords(g: Pick<ConsignmentNote['goods'], 'dangerousGoods'>): string {
+  const d = g.dangerousGoods;
+  if (!d) return 'Dangerous goods — UN number, proper shipping name, class and packing group not given by the sender';
+  return `Dangerous goods: ${d.unNumber} ${d.properShippingName}, class ${d.hazardClass}${d.packingGroup ? `, packing group ${d.packingGroup}` : ''}`;
 }
 
 /** The note's title, by the law it is under. */

@@ -152,7 +152,7 @@ export const enHelpApp = {
   'help.business-loads.title': 'Post a load for carriers',
   'help.business-loads.summary': 'Post a load for carriers on the open board, agree a price, and follow it to the door. You pay the carrier yourself.',
   'help.business-loads.step1': '“Loads › Post a load”. Choose where it is collected and where it goes from your saved places — Save a new place adds one.',
-  'help.business-loads.step2': 'Say what it is, its weight, how it is packed and what kind of goods. Carriers read exactly this, and it goes on the consignment note.',
+  'help.business-loads.step2': 'Say what it is, its weight, how it is packed and what kind of goods, and who receives it. Carriers read exactly this, and it goes on the consignment note. Dangerous goods are named as their safety data sheet names them: the UN number, the proper shipping name, the class and the packing group.',
   'help.business-loads.step3': 'Choose how the price is set: carriers name their price and you accept one, or the first carrier at the board price takes it.',
   'help.business-loads.step4': 'Open the load to see the prices offered, who is carrying it, the tracking link to share, and the consignment note with the links to it.',
   'help.business-loads.note1': 'SeeBuyGet does not take, hold or send the money for your loads. You pay the carrier directly, or through your own payment system.',
@@ -168,6 +168,7 @@ export const enHelpApp = {
   'help.business-exports.note1': 'The verified gross mass is your declaration, handed to your forwarder: they declare it to the line. A box is not loaded on a ship without one.',
   'help.business-exports.note2': 'SeeBuyGet carries the road and keeps the papers ready. The ocean leg, its booking and the bill of lading are your forwarder’s or the line’s; nothing is booked, filed or sent to a line from here, so any forwarder works with it.',
   'help.business-exports.note3': 'A clearing agent finds the exports it was appointed on under its own Exports: open each paper, accept it or send it back, and give the export entry by its number. Put on the list what this border asks for these goods: the exporter is told. Quote your fee under “Its fee”: the exporter is told and agrees to it, and a new figure asks it to agree again. The free days are in the exporter’s agreement with the line: SeeBuyGet counts days, and never what a day over costs.',
+  'help.business-loads.note4': 'Across a border the consignment note needs who receives the goods, their address and how many packages, and it asks for your instructions for customs. It says which law the carriage is under: the CMR where either country is a party to it, the Northern Corridor’s road protocol between its members, or else your contract.',
   'help.business-loads.note3': 'The person who posted the load is also emailed a receipt when it is delivered, with a link to the consignment note.',
   // business-note
   'help.business-note.title': 'Download or pass on a consignment note',

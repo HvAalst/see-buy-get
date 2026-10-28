@@ -255,3 +255,23 @@ describe('the Business app', () => {
     });
   });
 });
+
+describe('a load that crosses a border, as its consignment note needs it (the CMR check, 2026-10-28)', () => {
+  const load = { description: 'Paint, 40 drums', fromSiteId: 's1', toSiteId: 's2', weightKg: '900' };
+  it('asks who receives the goods and how many packages, across a border only', () => {
+    expect(loadGaps(load)).toEqual([]);
+    expect(loadGaps({ ...load, crossing: true })).toEqual(['consigneeName', 'consigneeAddress', 'packages']);
+    expect(loadGaps({ ...load, crossing: true, consigneeName: 'Kampala Build Co', consigneeAddress: 'Plot 4', packages: '40' })).toEqual([]);
+    // Loose goods are in bulk: no count. A receiving point is its own consignee.
+    expect(loadGaps({ ...load, crossing: true, packaging: 'loose', consigneeName: 'K', consigneeAddress: 'P' })).toEqual([]);
+    expect(loadGaps({ ...load, crossing: true, receivingPoint: '7KQ3-PX9M', packages: '2' })).toEqual([]);
+  });
+  it('asks dangerous goods for their UN number, name and class, wherever they go', () => {
+    expect(loadGaps({ ...load, natureCode: 'HAZ-CHEM' })).toEqual(['unNumber', 'properShippingName', 'hazardClass']);
+    expect(loadGaps({ ...load, natureCode: 'HAZ-FLAM', unNumber: '12', properShippingName: 'Paint', hazardClass: '3' })).toEqual(['unNumber']);
+    expect(loadGaps({ ...load, natureCode: 'HAZ-FLAM', unNumber: 'UN1263', properShippingName: 'Paint', hazardClass: '3' })).toEqual([]);
+    // Cement dust is not dangerous goods by its description: no UN number asked.
+    expect(loadGaps({ ...load, natureCode: 'HAZ-DUST' })).toEqual([]);
+    for (const k of ['consigneeName', 'consigneeAddress', 'packages', 'unNumber', 'properShippingName', 'hazardClass'] as const) expect(t(`business.loads.need.${k}`)).not.toBe(`business.loads.need.${k}`);
+  });
+});

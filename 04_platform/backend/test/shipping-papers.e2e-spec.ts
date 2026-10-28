@@ -175,6 +175,23 @@ describe('a shipper’s papers, over the wire', () => {
     const note = (await http().get(`/v1/sbg/dispatch/freight/${id}/consignment-note`).set(bearer(jenga.token)).expect(200)).body;
     // Kenya to Uganda: the Northern Corridor's road protocol, never the CMR (no CMR country at either end).
     expect(note.kind).toBe('northern_corridor');
+
+    // The CMR check (2026-10-28): the sender names who receives the goods, declares dangerous goods by their UN number,
+    // name, class and packing group, and gives its instructions for customs — and the note carries each where the CMR puts it.
+    const paint = { description: 'Paint, 40 drums', pickupLocation: { lat: -1.33, lng: 36.87 }, pickupLabel: 'Jenga yard', destLabel: 'Kampala depot', destLocation: { lat: 0.31, lng: 32.58 }, weightKg: 900, packaging: 'drummed', packages: 40, natureCode: 'HAZ-CHEM', pickupCountry: 'KE', destCountry: 'UG' };
+    const badUn = await http().post('/v1/sbg/dispatch/freight').set(bearer(jenga.token)).send({ ...paint, dangerousGoods: { unNumber: '12', properShippingName: 'Paint', hazardClass: '3' } }).expect(400);
+    expect(JSON.stringify(badUn.body)).toContain('A UN number is UN and four digits, like UN1263');
+    const declared = (
+      await http()
+        .post('/v1/sbg/dispatch/freight')
+        .set(bearer(jenga.token))
+        .send({ ...paint, consignee: { name: 'Kampala Build Co', address: 'Plot 4, Industrial Area' }, dangerousGoods: { unNumber: '1263', properShippingName: 'Paint', hazardClass: '3', packingGroup: 'III' }, customsInstructions: 'Cleared at Malaba by Pwani Clearing' })
+        .expect(201)
+    ).body;
+    const paintNote = (await http().get(`/v1/sbg/dispatch/freight/${declared.freightId}/consignment-note`).set(bearer(jenga.token)).expect(200)).body;
+    expect(paintNote.consignee).toMatchObject({ name: 'Kampala Build Co', address: 'Plot 4, Industrial Area', country: 'Uganda' });
+    expect(paintNote.goods.dangerousGoods).toEqual({ unNumber: 'UN1263', properShippingName: 'Paint', hazardClass: '3', packingGroup: 'III' });
+    expect(paintNote.instructions).toContain('For customs: Cleared at Malaba by Pwani Clearing');
     expect(note.documents).toContain('Commercial invoice INV-2026-0042 of ' + signed.issuedOn + ', 3 copies');
     expect(note.goods).toMatchObject({ packages: 3, marks: labels.codes.map((c: string) => `SSCC ${c}`) });
 

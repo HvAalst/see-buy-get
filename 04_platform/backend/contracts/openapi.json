@@ -51686,6 +51686,43 @@
           "paidTo"
         ]
       },
+      "FreightConsignee": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "FreightDangerous": {
+        "type": "object",
+        "properties": {
+          "packingGroup": {
+            "type": "string"
+          },
+          "unNumber": {
+            "type": "string",
+            "description": "UN and four digits: UN1263 for paint."
+          },
+          "properShippingName": {
+            "type": "string"
+          },
+          "hazardClass": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unNumber",
+          "properShippingName",
+          "hazardClass"
+        ]
+      },
       "CustodyAnchor": {
         "type": "object",
         "properties": {
@@ -52561,6 +52598,26 @@
                 "$ref": "#/components/schemas/FreightClaim"
               }
             ]
+          },
+          "consignee": {
+            "description": "CMR box 2 — the consignee the sender named (the user, 2026-10-28, on the CMR check).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightConsignee"
+              }
+            ]
+          },
+          "dangerousGoods": {
+            "description": "CMR box 9 — dangerous goods, as the sender declared them.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightDangerous"
+              }
+            ]
+          },
+          "customsInstructions": {
+            "type": "string",
+            "description": "CMR box 13 — the sender's instructions for customs and other formalities (Art. 6(1)(j))."
           },
           "custodyAnchors": {
             "description": "The trail: taken over and delivered, each anchored in the chain as it was kept (custodyAnchorOf).",
@@ -55561,6 +55618,52 @@
           }
         }
       },
+      "FreightConsigneeDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "FreightDangerousDto": {
+        "type": "object",
+        "properties": {
+          "unNumber": {
+            "type": "string",
+            "pattern": "/^\\s*(UN)?\\s*\\d{4}\\s*$/i"
+          },
+          "properShippingName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "hazardClass": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "packingGroup": {
+            "type": "string",
+            "enum": [
+              "I",
+              "II",
+              "III"
+            ]
+          }
+        },
+        "required": [
+          "unNumber",
+          "properShippingName",
+          "hazardClass"
+        ]
+      },
       "RegisterFreightDto": {
         "type": "object",
         "properties": {
@@ -55801,6 +55904,27 @@
             "type": "string",
             "description": "The receiving business's own number for the order, when it gave one: a reference both sides understand.",
             "maxLength": 60
+          },
+          "consignee": {
+            "description": "CMR box 2 (Art. 6(1)(e)) — who receives the goods, by name and address: the consignee on the note.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightConsigneeDto"
+              }
+            ]
+          },
+          "dangerousGoods": {
+            "description": "CMR box 9 (Art. 6(1)(f)) — dangerous goods by their generally recognised description. The sender's, never ours.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightDangerousDto"
+              }
+            ]
+          },
+          "customsInstructions": {
+            "type": "string",
+            "description": "CMR box 13 (Art. 6(1)(j)) — the instructions for customs and other formalities.",
+            "maxLength": 500
           }
         },
         "required": [
