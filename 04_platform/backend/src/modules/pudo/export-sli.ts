@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { cleanHsCode, hsDisplay } from './commercial-invoice.service';
-import { MAX_SLI_LINES, type BlRelease, type SliDraft, type SliDraftDto, type SliParty, type SliPartyDto } from './export-sli.types';
+import { MAX_SLI_LINES, type BlRelease, type SliDraft, type SliDraftDto, type SliParty, type SliPartyDto, type SliVersion } from './export-sli.types';
 
 /**
  * THE SHIPPER'S LETTER OF INSTRUCTION — its rules and its page. The shapes are in export-sli.types.ts (where the API
@@ -10,10 +10,24 @@ import { MAX_SLI_LINES, type BlRelease, type SliDraft, type SliDraftDto, type Sl
 
 /* ------------------------------------------------------------------- the rules -- */
 
-/** The export's own facts a signed version was drawn from, as one fingerprint — the papers enclosed left out, as they come in later. */
+/**
+ * The export's own facts a signed version was drawn from, as one fingerprint. Left out: the papers enclosed, the weight
+ * and the seal — they come in after the letter in the ordinary run of things, and are compared on their own (sliStale).
+ */
 export function sliBasis(f: SliFacts): string {
-  const { papers: _papers, ...facts } = f;
-  return createHash('sha256').update(JSON.stringify(facts), 'utf8').digest('hex');
+  const { papers: _papers, vgm: _vgm, container, ...facts } = f;
+  return createHash('sha256').update(JSON.stringify({ ...facts, container: { type: container.type, number: container.number } }), 'utf8').digest('hex');
+}
+
+/**
+ * OUT OF DATE: a fact the signed letter carried has changed — the booking, the vessel, the box, the port — or a weight or
+ * a seal that was on it is now a different one. A weight or a seal that came in after signing is no change to the letter.
+ */
+export function sliStale(v: Pick<SliVersion, 'basis' | 'vgmKg' | 'seals'>, f: SliFacts): boolean {
+  if (v.basis !== sliBasis(f)) return true;
+  if (v.vgmKg != null && f.vgm?.kg !== v.vgmKg) return true;
+  if (v.seals?.length && v.seals.join('|') !== f.container.seals.join('|')) return true;
+  return false;
 }
 
 const trimmed = (s?: string, max = 300) => (s?.trim() ? s.trim().slice(0, max) : undefined);

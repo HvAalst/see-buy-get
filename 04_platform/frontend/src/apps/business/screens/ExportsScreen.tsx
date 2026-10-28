@@ -5,6 +5,7 @@ import { tabAtTheTap } from '../../../shared/openPage';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
+import { ExportSli } from './ExportSli';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
@@ -372,9 +373,11 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
     // Its agent's word wins the tag: sent back is a gap whatever was given; accepted is the strongest yes. A kept paper not given is no gap.
     const paperTone = p.refusedAt ? 'warn' : given ? 'ok' : p.optional ? 'quiet' : 'warn';
     const paperWord: MessageKey = p.refusedAt ? 'business.exports.papers.sentBack' : p.acceptedAt ? 'business.exports.papers.acceptedTag' : given ? 'business.exports.papers.given' : p.optional ? 'business.exports.papers.noneKept' : 'business.exports.papers.missing';
-    const changeable = mine && given && !changing[p.key];
+    const changeable = mine && given && !changing[p.key] && p.key !== 'shipping_instructions';
     // Not given yet: two buttons, not a form — a file of its own, or the form to attach one or write its number.
-    const giving = mine && !given && !changing[p.key];
+    // The letter of instruction is given by signing its form below — never a file or a number on the line.
+    const isSli = p.key === 'shipping_instructions';
+    const giving = mine && !given && !changing[p.key] && !isSli;
     // The agent gives its word on what the exporter supplied; the entry it gave itself stands as its word.
     const worded = asAgent && given && refusing[p.key] === undefined && !(p.key === 'export_entry' && p.acceptedAt);
     return (
@@ -386,15 +389,16 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </span>
           {p.addedBy ? <span class="crow__sub">{t('business.exports.papers.askedBy', { who: p.addedBy, when: dayWords(p.addedAt ?? '') })}</span> : null}
           {given ? <span class="crow__sub">{[p.documentTitle, p.reference].filter(Boolean).join(' — ')}</span> : null}
+          {isSli && !given ? <span class="crow__sub">{t('business.exports.sli.onTheLine')}</span> : null}
           {p.refusedAt ? (
             <span class="crow__sub cerr">{t('business.exports.papers.refused', { who: p.refusedBy ?? '', reason: p.refusedReason ?? '' })}</span>
           ) : p.acceptedAt ? (
             <span class="crow__sub">{t('business.exports.papers.accepted', { who: p.acceptedBy ?? '' })}</span>
           ) : null}
           {/* One row of what this reader can do: open it; the exporter changes it; its agent accepts it or sends it back; whoever asked for it takes it off. */}
-          {p.documentId || changeable || giving || worded || p.removable ? (
+          {p.documentId || (isSli && given) || changeable || giving || worded || p.removable ? (
             <span class="twr-panelend">
-              {p.documentId ? (
+              {p.documentId || (isSli && given) ? (
                 <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void openPaper(p.key, p.documentTitle ?? paperName(p))}>
                   {t('business.exports.papers.open')}
                 </button>
@@ -921,6 +925,12 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </div>
         ) : null}
       </section>
+
+      {/* EX9 — the shipper's letter of instruction: a form, frozen on signing. */}
+      <ExportSli d={d} client={client} mine={mine} signatory={business.you.name ?? ''} onDetail={async (next) => {
+        setD(next);
+        await onChanged();
+      }} />
 
       {/* EX2 — the load to the terminal; its seal is written on that load, with the seal panel and its photographs. */}
       <section class="cons__panel">

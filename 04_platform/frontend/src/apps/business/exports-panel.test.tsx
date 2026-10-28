@@ -45,6 +45,7 @@ const detail = (over: Partial<ExportDetail> = {}, consignment: Partial<ExportDet
     you: 'exporter',
     exporterName: 'Thika Coffee',
     feeState: 'none',
+    sli: { versions: [], gaps: ['Fill in the form'], stale: false, hazardous: false },
     ...over,
   }) as ExportDetail;
 

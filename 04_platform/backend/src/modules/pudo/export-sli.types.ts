@@ -86,6 +86,9 @@ export class SliVersion {
   @ApiProperty() fingerprint: string;
   /** sha256 of the export's own facts the page was drawn from — when they change, the signed version is out of date. */
   @ApiProperty() basis: string;
+  /** The weight and the seal on the page as signed, where there were any — compared on their own. */
+  @ApiPropertyOptional() vgmKg?: number;
+  @ApiPropertyOptional({ type: [String] }) seals?: string[];
 }
 
 export class ExportSli {

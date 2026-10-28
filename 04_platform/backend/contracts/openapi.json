@@ -35620,6 +35620,16 @@
           "basis": {
             "type": "string",
             "description": "sha256 of the export's own facts the page was drawn from — when they change, the signed version is out of date."
+          },
+          "vgmKg": {
+            "type": "number",
+            "description": "The weight and the seal on the page as signed, where there were any — compared on their own."
+          },
+          "seals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

@@ -70,6 +70,18 @@ expeditor) — staff read, never act in its name.
    told and agrees (the agent is told), a re-quote drops the agreement, paid or open is said by either on the
    quotation. **One quotation per appointment** (subject id `exportId@appointedAt`): when the appointment ends its
    quotation stays on that former appointment (`feeQuoteId`), and the next agent quotes its own from nothing.
+10. **EX9 — the shipper's letter of instruction** (the user, 2026-10-28: "not just take the reference, but rather the
+    form fields"; then as recommended: a form, needed, frozen on signing). `export-sli.ts` (the rules and the page) and
+    `export-sli.types.ts` (the shapes — the swagger plugin reads `*.types.ts` only). What the export already knows is
+    read at signing (shipper with its registration and tax numbers, forwarder, booking, vessel, port, terminal, box,
+    seal, verified gross mass, documents cut-off, papers enclosed); the form asks the consignee (named / to order / to
+    the order of a bank), notify party, port of discharge, place of delivery, Incoterm and place, freight prepaid or
+    collect, the bill's release (originals — three unless said — sea waybill, telex release) and copies, goods lines
+    (marks, packages and kind, description, the exporter's own HS code, gross, net, volume), dangerous goods particulars
+    where hazardous, letter of credit, special instructions. Needed on every export; a typed reference is refused.
+    Signing is refused until complete (`sliGaps`); the page is drawn once and kept in `export-sli-copies` exactly as
+    signed with its sha256; a change is a new version. **Out of date** (`sliStale`) only when a fact it carried changed
+    — booking, vessel, box, port, or a weight or seal on it now different — never because one came in after signing.
 
 ## Not built (said, not hidden)
 Air exports — new ground, to get its own help section once the user has read into it (the user, 2026-10-28); the barge

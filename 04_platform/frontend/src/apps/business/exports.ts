@@ -178,6 +178,8 @@ export interface ExportDetail {
   /** The appointed agent's fee, as a quotation between it and the exporter. */
   fee?: QuoteView;
   feeState: 'none' | 'quoted' | 'accepted' | 'paid';
+  /** The shipper's letter of instruction: the form (the exporter's alone), the signed versions, what signing needs. */
+  sli: ExportSliView;
 }
 
 export interface ExportRow {
@@ -251,6 +253,10 @@ export interface ExportsApi {
   acceptFee(exportId: string): Promise<Result<ExportDetail>>;
   addPaper(exportId: string, body: { key: string; title?: string }): Promise<Result<ExportDetail>>;
   removePaper(exportId: string, key: ExportPaperKey): Promise<Result<ExportDetail>>;
+  saveSli(exportId: string, body: Record<string, unknown>): Promise<Result<ExportDetail>>;
+  signSli(exportId: string, signatory: string): Promise<Result<ExportDetail>>;
+  /** A signed version's page as signed (the latest unless named), or the exporter's draft. */
+  sliPage(exportId: string, which?: { version?: number; draft?: boolean }): Promise<Result<string>>;
 }
 
 export function exportsApi(sbg: SbgClient): ExportsApi {
@@ -282,6 +288,183 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     acceptFee: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/fee/accept`),
     addPaper: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/papers/add`, body),
     removePaper: (exportId, key) => post(`/v1/sbg/exports/${id(exportId)}/papers/${encodeURIComponent(key)}/remove`),
+    saveSli: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/sli`, body),
+    signSli: (exportId, signatory) => post(`/v1/sbg/exports/${id(exportId)}/sli/sign`, { signatory }),
+    sliPage: (exportId, which = {}) => {
+      const q = which.draft ? '?draft=1' : which.version ? `?version=${which.version}` : '';
+      return call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/sli.html${q}` as never, { parseAs: 'text' } as never) as never);
+    },
+  };
+}
+
+/* ----------------------------------------------- the shipper's letter of instruction -- */
+
+export type ConsigneeKind = 'named' | 'to_order' | 'to_order_of_bank';
+export type BlRelease = 'originals' | 'sea_waybill' | 'telex_release';
+export const SLI_INCOTERMS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'] as const;
+export type SliIncoterm = (typeof SLI_INCOTERMS)[number];
+
+export interface SliParty {
+  name: string;
+  address: string;
+  contact?: string;
+}
+
+export interface SliLine {
+  marks?: string;
+  packages: number;
+  packageKind: string;
+  description: string;
+  hsCode?: string;
+  grossKg: number;
+  netKg?: number;
+  volumeM3?: number;
+}
+
+/** The form as the exporter left it (the server's cleaned copy). */
+export interface SliDraft {
+  shipperContact?: string;
+  consigneeKind: ConsigneeKind;
+  consignee?: SliParty;
+  orderOfBank?: string;
+  notifySameAsConsignee?: boolean;
+  notify?: SliParty;
+  dischargePort?: string;
+  placeOfDelivery?: string;
+  incoterm?: SliIncoterm;
+  incotermPlace?: string;
+  freight?: 'prepaid' | 'collect';
+  blRelease?: BlRelease;
+  originals?: number;
+  copies?: number;
+  lines: SliLine[];
+  dangerous?: { unNumber: string; hazardClass: string; properShippingName?: string; packingGroup?: string };
+  letterOfCredit?: string;
+  instructions?: string;
+  savedAt: string;
+  savedBy: string;
+}
+
+export interface SliVersion {
+  version: number;
+  signedBy: string;
+  signedAt: string;
+  fingerprint: string;
+}
+
+export interface ExportSliView {
+  draft?: SliDraft;
+  versions: SliVersion[];
+  gaps: string[];
+  stale: boolean;
+  hazardous: boolean;
+}
+
+/** A goods line as typed: every field a string until it is sent. */
+export interface SliLineForm {
+  marks: string;
+  packages: string;
+  packageKind: string;
+  description: string;
+  hsCode: string;
+  grossKg: string;
+  netKg: string;
+  volumeM3: string;
+}
+
+/** The form as typed. */
+export interface SliForm {
+  shipperContact: string;
+  consigneeKind: ConsigneeKind;
+  consignee: { name: string; address: string; contact: string };
+  orderOfBank: string;
+  notifySame: boolean;
+  notify: { name: string; address: string; contact: string };
+  dischargePort: string;
+  placeOfDelivery: string;
+  incoterm: string;
+  incotermPlace: string;
+  freight: string;
+  blRelease: string;
+  originals: string;
+  copies: string;
+  lines: SliLineForm[];
+  dangerous: { unNumber: string; hazardClass: string; properShippingName: string; packingGroup: string };
+  letterOfCredit: string;
+  instructions: string;
+}
+
+export const emptySliLine = (description = ''): SliLineForm => ({ marks: '', packages: '', packageKind: '', description, hsCode: '', grossKg: '', netKg: '', volumeM3: '' });
+
+const str = (n?: number) => (n == null ? '' : String(n));
+
+/** The form, from what was saved — or a fresh one, its first goods line started from what the export says is in it. */
+export function sliForm(draft: SliDraft | undefined, goods: string, contact = ''): SliForm {
+  const party = (p?: SliParty) => ({ name: p?.name ?? '', address: p?.address ?? '', contact: p?.contact ?? '' });
+  return {
+    shipperContact: draft?.shipperContact ?? contact,
+    consigneeKind: draft?.consigneeKind ?? 'named',
+    consignee: party(draft?.consignee),
+    orderOfBank: draft?.orderOfBank ?? '',
+    notifySame: Boolean(draft?.notifySameAsConsignee),
+    notify: party(draft?.notify),
+    dischargePort: draft?.dischargePort ?? '',
+    placeOfDelivery: draft?.placeOfDelivery ?? '',
+    incoterm: draft?.incoterm ?? '',
+    incotermPlace: draft?.incotermPlace ?? '',
+    freight: draft?.freight ?? '',
+    blRelease: draft?.blRelease ?? '',
+    originals: str(draft?.originals ?? 3),
+    copies: str(draft?.copies),
+    lines: draft?.lines.length
+      ? draft.lines.map((l) => ({ marks: l.marks ?? '', packages: str(l.packages), packageKind: l.packageKind, description: l.description, hsCode: l.hsCode ?? '', grossKg: str(l.grossKg), netKg: str(l.netKg), volumeM3: str(l.volumeM3) }))
+      : [emptySliLine(goods)],
+    dangerous: { unNumber: draft?.dangerous?.unNumber ?? '', hazardClass: draft?.dangerous?.hazardClass ?? '', properShippingName: draft?.dangerous?.properShippingName ?? '', packingGroup: draft?.dangerous?.packingGroup ?? '' },
+    letterOfCredit: draft?.letterOfCredit ?? '',
+    instructions: draft?.instructions ?? '',
+  };
+}
+
+/** What is sent: empty fields left out, numbers as numbers, an empty goods line dropped. The server cleans it again. */
+export function sliBody(f: SliForm): Record<string, unknown> {
+  const t = (s: string) => s.trim();
+  const num = (s: string) => (t(s) === '' || Number.isNaN(Number(t(s))) ? undefined : Number(t(s)));
+  const party = (p: { name: string; address: string; contact: string }) => (t(p.name) || t(p.address) ? { name: t(p.name), address: t(p.address), ...(t(p.contact) ? { contact: t(p.contact) } : {}) } : undefined);
+  const lines = f.lines
+    .filter((l) => t(l.description) || t(l.packages) || t(l.grossKg))
+    .map((l) => ({
+      ...(t(l.marks) ? { marks: t(l.marks) } : {}),
+      packages: num(l.packages) ?? 0,
+      packageKind: t(l.packageKind),
+      description: t(l.description),
+      ...(t(l.hsCode) ? { hsCode: t(l.hsCode) } : {}),
+      grossKg: num(l.grossKg) ?? 0,
+      ...(num(l.netKg) != null ? { netKg: num(l.netKg) } : {}),
+      ...(num(l.volumeM3) != null ? { volumeM3: num(l.volumeM3) } : {}),
+    }));
+  const consignee = party(f.consignee);
+  const notify = party(f.notify);
+  const dangerous = t(f.dangerous.unNumber) || t(f.dangerous.hazardClass)
+    ? { unNumber: t(f.dangerous.unNumber), hazardClass: t(f.dangerous.hazardClass), ...(t(f.dangerous.properShippingName) ? { properShippingName: t(f.dangerous.properShippingName) } : {}), ...(t(f.dangerous.packingGroup) ? { packingGroup: t(f.dangerous.packingGroup) } : {}) }
+    : undefined;
+  return {
+    ...(t(f.shipperContact) ? { shipperContact: t(f.shipperContact) } : {}),
+    consigneeKind: f.consigneeKind,
+    ...(f.consigneeKind === 'named' && consignee ? { consignee } : {}),
+    ...(f.consigneeKind === 'to_order_of_bank' && t(f.orderOfBank) ? { orderOfBank: t(f.orderOfBank) } : {}),
+    ...(f.consigneeKind === 'named' && f.notifySame ? { notifySameAsConsignee: true } : notify ? { notify } : {}),
+    ...(t(f.dischargePort) ? { dischargePort: t(f.dischargePort) } : {}),
+    ...(t(f.placeOfDelivery) ? { placeOfDelivery: t(f.placeOfDelivery) } : {}),
+    ...(f.incoterm ? { incoterm: f.incoterm } : {}),
+    ...(f.incoterm && t(f.incotermPlace) ? { incotermPlace: t(f.incotermPlace) } : {}),
+    ...(f.freight ? { freight: f.freight } : {}),
+    ...(f.blRelease ? { blRelease: f.blRelease } : {}),
+    ...(f.blRelease === 'originals' && num(f.originals) != null ? { originals: num(f.originals) } : {}),
+    ...(num(f.copies) != null ? { copies: num(f.copies) } : {}),
+    lines,
+    ...(dangerous ? { dangerous } : {}),
+    ...(t(f.letterOfCredit) ? { letterOfCredit: t(f.letterOfCredit) } : {}),
+    ...(t(f.instructions) ? { instructions: t(f.instructions) } : {}),
   };
 }
 

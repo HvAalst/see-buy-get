@@ -18,7 +18,7 @@ import type { FeeState } from './import.types';
 import { QuoteService } from './quote.service';
 import type { Quote } from './quote.types';
 import { ROUTER, type Router } from './router';
-import { cleanDraft, sliBasis, sliGaps, sliHtml, type SliFacts } from './export-sli';
+import { cleanDraft, sliBasis, sliGaps, sliHtml, sliStale, type SliFacts } from './export-sli';
 import type { ExportSliView, SliDraftDto } from './export-sli.types';
 import { SiteService } from './site.service';
 
@@ -605,7 +605,7 @@ export class ExportService {
     const html = sliHtml(facts, draft!, { version, signedBy: who.slice(0, 120), signedAt });
     const fingerprint = createHash('sha256').update(html, 'utf8').digest('hex');
     this.sliCopies.set(`${c.exportId}:${version}`, { html, fingerprint });
-    c.sli = { draft: draft!, versions: [...versions, { version, signedBy: who.slice(0, 120), signedAt, fingerprint, basis: sliBasis(facts) }] };
+    c.sli = { draft: draft!, versions: [...versions, { version, signedBy: who.slice(0, 120), signedAt, fingerprint, basis: sliBasis(facts), ...(facts.vgm ? { vgmKg: facts.vgm.kg } : {}), ...(facts.container.seals.length ? { seals: facts.container.seals } : {}) }] };
     // Its line on the papers: given by the signing, the agent's word on an earlier version no longer standing.
     c.papers = c.papers.map((p) =>
       p.key === 'shipping_instructions'
@@ -681,7 +681,7 @@ export class ExportService {
       ...(you === 'exporter' && c.sli?.draft ? { draft: c.sli.draft } : {}),
       versions,
       gaps: sliGaps(c.sli?.draft, { hazardous, containerNo: c.containerNo }),
-      stale: Boolean(last && last.basis !== sliBasis(this.sliFactsOf(c))),
+      stale: Boolean(last && sliStale(last, this.sliFactsOf(c))),
       hazardous,
     };
   }
@@ -882,7 +882,7 @@ export class ExportService {
     else if (!this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the terminal');
     if (!c.vgm) out.push('The verified gross mass');
     const lastSli = c.sli?.versions[c.sli.versions.length - 1];
-    if (lastSli && lastSli.basis !== sliBasis(this.sliFactsOf(c))) out.push(`The letter of instruction: the export changed since version ${lastSli.version} was signed — sign it again`);
+    if (lastSli && sliStale(lastSli, this.sliFactsOf(c))) out.push(`The letter of instruction: the export changed since version ${lastSli.version} was signed — sign it again`);
     for (const p of c.papers) {
       // A paper its agent sent back is a gap, whatever was attached: what was given is not what customs will take.
       if (p.refusedAt) out.push(`${paperLabel(p)} — sent back by your clearing agent: ${p.refusedReason}`);

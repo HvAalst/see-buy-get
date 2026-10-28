@@ -536,6 +536,7 @@ describe('an export to the port, over the wire', () => {
       instructions: 'Freight collect. Shipped on board bills, please.',
     };
     await http().post(`${path}/container`).set(bearer(x.token)).send({ containerNo: 'MSCU1234566' }).expect(201);
+    await http().post(`${path}/vgm`).set(bearer(x.token)).send({ method: 1, kg: 18640, signatory: 'Wanjiku Mwangi' }).expect(201);
     const saved = (await http().post(`${path}/sli`).set(bearer(x.token)).send(form).expect(201)).body;
     expect(saved.sli).toMatchObject({ gaps: [], versions: [], stale: false, draft: { originals: 3, lines: [{ hsCode: '090240' }] } });
     // The draft is the exporter's: its agent reads the signed versions only.
@@ -566,7 +567,12 @@ describe('an export to the port, over the wire', () => {
     expect(await page()).toContain('Antwerp');
     expect(await page('?version=1')).toContain('Rotterdam');
 
-    // The export changes under a signed letter: it is out of date, and said so, until it is signed again.
+    // A seal written after signing is no change to the letter …
+    const laden = (await http().post(`${path}/laden-leg`).set(bearer(x.token)).send({}).expect(201)).body.ladenLeg;
+    const photo = async () => (await http().post('/v1/sbg/media').set(bearer(x.token)).send({ kind: 'seal', dataUrl: CONTENTS_PNG }).expect(201)).body.mediaId as string;
+    await http().post(`/v1/sbg/dispatch/freight/${laden.freightId}/seals`).set(bearer(x.token)).send({ number: 'KE 552190', sealClass: 'H', appliedBy: 'sender', photos: { loadedOpen: await photo(), closedWithSeal: await photo(), sealCloseUp: await photo() } }).expect(201);
+    expect((await read()).sli.stale).toBe(false);
+    // … but the export changing under it is: out of date, and said so, until it is signed again.
     await http().post(`${path}/vgm`).set(bearer(x.token)).send({ method: 1, kg: 21900, signatory: 'Wanjiku Mwangi' }).expect(201);
     const changed = await read();
     expect(changed.sli.stale).toBe(true);

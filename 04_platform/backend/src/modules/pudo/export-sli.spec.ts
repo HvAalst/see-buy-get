@@ -1,4 +1,4 @@
-import { cleanDraft, sliBasis, sliGaps, sliHtml, type SliFacts } from './export-sli';
+import { cleanDraft, sliBasis, sliGaps, sliHtml, sliStale, type SliFacts } from './export-sli';
 import type { SliDraftDto } from './export-sli.types';
 
 /*
@@ -60,6 +60,16 @@ describe('the shipper’s letter of instruction', () => {
     expect(sliHtml(facts, d, sign)).toContain('0902.40');
     expect(sliHtml(facts, d, 'draft')).toContain('DRAFT');
     expect(sliBasis({ ...facts, papers: ['Commercial invoice', 'Packing list'] })).toBe(sliBasis(facts));
-    expect(sliBasis({ ...facts, vgm: { kg: 21900, method: 1, signatory: 'Wanjiku' } })).not.toBe(sliBasis(facts));
+    expect(sliBasis({ ...facts, container: { ...facts.container, number: 'TGHU1234567' } })).not.toBe(sliBasis(facts));
+  });
+
+  it('is out of date when a fact it carried changed — not when a weight or a seal came in after signing', () => {
+    const signedWithout = { basis: sliBasis({ ...facts, vgm: undefined, container: { ...facts.container, seals: [] } }) };
+    expect(sliStale(signedWithout, facts)).toBe(false);
+    const signedWith = { basis: sliBasis(facts), vgmKg: 18640, seals: ['KE 552190'] };
+    expect(sliStale(signedWith, facts)).toBe(false);
+    expect(sliStale(signedWith, { ...facts, vgm: { kg: 21900, method: 1, signatory: 'Wanjiku' } })).toBe(true);
+    expect(sliStale(signedWith, { ...facts, container: { ...facts.container, seals: ['KE 552191'] } })).toBe(true);
+    expect(sliStale(signedWith, { ...facts, booking: 'MBA9999' })).toBe(true);
   });
 });
