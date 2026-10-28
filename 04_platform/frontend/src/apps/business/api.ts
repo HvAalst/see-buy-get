@@ -321,6 +321,8 @@ export interface NewLoad {
   dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
   /** CMR box 13 — instructions for customs. */
   customsInstructions?: string;
+  /** Only a carrier whose insurance cover SeeBuyGet has checked may take it. */
+  coverRequired?: boolean;
   /** How many packages: each gets a label, and an SSCC under the business's GS1 prefix. */
   packages?: number;
   natureCode?: string;

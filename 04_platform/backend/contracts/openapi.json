@@ -51169,6 +51169,16 @@
           "insuranceCopyRef": {
             "type": "string"
           },
+          "insuranceCovers": {
+            "type": "object",
+            "description": "What the cover is for, and what it pays up to per load — read off the policy by staff (2026-10-28)."
+          },
+          "insuranceLimit": {
+            "type": "number"
+          },
+          "insuranceCurrency": {
+            "type": "string"
+          },
           "recordedBy": {
             "type": "string",
             "description": "Who typed these dates and when — the same provenance a driver's licence carries, and for the same\nreason: a screen must be able to say whether a date was read off a document or taken on somebody's word."
@@ -52618,6 +52628,10 @@
           "customsInstructions": {
             "type": "string",
             "description": "CMR box 13 — the sender's instructions for customs and other formalities (Art. 6(1)(j))."
+          },
+          "coverRequired": {
+            "type": "boolean",
+            "description": "The sender asks for a carrier whose insurance cover SeeBuyGet checked (2026-10-28): nobody else may take it."
           },
           "custodyAnchors": {
             "description": "The trail: taken over and delivered, each anchored in the chain as it was kept (custodyAnchorOf).",
@@ -54136,6 +54150,26 @@
           "insuranceExpiresAt": {
             "type": "string",
             "nullable": true
+          },
+          "insuranceCovers": {
+            "type": "string",
+            "description": "What the cover is for, as the policy says (2026-10-28). Null clears it.",
+            "enum": [
+              "goods_in_transit",
+              "carrier_liability",
+              "both"
+            ]
+          },
+          "insuranceLimit": {
+            "type": "number",
+            "nullable": true,
+            "description": "What it pays up to, per load, and in which money. Null clears it.",
+            "minimum": 1
+          },
+          "insuranceCurrency": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 3
           }
         }
       },
@@ -55925,6 +55959,10 @@
             "type": "string",
             "description": "CMR box 13 (Art. 6(1)(j)) — the instructions for customs and other formalities.",
             "maxLength": 500
+          },
+          "coverRequired": {
+            "type": "boolean",
+            "description": "THE CARRIER MUST HAVE COVER (the user, 2026-10-28: \"Toggle cover needed/not needed\"): only a carrier whose insurance\nSeeBuyGet has checked, and which is still running, may take it. CMR Art. 6(2)(e): the sender's instruction on insurance."
           }
         },
         "required": [
@@ -56053,6 +56091,10 @@
               "instant",
               "negotiate"
             ]
+          },
+          "coverRequired": {
+            "type": "boolean",
+            "description": "The sender asks for a carrier with checked insurance cover: said on the board to every driver."
           },
           "freightId": {
             "type": "string"

@@ -49,6 +49,8 @@ export interface OwnPapers {
   sent?: Partial<Record<OwnPaperKind, { copyRef: string; expiresAt: string; reference?: string; sentAt: string }>>;
   /** Why the last one sent was turned down — the staff member's own sentence, shown as written. */
   refused?: Partial<Record<OwnPaperKind, { reason: string; at: string; by?: string }>>;
+  /** Its insurance cover, checked by SeeBuyGet off the policy it sent and still running: what opens loads that ask for cover. */
+  cover?: { policy?: string; expiresAt: string; covers?: 'goods_in_transit' | 'carrier_liability' | 'both'; limit?: number; currency?: string; checkedAt?: string };
 }
 
 export type OwnPaperKind = 'operator_licence' | 'carrier_insurance';

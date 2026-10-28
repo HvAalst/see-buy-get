@@ -467,6 +467,9 @@ describe('a customer’s business, over the wire', () => {
     await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: '2020-01-01' }).expect(400);
     await http().post('/v1/sbg/dispatch/freight').set(bearer(otherBiz)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(404);
     await http().post('/v1/sbg/dispatch/freight').set(bearer(owner.token)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(403);
+    // Cover asked of the order (2026-10-28): the fleet it goes to holds none SeeBuyGet checked, so it is not placed.
+    const uncovered = await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow, coverRequired: true }).expect(403);
+    expect(uncovered.body.detail).toBe(`Kilima ${tag} has no insurance cover SeeBuyGet has checked that is still running. Order it without asking for cover, or from a carrier that has it.`);
     const ordered = await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(201);
     expect(ordered.body).toMatchObject({ status: 'ordered', settlement: 'between_parties', deliverOn: tomorrow, contract: { fleetDid: fleet.did, reference: 'KL-07' } });
 

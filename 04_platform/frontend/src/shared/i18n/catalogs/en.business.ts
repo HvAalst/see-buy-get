@@ -271,6 +271,8 @@ export const enBusiness = {
   'business.loads.f.weight': 'Weight (kg)',
   'business.loads.f.packaging': 'How it is packed',
   'business.loads.f.consigneeName': 'Who receives it',
+  'business.loads.f.cover': 'The carrier must have insurance cover',
+  'business.loads.f.coverHint': 'Only a carrier whose insurance SeeBuyGet has checked off its policy, and which is still running, can take it. Fewer carriers may answer; the consignment note names the cover.',
   'business.details.address': 'Address',
   'business.details.addressHint': 'The sender’s address on your consignment notes.',
   'business.details.addressNone': 'Not given — your consignment notes say the address is not recorded',

@@ -5839,6 +5839,8 @@ export class SbgController {
       recordedAt: m.papers?.recordedAt,
       enforced: this.managers.enforcedFor(m),
       notOffered: this.managers.tradingBlocks(did),
+      // Its cover, proven (2026-10-28): what opens the loads that ask for it. Absent when it holds none that was checked.
+      ...(this.managers.coverOf(did) ? { cover: this.managers.coverOf(did) } : {}),
       // What the office sent and is waiting on, and why the last one was turned down — the only place the
       // fleet hears the answer, because the fleet app has no inbox. The media owner is plumbing, not news.
       sent: Object.fromEntries(Object.entries(m.papers?.sent ?? {}).map(([k, s]) => [k, { copyRef: s!.copyRef, expiresAt: s!.expiresAt, reference: s!.reference, sentAt: s!.sentAt }])),

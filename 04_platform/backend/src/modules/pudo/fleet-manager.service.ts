@@ -12,7 +12,8 @@ import { Geocoder, GEOCODER } from './geocoder';
 import { CarrierPapers, FleetClockView, FleetManager, FleetManagerKyc, FleetManagerRequirements, FleetManagerStatus, FleetSetupRow, FleetSignupView } from './fleet.types';
 import { sameSigner, type Signer } from '../../foundation/entity/same-person';
 import { clockAt, clocksOfCountry, isTimeZone, utcDay, zoneName } from './fleet-clock';
-import { CARRIER_PAPER_KINDS, fleetPapers, lapsedOf, offRoadLine, paperLabel, paperLapsesAt, type CarrierPaperKind, type PaperStatus } from './papers';
+import { CARRIER_PAPER_KINDS, fleetPapers, lapsedOf, offRoadLine, paperLabel, paperLapsesAt, type CarrierCoverProof, type CarrierPaperKind, type PaperStatus } from './papers';
+import { isKnownCurrency } from '../../foundation/countries/catalogue';
 import { MediaService } from './media.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -247,7 +248,7 @@ export class FleetManagerService {
    */
   recordPapers(
     did: string,
-    input: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null },
+    input: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null; insuranceCovers?: 'goods_in_transit' | 'carrier_liability' | 'both' | null; insuranceLimit?: number | null; insuranceCurrency?: string | null },
     by?: string,
     now = Date.now(),
   ): FleetManager {
@@ -267,6 +268,24 @@ export class FleetManagerService {
     set('licenceExpiresAt', input.licenceExpiresAt, true);
     set('insuranceExpiresAt', input.insuranceExpiresAt, true);
     set('insurancePolicy', input.insurancePolicy, false);
+    // What the cover is for, and up to how much a load — read off the same policy (the user, 2026-10-28: "they must prove it").
+    if (input.insuranceCovers !== undefined) {
+      if (input.insuranceCovers === null) delete next.insuranceCovers;
+      else next.insuranceCovers = input.insuranceCovers;
+    }
+    if (input.insuranceLimit !== undefined || input.insuranceCurrency !== undefined) {
+      const limit = input.insuranceLimit === undefined ? next.insuranceLimit : input.insuranceLimit;
+      const currency = input.insuranceCurrency === undefined ? next.insuranceCurrency : input.insuranceCurrency?.trim().toUpperCase();
+      if (limit == null) {
+        delete next.insuranceLimit;
+        delete next.insuranceCurrency;
+      } else {
+        if (!Number.isFinite(limit) || limit <= 0) throw new GlosError('VALIDATION_FAILED', 'A cover limit is an amount above nothing');
+        if (!isKnownCurrency(currency)) throw new GlosError('VALIDATION_FAILED', 'Say the money the cover limit is in — a currency some country uses, like KES or USD');
+        next.insuranceLimit = Math.round(limit);
+        next.insuranceCurrency = currency!;
+      }
+    }
 
     // A renewed licence can carry a new number. Checked BEFORE anything is written, so a refused number
     // is not also a half-recorded date — the same one-licence-one-operator rule registration keeps.
@@ -325,6 +344,23 @@ export class FleetManagerService {
       void this.events.publish(GlosEvent.Pudo.FleetPaperChecked, { did: m.did, kind: a.kind, accepted: true, expiresAt: a.expiresAt }, { source: 'pudo' }).catch(() => undefined);
     }
     return m;
+  }
+
+  /**
+   * THE CARRIER'S COVER, PROVEN (the user, 2026-10-28: "they must prove it"): its carrier-insurance paper as staff recorded
+   * it off the policy the fleet SENT — never a date typed on somebody's word — while it runs. Nothing otherwise.
+   */
+  coverOf(did: string, now = Date.now()): CarrierCoverProof | undefined {
+    const p = this.managers.get(did)?.papers;
+    if (!p?.insuranceExpiresAt || !p.insuranceCopyRef) return undefined;
+    if (paperLapsesAt(p.insuranceExpiresAt) <= now) return undefined;
+    return {
+      ...(p.insurancePolicy ? { policy: p.insurancePolicy } : {}),
+      expiresAt: p.insuranceExpiresAt,
+      ...(p.insuranceCovers ? { covers: p.insuranceCovers } : {}),
+      ...(p.insuranceLimit != null && p.insuranceCurrency ? { limit: p.insuranceLimit, currency: p.insuranceCurrency } : {}),
+      ...(p.recordedAt ? { checkedAt: p.recordedAt } : {}),
+    };
   }
 
   /**

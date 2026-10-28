@@ -7,6 +7,9 @@ import { DocumentStrip } from './DocumentStrip';
 import { CardPhoto, Fig } from './PapersScreen';
 import { operatorWaiting, type CarrierKind, type CarrierPaperRow, type SentPaper } from '../papers';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { ConsolePick } from '../ConsolePick';
+import { CurrencySelect } from './CurrencySelect';
+import { COVER_KINDS, type CoverKind } from '../papers';
 
 /**
  * THE OPERATORS' OWN PAPERS — the licence that lets a company run lorries, and its cover.
@@ -255,10 +258,16 @@ function RecordPaperForm({
   const paper = row.papers.find((p) => p.kind === kind);
   const [reference, setReference] = useState(sent?.reference ?? paper?.reference ?? '');
   const [expiresAt, setExpiresAt] = useState(sent ? '' : (paper?.expiresAt?.slice(0, 10) ?? ''));
+  // What the cover is for and up to how much a load — read off the same policy (the user, 2026-10-28: "they must prove it").
+  const [covers, setCovers] = useState<CoverKind | ''>(row.insurance?.covers ?? '');
+  const [limit, setLimit] = useState(row.insurance?.limit != null ? String(row.insurance.limit) : '');
+  const [currency, setCurrency] = useState(row.insurance?.currency ?? '');
+  const limitNumber = Number(limit);
+  const limitBad = kind === 'carrier_insurance' && Boolean(limit.trim()) && (!(limitNumber > 0) || !currency);
   const busy = state.busyId === row.did;
   const differs = Boolean(sent && expiresAt && expiresAt !== sent.expiresAt);
   // From a document a date is the whole point; without one, an emptied box is a deliberate clear.
-  const blocked = sent ? !expiresAt : !expiresAt && !paper?.expiresAt;
+  const blocked = (sent ? !expiresAt : !expiresAt && !paper?.expiresAt) || limitBad;
 
   const save = () => {
     const date = expiresAt || null;
@@ -268,7 +277,12 @@ function RecordPaperForm({
       row.did,
       kind === 'operator_licence'
         ? { licenceExpiresAt: date, ...(changedRef ? { licenceNumber: changedRef } : {}) }
-        : { insuranceExpiresAt: date, ...(changedRef ? { insurancePolicy: changedRef } : {}) },
+        : {
+            insuranceExpiresAt: date,
+            ...(changedRef ? { insurancePolicy: changedRef } : {}),
+            insuranceCovers: covers || null,
+            ...(limit.trim() ? { insuranceLimit: limitNumber, insuranceCurrency: currency } : { insuranceLimit: null }),
+          },
     );
   };
 
@@ -290,6 +304,23 @@ function RecordPaperForm({
           <input class="cinput" type="date" value={expiresAt} onInput={(e) => setExpiresAt((e.target as HTMLInputElement).value)} />
         </label>
       </div>
+      {kind === 'carrier_insurance' ? (
+        <div class="twr-facts">
+          <ConsolePick
+            label={t('tower.carrierPapers.covers')}
+            value={covers}
+            placeholder={t('tower.carrierPapers.coversNone')}
+            options={COVER_KINDS.map((k) => ({ value: k, label: t(`tower.carrierPapers.covers.${k}`) }))}
+            onChange={(v) => setCovers(v as CoverKind)}
+          />
+          <label class="cfield">
+            <span class="cfield__label">{t('tower.carrierPapers.limit')}</span>
+            <input class="cinput" type="number" min={1} value={limit} onInput={(e) => setLimit((e.target as HTMLInputElement).value)} />
+          </label>
+          <CurrencySelect api={(actions.client()?.api as never) ?? null} value={currency} onChange={setCurrency} label={t('tower.carrierPapers.limitCurrency')} near={row.jurisdiction ? [row.jurisdiction] : []} />
+        </div>
+      ) : null}
+      {kind === 'carrier_insurance' ? <p class="chint">{t('tower.carrierPapers.coverHint')}</p> : null}
       {differs && sent ? (
         <p class="cons__caveat">
           <Icon name="warning" size={16} />

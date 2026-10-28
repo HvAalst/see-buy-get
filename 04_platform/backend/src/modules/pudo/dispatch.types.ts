@@ -715,6 +715,8 @@ export class Freight {
   @ApiPropertyOptional({ type: FreightDangerous }) dangerousGoods?: FreightDangerous;
   /** CMR box 13 — the sender's instructions for customs and other formalities (Art. 6(1)(j)). */
   @ApiPropertyOptional() customsInstructions?: string;
+  /** The sender asks for a carrier whose insurance cover SeeBuyGet checked (2026-10-28): nobody else may take it. */
+  @ApiPropertyOptional() coverRequired?: boolean;
   claimedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;
@@ -1087,6 +1089,8 @@ export class BoardRow {
    *  cannot take it is entitled to know that before tapping it, and one who can should see the job. */
   bonded?: boolean;
   bondCountry?: string;
+  /** The sender asks for a carrier with checked insurance cover: said on the board to every driver. */
+  @ApiPropertyOptional() coverRequired?: boolean;
 }
 
 /**

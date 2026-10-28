@@ -55,6 +55,10 @@ export interface LooseVehicleRow {
  * (usually nothing) and `notOffered` whether a lapse is costing the fleet work right now: the screen has
  * to tell "lapsed and refused" from "lapsed and nobody is checking" from "in date".
  */
+/** What a carrier's insurance covers, as staff read it off the policy (2026-10-28). */
+export const COVER_KINDS = ['goods_in_transit', 'carrier_liability', 'both'] as const;
+export type CoverKind = (typeof COVER_KINDS)[number];
+
 export interface CarrierPaperRow {
   did: string;
   companyName: string;
@@ -68,6 +72,8 @@ export interface CarrierPaperRow {
   recordedAt?: string;
   /** What each recorded date was read from, when it came off a document the fleet sent. */
   copies?: Partial<Record<CarrierKind, string>>;
+  /** What the insurance covers and up to how much a load, as last recorded off the policy. */
+  insurance?: { covers?: CoverKind; limit?: number; currency?: string };
   /** A renewed document the fleet SENT and nobody has read — the work. Its date is the fleet's reading. */
   sent?: Partial<Record<CarrierKind, SentPaper>>;
   /** Why the last document sent for a paper was turned down. */

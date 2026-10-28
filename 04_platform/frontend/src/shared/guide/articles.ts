@@ -101,7 +101,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   // The procedures every consignment note refers to (e-CMR Art. 5): public, because the note links here for whoever holds it.
   { id: 'electronic-note', apps: ['business', 'agent', 'driver', 'fleet', 'vendor'], group: 'freight', site: true, steps: 6, notes: ['why', 'note'] },
   { id: 'business-bell', apps: ['business'], group: 'daily', steps: 3, notes: ['note', 'rare', 'note'] },
-  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note'] },
+  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note'] },
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.
   { id: 'business-exports', apps: ['business'], group: 'freight', steps: 6, notes: ['note', 'why', 'note'] },
   { id: 'business-note', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'note', 'note', 'note', 'why', 'rare', 'rare'] },
@@ -132,7 +132,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'fleet-plan', apps: ['fleet'], group: 'freight', steps: 8, notes: ['why', 'note', 'note', 'why', 'note', 'note', 'why', 'why', 'note', 'note'] },
   { id: 'fleet-plan-adviser', apps: ['fleet'], group: 'freight', steps: 6, notes: ['note', 'note', 'note', 'note', 'why'] },
   { id: 'fleet-partners', apps: ['fleet'], group: 'freight', steps: 8, notes: ['note', 'note', 'note', 'rare'] },
-  { id: 'papers-that-expire', apps: ['fleet', 'driver', 'console'], group: 'account', steps: 6, notes: ['why', 'why', 'rare'] },
+  { id: 'papers-that-expire', apps: ['fleet', 'driver', 'console'], group: 'account', steps: 6, notes: ['why', 'why', 'rare', 'note'] },
   { id: 'hand-back', apps: ['driver', 'agent', 'fleet'], group: 'freight', steps: 4, notes: ['note'] },
   { id: 'hours-of-service', apps: ['driver', 'fleet'], group: 'freight', steps: 6, notes: ['why'] },
   { id: 'when-to-change', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'home', 'console'], group: 'account', site: true, steps: 2, notes: ['careful'] },

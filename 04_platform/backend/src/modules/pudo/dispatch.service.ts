@@ -573,7 +573,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -592,6 +592,10 @@ export class DispatchService {
     // P1 — an order under a standing contract is that fleet's, on no market, for a day it must arrive by.
     const contract = input.contract;
     if (contract && !input.deliverOn) throw new GlosError('FIELD_REQUIRED', 'An order under a contract says which day it must arrive', { field: 'deliverOn' });
+    // Cover asked of an order under a contract: the fleet it goes to must have it, or the order would wait for nobody.
+    if (contract && input.coverRequired && !this.managers?.coverOf(contract.fleetDid, now)) {
+      throw new GlosError('FORBIDDEN', `${contract.fleetName} has no insurance cover SeeBuyGet has checked that is still running. Order it without asking for cover, or from a carrier that has it.`, { field: 'coverRequired' });
+    }
     // The shipper's early-claim choice (default: allow — a scarce truck can commit ahead of the date).
     const allowEarlyClaim = input.allowEarlyClaim ?? true;
     // S32: give the freight a cargo model so it matches vehicles like a tote does — class (from weight+dims)
@@ -713,6 +717,7 @@ export class DispatchService {
       ...(input.consignee?.name?.trim() ? { consignee: { name: input.consignee.name.trim().slice(0, 120), ...(input.consignee.address?.trim() ? { address: input.consignee.address.trim().slice(0, 300) } : {}) } } : {}),
       ...(input.dangerousGoods ? { dangerousGoods: dangerousOf(input.dangerousGoods) } : {}),
       ...(input.customsInstructions?.trim() ? { customsInstructions: input.customsInstructions.trim().slice(0, 500) } : {}),
+      ...(input.coverRequired ? { coverRequired: true } : {}),
       // FP7 — box 13 at posting, when the poster said anything.
       ...(instructionsOf({ text: input.instructions, contactName: input.contactName, contactPhone: input.contactPhone, deliveryWindow: input.deliveryWindow }, input.postedByDid, now) ?? {}),
       // S34c — a positive, finite cap only; a zero/negative/NaN budget is treated as "no cap" (never a load
@@ -866,7 +871,7 @@ export class DispatchService {
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
-      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load))
+      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
     const out: Offer[] = [];
@@ -989,7 +994,7 @@ export class DispatchService {
     const out: Offer[] = [];
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now))
       .map((load) => ({ load, km: this.router.roadKm(from, load.pickupLocation) }))
       .filter(({ km }) => km <= radius)
       .sort((a, b) => a.km - b.km);
@@ -1041,7 +1046,7 @@ export class DispatchService {
 
     const candidates = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now))
       .map((load) => ({ load, km: this.router.roadKm(point, load.pickupLocation) }))
       // A rider who declared a patch is asking to hear about their whole patch; anyone else gets the tighter
       // interrupt-someone-driving radius. Either way the declaration below decides whether it is really theirs.
@@ -1323,6 +1328,9 @@ export class DispatchService {
     // Round 39 — no load is taken on without the security declaration of whoever answers for the driver: their fleet's,
     // or their own when they ride for themselves. Every door onto a load comes through here.
     this.declarations?.assertMayCarry(driverDid, now);
+    // The cover the sender asked for (2026-10-28): whoever answers for the driver must hold it, checked and running.
+    const cover = this.coverRefusal(driverDid, f, now);
+    if (cover) throw new GlosError('FORBIDDEN', cover);
     // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
     // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
     // given, which is the invisible exclusion the whole board exists to remove; enforcing it here, where the
@@ -1459,6 +1467,7 @@ export class DispatchService {
           ratingBelowFloor,
           overHours,
           declaration,
+          cover: input.driverDid ? this.coverRefusal(input.driverDid, f, now) : undefined,
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //
@@ -1527,6 +1536,7 @@ export class DispatchService {
         // BL1 — said on the board, because a driver who cannot take it is entitled to know why before
         // tapping it, and one who has just been licensed should see the work that licence is for.
         ...(f.bonded ? { bonded: true, bondCountry: f.bondCountry } : {}),
+        ...(f.coverRequired ? { coverRequired: true } : {}),
       });
     }
 
@@ -4490,6 +4500,25 @@ export class DispatchService {
   private borderRefusals(vehicle: Vehicle, driverDid: string, load: Claimable): BorderRefusal[] {
     if (!this.borders || load.kind !== 'freight') return [];
     return this.borders.refusalsFor(load, this.drivers.homeCountryOf(driverDid, vehicle.managerDid));
+  }
+
+  /**
+   * COVER THE SENDER ASKED FOR (the user, 2026-10-28: "a specific matching of bookings that explicitly want to work with
+   * carriers that have an insurance cover"): whoever answers for the driver — the fleet, or the driver riding for
+   * themselves — must hold insurance SeeBuyGet checked off the policy it sent, still running. Undefined = it may, or no
+   * cover was asked. Asked wherever a load is offered or taken, as the bond is.
+   */
+  private coverRefusal(driverDid: string, f: Freight | undefined, now = Date.now()): string | undefined {
+    if (!f?.coverRequired) return undefined;
+    const carrier = this.carrierDidOf(driverDid);
+    if (carrier !== driverDid && this.managers?.coverOf(carrier, now)) return undefined;
+    return carrier === driverDid
+      ? 'The sender asks for a carrier whose insurance cover SeeBuyGet has checked. A driver riding for themselves cannot show cover yet.'
+      : 'The sender asks for a carrier whose insurance cover SeeBuyGet has checked: your fleet has none on record that is still running. Your office sends the policy from the Fleet app.';
+  }
+
+  private coverRefusalFor(driverDid: string, load: Claimable, now = Date.now()): string | undefined {
+    return load.kind === 'freight' ? this.coverRefusal(driverDid, this.freights.get(load.ref), now) : undefined;
   }
 
   /**

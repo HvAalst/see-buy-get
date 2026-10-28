@@ -94,6 +94,8 @@ export function blockersFor(
     overHours?: boolean;
     /** Round 39 — the security declaration of whoever answers for the driver is not in force: the take's own words. */
     declaration?: string;
+    /** The sender asks for checked insurance cover and whoever answers for this driver holds none (2026-10-28): the take's words. */
+    cover?: string;
     indicativeCharge?: number;
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
@@ -119,6 +121,8 @@ export function blockersFor(
     out.push(...(ctx.routeBlockers ?? []).filter((b) => b.code === 'NO_TRANSIT_AUTHORITY'));
     // Round 39 — and the security declaration: no lorry makes it signed.
     if (ctx.declaration) out.push({ kind: 'resolvable', code: 'DECLARATION_REQUIRED', message: ctx.declaration });
+    // …and cover: no lorry gives a carrier insurance it does not hold.
+    if (ctx.cover) out.push({ kind: 'resolvable', code: 'COVER_REQUIRED', message: ctx.cover });
     out.push({ kind: 'resolvable', code: 'NO_VEHICLE', message: 'Couple to a vehicle to see whether you can take this' });
     return out;
   }
@@ -128,6 +132,8 @@ export function blockersFor(
   }
   // Round 39 — every take refuses it until it is signed; the board says so first, in the take's own words.
   if (ctx.declaration) out.push({ kind: 'resolvable', code: 'DECLARATION_REQUIRED', message: ctx.declaration });
+  // The cover the sender asked for: the claim refuses it in these words, so the board says them first.
+  if (ctx.cover) out.push({ kind: 'resolvable', code: 'COVER_REQUIRED', message: ctx.cover });
   if (ctx.overHours) {
     out.push({ kind: 'resolvable', code: 'HOURS_EXCEEDED', message: 'Over the shift hours limit — deliver what is aboard, end the shift and rest before taking more' });
   }

@@ -419,7 +419,7 @@ export interface TowerActions {
   /** Round 38 — where this company requires a seal. */
   saveSealRules(rules: { crossBorder: boolean; containers: boolean }): Promise<void>;
   /** Record the dates on one fleet operator's own papers — staff only. */
-  recordCarrierPapers(did: string, body: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null }): Promise<boolean>;
+  recordCarrierPapers(did: string, body: { licenceExpiresAt?: string | null; licenceNumber?: string | null; insurancePolicy?: string | null; insuranceExpiresAt?: string | null; insuranceCovers?: 'goods_in_transit' | 'carrier_liability' | 'both' | null; insuranceLimit?: number | null; insuranceCurrency?: string | null }): Promise<boolean>;
   /** Turn down a document a fleet sent, with the reason the fleet is shown. */
   refuseCarrierPaper(did: string, kind: 'operator_licence' | 'carrier_insurance', reason: string): Promise<boolean>;
 }

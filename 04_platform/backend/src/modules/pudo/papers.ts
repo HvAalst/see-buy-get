@@ -26,6 +26,38 @@ export type CarrierPaperKind = (typeof CARRIER_PAPER_KINDS)[number];
 
 export type PaperState = 'ok' | 'due' | 'lapsed' | 'none';
 
+/**
+ * WHAT A CARRIER'S INSURANCE COVERS (the user, 2026-10-28: "Some carriers state cover, that's why they get certain orders
+ * that others don't. But they must prove it"): the goods while they are carried, the carrier's liability for them, or
+ * both — as staff read it off the policy the carrier sent.
+ */
+export const COVER_KINDS = ['goods_in_transit', 'carrier_liability', 'both'] as const;
+export type CoverKind = (typeof COVER_KINDS)[number];
+export const COVER_WORDS: Record<CoverKind, string> = {
+  goods_in_transit: 'goods in transit',
+  carrier_liability: 'the carrier’s liability',
+  both: 'goods in transit and the carrier’s liability',
+};
+
+/** A carrier's cover, proven: read by staff off the policy it sent, and still running. */
+export interface CarrierCoverProof {
+  policy?: string;
+  expiresAt: string;
+  covers?: CoverKind;
+  /** What it pays up to, per load, in `currency` — as staff read it off the policy. */
+  limit?: number;
+  currency?: string;
+  /** When its papers were last recorded by staff. */
+  checkedAt?: string;
+}
+
+/** The cover as a consignment note says it: what, up to how much, the policy, until when, and that it was checked. */
+export function coverLine(c: CarrierCoverProof): string {
+  const what = c.covers ? COVER_WORDS[c.covers] : 'goods and liability as the policy says';
+  const upTo = c.limit != null && c.currency ? ` up to ${c.limit.toLocaleString('en')} ${c.currency} a load` : '';
+  return `Insurance cover: ${what}${upTo}${c.policy ? `, policy ${c.policy}` : ''}, valid until ${c.expiresAt}${c.checkedAt ? ` — checked by SeeBuyGet on ${c.checkedAt.slice(0, 10)}` : ''}`;
+}
+
 /** How far ahead a fleet is told a paper is running out. */
 export const PAPER_DUE_DAYS = 30;
 const DAY_MS = 86_400_000;

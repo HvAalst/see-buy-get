@@ -40,6 +40,10 @@ export class CarrierPapers {
   insurancePolicy?: string;
   insuranceExpiresAt?: string;
   insuranceCopyRef?: string;
+  /** What the cover is for, and what it pays up to per load — read off the policy by staff (2026-10-28). */
+  insuranceCovers?: 'goods_in_transit' | 'carrier_liability' | 'both';
+  insuranceLimit?: number;
+  insuranceCurrency?: string;
   /**
    * Who typed these dates and when — the same provenance a driver's licence carries, and for the same
    * reason: a screen must be able to say whether a date was read off a document or taken on somebody's word.

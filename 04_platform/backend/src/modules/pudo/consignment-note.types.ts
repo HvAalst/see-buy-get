@@ -88,14 +88,14 @@ export interface ConsignmentNote {
   /** Box 14/20 — payment for carriage. */
   carriage: { amount?: number; currency?: string; paidBy: 'sender' | 'between-parties' | 'not-priced'; note: string };
   /** Box 16 — carrier, and the vehicle that took the goods over. */
-  carrier?: NoteParty & { driverName?: string; plate?: string; vehicleClass?: string };
+  carrier?: NoteParty & { driverName?: string; plate?: string; vehicleClass?: string; cover?: string };
   /**
    * Box 17 — THE CARRIER WHO CARRIED IT, where that is not the one the sender contracted with (the user, 2026-10-28:
    * "Contracted in 16, carrier in 17"): an order placed with a fleet under contract and carried by a partner it was handed
    * to, or by a driver from the board it was released to. Box 16 then names the contracted fleet; this one, the driver and
    * the vehicle, and when it took the goods over — and `via`, a partner that passed it on without carrying it.
    */
-  successive?: Array<NoteParty & { driverName?: string; plate?: string; vehicleClass?: string; takenOverAt?: string; via?: string }>;
+  successive?: Array<NoteParty & { driverName?: string; plate?: string; vehicleClass?: string; takenOverAt?: string; via?: string; cover?: string }>;
   /** Box 18 — carrier's reservations and observations. */
   reservations: string[];
   /** Round 15 — the seals on the load, one line each: number, ISO 17712 class, maker, who closed it, what became of it. */

@@ -8,6 +8,7 @@ import { FleetManagerService } from '../src/modules/pudo/fleet-manager.service';
 import { MdpService } from '../src/modules/pudo/mdp.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { DispatchService } from '../src/modules/pudo/dispatch.service';
+import { MediaService } from '../src/modules/pudo/media.service';
 import { AGREED } from './agreed';
 
 /**
@@ -182,5 +183,45 @@ describe('the yearly security declaration — over the wire', () => {
     const fleets = (await http().get('/v1/sbg/declarations/mine').set(office).expect(200)).body;
     await http().post('/v1/sbg/declarations/mine/sign').set(office).send({ version: fleets.version }).expect(201);
     expect(assign()).toBe('assigned');
+
+    /*
+     * COVER THE SENDER ASKS FOR (the user, 2026-10-28: "Toggle cover needed/not needed" — "they must prove it"). The same
+     * fleet, now signed: a load whose sender asks for cover is not put on its driver until staff have read the fleet's
+     * insurance off the policy it sent. The board says so first, in the take's own words.
+     */
+    const covered = dispatch.registerFreight({ description: 'Paint, 20 drums', pickupLocation: { lat: -1.3, lng: 36.85 }, pickupLabel: 'Bamburi depot', destLabel: 'Site 8', destLocation: { lat: -1.25, lng: 36.9 }, weightKg: 1500, packaging: 'drummed', coverRequired: true });
+    const assignCovered = () => {
+      try {
+        dispatch.assign(covered.freightId, driver.did, { managerDid: m.did, name: 'Office' });
+        return 'assigned';
+      } catch (e) {
+        return `${(e as { code?: string }).code}: ${(e as Error).message}`;
+      }
+    };
+    const refusal = 'FORBIDDEN: The sender asks for a carrier whose insurance cover SeeBuyGet has checked: your fleet has none on record that is still running. Your office sends the policy from the Fleet app.';
+    expect(assignCovered()).toBe(refusal);
+    // Never offered either: what refuses a load is not pushed to the driver it would refuse.
+    const offered = () => [...dispatch.suggestNearby(driver.did, { lat: -1.3, lng: 36.85 }, 50).map((o) => o.ref), dispatch.offerNear(driver.did, { lat: -1.3, lng: 36.85 })?.ref, ...dispatch.suggest(driver.did, { from: { lat: -1.3, lng: 36.85 }, to: { lat: -1.25, lng: 36.9 } }).map((o) => o.ref)];
+    expect(offered()).not.toContain(covered.freightId);
+    const row = dispatch.board({ driverDid: driver.did, from: { lat: -1.3, lng: 36.85 } }).find((r) => r.freightId === covered.freightId);
+    expect(row).toMatchObject({ coverRequired: true });
+    expect(row?.blockers).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'COVER_REQUIRED', kind: 'resolvable' })]));
+    // A date typed with no document is no proof.
+    const inAYear = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
+    await http().post(`/v1/sbg/fleet/managers/${m.did}/papers`).set(staff).send({ insuranceExpiresAt: inAYear, insurancePolicy: 'GIT-DH-1' }).expect(201);
+    expect(assignCovered()).toBe(refusal);
+    // The office sends its policy; staff read it off the image, with what it covers and up to how much a load.
+    const policy = app.get(MediaService).upload({ ownerDid: m.did, kind: 'kyc_insurance', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' }).mediaId;
+    managers.sendPaper(m.did, { kind: 'carrier_insurance', copyRef: policy, expiresAt: inAYear, reference: 'GIT-DH-1' }, { ownerDid: m.did });
+    await http().post(`/v1/sbg/fleet/managers/${m.did}/papers`).set(staff).send({ insuranceExpiresAt: inAYear, insuranceCovers: 'both', insuranceLimit: 2500000, insuranceCurrency: 'KES' }).expect(201);
+    const own = (await http().get(`/v1/sbg/fleet/managers/${m.did}/papers`).set(office).expect(200)).body;
+    expect(own.cover).toMatchObject({ policy: 'GIT-DH-1', covers: 'both', limit: 2500000, currency: 'KES' });
+    expect(dispatch.board({ driverDid: driver.did, from: { lat: -1.3, lng: 36.85 } }).find((r) => r.freightId === covered.freightId)?.blockers.map((b) => b.code)).not.toContain('COVER_REQUIRED');
+    expect(offered()).toContain(covered.freightId);
+    expect(assignCovered()).toBe('assigned');
+    // The note says what the sender asked for and the cover the carrier holds.
+    const note = (await http().get(`/v1/sbg/dispatch/freight/${covered.freightId}/consignment-note`).set(staff).expect(200)).body;
+    expect(note.instructions).toContain('Insurance: the sender requires a carrier whose insurance cover SeeBuyGet has checked');
+    expect(note.carrier.cover).toMatch(/^Insurance cover: goods in transit and the carrier’s liability up to 2,500,000 KES a load, policy GIT-DH-1, valid until /);
   });
 });

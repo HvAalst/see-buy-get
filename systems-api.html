@@ -171,6 +171,7 @@
       <tr><td>instructions, contactName, contactPhone, deliveryWindow</td><td class="desc">What the driver needs at the door.</td></tr>
       <tr><td>consignee</td><td class="desc"><code>{ name, address }</code>: who receives the goods — the consignee on the consignment note. Asked of every load that crosses a border.</td></tr>
       <tr><td>dangerousGoods</td><td class="desc"><code>{ unNumber, properShippingName, hazardClass, packingGroup }</code>: dangerous goods as their safety data sheet names them (<code>"1263"</code> or <code>"UN1263"</code>; packing group <code>I</code>, <code>II</code> or <code>III</code>). Yours to give: nothing is classified for you. A malformed UN number is refused with a 400.</td></tr>
+      <tr><td>coverRequired</td><td class="desc"><code>true</code>: only a carrier whose insurance cover SeeBuyGet has checked off its policy, and which is still running, may take the load. An order under a contract is refused with a 403 when the contracted fleet holds none.</td></tr>
       <tr><td>customsInstructions</td><td class="desc">Your instructions for customs and other formalities: where the goods are cleared, and by whom. On the note beside the sender's instructions.</td></tr>
       <tr><td>contractId, deliverOn, orderRef</td><td class="desc">An order under a contract you linked with a fleet: the day it must arrive, your own order number (used once).</td></tr>
       <tr><td>forClientId</td><td class="desc">An expeditor sending for one of its own clients.</td></tr>

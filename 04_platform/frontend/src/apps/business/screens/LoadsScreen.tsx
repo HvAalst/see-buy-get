@@ -47,8 +47,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
-type Form = LoadForm & { consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
-const EMPTY: Form = { consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
+type Form = LoadForm & { coverRequired: boolean; consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
+const EMPTY: Form = { coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -267,6 +267,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(dangerous ? { dangerousGoods: { unNumber: form.unNumber.trim(), properShippingName: form.properShippingName.trim(), hazardClass: form.hazardClass.trim(), ...(form.packingGroup ? { packingGroup: form.packingGroup } : {}) } } : {}),
       ...(crossing && form.customsInstructions.trim() ? { customsInstructions: form.customsInstructions.trim() } : {}),
       fragile: form.fragile,
+      ...(form.coverRequired ? { coverRequired: true } : {}),
       commitMode: form.commitMode,
       ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
       ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}),
@@ -442,6 +443,14 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
         <label class="cfield--check">
           <input type="checkbox" checked={form.fragile} onChange={() => setForm((prev) => ({ ...prev, fragile: !prev.fragile }))} />
           <span>{t('business.loads.f.fragile')}</span>
+        </label>
+        {/* Cover asked for (2026-10-28): only a carrier whose insurance SeeBuyGet has checked, and which still runs, may take it. */}
+        <label class="cfield--check">
+          <input type="checkbox" checked={form.coverRequired} onChange={() => setForm((prev) => ({ ...prev, coverRequired: !prev.coverRequired }))} />
+          <span>
+            {t('business.loads.f.cover')}
+            <span class="chint">{t('business.loads.f.coverHint')}</span>
+          </span>
         </label>
         <fieldset class="cfield biz-acts" style={contract ? 'display:none' : undefined}>
           <legend class="cfield__label">{t('business.loads.f.price')}</legend>

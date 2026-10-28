@@ -1654,6 +1654,11 @@ export class CarrierPapersRecordDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(64) licenceNumber?: string | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insurancePolicy?: string | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() insuranceExpiresAt?: string | null;
+  /** What the cover is for, as the policy says (2026-10-28). Null clears it. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsIn(['goods_in_transit', 'carrier_liability', 'both']) insuranceCovers?: 'goods_in_transit' | 'carrier_liability' | 'both' | null;
+  /** What it pays up to, per load, and in which money. Null clears it. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsNumber() @Min(1) insuranceLimit?: number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(3) insuranceCurrency?: string | null;
 }
 
 /**
@@ -2611,6 +2616,11 @@ export class RegisterFreightDto {
   @IsOptional() @ValidateNested() @Type(() => FreightDangerousDto) dangerousGoods?: FreightDangerousDto;
   /** CMR box 13 (Art. 6(1)(j)) — the instructions for customs and other formalities. */
   @IsOptional() @IsString() @MaxLength(500) customsInstructions?: string;
+  /**
+   * THE CARRIER MUST HAVE COVER (the user, 2026-10-28: "Toggle cover needed/not needed"): only a carrier whose insurance
+   * SeeBuyGet has checked, and which is still running, may take it. CMR Art. 6(2)(e): the sender's instruction on insurance.
+   */
+  @IsOptional() @IsBoolean() coverRequired?: boolean;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

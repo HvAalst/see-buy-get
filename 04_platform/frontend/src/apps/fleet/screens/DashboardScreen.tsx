@@ -392,6 +392,12 @@ function CompanyPapersCard({ own, state, actions }: { own: OwnPapers; state: Fle
       <p class="hint" style="margin-top:8px">
         {own.enforced.length ? t('fleet.ownPapers.enforced', { papers: enforced }) : t('fleet.ownPapers.notEnforced')}
       </p>
+      {/* Cover a sender can ask for (2026-10-28): open to this fleet only while its policy is checked and running. */}
+      <p class="hint" style="margin-top:8px">
+        {own.cover
+          ? t('fleet.ownPapers.coverOn', { until: own.cover.expiresAt, limit: own.cover.limit != null && own.cover.currency ? `${own.cover.limit.toLocaleString('en')} ${own.cover.currency}` : t('fleet.ownPapers.coverNoLimit') })
+          : t('fleet.ownPapers.coverOff')}
+      </p>
       {sending ? <SendPaperSheet kind={sending} state={state} actions={actions} onClose={() => setSending(null)} /> : null}
     </Card>
   );

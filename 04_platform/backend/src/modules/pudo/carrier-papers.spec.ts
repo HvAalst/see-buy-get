@@ -555,6 +555,41 @@ describe('a carrier that may not take new work', () => {
       expect(fleetPapers({ requirements: { businessRegistrationNo: 'x', transportOperatorLicence: 'TLB-9', taxId: 't' } }).map((p) => p.state)).toEqual(['none', 'none']);
     });
   });
+
+  /*
+   * COVER, PROVEN (the user, 2026-10-28: "Some carriers state cover ... But they must prove it"). A sender may ask for a
+   * carrier with cover; what counts is the fleet's insurance as staff read it off the policy the fleet SENT, still running.
+   */
+  describe('the cover a sender may ask for', () => {
+    it('counts only cover read off the policy the fleet sent, with what it covers and up to how much', () => {
+      const { managers, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      expect(managers.coverOf(m.did)).toBeUndefined();
+      // A date typed on somebody's word, with no document: recorded, and not proof.
+      managers.recordPapers(m.did, { insuranceExpiresAt: dateIn(200), insurancePolicy: 'GIT-77' }, 'ops1@sbg.test');
+      expect(managers.coverOf(m.did)).toBeUndefined();
+      // Sent, then read off the image by staff, with the limit and what it is for.
+      managers.sendPaper(m.did, { kind: 'carrier_insurance', copyRef: photo(m.did), expiresAt: dateIn(200), reference: 'GIT-77' }, { ownerDid: m.did });
+      managers.recordPapers(m.did, { insuranceExpiresAt: dateIn(200), insuranceCovers: 'both', insuranceLimit: 2_500_000, insuranceCurrency: 'kes' }, 'ops1@sbg.test');
+      expect(managers.coverOf(m.did)).toMatchObject({ policy: 'GIT-77', expiresAt: dateIn(200), covers: 'both', limit: 2_500_000, currency: 'KES' });
+    });
+
+    it('stops counting the day after it lapses', () => {
+      const { managers, activeFleet, photo } = setUp();
+      const m = activeFleet();
+      managers.sendPaper(m.did, { kind: 'carrier_insurance', copyRef: photo(m.did), expiresAt: dateIn(10) }, { ownerDid: m.did });
+      managers.recordPapers(m.did, { insuranceExpiresAt: dateIn(10) }, 'ops1@sbg.test');
+      expect(managers.coverOf(m.did)).toBeDefined();
+      expect(managers.coverOf(m.did, Date.now() + 12 * DAY)).toBeUndefined();
+    });
+
+    it('refuses a limit in no money, or of nothing', () => {
+      const { managers, activeFleet } = setUp();
+      const m = activeFleet();
+      expect(() => managers.recordPapers(m.did, { insuranceLimit: 500000, insuranceCurrency: 'KSH' }, 'ops1@sbg.test')).toThrow(/a currency some country uses/);
+      expect(() => managers.recordPapers(m.did, { insuranceLimit: 0, insuranceCurrency: 'KES' }, 'ops1@sbg.test')).toThrow(/above nothing/);
+    });
+  });
 });
 
 /** The day a date-only expiry is still valid until, spelled as offRoadLine spells it. */

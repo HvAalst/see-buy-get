@@ -19,6 +19,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { tempBand } from './heavy-cargo';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { roadRegimeOf, type RoadRegime } from '../../foundation/carriage-law/catalogue';
+import { coverLine } from './papers';
 import { NETWORK_CURRENCY } from './pudo.config';
 import { VendorService } from './vendor.service';
 import { BusinessService } from './business.service';
@@ -184,6 +185,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     const instructions: string[] = [];
     // Box 13 first for what customs reads (Art. 6(1)(j)): the sender's own instructions for it, and a bonded load's licence.
     if (f.customsInstructions) instructions.push(`For customs: ${f.customsInstructions}`);
+    if (f.coverRequired) instructions.push('Insurance: the sender requires a carrier whose insurance cover SeeBuyGet has checked');
     if (f.bonded) instructions.push(`Uncleared goods, carried in bond: the carrier needs a transit licence${f.bondCountry ? ` of ${countryName(f.bondCountry)}` : ''}`);
     if (band) instructions.push(`Keep between ${band.minC} °C and ${band.maxC} °C`);
     if (f.fragile) instructions.push('Fragile — handle with care');
@@ -453,7 +455,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (managerDid) {
       try {
         const m = this.managers.get(managerDid);
-        return { name: m.companyName, ...(m.depotAddress ? { address: m.depotAddress } : {}), ...(m.jurisdiction ? { country: countryName(m.jurisdiction) } : {}), did: m.did, ...(driverName ? { driverName } : {}), ...vehicle };
+        const cover = this.managers.coverOf?.(m.did);
+        return { name: m.companyName, ...(m.depotAddress ? { address: m.depotAddress } : {}), ...(m.jurisdiction ? { country: countryName(m.jurisdiction) } : {}), did: m.did, ...(driverName ? { driverName } : {}), ...vehicle, ...(cover ? { cover: coverLine(cover) } : {}) };
       } catch {
         /* fall through to the driver as an independent carrier */
       }
@@ -469,7 +472,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (!f.contract || !carried || carried.did === f.contract.fleetDid) return undefined;
     try {
       const m = this.managers.get(f.contract.fleetDid);
-      return { name: m.companyName, ...(m.depotAddress ? { address: m.depotAddress } : {}), ...(m.jurisdiction ? { country: countryName(m.jurisdiction) } : {}), did: m.did };
+      const cover = this.managers.coverOf?.(m.did);
+      return { name: m.companyName, ...(m.depotAddress ? { address: m.depotAddress } : {}), ...(m.jurisdiction ? { country: countryName(m.jurisdiction) } : {}), did: m.did, ...(cover ? { cover: coverLine(cover) } : {}) };
     } catch {
       return { name: f.contract.fleetName, did: f.contract.fleetDid };
     }
@@ -583,7 +587,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     const qr = n.trackingUrl ? `<svg viewBox="0 0 120 120" width="120" height="120" aria-label="Tracking code">${qrSvgGroup(n.trackingUrl, 0, 0, 120)}</svg>` : '';
     const g = n.goods;
     // The driver and the vehicle belong to whoever carried it: under box 17 when that is a successive carrier.
-    const carrierExtra = n.successive?.length ? 'Contracted with the sender; carried by the carrier in box 17' : [n.carrier?.driverName ? `Driver: ${e(n.carrier.driverName)}` : '', n.carrier?.plate ? `Vehicle: ${e(n.carrier.plate)}${n.carrier.vehicleClass ? ` (${e(n.carrier.vehicleClass)})` : ''}` : ''].filter(Boolean).join('<br>');
+    const carrierExtra = [n.carrier?.cover ? e(n.carrier.cover) : '', n.successive?.length ? 'Contracted with the sender; carried by the carrier in box 17' : [n.carrier?.driverName ? `Driver: ${e(n.carrier.driverName)}` : '', n.carrier?.plate ? `Vehicle: ${e(n.carrier.plate)}${n.carrier.vehicleClass ? ` (${e(n.carrier.vehicleClass)})` : ''}` : ''].filter(Boolean).join('<br>')].filter(Boolean).join('<br>');
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${e(n.number)} — ${e(n.title)}</title>
 <style>
@@ -630,7 +634,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(1, 'Sender (name, address, country)', party(n.sender) + (n.agent ? `<br><span class="how">Booked by ${e(n.agent.name)} as agent for the sender</span>` : ''))}
   ${box(16, 'Carrier (name, address, country)', party(n.carrier, carrierExtra) || '')}
   ${box(2, 'Consignee (name, address, country)', party(n.consignee))}
-  ${box(17, 'Successive carriers', n.successive?.length ? n.successive.map((s) => party(s, [s.driverName ? `Driver: ${e(s.driverName)}` : '', s.plate ? `Vehicle: ${e(s.plate)}${s.vehicleClass ? ` (${e(s.vehicleClass)})` : ''}` : '', s.takenOverAt ? `Took the goods over ${e(when(s.takenOverAt))}` : 'Has not yet taken the goods over', s.via ? `Passed on by ${e(s.via)}` : ''].filter(Boolean).join('<br>'))).join('<hr>') : '<span class="empty">None</span>')}
+  ${box(17, 'Successive carriers', n.successive?.length ? n.successive.map((s) => party(s, [s.driverName ? `Driver: ${e(s.driverName)}` : '', s.plate ? `Vehicle: ${e(s.plate)}${s.vehicleClass ? ` (${e(s.vehicleClass)})` : ''}` : '', s.takenOverAt ? `Took the goods over ${e(when(s.takenOverAt))}` : 'Has not yet taken the goods over', s.via ? `Passed on by ${e(s.via)}` : '', s.cover ? e(s.cover) : ''].filter(Boolean).join('<br>'))).join('<hr>') : '<span class="empty">None</span>')}
   ${box(3, 'Place of delivery of the goods (place, country)', `<b>${e(n.delivery.place)}</b>${n.delivery.country ? `<br>${e(n.delivery.country)}` : ''}${n.delivery.at ? `<br>Delivered ${e(when(n.delivery.at))}` : ''}`)}
   ${box(18, 'Carrier’s reservations and observations', list(n.reservations))}
   ${box(4, 'Place and date of taking over the goods (place, country, date)', `<b>${e(n.takingOver.place)}</b>${n.takingOver.country ? `<br>${e(n.takingOver.country)}` : ''}<br>${n.takingOver.at ? e(when(n.takingOver.at)) : '<span class="empty">Not yet taken over</span>'}`)}

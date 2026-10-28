@@ -97,6 +97,8 @@ export interface CarrierPaperRow {
   recordedAt?: string;
   /** What each recorded date was read from, when it was read from a document the fleet sent. */
   copies: { operator_licence?: string; carrier_insurance?: string };
+  /** What the insurance covers and up to how much a load, as last recorded off the policy (2026-10-28). */
+  insurance?: { covers?: 'goods_in_transit' | 'carrier_liability' | 'both'; limit?: number; currency?: string };
   /**
    * A renewed document the fleet SENT and nobody has read yet — the work. Its date is the fleet's reading,
    * shown beside staff's field and never typed into it.
@@ -377,6 +379,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
           ...(m.papers?.licenceCopyRef ? { operator_licence: m.papers.licenceCopyRef } : {}),
           ...(m.papers?.insuranceCopyRef ? { carrier_insurance: m.papers.insuranceCopyRef } : {}),
         },
+        ...(m.papers?.insuranceCovers || m.papers?.insuranceLimit != null ? { insurance: { ...(m.papers.insuranceCovers ? { covers: m.papers.insuranceCovers } : {}), ...(m.papers.insuranceLimit != null ? { limit: m.papers.insuranceLimit, currency: m.papers.insuranceCurrency } : {}) } } : {}),
         // The owner of the image is how it gets deleted, not something a reader needs.
         sent: Object.fromEntries(
           Object.entries(m.papers?.sent ?? {}).map(([k, s]) => [k, { copyRef: s!.copyRef, expiresAt: s!.expiresAt, reference: s!.reference, sentAt: s!.sentAt, sentBy: s!.sentBy }]),
