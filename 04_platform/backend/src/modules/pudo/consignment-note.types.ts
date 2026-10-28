@@ -85,6 +85,8 @@ export interface ConsignmentNote {
   };
   /** Box 13 — sender's instructions. */
   instructions: string[];
+  /** Box 19 — special agreements: a declared value, a special interest in delivery, an agreed time-limit (CMR Art. 6(2)(d), (f)). */
+  agreements?: string[];
   /** Box 14/20 — payment for carriage. */
   carriage: { amount?: number; currency?: string; paidBy: 'sender' | 'between-parties' | 'not-priced'; note: string };
   /** Box 16 — carrier, and the vehicle that took the goods over. */

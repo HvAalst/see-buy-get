@@ -331,6 +331,12 @@ export class FreightInstructions {
   by?: string;
 }
 
+/** An amount and its money, as the sender declared it. */
+export class FreightAmount {
+  amount: number;
+  currency: string;
+}
+
 /** CMR box 2 (Art. 6(1)(e)) — who receives the goods, as the sender named them: the consignee of the note. */
 export class FreightConsignee {
   name: string;
@@ -717,6 +723,11 @@ export class Freight {
   @ApiPropertyOptional() customsInstructions?: string;
   /** The sender asks for a carrier whose insurance cover SeeBuyGet checked (2026-10-28): nobody else may take it. */
   @ApiPropertyOptional() coverRequired?: boolean;
+  /** CMR Art. 6(2)(d) — the value of the goods, and a special interest in delivery, as the sender declared them. */
+  @ApiPropertyOptional({ type: FreightAmount }) declaredValue?: FreightAmount;
+  @ApiPropertyOptional({ type: FreightAmount }) specialInterest?: FreightAmount;
+  /** CMR Art. 6(2)(a) — the sender does not allow the goods to be moved onto another vehicle. */
+  @ApiPropertyOptional() noTranshipment?: boolean;
   claimedAt?: string;
   pickedUpAt?: string;
   deliveredAt?: string;

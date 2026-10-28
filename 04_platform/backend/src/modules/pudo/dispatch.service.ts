@@ -1,6 +1,7 @@
 ﻿import type { PlannedOn } from './fleet-plan.types';
 import { DEFAULT_DAY_START } from './fleet-plan.types';
 import { FleetManagerService } from './fleet-manager.service';
+import { isKnownCurrency } from '../../foundation/countries/catalogue';
 import { clockAt, minutesOf, momentAt, utcDay } from './fleet-clock';
 import { windowOf, windowWords } from './delivery-window';
 import type { ContractRef } from './carriage-contract.types';
@@ -573,7 +574,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -592,6 +593,10 @@ export class DispatchService {
     // P1 — an order under a standing contract is that fleet's, on no market, for a day it must arrive by.
     const contract = input.contract;
     if (contract && !input.deliverOn) throw new GlosError('FIELD_REQUIRED', 'An order under a contract says which day it must arrive', { field: 'deliverOn' });
+    // A value declared (CMR Art. 6(2)(d)) is in a money some country uses, or it is not declared at all.
+    for (const [field, v] of [['declaredValue', input.declaredValue], ['specialInterest', input.specialInterest]] as const) {
+      if (v && (!(v.amount > 0) || !isKnownCurrency(v.currency))) throw new GlosError('VALIDATION_FAILED', 'A declared amount is above nothing, in a currency some country uses — like KES or USD', { field });
+    }
     // Cover asked of an order under a contract: the fleet it goes to must have it, or the order would wait for nobody.
     if (contract && input.coverRequired && !this.managers?.coverOf(contract.fleetDid, now)) {
       throw new GlosError('FORBIDDEN', `${contract.fleetName} has no insurance cover SeeBuyGet has checked that is still running. Order it without asking for cover, or from a carrier that has it.`, { field: 'coverRequired' });
@@ -718,6 +723,9 @@ export class DispatchService {
       ...(input.dangerousGoods ? { dangerousGoods: dangerousOf(input.dangerousGoods) } : {}),
       ...(input.customsInstructions?.trim() ? { customsInstructions: input.customsInstructions.trim().slice(0, 500) } : {}),
       ...(input.coverRequired ? { coverRequired: true } : {}),
+      ...(input.declaredValue ? { declaredValue: { amount: Math.round(input.declaredValue.amount * 100) / 100, currency: input.declaredValue.currency.trim().toUpperCase() } } : {}),
+      ...(input.specialInterest ? { specialInterest: { amount: Math.round(input.specialInterest.amount * 100) / 100, currency: input.specialInterest.currency.trim().toUpperCase() } } : {}),
+      ...(input.noTranshipment ? { noTranshipment: true } : {}),
       // FP7 — box 13 at posting, when the poster said anything.
       ...(instructionsOf({ text: input.instructions, contactName: input.contactName, contactPhone: input.contactPhone, deliveryWindow: input.deliveryWindow }, input.postedByDid, now) ?? {}),
       // S34c — a positive, finite cap only; a zero/negative/NaN budget is treated as "no cap" (never a load

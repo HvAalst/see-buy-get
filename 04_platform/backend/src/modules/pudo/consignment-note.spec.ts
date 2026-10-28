@@ -202,6 +202,31 @@ describe('the consignment note', () => {
     expect(html).not.toMatch(/<span class="no">6<\/span>Seals/);
   });
 
+  it('carries CMR’s particulars where applicable: a declared value, a special interest, no transhipment, an agreed time-limit', () => {
+    const contract = { contractId: 'ctr_1', fleetDid: 'did:fleet:kilima', fleetName: 'Kilima Logistics', shipperName: 'Thika Avocados', reference: 'KL-07' };
+    const n = service.build(
+      base({
+        declaredValue: { amount: 12500, currency: 'USD' },
+        specialInterest: { amount: 800, currency: 'USD' },
+        noTranshipment: true,
+        contract,
+        deliverOn: '2026-10-30',
+        reloads: [{ at: '2026-09-14T10:00:00Z', fromPlate: 'KDA 123A', toPlate: 'KDB 456B', toDriverName: 'Juma', proof: 'pass', by: 'Juma', aboard: true }],
+      } as never),
+    );
+    expect(n.agreements).toEqual([
+      'Value of the goods declared by the sender: 12,500 USD',
+      'Special interest in delivery declared by the sender: 800 USD',
+      'Agreed time-limit: delivered on or before 2026-10-30, under contract KL-07 with Kilima Logistics',
+    ]);
+    expect(n.instructions).toContain('Transhipment is not allowed: the goods stay on the vehicle that took them over');
+    expect(n.reservations.find((r) => r.startsWith('Reloaded'))).toMatch(/although the sender had said transhipment is not allowed$/);
+    const html = service.htmlFor(n);
+    expect(html).toContain('Value of the goods declared by the sender: 12,500 USD');
+    // Without any: box 19 says none, as before.
+    expect(service.build(base({ pickupCountry: 'KE', destCountry: 'TZ' })).agreements).toBeUndefined();
+  });
+
   it('says an address is not recorded where the network holds none (CMR Art. 6(1)(b), (c), (e))', () => {
     // An owner-driver, with no fleet and no depot: the carrier box says so rather than looking filled.
     const n = service.build(base({ claimedBy: 'did:drv:solo', carrierDid: undefined } as never));

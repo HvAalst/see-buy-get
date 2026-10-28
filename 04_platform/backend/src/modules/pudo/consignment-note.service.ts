@@ -186,6 +186,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     // Box 13 first for what customs reads (Art. 6(1)(j)): the sender's own instructions for it, and a bonded load's licence.
     if (f.customsInstructions) instructions.push(`For customs: ${f.customsInstructions}`);
     if (f.coverRequired) instructions.push('Insurance: the sender requires a carrier whose insurance cover SeeBuyGet has checked');
+    // CMR Art. 6(2)(a): said where the carrier reads its instructions, and held against any reload below.
+    if (f.noTranshipment) instructions.push('Transhipment is not allowed: the goods stay on the vehicle that took them over');
     if (f.bonded) instructions.push(`Uncleared goods, carried in bond: the carrier needs a transit licence${f.bondCountry ? ` of ${countryName(f.bondCountry)}` : ''}`);
     if (band) instructions.push(`Keep between ${band.minC} °C and ${band.maxC} °C`);
     if (f.fragile) instructions.push('Fragile — handle with care');
@@ -201,7 +203,13 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.reservations) reservations.push(`At taking over: ${f.reservations.note}`);
     if (f.tempBreached) reservations.push(breachLine(f.tempReadings?.find((r) => r.breach)));
     // A reload onto another of the carrier's vehicles after a breakdown is written here, and nowhere else.
-    for (const r of (f.reloads ?? []).filter((x) => x.aboard)) reservations.push(reloadLine(r));
+    for (const r of (f.reloads ?? []).filter((x) => x.aboard)) reservations.push(`${reloadLine(r)}${f.noTranshipment ? ' — although the sender had said transhipment is not allowed' : ''}`);
+    // Box 19 (CMR Art. 6(2)(d), (f)): what the sender declared, and the day an order under contract must arrive.
+    const agreements = [
+      ...(f.declaredValue ? [`Value of the goods declared by the sender: ${money(f.declaredValue)}`] : []),
+      ...(f.specialInterest ? [`Special interest in delivery declared by the sender: ${money(f.specialInterest)}`] : []),
+      ...(f.contract && f.deliverOn ? [`Agreed time-limit: delivered on or before ${f.deliverOn}, under contract ${f.contract.reference ?? f.contract.contractId} with ${f.contract.fleetName}`] : []),
+    ];
     // Round 15 — the seals: each with what became of it; a broken one, or one not as written at the door, observed in box 18.
     const seals = this.dispatch.sealsOnNote?.(f.freightId, opts.sealNumbers ?? Boolean(f.pickedUpAt)) ?? { lines: [], observations: [] };
     reservations.push(...seals.observations);
@@ -253,6 +261,7 @@ export class ConsignmentNoteService implements OnModuleInit {
         fragile: Boolean(f.fragile),
       },
       instructions,
+      ...(agreements.length ? { agreements } : {}),
       carriage,
       ...(carrier ? { carrier } : {}),
       ...(successive ? { successive } : {}),
@@ -638,7 +647,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(3, 'Place of delivery of the goods (place, country)', `<b>${e(n.delivery.place)}</b>${n.delivery.country ? `<br>${e(n.delivery.country)}` : ''}${n.delivery.at ? `<br>Delivered ${e(when(n.delivery.at))}` : ''}`)}
   ${box(18, 'Carrier’s reservations and observations', list(n.reservations))}
   ${box(4, 'Place and date of taking over the goods (place, country, date)', `<b>${e(n.takingOver.place)}</b>${n.takingOver.country ? `<br>${e(n.takingOver.country)}` : ''}<br>${n.takingOver.at ? e(when(n.takingOver.at)) : '<span class="empty">Not yet taken over</span>'}`)}
-  ${box(19, 'Special agreements', n.kind === 'national' ? 'Carried under the network’s terms; this note stands as the consignment note where no national form applies.' : '<span class="empty">None</span>')}
+  ${box(19, 'Special agreements', (n.agreements?.length ? list(n.agreements) : '') + (n.kind === 'national' ? 'Carried under the network’s terms; this note stands as the consignment note where no national form applies.' : n.agreements?.length ? '' : '<span class="empty">None</span>'))}
   ${box(5, 'Documents attached', list(n.documents))}
   ${box(20, 'To be paid by', `${n.carriage.amount != null ? `<b>${e(String(n.carriage.amount))} ${e(n.carriage.currency ?? '')}</b><br>` : ''}${e(n.carriage.note)}`)}
   ${box('6–12', 'Goods', `<table class="goods"><tr><th>Marks / description</th><th>Packages</th><th>Method of packing</th><th>Nature of the goods</th><th>Gross weight</th><th>Volume</th></tr><tr><td>${e(g.description)}${g.marks?.length ? `<br><span class="did">${g.marks.map((m) => e(m)).join('<br>')}</span>` : ''}${g.fragile ? '<br><i>Fragile</i>' : ''}${g.dangerous ? `<br><b>${e(dangerousWords(g))}</b>` : ''}</td><td>${g.packages == null ? (g.packaging === 'loose' ? 'In bulk' : '<span class="empty">Not stated by the sender</span>') : g.packages}</td><td>${g.packaging ? e(g.packaging) : '<span class="empty">—</span>'}</td><td>${e(g.natureWords ?? g.nature)}${g.temperatureBand ? `<br>${e(g.temperatureBand)}` : ''}</td><td>${e(String(g.grossKg))} kg</td><td>${g.volumeM3 != null ? `${e(String(g.volumeM3))} m³` : '<span class="empty">—</span>'}</td></tr></table>`, 'wide')}
@@ -654,6 +663,11 @@ export class ConsignmentNoteService implements OnModuleInit {
 <footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(electronicLine(n))}<br>How this electronic note is made out, kept intact, read, confirmed at delivery, added to and replaced by paper: ${e(helpUrl('electronic-note'))}<br>Box numbers as on the classic CMR form; the IRU’s 2007 model numbers them differently.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span><br><span class="fp">Check this copy: ${e(`${appUrl('home')}?note=${noteFingerprint(n)}`)}</span></span></footer>
 </div></body></html>`;
   }
+}
+
+/** An amount as the note prints it: 12,500 USD. */
+function money(v: { amount: number; currency: string }): string {
+  return `${v.amount.toLocaleString('en', { maximumFractionDigits: 2 })} ${v.currency}`;
 }
 
 /** The kinds of goods in words (CMR Art. 6(1)(f): the description in common use), never the network's codes. */

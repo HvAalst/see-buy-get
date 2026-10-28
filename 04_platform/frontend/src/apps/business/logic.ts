@@ -121,6 +121,9 @@ export interface LoadForm {
   unNumber?: string;
   properShippingName?: string;
   hazardClass?: string;
+  declaredValue?: string;
+  specialInterest?: string;
+  valueCurrency?: string;
 }
 
 /** The kinds of goods that are dangerous goods, named on the note by their UN number, name, class and packing group. */
@@ -144,6 +147,8 @@ export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
     const n = Number(form.packages);
     if (!(Number.isInteger(n) && n >= 1 && n <= 500)) gaps.push('packages');
   }
+  // A value declared (CMR Art. 6(2)(d)) is in a money, or it means nothing.
+  if ((Number(form.declaredValue) > 0 || Number(form.specialInterest) > 0) && !form.valueCurrency) gaps.push('valueCurrency');
   // Dangerous goods by their generally recognised description (box 9): the sender's own, as on the safety data sheet.
   if (isDangerousNature(form.natureCode)) {
     if (!/^\s*(UN)?\s*\d{4}\s*$/i.test(form.unNumber ?? '')) gaps.push('unNumber');

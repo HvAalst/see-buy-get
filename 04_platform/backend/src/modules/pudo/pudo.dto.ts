@@ -43,6 +43,12 @@ export class FreightConsigneeDto {
   @IsOptional() @IsString() @MaxLength(300) address?: string;
 }
 
+/** An amount in a money some country uses: a declared value, a special interest in delivery. */
+export class FreightAmountDto {
+  @IsNumber() @Min(1) amount!: number;
+  @IsString() @MaxLength(3) currency!: string;
+}
+
 /** CMR box 9 — dangerous goods by their generally recognised description, as the sender declares them. */
 export class FreightDangerousDto {
   @Matches(/^\s*(UN)?\s*\d{4}\s*$/i, { message: 'A UN number is UN and four digits, like UN1263' }) unNumber!: string;
@@ -2621,6 +2627,12 @@ export class RegisterFreightDto {
    * SeeBuyGet has checked, and which is still running, may take it. CMR Art. 6(2)(e): the sender's instruction on insurance.
    */
   @IsOptional() @IsBoolean() coverRequired?: boolean;
+  /** CMR Art. 6(2)(d) — the value of the goods the sender declares, which raises what the carrier answers for. */
+  @IsOptional() @ValidateNested() @Type(() => FreightAmountDto) declaredValue?: FreightAmountDto;
+  /** CMR Art. 6(2)(d) — the amount representing a special interest in delivery. */
+  @IsOptional() @ValidateNested() @Type(() => FreightAmountDto) specialInterest?: FreightAmountDto;
+  /** CMR Art. 6(2)(a) — the goods are not to be moved onto another vehicle on the way. */
+  @IsOptional() @IsBoolean() noTranshipment?: boolean;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

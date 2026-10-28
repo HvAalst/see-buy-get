@@ -270,6 +270,9 @@ describe('a load that crosses a border, as its consignment note needs it (the CM
     expect(loadGaps({ ...load, natureCode: 'HAZ-CHEM' })).toEqual(['unNumber', 'properShippingName', 'hazardClass']);
     expect(loadGaps({ ...load, natureCode: 'HAZ-FLAM', unNumber: '12', properShippingName: 'Paint', hazardClass: '3' })).toEqual(['unNumber']);
     expect(loadGaps({ ...load, natureCode: 'HAZ-FLAM', unNumber: 'UN1263', properShippingName: 'Paint', hazardClass: '3' })).toEqual([]);
+    // A declared value is in a money (CMR Art. 6(2)(d)).
+    expect(loadGaps({ ...load, declaredValue: '12500' })).toEqual(['valueCurrency']);
+    expect(loadGaps({ ...load, declaredValue: '12500', valueCurrency: 'USD' })).toEqual([]);
     // Cement dust is not dangerous goods by its description: no UN number asked.
     expect(loadGaps({ ...load, natureCode: 'HAZ-DUST' })).toEqual([]);
     for (const k of ['consigneeName', 'consigneeAddress', 'packages', 'unNumber', 'properShippingName', 'hazardClass'] as const) expect(t(`business.loads.need.${k}`)).not.toBe(`business.loads.need.${k}`);

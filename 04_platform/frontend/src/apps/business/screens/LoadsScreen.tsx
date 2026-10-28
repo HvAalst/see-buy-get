@@ -8,6 +8,7 @@ import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_HELP } from '../../agent/logic';
 import { ConsolePick } from '../../tower/ConsolePick';
+import { CurrencySelect } from '../../tower/screens/CurrencySelect';
 import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type LoadProposal, type PostedLoad } from '../api';
 import { isDangerousNature, deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
 import { passageWords } from '../../../shared/passages';
@@ -47,8 +48,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
-type Form = LoadForm & { coverRequired: boolean; consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
-const EMPTY: Form = { coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
+type Form = LoadForm & { declaredValue: string; specialInterest: string; valueCurrency: string; noTranshipment: boolean; coverRequired: boolean; consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
+const EMPTY: Form = { declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -268,6 +269,9 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(crossing && form.customsInstructions.trim() ? { customsInstructions: form.customsInstructions.trim() } : {}),
       fragile: form.fragile,
       ...(form.coverRequired ? { coverRequired: true } : {}),
+      ...(Number(form.declaredValue) > 0 && form.valueCurrency ? { declaredValue: { amount: Number(form.declaredValue), currency: form.valueCurrency } } : {}),
+      ...(Number(form.specialInterest) > 0 && form.valueCurrency ? { specialInterest: { amount: Number(form.specialInterest), currency: form.valueCurrency } } : {}),
+      ...(form.noTranshipment ? { noTranshipment: true } : {}),
       commitMode: form.commitMode,
       ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
       ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}),
@@ -452,6 +456,29 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
             <span class="chint">{t('business.loads.f.coverHint')}</span>
           </span>
         </label>
+        {/* CMR Art. 6(2)(a) and (d): no transhipment, a declared value, a special interest in delivery — each the sender's own. */}
+        <label class="cfield--check">
+          <input type="checkbox" checked={form.noTranshipment} onChange={() => setForm((prev) => ({ ...prev, noTranshipment: !prev.noTranshipment }))} />
+          <span>
+            {t('business.loads.f.noTranshipment')}
+            <span class="chint">{t('business.loads.f.noTranshipmentHint')}</span>
+          </span>
+        </label>
+        <div class="biz-two">
+          <label class="cfield">
+            <span class="cfield__label">{t('business.loads.f.declaredValue')}</span>
+            <input class="cinput" type="number" min={1} value={form.declaredValue} onInput={(e) => setForm((prev) => ({ ...prev, declaredValue: (e.target as HTMLInputElement).value }))} />
+          </label>
+          <label class="cfield">
+            <span class="cfield__label">{t('business.loads.f.specialInterest')}</span>
+            <input class="cinput" type="number" min={1} value={form.specialInterest} onInput={(e) => setForm((prev) => ({ ...prev, specialInterest: (e.target as HTMLInputElement).value }))} />
+          </label>
+        </div>
+        {form.declaredValue.trim() || form.specialInterest.trim() ? (
+          <CurrencySelect api={client ? (client.api as never) : null} value={form.valueCurrency} onChange={(valueCurrency) => setForm((prev) => ({ ...prev, valueCurrency }))} label={t('business.loads.f.valueCurrency')} near={[business.country, form.destCountry]} />
+        ) : null}
+        {gap('valueCurrency')}
+        <p class="chint">{t('business.loads.f.declaredHint')}</p>
         <fieldset class="cfield biz-acts" style={contract ? 'display:none' : undefined}>
           <legend class="cfield__label">{t('business.loads.f.price')}</legend>
           {(['negotiate', 'instant'] as const).map((m) => (

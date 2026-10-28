@@ -323,6 +323,11 @@ export interface NewLoad {
   customsInstructions?: string;
   /** Only a carrier whose insurance cover SeeBuyGet has checked may take it. */
   coverRequired?: boolean;
+  /** CMR Art. 6(2)(d): the value of the goods, and a special interest in delivery, as the sender declares them. */
+  declaredValue?: { amount: number; currency: string };
+  specialInterest?: { amount: number; currency: string };
+  /** CMR Art. 6(2)(a): the goods stay on the vehicle that took them over. */
+  noTranshipment?: boolean;
   /** How many packages: each gets a label, and an SSCC under the business's GS1 prefix. */
   packages?: number;
   natureCode?: string;

@@ -51733,6 +51733,21 @@
           "hazardClass"
         ]
       },
+      "FreightAmount": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ]
+      },
       "CustodyAnchor": {
         "type": "object",
         "properties": {
@@ -52632,6 +52647,21 @@
           "coverRequired": {
             "type": "boolean",
             "description": "The sender asks for a carrier whose insurance cover SeeBuyGet checked (2026-10-28): nobody else may take it."
+          },
+          "declaredValue": {
+            "description": "CMR Art. 6(2)(d) — the value of the goods, and a special interest in delivery, as the sender declared them.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightAmount"
+              }
+            ]
+          },
+          "specialInterest": {
+            "$ref": "#/components/schemas/FreightAmount"
+          },
+          "noTranshipment": {
+            "type": "boolean",
+            "description": "CMR Art. 6(2)(a) — the sender does not allow the goods to be moved onto another vehicle."
           },
           "custodyAnchors": {
             "description": "The trail: taken over and delivered, each anchored in the chain as it was kept (custodyAnchorOf).",
@@ -55698,6 +55728,23 @@
           "hazardClass"
         ]
       },
+      "FreightAmountDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 1
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ]
+      },
       "RegisterFreightDto": {
         "type": "object",
         "properties": {
@@ -55963,6 +56010,26 @@
           "coverRequired": {
             "type": "boolean",
             "description": "THE CARRIER MUST HAVE COVER (the user, 2026-10-28: \"Toggle cover needed/not needed\"): only a carrier whose insurance\nSeeBuyGet has checked, and which is still running, may take it. CMR Art. 6(2)(e): the sender's instruction on insurance."
+          },
+          "declaredValue": {
+            "description": "CMR Art. 6(2)(d) — the value of the goods the sender declares, which raises what the carrier answers for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightAmountDto"
+              }
+            ]
+          },
+          "specialInterest": {
+            "description": "CMR Art. 6(2)(d) — the amount representing a special interest in delivery.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightAmountDto"
+              }
+            ]
+          },
+          "noTranshipment": {
+            "type": "boolean",
+            "description": "CMR Art. 6(2)(a) — the goods are not to be moved onto another vehicle on the way."
           }
         },
         "required": [

@@ -192,6 +192,12 @@ describe('a shipper’s papers, over the wire', () => {
     expect(paintNote.consignee).toMatchObject({ name: 'Kampala Build Co', address: 'Plot 4, Industrial Area', country: 'Uganda' });
     expect(paintNote.goods.dangerousGoods).toEqual({ unNumber: 'UN1263', properShippingName: 'Paint', hazardClass: '3', packingGroup: 'III' });
     expect(paintNote.instructions).toContain('For customs: Cleared at Malaba by Pwani Clearing');
+    // A value declared (CMR Art. 6(2)(d)) is in a money some country uses; it goes in box 19.
+    await http().post('/v1/sbg/dispatch/freight').set(bearer(jenga.token)).send({ ...paint, natureCode: 'GEN', declaredValue: { amount: 12500, currency: 'KSH' } }).expect(400);
+    const valued = (await http().post('/v1/sbg/dispatch/freight').set(bearer(jenga.token)).send({ ...paint, natureCode: 'GEN', declaredValue: { amount: 12500, currency: 'usd' }, noTranshipment: true }).expect(201)).body;
+    const valuedNote = (await http().get(`/v1/sbg/dispatch/freight/${valued.freightId}/consignment-note`).set(bearer(jenga.token)).expect(200)).body;
+    expect(valuedNote.agreements).toEqual(['Value of the goods declared by the sender: 12,500 USD']);
+    expect(valuedNote.instructions).toContain('Transhipment is not allowed: the goods stay on the vehicle that took them over');
     expect(note.documents).toContain('Commercial invoice INV-2026-0042 of ' + signed.issuedOn + ', 3 copies');
     expect(note.goods).toMatchObject({ packages: 3, marks: labels.codes.map((c: string) => `SSCC ${c}`) });
 
