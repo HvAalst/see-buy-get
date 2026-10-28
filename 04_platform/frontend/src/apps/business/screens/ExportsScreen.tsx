@@ -8,7 +8,7 @@ import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
-import { boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperKey, type ExportRow } from '../exports';
+import { ASKED_PAPERS, boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, paperKindFor, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperGroup, type ExportPaperKey, type ExportRow } from '../exports';
 import { mayAct } from '../logic';
 
 type Problem = { detail?: string; title: string } | null | undefined;
@@ -24,11 +24,32 @@ const LEG_WORD: Record<string, MessageKey> = {
 };
 const sayProblem = (e: Problem) => (e ? e.detail || e.title : null);
 
-const PAPER_WORD: Record<ExportPaperKey, MessageKey> = {
+/** The catalogue's papers in this reader's words; one asked for by name is said by its name. */
+const PAPER_WORD: Record<string, MessageKey> = {
   commercial_invoice: 'business.exports.paper.commercial_invoice',
   packing_list: 'business.exports.paper.packing_list',
-  certificate_of_origin: 'business.exports.paper.certificate_of_origin',
   export_entry: 'business.exports.paper.export_entry',
+  booking_confirmation: 'business.exports.paper.booking_confirmation',
+  shipping_instructions: 'business.exports.paper.shipping_instructions',
+  weighbridge_ticket: 'business.exports.paper.weighbridge_ticket',
+  bill_of_lading: 'business.exports.paper.bill_of_lading',
+  certificate_of_origin: 'business.exports.paper.certificate_of_origin',
+  phytosanitary_certificate: 'business.exports.paper.phytosanitary_certificate',
+  fumigation_certificate: 'business.exports.paper.fumigation_certificate',
+  export_permit: 'business.exports.paper.export_permit',
+  inspection_certificate: 'business.exports.paper.inspection_certificate',
+  certificate_of_analysis: 'business.exports.paper.certificate_of_analysis',
+  health_certificate: 'business.exports.paper.health_certificate',
+  insurance_certificate: 'business.exports.paper.insurance_certificate',
+  dangerous_goods_declaration: 'business.exports.paper.dangerous_goods_declaration',
+  letter_of_credit: 'business.exports.paper.letter_of_credit',
+};
+
+const PAPER_GROUPS: ExportPaperGroup[] = ['needed', 'asked', 'kept'];
+const GROUP_WORD: Record<ExportPaperGroup, MessageKey> = {
+  needed: 'business.exports.papers.groupNeeded',
+  asked: 'business.exports.papers.groupAsked',
+  kept: 'business.exports.papers.groupKept',
 };
 
 /**
@@ -270,6 +291,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
   const [entry, setEntry] = useState('');
   const [fee, setFee] = useState({ amount: '', currency: '', reference: '', note: '' });
   const [requoting, setRequoting] = useState(false);
+  const [asking, setAsking] = useState({ key: '', title: '' });
 
   /** A paper's bytes, opened in a tab at the tap — a PDF or a photograph, which the browser already knows how to show. */
   const openPaper = async (key: ExportPaperKey, title: string) => {
@@ -323,6 +345,169 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
       <dd class="cons__factv">{v}</dd>
     </div>
   );
+
+  /** A paper's name: the catalogue's, in this reader's words — or the name it was asked for by. */
+  const paperName = (p: ExportDetail['papers'][number]) => (PAPER_WORD[p.key] ? t(PAPER_WORD[p.key]) : (p.title ?? p.label));
+
+  /**
+   * A FILE OF ITS OWN, uploaded right on the line: filed among the exporter's documents under this export's code and the
+   * line (so two papers of one kind never replace each other), then attached. Never a loose upload.
+   */
+  const upload = (p: ExportDetail['papers'][number], file: File) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      void act(async () => {
+        const up = await client.api.uploadCompanyDocument(business.entityId, { kind: paperKindFor(p.key), title: paperName(p), dataUrl: String(reader.result), relatesTo: `${c.code}:${p.key}` });
+        const documentId = (up.data as { documentId?: string } | undefined)?.documentId;
+        if (up.error || !documentId) return { error: (up.error as Problem) ?? { title: t('business.exports.papers.uploadFailed') } };
+        const draft = paper[p.key];
+        return client.exports.paper(c.exportId, { key: p.key, documentId, ...(draft?.reference.trim() ? { reference: draft.reference.trim() } : {}) });
+      }, t('business.exports.papers.uploaded')).then(() => setChanging({ ...changing, [p.key]: false }));
+    reader.readAsDataURL(file);
+  };
+
+  const paperRow = (p: ExportDetail['papers'][number]) => {
+    const draft = paper[p.key] ?? { documentId: '', reference: '' };
+    const given = p.documentTitle || p.reference;
+    // Its agent's word wins the tag: sent back is a gap whatever was given; accepted is the strongest yes. A kept paper not given is no gap.
+    const paperTone = p.refusedAt ? 'warn' : given ? 'ok' : p.optional ? 'quiet' : 'warn';
+    const paperWord: MessageKey = p.refusedAt ? 'business.exports.papers.sentBack' : p.acceptedAt ? 'business.exports.papers.acceptedTag' : given ? 'business.exports.papers.given' : p.optional ? 'business.exports.papers.noneKept' : 'business.exports.papers.missing';
+    const changeable = mine && given && !changing[p.key];
+    // Not given yet: two buttons, not a form — a file of its own, or the form to attach one or write its number.
+    const giving = mine && !given && !changing[p.key];
+    // The agent gives its word on what the exporter supplied; the entry it gave itself stands as its word.
+    const worded = asAgent && given && refusing[p.key] === undefined && !(p.key === 'export_entry' && p.acceptedAt);
+    return (
+      <div class="crow" key={p.key}>
+        <span class="crow__body">
+          <span class="crow__top">
+            <span class="crow__name">{paperName(p)}</span>
+            <span class={`ctag ctag--${paperTone}`}>{t(paperWord)}</span>
+          </span>
+          {p.addedBy ? <span class="crow__sub">{t('business.exports.papers.askedBy', { who: p.addedBy, when: dayWords(p.addedAt ?? '') })}</span> : null}
+          {given ? <span class="crow__sub">{[p.documentTitle, p.reference].filter(Boolean).join(' — ')}</span> : null}
+          {p.refusedAt ? (
+            <span class="crow__sub cerr">{t('business.exports.papers.refused', { who: p.refusedBy ?? '', reason: p.refusedReason ?? '' })}</span>
+          ) : p.acceptedAt ? (
+            <span class="crow__sub">{t('business.exports.papers.accepted', { who: p.acceptedBy ?? '' })}</span>
+          ) : null}
+          {/* One row of what this reader can do: open it; the exporter changes it; its agent accepts it or sends it back; whoever asked for it takes it off. */}
+          {p.documentId || changeable || giving || worded || p.removable ? (
+            <span class="twr-panelend">
+              {p.documentId ? (
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void openPaper(p.key, p.documentTitle ?? paperName(p))}>
+                  {t('business.exports.papers.open')}
+                </button>
+              ) : null}
+              {changeable ? (
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: true })}>
+                  {t('business.exports.papers.change')}
+                </button>
+              ) : null}
+              {giving && p.key !== 'export_entry' ? (
+                <label class="cbtn cbtn--ghost cbtn--sm twr-quote__file">
+                  {t('business.exports.papers.upload')}
+                  <input
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg"
+                    disabled={busy}
+                    onChange={(e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) upload(p, file);
+                      (e.target as HTMLInputElement).value = '';
+                    }}
+                  />
+                </label>
+              ) : null}
+              {giving ? (
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: true })}>
+                  {t(p.key === 'export_entry' ? 'business.exports.papers.writeNumber' : 'business.exports.papers.attachOrNumber')}
+                </button>
+              ) : null}
+              {worded && !p.acceptedAt ? (
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.acceptPaper(c.exportId, p.key), t('business.exports.papers.acceptedNote'))}>
+                  {t('business.exports.papers.accept')}
+                </button>
+              ) : null}
+              {worded && !p.refusedAt ? (
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setRefusing({ ...refusing, [p.key]: '' })}>
+                  {t('business.exports.papers.sendBackStart')}
+                </button>
+              ) : null}
+              {p.removable ? (
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.removePaper(c.exportId, p.key), t('business.exports.papers.removed'))}>
+                  {t('business.exports.papers.remove')}
+                </button>
+              ) : null}
+            </span>
+          ) : null}
+          {asAgent && refusing[p.key] !== undefined ? (
+            <span class="biz-paperline">
+              <input class="cinput" maxLength={300} placeholder={t('business.exports.papers.refusePh')} value={refusing[p.key]} onInput={(e) => setRefusing({ ...refusing, [p.key]: (e.target as HTMLInputElement).value })} />
+              <button
+                type="button"
+                class="cbtn cbtn--ghost cbtn--sm"
+                disabled={busy || (refusing[p.key] ?? '').trim().length < 3}
+                onClick={() => void act(() => client.exports.refusePaper(c.exportId, p.key, (refusing[p.key] ?? '').trim()), t('business.exports.papers.refusedNote')).then(() => setRefusing({ ...refusing, [p.key]: undefined }))}
+              >
+                {t('business.exports.papers.sendBack')}
+              </button>
+            </span>
+          ) : null}
+          {/* The agent's own work is the export entry, by its number. */}
+          {asAgent && p.key === 'export_entry' && !p.acceptedAt ? (
+            <span class="biz-paperline">
+              <input class="cinput" maxLength={80} placeholder={t('business.exports.papers.entryAgentPh')} value={entry} onInput={(e) => setEntry((e.target as HTMLInputElement).value)} />
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || entry.trim().length < 3} onClick={() => void act(() => client.exports.paper(c.exportId, { key: 'export_entry', reference: entry.trim() }), t('business.exports.papers.entryGiven')).then(() => setEntry(''))}>
+                {t('business.exports.papers.giveEntry')}
+              </button>
+            </span>
+          ) : null}
+          {mine && changing[p.key] ? (
+            <span class="biz-paperline">
+              {p.key !== 'export_entry' && d.documents.length ? (
+                <select class="cinput" value={draft.documentId} onChange={(e) => setPaper({ ...paper, [p.key]: { ...draft, documentId: (e.target as HTMLSelectElement).value } })}>
+                  <option value="">{t('business.exports.papers.pick')}</option>
+                  {d.documents.map((doc) => (
+                    <option key={doc.documentId} value={doc.documentId}>
+                      {doc.title}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+              <input class="cinput" maxLength={80} placeholder={t(p.key === 'export_entry' ? 'business.exports.papers.entryPh' : 'business.exports.papers.refPh')} value={draft.reference} onInput={(e) => setPaper({ ...paper, [p.key]: { ...draft, reference: (e.target as HTMLInputElement).value } })} />
+              <button
+                type="button"
+                class="cbtn cbtn--ghost cbtn--sm"
+                disabled={busy || (!draft.documentId && draft.reference.trim().length < 3)}
+                onClick={() => void act(() => client.exports.paper(c.exportId, { key: p.key, ...(draft.documentId ? { documentId: draft.documentId } : {}), ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) }), t('business.exports.papers.saved')).then(() => setChanging({ ...changing, [p.key]: false }))}
+              >
+                {t('business.exports.papers.save')}
+              </button>
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: false })}>
+                {t('business.exports.notNow')}
+              </button>
+              {p.key !== 'export_entry' ? (
+                <label class="cbtn cbtn--ghost cbtn--sm twr-quote__file">
+                  {t('business.exports.papers.upload')}
+                  <input
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg"
+                    disabled={busy}
+                    onChange={(e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) upload(p, file);
+                      (e.target as HTMLInputElement).value = '';
+                    }}
+                  />
+                </label>
+              ) : null}
+            </span>
+          ) : null}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -691,110 +876,50 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         ) : null}
       </section>
 
-      {/* EX4 — the papers: its own documents, or a reference. */}
+      {/* EX4 — the papers an export holds: needed on every export, asked for these goods, kept when there is one. */}
       <section class="cons__panel">
         <div class="cons__panelhead">
           <span class="cons__panelt">{t('business.exports.papers.title')}</span>
         </div>
         <p class="chint">{t(d.you === 'agent' ? 'business.exports.papers.hintAgent' : 'business.exports.papers.hint')}</p>
-        <div class="crows">
-          {d.papers.map((p) => {
-            const draft = paper[p.key] ?? { documentId: '', reference: '' };
-            const given = p.documentTitle || p.reference;
-            // Its agent's word wins the tag: sent back is a gap whatever was given; accepted is the strongest yes.
-            const paperTone = p.refusedAt ? 'warn' : given ? 'ok' : p.optional ? 'quiet' : 'warn';
-            const paperWord: MessageKey = p.refusedAt ? 'business.exports.papers.sentBack' : p.acceptedAt ? 'business.exports.papers.acceptedTag' : given ? 'business.exports.papers.given' : p.optional ? 'business.exports.papers.optional' : 'business.exports.papers.missing';
-            const changeable = mine && given && !changing[p.key];
-            // The agent gives its word on what the exporter supplied; the entry it gave itself stands as its word.
-            const worded = asAgent && given && refusing[p.key] === undefined && !(p.key === 'export_entry' && p.acceptedAt);
-            return (
-              <div class="crow" key={p.key}>
-                <span class="crow__body">
-                  <span class="crow__top">
-                    <span class="crow__name">{t(PAPER_WORD[p.key])}</span>
-                    <span class={`ctag ctag--${paperTone}`}>{t(paperWord)}</span>
-                  </span>
-                  {given ? <span class="crow__sub">{[p.documentTitle, p.reference].filter(Boolean).join(' — ')}</span> : null}
-                  {p.refusedAt ? (
-                    <span class="crow__sub cerr">{t('business.exports.papers.refused', { who: p.refusedBy ?? '', reason: p.refusedReason ?? '' })}</span>
-                  ) : p.acceptedAt ? (
-                    <span class="crow__sub">{t('business.exports.papers.accepted', { who: p.acceptedBy ?? '' })}</span>
-                  ) : null}
-                  {/* One row of what this reader can do: open it; the exporter changes it; its agent accepts it or sends it back. */}
-                  {p.documentId || changeable || worded ? (
-                    <span class="twr-panelend">
-                      {p.documentId ? (
-                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void openPaper(p.key, p.documentTitle ?? t(PAPER_WORD[p.key]))}>
-                          {t('business.exports.papers.open')}
-                        </button>
-                      ) : null}
-                      {changeable ? (
-                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: true })}>
-                          {t('business.exports.papers.change')}
-                        </button>
-                      ) : null}
-                      {worded && !p.acceptedAt ? (
-                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.acceptPaper(c.exportId, p.key), t('business.exports.papers.acceptedNote'))}>
-                          {t('business.exports.papers.accept')}
-                        </button>
-                      ) : null}
-                      {worded && !p.refusedAt ? (
-                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setRefusing({ ...refusing, [p.key]: '' })}>
-                          {t('business.exports.papers.sendBackStart')}
-                        </button>
-                      ) : null}
-                    </span>
-                  ) : null}
-                  {asAgent && refusing[p.key] !== undefined ? (
-                    <span class="biz-paperline">
-                      <input class="cinput" maxLength={300} placeholder={t('business.exports.papers.refusePh')} value={refusing[p.key]} onInput={(e) => setRefusing({ ...refusing, [p.key]: (e.target as HTMLInputElement).value })} />
-                      <button
-                        type="button"
-                        class="cbtn cbtn--ghost cbtn--sm"
-                        disabled={busy || (refusing[p.key] ?? '').trim().length < 3}
-                        onClick={() => void act(() => client.exports.refusePaper(c.exportId, p.key, (refusing[p.key] ?? '').trim()), t('business.exports.papers.refusedNote')).then(() => setRefusing({ ...refusing, [p.key]: undefined }))}
-                      >
-                        {t('business.exports.papers.sendBack')}
-                      </button>
-                    </span>
-                  ) : null}
-                  {/* The agent's own work is the export entry, by its number. */}
-                  {asAgent && p.key === 'export_entry' && !p.acceptedAt ? (
-                    <span class="biz-paperline">
-                      <input class="cinput" maxLength={80} placeholder={t('business.exports.papers.entryAgentPh')} value={entry} onInput={(e) => setEntry((e.target as HTMLInputElement).value)} />
-                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || entry.trim().length < 3} onClick={() => void act(() => client.exports.paper(c.exportId, { key: 'export_entry', reference: entry.trim() }), t('business.exports.papers.entryGiven')).then(() => setEntry(''))}>
-                        {t('business.exports.papers.giveEntry')}
-                      </button>
-                    </span>
-                  ) : null}
-                  {mine && (!given || changing[p.key]) ? (
-                    <span class="biz-paperline">
-                      {p.key !== 'export_entry' && d.documents.length ? (
-                        <select class="cinput" value={draft.documentId} onChange={(e) => setPaper({ ...paper, [p.key]: { ...draft, documentId: (e.target as HTMLSelectElement).value } })}>
-                          <option value="">{t('business.exports.papers.pick')}</option>
-                          {d.documents.map((doc) => (
-                            <option key={doc.documentId} value={doc.documentId}>
-                              {doc.title}
-                            </option>
-                          ))}
-                        </select>
-                      ) : null}
-                      <input class="cinput" maxLength={80} placeholder={t(p.key === 'export_entry' ? 'business.exports.papers.entryPh' : 'business.exports.papers.refPh')} value={draft.reference} onInput={(e) => setPaper({ ...paper, [p.key]: { ...draft, reference: (e.target as HTMLInputElement).value } })} />
-                      <button
-                        type="button"
-                        class="cbtn cbtn--ghost cbtn--sm"
-                        disabled={busy || (!draft.documentId && draft.reference.trim().length < 3)}
-                        onClick={() => void act(() => client.exports.paper(c.exportId, { key: p.key, ...(draft.documentId ? { documentId: draft.documentId } : {}), ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) }), t('business.exports.papers.saved')).then(() => setChanging({ ...changing, [p.key]: false }))}
-                      >
-                        {t('business.exports.papers.save')}
-                      </button>
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        {PAPER_GROUPS.map((group) => {
+          const lines = d.papers.filter((p) => p.group === group);
+          if (!lines.length && group !== 'asked') return null;
+          return (
+            <div key={group}>
+              <h3 class="cons__sub">{t(GROUP_WORD[group])}</h3>
+              {group === 'asked' && !lines.length ? <p class="chint">{t('business.exports.papers.noneAsked')}</p> : null}
+              <div class="crows">{lines.map((p) => paperRow(p))}</div>
+            </div>
+          );
+        })}
+        {/* What these goods need beyond every export's papers: asked for by the exporter, or by its agent who knows the border. */}
+        {mine || asAgent ? (
+          <div class="biz-paperline">
+            <select key={`ask-${d.papers.length}`} class="cinput" value={asking.key} onChange={(e) => setAsking({ ...asking, key: (e.target as HTMLSelectElement).value })}>
+              <option value="">{t('business.exports.papers.askPick')}</option>
+              {ASKED_PAPERS.filter((key) => !d.papers.some((p) => p.key === key && p.group === 'asked')).map((key) => (
+                <option key={key} value={key}>
+                  {t(PAPER_WORD[key])}
+                </option>
+              ))}
+              <option value="other">{t('business.exports.papers.askOther')}</option>
+            </select>
+            {asking.key === 'other' ? (
+              <input class="cinput" maxLength={80} placeholder={t('business.exports.papers.askOtherPh')} value={asking.title} onInput={(e) => setAsking({ ...asking, title: (e.target as HTMLInputElement).value })} />
+            ) : null}
+            <button
+              type="button"
+              class="cbtn cbtn--ghost cbtn--sm"
+              disabled={busy || !asking.key || (asking.key === 'other' && asking.title.trim().length < 3)}
+              onClick={() =>
+                void act(() => client.exports.addPaper(c.exportId, { key: asking.key, ...(asking.key === 'other' ? { title: asking.title.trim() } : {}) }), t('business.exports.papers.asked')).then(() => setAsking({ key: '', title: '' }))
+              }
+            >
+              {t('business.exports.papers.ask')}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       {/* EX2 — the load to the terminal; its seal is written on that load, with the seal panel and its photographs. */}

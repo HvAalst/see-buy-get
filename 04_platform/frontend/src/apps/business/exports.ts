@@ -10,7 +10,34 @@ import type { QuoteView } from '../../shared/quote';
  */
 
 export type ExportTimingState = 'on_time' | 'at_risk' | 'missed' | 'gated_in';
-export type ExportPaperKey = 'commercial_invoice' | 'packing_list' | 'certificate_of_origin' | 'export_entry';
+/** One of the catalogue's papers, or `other-N`: a paper asked for by name. */
+export type ExportPaperKey = string;
+
+/** Needed on every export; asked for these goods; kept when there is one. */
+export type ExportPaperGroup = 'needed' | 'asked' | 'kept';
+
+/** The papers the exporter or its agent can ask for, when the goods, the buyer or the destination need them. */
+export const ASKED_PAPERS = [
+  'certificate_of_origin',
+  'phytosanitary_certificate',
+  'fumigation_certificate',
+  'export_permit',
+  'inspection_certificate',
+  'certificate_of_analysis',
+  'health_certificate',
+  'insurance_certificate',
+  'dangerous_goods_declaration',
+  'letter_of_credit',
+] as const;
+
+/** Which kind of company document a paper is filed as, when it is uploaded on its line. Anything else is `other`, by its name. */
+export function paperKindFor(key: ExportPaperKey): string {
+  const same = ['commercial_invoice', 'packing_list', 'certificate_of_origin', 'bill_of_lading'];
+  if (same.includes(key)) return key;
+  if (key === 'export_permit') return 'licence';
+  if (key === 'insurance_certificate') return 'insurance_policy';
+  return 'other';
+}
 
 export interface ExportPlace {
   label: string;
@@ -51,7 +78,16 @@ export interface ExportVgm {
 export interface ExportPaperView {
   key: ExportPaperKey;
   label: string;
+  group: ExportPaperGroup;
   optional?: boolean;
+  /** A paper asked for by name. */
+  title?: string;
+  /** Who asked for it, for these goods. */
+  addedBy?: string;
+  addedByEntityId?: string;
+  addedAt?: string;
+  /** This reader asked for it, and nothing was given yet: it may take it off the list. */
+  removable?: boolean;
   documentId?: string;
   documentTitle?: string;
   reference?: string;
@@ -213,6 +249,8 @@ export interface ExportsApi {
   ownBox(exportId: string, own: boolean): Promise<Result<ExportDetail>>;
   quoteFee(exportId: string, body: { amount: number; currency?: string; note?: string; reference?: string }): Promise<Result<ExportDetail>>;
   acceptFee(exportId: string): Promise<Result<ExportDetail>>;
+  addPaper(exportId: string, body: { key: string; title?: string }): Promise<Result<ExportDetail>>;
+  removePaper(exportId: string, key: ExportPaperKey): Promise<Result<ExportDetail>>;
 }
 
 export function exportsApi(sbg: SbgClient): ExportsApi {
@@ -242,6 +280,8 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     ownBox: (exportId, own) => post(`/v1/sbg/exports/${id(exportId)}/own-box`, { own }),
     quoteFee: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/fee`, body),
     acceptFee: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/fee/accept`),
+    addPaper: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/papers/add`, body),
+    removePaper: (exportId, key) => post(`/v1/sbg/exports/${id(exportId)}/papers/${encodeURIComponent(key)}/remove`),
   };
 }
 

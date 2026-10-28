@@ -34,8 +34,16 @@ expeditor) — staff read, never act in its name.
    seal panel and its three photographs** — one way to seal a load, not two. Delivered at the terminal = gated in.
 3. **EX3 — verified gross mass.** Method 1 (the packed box weighed) or 2 (contents + tare), the kilograms, the
    weighbridge and ticket, who signs for it, when. Recorded and handed over; never sent to the line.
-4. **EX4 — export papers.** Commercial invoice, packing list, certificate of origin (not every destination asks), each
-   attached from the business's own documents; the export entry as a **reference** its clearing agent gave.
+4. **EX4 — export papers** (widened 2026-10-28, the user: "we don't book but we hold documents as a report"). The
+   catalogue in `export.types.ts`, general names, never one country's agency, in three groups: **needed** on every
+   export, counted missing until given (commercial invoice, packing list, export entry); **kept** when there is one,
+   never counted missing (booking confirmation, shipping instructions, weighbridge ticket, bill of lading copy — the BL
+   number stands on its line until the copy is attached); **asked** for these goods by the exporter or its agent,
+   attributed, counted missing once on the list (certificate of origin, phytosanitary, fumigation, export permit or
+   licence, inspection or conformity, analysis or quality, health or veterinary, insurance, dangerous goods declaration —
+   on the list from the start for `HAZ-*` goods — letter of credit, or `other-N` by name). Only whoever asked takes a
+   line off, and only while nothing was given. Each is the exporter's own document — uploaded on its line, filed under
+   `relatesTo` `EXP-nnn:<key>` so two papers of one kind never version over each other — or a reference.
 5. **EX5 — one handover file.** A printable page for the forwarder at the port: booking, cut-offs, box and type, seal
    (from the laden load), VGM, papers with their references, the road consignment note's number, when it gated in; and
    the **bill of lading number** once the forwarder issues it, recorded back so the receiving end can match it.

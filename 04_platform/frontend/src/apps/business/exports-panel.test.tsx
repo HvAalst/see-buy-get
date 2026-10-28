@@ -32,10 +32,12 @@ const detail = (over: Partial<ExportDetail> = {}, consignment: Partial<ExportDet
     timing: { state: 'on_time', leaveByAt: '2026-11-04T06:00:00.000Z', roadKm: 480, plannedHours: 12 },
     seals: [],
     papers: [
-      { key: 'commercial_invoice', label: 'Commercial invoice', documentId: 'doc_1', documentTitle: 'Invoice 117' },
-      { key: 'packing_list', label: 'Packing list', reference: 'PL-117', refusedAt: '2026-10-28T10:00:00.000Z', refusedBy: 'Juma', refusedReason: 'The weights do not match the invoice' },
-      { key: 'certificate_of_origin', label: 'Certificate of origin', optional: true },
-      { key: 'export_entry', label: 'Export entry' },
+      { key: 'commercial_invoice', label: 'Commercial invoice', group: 'needed', documentId: 'doc_1', documentTitle: 'Invoice 117' },
+      { key: 'packing_list', label: 'Packing list', group: 'needed', reference: 'PL-117', refusedAt: '2026-10-28T10:00:00.000Z', refusedBy: 'Juma', refusedReason: 'The weights do not match the invoice' },
+      { key: 'export_entry', label: 'Export entry', group: 'needed' },
+      { key: 'booking_confirmation', label: 'Booking confirmation', group: 'kept', optional: true },
+      { key: 'phytosanitary_certificate', label: 'Phytosanitary certificate', group: 'asked', addedBy: 'Juma Bakari', addedByEntityId: 'ent_a', addedAt: '2026-10-28T09:30:00.000Z' },
+      { key: 'other-1', label: 'Buyer’s purchase order', title: 'Buyer’s purchase order', group: 'asked', addedBy: 'Wanjiku', addedByEntityId: 'ent_x', addedAt: '2026-10-28T09:40:00.000Z', removable: true },
     ],
     missing: [],
     documents: [],
@@ -190,5 +192,38 @@ describe('the agent’s fee, from each side', () => {
     expect(html).not.toContain(t('business.exports.fee.agree'));
     expect(html).not.toContain(t('business.exports.fee.change'));
     expect(html).toContain('18,000 KES');
+  });
+});
+
+/*
+ * THE PAPERS AN EXPORT HOLDS (the user, 2026-10-28: "we don't book but we hold documents as a report"): grouped, each with
+ * a file of its own uploaded on its line, and the papers these goods need asked for by the exporter or its agent.
+ */
+describe('the papers an export holds, on the panel', () => {
+  it('groups them: needed on every export, asked for these goods (by whom), kept when there is one', () => {
+    const html = render(detail());
+    for (const g of ['groupNeeded', 'groupAsked', 'groupKept'] as const) expect(html).toContain(t(`business.exports.papers.${g}`));
+    expect(html.indexOf(t('business.exports.papers.groupNeeded'))).toBeLessThan(html.indexOf(t('business.exports.papers.groupAsked')));
+    expect(html).toContain(t('business.exports.paper.phytosanitary_certificate'));
+    expect(html).toContain('Asked for by Juma Bakari on 28 Oct 2026');
+    // One asked for by name is said by its name.
+    expect(html).toContain('Buyer’s purchase order');
+    // Kept and not given is no gap.
+    expect(html).toContain(`<span class="ctag ctag--quiet">${t('business.exports.papers.noneKept')}</span>`);
+  });
+
+  it('offers the exporter a file of its own on a line not given, and its own ask to take off — never the agent’s', () => {
+    const html = render(detail());
+    expect(html).toContain(t('business.exports.papers.upload'));
+    // Only the line it asked for (removable) offers to come off.
+    expect(html.split(t('business.exports.papers.remove')).length - 1).toBe(1);
+  });
+
+  it('lets the exporter and its agent ask for a paper, and staff not', () => {
+    expect(render(detail())).toContain(t('business.exports.papers.ask'));
+    const agent = render(detail({ you: 'agent', agent: appointed }));
+    expect(agent).toContain(t('business.exports.papers.ask'));
+    expect(agent).not.toContain(t('business.exports.papers.upload'));
+    expect(render(detail({ you: 'staff' }))).not.toContain(t('business.exports.papers.ask'));
   });
 });
