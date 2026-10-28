@@ -12,9 +12,9 @@ const ROOT = join('src', 'apps', 'business', 'screens');
 const code = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 describe('the export screens’ choices', () => {
-  const files = readdirSync(ROOT)
-    .filter((name) => /^Export.*\.tsx$/.test(name))
-    .map((name) => ({ file: name, src: code(readFileSync(join(ROOT, name), 'utf8')) }));
+  const files = readdirSync(ROOT, { withFileTypes: true })
+    .filter((e) => !e.isDirectory() && /^Export.*\.tsx$/.test(e.name))
+    .map((e) => ({ file: e.name, src: code(readFileSync(join(ROOT, e.name), 'utf8')) }));
 
   it('reads the screens it guards', () => {
     // A guard that found nothing passes for ever: the export, its letter, its packing list and its invoice.
