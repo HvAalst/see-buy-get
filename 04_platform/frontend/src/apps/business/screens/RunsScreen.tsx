@@ -12,6 +12,7 @@ import { mayAct } from '../logic';
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 import { tabAtTheTap } from '../../../shared/openPage';
+import { ConsolePick } from '../../tower/ConsolePick';
 
 /**
  * B2 — SPACE ON A CARRIER'S RUN: a truck that is leaving anyway, with room in the back.
@@ -244,16 +245,12 @@ function BookPanel({ offer, business, client, act, onClose, onBooked }: { offer:
             <input class="cinput" maxLength={160} value={form.description} onInput={(e) => (setForm((prev) => ({ ...prev, description: (e.target as HTMLInputElement).value })), setQuote(null))} />
           </label>
           <div class="biz-two">
-            <label class="cfield">
-              <span class="cfield__label">{t('business.loads.f.nature')}</span>
-              <select class="cinput" value={form.nature} onChange={(e) => (setForm((prev) => ({ ...prev, nature: (e.target as HTMLSelectElement).value })), setQuote(null))}>
-                {NATURES.map((n) => (
-                  <option key={n.key} value={n.key}>
-                    {t(n.labelKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ConsolePick
+              label={t('business.loads.f.nature')}
+              value={form.nature}
+              options={NATURES.map((n) => ({ value: n.key, label: t(n.labelKey), sub: t(n.detailKey) }))}
+              onChange={(nature) => (setForm((prev) => ({ ...prev, nature })), setQuote(null))}
+            />
             <label class="cfield">
               <span class="cfield__label">{t('business.loads.f.weight')}</span>
               <input class="cinput" type="number" min={0.1} value={form.weightKg} onInput={(e) => (setForm((prev) => ({ ...prev, weightKg: (e.target as HTMLInputElement).value })), setQuote(null))} />

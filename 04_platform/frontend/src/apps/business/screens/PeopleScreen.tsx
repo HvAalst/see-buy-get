@@ -5,6 +5,7 @@ import type { BusinessClient, BusinessView, MemberRole, MemberRow } from '../api
 import { isLastOwner, mayManage, phoneReady, ROLES } from '../logic';
 import type { BusinessActions } from '../useBusinessApp';
 import { ROLE_LABEL } from './ChooseScreen';
+import { ConsolePick } from '../../tower/ConsolePick';
 
 const ROLE_SUB: Record<MemberRole, MessageKey> = {
   owner: 'business.role.ownerSub',
@@ -108,20 +109,16 @@ export function PeopleScreen({ business, actions, client }: { business: Business
                   </span>
                   <span class="crow__tail biz-people__acts">
                     {owner ? (
-                      <select
-                        class="cinput cinput--sm"
-                        aria-label={t('business.people.roleOf', { name: m.name })}
+                      // The only owner cannot change their own role: said beneath the list, and the picker is greyed.
+                      <ConsolePick
+                        bare
+                        small
+                        label={t('business.people.roleOf', { name: m.name })}
                         value={m.role}
-                        title={last ? t('business.people.lastOwner') : undefined}
                         disabled={busy !== null || last}
-                        onChange={(e) => void setRole(m.memberId, (e.target as HTMLSelectElement).value as MemberRole)}
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {t(ROLE_LABEL[r])}
-                          </option>
-                        ))}
-                      </select>
+                        options={ROLES.map((r) => ({ value: r, label: t(ROLE_LABEL[r]), sub: t(ROLE_SUB[r]) }))}
+                        onChange={(role) => void setRole(m.memberId, role as MemberRole)}
+                      />
                     ) : (
                       <span class="ctag ctag--quiet">{t(ROLE_LABEL[m.role])}</span>
                     )}

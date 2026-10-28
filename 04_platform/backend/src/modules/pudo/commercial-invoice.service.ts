@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
-import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { Entity } from '../../foundation/entity/entity.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { escapeHtml } from '../../foundation/mail/mail.blocks';
@@ -93,6 +93,8 @@ export class CommercialInvoiceService {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(issuedOn) || Number.isNaN(Date.parse(`${issuedOn}T00:00:00Z`))) throw new GlosError('VALIDATION_FAILED', 'The invoice date is a day: YYYY-MM-DD', { field: 'issuedOn' });
     const currency = String(input.currency ?? '').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw new GlosError('VALIDATION_FAILED', 'The money is three letters, like KES or USD', { field: 'currency' });
+    // Three letters is not yet a currency: "KSH" is none, and an invoice in it is stopped at the border.
+    if (!isKnownCurrency(currency)) throw new GlosError('VALIDATION_FAILED', `“${currency}” is no currency we know — use its three-letter code, like KES or USD`, { field: 'currency' });
     const reason = (input.reason ?? 'sale') as ExportReason;
     if (!EXPORT_REASONS.includes(reason)) throw new GlosError('VALIDATION_FAILED', 'Why the goods cross the border: sale, sample, gift, repair, return or other', { field: 'reason' });
 

@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { BusinessClient } from '../api';
+import { ConsolePick } from '../../tower/ConsolePick';
 import { CLAIM_KINDS, CLAIM_KIND_KEYS, claimLine, claimReady, claimStanding, type ClaimKind, type ClaimSide, type LoadClaim } from '../claim';
 
 /** What the panel reads of a load, from either side of it. */
@@ -81,17 +82,13 @@ export function LoadClaimPanel({ row, client, act, onChanged, side = 'sender' }:
         <>
           <p class="cons__lede">{t('business.claim.body', { code: row.code })}</p>
           <div class="biz-two">
-            <label class="cfield">
-              <span class="cfield__label">{t('business.claim.kindLabel')}</span>
-              <select class="cinput" value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: (e.target as HTMLSelectElement).value as ClaimKind }))}>
-                <option value="">{t('business.claim.kindPick')}</option>
-                {CLAIM_KINDS.map((k) => (
-                  <option key={k} value={k}>
-                    {t(CLAIM_KIND_KEYS[k])}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ConsolePick
+              label={t('business.claim.kindLabel')}
+              value={form.kind}
+              placeholder={t('business.claim.kindPick')}
+              options={CLAIM_KINDS.map((k) => ({ value: k, label: t(CLAIM_KIND_KEYS[k]) }))}
+              onChange={(kind) => setForm((f) => ({ ...f, kind: kind as ClaimKind }))}
+            />
             <label class="cfield">
               <span class="cfield__label">{t('business.claim.photoLabel')}</span>
               <input class="cinput" type="file" accept="image/*" onChange={(e) => void photo((e.target as HTMLInputElement).files?.[0])} />

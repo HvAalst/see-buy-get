@@ -5,6 +5,8 @@ import { publicRequest } from '../../../lib/sbg';
 import { downloadZpl } from '../../../shared/download';
 import { tabAtTheTap } from '../../../shared/openPage';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
+import { CurrencySelect } from '../../tower/screens/CurrencySelect';
+import { ConsolePick } from '../../tower/ConsolePick';
 import { businessConfig, type BusinessClient, type BusinessView, type PostedLoad } from '../api';
 import { EMPTY_LINE, EXPORT_REASONS, invoiceBody, invoiceForm, invoiceGaps, invoiceTotals, labelsLine, money, type CommercialInvoiceView, type InvoiceForm, type InvoiceGap, type InvoiceLineForm, type PackageLabels } from '../papers';
 
@@ -228,22 +230,17 @@ function InvoiceEditor({ client, row, view, origin, onCancel, onSigned }: { clie
       </fieldset>
 
       <div class="biz-two">
-        <label class="cfield">
-          <span class="cfield__label">{t('business.invoice.currency')}</span>
-          <input id="inv-currency" class="cinput" maxLength={3} value={form.currency} onInput={(e) => set({ currency: (e.target as HTMLInputElement).value.toUpperCase() })} />
-          <span class="chint">{t('business.invoice.currencyHint')}</span>
+        {/* The currency is chosen with the countries behind it, never typed: "KSH" is no currency (the user, 2026-10-28). */}
+        <div class="cfield">
+          <CurrencySelect api={atlasApi} value={form.currency} onChange={(currency) => set({ currency })} label={t('business.invoice.currency')} near={[origin, form.importerCountry]} />
           {gap('currency')}
-        </label>
-        <label class="cfield">
-          <span class="cfield__label">{t('business.invoice.reason')}</span>
-          <select class="cinput" value={form.reason} onChange={(e) => set({ reason: (e.target as HTMLSelectElement).value as InvoiceForm['reason'] })}>
-            {EXPORT_REASONS.map((r) => (
-              <option key={r} value={r}>
-                {t(`business.invoice.reason.${r}` as MessageKey)}
-              </option>
-            ))}
-          </select>
-        </label>
+        </div>
+        <ConsolePick
+          label={t('business.invoice.reason')}
+          value={form.reason}
+          options={EXPORT_REASONS.map((r) => ({ value: r, label: t(`business.invoice.reason.${r}` as MessageKey) }))}
+          onChange={(reason) => set({ reason: reason as InvoiceForm['reason'] })}
+        />
       </div>
 
       <fieldset class="cfield biz-acts">

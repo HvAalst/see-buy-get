@@ -5,6 +5,7 @@ import type { BusinessClient, BusinessView } from '../api';
 import { PREFIX_TAKEN, disputeLine, maySendLicence, mayTakeBack, stillWorthShowing, type Gs1DisputeView } from '../gs1Dispute';
 import { cleanPrefix, gs1Line } from '../papers';
 import type { BusinessActions } from '../useBusinessApp';
+import { ConsolePick } from '../../tower/ConsolePick';
 
 /**
  * THE BUSINESS'S GS1 COMPANY PREFIX — what puts the global barcode on its packages beside our code.
@@ -84,17 +85,13 @@ export function Gs1Panel({ business, actions, client, owner }: { business: Busin
               <input id="gs1-prefix" class="cinput" inputMode="numeric" maxLength={24} value={prefix} onInput={(e) => setPrefix((e.target as HTMLInputElement).value)} />
               <span class="chint">{t('business.gs1.prefixHint')}</span>
             </label>
-            <label class="cfield">
-              <span class="cfield__label">{t('business.gs1.digit')}</span>
-              <select id="gs1-digit" class="cinput" value={digit} onChange={(e) => setDigit((e.target as HTMLSelectElement).value)}>
-                {Array.from({ length: 10 }, (_, d) => (
-                  <option key={d} value={String(d)}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-              <span class="chint">{t('business.gs1.digitHint')}</span>
-            </label>
+            <ConsolePick
+              label={t('business.gs1.digit')}
+              value={digit}
+              options={Array.from({ length: 10 }, (_, d) => ({ value: String(d), label: String(d) }))}
+              onChange={setDigit}
+              hint={t('business.gs1.digitHint')}
+            />
           </div>
           {error ? <p class="cerr">{error}</p> : null}
           {taken && client ? (

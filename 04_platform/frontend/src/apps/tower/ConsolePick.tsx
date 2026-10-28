@@ -52,6 +52,7 @@ export function ConsolePick({
   bare,
   small,
   className,
+  disabled,
 }: {
   label: string;
   value: string;
@@ -69,6 +70,8 @@ export function ConsolePick({
   small?: boolean;
   /** Further classes for the field around it (a knob in a row of knobs). */
   className?: string;
+  /** Not to be opened now — while what it changes is being saved, or a choice that is not this person's to make. */
+  disabled?: boolean;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -92,6 +95,7 @@ export function ConsolePick({
   const button = (
     <button
       type="button"
+      disabled={disabled}
       class={`cselect__btn${small ? ' cselect__btn--sm' : ''}`}
       aria-haspopup="dialog"
       aria-expanded={open}

@@ -5,6 +5,7 @@ import type { BusinessClient, Client } from '../api';
 import { PREFIX_TAKEN } from '../gs1Dispute';
 import { cleanPrefix, gs1Line } from '../papers';
 import { ClaimPrefix } from './Gs1Panel';
+import { ConsolePick } from '../../tower/ConsolePick';
 
 /**
  * Round 20 — A CLIENT'S OWN GS1 PREFIX ("A client's own GS1 prefix"; "The forwarder, on the client's record").
@@ -71,17 +72,13 @@ export function ClientGs1({ row, client, owner, onRow }: { row: Client; client: 
               <input id="client-gs1-prefix" class="cinput" inputMode="numeric" maxLength={24} value={prefix} onInput={(e) => setPrefix((e.target as HTMLInputElement).value)} />
               <span class="chint">{t('business.clients.gs1.prefixHint', { name: row.name })}</span>
             </label>
-            <label class="cfield">
-              <span class="cfield__label">{t('business.gs1.digit')}</span>
-              <select id="client-gs1-digit" class="cinput" value={digit} onChange={(e) => setDigit((e.target as HTMLSelectElement).value)}>
-                {Array.from({ length: 10 }, (_, d) => (
-                  <option key={d} value={String(d)}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-              <span class="chint">{t('business.clients.gs1.digitHint', { name: row.name })}</span>
-            </label>
+            <ConsolePick
+              label={t('business.gs1.digit')}
+              value={digit}
+              options={Array.from({ length: 10 }, (_, d) => ({ value: String(d), label: String(d) }))}
+              onChange={setDigit}
+              hint={t('business.clients.gs1.digitHint', { name: row.name })}
+            />
           </div>
           {error ? <p class="cerr">{error}</p> : null}
           {taken && client ? (

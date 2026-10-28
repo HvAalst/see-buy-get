@@ -6,7 +6,8 @@ import { quoteFigure, quoteTone, type QuoteView } from '../../../shared/quote';
 import { ConsoleDetail } from '../../tower/ConsoleDetail';
 import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
-import { NATURES, PACKAGING_OPTIONS } from '../../agent/logic';
+import { NATURES, PACKAGING_HELP } from '../../agent/logic';
+import { ConsolePick } from '../../tower/ConsolePick';
 import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type LoadProposal, type PostedLoad } from '../api';
 import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
 import { passageWords } from '../../../shared/passages';
@@ -378,16 +379,14 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
             <input class="cinput" type="number" min={1} value={form.weightKg} onInput={(e) => setForm((prev) => ({ ...prev, weightKg: (e.target as HTMLInputElement).value }))} />
             {gap('weightKg')}
           </label>
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.packaging')}</span>
-            <select class="cinput" value={form.packaging} onChange={(e) => setForm((prev) => ({ ...prev, packaging: (e.target as HTMLSelectElement).value }))}>
-              {PACKAGING_OPTIONS.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {t(p.labelKey as MessageKey)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Each packaging said with what it means for the truck, as the counter's help sheet says it. */}
+          <ConsolePick
+            label={t('business.loads.f.packaging')}
+            value={form.packaging}
+            placeholder={t('agent.accept.packagingChoose')}
+            options={PACKAGING_HELP.map((p) => ({ value: p.value, label: t(p.labelKey as MessageKey), sub: t(p.detailKey as MessageKey) }))}
+            onChange={(packaging) => setForm((prev) => ({ ...prev, packaging }))}
+          />
         </div>
         <div class="biz-two">
           <label class="cfield">
@@ -401,16 +400,12 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
           </div>
         </div>
         <div class="biz-two">
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.nature')}</span>
-            <select class="cinput" value={form.natureCode} onChange={(e) => setForm((prev) => ({ ...prev, natureCode: (e.target as HTMLSelectElement).value }))}>
-              {NATURES.map((n) => (
-                <option key={n.key} value={n.key}>
-                  {t(n.labelKey)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <ConsolePick
+            label={t('business.loads.f.nature')}
+            value={form.natureCode}
+            options={NATURES.map((n) => ({ value: n.key, label: t(n.labelKey), sub: t(n.detailKey) }))}
+            onChange={(natureCode) => setForm((prev) => ({ ...prev, natureCode }))}
+          />
           {contract ? null : (
             <label class="cfield">
               <span class="cfield__label">{t('business.loads.f.pickupOn')}</span>

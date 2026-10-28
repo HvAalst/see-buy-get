@@ -807,6 +807,16 @@
   border-color: var(--tx3);
 }
 
+/* A choice not to be made now — while it is being saved, or one that is not this person's — looks it, as a button does. */
+.cselect__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.cselect__btn:disabled:hover {
+  border-color: var(--bd);
+}
+
 /* The compact twin of .cinput--sm, for a choice standing in a row of small controls. */
 .cselect__btn--sm {
   min-height: 32px;

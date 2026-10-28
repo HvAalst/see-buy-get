@@ -1235,7 +1235,6 @@ export const enBusiness = {
   'business.invoice.importerCountry': 'Country',
   'business.invoice.importerTaxNo': 'Tax number',
   'business.invoice.currency': 'Money',
-  'business.invoice.currencyHint': 'Three letters: KES, UGX, TZS, USD…',
   'business.invoice.reason': 'Why the goods cross the border',
   'business.invoice.reason.sale': 'Sale',
   'business.invoice.reason.sample': 'Sample',

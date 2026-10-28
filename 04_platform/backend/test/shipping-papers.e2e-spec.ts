@@ -102,6 +102,9 @@ describe('a shipper’s papers, over the wire', () => {
     await http().post(url).set(bearer(other.token)).send(invoice).expect(404);
     await http().post(url).set(bearer(jenga.token)).send({ ...invoice, lines: [{ ...invoice.lines[0], hsCode: '69' }] }).expect(400);
     await http().post(url).set(bearer(jenga.token)).send({ ...invoice, declare: false }).expect(400);
+    // A currency some country settles in: "KSH" is three letters and no currency.
+    const ksh = await http().post(url).set(bearer(jenga.token)).send({ ...invoice, currency: 'KSH' }).expect(400);
+    expect(ksh.body.detail).toBe('“KSH” is no currency we know — use its three-letter code, like KES or USD');
 
     // NO PAPERS, NO LOADING. The load is claimed by a driver (put so here: the border rules that decide who may carry it
     // are tested where they live); taking it over is refused until the shipper's invoice exists — the FIRST thing asked.

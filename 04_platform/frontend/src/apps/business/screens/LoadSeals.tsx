@@ -3,6 +3,7 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { SEAL_CLASSES, sealOver, sealStory, sealWhat, type SealClass } from '../../../shared/seals';
 import type { BusinessClient, PostedLoad } from '../api';
 import { EMPTY_SEAL, SEAL_PHOTOS, sealBody, sealGaps, type SealForm, type SealPhoto, type SealsView } from '../seals';
+import { ConsolePick } from '../../tower/ConsolePick';
 
 const onRoad = (iso: string) => new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -126,28 +127,26 @@ export function LoadSeals({ row, client, act }: { row: PostedLoad; client: Busin
               <span class="cfield__label">{t('business.seals.number')}</span>
               <input id="seal-number" class="cinput" maxLength={40} value={form.number} onInput={(e) => setForm({ ...form, number: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="cfield">
-              <span class="cfield__label">{t('business.seals.class')}</span>
-              <select id="seal-class" class="cinput" value={form.sealClass} onChange={(e) => setForm({ ...form, sealClass: (e.target as HTMLSelectElement).value as SealClass | '' })}>
-                <option value="">{t('business.seals.classPick')}</option>
-                {SEAL_CLASSES.map((c) => (
-                  <option key={c} value={c}>
-                    {t(CLASS_LABEL[c])}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ConsolePick
+              label={t('business.seals.class')}
+              value={form.sealClass}
+              placeholder={t('business.seals.classPick')}
+              options={SEAL_CLASSES.map((c) => ({ value: c, label: t(CLASS_LABEL[c]) }))}
+              onChange={(sealClass) => setForm({ ...form, sealClass: sealClass as SealClass | '' })}
+            />
             <label class="cfield">
               <span class="cfield__label">{t('business.seals.maker')}</span>
               <input id="seal-maker" class="cinput" maxLength={60} value={form.maker} onInput={(e) => setForm({ ...form, maker: (e.target as HTMLInputElement).value })} />
             </label>
-            <label class="cfield">
-              <span class="cfield__label">{t('business.seals.appliedBy')}</span>
-              <select id="seal-by" class="cinput" value={form.appliedBy} onChange={(e) => setForm({ ...form, appliedBy: (e.target as HTMLSelectElement).value as 'sender' | 'customs' })}>
-                <option value="sender">{t('business.seals.bySender')}</option>
-                <option value="customs">{t('business.seals.byCustoms')}</option>
-              </select>
-            </label>
+            <ConsolePick
+              label={t('business.seals.appliedBy')}
+              value={form.appliedBy}
+              options={[
+                { value: 'sender', label: t('business.seals.bySender') },
+                { value: 'customs', label: t('business.seals.byCustoms') },
+              ]}
+              onChange={(appliedBy) => setForm({ ...form, appliedBy: appliedBy as 'sender' | 'customs' })}
+            />
           </div>
           <p class="chint">{t('business.seals.photosHint')}</p>
           <div class="biz-seal__row">
