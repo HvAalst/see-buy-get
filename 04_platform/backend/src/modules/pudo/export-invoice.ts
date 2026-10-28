@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { hsDisplay } from './commercial-invoice.service';
 import { INVOICE_DECLARATION } from './commercial-invoice.types';
 import type { PackingLine } from './export-packing.types';
@@ -36,7 +36,8 @@ export function cleanInvoice(input: InvoiceDraftDto, by: string, now: number): I
   return {
     number: trimmed(input.number, 40) ?? '',
     date,
-    currency: /^[A-Z]{3}$/.test(currency) ? currency : '',
+    // Only a currency that exists: anything else is no currency, and the invoice asks for one.
+    currency: isKnownCurrency(currency) ? currency : '',
     ...(input.incoterm ? { incoterm: input.incoterm } : {}),
     ...(input.incoterm && trimmed(input.incotermPlace, 80) ? { incotermPlace: trimmed(input.incotermPlace, 80) } : {}),
     ...(trimmed(input.paymentTerms, 200) ? { paymentTerms: trimmed(input.paymentTerms, 200) } : {}),
@@ -86,7 +87,7 @@ export function invoiceGaps(d: InvoiceDraft | undefined, lines: PackingLine[]): 
   if (!d) return ['Fill in the invoice'];
   const out: string[] = [];
   if (!d.number) out.push('The invoice’s number');
-  if (!d.currency) out.push('The currency, as its three letters');
+  if (!d.currency) out.push('The currency, chosen from the list');
   if (!(d.buyer?.name && d.buyer.address)) out.push('The buyer’s name and address');
   const unvalued = invoiceTotals(lines).unvalued;
   if (unvalued) out.push(`${unvalued} line${unvalued === 1 ? '' : 's'} with no value — bring in your list with a unit price or a value column`);
@@ -103,7 +104,7 @@ export function invoiceNotes(d: InvoiceDraft | undefined, totals: InvoiceTotals,
   if (totals.withoutHs) out.push(`${totals.withoutHs} line${totals.withoutHs === 1 ? ' has' : 's have'} no HS code — many destinations ask for one on the invoice.`);
   if (totals.withoutOrigin) out.push(`${totals.withoutOrigin} line${totals.withoutOrigin === 1 ? ' has' : 's have'} no country of origin — many destinations ask for it, line by line.`);
   const empty = (d?.fields ?? []).filter((f) => !f.value).map((f) => f.label);
-  if (empty.length) out.push(`Empty, and not printed: ${empty.join('; ')}${template ? ` — your last invoice to ${dest} carried ${empty.length === 1 ? 'it' : 'them'}` : ''}.`);
+  if (empty.length) out.push(`Empty, and not printed: ${empty.join('; ')}${template ? ` — your last invoice with ${dest} as its destination carried ${empty.length === 1 ? 'it' : 'them'}` : ''}.`);
   return out;
 }
 

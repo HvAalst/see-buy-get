@@ -51,6 +51,14 @@ export function catalogueEntry(code?: string): CatalogueCountry | undefined {
   return code ? BY_CODE.get(code.trim().toUpperCase()) : undefined;
 }
 
+/** The currencies some country settles in — the only ones a price may be written in (2026-10-28: "to avoid errors"). */
+const CURRENCIES = new Set(COUNTRY_CATALOGUE.map((c) => c.currency));
+
+/** A currency that exists: one some country of the catalogue settles in. "KSH" is not one; "KES" is. */
+export function isKnownCurrency(code?: string): boolean {
+  return Boolean(code) && CURRENCIES.has(code!.trim().toUpperCase());
+}
+
 export function isCatalogued(code?: string): boolean {
   return Boolean(catalogueEntry(code));
 }

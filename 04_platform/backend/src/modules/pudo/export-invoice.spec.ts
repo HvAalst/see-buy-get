@@ -46,11 +46,17 @@ describe('the commercial invoice on an export', () => {
     expect(d).toMatchObject({ number: 'TA-117', currency: 'USD', date: '2026-10-28', declarations: ['Of Kenyan preferential origin.'], fields: [{ label: 'Buyer’s EORI number', value: '' }], charges: [], reason: 'sale' });
   });
 
+  it('takes only a currency that exists — one some country settles in', () => {
+    expect(cleanInvoice({ currency: 'kes' }, 'W', at).currency).toBe('KES');
+    expect(cleanInvoice({ currency: 'KSH' }, 'W', at).currency).toBe('');
+    expect(cleanInvoice({ currency: 'XYZ' }, 'W', at).currency).toBe('');
+  });
+
   it('refuses to sign only what no invoice anywhere goes without', () => {
     expect(invoiceGaps(undefined, [])).toEqual(['Bring in the packing list: the invoice’s lines are its lines']);
     expect(invoiceGaps(undefined, lines)).toEqual(['Fill in the invoice']);
     const bare = cleanInvoice({}, 'W', at);
-    expect(invoiceGaps(bare, [...lines, { description: 'Samples', packages: 1 }])).toEqual(['The invoice’s number', 'The currency, as its three letters', 'The buyer’s name and address', '1 line with no value — bring in your list with a unit price or a value column']);
+    expect(invoiceGaps(bare, [...lines, { description: 'Samples', packages: 1 }])).toEqual(['The invoice’s number', 'The currency, chosen from the list', 'The buyer’s name and address', '1 line with no value — bring in your list with a unit price or a value column']);
     expect(invoiceGaps(cleanInvoice({ number: 'TA-117', currency: 'USD', buyer: { name: 'Van Rees', address: 'Rotterdam' } }, 'W', at), lines)).toEqual([]);
   });
 
@@ -60,7 +66,7 @@ describe('the commercial invoice on an export', () => {
     expect(notes).toEqual([
       '1 line has no HS code — many destinations ask for one on the invoice.',
       '1 line has no country of origin — many destinations ask for it, line by line.',
-      'Empty, and not printed: Buyer’s EORI number — your last invoice to Netherlands carried it.',
+      'Empty, and not printed: Buyer’s EORI number — your last invoice with Netherlands as its destination carried it.',
     ]);
   });
 

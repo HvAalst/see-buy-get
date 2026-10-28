@@ -240,7 +240,13 @@
   <p><code>mapping</code> is optional: a heading and what it is — <code>marks</code>, <code>itemCode</code>,
   <code>description</code>, <code>hsCode</code>, <code>quantity</code>, <code>unit</code>, <code>packages</code>,
   <code>packageKind</code>, <code>netKg</code>, <code>grossKg</code>, <code>volumeM3</code>, <code>lengthCm</code>,
-  <code>widthCm</code>, <code>heightCm</code>, <code>keep</code> or <code>ignore</code>.</p>
+  <code>widthCm</code>, <code>heightCm</code>, <code>unitPrice</code>, <code>lineValue</code>, <code>originCountry</code>,
+  <code>keep</code> or <code>ignore</code>.</p>
+  <p>The same rows carry the commercial invoice’s lines: send a unit price or a line value and a country of origin on
+  each, and the invoice is drawn from them — one set of lines, so the invoice and the packing list cannot disagree. A
+  currency named in a price heading (<em>Unit price (USD)</em>) is offered to the invoice. Prices are never printed on
+  the packing list. The invoice itself — its number, buyer, charges and what the destination asks for — is filled in
+  and signed by a person, in the app.</p>
 <pre><code>{ "test": false, "imported": true, "replayed": false, "check": { "totals": { "lines": 1, "packages": 800, "grossKg": 3600, … }, "columns": [ … ], "problems": [], "notes": [ … ] } }</code></pre>
   <p>A list with a line that cannot be kept as it is — a number that is not one, an HS code that is not one, a line with
   no description — is not imported: <code>imported</code> is false and <code>problems</code> says which row and why.

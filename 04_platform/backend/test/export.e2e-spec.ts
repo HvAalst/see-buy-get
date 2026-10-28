@@ -361,6 +361,9 @@ describe('an export to the port, over the wire', () => {
     // The exporter quotes nothing to itself; the agent quotes, in the currency of where it is sent from unless it says.
     expect((await http().post(`${path}/fee`).set(bearer(x.token)).send({ amount: 18000 })).status).toBe(403);
     expect((await http().post(`${path}/fee`).set(bearer(agent.token)).send({ amount: 0 })).status).toBe(400);
+    // A currency that does not exist cannot be written — chosen from the list, never typed (2026-10-28).
+    const ksh = await http().post(`${path}/fee`).set(bearer(agent.token)).send({ amount: 18000, currency: 'KSH' });
+    expect([ksh.status, ksh.body.detail]).toEqual([400, '“KSH” is no currency we know — choose it from the list']);
     const quoted = (await http().post(`${path}/fee`).set(bearer(agent.token)).send({ amount: 18000, reference: 'PC-2026-044', note: 'Export entry and documents' }).expect(201)).body;
     expect(quoted).toMatchObject({ feeState: 'quoted', fee: { amount: 18000, currency: 'KES', reference: 'PC-2026-044', issuer: { entityId: agent.entityId }, payer: { entityId: x.entityId }, subject: { kind: 'export', code: made.code } } });
     expect(bell(x.entityId)).toContain(`${made.code}: your clearing agent quoted its fee`);

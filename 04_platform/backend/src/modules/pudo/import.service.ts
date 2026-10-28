@@ -1,5 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { QuoteService } from './quote.service';
 import type { Quote } from './quote.types';
 import { randomBytes } from 'crypto';
@@ -1193,6 +1193,8 @@ export class ImportService {
   ): ImportDetail {
     const consignment = this.requireImport(importId);
     this.requireAgent(consignment, agentEntityId);
+    // A currency that exists, or none said (the destination's then): "KSH" is no currency.
+    if (opts.currency?.trim() && !isKnownCurrency(opts.currency)) throw new GlosError('VALIDATION_FAILED', `“${opts.currency.trim()}” is no currency we know — choose it from the list`, { field: 'currency' });
     const agent = this.entities.get(agentEntityId);
     const importer = this.entities.get(consignment.importerEntityId);
     const quote = this.quotes.quote(

@@ -375,6 +375,10 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       expect(quoted.fee).toMatchObject({ amount: 4500, currency: 'ETB', note: 'Port dues and our attendance', reference: 'PF-2026-114', status: 'open' });
       expect(quoted.fee?.issuer.entityId).toBe(agentId);
       expect(quoted.fee?.payer.entityId).toBe(importerId);
+      // A currency is chosen from those that exist: "KSH" is no currency, and a quotation in it is refused, not stored.
+      expect(() => imports.quoteFee(one.importId, agentId, 4500, undefined, 'Selam', Date.now(), { currency: 'KSH' })).toThrow('“KSH” is no currency we know — choose it from the list');
+      expect(imports.quoteFee(one.importId, agentId, 4500, undefined, 'Selam', Date.now(), { currency: 'usd' }).fee?.currency).toBe('USD');
+      imports.quoteFee(one.importId, agentId, 4500, 'Port dues and our attendance', 'Selam', Date.now(), { reference: 'PF-2026-114' });
       expect(imports.acceptFee(one.importId, importerId, 'Hans').feeState).toBe('accepted');
 
       const paid = imports.setFeeStatus(one.importId, importerId, 'paid', 'Hans', 'CBE-TXN-778');

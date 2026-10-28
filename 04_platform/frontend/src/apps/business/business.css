@@ -283,3 +283,9 @@
 .biz-packtable .r {
   text-align: right;
 }
+
+/* The business forms run their text boxes the full width of the panel: a picker among them keeps the same right-hand
+   edge, so the invoice reads as one column. */
+.biz .cselect__btn {
+  max-width: none;
+}

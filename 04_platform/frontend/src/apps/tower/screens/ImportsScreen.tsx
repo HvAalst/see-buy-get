@@ -9,6 +9,7 @@ import { ConsolePick } from '../ConsolePick';
 import { PaperFile, PaperFiles } from './PaperFile';
 import { PaperHelp } from './PaperHelp';
 import { QuotePanel } from './QuotePanel';
+import { CurrencySelect } from './CurrencySelect';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
 import { publicPageUrl } from '../../../lib/sbg/config';
 import { ParticipantPicker } from './ParticipantPicker';
@@ -932,10 +933,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                     <span class="cfield__label">{t('tower.imports.f.amount')}</span>
                     <input class="cinput" type="number" min={1} value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: (e.target as HTMLInputElement).value })} />
                   </label>
-                  <label class="twr-knob cfield">
-                    <span class="cfield__label">{t('tower.imports.f.currency')}</span>
-                    <input class="cinput" maxLength={3} value={feeForm.currency} placeholder={detail.fee?.currency ?? ''} onChange={(e) => setFeeForm({ ...feeForm, currency: (e.target as HTMLInputElement).value })} />
-                  </label>
+                  <div class="twr-knob">
+                    <CurrencySelect api={client ? (client.api as never) : null} value={feeForm.currency || detail.fee?.currency || ''} onChange={(currency) => setFeeForm({ ...feeForm, currency })} label={t('tower.imports.f.currency')} near={[detail.destCountry]} />
+                  </div>
                   <label class="twr-knob cfield">
                     <span class="cfield__label">{t('tower.imports.f.quoteRef')}</span>
                     <input class="cinput" value={feeForm.reference} onChange={(e) => setFeeForm({ ...feeForm, reference: (e.target as HTMLInputElement).value })} />

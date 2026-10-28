@@ -7,6 +7,8 @@ import { ConsolePick } from '../../tower/ConsolePick';
 import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
 import { ExportSli } from './ExportSli';
 import { ExportPacking } from './ExportPacking';
+import { ExportInvoice } from './ExportInvoice';
+import { CurrencySelect } from '../../tower/screens/CurrencySelect';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
@@ -392,15 +394,16 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           {given ? <span class="crow__sub">{[p.documentTitle, p.reference].filter(Boolean).join(' — ')}</span> : null}
           {isSli && !given ? <span class="crow__sub">{t('business.exports.sli.onTheLine')}</span> : null}
           {p.key === 'packing_list' && !given ? <span class="crow__sub">{t('business.exports.packing.onTheLine')}</span> : null}
+          {p.key === 'commercial_invoice' && !given ? <span class="crow__sub">{t('business.exports.invoice.onTheLine')}</span> : null}
           {p.refusedAt ? (
             <span class="crow__sub cerr">{t('business.exports.papers.refused', { who: p.refusedBy ?? '', reason: p.refusedReason ?? '' })}</span>
           ) : p.acceptedAt ? (
             <span class="crow__sub">{t('business.exports.papers.accepted', { who: p.acceptedBy ?? '' })}</span>
           ) : null}
           {/* One row of what this reader can do: open it; the exporter changes it; its agent accepts it or sends it back; whoever asked for it takes it off. */}
-          {p.documentId || (isSli && given) || (p.key === 'packing_list' && given) || changeable || giving || worded || p.removable ? (
+          {p.documentId || (isSli && given) || (p.key === 'packing_list' && given) || (p.key === 'commercial_invoice' && given && !p.documentId && p.reference?.startsWith('Invoice ')) || changeable || giving || worded || p.removable ? (
             <span class="twr-panelend">
-              {p.documentId || (isSli && given) || (p.key === 'packing_list' && given) ? (
+              {p.documentId || (isSli && given) || (p.key === 'packing_list' && given) || (p.key === 'commercial_invoice' && given && p.reference?.startsWith('Invoice ')) ? (
                 <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void openPaper(p.key, p.documentTitle ?? paperName(p))}>
                   {t('business.exports.papers.open')}
                 </button>
@@ -839,10 +842,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
                     <span class="cfield__label">{t('business.exports.fee.amount')}</span>
                     <input class="cinput" type="number" min={0} step="0.01" value={fee.amount} onInput={(e) => setFee({ ...fee, amount: (e.target as HTMLInputElement).value })} />
                   </label>
-                  <label class="cfield">
-                    <span class="cfield__label">{t('business.exports.fee.currency')}</span>
-                    <input class="cinput" maxLength={3} placeholder={t('business.exports.fee.currencyPh')} value={fee.currency} onInput={(e) => setFee({ ...fee, currency: (e.target as HTMLInputElement).value.toUpperCase() })} />
-                  </label>
+                  <CurrencySelect api={client.api as never} value={fee.currency} onChange={(currency) => setFee({ ...fee, currency })} label={t('business.exports.fee.currency')} near={[c.originCountry, c.destCountry]} />
                 </div>
                 <div class="biz-two">
                   <label class="cfield">
@@ -930,6 +930,12 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
 
       {/* EX10 — the packing list, from the shipper's own file; the letter's goods are worked out from it. */}
       <ExportPacking d={d} client={client} mine={mine} signatory={business.you.name ?? ''} onDetail={async (next) => {
+        setD(next);
+        await onChanged();
+      }} />
+
+      {/* EX11 — the commercial invoice, from the packing list's lines; flexible for where the goods are going. */}
+      <ExportInvoice d={d} client={client} mine={mine} signatory={business.you.name ?? ''} onDetail={async (next) => {
         setD(next);
         await onChanged();
       }} />

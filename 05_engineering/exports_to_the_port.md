@@ -93,6 +93,26 @@ expeditor) — staff read, never act in its name.
     problem. Signed and frozen like the letter (`export-packing-copies`); the packing paper line is given by it or by
     the shipper's own document. The letter's goods are `summarisePacking` (per description, HS code, package kind;
     past thirty lines, per HS code), and the list's fingerprint is in the letter's basis — a new list outdates it.
+12. **EX11 — the commercial invoice, from the same lines** (the user, 2026-10-28: "a flexible document since it is
+    virtually different in every nation"). `export-invoice.ts` + `export-invoice.types.ts`. Its lines ARE the packing
+    list's; the reader also takes `unitPrice`, `lineValue`, `originCountry` (and a currency named in a price heading) —
+    never printed on the packing list. A **fixed core** (seller with its numbers, buyer with a tax or import number as
+    its own country knows it, consignee, number, date, currency, Incoterm, payment terms, reason, the export's
+    references, lines with HS code, origin, quantity, unit price, value; charges by name, a discount below zero; our
+    truth declaration; signed) — refused only without a number, a currency, a buyer, or a value on every line. A
+    **flexible rest** in the exporter's words: particulars by their own names (kept while empty, printed when filled),
+    declarations in the destination's words, which list columns to print. **No nation's rules are written in:** what
+    a business's last signed invoice to a country carried is kept in `export-invoice-templates` (`entityId:country`)
+    and offered on its next — never imposed, never shared between businesses. Missing HS codes and origins are said,
+    not refused. Frozen on signing (`export-invoice-copies`); a changed list outdates it.
+    **Chosen, never typed** (the user, 2026-10-28: "currency should be an selector with country behind it to avoid
+    errors"; "payment terms should be selected too with an 'other' option"): the currency is picked from the country
+    catalogue's currencies, each shown with its name and the countries that settle in it, the likeliest first (the
+    export's two countries, a currency the shipper's file named) — on the invoice and on both agent fees. The server
+    refuses a code no country settles in (`isKnownCurrency`), so "KSH" cannot be stored. Payment terms are one of
+    nine usual terms (advance, letters of credit, cash against documents, documents against acceptance, open account
+    30/60/90, consignment) or "Other" with the exporter's own words; the stored value is the words, so a saved
+    invoice reads back either way.
 
 ## Not built (said, not hidden)
 Air exports — new ground, to get its own help section once the user has read into it (the user, 2026-10-28); the barge

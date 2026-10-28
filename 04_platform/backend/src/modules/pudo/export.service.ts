@@ -13,7 +13,7 @@ import { EXPORT_PAPER_GROUP, EXPORT_PAPER_KEYS, type ExportPaperGroup, type Know
 import { LoadSealService } from './load-seal.service';
 import { NotificationService } from './notification.service';
 import { EXPORT_GATE_BUFFER_H, VEHICLE_SPEED_KMH } from './pudo.config';
-import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import type { FeeState } from './import.types';
 import { QuoteService } from './quote.service';
 import type { Quote } from './quote.types';
@@ -1020,6 +1020,7 @@ export class ExportService {
     const c = this.requireExport(exportId);
     this.requireAgent(c, actorEntityId);
     const agent = c.agent!;
+    if (input.currency?.trim() && !isKnownCurrency(input.currency)) throw new GlosError('VALIDATION_FAILED', `“${input.currency.trim()}” is no currency we know — choose it from the list`, { field: 'currency' });
     const quote = this.quotes.quote(
       {
         subject: { kind: 'export', id: `${c.exportId}@${agent.entityId}@${agent.appointedAt}`, code: c.code },

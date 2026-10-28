@@ -182,6 +182,8 @@ export interface ExportDetail {
   sli: ExportSliView;
   /** The packing list, imported from the shipper's own file. */
   packing?: ExportPackingView;
+  /** The commercial invoice, drawn from the packing list's lines. */
+  invoice: ExportInvoiceView;
 }
 
 export interface ExportRow {
@@ -263,6 +265,9 @@ export interface ExportsApi {
   importPacking(exportId: string, body: PackingInput): Promise<Result<ExportDetail>>;
   signPacking(exportId: string, signatory: string): Promise<Result<ExportDetail>>;
   packingPage(exportId: string, which?: { version?: number; draft?: boolean }): Promise<Result<string>>;
+  saveInvoice(exportId: string, body: Record<string, unknown>): Promise<Result<ExportDetail>>;
+  signInvoice(exportId: string, signatory: string): Promise<Result<ExportDetail>>;
+  invoicePage(exportId: string, which?: { version?: number; draft?: boolean }): Promise<Result<string>>;
 }
 
 export function exportsApi(sbg: SbgClient): ExportsApi {
@@ -302,6 +307,12 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     packingPage: (exportId, which = {}) => {
       const q = which.draft ? '?draft=1' : which.version ? `?version=${which.version}` : '';
       return call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/packing-list.html${q}` as never, { parseAs: 'text' } as never) as never);
+    },
+    saveInvoice: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/invoice`, body),
+    signInvoice: (exportId, signatory) => post(`/v1/sbg/exports/${id(exportId)}/invoice/sign`, { signatory }),
+    invoicePage: (exportId, which = {}) => {
+      const q = which.draft ? '?draft=1' : which.version ? `?version=${which.version}` : '';
+      return call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/invoice.html${q}` as never, { parseAs: 'text' } as never) as never);
     },
     sliPage: (exportId, which = {}) => {
       const q = which.draft ? '?draft=1' : which.version ? `?version=${which.version}` : '';
@@ -486,7 +497,7 @@ export function sliBody(f: SliForm): Record<string, unknown> {
 
 /* ------------------------------------------------------------- the packing list -- */
 
-export const PACKING_FIELDS = ['marks', 'itemCode', 'description', 'hsCode', 'quantity', 'unit', 'packages', 'packageKind', 'netKg', 'grossKg', 'volumeM3', 'lengthCm', 'widthCm', 'heightCm'] as const;
+export const PACKING_FIELDS = ['marks', 'itemCode', 'description', 'hsCode', 'quantity', 'unit', 'packages', 'packageKind', 'netKg', 'grossKg', 'volumeM3', 'lengthCm', 'widthCm', 'heightCm', 'unitPrice', 'lineValue', 'originCountry'] as const;
 export type PackingField = (typeof PACKING_FIELDS)[number];
 export type PackingColumnUse = PackingField | 'keep' | 'ignore';
 
@@ -505,6 +516,10 @@ export interface PackingLine {
   lengthCm?: number;
   widthCm?: number;
   heightCm?: number;
+  /** For the invoice, read from the same file; never printed on the packing list. */
+  unitPrice?: number;
+  lineValue?: number;
+  originCountry?: string;
   extra?: Record<string, string>;
 }
 
@@ -533,6 +548,8 @@ export interface PackingCheck {
   notes: string[];
   sheet?: string;
   refusal?: string;
+  /** A currency the price headings named. */
+  currency?: string;
   imported: boolean;
 }
 
@@ -570,6 +587,167 @@ export interface PackingInput {
 export function packingTotalsLine(t: PackingTotals, words: { lines: string; packages: string; gross: string; net: string; volume: string }): string {
   const n = (x: number, dp = 1) => x.toLocaleString('en', { maximumFractionDigits: dp });
   return [`${n(t.lines, 0)} ${words.lines}`, `${n(t.packages, 0)} ${words.packages}`, t.grossKg ? `${n(t.grossKg)} kg ${words.gross}` : '', t.netKg ? `${n(t.netKg)} kg ${words.net}` : '', t.volumeM3 ? `${n(t.volumeM3, 2)} ${words.volume}` : ''].filter(Boolean).join(' · ');
+}
+
+/* ------------------------------------------------------- the commercial invoice -- */
+
+export const INVOICE_REASONS = ['sale', 'sample', 'gift', 'repair', 'return', 'other'] as const;
+export type InvoiceReason = (typeof INVOICE_REASONS)[number];
+
+export interface InvoiceParty {
+  name: string;
+  address: string;
+  taxId?: string;
+  contact?: string;
+}
+
+export interface InvoiceDraft {
+  number: string;
+  date: string;
+  currency: string;
+  incoterm?: SliIncoterm;
+  incotermPlace?: string;
+  paymentTerms?: string;
+  reason: InvoiceReason;
+  buyer?: InvoiceParty;
+  consigneeIsBuyer?: boolean;
+  charges: Array<{ label: string; amount: number }>;
+  fields: Array<{ label: string; value: string }>;
+  declarations: string[];
+  columns: string[];
+  savedAt: string;
+  savedBy: string;
+}
+
+export interface InvoiceVersion {
+  version: number;
+  signedBy: string;
+  signedAt: string;
+  fingerprint: string;
+  total: number;
+  currency: string;
+}
+
+export interface ExportInvoiceView {
+  draft?: InvoiceDraft;
+  versions: InvoiceVersion[];
+  totals: { lines: number; goods: number; charges: number; total: number; unvalued: number; withoutHs: number; withoutOrigin: number };
+  gaps: string[];
+  notes: string[];
+  stale: boolean;
+  template?: { destCountry: string; fieldLabels: string[]; declarations: string[]; paymentTerms?: string; fromExport: string };
+  currencyFromList?: string;
+  listColumns: string[];
+  truth: string;
+}
+
+/** The invoice as typed: amounts as strings until sent. */
+export interface InvoiceForm {
+  number: string;
+  date: string;
+  currency: string;
+  incoterm: string;
+  incotermPlace: string;
+  paymentTerms: string;
+  reason: InvoiceReason;
+  buyer: { name: string; address: string; taxId: string; contact: string };
+  consigneeIsBuyer: boolean;
+  charges: Array<{ label: string; amount: string }>;
+  fields: Array<{ label: string; value: string }>;
+  declarations: string[];
+  columns: string[];
+}
+
+/**
+ * The invoice's form: from what was saved; or, the first time, from what this business's last invoice to the same
+ * country carried (its particulars' names, its declarations, its terms), the letter's trade term and the list's currency.
+ */
+export function invoiceForm(view: ExportInvoiceView, letter: SliDraft | undefined, today: string): InvoiceForm {
+  const d = view.draft;
+  if (d) {
+    return {
+      number: d.number,
+      date: d.date,
+      currency: d.currency,
+      incoterm: d.incoterm ?? '',
+      incotermPlace: d.incotermPlace ?? '',
+      paymentTerms: d.paymentTerms ?? '',
+      reason: d.reason,
+      buyer: { name: d.buyer?.name ?? '', address: d.buyer?.address ?? '', taxId: d.buyer?.taxId ?? '', contact: d.buyer?.contact ?? '' },
+      consigneeIsBuyer: Boolean(d.consigneeIsBuyer),
+      charges: d.charges.map((c) => ({ label: c.label, amount: String(c.amount) })),
+      fields: d.fields.map((f) => ({ ...f })),
+      declarations: [...d.declarations],
+      columns: [...d.columns],
+    };
+  }
+  const named = letter?.consigneeKind === 'named' ? letter.consignee : undefined;
+  return {
+    number: '',
+    date: today,
+    currency: view.currencyFromList ?? '',
+    incoterm: letter?.incoterm ?? '',
+    incotermPlace: letter?.incotermPlace ?? '',
+    paymentTerms: view.template?.paymentTerms ?? '',
+    reason: 'sale',
+    buyer: { name: named?.name ?? '', address: named?.address ?? '', taxId: '', contact: named?.contact ?? '' },
+    consigneeIsBuyer: Boolean(named),
+    charges: [],
+    fields: (view.template?.fieldLabels ?? []).map((label) => ({ label, value: '' })),
+    declarations: [...(view.template?.declarations ?? [])],
+    columns: [],
+  };
+}
+
+/** What is sent: empty rows left out, amounts as numbers. The server cleans it again. */
+export function invoiceBody(f: InvoiceForm): Record<string, unknown> {
+  const t = (s: string) => s.trim();
+  return {
+    ...(t(f.number) ? { number: t(f.number) } : {}),
+    ...(t(f.date) ? { date: t(f.date) } : {}),
+    ...(t(f.currency) ? { currency: t(f.currency).toUpperCase() } : {}),
+    ...(f.incoterm ? { incoterm: f.incoterm } : {}),
+    ...(f.incoterm && t(f.incotermPlace) ? { incotermPlace: t(f.incotermPlace) } : {}),
+    ...(t(f.paymentTerms) ? { paymentTerms: t(f.paymentTerms) } : {}),
+    reason: f.reason,
+    ...(t(f.buyer.name) || t(f.buyer.address) ? { buyer: { name: t(f.buyer.name), address: t(f.buyer.address), ...(t(f.buyer.taxId) ? { taxId: t(f.buyer.taxId) } : {}), ...(t(f.buyer.contact) ? { contact: t(f.buyer.contact) } : {}) } } : {}),
+    ...(f.consigneeIsBuyer ? { consigneeIsBuyer: true } : {}),
+    charges: f.charges.filter((c) => t(c.label) && t(c.amount) !== '' && !Number.isNaN(Number(t(c.amount)))).map((c) => ({ label: t(c.label), amount: Number(t(c.amount)) })),
+    fields: f.fields.filter((x) => t(x.label)).map((x) => ({ label: t(x.label), value: t(x.value) })),
+    declarations: f.declarations.map(t).filter(Boolean),
+    columns: f.columns,
+  };
+}
+
+/**
+ * THE PAYMENT TERMS AN INVOICE IS USUALLY ON (the user, 2026-10-28: "payment terms should be selected too with an
+ * 'other' option"), written out in full, and printed on the invoice in these words. Anything else is "Other", in the
+ * exporter's own words.
+ */
+export const PAYMENT_TERMS = ['advance', 'lc_sight', 'lc_deferred', 'cad', 'dad', 'open_30', 'open_60', 'open_90', 'consignment'] as const;
+export type PaymentTermKey = (typeof PAYMENT_TERMS)[number];
+export const PAYMENT_TERM_WORDS: Record<PaymentTermKey, string> = {
+  advance: 'Payment in advance',
+  lc_sight: 'Letter of credit, payable at sight',
+  lc_deferred: 'Letter of credit, deferred payment',
+  cad: 'Cash against documents (documents against payment)',
+  dad: 'Documents against acceptance',
+  open_30: 'Open account, 30 days',
+  open_60: 'Open account, 60 days',
+  open_90: 'Open account, 90 days',
+  consignment: 'Consignment: paid when sold',
+};
+
+/** Which of the usual terms a saved text is — or "other", in the exporter's own words, or nothing yet. */
+export function paymentTermOf(text: string): PaymentTermKey | 'other' | '' {
+  const t = text.trim();
+  if (!t) return '';
+  return (PAYMENT_TERMS.find((k) => PAYMENT_TERM_WORDS[k] === t) as PaymentTermKey | undefined) ?? 'other';
+}
+
+/** "USD 7,970.00" — an amount in its currency, never converted. */
+export function moneyWords(currency: string, amount: number): string {
+  return `${currency || '—'} ${amount.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** "28 Oct 2026 18:00 UTC" — a cut-off in one clock, the same for the exporter, its forwarder and the driver. */

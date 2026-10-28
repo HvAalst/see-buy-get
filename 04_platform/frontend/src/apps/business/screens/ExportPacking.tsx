@@ -22,6 +22,9 @@ const USE_WORD: Record<PackingColumnUse, MessageKey> = {
   lengthCm: 'business.exports.packing.use.lengthCm',
   widthCm: 'business.exports.packing.use.widthCm',
   heightCm: 'business.exports.packing.use.heightCm',
+  unitPrice: 'business.exports.packing.use.unitPrice',
+  lineValue: 'business.exports.packing.use.lineValue',
+  originCountry: 'business.exports.packing.use.originCountry',
   keep: 'business.exports.packing.use.keep',
   ignore: 'business.exports.packing.use.ignore',
 };
