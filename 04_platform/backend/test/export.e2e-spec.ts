@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
+import { createHash } from 'crypto';
 import { AppModule } from '../src/app.module';
 import { BooksService } from '../src/foundation/books/books.service';
 import { EntityService } from '../src/foundation/entity/entity.service';
@@ -125,6 +126,9 @@ describe('an export to the port, over the wire', () => {
     for (const key of ['commercial_invoice', 'packing_list']) await http().post(`${path}/papers`).set(bearer(x.token)).send({ key, reference: `${key}-2026-117` }).expect(201);
     await http().post(`${path}/papers`).set(bearer(x.token)).send({ key: 'export_entry', reference: '2026KEMSA7712045' }).expect(201);
 
+    // The letter of instruction, filled in and signed on the export (EX9).
+    await http().post(`${path}/sli`).set(bearer(x.token)).send({ consigneeKind: 'to_order', notify: { name: 'Van Rees Tea BV', address: 'Rotterdam' }, dischargePort: 'Rotterdam', freight: 'prepaid', blRelease: 'sea_waybill', lines: [{ packages: 640, packageKind: 'sacks', description: 'Black tea', grossKg: 18640 }] }).expect(201);
+    await http().post(`${path}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201);
     const ready = await read();
     expect(ready.missing).toEqual([]);
     expect(ready.seals).toEqual([expect.objectContaining({ number: 'KE 552190', state: 'on' })]);
@@ -436,8 +440,8 @@ describe('an export to the port, over the wire', () => {
     // Every export: the three needed, the four kept when there is one — and nothing asked for yet.
     const first = await read();
     const groups = Object.fromEntries(first.papers.map((p: { key: string; group: string }) => [p.key, p.group]));
-    expect(groups).toEqual({ commercial_invoice: 'needed', packing_list: 'needed', export_entry: 'needed', booking_confirmation: 'kept', shipping_instructions: 'kept', weighbridge_ticket: 'kept', bill_of_lading: 'kept' });
-    for (const kept of ['Booking confirmation', 'Shipping instructions to the forwarder', 'Weighbridge ticket', 'Bill of lading']) expect(first.missing).not.toContain(kept);
+    expect(groups).toEqual({ commercial_invoice: 'needed', packing_list: 'needed', export_entry: 'needed', booking_confirmation: 'kept', shipping_instructions: 'needed', weighbridge_ticket: 'kept', bill_of_lading: 'kept' });
+    for (const kept of ['Booking confirmation', 'Weighbridge ticket', 'Bill of lading']) expect(first.missing).not.toContain(kept);
     // Hazardous goods carry their declaration from the start.
     const hazardous = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ ...base, goodsDescription: 'Paint, 400 drums', natureCode: 'HAZ-CHEM' }).expect(201)).body;
     expect(hazardous.papers.map((p: { key: string }) => p.key)).toContain('dangerous_goods_declaration');
@@ -488,5 +492,98 @@ describe('an export to the port, over the wire', () => {
     expect(file).toContain(`Phytosanitary certificate (plant health) (asked for by`);
     expect(file).toContain('KE-PC-2026-0091');
     expect(file).toContain('None kept here');
+  });
+  /*
+   * EX9 — THE SHIPPER'S LETTER OF INSTRUCTION (the user, 2026-10-28: "the shippers letter of instruction is an important
+   * doc, I think we should not just take the reference, but rather the form fields"; then: a form, needed, frozen on
+   * signing). Most of it is read off the export; the form asks the rest; signed, it stops changing.
+   */
+  it('the letter of instruction: a form, never just a reference; refused until complete; frozen on signing, a change a new version', async () => {
+    const x = await anExporter();
+    const agent = await anExporter(['clearing_agent'], 'Pwani Clearing');
+    const made = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ goodsDescription: 'Black tea, 640 bags', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '22G1', booking: booking(Date.now() + 72 * H), loadingSiteId: x.loading, terminalSiteId: x.terminal }).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const read = async (token = x.token) => (await http().get(path).set(bearer(token)).expect(200)).body;
+    const page = async (q = '', token = x.token) => (await http().get(`${path}/sli.html${q}`).set(bearer(token)).expect(200)).text;
+    const sha = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
+    await http().post(`${path}/agent`).set(bearer(x.token)).send({ agentEntityId: agent.entityId }).expect(201);
+
+    // Needed on every export, and never just a reference.
+    expect((await read()).missing).toContain('Shipping instructions to the forwarder');
+    const typed = await http().post(`${path}/papers`).set(bearer(x.token)).send({ key: 'shipping_instructions', reference: 'SI-117' });
+    expect([typed.status, typed.body.detail]).toEqual([400, 'Fill in and sign the letter of instruction on the export: the forwarder drafts the bill of lading from it']);
+    expect(String((await http().post(`${path}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' })).body.detail)).toContain('Fill in the form');
+
+    // A form saved half-done is a draft; signing it says what is still needed. Staff fill in nothing.
+    await http().post(`${path}/sli`).set(bearer(x.token)).send({ consigneeKind: 'named', lines: [] }).expect(201);
+    const half = await http().post(`${path}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' });
+    expect(half.status).toBe(400);
+    for (const gap of ['The consignee’s name and address', 'The port of discharge', 'Freight prepaid or collect', 'How the bill of lading is released', 'The goods: at least one line', 'The box’s number, on the export']) expect(half.body.detail).toContain(gap);
+    expect((await http().post(`${path}/sli`).set(bearer(operator)).send({ consigneeKind: 'to_order', lines: [] })).status).toBe(403);
+
+    const form = {
+      shipperContact: 'Wanjiku Mwangi, +254 700 000 000',
+      consigneeKind: 'named',
+      consignee: { name: 'Van Rees Tea BV', address: 'Wilhelminakade 1\nRotterdam, Netherlands', contact: 'imports@vanrees.example' },
+      notifySameAsConsignee: true,
+      dischargePort: 'Rotterdam',
+      placeOfDelivery: 'Rotterdam',
+      incoterm: 'FOB',
+      incotermPlace: 'Mombasa',
+      freight: 'collect',
+      blRelease: 'originals',
+      lines: [{ marks: 'KTEA/NL/1-640', packages: 640, packageKind: 'bags', description: 'Black tea, CTC, in poly-lined paper sacks', hsCode: '0902.40', grossKg: 18400, netKg: 17920, volumeM3: 32.5 }],
+      instructions: 'Freight collect. Shipped on board bills, please.',
+    };
+    await http().post(`${path}/container`).set(bearer(x.token)).send({ containerNo: 'MSCU1234566' }).expect(201);
+    const saved = (await http().post(`${path}/sli`).set(bearer(x.token)).send(form).expect(201)).body;
+    expect(saved.sli).toMatchObject({ gaps: [], versions: [], stale: false, draft: { originals: 3, lines: [{ hsCode: '090240' }] } });
+    // The draft is the exporter's: its agent reads the signed versions only.
+    expect((await read(agent.token)).sli.draft).toBeUndefined();
+    expect((await http().get(`${path}/sli.html?draft=1`).set(bearer(agent.token))).status).toBe(404);
+    expect(await page('?draft=1')).toContain('DRAFT');
+
+    // Signed: version 1, frozen with the fingerprint of its page; its line on the papers given; the agent told.
+    const signed = (await http().post(`${path}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201)).body;
+    expect(signed.sli.versions).toEqual([expect.objectContaining({ version: 1, signedBy: 'Wanjiku Mwangi', fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/) })]);
+    expect(signed.papers.find((p: { key: string }) => p.key === 'shipping_instructions')).toMatchObject({ reference: 'Version 1, signed by Wanjiku Mwangi', group: 'needed' });
+    expect(signed.missing).not.toContain('Shipping instructions to the forwarder');
+    expect(app.get(NotificationService).inboxFor(app.get(EntityService).get(agent.entityId).did).map((n) => n.title)).toContain(`${made.code}: shipping instructions signed, version 1`);
+    const v1 = await page('', agent.token);
+    expect(sha(v1)).toBe(signed.sli.versions[0].fingerprint);
+    for (const fact of [made.code, 'version 1', 'Van Rees Tea BV', 'Rotterdam', 'FOB Mombasa', 'Collect', '3 originals', 'KTEA/NL/1-640', '0902.40', '18,400', 'MSCU1234566', 'Pwani Forwarders', 'Wanjiku Mwangi']) expect(v1).toContain(fact);
+    // The paper's own route serves the same frozen page, intact.
+    const file = await http().get(`${path}/papers/shipping_instructions/file`).set(bearer(agent.token)).expect(200);
+    expect([file.headers['content-type'], file.headers['x-fingerprint'], file.headers['x-fingerprint-intact']]).toEqual([expect.stringContaining('text/html'), signed.sli.versions[0].fingerprint, 'true']);
+
+    // The agent's word, then a change: the draft moves, version 1 does not; signing again is version 2, the word asked again.
+    await http().post(`${path}/papers/shipping_instructions/accept`).set(bearer(agent.token)).expect(201);
+    await http().post(`${path}/sli`).set(bearer(x.token)).send({ ...form, dischargePort: 'Antwerp', placeOfDelivery: 'Antwerp' }).expect(201);
+    expect(await page('?version=1')).toBe(v1);
+    const second = (await http().post(`${path}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201)).body;
+    expect(second.sli.versions.map((v: { version: number }) => v.version)).toEqual([1, 2]);
+    expect(second.papers.find((p: { key: string }) => p.key === 'shipping_instructions').acceptedAt).toBeUndefined();
+    expect(await page()).toContain('Antwerp');
+    expect(await page('?version=1')).toContain('Rotterdam');
+
+    // The export changes under a signed letter: it is out of date, and said so, until it is signed again.
+    await http().post(`${path}/vgm`).set(bearer(x.token)).send({ method: 1, kg: 21900, signatory: 'Wanjiku Mwangi' }).expect(201);
+    const changed = await read();
+    expect(changed.sli.stale).toBe(true);
+    expect(changed.missing).toContain('The letter of instruction: the export changed since version 2 was signed — sign it again');
+    const third = (await http().post(`${path}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201)).body;
+    expect(third.sli.stale).toBe(false);
+    expect(await page()).toContain('21,900 kg');
+
+    // Hazardous goods: not signed without their UN number and class.
+    const paint = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ goodsDescription: 'Paint, 80 drums', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '22G1', natureCode: 'HAZ-CHEM', booking: booking(Date.now() + 72 * H), loadingSiteId: x.loading, terminalSiteId: x.terminal }).expect(201)).body;
+    const paintPath = `/v1/sbg/exports/${paint.exportId}`;
+    await http().post(`${paintPath}/container`).set(bearer(x.token)).send({ containerNo: 'MSCU1234566' }).expect(201);
+    await http().post(`${paintPath}/sli`).set(bearer(x.token)).send({ ...form, lines: [{ packages: 80, packageKind: 'drums', description: 'Paint', grossKg: 16000 }] }).expect(201);
+    expect(String((await http().post(`${paintPath}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' })).body.detail)).toContain('The dangerous goods’ UN number and class');
+    const dg = (await http().post(`${paintPath}/sli`).set(bearer(x.token)).send({ ...form, lines: [{ packages: 80, packageKind: 'drums', description: 'Paint', grossKg: 16000 }], dangerous: { unNumber: '1263', hazardClass: '3', properShippingName: 'Paint', packingGroup: 'iii' } }).expect(201)).body;
+    expect(dg.sli.draft.dangerous).toEqual({ unNumber: 'UN1263', hazardClass: '3', properShippingName: 'Paint', packingGroup: 'III' });
+    await http().post(`${paintPath}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201);
+    expect((await http().get(`${paintPath}/sli.html`).set(bearer(x.token)).expect(200)).text).toContain('UN1263');
   });
 });

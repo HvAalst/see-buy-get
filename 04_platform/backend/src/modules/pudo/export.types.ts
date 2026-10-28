@@ -4,6 +4,7 @@ import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, M
 import { FREE_DAY_KINDS, type FreeDayKind } from './container-box';
 import { FEE_STATES, type FeeState } from './import.types';
 import { Quote } from './quote.types';
+import { ExportSli, ExportSliView } from './export-sli.types';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -68,7 +69,8 @@ export const EXPORT_PAPER_GROUP: Record<KnownExportPaperKey, ExportPaperGroup> =
   packing_list: 'needed',
   export_entry: 'needed',
   booking_confirmation: 'kept',
-  shipping_instructions: 'kept',
+  // The forwarder drafts the bill of lading from it: needed, and a form of its own (EX9), never just a reference.
+  shipping_instructions: 'needed',
   weighbridge_ticket: 'kept',
   bill_of_lading: 'kept',
   certificate_of_origin: 'asked',
@@ -248,6 +250,8 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: [ExportFormerAgent] }) formerAgents?: ExportFormerAgent[];
   @ApiPropertyOptional({ type: ExportFeeStamp }) fee?: ExportFeeStamp;
   @ApiPropertyOptional({ type: ExportOwnBox }) ownBox?: ExportOwnBox;
+  /** The shipper's letter of instruction: the form, and the versions signed. */
+  @ApiPropertyOptional({ type: ExportSli }) sli?: ExportSli;
   /** Which warnings were sent, once each: the latest departure near, the cut-off passed, the VGM cut-off near — and the box's free days, once per due date. */
   @ApiPropertyOptional() warned?: { pickup?: string; gate?: string; vgm?: string; box?: string[] };
   @ApiProperty() createdAt: string;
@@ -340,6 +344,7 @@ export class ExportDetail {
   /** The appointed agent's fee, as a quotation between it and the exporter: nothing of it passes through SeeBuyGet. */
   @ApiPropertyOptional({ type: Quote }) fee?: Quote;
   @ApiProperty({ enum: FEE_STATES }) feeState: FeeState;
+  @ApiProperty({ type: ExportSliView }) sli: ExportSliView;
 }
 
 export class ExportRow {

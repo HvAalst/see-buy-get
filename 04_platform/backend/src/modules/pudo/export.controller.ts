@@ -9,6 +9,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { ExportService } from './export.service';
+import { SliDraftDto, SliSignDto } from './export-sli.types';
 import {
   isExportPaperKey,
   ExportAddPaperDto,
@@ -138,6 +139,34 @@ export class ExportController {
   @Post(':exportId/own-box')
   ownBox(@Param('exportId') exportId: string, @Body() dto: ExportOwnBoxDto, @Actor() actor: IntrospectionResult): ExportDetail {
     return this.exports.setOwnBox(exportId, this.ownCompany(actor), dto.own, auditActor(actor));
+  }
+
+  /* --------------------------------------- EX9 the shipper's letter of instruction -- */
+
+  /** Save the form — as often as the exporter likes; nothing is handed over until it is signed. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/sli')
+  saveSli(@Param('exportId') exportId: string, @Body() dto: SliDraftDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.saveSli(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  /** Sign it: refused while incomplete; frozen as a new version with the fingerprint of its page. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/sli/sign')
+  signSli(@Param('exportId') exportId: string, @Body() dto: SliSignDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.signSli(exportId, this.ownCompany(actor), dto.signatory, auditActor(actor));
+  }
+
+  /** The letter's page: a signed version as signed (the latest unless one is named), or the exporter's own draft. */
+  @Roles('business', 'entity_admin', 'operator')
+  @ApiQuery({ name: 'version', required: false })
+  @ApiQuery({ name: 'draft', required: false })
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @Header('Cache-Control', 'private, no-store')
+  @Get(':exportId/sli.html')
+  sliPage(@Param('exportId') exportId: string, @Actor() actor: IntrospectionResult, @Query('version') version?: string, @Query('draft') draft?: string): string {
+    const which = { ...(version ? { version: Number(version) } : {}), ...(draft === '1' || draft === 'true' ? { draft: true } : {}) };
+    return actor?.role === 'operator' ? this.exports.sliPage(exportId, '', which, { all: true }) : this.exports.sliPage(exportId, this.ownCompany(actor), which);
   }
 
   /* ------------------------------------------------------- EX8 the agent's fee -- */

@@ -4386,6 +4386,136 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/sli": {
+      "post": {
+        "operationId": "Export.saveSli",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SliDraftDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/sli/sign": {
+      "post": {
+        "operationId": "Export.signSli",
+        "summary": "",
+        "description": "Sign it: refused while incomplete; frozen as a new version with the fingerprint of its page.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SliSignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/sli.html": {
+      "get": {
+        "operationId": "Export.sliPage",
+        "summary": "",
+        "description": "The letter's page: a signed version as signed (the latest unless one is named), or the exporter's own draft.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draft",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/exports/{exportId}/fee": {
       "post": {
         "operationId": "Export.quoteFee",
@@ -35291,6 +35421,232 @@
           "at"
         ]
       },
+      "SliParty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "contact": {
+            "type": "string",
+            "description": "A person, a phone, an email — however the forwarder reaches them."
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ]
+      },
+      "SliLine": {
+        "type": "object",
+        "properties": {
+          "marks": {
+            "type": "string"
+          },
+          "packages": {
+            "type": "number"
+          },
+          "packageKind": {
+            "type": "string",
+            "description": "Cartons, bags, pallets, drums …"
+          },
+          "description": {
+            "type": "string"
+          },
+          "hsCode": {
+            "type": "string",
+            "description": "The exporter's own HS code, as it typed it — we never classify."
+          },
+          "grossKg": {
+            "type": "number"
+          },
+          "netKg": {
+            "type": "number"
+          },
+          "volumeM3": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "packages",
+          "packageKind",
+          "description",
+          "grossKg"
+        ]
+      },
+      "SliDangerous": {
+        "type": "object",
+        "properties": {
+          "unNumber": {
+            "type": "string",
+            "description": "UN and four digits — UN1263 for paint."
+          },
+          "hazardClass": {
+            "type": "string"
+          },
+          "properShippingName": {
+            "type": "string"
+          },
+          "packingGroup": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unNumber",
+          "hazardClass"
+        ]
+      },
+      "SliDraft": {
+        "type": "object",
+        "properties": {
+          "shipperContact": {
+            "type": "string"
+          },
+          "consigneeKind": {
+            "type": "string",
+            "enum": [
+              "named",
+              "to_order",
+              "to_order_of_bank"
+            ]
+          },
+          "consignee": {
+            "$ref": "#/components/schemas/SliParty"
+          },
+          "orderOfBank": {
+            "type": "string",
+            "description": "The bank a \"to order of\" bill is made out to."
+          },
+          "notifySameAsConsignee": {
+            "type": "boolean"
+          },
+          "notify": {
+            "$ref": "#/components/schemas/SliParty"
+          },
+          "dischargePort": {
+            "type": "string"
+          },
+          "placeOfDelivery": {
+            "type": "string"
+          },
+          "incoterm": {
+            "type": "string",
+            "enum": [
+              "EXW",
+              "FCA",
+              "CPT",
+              "CIP",
+              "DAP",
+              "DPU",
+              "DDP",
+              "FAS",
+              "FOB",
+              "CFR",
+              "CIF"
+            ]
+          },
+          "incotermPlace": {
+            "type": "string"
+          },
+          "freight": {
+            "type": "string",
+            "enum": [
+              "prepaid",
+              "collect"
+            ]
+          },
+          "blRelease": {
+            "type": "string",
+            "enum": [
+              "originals",
+              "sea_waybill",
+              "telex_release"
+            ]
+          },
+          "originals": {
+            "type": "number"
+          },
+          "copies": {
+            "type": "number"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SliLine"
+            }
+          },
+          "dangerous": {
+            "$ref": "#/components/schemas/SliDangerous"
+          },
+          "letterOfCredit": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "savedAt": {
+            "type": "string"
+          },
+          "savedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "consigneeKind",
+          "lines",
+          "savedAt",
+          "savedBy"
+        ]
+      },
+      "SliVersion": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          },
+          "signedBy": {
+            "type": "string"
+          },
+          "signedAt": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "sha256 of the frozen page's bytes. Never called `hash`: the response mask strips that name."
+          },
+          "basis": {
+            "type": "string",
+            "description": "sha256 of the export's own facts the page was drawn from — when they change, the signed version is out of date."
+          }
+        },
+        "required": [
+          "version",
+          "signedBy",
+          "signedAt",
+          "fingerprint",
+          "basis"
+        ]
+      },
+      "ExportSli": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/SliDraft"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SliVersion"
+            }
+          }
+        },
+        "required": [
+          "versions"
+        ]
+      },
       "ExportConsignment": {
         "type": "object",
         "properties": {
@@ -35417,6 +35773,14 @@
           },
           "ownBox": {
             "$ref": "#/components/schemas/ExportOwnBox"
+          },
+          "sli": {
+            "description": "The shipper's letter of instruction: the form, and the versions signed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportSli"
+              }
+            ]
           },
           "warned": {
             "type": "object",
@@ -35929,6 +36293,41 @@
           "createdBy"
         ]
       },
+      "ExportSliView": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/SliDraft"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SliVersion"
+            }
+          },
+          "gaps": {
+            "description": "What signing still needs, in words. Empty: it can be signed.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "The export's facts changed since the last signed version — the forwarder's copy is out of date."
+          },
+          "hazardous": {
+            "type": "boolean",
+            "description": "Whether the goods are hazardous: the form then asks for their dangerous goods particulars."
+          }
+        },
+        "required": [
+          "versions",
+          "gaps",
+          "stale",
+          "hazardous"
+        ]
+      },
       "ExportDetail": {
         "type": "object",
         "properties": {
@@ -36005,6 +36404,9 @@
               "accepted",
               "paid"
             ]
+          },
+          "sli": {
+            "$ref": "#/components/schemas/ExportSliView"
           }
         },
         "required": [
@@ -36017,7 +36419,8 @@
           "box",
           "you",
           "exporterName",
-          "feeState"
+          "feeState",
+          "sli"
         ]
       },
       "ExportContainerDto": {
@@ -36152,6 +36555,216 @@
         },
         "required": [
           "own"
+        ]
+      },
+      "SliPartyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "contact": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ]
+      },
+      "SliLineDto": {
+        "type": "object",
+        "properties": {
+          "marks": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "packages": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "packageKind": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "hsCode": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "grossKg": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 60000
+          },
+          "netKg": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 60000
+          },
+          "volumeM3": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "packages",
+          "packageKind",
+          "description",
+          "grossKg"
+        ]
+      },
+      "SliDangerousDto": {
+        "type": "object",
+        "properties": {
+          "unNumber": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "hazardClass": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "properShippingName": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "packingGroup": {
+            "type": "string",
+            "maxLength": 4
+          }
+        },
+        "required": [
+          "unNumber",
+          "hazardClass"
+        ]
+      },
+      "SliDraftDto": {
+        "type": "object",
+        "properties": {
+          "shipperContact": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "consigneeKind": {
+            "type": "string",
+            "enum": [
+              "named",
+              "to_order",
+              "to_order_of_bank"
+            ]
+          },
+          "consignee": {
+            "$ref": "#/components/schemas/SliPartyDto"
+          },
+          "orderOfBank": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "notifySameAsConsignee": {
+            "type": "boolean"
+          },
+          "notify": {
+            "$ref": "#/components/schemas/SliPartyDto"
+          },
+          "dischargePort": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "placeOfDelivery": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "incoterm": {
+            "type": "string",
+            "enum": [
+              "EXW",
+              "FCA",
+              "CPT",
+              "CIP",
+              "DAP",
+              "DPU",
+              "DDP",
+              "FAS",
+              "FOB",
+              "CFR",
+              "CIF"
+            ]
+          },
+          "incotermPlace": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "freight": {
+            "type": "string",
+            "enum": [
+              "prepaid",
+              "collect"
+            ]
+          },
+          "blRelease": {
+            "type": "string",
+            "enum": [
+              "originals",
+              "sea_waybill",
+              "telex_release"
+            ]
+          },
+          "originals": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 6
+          },
+          "copies": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 12
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SliLineDto"
+            }
+          },
+          "dangerous": {
+            "$ref": "#/components/schemas/SliDangerousDto"
+          },
+          "letterOfCredit": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "instructions": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "consigneeKind",
+          "lines"
+        ]
+      },
+      "SliSignDto": {
+        "type": "object",
+        "properties": {
+          "signatory": {
+            "type": "string",
+            "description": "Who signs it, for the exporter.",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "signatory"
         ]
       },
       "ExportFeeDto": {

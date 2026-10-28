@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -18,6 +18,8 @@ import type { FeeState } from './import.types';
 import { QuoteService } from './quote.service';
 import type { Quote } from './quote.types';
 import { ROUTER, type Router } from './router';
+import { cleanDraft, sliBasis, sliGaps, sliHtml, type SliFacts } from './export-sli';
+import type { ExportSliView, SliDraftDto } from './export-sli.types';
 import { SiteService } from './site.service';
 
 /** The words for each paper, where a sentence names it (the screen translates its own). */
@@ -97,6 +99,8 @@ const VGM_WARN_H = 12;
 @Injectable()
 export class ExportService {
   private readonly exports = new PersistentMap<string, ExportConsignment>('export-consignments');
+  /** Each signed letter of instruction, exactly as it was signed: `exportId:version` → its page and the fingerprint of its bytes. */
+  private readonly sliCopies = new PersistentMap<string, { html: string; fingerprint: string }>('export-sli-copies');
 
   constructor(
     private readonly entities: EntityService,
@@ -256,6 +260,7 @@ export class ExportService {
       ...(c.agent ? { agent: { ...c.agent, name: this.nameOf(c.agent.entityId) } } : {}),
       ...(fee ? { fee } : {}),
       feeState: feeStateOf(fee),
+      sli: this.sliViewOf(c, you),
     };
   }
 
@@ -420,6 +425,8 @@ export class ExportService {
       throw new GlosError('FORBIDDEN', 'The exporter supplies its own papers: as its clearing agent you give the export entry, and accept or send back the rest');
     }
     if (side === 'agent' && input.documentId) throw new GlosError('VALIDATION_FAILED', 'Give the export entry’s number: your own documents are not the exporter’s', { field: 'reference' });
+    // Never just a reference: the letter is filled in and signed on the export, and its signing gives the line.
+    if (input.key === 'shipping_instructions') throw new GlosError('INVALID_STATE', 'Fill in and sign the letter of instruction on the export: the forwarder drafts the bill of lading from it');
     const line = c.papers.find((p) => p.key === input.key);
     if (!line) throw new GlosError('NOT_FOUND', 'No such paper on this export');
     const reference = input.reference?.trim();
@@ -505,6 +512,13 @@ export class ExportService {
   paperFile(exportId: string, readerEntityId: string, key: ExportPaperKey, opts: { all?: boolean } = {}) {
     const c = this.requireExport(exportId);
     this.sideOf(c, readerEntityId, opts.all);
+    // The letter of instruction is ours to draw: its latest signed version, exactly as signed.
+    if (key === 'shipping_instructions') {
+      const version = c.sli?.versions.length ?? 0;
+      const copy = version ? this.sliCopies.get(`${c.exportId}:${version}`) : undefined;
+      if (!copy) throw new GlosError('NOT_FOUND', 'No signed letter of instruction yet');
+      return { bytes: Buffer.from(copy.html, 'utf8'), contentType: 'text/html; charset=utf-8', fingerprint: copy.fingerprint, intact: createHash('sha256').update(copy.html, 'utf8').digest('hex') === copy.fingerprint };
+    }
     const line = c.papers.find((p) => p.key === key);
     if (!line?.documentId) throw new GlosError('NOT_FOUND', 'No paper is attached on that line');
     return this.documents.file(c.exporterEntityId, line.documentId);
@@ -560,6 +574,116 @@ export class ExportService {
     c.papers = c.papers.filter((p) => p.key !== key);
     this.exports.set(c.exportId, c);
     return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /* ------------------------------------- EX9 the shipper's letter of instruction -- */
+
+  /** The form as the exporter leaves it — saved as often as it likes; nothing is handed over until it is signed. */
+  saveSli(exportId: string, actorEntityId: string, input: SliDraftDto, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    c.sli = { draft: cleanDraft(input, by, now), versions: c.sli?.versions ?? [] };
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /**
+   * SIGNED, IT STOPS CHANGING. Refused while the forwarder could not draft a bill of lading from it. The page is drawn
+   * once, from the export's facts and the form, and kept exactly as signed with the fingerprint of its bytes; a change
+   * afterwards is a new version. Its line on the papers is given by the signing, and the agent's word on it is asked again.
+   */
+  signSli(exportId: string, actorEntityId: string, signatory: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    const draft = c.sli?.draft;
+    const gaps = sliGaps(draft, { hazardous: this.hazardousOf(c), containerNo: c.containerNo });
+    if (gaps.length) throw new GlosError('FIELD_REQUIRED', `The letter of instruction is not complete: ${gaps.join('; ')}`);
+    const who = signatory?.trim();
+    if (!who || who.length < 2) throw new GlosError('FIELD_REQUIRED', 'Say who signs it, for the exporter', { field: 'signatory' });
+    const versions = c.sli!.versions;
+    const version = versions.length + 1;
+    const signedAt = new Date(now).toISOString();
+    const facts = this.sliFactsOf(c);
+    const html = sliHtml(facts, draft!, { version, signedBy: who.slice(0, 120), signedAt });
+    const fingerprint = createHash('sha256').update(html, 'utf8').digest('hex');
+    this.sliCopies.set(`${c.exportId}:${version}`, { html, fingerprint });
+    c.sli = { draft: draft!, versions: [...versions, { version, signedBy: who.slice(0, 120), signedAt, fingerprint, basis: sliBasis(facts) }] };
+    // Its line on the papers: given by the signing, the agent's word on an earlier version no longer standing.
+    c.papers = c.papers.map((p) =>
+      p.key === 'shipping_instructions'
+        ? { key: p.key, ...(p.optional ? { optional: true } : {}), reference: `Version ${version}, signed by ${who.slice(0, 60)}`, suppliedAt: signedAt, suppliedBy: by }
+        : p,
+    );
+    this.exports.set(c.exportId, c);
+    if (c.agent) this.tell(c, `${c.code}: shipping instructions signed, version ${version}`, `${this.nameOf(c.exporterEntityId)} signed its letter of instruction for ${c.code}, version ${version}. Read it on the export, and accept it or send it back.`, c.agent.entityId);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /**
+   * THE LETTER'S PAGE: a signed version exactly as it was signed (the latest, or the one asked for), for the exporter, its
+   * agent and staff — or the draft, marked a draft, for the exporter alone.
+   */
+  sliPage(exportId: string, readerEntityId: string, which: { version?: number; draft?: boolean } = {}, opts: { all?: boolean } = {}): string {
+    const c = this.requireExport(exportId);
+    const side = this.sideOf(c, readerEntityId, opts.all);
+    if (which.draft) {
+      if (side !== 'exporter' || !c.sli?.draft) throw new GlosError('NOT_FOUND', 'No draft of the letter of instruction');
+      return sliHtml(this.sliFactsOf(c), c.sli.draft, 'draft');
+    }
+    const versions = c.sli?.versions ?? [];
+    const version = which.version ?? versions.length;
+    const copy = version > 0 ? this.sliCopies.get(`${c.exportId}:${version}`) : undefined;
+    if (!copy) throw new GlosError('NOT_FOUND', 'No such version of the letter of instruction');
+    return copy.html;
+  }
+
+  /** Hazardous goods: by their nature, or because their declaration is on the list. */
+  private hazardousOf(c: ExportConsignment): boolean {
+    return /^HAZ/.test((c.natureCode ?? '').toUpperCase()) || c.papers.some((p) => p.key === 'dangerous_goods_declaration' && !p.optional);
+  }
+
+  /** What the letter reads off the export itself, rather than asking again. */
+  private sliFactsOf(c: ExportConsignment): SliFacts {
+    const exporter = this.entities.get(c.exporterEntityId);
+    const record = this.entities.recordOf(c.exporterEntityId);
+    const a = record.registeredAddress;
+    const seals = c.ladenFreightId ? this.seals.views(c.ladenFreightId).filter((s) => s.state === 'on').map((s) => s.number ?? '—') : [];
+    return {
+      code: c.code,
+      shipper: {
+        name: exporter.name,
+        ...(a ? { address: [a.line1, a.line2, a.city, a.region, a.postalCode].filter(Boolean).join(', ') } : {}),
+        // The business's own numbers as it gave them, else what its company record says.
+        ...((exporter.business?.registrationNo ?? record.registrationNumber) ? { registrationNo: exporter.business?.registrationNo ?? record.registrationNumber } : {}),
+        ...((exporter.business?.taxNo ?? exporter.taxRegistration) ? { taxNo: exporter.business?.taxNo ?? exporter.taxRegistration } : {}),
+        country: c.originCountry,
+      },
+      forwarder: c.booking.partyName,
+      bookedWith: c.booking.bookedWith === 'shipping_line' ? 'shipping line' : 'forwarder',
+      booking: c.booking.reference,
+      ...(c.booking.vessel ? { vessel: c.booking.vessel } : {}),
+      ...(c.booking.voyage ? { voyage: c.booking.voyage } : {}),
+      loadingPort: c.loadingPort,
+      terminal: c.terminal.label,
+      originCountry: c.originCountry,
+      destCountry: c.destCountry,
+      ...(c.booking.docsCutoffAt ? { docsCutoffAt: c.booking.docsCutoffAt } : {}),
+      container: { ...(c.containerType ? { type: c.containerType } : {}), ...(c.containerNo ? { number: c.containerNo } : {}), seals },
+      ...(c.vgm ? { vgm: { kg: c.vgm.kg, method: c.vgm.method, signatory: c.vgm.signatory } } : {}),
+      papers: c.papers.filter((p) => p.key !== 'shipping_instructions' && (p.documentId || p.reference)).map((p) => paperLabel(p)),
+    };
+  }
+
+  /** The letter as this reader sees it: the draft (the exporter's alone), the versions, what signing needs, whether it is out of date. */
+  private sliViewOf(c: ExportConsignment, you: 'exporter' | 'agent' | 'staff'): ExportSliView {
+    const versions = c.sli?.versions ?? [];
+    const last = versions[versions.length - 1];
+    const hazardous = this.hazardousOf(c);
+    return {
+      ...(you === 'exporter' && c.sli?.draft ? { draft: c.sli.draft } : {}),
+      versions,
+      gaps: sliGaps(c.sli?.draft, { hazardous, containerNo: c.containerNo }),
+      stale: Boolean(last && last.basis !== sliBasis(this.sliFactsOf(c))),
+      hazardous,
+    };
   }
 
   /* ------------------------------------------------- EX7 the clearing agent -- */
@@ -757,6 +881,8 @@ export class ExportService {
     if (!c.ladenFreightId) out.push('A load to the terminal');
     else if (!this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the terminal');
     if (!c.vgm) out.push('The verified gross mass');
+    const lastSli = c.sli?.versions[c.sli.versions.length - 1];
+    if (lastSli && lastSli.basis !== sliBasis(this.sliFactsOf(c))) out.push(`The letter of instruction: the export changed since version ${lastSli.version} was signed — sign it again`);
     for (const p of c.papers) {
       // A paper its agent sent back is a gap, whatever was attached: what was given is not what customs will take.
       if (p.refusedAt) out.push(`${paperLabel(p)} — sent back by your clearing agent: ${p.refusedReason}`);
