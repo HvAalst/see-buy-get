@@ -113,6 +113,19 @@ describe('a shipper’s papers, over the wire', () => {
     const takeOver = () => { try { dispatch.pickupFreight(id, 'did:glos:papers-driver', {}); return 'taken'; } catch (e) { return (e as { code?: string }).code; } };
     expect(takeOver()).toBe('COMMERCIAL_INVOICE_REQUIRED');
     expect((await http().get(url).set(bearer(jenga.token)).expect(200)).body).toMatchObject({ crossesBorder: true, collectable: false });
+
+    // CMR Art. 8(2): what the driver noted at taking over binds the sender only where it agrees. Its own answer, once.
+    const answer = `/v1/sbg/dispatch/freight/${id}/reservations/answer`;
+    expect((await http().post(answer).set(bearer(jenga.token)).send({ agreed: true }).expect(400)).body.detail).toMatch(/wrote no reservations/);
+    Object.assign(dispatch.requireFreightPublic(id), { reservations: { note: 'Two pallets wrapped loose', at: new Date().toISOString(), by: 'did:glos:papers-driver' } });
+    await http().post(answer).set(bearer(other.token)).send({ agreed: true }).expect(404);
+    await http().post(answer).set(bearer(jenga.token)).send({ agreed: false }).expect(400);
+    const answered = (await http().post(answer).set(bearer(jenga.token)).send({ agreed: false, note: 'Wrapped tight at loading: see the photo' }).expect(201)).body;
+    expect(answered.reservations.answer).toMatchObject({ agreed: false, note: 'Wrapped tight at loading: see the photo' });
+    expect((await http().post(answer).set(bearer(jenga.token)).send({ agreed: true }).expect(400)).body.detail).toBe('You already disputed these reservations');
+    const postedRow = (await http().get('/v1/sbg/dispatch/posted').set(bearer(jenga.token)).expect(200)).body.items.find((r: { freightId: string }) => r.freightId === id);
+    expect(postedRow.reservations).toMatchObject({ note: 'Two pallets wrapped loose', answer: { agreed: false } });
+    delete (dispatch.requireFreightPublic(id) as { reservations?: unknown }).reservations;
     // The shipper's own paper travels: staff may not say so for it; the shipper may. The next thing asked is the safety check.
     await http().post(`${url}/own-paper`).set(bearer(operator)).send({ travels: true }).expect(403);
     expect((await http().post(`${url}/own-paper`).set(bearer(jenga.token)).send({ travels: true }).expect(201)).body.ownPaper).toMatchObject({ by: 'Achieng' });

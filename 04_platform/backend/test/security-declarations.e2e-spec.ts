@@ -110,6 +110,14 @@ describe('the yearly security declaration — over the wire', () => {
     expect(() => mdps.loadBag(bag.code, rider.badgeId)).toThrow(/^This rider has not signed their security declaration: nothing new is taken on until they have/);
     await http().post('/v1/sbg/declarations/mine/sign').set(riderToken).send({ version: own.version }).expect(201);
     expect((await http().get('/v1/sbg/declarations/mine').set(riderToken).expect(200)).body.state).toBe('signed');
+    // Riding for themselves, the rider is the carrier on its notes: an address, or a pin of its station (2026-10-28) —
+    // its own to give, never staff's to write in its name, and one of the two at least.
+    const place = `/v1/sbg/fleet/drivers/${rider.did}/carrier-place`;
+    await http().post(place).set(riderToken).send({}).expect(400);
+    await http().post(place).set(staff).send({ address: 'Kencom, Nairobi' }).expect(403);
+    const placed = (await http().post(place).set(riderToken).send({ station: { lat: -1.283333, lng: 36.816667, label: 'Kencom stage' } }).expect(201)).body;
+    expect(placed.carrierPlace).toMatchObject({ station: { lat: -1.28333, lng: 36.81667, label: 'Kencom stage' } });
+    expect((await http().get(`/v1/sbg/fleet/drivers/${rider.did}`).set(riderToken).expect(200)).body.carrierPlace).toMatchObject({ station: { label: 'Kencom stage' } });
 
     // A fleet's office signs for the fleet, from its own sign-in.
     const managers = app.get(FleetManagerService);
@@ -169,6 +177,8 @@ describe('the yearly security declaration — over the wire', () => {
     const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: '48261', device: enrolled.body.device }).expect(201);
     const truck = app.get(VehicleService).register({ plate: `DCL ${n.slice(-3)}T`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 8000, ownerName: 'Decl Haulage', equipment: ['TLT', 'FLT'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, managerDid: m.did } as never);
     await http().post(`/v1/sbg/fleet/drivers/${driver.did}/start-session`).set(bearer(session.body.token.access_token)).send({ vehicleId: truck.vehicleId, pin: '48261' }).expect(201);
+    // A fleet's driver carries for the fleet: its depot is the carrier's address, and the driver is never asked for one.
+    expect((await http().post(`/v1/sbg/fleet/drivers/${driver.did}/carrier-place`).set(bearer(session.body.token.access_token)).send({ address: 'Home' }).expect(403)).body.detail).toMatch(/the fleet’s depot is the carrier’s address/);
     const dispatch = app.get(DispatchService);
     const load = dispatch.registerFreight({ description: 'Cement, 40 bags', pickupLocation: { lat: -1.3, lng: 36.85 }, pickupLabel: 'Bamburi depot', destLabel: 'Site 7', destLocation: { lat: -1.25, lng: 36.9 }, weightKg: 2000, packaging: 'palletised' } as never);
     const assign = () => {

@@ -33,6 +33,7 @@ import type { RecentVehicleView } from '../types';
 import { ReportDefectSheet, VehicleCheckSheet } from './VehicleCheck';
 import { BreakdownSheet, TakeOverLink } from './Breakdown';
 import { IdPhotoCard } from './IdPhotoCard';
+import { CarrierPlaceCard } from './CarrierPlaceCard';
 import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient } from '../../../lib/sbg';
 import type { DriverActions, DriverState } from '../useDriverApp';
@@ -201,6 +202,8 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
       {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
       {state.driver && !state.driver.managerDid ? <DeclarationCard sbg={sbg ?? null} /> : null}
       {state.custodyCap?.idUnseen ? <IdPhotoCard state={state} actions={actions} /> : null}
+      {/* Riding for themselves, they are the carrier: its address, or the station it works from, for its notes (2026-10-28). */}
+      <CarrierPlaceCard state={state} actions={actions} sbg={sbg ?? null} />
       {/* A refused start names the paper (FP4) — that sentence was written for the driver, so it is shown. */}
       {/* FP8 — and a refused start after a working day names the rest owed (HOURS_EXCEEDED), the same way. */}
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} showDetail={state.error.code === 'CANNOT_COUPLE' || state.error.code === 'HOURS_EXCEEDED'} /> : null}

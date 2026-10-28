@@ -2449,6 +2449,25 @@ export class NudgeMinEarnDto {
   @IsOptional() @IsNumber() @Min(0) amount?: number;
 }
 
+/** The sender's answer to the carrier's reservations at taking over: agreed, or disputed in its own words. */
+export class ReservationAnswerDto {
+  @IsBoolean() agreed!: boolean;
+  @IsOptional() @IsString() @MaxLength(500) note?: string;
+}
+
+/** A carrier's station: a pin, and what the driver calls it. */
+export class CarrierStationDto {
+  @IsNumber() @Min(-90) @Max(90) lat!: number;
+  @IsNumber() @Min(-180) @Max(180) lng!: number;
+  @IsOptional() @IsString() @MaxLength(120) label?: string;
+}
+
+/** Where a driver riding for themselves is, as the carrier on its notes: an address, or a pin of its station. */
+export class CarrierPlaceDto {
+  @IsOptional() @IsString() @MaxLength(300) address?: string;
+  @IsOptional() @ValidateNested() @Type(() => CarrierStationDto) station?: CarrierStationDto;
+}
+
 /** Why a payout did not go, or came back. Free text because a rail's reason is a rail's own words. */
 export class PayoutFailureDto {
   @IsString() reason!: string;

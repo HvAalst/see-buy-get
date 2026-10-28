@@ -1817,6 +1817,7 @@ export class DispatchService {
         ...(f.handBacks?.length ? { handBacks: f.handBacks.map((h) => ({ reason: h.reason, at: h.at })) } : {}),
         // FP7 — box 13, and whether it is still the sender's to rewrite or only to add to.
         ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}),
+        ...(f.reservations ? { reservations: { note: f.reservations.note, at: f.reservations.at, ...(f.reservations.answer ? { answer: f.reservations.answer } : {}) } } : {}),
         instructionsMode: f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed' ? 'edit' : f.status === 'in_transit' ? 'amend' : 'none',
         // Round 14 — at a border post, cleared it, at a hub; crossing a border, when it is expected.
         // Held by an authority on the road, as its driver said.
@@ -1834,6 +1835,22 @@ export class DispatchService {
    * rewrite. Once on the road it can only be ADDED to — a subsequent instruction with its own time, as the
    * CMR does it — so the note shows what the driver was told and when. The driver holding the load is told.
    */
+  /**
+   * THE SENDER ANSWERS THE CARRIER'S RESERVATIONS (CMR Art. 8(2): "Such reservations shall not bind the sender unless he
+   * has expressly agreed to be bound by them in the consignment note"). Agreed, or disputed in its own words — once,
+   * from its own sign-in, as every party here gives one answer to a word said against it.
+   */
+  answerReservations(freightId: string, byDid: string, input: { agreed: boolean; note?: string }, byName: string, now = Date.now()): Freight {
+    const f = this.requireFreight(freightId);
+    if (!f.reservations) throw new GlosError('INVALID_STATE', 'The carrier wrote no reservations when it took the goods over');
+    if (f.reservations.answer) throw new GlosError('INVALID_STATE', `You already ${f.reservations.answer.agreed ? 'agreed to' : 'disputed'} these reservations`);
+    const note = input.note?.trim().slice(0, 500);
+    if (!input.agreed && (!note || note.length < 3)) throw new GlosError('FIELD_REQUIRED', 'Say why you dispute them: it goes on the consignment note beside the reservations', { field: 'note' });
+    f.reservations = { ...f.reservations, answer: { agreed: input.agreed, ...(note ? { note } : {}), by: byName.trim().slice(0, 80) || byDid, at: new Date(now).toISOString() } };
+    this.freights.set(f.freightId, f);
+    return f;
+  }
+
   setInstructions(freightId: string, byDid: string, input: { text?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string }, now: number = Date.now()): Freight {
     const f = this.requireFreight(freightId);
     const at = new Date(now).toISOString();

@@ -331,6 +331,14 @@ export class FreightInstructions {
   by?: string;
 }
 
+/** The sender's answer to the carrier's reservations at taking over (CMR Art. 8(2)). */
+export class ReservationAnswer {
+  agreed: boolean;
+  @ApiPropertyOptional() note?: string;
+  by: string;
+  at: string;
+}
+
 /** An amount and its money, as the sender declared it. */
 export class FreightAmount {
   amount: number;
@@ -660,7 +668,11 @@ export class Freight {
   @ApiPropertyOptional({ type: ProofOfDelivery }) proofOfDelivery?: ProofOfDelivery;
   /** FP3 — the carrier's reservations about the goods as handed over at taking over (box 18): a torn sack, a
    *  short count, a wet pallet. Written by the driver at pickup, before the goods are theirs to answer for. */
-  @ApiPropertyOptional() reservations?: { note: string; at: string; by?: string };
+  /**
+   * Box 18 — what the carrier saw at taking over, in the driver's words; and the sender's answer (CMR Art. 8(2): a
+   * reservation binds the sender only where it expressly agrees). One answer, from the sender's own sign-in.
+   */
+  @ApiPropertyOptional() reservations?: { note: string; at: string; by?: string; answer?: ReservationAnswer };
   /** FP3 — withdrawn by the sender (or the network) before the goods were taken over. Terminal; the record stays. */
   @ApiPropertyOptional() cancelledAt?: string;
   @ApiPropertyOptional() cancellation?: { by: string; role: 'shipper' | 'operator'; reason: string; at: string; refunded?: number };
@@ -1527,6 +1539,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: FreightInstructionsView }) instructions?: FreightInstructionsView;
   @ApiProperty({ enum: ['edit', 'amend', 'none'] })
   instructionsMode: 'edit' | 'amend' | 'none';
+  /** The carrier's reservations at taking over, and the sender's answer once given (CMR Art. 8(2)). */
+  @ApiPropertyOptional() reservations?: { note: string; at: string; answer?: ReservationAnswer };
   /** FP3b — true while the sender may still claim: delivered, no claim yet, within the claim window. */
   canClaim: boolean;
   /** Held by the police, customs or another authority on the road, as its driver said: who and where, since when. */

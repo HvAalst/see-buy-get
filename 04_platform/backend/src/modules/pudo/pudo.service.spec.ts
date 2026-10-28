@@ -8637,6 +8637,10 @@ describe('PUDO Light', () => {
     claimFreight(d.did, pickup, f.freightId);
     dispatch.pickupFreight(f.freightId, d.did, { confirmed: requiredLoadKeys(f), securementPhotoId: photoBy(d.did), reservations: '  Two sacks torn at the corner  ' });
     expect(dispatch.listFreight().find((x) => x.freightId === f.freightId)?.reservations).toMatchObject({ note: 'Two sacks torn at the corner', by: d.did });
+    // CMR Art. 8(2): the sender agrees, or disputes in its own words — once.
+    expect(() => dispatch.answerReservations(f.freightId, 'did:sender', { agreed: false }, 'Hans')).toThrow(/Say why you dispute them/);
+    expect(dispatch.answerReservations(f.freightId, 'did:sender', { agreed: false, note: 'Whole at loading: see the photo' }, 'Hans').reservations?.answer).toMatchObject({ agreed: false, note: 'Whole at loading: see the photo', by: 'Hans' });
+    expect(() => dispatch.answerReservations(f.freightId, 'did:sender', { agreed: true }, 'Hans')).toThrow(/You already disputed these reservations/);
     expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys() })).toThrow(/who received/i);
     expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'J' })).toThrow(/who received/i);
     expect(() => dispatch.deliverFreight(f.freightId, d.did, { confirmed: requiredUnloadKeys(), receiverName: 'Joseph' })).toThrow(/photo/i);

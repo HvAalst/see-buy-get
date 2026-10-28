@@ -445,6 +445,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'PATCH sbg/business/me': 'none',
   'PATCH sbg/business/me/clients/:clientId': 'none',
   'PATCH sbg/dispatch/freight/:id/instructions': 'support',
+  // The sender's own answer to a carrier's reservations (CMR Art. 8(2)): staff write nothing in its name.
+  'POST sbg/dispatch/freight/:id/reservations/answer': 'none',
   'PATCH sbg/identity/profile': 'none',
   'PATCH sbg/mdps/:id/pricing': 'none',
   'PATCH sbg/vehicles/:id/pricing': 'support',
@@ -686,6 +688,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/fleet/drivers/:did/licence-renewal/refuse': 'vetting',
   'POST sbg/fleet/drivers/:did/locate': 'support',
   'POST sbg/fleet/drivers/:did/min-earn': 'support',
+  // Where a carrier riding for itself works from, for its notes: its own to give, never staff's.
+  'POST sbg/fleet/drivers/:did/carrier-place': 'none',
   'POST sbg/fleet/drivers/:did/ping': 'support',
   'POST sbg/fleet/drivers/:did/rest/tell-me': 'support',
   'POST sbg/fleet/drivers/:did/resume': 'support',

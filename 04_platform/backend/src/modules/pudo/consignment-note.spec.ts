@@ -37,7 +37,7 @@ describe('the consignment note', () => {
   const service = new ConsignmentNoteService(
     // Nothing said on the road yet (round 14): no border, no hub.
     { requireFreightPublic: (id: string) => freights[id] ?? (() => { throw new Error('not found'); })(), passageFacts: () => ({}) } as never,
-    { get: (did: string) => ({ displayName: 'Amos K.', managerDid: did === 'did:drv:amos' ? 'did:fleet:kilima' : undefined, jurisdiction: 'KE' }) } as never,
+    { get: (did: string) => ({ displayName: 'Amos K.', managerDid: did === 'did:drv:amos' ? 'did:fleet:kilima' : undefined, jurisdiction: 'KE', ...(did === 'did:drv:stage' ? { carrierPlace: { station: { lat: -1.28333, lng: 36.81667, label: 'Kencom stage' }, at: '2026-10-28T10:00:00Z' } } : {}) }) } as never,
     { get: (did: string) => (did === 'did:fleet:jenga' ? { companyName: 'Jenga Freight', depotAddress: 'Enterprise Rd 4', jurisdiction: 'KE', did } : { companyName: 'Kilima Logistics', depotAddress: '1 Depot Rd', jurisdiction: 'KE', did: 'did:fleet:kilima' }) } as never,
     { get: (did: string) => ({ shopName: did === 'did:shop:a1' ? 'Mama Sarah Shop' : 'Riverside Corner', landmark: 'Next to the market', country: 'KE', did }) } as never,
     { has: (id: string) => id === 'ven_1', get: () => ({ did: 'did:store', name: 'Nairobi Threads', address: 'Biashara St 12', country: 'KE' }) } as never,
@@ -85,7 +85,11 @@ describe('the consignment note', () => {
   it('FP3: the carrier’s reservations fill box 18, the proof of delivery fills box 24, and a cancelled load says so', () => {
     freights.fr_1 = base({ status: 'delivered', pickedUpAt: '2026-09-14T09:00:00Z', deliveredAt: '2026-09-14T12:00:00Z', reservations: { note: 'Two sacks torn', at: '2026-09-14T09:00:00Z', by: 'did:drv:amos' }, proofOfDelivery: { receiverName: 'Joseph Mwangi', photoRef: 'med_pod', remarks: 'One sack short', at: '2026-09-14T12:00:00Z', by: 'did:drv:amos' } });
     const n = service.build(freights.fr_1);
-    expect(n.reservations).toEqual(['At taking over: Two sacks torn']);
+    // CMR Art. 8(2): not answered by the sender, so it does not bind the sender — said beside it.
+    expect(n.reservations).toEqual(['At taking over: Two sacks torn — not agreed by the sender, so it does not bind the sender']);
+    const answered = (answer: object) => service.build({ ...freights.fr_1, reservations: { ...freights.fr_1.reservations!, answer } } as never).reservations[0];
+    expect(answered({ agreed: true, by: 'Hans', at: '2026-09-14T10:00:00Z' })).toBe('At taking over: Two sacks torn — agreed by the sender 14 Sep 2026, 10:00 UTC');
+    expect(answered({ agreed: false, note: 'They were whole at loading: see the photo', by: 'Hans', at: '2026-09-14T10:00:00Z' })).toBe('At taking over: Two sacks torn — disputed by the sender 14 Sep 2026, 10:00 UTC: They were whole at loading: see the photo');
     expect(n.confirmations.consignee).toMatchObject({ by: 'Joseph Mwangi', at: '2026-09-14T12:00:00Z', remarks: 'Receiver’s remarks: One sack short' });
     expect(n.documents).toContain('Photo of the goods as delivered (med_pod)');
     const html = service.htmlFor(n);
@@ -233,6 +237,8 @@ describe('the consignment note', () => {
     expect(n.carrier).toMatchObject({ name: 'Amos K.', did: 'did:drv:solo' });
     expect(n.carrier?.address).toBeUndefined();
     expect(service.htmlFor(n)).toContain('<span class="empty">Address not recorded</span>');
+    // Riding for themselves with no address but a pinned station: the station is the carrier's address (2026-10-28).
+    expect(service.build(base({ claimedBy: 'did:drv:stage', carrierDid: undefined } as never)).carrier?.address).toBe('Station Kencom stage at -1.28333, 36.81667');
     // A fleet with its depot: its address, and nothing said of a gap.
     const fleet = service.build(base({}));
     expect(fleet.carrier?.address).toBe('1 Depot Rd');

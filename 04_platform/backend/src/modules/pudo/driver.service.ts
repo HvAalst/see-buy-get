@@ -895,6 +895,21 @@ export class DriverService {
    * filter and the open board keeps none — a driver who is already looking is asking a different question
    * from a driver being tapped on the shoulder at the wheel.
    */
+  /**
+   * WHERE THIS CARRIER IS, on its consignment notes (the user, 2026-10-28): its business address if it has one, otherwise
+   * a pin of the station it works from. Only a driver riding for themselves is asked — they are the carrier; a fleet's
+   * driver is carried for by the fleet, whose depot is the address.
+   */
+  setCarrierPlace(did: string, input: { address?: string; station?: { lat: number; lng: number; label?: string } }, now = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    if (driver.managerDid) throw new GlosError('FORBIDDEN', 'A fleet’s driver carries for the fleet: the fleet’s depot is the carrier’s address on the notes');
+    const address = input.address?.trim().slice(0, 300);
+    const station = input.station && Number.isFinite(input.station.lat) && Number.isFinite(input.station.lng) ? { lat: Math.round(input.station.lat * 1e5) / 1e5, lng: Math.round(input.station.lng * 1e5) / 1e5, ...(input.station.label?.trim() ? { label: input.station.label.trim().slice(0, 120) } : {}) } : undefined;
+    if (!address && !station) throw new GlosError('FIELD_REQUIRED', 'Give your business address, or pin the station you work from', { field: 'address' });
+    driver.carrierPlace = { ...(address ? { address } : {}), ...(station ? { station } : {}), at: new Date(now).toISOString() };
+    return driver;
+  }
+
   setNudgeMinEarn(did: string, amount?: number): FleetDriver {
     const driver = this.require(did);
     if (amount != null && (!Number.isFinite(amount) || amount < 0 || amount > MAX_NUDGE_MIN_EARN)) {

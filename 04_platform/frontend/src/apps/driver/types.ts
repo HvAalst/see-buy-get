@@ -37,6 +37,8 @@ export interface DriverRecord {
   notOpenIn?: string;
   /** Present when a fleet employs them — whose office records their licence. Absent: they ride on their own. */
   managerDid?: string;
+  /** Riding for themselves: where they are as the carrier on their notes — an address, or a pin of their station. */
+  carrierPlace?: { address?: string; station?: { lat: number; lng: number; label?: string }; at: string };
   /** The fleet's name, when a fleet employs them — what the account menu says they drive for. */
   fleetName?: string;
   /**

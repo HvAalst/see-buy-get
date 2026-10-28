@@ -9,6 +9,7 @@ import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { NATURES, PACKAGING_HELP } from '../../agent/logic';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { CurrencySelect } from '../../tower/screens/CurrencySelect';
+import { LoadReservations } from './LoadReservations';
 import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type LoadProposal, type PostedLoad } from '../api';
 import { isDangerousNature, deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
 import { passageWords } from '../../../shared/passages';
@@ -769,6 +770,8 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
       {stage === 'delivered' ? <LoadClaimPanel row={row} client={client} act={act} onChanged={onChanged} /> : null}
 
       {/* The labels for its packages and, across a border, its commercial invoice — the business's own papers. */}
+      {/* Box 18 at taking over, and this business's answer (CMR Art. 8(2)). */}
+      <LoadReservations row={row} client={client} act={act} onChanged={onChanged} />
       {stage !== 'cancelled' ? <LoadPapers row={row} client={client} business={business} act={act} /> : null}
       {/* Round 15 — the seals on the load: written before pickup, and what became of each after. */}
       {stage !== 'cancelled' ? <LoadSeals row={row} client={client} act={act} /> : null}

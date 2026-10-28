@@ -18013,11 +18013,41 @@
         }
       }
     },
+    "/v1/sbg/dispatch/freight/{id}/reservations/answer": {
+      "post": {
+        "operationId": "Sbg.answerFreightReservations",
+        "summary": "",
+        "description": "FP7 — the sender's instructions (CMR box 13). Rewritten until the goods are taken over; added to once\nthey are on the road. The sender or the store that shipped it; the driver holding the load is told.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservationAnswerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/dispatch/freight/{id}/instructions": {
       "patch": {
         "operationId": "Sbg.setFreightInstructions",
-        "summary": "",
-        "description": "FP7 — the sender's instructions (CMR box 13). Rewritten until the goods are taken over; added to once\nthey are on the road. The sender or the store that shipped it; the driver holding the load is told.",
         "parameters": [
           {
             "name": "id",
@@ -19510,11 +19540,41 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/carrier-place": {
+      "post": {
+        "operationId": "Sbg.setCarrierPlace",
+        "summary": "",
+        "description": "\"Do not wake me for less than this\", all in, for both bags and freight.\n\nA STANDING setting on the driver, not a filter on a search. The list views already had a minimum, but\nit was a box typed into the request — so the one surface that speaks first, the lock-screen nudge off\na GPS fix, had nothing to read and applied none. A driver could set a minimum, watch the list obey it,\nand still be interrupted at the wheel for a job beneath it.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarrierPlaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/min-earn": {
       "post": {
         "operationId": "Sbg.setNudgeMinEarn",
-        "summary": "",
-        "description": "\"Do not wake me for less than this\", all in, for both bags and freight.\n\nA STANDING setting on the driver, not a filter on a search. The list views already had a minimum, but\nit was a box typed into the request — so the one surface that speaks first, the lock-screen nudge off\na GPS fix, had nothing to read and applied none. A driver could set a minimum, watch the list obey it,\nand still be interrupted at the wheel for a job beneath it.",
         "parameters": [
           {
             "name": "did",
@@ -51479,6 +51539,28 @@
           "at"
         ]
       },
+      "ReservationAnswer": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "agreed": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agreed",
+          "by",
+          "at"
+        ]
+      },
       "FreightLink": {
         "type": "object",
         "properties": {
@@ -52553,6 +52635,10 @@
               "by": {
                 "required": false,
                 "type": "string"
+              },
+              "answer": {
+                "required": false,
+                "$ref": "#/components/schemas/ReservationAnswer"
               }
             }
           },
@@ -53580,6 +53666,38 @@
           "askedAt"
         ]
       },
+      "CarrierPlace": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "station": {
+            "type": "object",
+            "properties": {
+              "lat": {
+                "required": true,
+                "type": "number"
+              },
+              "lng": {
+                "required": true,
+                "type": "number"
+              },
+              "label": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "station",
+          "at"
+        ]
+      },
       "DriverPortrait": {
         "type": "object",
         "properties": {
@@ -53706,6 +53824,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/CourierAsk"
+              }
+            ]
+          },
+          "carrierPlace": {
+            "description": "WHERE THIS CARRIER IS (the user, 2026-10-28: \"Drivers should give one if there is one. Otherwise a pin of their legal\nstation\"): the carrier's address on its consignment notes (CMR Art. 6(1)(c)) — its business address, or else a pin of\nthe station it works from. Only for a driver riding for themselves, who IS the carrier: a fleet's driver has the\nfleet's depot, and asking where a fleet driver lives would be data for a payment we never make.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CarrierPlace"
               }
             ]
           },
@@ -54304,6 +54430,21 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "ReservationAnswerDto": {
+        "type": "object",
+        "properties": {
+          "agreed": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "agreed"
         ]
       },
       "FreightInstructionsDto": {
@@ -55651,6 +55792,41 @@
           "observedAt": {
             "type": "string",
             "description": "Round 24 — when the driver ended it, by the phone's clock: a shift ended with no signal waits on the phone."
+          }
+        }
+      },
+      "CarrierStationDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "minimum": -90,
+            "maximum": 90
+          },
+          "lng": {
+            "type": "number",
+            "minimum": -180,
+            "maximum": 180
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ]
+      },
+      "CarrierPlaceDto": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "station": {
+            "$ref": "#/components/schemas/CarrierStationDto"
           }
         }
       },
@@ -57571,6 +57747,23 @@
               "none"
             ]
           },
+          "reservations": {
+            "type": "object",
+            "properties": {
+              "note": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "answer": {
+                "required": false,
+                "$ref": "#/components/schemas/ReservationAnswer"
+              }
+            }
+          },
           "heldByAuthority": {
             "description": "Held by the police, customs or another authority on the road, as its driver said: who and where, since when.",
             "allOf": [
@@ -57722,6 +57915,7 @@
           "carrier",
           "rating",
           "instructionsMode",
+          "reservations",
           "freightId",
           "code",
           "description",

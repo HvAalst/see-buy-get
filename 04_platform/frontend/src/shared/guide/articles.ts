@@ -101,7 +101,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   // The procedures every consignment note refers to (e-CMR Art. 5): public, because the note links here for whoever holds it.
   { id: 'electronic-note', apps: ['business', 'agent', 'driver', 'fleet', 'vendor'], group: 'freight', site: true, steps: 6, notes: ['why', 'note'] },
   { id: 'business-bell', apps: ['business'], group: 'daily', steps: 3, notes: ['note', 'rare', 'note'] },
-  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note'] },
+  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note'] },
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.
   { id: 'business-exports', apps: ['business'], group: 'freight', steps: 6, notes: ['note', 'why', 'note'] },
   { id: 'business-note', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'note', 'note', 'note', 'why', 'rare', 'rare'] },
@@ -122,7 +122,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'hub-bulk', apps: ['mdp', 'vendor'], group: 'daily', steps: 7, notes: ['note', 'why'] },
   { id: 'gs1-codes', apps: ['vendor', 'business'], group: 'start', steps: 4, notes: ['why', 'note'] },
   { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 6, notes: ['careful', 'why'] },
-  { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['why', 'careful', 'note', 'note', 'note', 'note', 'rare'] },
+  { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['why', 'careful', 'note', 'note', 'note', 'note', 'rare', 'note', 'note'] },
   { id: 'freight-delivery', apps: ['agent', 'driver'], group: 'freight', steps: 5, notes: ['note', 'why', 'note'] },
   { id: 'sender-instructions', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['note'] },
   { id: 'freight-tracking', apps: ['agent', 'send'], group: 'freight', steps: 3, notes: ['why', 'note', 'note'] },

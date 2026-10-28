@@ -200,7 +200,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.instructions?.text) instructions.push(f.instructions.text);
     for (const a of f.instructionAmendments ?? []) instructions.push(`Subsequent instruction, ${when(a.at)}: ${a.text}`);
     const reservations: string[] = [];
-    if (f.reservations) reservations.push(`At taking over: ${f.reservations.note}`);
+    // CMR Art. 8(2): a reservation binds the sender only where it expressly agreed — said beside it, either way.
+    if (f.reservations) reservations.push(`At taking over: ${f.reservations.note}${reservationAnswer(f.reservations.answer)}`);
     if (f.tempBreached) reservations.push(breachLine(f.tempReadings?.find((r) => r.breach)));
     // A reload onto another of the carrier's vehicles after a breakdown is written here, and nowhere else.
     for (const r of (f.reloads ?? []).filter((x) => x.aboard)) reservations.push(`${reloadLine(r)}${f.noTranshipment ? ' — although the sender had said transhipment is not allowed' : ''}`);
@@ -450,11 +451,13 @@ export class ConsignmentNoteService implements OnModuleInit {
     let driverName: string | undefined;
     let managerDid: string | undefined;
     let jurisdiction: string | undefined;
+    let own: { carrierPlace?: { address?: string; station?: { lat: number; lng: number; label?: string } } } | undefined;
     try {
       // Box 16 names the driver the goods were TAKEN OVER by; a later reload is box 18's.
       const d = this.drivers.get(f.carriage?.driverDid ?? f.claimedBy);
       driverName = d.displayName;
       jurisdiction = d.jurisdiction ?? undefined;
+      own = d;
     } catch {
       /* a carrier the network no longer knows is still named by its identity below */
     }
@@ -470,7 +473,10 @@ export class ConsignmentNoteService implements OnModuleInit {
         /* fall through to the driver as an independent carrier */
       }
     }
-    return { name: driverName ?? 'Carrier', ...(jurisdiction ? { country: countryName(jurisdiction) } : {}), did: f.claimedBy, ...(driverName ? { driverName } : {}), ...vehicle };
+    // Riding for themselves, the driver is the carrier: its address, or the station it pinned (2026-10-28).
+    const place = own?.carrierPlace;
+    const address = place?.address ?? (place?.station ? `Station${place.station.label ? ` ${place.station.label}` : ''} at ${place.station.lat.toFixed(5)}, ${place.station.lng.toFixed(5)}` : undefined);
+    return { name: driverName ?? 'Carrier', ...(address ? { address } : {}), ...(jurisdiction ? { country: countryName(jurisdiction) } : {}), did: f.claimedBy, ...(driverName ? { driverName } : {}), ...vehicle };
   }
 
   /**
@@ -663,6 +669,12 @@ export class ConsignmentNoteService implements OnModuleInit {
 <footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(electronicLine(n))}<br>How this electronic note is made out, kept intact, read, confirmed at delivery, added to and replaced by paper: ${e(helpUrl('electronic-note'))}<br>Box numbers as on the classic CMR form; the IRU’s 2007 model numbers them differently.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span><br><span class="fp">Check this copy: ${e(`${appUrl('home')}?note=${noteFingerprint(n)}`)}</span></span></footer>
 </div></body></html>`;
   }
+}
+
+/** The sender's answer beside the carrier's reservation (CMR Art. 8(2)), or that it gave none and so is not bound. */
+function reservationAnswer(a: { agreed: boolean; note?: string; at: string } | undefined): string {
+  if (!a) return ' — not agreed by the sender, so it does not bind the sender';
+  return a.agreed ? ` — agreed by the sender ${when(a.at)}` : ` — disputed by the sender ${when(a.at)}: ${a.note ?? ''}`;
 }
 
 /** An amount as the note prints it: 12,500 USD. */

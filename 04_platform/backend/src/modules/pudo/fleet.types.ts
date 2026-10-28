@@ -392,6 +392,13 @@ export class CourierAsk {
   askedAt: string;
 }
 
+/** A carrier's address, or the pin of the station it works from — one or both. */
+export class CarrierPlace {
+  @ApiPropertyOptional() address?: string;
+  @ApiPropertyOptional() station?: { lat: number; lng: number; label?: string };
+  at: string;
+}
+
 export class FleetDriver {
   driverId: string;
   did: string;
@@ -436,6 +443,13 @@ export class FleetDriver {
   jurisdiction?: string;
   /** The sister that contracts this courier directly. Absent for a fleet-attached driver. */
   entityId?: string;
+  /**
+   * WHERE THIS CARRIER IS (the user, 2026-10-28: "Drivers should give one if there is one. Otherwise a pin of their legal
+   * station"): the carrier's address on its consignment notes (CMR Art. 6(1)(c)) — its business address, or else a pin of
+   * the station it works from. Only for a driver riding for themselves, who IS the carrier: a fleet's driver has the
+   * fleet's depot, and asking where a fleet driver lives would be data for a payment we never make.
+   */
+  @ApiPropertyOptional({ type: () => CarrierPlace }) carrierPlace?: CarrierPlace;
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the vault — never in the core
   displayName: string; // non-PII shop-floor label (e.g. "Driver J.")
   badgeId?: string; // scannable handover badge — issued on activation

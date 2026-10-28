@@ -188,6 +188,8 @@ export interface ClientRef {
 export interface PostedLoad {
   freightId: string;
   code: string;
+  /** The carrier's reservations at taking over, and this business's answer once given (CMR Art. 8(2)). */
+  reservations?: { note: string; at: string; answer?: { agreed: boolean; note?: string; by: string; at: string } };
   /** FP3b — the doors the driver stood at and could not hand over at, most recent last. */
   attempts?: Array<{ outcome: 'absent' | 'refused' | 'unreachable'; note?: string; at: string }>;
   /** Refused at the door (the user, 2026-10-27): by when the business says where the goods go, and what it said. */
@@ -424,6 +426,8 @@ export interface BusinessClient {
   sealPhoto(file: File): Promise<string | null>;
   /** A photo of a problem with goods delivered, sent with a claim on them. */
   claimPhoto(file: File): Promise<string | null>;
+  /** CMR Art. 8(2): agree to, or dispute in its own words, what the driver noted at taking over — once. */
+  answerReservations(freightId: string, body: { agreed: boolean; note?: string }): Promise<Result<unknown>>;
 }
 
 export function createBusinessClient(): BusinessClient {
@@ -496,6 +500,7 @@ export function createBusinessClient(): BusinessClient {
     seals: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, {} as never) as never),
     writeSeal: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, { body } as never) as never),
     removeSeal: (freightId, sealId) => call((c) => c.DELETE(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals/${encodeURIComponent(sealId)}` as never, {} as never) as never),
+    answerReservations: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/reservations/answer` as never, { body } as never) as never),
     claimPhoto: async (file) => {
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
