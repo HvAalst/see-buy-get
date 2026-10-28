@@ -1,4 +1,4 @@
-import { BOX_WARN_DAYS, BoxTimes, boxClock, boxDueSoon, checkDigitFor, normaliseContainerNo, parseContainerNo } from './container-box';
+import { BOX_WARN_DAYS, BoxTimes, boxClock, boxDueSoon, checkDigitFor, exportBoxClock, normaliseContainerNo, parseContainerNo } from './container-box';
 
 const DAY = 86_400_000;
 const NOW = Date.parse('2026-09-18T09:00:00.000Z');
@@ -164,5 +164,46 @@ describe('the clock on a box, in dates and never in money', () => {
     // Overdue is a different message with different advice, so this predicate deliberately excludes it.
     expect(boxDueSoon(at(20, 14))).toBe(false);
     expect(BOX_WARN_DAYS).toBe(3);
+  });
+});
+
+/*
+ * THE SAME BOX ON AN EXPORT (2026-10-28): it leaves the depot empty first and enters the terminal laden second, so detention
+ * runs before demurrage — the import's order reversed, the import's rules kept.
+ */
+describe('the clock on an export box: outside until the gate, inside until loaded', () => {
+  const D = 86_400_000;
+  const t0 = Date.parse('2026-11-01T08:00:00Z');
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const claim = (kind: 'detention' | 'demurrage', days: number, atMs: number, by = 'Wanjiku') => ({ kind, days, byEntityId: 'ent_x', by, at: iso(atMs) });
+
+  it('runs nothing before the empty is out, and invents no date without a claim', () => {
+    expect(exportBoxClock({ freeDays: [] }, t0)).toMatchObject({ kind: 'unknown', overdue: false });
+    const c = exportBoxClock({ emptyOutAt: iso(t0), freeDays: [] }, t0 + 3 * D + 1);
+    expect(c).toMatchObject({ kind: 'detention', daysElapsed: 3, overdue: false });
+    expect(c.dueAt).toBeUndefined();
+    expect(c.daysLeft).toBeUndefined();
+  });
+
+  it('counts detention to the latest claim, and says whose figure it is', () => {
+    const c = exportBoxClock({ emptyOutAt: iso(t0), freeDays: [claim('detention', 10, t0), claim('detention', 7, t0 + D, 'Amina'), claim('demurrage', 2, t0)] }, t0 + 5 * D);
+    expect(c).toMatchObject({ kind: 'detention', freeDays: 7, freeDaysBy: 'Amina', daysLeft: 2, overdue: false, dueAt: iso(t0 + 7 * D) });
+    expect(boxDueSoon(c)).toBe(true);
+    expect(c.basis).toContain('Amina');
+    expect(c.basis).not.toMatch(/KES|USD|\$|€/);
+    const late = exportBoxClock({ emptyOutAt: iso(t0), freeDays: [claim('detention', 7, t0)] }, t0 + 9 * D);
+    expect(late).toMatchObject({ overdue: true, daysLeft: -2 });
+    expect(boxDueSoon(late)).toBe(false);
+  });
+
+  it('hands over to demurrage at the gate, closing detention on whole days', () => {
+    const c = exportBoxClock({ emptyOutAt: iso(t0), gatedInAt: iso(t0 + 4 * D + 5 * 3_600_000), freeDays: [claim('detention', 7, t0), claim('demurrage', 3, t0)] }, t0 + 6 * D);
+    expect(c).toMatchObject({ kind: 'demurrage', since: iso(t0 + 4 * D + 5 * 3_600_000), daysElapsed: 1, detentionDays: 4, freeDays: 3, daysLeft: 2 });
+  });
+
+  it('stops once loaded on board — a recorded fact, never overdue after', () => {
+    const c = exportBoxClock({ emptyOutAt: iso(t0), gatedInAt: iso(t0 + 4 * D), loaded: { at: iso(t0 + 9 * D), by: 'Wanjiku' }, freeDays: [claim('demurrage', 1, t0)] }, t0 + 40 * D);
+    expect(c).toMatchObject({ kind: 'stopped', overdue: false, detentionDays: 4, demurrageDays: 5 });
+    expect(c.basis).toContain('Loaded on board');
   });
 });

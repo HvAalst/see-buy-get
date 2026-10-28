@@ -5,10 +5,11 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import type { CargoNature } from './cargo.types';
+import { boxDueSoon, exportBoxClock, FREE_DAY_KINDS, type FreeDayKind } from './container-box';
 import { ContainerBoxService } from './container-box.service';
 import { containerType } from './container-type';
 import { DispatchService } from './dispatch.service';
-import { EXPORT_PAPER_KEYS, type ExportConsignment, type ExportDetail, type ExportLegView, type ExportPaper, type ExportPaperKey, type ExportPlace, type ExportRow, type ExportTiming, type BookedWith } from './export.types';
+import { EXPORT_PAPER_KEYS, type ExportBoxClockView, type ExportConsignment, type ExportDetail, type ExportLegView, type ExportPaper, type ExportPaperKey, type ExportPlace, type ExportRow, type ExportTiming, type BookedWith } from './export.types';
 import { LoadSealService } from './load-seal.service';
 import { NotificationService } from './notification.service';
 import { EXPORT_GATE_BUFFER_H, VEHICLE_SPEED_KMH } from './pudo.config';
@@ -21,6 +22,14 @@ export const EXPORT_PAPER_LABEL: Record<ExportPaperKey, string> = {
   packing_list: 'Packing list',
   certificate_of_origin: 'Certificate of origin',
   export_entry: 'Export entry (from your clearing agent)',
+};
+
+/** The same papers mid-sentence: "sent back the packing list". */
+const EXPORT_PAPER_NOUN: Record<ExportPaperKey, string> = {
+  commercial_invoice: 'the commercial invoice',
+  packing_list: 'the packing list',
+  certificate_of_origin: 'the certificate of origin',
+  export_entry: 'the export entry',
 };
 
 const H = 3_600_000;
@@ -138,9 +147,10 @@ export class ExportService {
     return consignment;
   }
 
+  /** The exports this company is a party to: its own as exporter, and the ones it was appointed to clear. */
   list(readerEntityId: string, opts: { all?: boolean } = {}, now = Date.now()): ExportRow[] {
     return [...this.exports.values()]
-      .filter((c) => opts.all || c.exporterEntityId === readerEntityId)
+      .filter((c) => opts.all || c.exporterEntityId === readerEntityId || (Boolean(readerEntityId) && c.agent?.entityId === readerEntityId))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((c) => ({
         exportId: c.exportId,
@@ -152,24 +162,38 @@ export class ExportService {
         ...(c.containerNo ? { containerNo: c.containerNo } : {}),
         timing: this.timingOf(c, now),
         missing: this.missingOf(c).length,
+        box: this.boxOf(c, now),
+        you: this.sideOf(c, readerEntityId, opts.all),
+        exporterName: this.nameOf(c.exporterEntityId),
+        ...(c.agent ? { agentName: this.nameOf(c.agent.entityId) } : {}),
       }));
   }
 
   detail(exportId: string, readerEntityId: string, opts: { all?: boolean } = {}, now = Date.now()): ExportDetail {
     const c = this.requireExport(exportId);
-    if (!opts.all && c.exporterEntityId !== readerEntityId) throw new GlosError('NOT_FOUND', 'No such export');
+    // The exporter, the agent it appointed, or staff reading — anybody else is told there is no such export.
+    const you = this.sideOf(c, readerEntityId, opts.all);
+    const timing = this.timingOf(c, now);
     return {
       consignment: c,
-      timing: this.timingOf(c, now),
+      timing,
       ...(c.emptyFreightId ? { emptyLeg: this.legOf(c.emptyFreightId) } : {}),
       ...(c.ladenFreightId ? { ladenLeg: this.legOf(c.ladenFreightId) } : {}),
       seals: c.ladenFreightId ? this.seals.views(c.ladenFreightId).map((s) => ({ ...(s.number ? { number: s.number } : {}), state: s.state, appliedBy: s.appliedBy })) : [],
       papers: c.papers.map((p) => ({ ...p, label: EXPORT_PAPER_LABEL[p.key] })),
       missing: this.missingOf(c),
-      documents: this.documents
-        .list(c.exporterEntityId)
-        .filter((d) => d.status !== 'superseded' && d.status !== 'rejected')
-        .map((d) => ({ documentId: d.documentId, title: d.title })),
+      // The exporter's own list, to attach from. Its agent reads what is attached on a line, and not the rest of its papers.
+      documents:
+        you === 'exporter'
+          ? this.documents
+              .list(c.exporterEntityId)
+              .filter((d) => d.status !== 'superseded' && d.status !== 'rejected')
+              .map((d) => ({ documentId: d.documentId, title: d.title }))
+          : [],
+      box: this.boxOf(c, now, timing),
+      you,
+      exporterName: this.nameOf(c.exporterEntityId),
+      ...(c.agent ? { agent: { ...c.agent, name: this.nameOf(c.agent.entityId) } } : {}),
     };
   }
 
@@ -209,6 +233,7 @@ export class ExportService {
     const c = this.requireOwn(exportId, actorEntityId);
     if (!c.emptyDepot) throw new GlosError('INVALID_STATE', `${c.code} names no depot to fetch the empty from: the line or your forwarder brings it`);
     if (c.emptyFreightId) throw new GlosError('CONFLICT', `${c.code} already has its empty run (${c.emptyFreightCode})`);
+    if (c.emptyOut) throw new GlosError('INVALID_STATE', `You recorded the empty leaving the depot on ${utc(c.emptyOut.at)}: it is already out`);
     if (c.ladenFreightId) throw new GlosError('INVALID_STATE', `${c.code} is already on its way to the port`);
     const exporter = this.entities.get(c.exporterEntityId);
     const spec = containerType(c.containerType)!;
@@ -326,7 +351,13 @@ export class ExportService {
    * never a loose upload — or a reference (the export entry its clearing agent gave). We file nothing with customs.
    */
   supplyPaper(exportId: string, actorEntityId: string, input: { key: ExportPaperKey; documentId?: string; reference?: string }, by: string, now = Date.now()): ExportDetail {
-    const c = this.requireOwn(exportId, actorEntityId);
+    const c = this.requireExport(exportId);
+    const side = this.sideOf(c, actorEntityId);
+    // Its agent gives the one paper that is its own work — the export entry, by its number — and supplies none of the exporter's.
+    if (side === 'agent' && input.key !== 'export_entry') {
+      throw new GlosError('FORBIDDEN', 'The exporter supplies its own papers: as its clearing agent you give the export entry, and accept or send back the rest');
+    }
+    if (side === 'agent' && input.documentId) throw new GlosError('VALIDATION_FAILED', 'Give the export entry’s number: your own documents are not the exporter’s', { field: 'reference' });
     const line = c.papers.find((p) => p.key === input.key);
     if (!line) throw new GlosError('NOT_FOUND', 'No such paper on this export');
     const reference = input.reference?.trim();
@@ -346,10 +377,173 @@ export class ExportService {
       ...(reference ? { reference: reference.slice(0, 80) } : {}),
       suppliedAt: new Date(now).toISOString(),
       suppliedBy: by,
+      // The entry is the agent's own word: given by it, it stands as accepted by it. Anything else waits for its word again.
+      ...(side === 'agent' ? { acceptedAt: new Date(now).toISOString(), acceptedBy: by } : {}),
     };
     c.papers = c.papers.map((p) => (p.key === line.key ? next : p));
     this.exports.set(c.exportId, c);
+    if (side === 'agent') {
+      this.tell(c, `${c.code}: your clearing agent gave the export entry`, `${this.nameOf(actorEntityId)} gave the export entry ${next.reference} on ${c.code}. It is on the export, and in the file for your forwarder.`);
+    } else if (c.agent && line.refusedAt) {
+      this.tell(
+        c,
+        `${c.code}: ${EXPORT_PAPER_NOUN[line.key]} was supplied again`,
+        `${this.nameOf(c.exporterEntityId)} supplied ${EXPORT_PAPER_NOUN[line.key]} again on ${c.code}, after you sent it back. Read it, and accept it or send it back.`,
+        c.agent.entityId,
+      );
+    }
     return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /**
+   * THE AGENT'S WORD ON A PAPER: accepted, or sent back with a reason — the import's bargain. A paper replaced, or past its
+   * date, is not accepted: the exporter hears it here, from its own agent, and not at the customs counter.
+   */
+  acceptPaper(exportId: string, actorEntityId: string, key: ExportPaperKey, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireExport(exportId);
+    this.requireAgent(c, actorEntityId);
+    const line = this.suppliedLine(c, key);
+    if (line.key === 'export_entry' && line.acceptedAt) throw new GlosError('INVALID_STATE', 'The export entry is your own: given by you, it stands');
+    if (line.documentId) {
+      const d = this.documents.list(c.exporterEntityId).find((x) => x.documentId === line.documentId);
+      if (!d) throw new GlosError('INVALID_STATE', `${line.documentTitle ?? EXPORT_PAPER_LABEL[key]} is no longer among the exporter’s papers — ask it to attach it again`);
+      if (d.status === 'superseded') throw new GlosError('INVALID_STATE', `${d.title} has been replaced since it was attached — ask the exporter to attach the current one`);
+      if (d.expiresAt && d.expiresAt < new Date(now).toISOString().slice(0, 10)) throw new GlosError('INVALID_STATE', `${d.title} expired on ${d.expiresAt}: it cannot be relied on at customs`);
+    }
+    Object.assign(line, { acceptedAt: new Date(now).toISOString(), acceptedBy: by });
+    delete line.refusedAt;
+    delete line.refusedBy;
+    delete line.refusedReason;
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** Sent back, always with a reason: an exporter cannot put right a paper that came back with none. */
+  refusePaper(exportId: string, actorEntityId: string, key: ExportPaperKey, reason: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireExport(exportId);
+    this.requireAgent(c, actorEntityId);
+    const why = reason?.trim();
+    if (!why || why.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say why — an exporter cannot put right a paper that came back with no reason', { field: 'reason' });
+    const line = this.suppliedLine(c, key);
+    Object.assign(line, { refusedAt: new Date(now).toISOString(), refusedBy: by, refusedReason: why.slice(0, 300) });
+    delete line.acceptedAt;
+    delete line.acceptedBy;
+    this.exports.set(c.exportId, c);
+    this.tell(c, `${c.code}: your clearing agent sent back ${EXPORT_PAPER_NOUN[key]}`, `${this.nameOf(actorEntityId)} sent back ${EXPORT_PAPER_NOUN[key]} on ${c.code}: “${line.refusedReason}”. Supply it again on the export.`);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /**
+   * THE PAPER ITSELF, for whoever may read this export: the exporter, its appointed agent, staff. The grant IS the
+   * appointment — derived, never a second list — so ending it ends the reading on the same call.
+   */
+  paperFile(exportId: string, readerEntityId: string, key: ExportPaperKey, opts: { all?: boolean } = {}) {
+    const c = this.requireExport(exportId);
+    this.sideOf(c, readerEntityId, opts.all);
+    const line = c.papers.find((p) => p.key === key);
+    if (!line?.documentId) throw new GlosError('NOT_FOUND', 'No paper is attached on that line');
+    return this.documents.file(c.exporterEntityId, line.documentId);
+  }
+
+  /* ------------------------------------------------- EX7 the clearing agent -- */
+
+  /**
+   * APPOINT A CLEARING AGENT on this export — the exporter's decision alone, as its papers are its own. The agent reads
+   * what is attached here, gives the export entry, and accepts each paper or sends it back, under its own sign-in.
+   * Replacing one is two acts: the moment the first stops reading the exporter's papers is one the exporter sees.
+   */
+  appointAgent(exportId: string, actorEntityId: string, agentEntityId: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    const agent = this.entities.find(agentEntityId);
+    if (!agent) throw new GlosError('NOT_FOUND', 'No such company');
+    if (agent.entityId === c.exporterEntityId) throw new GlosError('VALIDATION_FAILED', 'You hold your own papers — appointing yourself grants nothing');
+    if (c.agent) {
+      throw new GlosError('INVALID_STATE', `${this.nameOf(c.agent.entityId)} is already appointed on ${c.code}. End that appointment first — an agent losing access to your papers is a moment you should see happen`);
+    }
+    c.agent = { entityId: agent.entityId, appointedAt: new Date(now).toISOString(), appointedBy: by };
+    this.exports.set(c.exportId, c);
+    this.tell(
+      c,
+      `${c.code}: you are appointed to clear an export`,
+      `${this.nameOf(c.exporterEntityId)} appointed you as its clearing agent on ${c.code} — ${c.goodsDescription}, leaving through ${c.loadingPort}, booking ${c.booking.reference}. Its papers are on the export in your Exports: give the export entry, and accept each paper or send it back with a reason.`,
+      agent.entityId,
+    );
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** End it: at once, and both sides see it. Kept on the record — who could read these papers, and until when. */
+  endAgent(exportId: string, actorEntityId: string, by: string, reason?: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    if (!c.agent) throw new GlosError('INVALID_STATE', `No clearing agent is appointed on ${c.code}`);
+    const why = reason?.trim();
+    const former = { ...c.agent, endedAt: new Date(now).toISOString(), endedBy: by, ...(why ? { reason: why.slice(0, 200) } : {}) };
+    c.formerAgents = [...(c.formerAgents ?? []), former];
+    delete c.agent;
+    this.exports.set(c.exportId, c);
+    this.tell(c, `${c.code}: your appointment ended`, `${this.nameOf(c.exporterEntityId)} ended your appointment as clearing agent on ${c.code}${why ? `: “${former.reason}”` : ''}. Its papers are no longer shared with you.`, former.entityId);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /* ----------------------------------------------------- EX6 the box's clock -- */
+
+  /**
+   * HOW MANY FREE DAYS THE LINE GIVES — the exporter's claim, from its agreement with the line or its forwarder: outside
+   * the terminal (detention) or inside it (demurrage). Kept, every one: a corrected figure is a second claim, not an edit.
+   */
+  claimFreeDays(exportId: string, actorEntityId: string, kind: FreeDayKind, days: number, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    if (!(FREE_DAY_KINDS as readonly string[]).includes(kind)) throw new GlosError('VALIDATION_FAILED', 'Say which free days: outside the terminal (detention) or inside it (demurrage)', { field: 'kind' });
+    if (!Number.isInteger(days) || days < 0 || days > 90) throw new GlosError('VALIDATION_FAILED', 'Free days are a whole number of days, 0 to 90', { field: 'days' });
+    if (c.loaded) throw new GlosError('INVALID_STATE', `${c.code} was loaded on board on ${utc(c.loaded.at)}: the box’s clock has stopped`);
+    c.freeDays = [...(c.freeDays ?? []), { kind, days, byEntityId: c.exporterEntityId, by, at: new Date(now).toISOString() }];
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /**
+   * WHEN THE EMPTY LEFT THE DEPOT, where no load of ours fetched it — the line or the forwarder brought it, or the
+   * exporter's own truck did. Where our empty load fetched it, its pickup says it, and a typed second date is refused.
+   */
+  recordEmptyOut(exportId: string, actorEntityId: string, at: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    if (c.emptyFreightId && this.legOf(c.emptyFreightId).status !== 'cancelled') {
+      throw new GlosError('INVALID_STATE', `The empty is fetched on load ${c.emptyFreightCode}: its pickup says when it left the depot`);
+    }
+    const when = pastMoment(at, 'When the empty left the depot', now);
+    const gatedInAt = this.timingOf(c, now).gatedInAt;
+    if (gatedInAt && when > gatedInAt) throw new GlosError('VALIDATION_FAILED', `The empty cannot have left the depot after the box was inside the gate (${utc(gatedInAt)})`, { field: 'at' });
+    c.emptyOut = { at: when, by, recordedAt: new Date(now).toISOString() };
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** LOADED ON BOARD, from the forwarder's or the line's word: what stops the box's clock. Only once it is inside the gate. */
+  recordLoaded(exportId: string, actorEntityId: string, at: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    const gatedInAt = this.timingOf(c, now).gatedInAt;
+    if (!gatedInAt) throw new GlosError('INVALID_STATE', `${c.code} is not inside the terminal yet: a box is loaded on board only after it gated in`);
+    const when = pastMoment(at, 'When it was loaded on board', now);
+    if (when < gatedInAt) throw new GlosError('VALIDATION_FAILED', `It cannot have been loaded on board before it was inside the gate (${utc(gatedInAt)})`, { field: 'at' });
+    c.loaded = { at: when, by, recordedAt: new Date(now).toISOString() };
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** The box's clock, derived on every read from the empty out, the gate-in and the loading — never a stored figure. */
+  boxOf(c: ExportConsignment, now = Date.now(), timing: ExportTiming = this.timingOf(c, now)): ExportBoxClockView {
+    const empty = c.emptyFreightId ? this.legOf(c.emptyFreightId) : undefined;
+    const fromLoad = empty && empty.status !== 'cancelled' ? empty.pickedUpAt : undefined;
+    const emptyOutAt = fromLoad ?? c.emptyOut?.at;
+    const clock = exportBoxClock(
+      {
+        ...(emptyOutAt ? { emptyOutAt } : {}),
+        ...(timing.gatedInAt ? { gatedInAt: timing.gatedInAt } : {}),
+        ...(c.loaded ? { loaded: { at: c.loaded.at, by: c.loaded.by } } : {}),
+        freeDays: c.freeDays ?? [],
+      },
+      now,
+    );
+    return { ...clock, dueSoon: boxDueSoon(clock), ...(emptyOutAt ? { emptyOutAt, emptyOutFrom: fromLoad ? ('load' as const) : ('recorded' as const) } : {}) };
   }
 
   /* --------------------------------------------- EX5 the handover and the BL -- */
@@ -371,7 +565,11 @@ export class ExportService {
     if (!c.ladenFreightId) out.push('A load to the terminal');
     else if (!this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the terminal');
     if (!c.vgm) out.push('The verified gross mass');
-    for (const p of c.papers) if (!p.optional && !p.documentId && !p.reference) out.push(EXPORT_PAPER_LABEL[p.key]);
+    for (const p of c.papers) {
+      // A paper its agent sent back is a gap, whatever was attached: what was given is not what customs will take.
+      if (p.refusedAt) out.push(`${EXPORT_PAPER_LABEL[p.key]} — sent back by your clearing agent: ${p.refusedReason}`);
+      else if (!p.optional && !p.documentId && !p.reference) out.push(EXPORT_PAPER_LABEL[p.key]);
+    }
     return out;
   }
 
@@ -392,8 +590,13 @@ export class ExportService {
       ? `${c.vgm.kg.toLocaleString('en')} kg, method ${c.vgm.method}${c.vgm.weighbridge ? `, ${esc(c.vgm.weighbridge)}` : ''}${c.vgm.ticketRef ? `, ticket ${esc(c.vgm.ticketRef)}` : ''} — signed for by ${esc(c.vgm.signatory)}`
       : '';
     const papers = d.papers
-      .map((p) => row(p.label, p.documentTitle || p.reference ? esc([p.documentTitle, p.reference].filter(Boolean).join(' — ')) : p.optional ? 'Not given (not every destination asks for it)' : missing()))
+      .map((p) => {
+        const given = p.documentTitle || p.reference ? esc([p.documentTitle, p.reference].filter(Boolean).join(' — ')) : p.optional ? 'Not given (not every destination asks for it)' : missing();
+        const word = p.refusedAt ? ` <span class="missing">Sent back by the clearing agent: ${esc(p.refusedReason ?? '')}</span>` : p.acceptedAt ? ` — accepted by ${esc(p.acceptedBy ?? '')}` : '';
+        return row(p.label, given + word);
+      })
       .join('');
+    const agentRow = row('Clearing agent', d.agent ? esc(d.agent.name) : 'None appointed on SeeBuyGet');
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(c.code)} — handover at ${esc(c.loadingPort)}</title>
 <style>body{font:14px/1.45 system-ui,sans-serif;color:#111;margin:24px auto;max-width:760px;padding:0 16px}h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 6px;border-bottom:1px solid #ccc;padding-bottom:3px}table{border-collapse:collapse;width:100%}th{text-align:left;font-weight:600;width:38%;padding:4px 8px 4px 0;vertical-align:top}td{padding:4px 0}.missing{color:#b00020;font-weight:600}.note{color:#555;font-size:12px;margin-top:18px}@media print{body{margin:0}}</style></head><body>
 <h1>Handover at ${esc(c.loadingPort)} — ${esc(c.code)}</h1>
@@ -401,8 +604,9 @@ export class ExportService {
 ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; '))}.</p>` : ''}
 <h2>Booking</h2><table>${row('Booking number', esc(c.booking.reference))}${row(c.booking.bookedWith === 'shipping_line' ? 'Shipping line' : 'Forwarder', esc(c.booking.partyName))}${c.booking.vessel ? row('Vessel / voyage', esc(`${c.booking.vessel}${c.booking.voyage ? ` / ${c.booking.voyage}` : ''}`)) : ''}${row('Gate-in cut-off', esc(utc(c.booking.gateCutoffAt)))}${c.booking.vgmCutoffAt ? row('Verified gross mass cut-off', esc(utc(c.booking.vgmCutoffAt))) : ''}${c.booking.docsCutoffAt ? row('Documents cut-off', esc(utc(c.booking.docsCutoffAt))) : ''}${c.booking.emptyReleaseRef ? row('Empty release', esc(c.booking.emptyReleaseRef)) : ''}</table>
 <h2>The box</h2><table>${row('Container number', missing(c.containerNo))}${row('Type', esc(spec ? `${spec.code} — ${spec.label}` : c.containerType ?? ''))}${row('Seal', missing(seal || undefined))}${row('Verified gross mass', missing(vgm || undefined))}</table>
-<h2>Papers</h2><table>${papers}</table>
+<h2>Papers</h2><table>${agentRow}${papers}</table>
 <h2>The road to the terminal</h2><table>${row('Terminal', esc(c.terminal.label))}${row('Road consignment note', d.ladenLeg ? esc(`CMR-${d.ladenLeg.code}`) : missing())}${row('Collected', d.timing.collectedAt ? esc(utc(d.timing.collectedAt)) : 'Not yet')}${row('Gated in', d.timing.gatedInAt ? esc(utc(d.timing.gatedInAt)) : 'Not yet')}${row('Bill of lading', c.billOfLading ? esc(c.billOfLading.number) : 'Not issued yet — recorded once your forwarder issues it')}</table>
+<h2>The box’s clock</h2><table>${row('Empty out of the depot', d.box.emptyOutAt ? esc(utc(d.box.emptyOutAt)) : 'Not recorded')}${row('Free days outside the terminal (detention)', esc(freeDaysWords(c, 'detention')))}${row('Free days inside the terminal (demurrage)', esc(freeDaysWords(c, 'demurrage')))}${c.loaded ? row('Loaded on board', esc(utc(c.loaded.at))) : ''}</table><p>${esc(d.box.basis)}</p>
 <p class="note">Made on SeeBuyGet on ${esc(utc(new Date(now).toISOString()))}. SeeBuyGet carried the road leg; the ocean leg, its booking and the bill of lading are your forwarder’s or the line’s. The verified gross mass is the exporter’s declaration, handed to the forwarder — SeeBuyGet sends nothing to a line.</p>
 </body></html>`;
   }
@@ -418,20 +622,31 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
     const told: string[] = [];
     for (const c of [...this.exports.values()]) {
       const t = this.timingOf(c, now);
-      if (t.gatedInAt) continue;
-      const cutoff = Date.parse(c.booking.gateCutoffAt);
       const warned = { ...(c.warned ?? {}) };
-      if (!warned.pickup && !t.collectedAt && now < cutoff && now >= Date.parse(t.leaveByAt) - PICKUP_WARN_H * H) {
+      // The box's free days — outside the terminal until the gate, inside it until it is loaded: once three days before
+      // the date, and once when it passed. Keyed by the date, so a corrected claim is a new date and is warned afresh.
+      const box = this.boxOf(c, now, t);
+      if (box.dueAt && (box.kind === 'detention' || box.kind === 'demurrage') && (box.overdue || box.dueSoon)) {
+        const key = `${box.kind}@${box.dueAt}:${box.overdue ? 'over' : 'soon'}`;
+        if (!(warned.box ?? []).includes(key)) {
+          warned.box = [...(warned.box ?? []), key];
+          const [title, body] = boxWarning(c, box);
+          this.tell(c, title, body);
+          told.push(`${c.code}:box:${box.kind}:${box.overdue ? 'over' : 'soon'}`);
+        }
+      }
+      const cutoff = Date.parse(c.booking.gateCutoffAt);
+      if (!t.gatedInAt && !warned.pickup && !t.collectedAt && now < cutoff && now >= Date.parse(t.leaveByAt) - PICKUP_WARN_H * H) {
         warned.pickup = new Date(now).toISOString();
         this.tell(c, `${c.code}: the box must leave by ${utc(t.leaveByAt)}`, `To be inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)}, a truck must leave ${c.loadingPlace.label} by ${utc(t.leaveByAt)}. ${c.ladenFreightId ? `No driver has collected load ${c.ladenFreightCode} yet.` : 'Post the load to the terminal now.'}`);
         told.push(`${c.code}:pickup`);
       }
-      if (!warned.gate && now >= cutoff) {
+      if (!t.gatedInAt && !warned.gate && now >= cutoff) {
         warned.gate = new Date(now).toISOString();
         this.tell(c, `${c.code}: the gate closed without the box`, `The gate-in cut-off at ${c.terminal.label} was ${utc(c.booking.gateCutoffAt)} and the box is not inside. Tell ${c.booking.partyName} at once: it may go on the next vessel, under a new cut-off.`);
         told.push(`${c.code}:gate`);
       }
-      if (c.booking.vgmCutoffAt && !c.vgm && !warned.vgm && now >= Date.parse(c.booking.vgmCutoffAt) - VGM_WARN_H * H) {
+      if (!t.gatedInAt && c.booking.vgmCutoffAt && !c.vgm && !warned.vgm && now >= Date.parse(c.booking.vgmCutoffAt) - VGM_WARN_H * H) {
         warned.vgm = new Date(now).toISOString();
         this.tell(c, `${c.code}: declare the verified gross mass`, `${c.booking.partyName} needs the box’s verified gross mass before ${utc(c.booking.vgmCutoffAt)}: without it the box is not loaded. Weigh it and declare it on the export.`);
         told.push(`${c.code}:vgm`);
@@ -446,10 +661,11 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
 
   /* ----------------------------------------------------------------- inside -- */
 
-  private tell(c: ExportConsignment, title: string, body: string): void {
+  /** Into the bell — the exporter's, or (named) its agent's — as a load's trouble is. */
+  private tell(c: ExportConsignment, title: string, body: string, toEntityId: string = c.exporterEntityId): void {
     let did: string | undefined;
     try {
-      did = this.entities.get(c.exporterEntityId).did;
+      did = this.entities.get(toEntityId).did;
     } catch {
       return;
     }
@@ -466,6 +682,31 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
     const c = this.exports.get(exportId);
     if (!c) throw new GlosError('NOT_FOUND', 'No such export');
     return c;
+  }
+
+  /** Who is reading: the exporter, the agent it appointed, or staff — anybody else is told there is no such export. */
+  private sideOf(c: ExportConsignment, readerEntityId: string, all?: boolean): 'exporter' | 'agent' | 'staff' {
+    if (readerEntityId && readerEntityId === c.exporterEntityId) return 'exporter';
+    if (readerEntityId && readerEntityId === c.agent?.entityId) return 'agent';
+    if (all) return 'staff';
+    throw new GlosError('NOT_FOUND', 'No such export');
+  }
+
+  private requireAgent(c: ExportConsignment, actorEntityId: string): void {
+    this.sideOf(c, actorEntityId);
+    if (c.agent?.entityId !== actorEntityId) throw new GlosError('FORBIDDEN', `Only the clearing agent appointed on ${c.code} gives its word on the papers`);
+  }
+
+  /** A paper line that holds something to give a word on. */
+  private suppliedLine(c: ExportConsignment, key: ExportPaperKey): ExportPaper {
+    const line = c.papers.find((p) => p.key === key);
+    if (!line) throw new GlosError('NOT_FOUND', 'No such paper on this export');
+    if (!line.documentId && !line.reference) throw new GlosError('INVALID_STATE', `Nothing is supplied for ${EXPORT_PAPER_LABEL[key]} yet`);
+    return line;
+  }
+
+  private nameOf(entityId: string): string {
+    return this.entities.find(entityId)?.name ?? entityId;
   }
 
   /** The exporter's own — anybody else is told there is no such export. */
@@ -493,6 +734,48 @@ function moment(value: string | undefined, what: string): string | undefined {
   const at = Date.parse(v);
   if (Number.isNaN(at)) throw new GlosError('VALIDATION_FAILED', `${what} must be a date and time`);
   return new Date(at).toISOString();
+}
+
+/** A moment that already happened: refused when it is not a time, or when it is ahead of now. */
+function pastMoment(value: string, what: string, now: number): string {
+  const at = moment(value, what);
+  if (!at) throw new GlosError('FIELD_REQUIRED', `Say ${what.charAt(0).toLowerCase()}${what.slice(1)}`, { field: 'at' });
+  if (Date.parse(at) > now + 10 * 60_000) throw new GlosError('VALIDATION_FAILED', `${what} cannot be ahead of now`, { field: 'at' });
+  return at;
+}
+
+/** The claim in force, in words: "14 days, said by Amina on 28 Oct 2026 09:00 UTC" — or that nobody said. */
+function freeDaysWords(c: ExportConsignment, kind: FreeDayKind): string {
+  const claim = (c.freeDays ?? [])
+    .filter((f) => f.kind === kind)
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .pop();
+  return claim ? `${claim.days} day${claim.days === 1 ? '' : 's'}, said by ${claim.by} on ${utc(claim.at)}` : 'Not said';
+}
+
+/** The bell's words for a box near or past its free days: what is counted, by when, and who to talk to. Never a sum. */
+function boxWarning(c: ExportConsignment, box: ExportBoxClockView): [string, string] {
+  const due = utc(box.dueAt!);
+  if (box.kind === 'detention') {
+    return box.overdue
+      ? [
+          `${c.code}: the box’s free days outside the terminal ran out`,
+          `The ${box.freeDays} free days outside the terminal (detention) ended on ${due} and the box is not inside the gate at ${c.terminal.label}. Each day over is the line’s to charge, under your agreement with it — talk to ${c.booking.partyName}.`,
+        ]
+      : [
+          `${c.code}: the box’s free days outside the terminal end ${due}`,
+          `The line gives ${box.freeDays} free days for the box outside the terminal (detention, ${box.freeDaysBy}’s figure); they end on ${due}. Get it inside the gate at ${c.terminal.label} before then: after that the line may charge for each day, under your agreement with it.`,
+        ];
+  }
+  return box.overdue
+    ? [
+        `${c.code}: the box’s free days inside the terminal ran out`,
+        `The ${box.freeDays} free days inside ${c.terminal.label} (demurrage) ended on ${due}, and nobody has recorded the box loaded on board. Ask ${c.booking.partyName} — and record it loaded once it is.`,
+      ]
+    : [
+        `${c.code}: the box’s free days inside the terminal end ${due}`,
+        `The box waits inside ${c.terminal.label}; its ${box.freeDays} free days there (demurrage, ${box.freeDaysBy}’s figure) end on ${due}. Ask ${c.booking.partyName} which vessel takes it: after that the terminal or the line may charge for each day.`,
+      ];
 }
 
 /** "28 Oct 2026 18:00 UTC" — a cut-off said in one clock, the same for everybody who reads it. */

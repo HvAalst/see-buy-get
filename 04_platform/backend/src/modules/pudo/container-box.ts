@@ -195,7 +195,7 @@ const elapsed = (fromIso: string, now: number) => Math.max(0, Math.floor((now - 
 const plusDays = (fromIso: string, days: number) => new Date(Date.parse(fromIso) + days * DAY_MS).toISOString();
 
 /** The latest claim of a kind. Corrections arrive as new claims, so "latest" is the live one. */
-function claimOf(times: BoxTimes, kind: FreeDayKind): FreeDaysClaim | undefined {
+function claimOf(times: Pick<BoxTimes, 'freeDays'>, kind: FreeDayKind): FreeDaysClaim | undefined {
   return times.freeDays
     .filter((c) => c.kind === kind)
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
@@ -280,6 +280,116 @@ export function boxClock(times: BoxTimes, now: number): BoxClock {
   };
 }
 
+/* ------------------------------------------------------- the clock on an export -- */
+
+/**
+ * THE SAME BOX, THE OTHER WAY ROUND (the user, 2026-10-28: "1 and 2 are clear addition to what you built here").
+ *
+ * On an import the box lands inside the terminal first and leaves it second; on an export it leaves the line's
+ * depot EMPTY first and enters the terminal LADEN second. So the two clocks run in the opposite order:
+ *
+ *   - **detention** from the empty out of the depot until the laden box is inside the terminal's gate — the box
+ *     is outside, on loan to the exporter;
+ *   - **demurrage** from that gate-in until it is loaded on board — the box waits inside the terminal.
+ *
+ * The rules are the import's and for the same reasons: dates and whole days, never money; the free days are a
+ * CLAIM with a name on it (the exporter's, from its agreement with the line or its forwarder) and the latest
+ * claim is the live one; no claim means no date at all, never a zero. Loading on board ends it — a RECORDED
+ * fact, never a dismissal.
+ */
+export interface ExportBoxTimes {
+  /** The empty left the depot: the empty load's pickup, or — when no load of ours fetched it — what the exporter recorded. */
+  emptyOutAt?: string;
+  /** The laden box inside the terminal's gate: the load to the terminal's delivery. */
+  gatedInAt?: string;
+  /** Loaded on board, as the exporter recorded it from its forwarder's or the line's word. */
+  loaded?: { at: string; by: string };
+  freeDays: FreeDaysClaim[];
+}
+
+export interface ExportBoxClock {
+  /** What is running: `detention` outside, `demurrage` inside, `stopped` once loaded, `unknown` before the empty is out. */
+  kind: 'detention' | 'demurrage' | 'stopped' | 'unknown';
+  since?: string;
+  daysElapsed?: number;
+  freeDays?: number;
+  freeDaysBy?: string;
+  freeDaysAt?: string;
+  /** DERIVED: since + the free days of the claim in force. Never stored, so a corrected claim moves it at once. */
+  dueAt?: string;
+  daysLeft?: number;
+  overdue: boolean;
+  /** Closed: the whole days it was outside, empty out to gate-in, once both are known. */
+  detentionDays?: number;
+  /** Closed: the whole days it waited inside, gate-in to loading, once loaded. */
+  demurrageDays?: number;
+  /** One sentence naming what is counted and whose figure it is — the handover file prints it. */
+  basis: string;
+}
+
+export function exportBoxClock(times: ExportBoxTimes, now: number): ExportBoxClock {
+  const detentionDays = times.emptyOutAt && times.gatedInAt ? elapsed(times.emptyOutAt, Date.parse(times.gatedInAt)) : undefined;
+  const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
+  const outside = detentionDays != null ? ` It was ${days(detentionDays)} outside the terminal, from the empty out to the gate.` : '';
+
+  if (times.loaded && times.gatedInAt) {
+    const demurrageDays = elapsed(times.gatedInAt, Date.parse(times.loaded.at));
+    return {
+      kind: 'stopped',
+      overdue: false,
+      ...(detentionDays != null ? { detentionDays } : {}),
+      demurrageDays,
+      basis: `Loaded on board on ${day(times.loaded.at)}, recorded by ${times.loaded.by}: the box is the line's again and no clock runs.${outside} It waited ${days(demurrageDays)} inside the terminal.`,
+    };
+  }
+
+  const running: FreeDayKind | undefined = times.gatedInAt ? 'demurrage' : times.emptyOutAt ? 'detention' : undefined;
+  if (!running) {
+    return {
+      kind: 'unknown',
+      overdue: false,
+      basis: 'No clock runs on the box yet: as far as anyone has recorded, the empty has not left the depot. Its leaving is what starts detention, and we do not guess at it.',
+    };
+  }
+
+  const since = (running === 'demurrage' ? times.gatedInAt : times.emptyOutAt)!;
+  const daysElapsed = elapsed(since, now);
+  const claim = claimOf({ freeDays: times.freeDays }, running);
+  const which = running === 'detention' ? 'Detention (the box outside the terminal)' : 'Demurrage (the box waiting inside the terminal)';
+  const until = running === 'detention' ? 'inside the gate' : 'loaded on board';
+  const closed = running === 'demurrage' ? outside : '';
+
+  if (!claim) {
+    return {
+      kind: running,
+      since,
+      daysElapsed,
+      overdue: false,
+      ...(detentionDays != null ? { detentionDays } : {}),
+      basis: `${which} since ${day(since)}: ${days(daysElapsed)}. Nobody has said how many free days the line gives, so there is no date to count to — the figure is in the exporter's agreement with the line or its forwarder, and only the exporter can give it.${closed}`,
+    };
+  }
+
+  const dueAt = plusDays(since, claim.days);
+  const daysLeft = claim.days - daysElapsed;
+  return {
+    kind: running,
+    since,
+    daysElapsed,
+    freeDays: claim.days,
+    freeDaysBy: claim.by,
+    freeDaysAt: claim.at,
+    dueAt,
+    daysLeft,
+    overdue: daysLeft < 0,
+    ...(detentionDays != null ? { detentionDays } : {}),
+    basis:
+      daysLeft < 0
+        ? `${which}: the ${claim.days} free days ${claim.by} gave ran out on ${day(dueAt)}, ${days(-daysLeft)} ago. What a day over costs is between the exporter and the line — we count, and charge nothing.${closed}`
+        : `${which} since ${day(since)}: day ${daysElapsed} of the ${claim.days} free days ${claim.by} gave, so it must be ${until} by ${day(dueAt)}. The figure is theirs, from an agreement we have not seen.${closed}`,
+  };
+}
+
 /* --------------------------------------------------- the interchange record -- */
 
 /** The two gates a box passes through with us: out of the terminal, and back in at a depot. */
@@ -326,6 +436,6 @@ export interface InterchangeAccount {
 export const BOX_WARN_DAYS = 3;
 
 /** True while the box is inside the window where somebody can still act. Overdue is a different message. */
-export function boxDueSoon(clock: BoxClock): boolean {
+export function boxDueSoon(clock: Pick<BoxClock, 'daysLeft'>): boolean {
   return clock.daysLeft != null && clock.daysLeft >= 0 && clock.daysLeft <= BOX_WARN_DAYS;
 }

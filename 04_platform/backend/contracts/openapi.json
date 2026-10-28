@@ -4220,6 +4220,335 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/free-days": {
+      "post": {
+        "operationId": "Export.freeDays",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportFreeDaysDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/empty-out": {
+      "post": {
+        "operationId": "Export.emptyOut",
+        "summary": "",
+        "description": "When the empty left the depot, where no load of ours fetched it.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportMomentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/loaded": {
+      "post": {
+        "operationId": "Export.loaded",
+        "summary": "",
+        "description": "Loaded on board, from the forwarder's or the line's word: the box's clock stops.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportMomentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/agent": {
+      "post": {
+        "operationId": "Export.appointAgent",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportAppointAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/agent/end": {
+      "post": {
+        "operationId": "Export.endAgent",
+        "summary": "",
+        "description": "End the appointment: at once, and the agent is told.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportEndAgentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/papers/{key}/accept": {
+      "post": {
+        "operationId": "Export.acceptPaper",
+        "summary": "",
+        "description": "The appointed agent accepts a paper.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/papers/{key}/refuse": {
+      "post": {
+        "operationId": "Export.refusePaper",
+        "summary": "",
+        "description": "The appointed agent sends a paper back, with its reason; the exporter is told.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportPaperRefusalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/papers/{key}/file": {
+      "get": {
+        "operationId": "Export.paperFile",
+        "summary": "",
+        "description": "The paper attached on a line, for the exporter, its appointed agent, or staff. One the caller may not read answers\nNOT FOUND, never FORBIDDEN — the import's rule: a probe learns nothing about what exists.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/live": {
       "get": {
         "operationId": "Live.stream",
@@ -34575,6 +34904,22 @@
           },
           "suppliedBy": {
             "type": "string"
+          },
+          "acceptedAt": {
+            "type": "string",
+            "description": "The appointed clearing agent's word on what was supplied — accepted, or sent back with a reason. Cleared when the paper is supplied again."
+          },
+          "acceptedBy": {
+            "type": "string"
+          },
+          "refusedAt": {
+            "type": "string"
+          },
+          "refusedBy": {
+            "type": "string"
+          },
+          "refusedReason": {
+            "type": "string"
           }
         },
         "required": [
@@ -34598,6 +34943,105 @@
           "number",
           "recordedAt",
           "recordedBy"
+        ]
+      },
+      "ExportFreeDays": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "demurrage",
+              "detention"
+            ]
+          },
+          "days": {
+            "type": "number"
+          },
+          "byEntityId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "days",
+          "byEntityId",
+          "by",
+          "at"
+        ]
+      },
+      "ExportMoment": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "recordedAt"
+        ]
+      },
+      "ExportAgent": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "appointedAt": {
+            "type": "string"
+          },
+          "appointedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "appointedAt",
+          "appointedBy"
+        ]
+      },
+      "ExportFormerAgent": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "appointedAt": {
+            "type": "string"
+          },
+          "appointedBy": {
+            "type": "string"
+          },
+          "endedAt": {
+            "type": "string"
+          },
+          "endedBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "appointedAt",
+          "appointedBy",
+          "endedAt",
+          "endedBy"
         ]
       },
       "ExportConsignment": {
@@ -34689,6 +35133,38 @@
           "billOfLading": {
             "$ref": "#/components/schemas/ExportBillOfLading"
           },
+          "freeDays": {
+            "description": "The box's free days, as the exporter was given them: detention outside the terminal, demurrage inside.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportFreeDays"
+            }
+          },
+          "emptyOut": {
+            "description": "When the empty left the depot — recorded only where no empty load of ours fetched it (the line or forwarder brought it).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportMoment"
+              }
+            ]
+          },
+          "loaded": {
+            "description": "Loaded on board, from the forwarder's or the line's word: what stops the box's clock.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportMoment"
+              }
+            ]
+          },
+          "agent": {
+            "$ref": "#/components/schemas/ExportAgent"
+          },
+          "formerAgents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportFormerAgent"
+            }
+          },
           "warned": {
             "type": "object",
             "properties": {
@@ -34703,6 +35179,13 @@
               "vgm": {
                 "required": false,
                 "type": "string"
+              },
+              "box": {
+                "required": false,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -34843,6 +35326,22 @@
           "suppliedBy": {
             "type": "string"
           },
+          "acceptedAt": {
+            "type": "string",
+            "description": "The appointed clearing agent's word on what was supplied — accepted, or sent back with a reason. Cleared when the paper is supplied again."
+          },
+          "acceptedBy": {
+            "type": "string"
+          },
+          "refusedAt": {
+            "type": "string"
+          },
+          "refusedBy": {
+            "type": "string"
+          },
+          "refusedReason": {
+            "type": "string"
+          },
           "label": {
             "type": "string"
           }
@@ -34865,6 +35364,97 @@
         "required": [
           "documentId",
           "title"
+        ]
+      },
+      "ExportBoxClockView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "detention",
+              "demurrage",
+              "stopped",
+              "unknown"
+            ]
+          },
+          "since": {
+            "type": "string"
+          },
+          "daysElapsed": {
+            "type": "number"
+          },
+          "freeDays": {
+            "type": "number"
+          },
+          "freeDaysBy": {
+            "type": "string"
+          },
+          "freeDaysAt": {
+            "type": "string"
+          },
+          "dueAt": {
+            "type": "string"
+          },
+          "daysLeft": {
+            "type": "number"
+          },
+          "overdue": {
+            "type": "boolean"
+          },
+          "dueSoon": {
+            "type": "boolean",
+            "description": "Within three days of the date: still time to act."
+          },
+          "detentionDays": {
+            "type": "number"
+          },
+          "demurrageDays": {
+            "type": "number"
+          },
+          "emptyOutAt": {
+            "type": "string",
+            "description": "When the empty left the depot, and how we know: its load's pickup, or what the exporter recorded."
+          },
+          "emptyOutFrom": {
+            "type": "string",
+            "enum": [
+              "load",
+              "recorded"
+            ]
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "overdue",
+          "dueSoon",
+          "basis"
+        ]
+      },
+      "ExportAgentView": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "appointedAt": {
+            "type": "string"
+          },
+          "appointedBy": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entityId",
+          "appointedAt",
+          "appointedBy",
+          "name"
         ]
       },
       "ExportDetail": {
@@ -34903,11 +35493,29 @@
             }
           },
           "documents": {
-            "description": "The exporter's own current papers, to attach one to a line (never a loose upload).",
+            "description": "The exporter's own current papers, to attach one to a line (never a loose upload). Empty for its agent: it reads what is attached, nothing more.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ExportDocumentChoice"
             }
+          },
+          "box": {
+            "$ref": "#/components/schemas/ExportBoxClockView"
+          },
+          "you": {
+            "type": "string",
+            "description": "Who is reading: the exporter, its appointed clearing agent, or network staff.",
+            "enum": [
+              "exporter",
+              "agent",
+              "staff"
+            ]
+          },
+          "exporterName": {
+            "type": "string"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/ExportAgentView"
           }
         },
         "required": [
@@ -34916,7 +35524,10 @@
           "seals",
           "papers",
           "missing",
-          "documents"
+          "documents",
+          "box",
+          "you",
+          "exporterName"
         ]
       },
       "ExportContainerDto": {
@@ -35012,6 +35623,72 @@
         },
         "required": [
           "number"
+        ]
+      },
+      "ExportFreeDaysDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "demurrage",
+              "detention"
+            ]
+          },
+          "days": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 90
+          }
+        },
+        "required": [
+          "kind",
+          "days"
+        ]
+      },
+      "ExportMomentDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "description": "When it happened, as ISO-8601."
+          }
+        },
+        "required": [
+          "at"
+        ]
+      },
+      "ExportAppointAgentDto": {
+        "type": "object",
+        "properties": {
+          "agentEntityId": {
+            "type": "string",
+            "description": "The clearing agent's company, chosen from the agents' directory."
+          }
+        },
+        "required": [
+          "agentEntityId"
+        ]
+      },
+      "ExportEndAgentDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
+      },
+      "ExportPaperRefusalDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "GeoPoint": {

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { FREE_DAY_KINDS, type FreeDayKind } from './container-box';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -74,6 +75,42 @@ export class ExportPaper {
   @ApiPropertyOptional() reference?: string;
   @ApiPropertyOptional() suppliedAt?: string;
   @ApiPropertyOptional() suppliedBy?: string;
+  /** The appointed clearing agent's word on what was supplied — accepted, or sent back with a reason. Cleared when the paper is supplied again. */
+  @ApiPropertyOptional() acceptedAt?: string;
+  @ApiPropertyOptional() acceptedBy?: string;
+  @ApiPropertyOptional() refusedAt?: string;
+  @ApiPropertyOptional() refusedBy?: string;
+  @ApiPropertyOptional() refusedReason?: string;
+}
+
+/** How many free days the line gives — the exporter's claim, from its agreement with the line or forwarder. Every claim is kept; the latest is in force. */
+export class ExportFreeDays {
+  @ApiProperty({ enum: FREE_DAY_KINDS }) kind: FreeDayKind;
+  @ApiProperty() days: number;
+  @ApiProperty() byEntityId: string;
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
+}
+
+/** A moment the exporter recorded from what it was told — when no load of ours saw it happen. */
+export class ExportMoment {
+  @ApiProperty() at: string;
+  @ApiProperty() by: string;
+  @ApiProperty() recordedAt: string;
+}
+
+/** The clearing agent the exporter appointed: reads this export's papers, gives the export entry, accepts or sends back. */
+export class ExportAgent {
+  @ApiProperty() entityId: string;
+  @ApiProperty() appointedAt: string;
+  @ApiProperty() appointedBy: string;
+}
+
+/** An appointment that ended — kept, so who could read these papers, and until when, stays on the record. */
+export class ExportFormerAgent extends ExportAgent {
+  @ApiProperty() endedAt: string;
+  @ApiProperty() endedBy: string;
+  @ApiPropertyOptional() reason?: string;
 }
 
 export class ExportBillOfLading {
@@ -112,8 +149,16 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: ExportVgm }) vgm?: ExportVgm;
   @ApiProperty({ type: [ExportPaper] }) papers: ExportPaper[];
   @ApiPropertyOptional({ type: ExportBillOfLading }) billOfLading?: ExportBillOfLading;
-  /** Which warnings were sent, once each: the latest departure near, the cut-off passed, the VGM cut-off near. */
-  @ApiPropertyOptional() warned?: { pickup?: string; gate?: string; vgm?: string };
+  /** The box's free days, as the exporter was given them: detention outside the terminal, demurrage inside. */
+  @ApiPropertyOptional({ type: [ExportFreeDays] }) freeDays?: ExportFreeDays[];
+  /** When the empty left the depot — recorded only where no empty load of ours fetched it (the line or forwarder brought it). */
+  @ApiPropertyOptional({ type: ExportMoment }) emptyOut?: ExportMoment;
+  /** Loaded on board, from the forwarder's or the line's word: what stops the box's clock. */
+  @ApiPropertyOptional({ type: ExportMoment }) loaded?: ExportMoment;
+  @ApiPropertyOptional({ type: ExportAgent }) agent?: ExportAgent;
+  @ApiPropertyOptional({ type: [ExportFormerAgent] }) formerAgents?: ExportFormerAgent[];
+  /** Which warnings were sent, once each: the latest departure near, the cut-off passed, the VGM cut-off near — and the box's free days, once per due date. */
+  @ApiPropertyOptional() warned?: { pickup?: string; gate?: string; vgm?: string; box?: string[] };
   @ApiProperty() createdAt: string;
   @ApiProperty() createdBy: string;
 }
@@ -151,6 +196,31 @@ export class ExportPaperView extends ExportPaper {
   @ApiProperty() label: string;
 }
 
+/** The box's clock on this export, derived on every read: detention outside, demurrage inside, in dates and days — never money. */
+export class ExportBoxClockView {
+  @ApiProperty({ enum: ['detention', 'demurrage', 'stopped', 'unknown'] }) kind: 'detention' | 'demurrage' | 'stopped' | 'unknown';
+  @ApiPropertyOptional() since?: string;
+  @ApiPropertyOptional() daysElapsed?: number;
+  @ApiPropertyOptional() freeDays?: number;
+  @ApiPropertyOptional() freeDaysBy?: string;
+  @ApiPropertyOptional() freeDaysAt?: string;
+  @ApiPropertyOptional() dueAt?: string;
+  @ApiPropertyOptional() daysLeft?: number;
+  @ApiProperty() overdue: boolean;
+  /** Within three days of the date: still time to act. */
+  @ApiProperty() dueSoon: boolean;
+  @ApiPropertyOptional() detentionDays?: number;
+  @ApiPropertyOptional() demurrageDays?: number;
+  /** When the empty left the depot, and how we know: its load's pickup, or what the exporter recorded. */
+  @ApiPropertyOptional() emptyOutAt?: string;
+  @ApiPropertyOptional({ enum: ['load', 'recorded'] }) emptyOutFrom?: 'load' | 'recorded';
+  @ApiProperty() basis: string;
+}
+
+export class ExportAgentView extends ExportAgent {
+  @ApiProperty() name: string;
+}
+
 export class ExportDocumentChoice {
   @ApiProperty() documentId: string;
   @ApiProperty() title: string;
@@ -166,8 +236,13 @@ export class ExportDetail {
   @ApiProperty({ type: [ExportPaperView] }) papers: ExportPaperView[];
   /** What is still missing before the forwarder can take it at the gate — in words. Empty: nothing. */
   @ApiProperty({ type: [String] }) missing: string[];
-  /** The exporter's own current papers, to attach one to a line (never a loose upload). */
+  /** The exporter's own current papers, to attach one to a line (never a loose upload). Empty for its agent: it reads what is attached, nothing more. */
   @ApiProperty({ type: [ExportDocumentChoice] }) documents: ExportDocumentChoice[];
+  @ApiProperty({ type: ExportBoxClockView }) box: ExportBoxClockView;
+  /** Who is reading: the exporter, its appointed clearing agent, or network staff. */
+  @ApiProperty({ enum: ['exporter', 'agent', 'staff'] }) you: 'exporter' | 'agent' | 'staff';
+  @ApiProperty() exporterName: string;
+  @ApiPropertyOptional({ type: ExportAgentView }) agent?: ExportAgentView;
 }
 
 export class ExportRow {
@@ -180,6 +255,10 @@ export class ExportRow {
   @ApiPropertyOptional() containerNo?: string;
   @ApiProperty({ type: ExportTiming }) timing: ExportTiming;
   @ApiProperty() missing: number;
+  @ApiProperty({ type: ExportBoxClockView }) box: ExportBoxClockView;
+  @ApiProperty({ enum: ['exporter', 'agent', 'staff'] }) you: 'exporter' | 'agent' | 'staff';
+  @ApiProperty() exporterName: string;
+  @ApiPropertyOptional() agentName?: string;
 }
 
 /* ------------------------------------------------------------------ requests -- */
@@ -239,4 +318,27 @@ export class ExportPaperDto {
 
 export class ExportBillOfLadingDto {
   @IsString() @MaxLength(60) number!: string;
+}
+
+export class ExportFreeDaysDto {
+  @IsIn(FREE_DAY_KINDS) kind!: FreeDayKind;
+  @IsInt() @Min(0) @Max(90) days!: number;
+}
+
+export class ExportMomentDto {
+  /** When it happened, as ISO-8601. */
+  @IsString() at!: string;
+}
+
+export class ExportAppointAgentDto {
+  /** The clearing agent's company, chosen from the agents' directory. */
+  @IsString() agentEntityId!: string;
+}
+
+export class ExportEndAgentDto {
+  @IsOptional() @IsString() @MaxLength(200) reason?: string;
+}
+
+export class ExportPaperRefusalDto {
+  @IsString() @MaxLength(300) reason!: string;
 }
