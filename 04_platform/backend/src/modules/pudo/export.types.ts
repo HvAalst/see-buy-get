@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { FREE_DAY_KINDS, type FreeDayKind } from './container-box';
+import { FEE_STATES, type FeeState } from './import.types';
+import { Quote } from './quote.types';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -111,6 +113,21 @@ export class ExportFormerAgent extends ExportAgent {
   @ApiProperty() endedAt: string;
   @ApiProperty() endedBy: string;
   @ApiPropertyOptional() reason?: string;
+  /** The fee it quoted while appointed, if it did: the quotation stays between the two of them. */
+  @ApiPropertyOptional() feeQuoteId?: string;
+}
+
+/** The appointed agent's fee: which quotation it is, whose, and when it was first quoted. One per appointment. */
+export class ExportFeeStamp {
+  @ApiProperty() quoteId: string;
+  @ApiProperty() quotedAt: string;
+  @ApiProperty() agentEntityId: string;
+}
+
+/** The exporter says the box is its own (a shipper-owned container): no line's free days run on it. */
+export class ExportOwnBox {
+  @ApiProperty() by: string;
+  @ApiProperty() at: string;
 }
 
 export class ExportBillOfLading {
@@ -157,6 +174,8 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: ExportMoment }) loaded?: ExportMoment;
   @ApiPropertyOptional({ type: ExportAgent }) agent?: ExportAgent;
   @ApiPropertyOptional({ type: [ExportFormerAgent] }) formerAgents?: ExportFormerAgent[];
+  @ApiPropertyOptional({ type: ExportFeeStamp }) fee?: ExportFeeStamp;
+  @ApiPropertyOptional({ type: ExportOwnBox }) ownBox?: ExportOwnBox;
   /** Which warnings were sent, once each: the latest departure near, the cut-off passed, the VGM cut-off near — and the box's free days, once per due date. */
   @ApiPropertyOptional() warned?: { pickup?: string; gate?: string; vgm?: string; box?: string[] };
   @ApiProperty() createdAt: string;
@@ -198,7 +217,7 @@ export class ExportPaperView extends ExportPaper {
 
 /** The box's clock on this export, derived on every read: detention outside, demurrage inside, in dates and days — never money. */
 export class ExportBoxClockView {
-  @ApiProperty({ enum: ['detention', 'demurrage', 'stopped', 'unknown'] }) kind: 'detention' | 'demurrage' | 'stopped' | 'unknown';
+  @ApiProperty({ enum: ['detention', 'demurrage', 'stopped', 'unknown', 'owned'] }) kind: 'detention' | 'demurrage' | 'stopped' | 'unknown' | 'owned';
   @ApiPropertyOptional() since?: string;
   @ApiPropertyOptional() daysElapsed?: number;
   @ApiPropertyOptional() freeDays?: number;
@@ -243,6 +262,9 @@ export class ExportDetail {
   @ApiProperty({ enum: ['exporter', 'agent', 'staff'] }) you: 'exporter' | 'agent' | 'staff';
   @ApiProperty() exporterName: string;
   @ApiPropertyOptional({ type: ExportAgentView }) agent?: ExportAgentView;
+  /** The appointed agent's fee, as a quotation between it and the exporter: nothing of it passes through SeeBuyGet. */
+  @ApiPropertyOptional({ type: Quote }) fee?: Quote;
+  @ApiProperty({ enum: FEE_STATES }) feeState: FeeState;
 }
 
 export class ExportRow {
@@ -289,6 +311,8 @@ export class RegisterExportDto {
   @IsString() loadingSiteId!: string;
   @IsString() terminalSiteId!: string;
   @IsOptional() @IsString() emptyDepotSiteId?: string;
+  /** The box is the exporter's own (a shipper-owned container): no line's free days run on it. */
+  @IsOptional() @IsBoolean() ownBox?: boolean;
   @IsOptional() @IsString() @MaxLength(80) by?: string;
 }
 
@@ -337,6 +361,20 @@ export class ExportAppointAgentDto {
 
 export class ExportEndAgentDto {
   @IsOptional() @IsString() @MaxLength(200) reason?: string;
+}
+
+export class ExportOwnBoxDto {
+  @IsBoolean() own!: boolean;
+}
+
+/** The appointed agent's fee, quoted to the exporter: a quotation, never a payment through us. */
+export class ExportFeeDto {
+  @IsNumber() @Min(0.01) amount!: number;
+  /** Three letters; left out, the currency of the country it is sent from. */
+  @IsOptional() @IsString() @MaxLength(3) currency?: string;
+  @IsOptional() @IsString() @MaxLength(300) note?: string;
+  /** Its own number for it — the quotation or proforma number. */
+  @IsOptional() @IsString() @MaxLength(60) reference?: string;
 }
 
 export class ExportPaperRefusalDto {

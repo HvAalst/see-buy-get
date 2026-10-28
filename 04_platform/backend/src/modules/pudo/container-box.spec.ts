@@ -201,6 +201,13 @@ describe('the clock on an export box: outside until the gate, inside until loade
     expect(c).toMatchObject({ kind: 'demurrage', since: iso(t0 + 4 * D + 5 * 3_600_000), daysElapsed: 1, detentionDays: 4, freeDays: 3, daysLeft: 2 });
   });
 
+  it('runs no line’s clock on a box the exporter owns, whatever free days or dates there are', () => {
+    const c = exportBoxClock({ emptyOutAt: iso(t0), gatedInAt: iso(t0 + 4 * D), owned: { by: 'Wanjiku' }, freeDays: [claim('detention', 2, t0)] }, t0 + 30 * D);
+    expect(c).toMatchObject({ kind: 'owned', overdue: false });
+    expect(c.dueAt).toBeUndefined();
+    expect(c.basis).toContain('shipper-owned');
+  });
+
   it('stops once loaded on board — a recorded fact, never overdue after', () => {
     const c = exportBoxClock({ emptyOutAt: iso(t0), gatedInAt: iso(t0 + 4 * D), loaded: { at: iso(t0 + 9 * D), by: 'Wanjiku' }, freeDays: [claim('demurrage', 1, t0)] }, t0 + 40 * D);
     expect(c).toMatchObject({ kind: 'stopped', overdue: false, detentionDays: 4, demurrageDays: 5 });

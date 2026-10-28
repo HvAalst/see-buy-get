@@ -12,9 +12,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * carried. When a business connects its own payment network (B5), that network will say so through the same field.
  *
  * What it is about: `import` an agent's fee for clearing a container · `freight` the carrier's price for a load a
- * business posted · `booking` the carrier's price for space a business booked on a run.
+ * business posted · `booking` the carrier's price for space a business booked on a run · `export` an agent's fee for
+ * clearing an export (2026-10-28), one quotation per appointment.
  */
-export const QUOTE_SUBJECTS = ['import', 'freight', 'booking'] as const;
+export const QUOTE_SUBJECTS = ['import', 'freight', 'booking', 'export'] as const;
 export type QuoteSubjectKind = (typeof QUOTE_SUBJECTS)[number];
 
 export const QUOTE_STATUSES = ['open', 'paid'] as const;

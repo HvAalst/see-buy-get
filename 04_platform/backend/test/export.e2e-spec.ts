@@ -338,4 +338,82 @@ describe('an export to the port, over the wire', () => {
     expect((await http().get(`${path}/papers/commercial_invoice/file`).set(bearer(agent.token))).status).toBe(404);
     expect((await http().post(`${path}/papers/commercial_invoice/accept`).set(bearer(agent.token))).status).toBe(404);
   });
+  /*
+   * EX8 — THE AGENT'S FEE (the user, 2026-10-28: "ok, great, implement it"). The import's bargain on an export: the agent
+   * quotes, the exporter agrees, either says it is paid — a quotation between them, nothing through us. One per
+   * appointment: a new agent quotes its own, and the former one's stays on its record.
+   */
+  it('the agent’s fee: quoted by the agent, agreed by the exporter, paid as either says — one quotation per appointment', async () => {
+    const x = await anExporter();
+    const agent = await anExporter(['clearing_agent'], 'Pwani Clearing');
+    const made = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ goodsDescription: 'Cut roses', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '45R1', booking: booking(Date.now() + 72 * H), loadingSiteId: x.loading, terminalSiteId: x.terminal }).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const bell = (entityId: string) => app.get(NotificationService).inboxFor(app.get(EntityService).get(entityId).did).map((n) => n.title);
+
+    // No agent, no fee: nobody quotes on an export it was not appointed on.
+    expect((await http().post(`${path}/fee`).set(bearer(agent.token)).send({ amount: 18000 })).status).toBe(404);
+    await http().post(`${path}/agent`).set(bearer(x.token)).send({ agentEntityId: agent.entityId }).expect(201);
+    expect((await http().get(path).set(bearer(x.token)).expect(200)).body.feeState).toBe('none');
+    // The exporter quotes nothing to itself; the agent quotes, in the currency of where it is sent from unless it says.
+    expect((await http().post(`${path}/fee`).set(bearer(x.token)).send({ amount: 18000 })).status).toBe(403);
+    expect((await http().post(`${path}/fee`).set(bearer(agent.token)).send({ amount: 0 })).status).toBe(400);
+    const quoted = (await http().post(`${path}/fee`).set(bearer(agent.token)).send({ amount: 18000, reference: 'PC-2026-044', note: 'Export entry and documents' }).expect(201)).body;
+    expect(quoted).toMatchObject({ feeState: 'quoted', fee: { amount: 18000, currency: 'KES', reference: 'PC-2026-044', issuer: { entityId: agent.entityId }, payer: { entityId: x.entityId }, subject: { kind: 'export', code: made.code } } });
+    expect(bell(x.entityId)).toContain(`${made.code}: your clearing agent quoted its fee`);
+
+    // Agreed by the exporter only; the agent is told. A re-quote drops the agreement — it is a different number.
+    expect((await http().post(`${path}/fee/accept`).set(bearer(agent.token))).status).toBe(404);
+    expect((await http().post(`${path}/fee/accept`).set(bearer(x.token)).expect(201)).body.feeState).toBe('accepted');
+    expect(bell(agent.entityId)).toContain(`${made.code}: the exporter agreed to your fee`);
+    const requoted = (await http().post(`${path}/fee`).set(bearer(agent.token)).send({ amount: 19500 }).expect(201)).body;
+    expect(requoted).toMatchObject({ feeState: 'quoted', fee: { quoteId: quoted.fee.quoteId, amount: 19500 } });
+    await http().post(`${path}/fee/accept`).set(bearer(x.token)).expect(201);
+
+    // Paid as a party says, with its reference — on the quotation itself; staff say nothing in their name.
+    const quoteId = quoted.fee.quoteId as string;
+    expect((await http().post(`/v1/sbg/quotes/${quoteId}/status`).set(bearer(operator)).send({ status: 'paid' })).status).toBe(404);
+    await http().post(`/v1/sbg/quotes/${quoteId}/status`).set(bearer(x.token)).send({ status: 'paid', reference: 'QJK4TR21XY' }).expect(201);
+    const paid = (await http().get(path).set(bearer(agent.token)).expect(200)).body;
+    expect(paid).toMatchObject({ feeState: 'paid', fee: { status: 'paid', paidReference: 'QJK4TR21XY' } });
+    expect((await http().post(`${path}/fee`).set(bearer(agent.token)).send({ amount: 21000 })).status).toBe(400);
+    // Staff read the fee, change nothing.
+    expect((await http().get(path).set(bearer(operator)).expect(200)).body.fee.quoteId).toBe(quoteId);
+
+    // The appointment ends: its quotation stays on its record; the next agent quotes its own, from nothing.
+    const ended = (await http().post(`${path}/agent/end`).set(bearer(x.token)).send({}).expect(201)).body;
+    expect(ended.fee).toBeUndefined();
+    expect(ended.feeState).toBe('none');
+    expect(ended.consignment.formerAgents[0]).toMatchObject({ entityId: agent.entityId, feeQuoteId: quoteId });
+    const next = await anExporter(['clearing_agent'], 'Kilindini Clearing');
+    await http().post(`${path}/agent`).set(bearer(x.token)).send({ agentEntityId: next.entityId }).expect(201);
+    const fresh = (await http().post(`${path}/fee`).set(bearer(next.token)).send({ amount: 15000, currency: 'usd' }).expect(201)).body;
+    expect(fresh.fee.quoteId).not.toBe(quoteId);
+    expect(fresh).toMatchObject({ feeState: 'quoted', fee: { amount: 15000, currency: 'USD', issuer: { entityId: next.entityId } } });
+  });
+
+  /* EX6b — A BOX THE EXPORTER OWNS: nobody lent it, so no line's free days run on it, and nobody is warned about them. */
+  it('a box the exporter owns: no line’s clock, no free days, no warning — until it says the box is the line’s after all', async () => {
+    const x = await anExporter();
+    const D = 24 * H;
+    const made = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ goodsDescription: 'Machine parts', originCountry: 'KE', destCountry: 'TZ', loadingPort: 'Mombasa', containerType: '22G1', booking: booking(Date.now() + 20 * D), loadingSiteId: x.loading, terminalSiteId: x.terminal, ownBox: true }).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const read = async () => (await http().get(path).set(bearer(x.token)).expect(200)).body;
+    expect(made.ownBox).toMatchObject({ by: expect.any(String) });
+    await http().post(`${path}/empty-out`).set(bearer(x.token)).send({ at: new Date(Date.now() - 9 * D).toISOString() }).expect(201);
+    const owned = (await read()).box;
+    expect(owned).toMatchObject({ kind: 'owned', overdue: false, dueSoon: false });
+    expect(owned.basis).toContain('shipper-owned');
+    // No line's free days on it — and the watch says nothing, however long it is out.
+    const refused = await http().post(`${path}/free-days`).set(bearer(x.token)).send({ kind: 'detention', days: 5 });
+    expect([refused.status, refused.body.detail]).toEqual([400, 'The box is your own: no line lent it, so no line’s free days run on it']);
+    const exports = app.get(ExportService);
+    expect(exports.sweep(Date.now()).filter((t) => t.startsWith(`${made.code}:box`))).toEqual([]);
+    expect((await http().get(`${path}/handover.html`).set(bearer(x.token)).expect(200)).text).toContain('The exporter (a shipper-owned container)');
+    // Staff say nothing about whose box it is.
+    expect((await http().post(`${path}/own-box`).set(bearer(operator)).send({ own: false })).status).toBe(403);
+    // The line's after all: the clock runs from the empty out, and the free days can be given.
+    expect((await http().post(`${path}/own-box`).set(bearer(x.token)).send({ own: false }).expect(201)).body.box).toMatchObject({ kind: 'detention', daysElapsed: 9 });
+    await http().post(`${path}/free-days`).set(bearer(x.token)).send({ kind: 'detention', days: 7 }).expect(201);
+    expect((await read()).box).toMatchObject({ kind: 'detention', overdue: true });
+  });
 });

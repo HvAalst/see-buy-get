@@ -13,6 +13,10 @@ import { EXPORT_PAPER_KEYS, type ExportBoxClockView, type ExportConsignment, typ
 import { LoadSealService } from './load-seal.service';
 import { NotificationService } from './notification.service';
 import { EXPORT_GATE_BUFFER_H, VEHICLE_SPEED_KMH } from './pudo.config';
+import { catalogueEntry } from '../../foundation/countries/catalogue';
+import type { FeeState } from './import.types';
+import { QuoteService } from './quote.service';
+import type { Quote } from './quote.types';
 import { ROUTER, type Router } from './router';
 import { SiteService } from './site.service';
 
@@ -59,6 +63,7 @@ export class ExportService {
     private readonly sites: SiteService,
     private readonly seals: LoadSealService,
     @Inject(ROUTER) private readonly router: Router,
+    private readonly quotes: QuoteService,
     @Optional() private readonly notifications?: NotificationService,
   ) {}
 
@@ -82,6 +87,7 @@ export class ExportService {
       loadingSiteId: string;
       terminalSiteId: string;
       emptyDepotSiteId?: string;
+      ownBox?: boolean;
     },
     by: string,
     now = Date.now(),
@@ -139,6 +145,7 @@ export class ExportService {
       loadingPlace,
       terminal,
       ...(emptyDepot ? { emptyDepot } : {}),
+      ...(input.ownBox ? { ownBox: { by, at: new Date(now).toISOString() } } : {}),
       papers: EXPORT_PAPER_KEYS.map((key) => ({ key, ...(key === 'certificate_of_origin' ? { optional: true } : {}) })),
       createdAt: new Date(now).toISOString(),
       createdBy: by,
@@ -174,6 +181,7 @@ export class ExportService {
     // The exporter, the agent it appointed, or staff reading — anybody else is told there is no such export.
     const you = this.sideOf(c, readerEntityId, opts.all);
     const timing = this.timingOf(c, now);
+    const fee = this.feeOf(c);
     return {
       consignment: c,
       timing,
@@ -194,6 +202,8 @@ export class ExportService {
       you,
       exporterName: this.nameOf(c.exporterEntityId),
       ...(c.agent ? { agent: { ...c.agent, name: this.nameOf(c.agent.entityId) } } : {}),
+      ...(fee ? { fee } : {}),
+      feeState: feeStateOf(fee),
     };
   }
 
@@ -476,11 +486,82 @@ export class ExportService {
     const c = this.requireOwn(exportId, actorEntityId);
     if (!c.agent) throw new GlosError('INVALID_STATE', `No clearing agent is appointed on ${c.code}`);
     const why = reason?.trim();
-    const former = { ...c.agent, endedAt: new Date(now).toISOString(), endedBy: by, ...(why ? { reason: why.slice(0, 200) } : {}) };
+    const feeQuoteId = c.fee && c.fee.agentEntityId === c.agent.entityId ? c.fee.quoteId : undefined;
+    const former = { ...c.agent, endedAt: new Date(now).toISOString(), endedBy: by, ...(why ? { reason: why.slice(0, 200) } : {}), ...(feeQuoteId ? { feeQuoteId } : {}) };
     c.formerAgents = [...(c.formerAgents ?? []), former];
     delete c.agent;
+    // Its quotation stays between the two of them, kept on the former appointment; the next agent quotes its own.
+    delete c.fee;
     this.exports.set(c.exportId, c);
     this.tell(c, `${c.code}: your appointment ended`, `${this.nameOf(c.exporterEntityId)} ended your appointment as clearing agent on ${c.code}${why ? `: “${former.reason}”` : ''}. Its papers are no longer shared with you.`, former.entityId);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /* --------------------------------------------- EX8 the agent's fee -- */
+
+  /**
+   * THE AGENT NAMES ITS FEE — a QUOTATION to the exporter, the import's bargain (the user, 2026-10-04: "we don't manage
+   * the clearing agent's fee, but we do handle quotations for anyone"). One per appointment: a re-quote changes it and
+   * drops the exporter's agreement; a new agent quotes its own. Nothing of it passes through SeeBuyGet.
+   */
+  quoteFee(exportId: string, actorEntityId: string, input: { amount: number; currency?: string; note?: string; reference?: string }, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireExport(exportId);
+    this.requireAgent(c, actorEntityId);
+    const agent = c.agent!;
+    const quote = this.quotes.quote(
+      {
+        subject: { kind: 'export', id: `${c.exportId}@${agent.appointedAt}`, code: c.code },
+        issuer: { name: this.nameOf(agent.entityId), entityId: agent.entityId },
+        payer: { name: this.nameOf(c.exporterEntityId), entityId: c.exporterEntityId },
+        amount: input.amount,
+        currency: input.currency?.trim() || catalogueEntry(c.originCountry)?.currency || 'USD',
+        note: input.note,
+        reference: input.reference,
+      },
+      by,
+      now,
+    );
+    const first = c.fee?.quoteId === quote.quoteId ? c.fee.quotedAt : new Date(now).toISOString();
+    c.fee = { quoteId: quote.quoteId, quotedAt: first, agentEntityId: agent.entityId };
+    this.exports.set(c.exportId, c);
+    const ref = quote.reference ? ` (its reference ${quote.reference})` : '';
+    this.tell(
+      c,
+      `${c.code}: your clearing agent quoted its fee`,
+      `${this.nameOf(agent.entityId)} quotes ${quote.amount.toLocaleString('en')} ${quote.currency} for clearing ${c.code}${ref}. Agree to it on the export if it is what you agreed — agreeing is not paying, and SeeBuyGet moves no money between you.`,
+    );
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** The exporter agrees to the figure. Nothing moves — agreeing is not paying. */
+  acceptFee(exportId: string, actorEntityId: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    const fee = this.feeOf(c);
+    if (!fee) throw new GlosError('INVALID_STATE', `No fee has been quoted on ${c.code} yet`);
+    this.quotes.agree(fee.quoteId, { name: by, entityId: actorEntityId }, now);
+    this.tell(c, `${c.code}: the exporter agreed to your fee`, `${this.nameOf(c.exporterEntityId)} agreed to your fee of ${fee.amount.toLocaleString('en')} ${fee.currency} for clearing ${c.code}. Whether it is paid is for the two of you to say on the quotation.`, c.agent!.entityId);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** The quotation behind the appointed agent's fee — only the agent appointed now; an earlier one's stays on its record. */
+  feeOf(c: ExportConsignment): Quote | undefined {
+    if (!c.fee || !c.agent || c.fee.agentEntityId !== c.agent.entityId) return undefined;
+    try {
+      return this.quotes.get(c.fee.quoteId);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * THE BOX IS OURS — a shipper-owned container, said by the exporter (or taken back: it is the line's after all). No line
+   * lent it, so no line's free days run on it and nobody is warned about them.
+   */
+  setOwnBox(exportId: string, actorEntityId: string, own: boolean, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    if (own) c.ownBox = { by, at: new Date(now).toISOString() };
+    else delete c.ownBox;
+    this.exports.set(c.exportId, c);
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
@@ -495,6 +576,7 @@ export class ExportService {
     if (!(FREE_DAY_KINDS as readonly string[]).includes(kind)) throw new GlosError('VALIDATION_FAILED', 'Say which free days: outside the terminal (detention) or inside it (demurrage)', { field: 'kind' });
     if (!Number.isInteger(days) || days < 0 || days > 90) throw new GlosError('VALIDATION_FAILED', 'Free days are a whole number of days, 0 to 90', { field: 'days' });
     if (c.loaded) throw new GlosError('INVALID_STATE', `${c.code} was loaded on board on ${utc(c.loaded.at)}: the box’s clock has stopped`);
+    if (c.ownBox) throw new GlosError('INVALID_STATE', 'The box is your own: no line lent it, so no line’s free days run on it');
     c.freeDays = [...(c.freeDays ?? []), { kind, days, byEntityId: c.exporterEntityId, by, at: new Date(now).toISOString() }];
     this.exports.set(c.exportId, c);
     return this.detail(c.exportId, actorEntityId, {}, now);
@@ -539,6 +621,7 @@ export class ExportService {
         ...(emptyOutAt ? { emptyOutAt } : {}),
         ...(timing.gatedInAt ? { gatedInAt: timing.gatedInAt } : {}),
         ...(c.loaded ? { loaded: { at: c.loaded.at, by: c.loaded.by } } : {}),
+        ...(c.ownBox ? { owned: { by: c.ownBox.by } } : {}),
         freeDays: c.freeDays ?? [],
       },
       now,
@@ -603,7 +686,7 @@ export class ExportService {
 <div>${esc(exporter.name)} · ${esc(c.goodsDescription)} · ${esc(c.originCountry)} → ${esc(c.destCountry)}</div>
 ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; '))}.</p>` : ''}
 <h2>Booking</h2><table>${row('Booking number', esc(c.booking.reference))}${row(c.booking.bookedWith === 'shipping_line' ? 'Shipping line' : 'Forwarder', esc(c.booking.partyName))}${c.booking.vessel ? row('Vessel / voyage', esc(`${c.booking.vessel}${c.booking.voyage ? ` / ${c.booking.voyage}` : ''}`)) : ''}${row('Gate-in cut-off', esc(utc(c.booking.gateCutoffAt)))}${c.booking.vgmCutoffAt ? row('Verified gross mass cut-off', esc(utc(c.booking.vgmCutoffAt))) : ''}${c.booking.docsCutoffAt ? row('Documents cut-off', esc(utc(c.booking.docsCutoffAt))) : ''}${c.booking.emptyReleaseRef ? row('Empty release', esc(c.booking.emptyReleaseRef)) : ''}</table>
-<h2>The box</h2><table>${row('Container number', missing(c.containerNo))}${row('Type', esc(spec ? `${spec.code} — ${spec.label}` : c.containerType ?? ''))}${row('Seal', missing(seal || undefined))}${row('Verified gross mass', missing(vgm || undefined))}</table>
+<h2>The box</h2><table>${row('Container number', missing(c.containerNo))}${row('Type', esc(spec ? `${spec.code} — ${spec.label}` : c.containerType ?? ''))}${row('Owner of the box', c.ownBox ? 'The exporter (a shipper-owned container)' : 'The line, on loan for this booking')}${row('Seal', missing(seal || undefined))}${row('Verified gross mass', missing(vgm || undefined))}</table>
 <h2>Papers</h2><table>${agentRow}${papers}</table>
 <h2>The road to the terminal</h2><table>${row('Terminal', esc(c.terminal.label))}${row('Road consignment note', d.ladenLeg ? esc(`CMR-${d.ladenLeg.code}`) : missing())}${row('Collected', d.timing.collectedAt ? esc(utc(d.timing.collectedAt)) : 'Not yet')}${row('Gated in', d.timing.gatedInAt ? esc(utc(d.timing.gatedInAt)) : 'Not yet')}${row('Bill of lading', c.billOfLading ? esc(c.billOfLading.number) : 'Not issued yet — recorded once your forwarder issues it')}</table>
 <h2>The box’s clock</h2><table>${row('Empty out of the depot', d.box.emptyOutAt ? esc(utc(d.box.emptyOutAt)) : 'Not recorded')}${row('Free days outside the terminal (detention)', esc(freeDaysWords(c, 'detention')))}${row('Free days inside the terminal (demurrage)', esc(freeDaysWords(c, 'demurrage')))}${c.loaded ? row('Loaded on board', esc(utc(c.loaded.at))) : ''}</table><p>${esc(d.box.basis)}</p>
@@ -734,6 +817,13 @@ function moment(value: string | undefined, what: string): string | undefined {
   const at = Date.parse(v);
   if (Number.isNaN(at)) throw new GlosError('VALIDATION_FAILED', `${what} must be a date and time`);
   return new Date(at).toISOString();
+}
+
+/** How far the agent's fee has got, read off its quotation every time — the import's words. */
+function feeStateOf(fee?: Quote): FeeState {
+  if (!fee) return 'none';
+  if (fee.status === 'paid') return 'paid';
+  return fee.agreedAt ? 'accepted' : 'quoted';
 }
 
 /** A moment that already happened: refused when it is not a time, or when it is ahead of now. */

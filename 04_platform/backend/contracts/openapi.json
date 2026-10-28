@@ -4344,6 +4344,120 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/own-box": {
+      "post": {
+        "operationId": "Export.ownBox",
+        "summary": "",
+        "description": "The box is the exporter's own (a shipper-owned container) — or the line's after all.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportOwnBoxDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/fee": {
+      "post": {
+        "operationId": "Export.quoteFee",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportFeeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/fee/accept": {
+      "post": {
+        "operationId": "Export.acceptFee",
+        "summary": "",
+        "description": "The exporter agrees to the figure. Whether it is paid, either of them says on the quotation itself.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/exports/{exportId}/agent": {
       "post": {
         "operationId": "Export.appointAgent",
@@ -34744,6 +34858,10 @@
           "emptyDepotSiteId": {
             "type": "string"
           },
+          "ownBox": {
+            "type": "boolean",
+            "description": "The box is the exporter's own (a shipper-owned container): no line's free days run on it."
+          },
           "by": {
             "type": "string",
             "maxLength": 80
@@ -35034,6 +35152,10 @@
           },
           "reason": {
             "type": "string"
+          },
+          "feeQuoteId": {
+            "type": "string",
+            "description": "The fee it quoted while appointed, if it did: the quotation stays between the two of them."
           }
         },
         "required": [
@@ -35042,6 +35164,40 @@
           "appointedBy",
           "endedAt",
           "endedBy"
+        ]
+      },
+      "ExportFeeStamp": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "string"
+          },
+          "quotedAt": {
+            "type": "string"
+          },
+          "agentEntityId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quoteId",
+          "quotedAt",
+          "agentEntityId"
+        ]
+      },
+      "ExportOwnBox": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at"
         ]
       },
       "ExportConsignment": {
@@ -35164,6 +35320,12 @@
             "items": {
               "$ref": "#/components/schemas/ExportFormerAgent"
             }
+          },
+          "fee": {
+            "$ref": "#/components/schemas/ExportFeeStamp"
+          },
+          "ownBox": {
+            "$ref": "#/components/schemas/ExportOwnBox"
           },
           "warned": {
             "type": "object",
@@ -35375,7 +35537,8 @@
               "detention",
               "demurrage",
               "stopped",
-              "unknown"
+              "unknown",
+              "owned"
             ]
           },
           "since": {
@@ -35457,6 +35620,202 @@
           "name"
         ]
       },
+      "QuoteSubject": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "import",
+              "freight",
+              "booking",
+              "export"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "What a person reads it as — IMP-004, FRT-012."
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      },
+      "QuoteParty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "did": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "QuoteProforma": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "sha256 of the bytes. Never called `hash`: the response mask strips that name at every depth."
+          },
+          "addedBy": {
+            "type": "string"
+          },
+          "addedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fileName",
+          "contentType",
+          "size",
+          "fingerprint",
+          "addedBy",
+          "addedAt"
+        ]
+      },
+      "QuoteEvent": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "what": {
+            "type": "string",
+            "enum": [
+              "quoted",
+              "requoted",
+              "proforma",
+              "agreed",
+              "paid",
+              "open"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "what"
+        ]
+      },
+      "Quote": {
+        "type": "object",
+        "properties": {
+          "quoteId": {
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/QuoteSubject"
+          },
+          "issuer": {
+            "description": "Who is asking to be paid — the agent, the carrier.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteParty"
+              }
+            ]
+          },
+          "payer": {
+            "description": "Who is asked to pay — the importer, the business.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteParty"
+              }
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string",
+            "description": "Whatever currency the parties agreed in. Ours to show, never to convert."
+          },
+          "note": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "Their own number for it — the quotation or invoice number on the proforma."
+          },
+          "proforma": {
+            "$ref": "#/components/schemas/QuoteProforma"
+          },
+          "agreedAt": {
+            "type": "string",
+            "description": "The payer agreed to the figure. Not every quotation asks for it; a run's published price was agreed by booking."
+          },
+          "agreedBy": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "paid"
+            ]
+          },
+          "paidAt": {
+            "type": "string"
+          },
+          "paidBy": {
+            "type": "string"
+          },
+          "paidReference": {
+            "type": "string",
+            "description": "The payment's own reference, as the person confirming it gave it — a bank or mobile-money transaction."
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuoteEvent"
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quoteId",
+          "subject",
+          "issuer",
+          "payer",
+          "amount",
+          "currency",
+          "status",
+          "history",
+          "createdAt",
+          "createdBy"
+        ]
+      },
       "ExportDetail": {
         "type": "object",
         "properties": {
@@ -35516,6 +35875,23 @@
           },
           "agent": {
             "$ref": "#/components/schemas/ExportAgentView"
+          },
+          "fee": {
+            "description": "The appointed agent's fee, as a quotation between it and the exporter: nothing of it passes through SeeBuyGet.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Quote"
+              }
+            ]
+          },
+          "feeState": {
+            "type": "string",
+            "enum": [
+              "none",
+              "quoted",
+              "accepted",
+              "paid"
+            ]
           }
         },
         "required": [
@@ -35527,7 +35903,8 @@
           "documents",
           "box",
           "you",
-          "exporterName"
+          "exporterName",
+          "feeState"
         ]
       },
       "ExportContainerDto": {
@@ -35656,6 +36033,43 @@
         },
         "required": [
           "at"
+        ]
+      },
+      "ExportOwnBoxDto": {
+        "type": "object",
+        "properties": {
+          "own": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "own"
+        ]
+      },
+      "ExportFeeDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "currency": {
+            "type": "string",
+            "description": "Three letters; left out, the currency of the country it is sent from.",
+            "maxLength": 3
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "reference": {
+            "type": "string",
+            "description": "Its own number for it — the quotation or proforma number.",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "amount"
         ]
       },
       "ExportAppointAgentDto": {
@@ -41368,201 +41782,6 @@
           "readerEntityId",
           "grantedBy",
           "grantedAt"
-        ]
-      },
-      "QuoteSubject": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "import",
-              "freight",
-              "booking"
-            ]
-          },
-          "id": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string",
-            "description": "What a person reads it as — IMP-004, FRT-012."
-          }
-        },
-        "required": [
-          "kind",
-          "id"
-        ]
-      },
-      "QuoteParty": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "entityId": {
-            "type": "string"
-          },
-          "did": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "QuoteProforma": {
-        "type": "object",
-        "properties": {
-          "fileName": {
-            "type": "string"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "size": {
-            "type": "number"
-          },
-          "fingerprint": {
-            "type": "string",
-            "description": "sha256 of the bytes. Never called `hash`: the response mask strips that name at every depth."
-          },
-          "addedBy": {
-            "type": "string"
-          },
-          "addedAt": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "fileName",
-          "contentType",
-          "size",
-          "fingerprint",
-          "addedBy",
-          "addedAt"
-        ]
-      },
-      "QuoteEvent": {
-        "type": "object",
-        "properties": {
-          "at": {
-            "type": "string"
-          },
-          "by": {
-            "type": "string"
-          },
-          "what": {
-            "type": "string",
-            "enum": [
-              "quoted",
-              "requoted",
-              "proforma",
-              "agreed",
-              "paid",
-              "open"
-            ]
-          },
-          "note": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "at",
-          "by",
-          "what"
-        ]
-      },
-      "Quote": {
-        "type": "object",
-        "properties": {
-          "quoteId": {
-            "type": "string"
-          },
-          "subject": {
-            "$ref": "#/components/schemas/QuoteSubject"
-          },
-          "issuer": {
-            "description": "Who is asking to be paid — the agent, the carrier.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/QuoteParty"
-              }
-            ]
-          },
-          "payer": {
-            "description": "Who is asked to pay — the importer, the business.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/QuoteParty"
-              }
-            ]
-          },
-          "amount": {
-            "type": "number"
-          },
-          "currency": {
-            "type": "string",
-            "description": "Whatever currency the parties agreed in. Ours to show, never to convert."
-          },
-          "note": {
-            "type": "string"
-          },
-          "reference": {
-            "type": "string",
-            "description": "Their own number for it — the quotation or invoice number on the proforma."
-          },
-          "proforma": {
-            "$ref": "#/components/schemas/QuoteProforma"
-          },
-          "agreedAt": {
-            "type": "string",
-            "description": "The payer agreed to the figure. Not every quotation asks for it; a run's published price was agreed by booking."
-          },
-          "agreedBy": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "open",
-              "paid"
-            ]
-          },
-          "paidAt": {
-            "type": "string"
-          },
-          "paidBy": {
-            "type": "string"
-          },
-          "paidReference": {
-            "type": "string",
-            "description": "The payment's own reference, as the person confirming it gave it — a bank or mobile-money transaction."
-          },
-          "history": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/QuoteEvent"
-            }
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "createdBy": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "quoteId",
-          "subject",
-          "issuer",
-          "payer",
-          "amount",
-          "currency",
-          "status",
-          "history",
-          "createdAt",
-          "createdBy"
         ]
       },
       "ContainerFacts": {

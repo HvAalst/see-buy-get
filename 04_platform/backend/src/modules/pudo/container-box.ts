@@ -304,12 +304,17 @@ export interface ExportBoxTimes {
   gatedInAt?: string;
   /** Loaded on board, as the exporter recorded it from its forwarder's or the line's word. */
   loaded?: { at: string; by: string };
+  /** The box is the exporter's own (a shipper-owned container): no line lent it, so no line's clock runs. */
+  owned?: { by: string };
   freeDays: FreeDaysClaim[];
 }
 
 export interface ExportBoxClock {
-  /** What is running: `detention` outside, `demurrage` inside, `stopped` once loaded, `unknown` before the empty is out. */
-  kind: 'detention' | 'demurrage' | 'stopped' | 'unknown';
+  /**
+   * What is running: `detention` outside, `demurrage` inside, `stopped` once loaded, `unknown` before the empty is out —
+   * and `owned` where the box is the exporter's own, on which no line's clock runs at all.
+   */
+  kind: 'detention' | 'demurrage' | 'stopped' | 'unknown' | 'owned';
   since?: string;
   daysElapsed?: number;
   freeDays?: number;
@@ -331,6 +336,15 @@ export function exportBoxClock(times: ExportBoxTimes, now: number): ExportBoxClo
   const detentionDays = times.emptyOutAt && times.gatedInAt ? elapsed(times.emptyOutAt, Date.parse(times.gatedInAt)) : undefined;
   const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
   const outside = detentionDays != null ? ` It was ${days(detentionDays)} outside the terminal, from the empty out to the gate.` : '';
+
+  // Its own box: nobody lent it, so nobody's free days run on it — owned beats every clock, as an ending does.
+  if (times.owned) {
+    return {
+      kind: 'owned',
+      overdue: false,
+      basis: `The box is the exporter's own (a shipper-owned container), as ${times.owned.by} recorded: no line lent it, so no line's free days run on it.`,
+    };
+  }
 
   if (times.loaded && times.gatedInAt) {
     const demurrageDays = elapsed(times.gatedInAt, Date.parse(times.loaded.at));

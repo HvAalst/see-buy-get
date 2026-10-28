@@ -16,7 +16,9 @@ import {
   ExportContainerDto,
   ExportDetail,
   ExportEndAgentDto,
+  ExportFeeDto,
   ExportFreeDaysDto,
+  ExportOwnBoxDto,
   ExportLadenLegDto,
   ExportMomentDto,
   ExportPaperDto,
@@ -128,6 +130,29 @@ export class ExportController {
   @Post(':exportId/loaded')
   loaded(@Param('exportId') exportId: string, @Body() dto: ExportMomentDto, @Actor() actor: IntrospectionResult): ExportDetail {
     return this.exports.recordLoaded(exportId, this.ownCompany(actor), dto.at, auditActor(actor));
+  }
+
+  /** The box is the exporter's own (a shipper-owned container) — or the line's after all. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/own-box')
+  ownBox(@Param('exportId') exportId: string, @Body() dto: ExportOwnBoxDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.setOwnBox(exportId, this.ownCompany(actor), dto.own, auditActor(actor));
+  }
+
+  /* ------------------------------------------------------- EX8 the agent's fee -- */
+
+  /** The appointed agent quotes its fee: a quotation to the exporter, never a payment through us. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/fee')
+  quoteFee(@Param('exportId') exportId: string, @Body() dto: ExportFeeDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.quoteFee(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  /** The exporter agrees to the figure. Whether it is paid, either of them says on the quotation itself. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/fee/accept')
+  acceptFee(@Param('exportId') exportId: string, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.acceptFee(exportId, this.ownCompany(actor), auditActor(actor));
   }
 
   /* --------------------------------------------------- EX7 the clearing agent -- */
