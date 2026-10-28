@@ -741,7 +741,7 @@ export class ExportService {
     const agent = c.agent!;
     const quote = this.quotes.quote(
       {
-        subject: { kind: 'export', id: `${c.exportId}@${agent.appointedAt}`, code: c.code },
+        subject: { kind: 'export', id: `${c.exportId}@${agent.entityId}@${agent.appointedAt}`, code: c.code },
         issuer: { name: this.nameOf(agent.entityId), entityId: agent.entityId },
         payer: { name: this.nameOf(c.exporterEntityId), entityId: c.exporterEntityId },
         amount: input.amount,
@@ -776,7 +776,8 @@ export class ExportService {
 
   /** The quotation behind the appointed agent's fee — only the agent appointed now; an earlier one's stays on its record. */
   feeOf(c: ExportConsignment): Quote | undefined {
-    if (!c.fee || !c.agent || c.fee.agentEntityId !== c.agent.entityId) return undefined;
+    // Only the agent appointed now has one: ending an appointment clears the stamp and keeps its quotation on its record.
+    if (!c.fee) return undefined;
     try {
       return this.quotes.get(c.fee.quoteId);
     } catch {

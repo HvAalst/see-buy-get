@@ -68,7 +68,7 @@ expeditor) — staff read, never act in its name.
 9. **EX8 — the clearing agent's fee.** The import's bargain as a quotation (`quote.types.ts`, subject `export`), never
    a payment through us: the appointed agent quotes (currency of the origin country unless it says), the exporter is
    told and agrees (the agent is told), a re-quote drops the agreement, paid or open is said by either on the
-   quotation. **One quotation per appointment** (subject id `exportId@appointedAt`): when the appointment ends its
+   quotation. **One quotation per appointment** (subject id `exportId@agentEntityId@appointedAt`): when the appointment ends its
    quotation stays on that former appointment (`feeQuoteId`), and the next agent quotes its own from nothing.
 10. **EX9 — the shipper's letter of instruction** (the user, 2026-10-28: "not just take the reference, but rather the
     form fields"; then as recommended: a form, needed, frozen on signing). `export-sli.ts` (the rules and the page) and

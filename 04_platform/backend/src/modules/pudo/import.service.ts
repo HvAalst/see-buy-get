@@ -280,6 +280,11 @@ export class ImportService {
       Object.assign(grant, { revokedBy: by, revokedAt: at, ...(reason?.trim() ? { revokedReason: reason.trim() } : {}) });
       this.grants.set(grant.grantId, grant);
     }
+    // Its fee stays between the two of them, on the record of the appointment that ended; the next agent quotes its own.
+    if (consignment.fee && consignment.agentEntityId) {
+      consignment.formerFees = [...(consignment.formerFees ?? []), { agentEntityId: consignment.agentEntityId, quoteId: consignment.fee.quoteId, endedAt: at }];
+      delete consignment.fee;
+    }
     Object.assign(consignment, { status: 'open' });
     delete consignment.agentEntityId;
     delete consignment.appointedAt;
@@ -460,6 +465,7 @@ export class ImportService {
       documents: visible,
       grants: this.grantsOn(consignment),
       ...(this.feeOf(consignment) ? { fee: this.feeOf(consignment) } : {}),
+      ...(side === 'importer' && consignment.formerFees?.length ? { formerFees: consignment.formerFees } : {}),
       ...(consignment.roadFreightId ? { roadFreightId: consignment.roadFreightId } : {}),
       // Shown to BOTH parties, always. A hold recorded by the agent that the importer could not see would
       // be a claim made about them behind their back, and the dispute it invites could never be made.
@@ -1191,7 +1197,8 @@ export class ImportService {
     const importer = this.entities.get(consignment.importerEntityId);
     const quote = this.quotes.quote(
       {
-        subject: { kind: 'import', id: consignment.importId, code: consignment.code },
+        // One quotation per appointment: a replacement agent's quote is its own, never an edit of the former one's.
+        subject: { kind: 'import', id: `${consignment.importId}@${agentEntityId}@${consignment.appointedAt}`, code: consignment.code },
         issuer: { name: agent.name, entityId: agent.entityId },
         payer: { name: importer.name, entityId: importer.entityId },
         amount,
@@ -1202,7 +1209,8 @@ export class ImportService {
       by,
       now,
     );
-    consignment.fee = { quoteId: quote.quoteId, quotedAt: consignment.fee?.quotedAt ?? new Date(now).toISOString() };
+    const first = consignment.fee?.quoteId === quote.quoteId ? consignment.fee.quotedAt : new Date(now).toISOString();
+    consignment.fee = { quoteId: quote.quoteId, quotedAt: first, agentEntityId: agentEntityId };
     this.imports.set(consignment.importId, consignment);
     return this.detail(consignment.importId, agentEntityId);
   }
@@ -1234,7 +1242,14 @@ export class ImportService {
 
   /** The quotation behind a consignment's fee, if one was ever made. */
   feeOf(consignment: ImportConsignment): Quote | undefined {
-    return consignment.fee ? this.quotes.forSubject('import', consignment.importId) : undefined;
+    // Only the agent appointed now has one: an ended appointment's stamp is cleared, its quotation kept on formerFees.
+    const fee = consignment.fee;
+    if (!fee) return undefined;
+    try {
+      return this.quotes.get(fee.quoteId);
+    } catch {
+      return this.quotes.forSubject('import', consignment.importId);
+    }
   }
 
   /* ------------------------------------- CL2b: the road leg from the port -- */

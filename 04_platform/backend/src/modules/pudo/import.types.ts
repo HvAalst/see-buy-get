@@ -454,6 +454,18 @@ export type FeeState = (typeof FEE_STATES)[number];
 export class ImportFeeStamp {
   @ApiProperty() quoteId: string;
   @ApiProperty() quotedAt: string;
+  /**
+   * Whose fee it is (2026-10-28, the export's rule: "import and export rules similar makes sense"): one quotation per
+   * APPOINTMENT. A replacement agent quotes its own from nothing, and the former one's stays on `formerFees`.
+   */
+  @ApiPropertyOptional() agentEntityId?: string;
+}
+
+/** The fee an ended appointment quoted: its quotation stays between the two of them. */
+export class ImportFormerFee {
+  @ApiProperty() agentEntityId: string;
+  @ApiProperty() quoteId: string;
+  @ApiProperty() endedAt: string;
 }
 
 /**
@@ -533,6 +545,7 @@ export class ImportConsignment {
 
   /** The agent's quotation for clearing this container, once they have named a price. */
   @ApiPropertyOptional({ type: ImportFeeStamp }) fee?: ImportFeeStamp;
+  @ApiPropertyOptional({ type: [ImportFormerFee] }) formerFees?: ImportFormerFee[];
   /** The road leg, once a person has minted it. Stored as id AND code: the id is what the freight
    *  machinery answers to, the code is what a human reads on a screen beside this container. */
   @ApiPropertyOptional() roadFreightId?: string;
@@ -651,6 +664,8 @@ export class ImportDetail extends ImportRow {
   @ApiProperty() documents: CompanyDocument[];
   /** Every grant over these papers, live and revoked, so both sides see what was shared and when. */
   @ApiProperty({ type: [DocumentGrant] }) grants: DocumentGrant[];
+  /** Fees quoted under appointments that ended — the importer's to read, each quotation kept between it and that agent. */
+  @ApiPropertyOptional({ type: [ImportFormerFee] }) formerFees?: ImportFormerFee[];
   /** CL2b — the agent's quotation: the figure, the proforma, and open or paid as the parties confirm it. */
   @ApiPropertyOptional({ type: Quote }) fee?: Quote;
   @ApiPropertyOptional() roadFreightId?: string;

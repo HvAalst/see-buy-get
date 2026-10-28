@@ -42131,11 +42131,34 @@
           },
           "quotedAt": {
             "type": "string"
+          },
+          "agentEntityId": {
+            "type": "string",
+            "description": "Whose fee it is (2026-10-28, the export's rule: \"import and export rules similar makes sense\"): one quotation per\nAPPOINTMENT. A replacement agent quotes its own from nothing, and the former one's stays on `formerFees`."
           }
         },
         "required": [
           "quoteId",
           "quotedAt"
+        ]
+      },
+      "ImportFormerFee": {
+        "type": "object",
+        "properties": {
+          "agentEntityId": {
+            "type": "string"
+          },
+          "quoteId": {
+            "type": "string"
+          },
+          "endedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agentEntityId",
+          "quoteId",
+          "endedAt"
         ]
       },
       "CustomsHoldAccount": {
@@ -42322,6 +42345,12 @@
           },
           "fee": {
             "$ref": "#/components/schemas/ImportFeeStamp"
+          },
+          "formerFees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportFormerFee"
+            }
           },
           "roadFreightId": {
             "type": "string",
@@ -42995,6 +43024,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DocumentGrant"
+            }
+          },
+          "formerFees": {
+            "description": "Fees quoted under appointments that ended — the importer's to read, each quotation kept between it and that agent.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportFormerFee"
             }
           },
           "fee": {

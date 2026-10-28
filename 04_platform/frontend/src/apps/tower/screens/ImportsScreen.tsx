@@ -922,6 +922,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               <QuotePanel quote={detail.fee} api={client ? (client.api as never) : null} canChange={isCompany && detail.youAre !== 'onlooker'} onChanged={() => openOne(detail.importId, false)} />
             ) : null}
 
+            {/* One quotation per appointment: an earlier agent's stays on its own record, and this one quotes its own. */}
+            {detail.formerFees?.length ? <p class="chint">{t('tower.imports.formerFees', { n: detail.formerFees.length })}</p> : null}
+
             {detail.youAre === 'agent' && detail.feeState !== 'paid' ? (
               <>
                 <div class="twr-knobs__row">

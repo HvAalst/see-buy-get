@@ -85,6 +85,8 @@ export interface ImportDetailView extends ImportRow {
   grants: DocumentGrant[];
   /** CL2b — the agent's fee as a QUOTATION: the figure, the proforma, open or paid as a party confirms it. */
   fee?: QuoteView;
+  /** Fees quoted under appointments that ended — the importer's to read; one quotation per appointment (2026-10-28). */
+  formerFees?: Array<{ agentEntityId: string; quoteId: string; endedAt: string }>;
   roadFreightId?: string;
   /** BL1 — the bonded run from the quay, on a split chain. Absent where the box clears where it lands. */
   bondedFreightId?: string;

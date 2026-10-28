@@ -397,6 +397,29 @@ describe('an import consignment, its papers, and the agent who clears them', () 
       expect(() => imports.setFeeStatus(one.importId, rivalId, 'paid', 'Dawit')).toThrow(/Only the importer or the appointed agent/);
     });
 
+    /* 2026-10-28, the user: "import and export rules similar makes sense" — the export's rule, one quotation per appointment. */
+    it('gives a replacement agent its own quotation — the former one’s is kept, never overwritten, and paid stays paid', () => {
+      const one = appointed();
+      const first = imports.quoteFee(one.importId, agentId, 4500, undefined, 'Selam');
+      const firstId = first.fee!.quoteId;
+      imports.setFeeStatus(one.importId, importerId, 'paid', 'Hans', 'CBE-TXN-778');
+      imports.revoke(one.importId, importerId, 'Hans', 'Appointed somebody closer to the port');
+      const ended = imports.detail(one.importId, importerId);
+      expect(ended.fee).toBeUndefined();
+      expect(ended.feeState).toBe('none');
+      expect(ended.formerFees).toEqual([expect.objectContaining({ agentEntityId: agentId, quoteId: firstId })]);
+      // The next agent quotes from nothing — a paid quotation of the former agent's does not block it, and its record
+      // is not credited with a quote it never made.
+      imports.appoint(one.importId, rivalId, importerId, 'Hans');
+      expect(imports.agentRecord(rivalId).quoted).toBe(0);
+      const fresh = imports.quoteFee(one.importId, rivalId, 3000, undefined, 'Dawit');
+      expect(fresh.fee?.quoteId).not.toBe(firstId);
+      expect(fresh.fee).toMatchObject({ amount: 3000, status: 'open', issuer: { entityId: rivalId } });
+      // The former agent's stays as it was: paid, with its reference.
+      const quotes = (imports as unknown as { quotes: { get(id: string): unknown } }).quotes;
+      expect(quotes.get(firstId)).toMatchObject({ amount: 4500, status: 'paid', paidReference: 'CBE-TXN-778', issuer: { entityId: agentId } });
+    });
+
     it('lets either party confirm it paid or set it back to open, and keeps every turn with a name on it', () => {
       const one = appointed();
       imports.quoteFee(one.importId, agentId, 100, undefined, 'Selam');

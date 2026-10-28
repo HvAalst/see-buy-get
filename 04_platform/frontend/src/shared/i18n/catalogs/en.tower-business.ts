@@ -310,6 +310,7 @@ export const enTowerBusiness = {
   /* ---- CL2b: the agent's fee, and the road leg from the port ---- */
   'tower.imports.feeTitle': 'What the agent charges',
   'tower.imports.feeHint': 'The agent quotes, the importer agrees, and either of them says when it is paid. SeeBuyGet keeps the quotation and the proforma in one place and never handles the money.',
+  'tower.imports.formerFees': '{n, plural, one {# quotation} other {# quotations}} from an earlier appointment, kept between you and that agent. The agent appointed now quotes its own.',
   'tower.imports.f.amount': 'Amount',
   'tower.imports.f.currency': 'Currency',
   'tower.imports.f.quoteRef': 'Your quotation number',
