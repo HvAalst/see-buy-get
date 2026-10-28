@@ -378,7 +378,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   /** B4 — the business that booked it as an agent, by its registered name. */
   private agentOf(did: string | undefined): NoteParty | undefined {
     const business = did ? this.entities?.byDid(did) : undefined;
-    return business ? { name: business.name, ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did: business.did } : undefined;
+    return business ? { name: business.name, ...(business.business?.address ? { address: business.business.address } : {}), ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did: business.did } : undefined;
   }
 
   private senderOf(f: Freight): NoteParty {
@@ -397,7 +397,7 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (did) {
       // B2 — a customer's business that posted its own load is the sender, by its registered name.
       const business = this.entities?.byDid(did);
-      if (business?.kind === 'business') return { name: business.name, ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did };
+      if (business?.kind === 'business') return { name: business.name, ...(business.business?.address ? { address: business.business.address } : {}), ...(business.jurisdiction ? { country: countryName(business.jurisdiction) } : {}), did };
       // P1b — an order the FLEET uploaded under a contract: the sender is the shipper the contract names. The fleet
       // that typed it in is the carrier, never the sender of its own customer's goods.
       if (f.contract) return { name: f.contract.shipperName };
@@ -571,7 +571,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   htmlFor(n: ConsignmentNote): string {
     const e = escapeHtml;
     const party = (p: NoteParty | undefined, extra?: string) =>
-      p ? `<b>${e(p.name)}</b>${p.address ? `<br>${e(p.address)}` : ''}${p.country ? `<br>${e(p.country)}` : ''}${extra ? `<br>${extra}` : ''}${p.did ? `<br><span class="did">${e(p.did)}</span>` : ''}` : '<span class="empty">—</span>';
+      p ? `<b>${e(p.name)}</b>${p.address ? `<br>${e(p.address)}` : '<br><span class="empty">Address not recorded</span>'}${p.country ? `<br>${e(p.country)}` : ''}${extra ? `<br>${extra}` : ''}${p.did ? `<br><span class="did">${e(p.did)}</span>` : ''}` : '<span class="empty">—</span>';
     const list = (xs: string[]) => (xs.length ? xs.map((x) => `<div>${e(x)}</div>`).join('') : '<span class="empty">None</span>');
     const box = (no: number | string, label: string, body: string, cls = '') => `<div class="box ${cls}"><div class="box__h"><span class="no">${no}</span>${e(label)}</div><div class="box__b">${body}</div></div>`;
     const conf = (c: ConsignmentNote['confirmations']['sender'] | undefined, missing: string) =>

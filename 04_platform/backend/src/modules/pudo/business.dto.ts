@@ -30,6 +30,8 @@ export class UpdateBusinessDto {
   @IsOptional() @IsString() @MaxLength(60) registrationNo?: string;
   /** Null clears it. */
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(60) @ApiPropertyOptional({ nullable: true }) taxNo?: string | null;
+  /** The sender's address on its consignment notes. Null clears it. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(300) @ApiPropertyOptional({ nullable: true }) address?: string | null;
   @IsOptional() @ApiPropertyOptional({ enum: BUSINESS_ACTIVITIES, isArray: true }) @IsArray() @ArrayMaxSize(BUSINESS_ACTIVITIES.length) @IsString({ each: true }) activities?: string[];
 }
 

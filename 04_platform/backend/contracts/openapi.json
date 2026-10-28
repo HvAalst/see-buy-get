@@ -61812,6 +61812,10 @@
           "taxNo": {
             "type": "string"
           },
+          "address": {
+            "type": "string",
+            "description": "The sender's address on its consignment notes."
+          },
           "check": {
             "$ref": "#/components/schemas/BusinessCheckView"
           },
@@ -61943,6 +61947,12 @@
             "nullable": true,
             "description": "Null clears it.",
             "maxLength": 60
+          },
+          "address": {
+            "type": "string",
+            "nullable": true,
+            "description": "The sender's address on its consignment notes. Null clears it.",
+            "maxLength": 300
           },
           "activities": {
             "type": "array",
@@ -62209,6 +62219,9 @@
             "type": "string"
           },
           "taxNo": {
+            "type": "string"
+          },
+          "address": {
             "type": "string"
           },
           "createdAt": {

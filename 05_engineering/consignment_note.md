@@ -10,8 +10,23 @@ packing, nature, gross weight, volume), sender's instructions, payment for carri
 carriers, carrier's reservations, special agreements, charges, established in/on, and the three confirmations —
 sender, carrier, consignee. Number `CMR-<load code>`.
 
-- **Across a border** (pickup and destination countries differ) it is titled *CMR — International consignment note*
-  and carries the Convention clause: the CMR applies of its own force to international carriage by road.
+- **Across a border — the law of the lane, from treaty membership** (the CMR check, 2026-10-28; the user: "Per lane,
+  from membership"). `foundation/carriage-law/catalogue.ts` keeps the parties to the CMR (58), the e-CMR Protocol (42)
+  and the Northern Corridor agreement (BI, CD, KE, RW, SS, UG), with sources and the day checked. `roadRegimeOf`:
+  **cmr** when either end is a CMR party (Art. 1(1)) — no East African state is one; **northern_corridor** between
+  two of its members (Protocol No. 6, its own statement, Art. 21); **contract** between two countries no convention
+  joins — the note says so and that the carriage is under its contract and the national law that governs it (which
+  law is not for the note to say); **national** in one country. `electronic` only between two e-CMR parties; every
+  note links its procedures (e-CMR Art. 5(2)) to the public help page /help/electronic-note/, and on paper asks which
+  original it is and has a line for a signature by hand.
+- **The particulars the CMR check found missing** (Art. 6(1)): the consignee named at posting (box 2); dangerous goods
+  by UN number, proper shipping name, class and packing group (box 9, the sender's own); instructions for customs and
+  a bonded load's transit licence (box 13); the business's address (its details) as the sender's; "Address not
+  recorded" where none is held; the kind of goods in words; "In bulk" for loose goods. **Box 16/17**: an order under
+  contract carried by a partner or a board driver names the contracted fleet in 16 and the carrier in 17 (the user:
+  "Contracted in 16, carrier in 17"); the contracted fleet reads the note. Box numbers are the classic form's, said so.
+  For the lawyer: whether SeeBuyGet itself is a party to the carriage when it bills the shipper; the claim window on
+  Northern Corridor lanes (ours is the CMR's seven days).
 - **Everywhere else** it is *Consignment note (CMR layout)*: same boxes, same numbering, said plainly to be the
   network's standard form where no national form applies — so a driver, a shop and an inspector read one page.
 

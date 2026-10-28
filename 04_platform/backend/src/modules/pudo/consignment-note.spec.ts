@@ -202,6 +202,17 @@ describe('the consignment note', () => {
     expect(html).not.toMatch(/<span class="no">6<\/span>Seals/);
   });
 
+  it('says an address is not recorded where the network holds none (CMR Art. 6(1)(b), (c), (e))', () => {
+    // An owner-driver, with no fleet and no depot: the carrier box says so rather than looking filled.
+    const n = service.build(base({ claimedBy: 'did:drv:solo', carrierDid: undefined } as never));
+    expect(n.carrier).toMatchObject({ name: 'Amos K.', did: 'did:drv:solo' });
+    expect(n.carrier?.address).toBeUndefined();
+    expect(service.htmlFor(n)).toContain('<span class="empty">Address not recorded</span>');
+    // A fleet with its depot: its address, and nothing said of a gap.
+    const fleet = service.build(base({}));
+    expect(fleet.carrier?.address).toBe('1 Depot Rd');
+  });
+
   it('names the fleet the sender contracted with in box 16, and the partner that carried it in box 17', () => {
     // Ordered from Jenga under contract, handed on to its partner Kilima, whose driver took the goods over.
     const contract = { contractId: 'ctr_1', fleetDid: 'did:fleet:jenga', fleetName: 'Jenga Freight', shipperName: 'Thika Avocados' };

@@ -61,6 +61,8 @@ export interface BusinessProfile {
   /** Its number at the company registry of its country. What staff check the certificate against. */
   registrationNo: string;
   taxNo?: string;
+  /** Where the business is, in its own words: the sender's address on its consignment notes (CMR Art. 6(1)(b)). */
+  address?: string;
   createdBy: string;
   createdByPersonDid: string;
   verification: BusinessVerification;

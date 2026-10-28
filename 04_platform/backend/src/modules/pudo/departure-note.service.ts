@@ -268,7 +268,7 @@ export class DepartureNoteService {
     }
     // B2 — a customer's business, by its registered name.
     const business = this.entities?.byDid(booking.shipperDid);
-    if (business?.kind === 'business') return { name: business.name, ...(business.jurisdiction ? { country: business.jurisdiction } : {}), did: booking.shipperDid };
+    if (business?.kind === 'business') return { name: business.name, ...(business.business?.address ? { address: business.business.address } : {}), ...(business.jurisdiction ? { country: business.jurisdiction } : {}), did: booking.shipperDid };
     // A store, then a shop, then the honest placeholder — the same order and the same fields the
     // board's note resolves a sender in, so one page cannot describe a party two ways.
     if (this.vendors.has(booking.shipperDid)) {

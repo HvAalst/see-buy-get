@@ -120,6 +120,8 @@ export class BusinessView {
   @ApiProperty({ enum: BUSINESS_ACTIVITIES, isArray: true }) activities: BusinessActivity[];
   @ApiProperty() registrationNo: string;
   @ApiPropertyOptional() taxNo?: string;
+  /** The sender's address on its consignment notes. */
+  @ApiPropertyOptional() address?: string;
   @ApiProperty({ type: BusinessCheckView }) check: BusinessCheckView;
   /** Its public address — only once checked. */
   @ApiPropertyOptional() handle?: string;
@@ -167,6 +169,7 @@ export class BusinessStaffRow {
   @ApiProperty({ enum: BUSINESS_ACTIVITIES, isArray: true }) activities: BusinessActivity[];
   @ApiProperty() registrationNo: string;
   @ApiPropertyOptional() taxNo?: string;
+  @ApiPropertyOptional() address?: string;
   @ApiProperty() createdAt: string;
   @ApiProperty() createdBy: string;
   @ApiProperty({ enum: VERIFICATION_STATES }) state: VerificationState;

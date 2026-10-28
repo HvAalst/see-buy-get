@@ -166,6 +166,7 @@ export class BusinessService {
       activities: p.activities,
       registrationNo: p.registrationNo,
       ...(p.taxNo ? { taxNo: p.taxNo } : {}),
+      ...(p.address ? { address: p.address } : {}),
       check: {
         state: p.verification.state,
         ...(p.verification.askedAt ? { askedAt: p.verification.askedAt } : {}),
@@ -203,7 +204,7 @@ export class BusinessService {
    * a verified "Acme Ltd" renamed to something else is not something anybody verified. Its public address, once issued,
    * does not move (a handle never follows a rename).
    */
-  update(acting: ActingMember, patch: { name?: string; registrationNo?: string; taxNo?: string | null; activities?: string[] }): Entity {
+  update(acting: ActingMember, patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; activities?: string[] }): Entity {
     this.requireOwner(acting);
     const entity = acting.entity;
     const p = entity.business!;
@@ -215,6 +216,8 @@ export class BusinessService {
     const profile = {
       ...(registrationNo !== undefined ? { registrationNo } : {}),
       ...(patch.taxNo !== undefined ? { taxNo: patch.taxNo?.trim() || undefined } : {}),
+      // Where it is: not something staff checked, so changing it leaves the check as it stands.
+      ...(patch.address !== undefined ? { address: patch.address?.trim().slice(0, 300) || undefined } : {}),
       ...(patch.activities !== undefined ? { activities: cleanActivities(patch.activities) } : {}),
       ...(identityChanged && p.verification.state !== 'unverified' ? { verification: { state: 'unverified' as const } } : {}),
     };
@@ -485,6 +488,7 @@ export class BusinessService {
       activities: p.activities,
       registrationNo: p.registrationNo,
       ...(p.taxNo ? { taxNo: p.taxNo } : {}),
+      ...(p.address ? { address: p.address } : {}),
       createdAt: e.createdAt,
       createdBy: p.createdBy,
       state: v.state,

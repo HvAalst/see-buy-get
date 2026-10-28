@@ -158,6 +158,9 @@ describe('a customer’s business, over the wire', () => {
     const biz = made.body.token.access_token;
     const entityId = made.body.business.entityId;
 
+    // The CMR check (2026-10-28): the address the business gives in its details is the sender's address on its notes.
+    const located = await http().patch('/v1/sbg/business/me').set(bearer(biz)).send({ address: 'Hawassa, Tabor sub-city, Plot 12' }).expect(200);
+    expect(located.body.address).toBe('Hawassa, Tabor sub-city, Plot 12');
     // A load of its own: posted as the business, by a named person, and settled with the carrier directly.
     const posted = await http()
       .post('/v1/sbg/dispatch/freight')
@@ -172,6 +175,7 @@ describe('a customer’s business, over the wire', () => {
     expect(mine.body.items.find((r: { freightId: string }) => r.freightId === posted.body.freightId)).toMatchObject({ currency: 'ETB' });
     const note = await http().get(`/v1/sbg/dispatch/freight/${posted.body.freightId}/consignment-note`).set(bearer(biz)).expect(200);
     expect(note.body.sender.name).toBe(`Sidama Coffee ${tag}`);
+    expect(note.body.sender.address).toBe('Hawassa, Tabor sub-city, Plot 12');
     // Not priced until a carrier takes it — and never "paid by the sender through SeeBuyGet".
     expect(note.body.carriage.paidBy).not.toBe('sender');
     // Nobody has quoted before a carrier has the load.

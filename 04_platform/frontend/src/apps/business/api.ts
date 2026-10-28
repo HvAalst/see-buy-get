@@ -102,6 +102,8 @@ export interface BusinessView {
   activities: BusinessActivity[];
   registrationNo: string;
   taxNo?: string;
+  /** The sender's address on its consignment notes. */
+  address?: string;
   check: { state: CheckState; askedAt?: string; verifiedAt?: string; refusedAt?: string; reason?: string; missing: string[] };
   handle?: string;
   createdAt: string;
@@ -361,7 +363,7 @@ export interface BusinessClient {
   bookingQuote(departureId: string, bookingId: string): Promise<Result<{ quote: QuoteView | null }>>;
   recordBookingQuote(departureId: string, bookingId: string, body: { amount?: number; currency?: string; reference?: string; note?: string }): Promise<Result<QuoteView>>;
   me(): Promise<Result<BusinessView>>;
-  update(patch: { name?: string; registrationNo?: string; taxNo?: string | null; activities?: BusinessActivity[] }): Promise<Result<BusinessView>>;
+  update(patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; activities?: BusinessActivity[] }): Promise<Result<BusinessView>>;
   members(): Promise<Result<{ items: MemberRow[] }>>;
   invite(input: { phone: string; name: string; role: MemberRole }): Promise<Result<MemberRow>>;
   setRole(memberId: string, role: MemberRole): Promise<Result<MemberRow>>;

@@ -21,7 +21,7 @@ import { KeysPanel } from './KeysPanel';
 export function DetailsScreen({ business, actions, client }: { business: BusinessView; actions: BusinessActions; client: BusinessClient | null }) {
   const t = useT();
   const owner = mayManage(business.you.role);
-  const [form, setForm] = useState({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', activities: business.activities });
+  const [form, setForm] = useState({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', address: business.address ?? '', activities: business.activities });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sites, setSites] = useState<SiteView[] | null>(null);
@@ -35,7 +35,7 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
   const works = mayAct(business.you.role);
 
   useEffect(() => {
-    setForm({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', activities: business.activities });
+    setForm({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', address: business.address ?? '', activities: business.activities });
   }, [business]);
 
   const loadSites = useCallback(async () => {
@@ -69,7 +69,7 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
   };
 
   const identityChanges = form.name.trim() !== business.name || form.registrationNo.trim() !== business.registrationNo;
-  const dirty = identityChanges || form.taxNo.trim() !== (business.taxNo ?? '') || form.activities.join() !== business.activities.join();
+  const dirty = identityChanges || form.taxNo.trim() !== (business.taxNo ?? '') || form.address.trim() !== (business.address ?? '') || form.activities.join() !== business.activities.join();
   const checked = business.check.state !== 'unverified';
   const toggle = (a: BusinessActivity) => setForm((f) => ({ ...f, activities: f.activities.includes(a) ? f.activities.filter((x) => x !== a) : [...f.activities, a] }));
 
@@ -82,6 +82,7 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
       ...(form.name.trim() !== business.name ? { name: form.name.trim() } : {}),
       ...(form.registrationNo.trim() !== business.registrationNo ? { registrationNo: form.registrationNo.trim() } : {}),
       ...(form.taxNo.trim() !== (business.taxNo ?? '') ? { taxNo: form.taxNo.trim() || null } : {}),
+      ...(form.address.trim() !== (business.address ?? '') ? { address: form.address.trim() || null } : {}),
       ...(form.activities.join() !== business.activities.join() ? { activities: form.activities } : {}),
     });
     setBusy(false);
@@ -117,6 +118,11 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
                 <input class="cinput" value={form.taxNo} onInput={(e) => setForm((prev) => ({ ...prev, taxNo: (e.target as HTMLInputElement).value }))} />
               </label>
             </div>
+            <label class="cfield">
+              <span class="cfield__label">{t('business.details.address')}</span>
+              <input class="cinput" maxLength={300} value={form.address} onInput={(e) => setForm((prev) => ({ ...prev, address: (e.target as HTMLInputElement).value }))} />
+              <span class="chint">{t('business.details.addressHint')}</span>
+            </label>
             <fieldset class="cfield biz-acts">
               <legend class="cfield__label">{t('business.new.activities')}</legend>
               {ACTIVITIES.map((a) => (
@@ -153,6 +159,10 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
                 <dd class="cons__factv">{business.taxNo}</dd>
               </div>
             ) : null}
+            <div class="cons__fact">
+              <dt class="cons__factk">{t('business.details.address')}</dt>
+              <dd class="cons__factv">{business.address ?? t('business.details.addressNone')}</dd>
+            </div>
             <div class="cons__fact">
               <dt class="cons__factk">{t('business.new.activities')}</dt>
               <dd class="cons__factv">{business.activities.map((a) => t(ACTIVITY_LABEL[a])).join(', ')}</dd>
