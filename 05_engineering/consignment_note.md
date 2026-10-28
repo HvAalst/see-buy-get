@@ -31,7 +31,7 @@ sender, carrier, consignee. Number `CMR-<load code>`.
   carrier-insurance paper counts only when staff recorded it off the policy the fleet SENT (`insuranceCopyRef`), with what
   it covers and up to how much a load (`insuranceCovers`, `insuranceLimit`, `insuranceCurrency`), and while it runs
   (`FleetManagerService.coverOf`). `Freight.coverRequired`: `DispatchService.coverRefusal` is asked at the board
-  (`COVER_REQUIRED`, resolvable), the three offer paths, the take and a contract order. Owner-drivers cannot show cover yet.
+  (`COVER_REQUIRED`, resolvable), the three offer paths, the take and a contract order. An owner-driver proves their own the same way (`DriverService.coverOf`, 2026-10-28).
   The note: box 13 "Insurance: the sender requires …" (Art. 6(2)(e)); the carrier's `coverLine` beside it in 16 or 17.
 - **Art. 6(2)**: `declaredValue`, `specialInterest` (box 19), `noTranshipment` (box 13; a reload is written against it),
   a contract order's agreed time-limit (box 19).
