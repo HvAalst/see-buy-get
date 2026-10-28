@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useState } from 'preact/hooks';
 import { Sheet } from '../../../shared/ui';
+import { tabAtTheTap } from '../../../shared/openPage';
 import { useT } from '../../../shared/i18n';
 import type { CompanyDocument } from '../company';
 import { fileSize, paperFileName, paperKindShort } from '../imports';
@@ -64,17 +65,13 @@ export function PaperFile({
      (2026-10-28): a tab opened after waiting for a download is blocked as a pop-up by some browsers,
      Safari above all, and the tap seemed to do nothing. Revoked a minute later — the tab has it by then. */
   const open = async () => {
-    const tab = window.open('', '_blank');
-    if (tab) tab.opener = null;
-    const blob = await bytes();
-    if (!blob) {
-      tab?.close();
-      return;
+    const tab = tabAtTheTap();
+    try {
+      const blob = await bytes();
+      if (blob) tab.show(blob);
+    } finally {
+      tab.cancel();
     }
-    const url = URL.createObjectURL(blob);
-    if (tab) tab.location.href = url;
-    else window.location.assign(url);
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
   const save = async () => {

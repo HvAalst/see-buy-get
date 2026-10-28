@@ -1,12 +1,11 @@
 import { Button, CodeCard, ReadAloud, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { openSvg } from '../../../shared/openPage';
 import type { AgentActions, AgentState, TakenIn } from '../useAgentApp';
 
 /** Open the label SVG in a new tab so the agent can print it and stick it on the parcel. */
 export function openLabel(svg: string) {
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-  window.open(url, '_blank', 'noopener');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  openSvg(svg);
 }
 
 /**

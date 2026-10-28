@@ -14,6 +14,7 @@ import { useCountryAtlas } from './CountrySelect';
 import { paperDay, paperLine, papersToShow, renewalBlocker } from '../../../shared/papers';
 import { isStuck, type CourierContact, type CourierPaperRow, type LooseVehicleRow } from '../papers';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 /**
  * FP4 — the papers only network staff can put right.
@@ -290,9 +291,14 @@ export function CardPhoto({ mediaId, name, actions }: { mediaId: string; name: s
       title={t('tower.papers.cardOpen')}
       aria-label={t('tower.papers.cardOpen')}
       onClick={async () => {
-        const r = await client.api.mediaBlob(mediaId);
-        const blob = r.error ? null : (r.data as unknown as Blob | null);
-        if (blob) window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+        const tab = tabAtTheTap();
+        try {
+          const r = await client.api.mediaBlob(mediaId);
+          const blob = r.error ? null : (r.data as unknown as Blob | null);
+          if (blob) tab.show(blob);
+        } finally {
+          tab.cancel();
+        }
       }}
     >
       <AuthImage

@@ -7,6 +7,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { abroadLine, inboundTitle, type InboundRow } from '../inbound';
 import { LoadClaimPanel } from './LoadClaim';
 import { NoteFile, NoteLinksPanel } from './LoadNote';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 /**
  * ONE DELIVERED LOAD, OPENED FROM COMING IN (the user, 2026-10-26: "Its copy, no carriage price"): what came and what
@@ -24,11 +25,14 @@ export function InboundDetail({ row, client, act, onClose, onChanged }: { row: I
   const note = async () => {
     if (!client) return;
     setError(null);
-    const r = await client.shipping.freightNote(row.freightId);
-    if (r.error || !r.data) return setError(t('business.inbound.noteGone'));
-    const url = URL.createObjectURL(new Blob([r.data as unknown as string], { type: 'text/html' }));
-    window.open(url, '_blank', 'noopener');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    const tab = tabAtTheTap();
+    try {
+      const r = await client.shipping.freightNote(row.freightId);
+      if (r.error || !r.data) return setError(t('business.inbound.noteGone'));
+      tab.show(r.data as unknown as string);
+    } finally {
+      tab.cancel();
+    }
   };
 
   return (

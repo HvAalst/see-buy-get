@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { FISCAL_STATES, fiscalTitle, fiscalTone, mayResend, printable, type FiscalInvoiceList, type FiscalState } from '../../../shared/fiscal';
-import { openPage } from '../../../shared/openPage';
+import { tabAtTheTap } from '../../../shared/openPage';
 import { amount } from '../queues';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -37,9 +37,14 @@ export function TaxInvoicesPanel({ state, actions }: { state: TowerState; action
 
   const print = async (invoiceId: string) => {
     setError(null);
-    const r = await client!.api.fiscalInvoicePage(invoiceId);
-    if (r.error || !r.data) return setError(t('fiscal.gone'));
-    openPage(r.data as unknown as string);
+    const tab = tabAtTheTap();
+    try {
+      const r = await client!.api.fiscalInvoicePage(invoiceId);
+      if (r.error || !r.data) return setError(t('fiscal.gone'));
+      tab.show(r.data as unknown as string);
+    } finally {
+      tab.cancel();
+    }
   };
   const resend = async (invoiceId: string) => {
     setBusy(invoiceId);

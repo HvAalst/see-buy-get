@@ -11,6 +11,7 @@ import type { BusinessClient, BusinessView } from '../api';
 import { mayAct } from '../logic';
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 /**
  * B2 — SPACE ON A CARRIER'S RUN: a truck that is leaving anyway, with room in the back.
@@ -314,11 +315,14 @@ function BookingDetail({ row, client, act, onClose, onChanged }: { row: MyBookin
 
   const note = async () => {
     if (!client) return;
-    const r = await client.bookingNote(row.departureId, row.bookingId);
-    if (r.error || !r.data) return setError(t('business.loads.noteGone'));
-    const url = URL.createObjectURL(new Blob([r.data], { type: 'text/html' }));
-    window.open(url, '_blank', 'noopener');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    const tab = tabAtTheTap();
+    try {
+      const r = await client.bookingNote(row.departureId, row.bookingId);
+      if (r.error || !r.data) return setError(t('business.loads.noteGone'));
+      tab.show(r.data);
+    } finally {
+      tab.cancel();
+    }
   };
 
   return (

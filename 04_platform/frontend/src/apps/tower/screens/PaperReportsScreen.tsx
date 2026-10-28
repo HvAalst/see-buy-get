@@ -3,6 +3,7 @@ import { useT } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { CASE_LABEL, CASE_TONE, CATEGORY_LABEL, caseSub, isWaiting, strikeStep, type PaperCase } from '../paperReports';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -111,9 +112,14 @@ function CaseDetail({ caseId, state, actions, onClose }: { caseId: string; state
   };
   /** A file, opened in its own tab: the paper itself, or what somebody attached. */
   const show = async (read: () => Promise<{ data?: unknown; error?: unknown }>) => {
-    const r = await read();
-    const blob = r.error ? null : (r.data as Blob | null);
-    if (blob) window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+    const tab = tabAtTheTap();
+    try {
+      const r = await read();
+      const blob = r.error ? null : (r.data as Blob | null);
+      if (blob) tab.show(blob);
+    } finally {
+      tab.cancel();
+    }
   };
 
   if (!row) {

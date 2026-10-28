@@ -9,7 +9,7 @@ import { addToQueue, dropFromQueue, findMyHub, floorOpen, money, unsortedAt } fr
 import { onIt, replaceArrival, unitsLine, type HubArrival, type HubArrivalScan, type HubArrivalsView, type HubBulk } from './arrivals';
 import { downscaleImage } from '../../shared/media';
 import { downloadZpl } from '../../shared/download';
-import { openSvg } from '../../shared/openPage';
+import { tabAtTheTap } from '../../shared/openPage';
 import { holdPhoto } from '../../shared/heldPhotos';
 import { errorSentence } from '../../shared/ui';
 import type { UnitHold } from '../../shared/tamper';
@@ -604,12 +604,17 @@ export function useMdpApp() {
     async (parcelId: string) => {
       const hub = stateRef.current.hub;
       if (!client || !hub) return;
-      await run(`label:${parcelId}`, async () => {
-        const r = await client.api.hubLabel(hub.mdpId, parcelId);
-        if (r.error) return fail(r.error);
-        const svg = narrow<{ svg?: string }>(r.data)?.svg;
-        if (svg) openSvg(svg);
-      });
+      const tab = tabAtTheTap();
+      try {
+        await run(`label:${parcelId}`, async () => {
+          const r = await client.api.hubLabel(hub.mdpId, parcelId);
+          if (r.error) return fail(r.error);
+          const svg = narrow<{ svg?: string }>(r.data)?.svg;
+          if (svg) tab.show(svg, 'image/svg+xml');
+        });
+      } finally {
+        tab.cancel();
+      }
     },
     [client, run, fail],
   );

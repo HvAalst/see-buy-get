@@ -11,6 +11,7 @@ import type { NetworkPoint } from '../types';
 import { HUB_ORIGIN, hoursLine, receivingHours, receivingWords, type HubOptionView } from '../hubs';
 import type { VendorActions, VendorState } from '../useVendorApp';
 import { SizePriceNote } from '../../../shared/SizePriceNote';
+import { openSvg } from '../../../shared/openPage';
 
 export interface MintScreenProps {
   state: VendorState;
@@ -592,11 +593,9 @@ function LabelStep({ state, actions }: MintScreenProps) {
   if (!m) return null;
   const svg = m.label?.svg ?? null;
 
+  // Drawn when the parcel was made: in hand, so it opens straight from the tap.
   const openLabel = () => {
-    if (!svg) return;
-    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-    window.open(url, '_blank', 'noopener');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    if (svg) openSvg(svg);
   };
 
   return (

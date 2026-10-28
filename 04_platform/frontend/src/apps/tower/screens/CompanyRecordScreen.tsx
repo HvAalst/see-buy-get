@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
+import { tabAtTheTap } from '../../../shared/openPage';
 import {
   DOCUMENT_KINDS,
   DOCUMENT_LABEL,
@@ -186,9 +187,14 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
             onReject={(documentId, reason) => (client && entityId ? run(documentId, () => client.api.rejectCompanyDocument(entityId, documentId, reason, who), t('tower.company.doc.rejected')) : Promise.resolve(false))}
             onOpen={async (document) => {
               if (!client || !entityId) return;
-              const r = await client.api.companyDocumentFile(entityId, document.documentId);
-              const blob = r.error ? null : (r.data as unknown as Blob | null);
-              if (blob) window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+              const tab = tabAtTheTap();
+              try {
+                const r = await client.api.companyDocumentFile(entityId, document.documentId);
+                const blob = r.error ? null : (r.data as unknown as Blob | null);
+                if (blob) tab.show(blob);
+              } finally {
+                tab.cancel();
+              }
             }}
           />
           <Lapses view={view} />

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 /**
  * THE DOCUMENTS THEMSELVES, shown where the decision is taken.
@@ -83,10 +84,15 @@ export function DocumentStrip({
               disabled={!client || gone || state.busyId != null}
               onClick={async () => {
                 if (!client) return;
-                const r = await client.api.mediaBlob(mediaId);
-                const blob = r.error ? null : (r.data as unknown as Blob | null);
-                // Opened, never downloaded: this is somebody's document, and the retention clock owns the copy.
-                if (blob) window.open(URL.createObjectURL(blob), '_blank', 'noopener');
+                const tab = tabAtTheTap();
+                try {
+                  const r = await client.api.mediaBlob(mediaId);
+                  const blob = r.error ? null : (r.data as unknown as Blob | null);
+                  // Opened, never downloaded: this is somebody's document, and the retention clock owns the copy.
+                  if (blob) tab.show(blob);
+                } finally {
+                  tab.cancel();
+                }
               }}
             >
               {/* No client, no loader: AuthImage fetches on mount, so rendering it before sign-in would

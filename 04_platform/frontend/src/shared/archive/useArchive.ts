@@ -3,6 +3,7 @@ import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sb
 import { createArchiveApi } from '../../lib/sbg/personas/archive';
 import type { ArchiveQuery, ArchivedNoteDoc, ArchivedNoteRow, ProofAnswer } from '../../lib/sbg/personas/archive';
 import { triggerDownload, triggerDownloadBlob } from '../download';
+import { tabAtTheTap } from '../openPage';
 import type { DocumentLinkRow, MadeLink } from './documentLink';
 import { canShareFiles as browserSharesFiles, fileNameFor, handOverFile } from './handOver';
 import { useNoteLinks } from './useNoteLinks';
@@ -191,11 +192,20 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
   const printCopy = useCallback(
     async (docId: string, seq: number) => {
       if (!api) return;
-      setBusy('print');
-      const r: Result<unknown> = await api.noteCopyHtml(docId, seq);
-      setBusy('');
-      if (r.error || r.data == null) return setError(r.error ?? null);
-      openHtml(narrow<string>(r.data));
+      // The tab is opened at the tap: one opened after the fetch is blocked as a pop-up by some browsers. Where even
+      // this one is refused, the page comes as a download instead.
+      const tab = tabAtTheTap();
+      try {
+        setBusy('print');
+        const r: Result<unknown> = await api.noteCopyHtml(docId, seq);
+        setBusy('');
+        if (r.error || r.data == null) return setError(r.error ?? null);
+        const html = narrow<string>(r.data);
+        if (tab.opened) tab.show(html);
+        else triggerDownload('consignment-note.html', html, 'text/html;charset=utf-8');
+      } finally {
+        tab.cancel();
+      }
     },
     [api],
   );
@@ -217,16 +227,4 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
 
   const { links, cancelling, cancelLink, made, making, makeLink, problem: makeProblem } = noteLinks;
   return { rows, total, phase, error, query, open, openPhase, links, cancelling, cancelLink, made, making, makeProblem, makeLink, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote, canShareFiles };
-}
-
-/** Show a fetched page in its own window. Falls back to a download where a popup is blocked. */
-function openHtml(html: string): void {
-  if (typeof window === 'undefined') return;
-  const win = window.open('', '_blank', 'noopener');
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-    return;
-  }
-  triggerDownload('consignment-note.html', html, 'text/html;charset=utf-8');
 }

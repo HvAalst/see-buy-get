@@ -7,6 +7,7 @@ import { carriersLine, cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPr
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 import { SizePriceNote } from '../../../shared/SizePriceNote';
+import { openSvg } from '../../../shared/openPage';
 
 export interface SendScreenProps {
   state: SendState;
@@ -553,11 +554,9 @@ function DoneStep({ state, actions }: SendScreenProps) {
   if (!m) return null;
   const svg = m.label?.svg ?? null;
 
+  // Drawn when the parcel was made: in hand, so it opens straight from the tap.
   const openLabel = () => {
-    if (!svg) return;
-    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-    window.open(url, '_blank', 'noopener');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    if (svg) openSvg(svg);
   };
 
   return (

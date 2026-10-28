@@ -3,18 +3,13 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { publicRequest } from '../../../lib/sbg';
 import { downloadZpl } from '../../../shared/download';
+import { tabAtTheTap } from '../../../shared/openPage';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
 import { businessConfig, type BusinessClient, type BusinessView, type PostedLoad } from '../api';
 import { EMPTY_LINE, EXPORT_REASONS, invoiceBody, invoiceForm, invoiceGaps, invoiceTotals, labelsLine, money, type CommercialInvoiceView, type InvoiceForm, type InvoiceGap, type InvoiceLineForm, type PackageLabels } from '../papers';
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
-/** A printable page the server rendered, in a tab of its own: the same way the consignment note opens. */
-function openPage(html: string): void {
-  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-  window.open(url, '_blank', 'noopener');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
 
 /*
  * THE PAPERS FOR A LOAD'S GOODS — the package labels (our code, and the business's GS1 code beside it) and the
@@ -59,11 +54,17 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
     await read();
   };
 
+  /** A printable page the server rendered, in a tab opened at the tap: the same way the consignment note opens. */
   const print = async (page: () => Promise<{ data?: string | null; error?: unknown }>) => {
     setError(null);
-    const r = await page();
-    if (r.error || !r.data) return setError(t('business.papers.gone'));
-    openPage(r.data);
+    const tab = tabAtTheTap();
+    try {
+      const r = await page();
+      if (r.error || !r.data) return setError(t('business.papers.gone'));
+      tab.show(r.data);
+    } finally {
+      tab.cancel();
+    }
   };
 
   const current = invoice?.current;

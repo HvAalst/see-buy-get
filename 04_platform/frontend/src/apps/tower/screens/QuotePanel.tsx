@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { quoteFigure, type QuoteView } from '../../../shared/quote';
 import { ConsoleFold } from '../ConsoleFold';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 type Api = {
   attachProforma: (quoteId: string, body: { dataUrl: string; fileName?: string }) => Promise<{ data?: unknown; error?: { detail?: string; title?: string } | null }>;
@@ -44,11 +45,14 @@ export function QuotePanel({ quote, api, canChange, onChanged }: { quote: QuoteV
 
   const open = async () => {
     if (!api) return;
-    const r = await api.proformaFile(quote.quoteId);
-    if (r.error || !r.data) return setError(t('quote.proformaGone'));
-    const url = URL.createObjectURL(r.data as Blob);
-    window.open(url, '_blank', 'noopener');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    const tab = tabAtTheTap();
+    try {
+      const r = await api.proformaFile(quote.quoteId);
+      if (r.error || !r.data) return setError(t('quote.proformaGone'));
+      tab.show(r.data as Blob);
+    } finally {
+      tab.cancel();
+    }
   };
 
   return (

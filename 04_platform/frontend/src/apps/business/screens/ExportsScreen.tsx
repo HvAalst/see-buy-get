@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { DocumentButton } from '../../../shared/ui';
 import { Abbreviated } from '../../../shared/ui/Abbr';
+import { tabAtTheTap } from '../../../shared/openPage';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
@@ -261,23 +262,16 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
   const [refusing, setRefusing] = useState<Record<string, string | undefined>>({});
   const [entry, setEntry] = useState('');
 
-  /**
-   * A paper's bytes, opened in a tab — a PDF or a photograph, which the browser already knows how to show. The tab is
-   * opened AT the tap and filled once the file arrives: a tab opened after waiting for a download is blocked as a pop-up
-   * by some browsers (Safari above all), and the tap would seem to do nothing.
-   */
+  /** A paper's bytes, opened in a tab at the tap — a PDF or a photograph, which the browser already knows how to show. */
   const openPaper = async (key: ExportPaperKey, title: string) => {
-    const tab = window.open('', '_blank');
-    if (tab) tab.opener = null;
-    const r = await client.exports.paperFile(exportId, key);
-    if (r.error || !r.data) {
-      tab?.close();
-      return setError(t('business.exports.papers.unreadable', { title }));
+    const tab = tabAtTheTap();
+    try {
+      const r = await client.exports.paperFile(exportId, key);
+      if (r.error || !r.data) return setError(t('business.exports.papers.unreadable', { title }));
+      tab.show(r.data as Blob);
+    } finally {
+      tab.cancel();
     }
-    const url = URL.createObjectURL(r.data as Blob);
-    if (tab) tab.location.href = url;
-    else window.location.assign(url);
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
   const read = useCallback(async () => {

@@ -9,6 +9,7 @@ import type { FleetActions, FleetOfferRow, FleetState, RemovalReason } from '../
 import { useEffect, useState } from 'preact/hooks';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 export interface DriversScreenProps {
   state: FleetState;
@@ -601,8 +602,13 @@ function DriverCard({ did, mediaId, name, actions, recorded }: { did: string; me
         title={t('fleet.card.open')}
         aria-label={t('fleet.card.open')}
         onClick={async () => {
-          const r = await load(mediaId);
-          if (!r.error && r.data) window.open(URL.createObjectURL(r.data), '_blank', 'noopener');
+          const tab = tabAtTheTap();
+          try {
+            const r = await load(mediaId);
+            if (!r.error && r.data) tab.show(r.data);
+          } finally {
+            tab.cancel();
+          }
         }}
       >
         <AuthImage mediaId={mediaId} load={load} alt={t('fleet.card.alt', { name })} class="cardphoto__img" onFailed={() => setGone(true)} />

@@ -5,6 +5,7 @@ import { DOCUMENT_LABEL, type CompanyDocument } from '../company';
 import { approveBlock, stateTone, type BusinessRow } from '../businesses';
 import { Gs1DisputesPanel } from './Gs1DisputesPanel';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 const STATE_LABEL: Record<BusinessRow['state'], MessageKey> = {
   unverified: 'tower.biz.state.unverified',
@@ -137,11 +138,14 @@ function BusinessDetail({ row, state, actions, onClose }: { row: BusinessRow; st
 
   const openFile = async (doc: CompanyDocument) => {
     if (!client) return;
-    const r = (await client.api.companyDocumentFile(row.entityId, doc.documentId)) as unknown as { data?: Blob; error?: unknown };
-    if (r.error || !r.data) return setError(t('tower.biz.fileGone'));
-    const url = URL.createObjectURL(r.data);
-    window.open(url, '_blank', 'noopener');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    const tab = tabAtTheTap();
+    try {
+      const r = (await client.api.companyDocumentFile(row.entityId, doc.documentId)) as unknown as { data?: Blob; error?: unknown };
+      if (r.error || !r.data) return setError(t('tower.biz.fileGone'));
+      tab.show(r.data);
+    } finally {
+      tab.cancel();
+    }
   };
 
   return (

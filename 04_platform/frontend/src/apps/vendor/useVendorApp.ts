@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { isMintSourced, isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, type SbgError } from '../../lib/sbg';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
-import { openPage } from '../../shared/openPage';
+import { tabAtTheTap } from '../../shared/openPage';
 import { papersBody } from './papers';
 import { hubOriginOf, type HubOptionView } from './hubs';
 import { downloadZpl, triggerDownload } from '../../shared/download';
-import { openSvg } from '../../shared/openPage';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import { downscaleImage } from '../../shared/media';
 import type { Gs1DisputeView } from '../../shared/gs1';
@@ -781,11 +780,16 @@ export function useVendorApp() {
   const printPapers = useCallback(
     async (parcelId: string) => {
       if (!client || !creds) return;
-      await run(`papers:${parcelId}`, async () => {
-        const r = await client.api.papersPage(creds.vendorId, parcelId);
-        if (r.error || !r.data) return fail(r.error as never);
-        openPage(r.data);
-      });
+      const tab = tabAtTheTap();
+      try {
+        await run(`papers:${parcelId}`, async () => {
+          const r = await client.api.papersPage(creds.vendorId, parcelId);
+          if (r.error || !r.data) return fail(r.error as never);
+          tab.show(r.data);
+        });
+      } finally {
+        tab.cancel();
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [client, creds],
@@ -1070,12 +1074,17 @@ export function useVendorApp() {
   const printOrderLabel = useCallback(
     async (parcelId: string) => {
       if (!client || !creds) return;
-      await run(`label:${parcelId}`, async () => {
-        const r = await client.api.orderLabel(creds.vendorId, parcelId);
-        if (r.error) return fail(r.error);
-        const svg = narrow<{ svg?: string }>(r.data)?.svg;
-        if (svg) openSvg(svg);
-      });
+      const tab = tabAtTheTap();
+      try {
+        await run(`label:${parcelId}`, async () => {
+          const r = await client.api.orderLabel(creds.vendorId, parcelId);
+          if (r.error) return fail(r.error);
+          const svg = narrow<{ svg?: string }>(r.data)?.svg;
+          if (svg) tab.show(svg, 'image/svg+xml');
+        });
+      } finally {
+        tab.cancel();
+      }
     },
     [client, creds, run, fail],
   );

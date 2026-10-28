@@ -3,7 +3,7 @@ import { Abbreviated } from './ui/Abbr';
 import { Button, Card, Icon } from './ui';
 import { formatMoney, useT } from './i18n';
 import { fiscalStanding, fiscalTitle, printable, type FiscalInvoiceRow } from './fiscal';
-import { openPage } from './openPage';
+import { tabAtTheTap } from './openPage';
 
 /** Whatever a persona's client answers: read here as the invoice rows and the page they are. */
 type Answer = Promise<{ data?: unknown; error?: unknown }>;
@@ -45,9 +45,14 @@ export function TaxInvoicesCard({ load, page, title, taxNumber }: { load: () => 
 
   const print = async (invoiceId: string) => {
     setError(null);
-    const r = await page(invoiceId);
-    if (r.error || typeof r.data !== 'string') return setError(t('fiscal.gone'));
-    openPage(r.data);
+    const tab = tabAtTheTap();
+    try {
+      const r = await page(invoiceId);
+      if (r.error || typeof r.data !== 'string') return setError(t('fiscal.gone'));
+      tab.show(r.data);
+    } finally {
+      tab.cancel();
+    }
   };
 
   return (

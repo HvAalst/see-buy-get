@@ -12,6 +12,7 @@ import { deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderable
 import { passageWords } from '../../../shared/passages';
 import { heldLine } from '../../../shared/tamper';
 import { heldByLine } from '../../../shared/heldByAuthority';
+import { tabAtTheTap } from '../../../shared/openPage';
 
 /** A time on the road, as the shipper reads it: its day and hour. */
 const onRoad = (iso: string) => new Date(iso).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -513,11 +514,14 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
 
   const note = async () => {
     if (!client) return;
-    const r = await client.shipping.freightNote(row.freightId);
-    if (r.error || !r.data) return setError(t('business.loads.noteGone'));
-    const url = URL.createObjectURL(new Blob([r.data as unknown as string], { type: 'text/html' }));
-    window.open(url, '_blank', 'noopener');
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    const tab = tabAtTheTap();
+    try {
+      const r = await client.shipping.freightNote(row.freightId);
+      if (r.error || !r.data) return setError(t('business.loads.noteGone'));
+      tab.show(r.data as unknown as string);
+    } finally {
+      tab.cancel();
+    }
   };
 
   return (
