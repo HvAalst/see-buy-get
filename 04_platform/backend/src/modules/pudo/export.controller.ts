@@ -10,7 +10,8 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { ExportService } from './export.service';
 import {
-  EXPORT_PAPER_KEYS,
+  isExportPaperKey,
+  ExportAddPaperDto,
   ExportAppointAgentDto,
   ExportBillOfLadingDto,
   ExportContainerDto,
@@ -171,6 +172,20 @@ export class ExportController {
     return this.exports.endAgent(exportId, this.ownCompany(actor), auditActor(actor), dto.reason);
   }
 
+  /** Ask for a paper these goods need — the exporter, or its appointed clearing agent. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/papers/add')
+  addPaper(@Param('exportId') exportId: string, @Body() dto: ExportAddPaperDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.addPaper(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  /** Off the list again: only by whoever asked for it, and only while nothing was given for it. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/papers/:key/remove')
+  removePaper(@Param('exportId') exportId: string, @Param('key') key: string, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.removePaper(exportId, this.ownCompany(actor), paperKey(key));
+  }
+
   /** The appointed agent accepts a paper. */
   @Roles('business', 'entity_admin')
   @Post(':exportId/papers/:key/accept')
@@ -213,6 +228,6 @@ export class ExportController {
 
 /** A paper's key from the path — one of the four this export keeps, or no such paper. */
 function paperKey(key: string): ExportPaperKey {
-  if (!(EXPORT_PAPER_KEYS as readonly string[]).includes(key)) throw new GlosError('NOT_FOUND', 'No such paper on this export');
+  if (!isExportPaperKey(key)) throw new GlosError('NOT_FOUND', 'No such paper on this export');
   return key as ExportPaperKey;
 }

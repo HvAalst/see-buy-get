@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { FREE_DAY_KINDS, type FreeDayKind } from './container-box';
 import { FEE_STATES, type FeeState } from './import.types';
 import { Quote } from './quote.types';
@@ -21,9 +21,74 @@ import { Quote } from './quote.types';
 export const BOOKED_WITH = ['forwarder', 'shipping_line'] as const;
 export type BookedWith = (typeof BOOKED_WITH)[number];
 
-/** The export papers this record keeps — attached from the exporter's own documents, or a reference its agent gave. */
-export const EXPORT_PAPER_KEYS = ['commercial_invoice', 'packing_list', 'certificate_of_origin', 'export_entry'] as const;
-export type ExportPaperKey = (typeof EXPORT_PAPER_KEYS)[number];
+/**
+ * THE PAPERS AN EXPORT HOLDS (the user, 2026-10-28: "in the exports field I miss quiet a bit of documents. Shouldn't we
+ * add them? we don't book but we hold documents as a report"). We issue none of them and file none: each is the
+ * exporter's own document (fingerprinted and versioned with its other papers) or a reference — held here so the record,
+ * and the file the forwarder takes, is complete. Three groups:
+ *
+ *  - `needed` — on every export, counted missing until given: what the forwarder and customs ask of any export.
+ *  - `kept` — on every export, kept when there is one and never counted missing: the booking confirmation, the shipping
+ *    instructions to the forwarder, the weighbridge ticket behind the verified gross mass, the bill of lading's copy.
+ *  - `asked` — put on the list by the exporter or its clearing agent when the goods, the buyer or the destination ask for
+ *    it; once there, counted missing until given. A dangerous goods declaration is put there for hazardous goods. Any
+ *    other paper can be asked for by name (`other-1`, `other-2`, …).
+ *
+ * General names, never one country's agency: the plant-health authority, the standards body and the licensing office
+ * differ by country; the paper's kind does not.
+ */
+export const EXPORT_PAPER_KEYS = [
+  'commercial_invoice',
+  'packing_list',
+  'export_entry',
+  'booking_confirmation',
+  'shipping_instructions',
+  'weighbridge_ticket',
+  'bill_of_lading',
+  'certificate_of_origin',
+  'phytosanitary_certificate',
+  'fumigation_certificate',
+  'export_permit',
+  'inspection_certificate',
+  'certificate_of_analysis',
+  'health_certificate',
+  'insurance_certificate',
+  'dangerous_goods_declaration',
+  'letter_of_credit',
+] as const;
+export type KnownExportPaperKey = (typeof EXPORT_PAPER_KEYS)[number];
+/** A paper of the catalogue, or another paper asked for by name. */
+export type ExportPaperKey = KnownExportPaperKey | `other-${number}`;
+
+export const EXPORT_PAPER_GROUPS = ['needed', 'asked', 'kept'] as const;
+export type ExportPaperGroup = (typeof EXPORT_PAPER_GROUPS)[number];
+
+export const EXPORT_PAPER_GROUP: Record<KnownExportPaperKey, ExportPaperGroup> = {
+  commercial_invoice: 'needed',
+  packing_list: 'needed',
+  export_entry: 'needed',
+  booking_confirmation: 'kept',
+  shipping_instructions: 'kept',
+  weighbridge_ticket: 'kept',
+  bill_of_lading: 'kept',
+  certificate_of_origin: 'asked',
+  phytosanitary_certificate: 'asked',
+  fumigation_certificate: 'asked',
+  export_permit: 'asked',
+  inspection_certificate: 'asked',
+  certificate_of_analysis: 'asked',
+  health_certificate: 'asked',
+  insurance_certificate: 'asked',
+  dangerous_goods_declaration: 'asked',
+  letter_of_credit: 'asked',
+};
+
+const OTHER_KEY = /^other-([1-9][0-9]?)$/;
+
+/** Is this one of the papers an export can hold — the catalogue's, or another asked for by name? */
+export function isExportPaperKey(key: string): key is ExportPaperKey {
+  return (EXPORT_PAPER_KEYS as readonly string[]).includes(key) || OTHER_KEY.test(key);
+}
 
 /** Where the timing stands, derived on every read from the cut-off, the road and the laden leg. */
 export const EXPORT_TIMING = ['on_time', 'at_risk', 'missed', 'gated_in'] as const;
@@ -69,9 +134,16 @@ export class ExportVgm {
 
 /** One export paper: a document from the exporter's own papers, or (the export entry) a reference. */
 export class ExportPaper {
-  @ApiProperty({ enum: EXPORT_PAPER_KEYS }) key: ExportPaperKey;
-  /** Not every destination asks for it (a certificate of origin): missing is then not a gap. */
+  /** One of the catalogue's (EXPORT_PAPER_KEYS), or `other-N` for a paper asked for by name. */
+  @ApiProperty({ type: String }) key: ExportPaperKey;
+  /** Kept when there is one, never counted missing (the booking confirmation, the weighbridge ticket …). */
   @ApiPropertyOptional() optional?: boolean;
+  /** The name of a paper asked for by name. */
+  @ApiPropertyOptional() title?: string;
+  /** Who put it on the list, for these goods — the exporter or its agent. Absent: on every export. */
+  @ApiPropertyOptional() addedBy?: string;
+  @ApiPropertyOptional() addedByEntityId?: string;
+  @ApiPropertyOptional() addedAt?: string;
   @ApiPropertyOptional() documentId?: string;
   @ApiPropertyOptional() documentTitle?: string;
   @ApiPropertyOptional() reference?: string;
@@ -213,6 +285,9 @@ export class ExportSealView {
 
 export class ExportPaperView extends ExportPaper {
   @ApiProperty() label: string;
+  @ApiProperty({ enum: EXPORT_PAPER_GROUPS }) group: ExportPaperGroup;
+  /** This reader asked for it and nothing was given for it yet: it may take it off the list. */
+  @ApiPropertyOptional() removable?: boolean;
 }
 
 /** The box's clock on this export, derived on every read: detention outside, demurrage inside, in dates and days — never money. */
@@ -335,7 +410,7 @@ export class ExportVgmDto {
 }
 
 export class ExportPaperDto {
-  @IsIn(EXPORT_PAPER_KEYS) key!: ExportPaperKey;
+  @IsString() @Matches(/^([a-z_]{3,40}|other-[1-9][0-9]?)$/) key!: ExportPaperKey;
   @IsOptional() @IsString() documentId?: string;
   @IsOptional() @IsString() @MaxLength(80) reference?: string;
 }
@@ -361,6 +436,12 @@ export class ExportAppointAgentDto {
 
 export class ExportEndAgentDto {
   @IsOptional() @IsString() @MaxLength(200) reason?: string;
+}
+
+/** Ask for a paper these goods need: one of the catalogue's `asked` papers, or `other` with its name. */
+export class ExportAddPaperDto {
+  @IsString() @MaxLength(40) key!: string;
+  @IsOptional() @IsString() @MaxLength(80) title?: string;
 }
 
 export class ExportOwnBoxDto {

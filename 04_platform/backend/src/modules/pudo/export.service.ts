@@ -9,7 +9,7 @@ import { boxDueSoon, exportBoxClock, FREE_DAY_KINDS, type FreeDayKind } from './
 import { ContainerBoxService } from './container-box.service';
 import { containerType } from './container-type';
 import { DispatchService } from './dispatch.service';
-import { EXPORT_PAPER_KEYS, type ExportBoxClockView, type ExportConsignment, type ExportDetail, type ExportLegView, type ExportPaper, type ExportPaperKey, type ExportPlace, type ExportRow, type ExportTiming, type BookedWith } from './export.types';
+import { EXPORT_PAPER_GROUP, EXPORT_PAPER_KEYS, type ExportPaperGroup, type KnownExportPaperKey, type ExportBoxClockView, type ExportConsignment, type ExportDetail, type ExportLegView, type ExportPaper, type ExportPaperKey, type ExportPlace, type ExportRow, type ExportTiming, type BookedWith } from './export.types';
 import { LoadSealService } from './load-seal.service';
 import { NotificationService } from './notification.service';
 import { EXPORT_GATE_BUFFER_H, VEHICLE_SPEED_KMH } from './pudo.config';
@@ -21,20 +21,62 @@ import { ROUTER, type Router } from './router';
 import { SiteService } from './site.service';
 
 /** The words for each paper, where a sentence names it (the screen translates its own). */
-export const EXPORT_PAPER_LABEL: Record<ExportPaperKey, string> = {
+export const EXPORT_PAPER_LABEL: Record<KnownExportPaperKey, string> = {
   commercial_invoice: 'Commercial invoice',
   packing_list: 'Packing list',
-  certificate_of_origin: 'Certificate of origin',
   export_entry: 'Export entry (from your clearing agent)',
+  booking_confirmation: 'Booking confirmation',
+  shipping_instructions: 'Shipping instructions to the forwarder',
+  weighbridge_ticket: 'Weighbridge ticket',
+  bill_of_lading: 'Bill of lading',
+  certificate_of_origin: 'Certificate of origin',
+  phytosanitary_certificate: 'Phytosanitary certificate (plant health)',
+  fumigation_certificate: 'Fumigation certificate',
+  export_permit: 'Export permit or licence',
+  inspection_certificate: 'Inspection or conformity certificate',
+  certificate_of_analysis: 'Certificate of analysis or quality',
+  health_certificate: 'Health or veterinary certificate',
+  insurance_certificate: 'Insurance certificate',
+  dangerous_goods_declaration: 'Dangerous goods declaration',
+  letter_of_credit: 'Letter of credit',
 };
 
 /** The same papers mid-sentence: "sent back the packing list". */
-const EXPORT_PAPER_NOUN: Record<ExportPaperKey, string> = {
+const EXPORT_PAPER_NOUN: Record<KnownExportPaperKey, string> = {
   commercial_invoice: 'the commercial invoice',
   packing_list: 'the packing list',
-  certificate_of_origin: 'the certificate of origin',
   export_entry: 'the export entry',
+  booking_confirmation: 'the booking confirmation',
+  shipping_instructions: 'the shipping instructions',
+  weighbridge_ticket: 'the weighbridge ticket',
+  bill_of_lading: 'the bill of lading',
+  certificate_of_origin: 'the certificate of origin',
+  phytosanitary_certificate: 'the phytosanitary certificate',
+  fumigation_certificate: 'the fumigation certificate',
+  export_permit: 'the export permit or licence',
+  inspection_certificate: 'the inspection certificate',
+  certificate_of_analysis: 'the certificate of analysis',
+  health_certificate: 'the health certificate',
+  insurance_certificate: 'the insurance certificate',
+  dangerous_goods_declaration: 'the dangerous goods declaration',
+  letter_of_credit: 'the letter of credit',
 };
+
+/** A line's name: the catalogue's, or the name it was asked for by. */
+export function paperLabel(p: Pick<ExportPaper, 'key' | 'title'>): string {
+  return p.title ?? EXPORT_PAPER_LABEL[p.key as KnownExportPaperKey] ?? p.key;
+}
+
+function paperNoun(p: Pick<ExportPaper, 'key' | 'title'>): string {
+  return p.title ? `“${p.title}”` : (EXPORT_PAPER_NOUN[p.key as KnownExportPaperKey] ?? p.key);
+}
+
+/** Which group a line is in: kept (never missing), asked for these goods, or needed on every export. */
+function groupOf(p: ExportPaper): ExportPaperGroup {
+  if (p.optional) return 'kept';
+  if (p.title || EXPORT_PAPER_GROUP[p.key as KnownExportPaperKey] === 'asked') return 'asked';
+  return 'needed';
+}
 
 const H = 3_600_000;
 /** Warned this long before the latest departure, while no truck has collected the box. */
@@ -120,6 +162,7 @@ export class ExportService {
     const loadingPlace = placeOf(input.loadingSiteId, 'loading', 'where it is stuffed');
     const terminal = placeOf(input.terminalSiteId, 'port', 'the terminal');
     const emptyDepot = input.emptyDepotSiteId ? placeOf(input.emptyDepotSiteId, 'port', 'the empty depot') : undefined;
+    const hazardous = /^HAZ/.test(input.natureCode?.trim().toUpperCase() ?? '');
 
     const consignment: ExportConsignment = {
       exportId: `exp_${randomBytes(8).toString('hex')}`,
@@ -146,7 +189,11 @@ export class ExportService {
       terminal,
       ...(emptyDepot ? { emptyDepot } : {}),
       ...(input.ownBox ? { ownBox: { by, at: new Date(now).toISOString() } } : {}),
-      papers: EXPORT_PAPER_KEYS.map((key) => ({ key, ...(key === 'certificate_of_origin' ? { optional: true } : {}) })),
+      // Every export's papers — needed, and kept when there is one — and, for hazardous goods, their declaration.
+      papers: EXPORT_PAPER_KEYS.filter((key) => EXPORT_PAPER_GROUP[key] !== 'asked' || (key === 'dangerous_goods_declaration' && hazardous)).map((key) => ({
+        key,
+        ...(EXPORT_PAPER_GROUP[key] === 'kept' ? { optional: true } : {}),
+      })),
       createdAt: new Date(now).toISOString(),
       createdBy: by,
     };
@@ -188,7 +235,12 @@ export class ExportService {
       ...(c.emptyFreightId ? { emptyLeg: this.legOf(c.emptyFreightId) } : {}),
       ...(c.ladenFreightId ? { ladenLeg: this.legOf(c.ladenFreightId) } : {}),
       seals: c.ladenFreightId ? this.seals.views(c.ladenFreightId).map((s) => ({ ...(s.number ? { number: s.number } : {}), state: s.state, appliedBy: s.appliedBy })) : [],
-      papers: c.papers.map((p) => ({ ...p, label: EXPORT_PAPER_LABEL[p.key] })),
+      papers: c.papers.map((p) => ({
+        ...p,
+        label: paperLabel(p),
+        group: groupOf(p),
+        ...(p.addedByEntityId && p.addedByEntityId === readerEntityId && !p.documentId && !p.reference ? { removable: true } : {}),
+      })),
       missing: this.missingOf(c),
       // The exporter's own list, to attach from. Its agent reads what is attached on a line, and not the rest of its papers.
       documents:
@@ -380,9 +432,12 @@ export class ExportService {
       document = { documentId: d.documentId, title: d.title };
     }
     if (!document && !(reference && reference.length >= 3)) throw new GlosError('FIELD_REQUIRED', 'Attach one of your documents, or give its reference', { field: 'reference' });
+    // What the line IS stays — its name and who asked for it; what was given, and the word on it, are new.
     const next: ExportPaper = {
       key: line.key,
       ...(line.optional ? { optional: true } : {}),
+      ...(line.title ? { title: line.title } : {}),
+      ...(line.addedByEntityId ? { addedBy: line.addedBy, addedByEntityId: line.addedByEntityId, addedAt: line.addedAt } : {}),
       ...(document ? { documentId: document.documentId, documentTitle: document.title } : {}),
       ...(reference ? { reference: reference.slice(0, 80) } : {}),
       suppliedAt: new Date(now).toISOString(),
@@ -397,8 +452,8 @@ export class ExportService {
     } else if (c.agent && line.refusedAt) {
       this.tell(
         c,
-        `${c.code}: ${EXPORT_PAPER_NOUN[line.key]} was supplied again`,
-        `${this.nameOf(c.exporterEntityId)} supplied ${EXPORT_PAPER_NOUN[line.key]} again on ${c.code}, after you sent it back. Read it, and accept it or send it back.`,
+        `${c.code}: ${paperNoun(line)} was supplied again`,
+        `${this.nameOf(c.exporterEntityId)} supplied ${paperNoun(line)} again on ${c.code}, after you sent it back. Read it, and accept it or send it back.`,
         c.agent.entityId,
       );
     }
@@ -416,7 +471,7 @@ export class ExportService {
     if (line.key === 'export_entry' && line.acceptedAt) throw new GlosError('INVALID_STATE', 'The export entry is your own: given by you, it stands');
     if (line.documentId) {
       const d = this.documents.list(c.exporterEntityId).find((x) => x.documentId === line.documentId);
-      if (!d) throw new GlosError('INVALID_STATE', `${line.documentTitle ?? EXPORT_PAPER_LABEL[key]} is no longer among the exporter’s papers — ask it to attach it again`);
+      if (!d) throw new GlosError('INVALID_STATE', `${line.documentTitle ?? paperLabel(line)} is no longer among the exporter’s papers — ask it to attach it again`);
       if (d.status === 'superseded') throw new GlosError('INVALID_STATE', `${d.title} has been replaced since it was attached — ask the exporter to attach the current one`);
       if (d.expiresAt && d.expiresAt < new Date(now).toISOString().slice(0, 10)) throw new GlosError('INVALID_STATE', `${d.title} expired on ${d.expiresAt}: it cannot be relied on at customs`);
     }
@@ -439,7 +494,7 @@ export class ExportService {
     delete line.acceptedAt;
     delete line.acceptedBy;
     this.exports.set(c.exportId, c);
-    this.tell(c, `${c.code}: your clearing agent sent back ${EXPORT_PAPER_NOUN[key]}`, `${this.nameOf(actorEntityId)} sent back ${EXPORT_PAPER_NOUN[key]} on ${c.code}: “${line.refusedReason}”. Supply it again on the export.`);
+    this.tell(c, `${c.code}: your clearing agent sent back ${paperNoun(line)}`, `${this.nameOf(actorEntityId)} sent back ${paperNoun(line)} on ${c.code}: “${line.refusedReason}”. Supply it again on the export.`);
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
@@ -453,6 +508,58 @@ export class ExportService {
     const line = c.papers.find((p) => p.key === key);
     if (!line?.documentId) throw new GlosError('NOT_FOUND', 'No paper is attached on that line');
     return this.documents.file(c.exporterEntityId, line.documentId);
+  }
+
+  /**
+   * ASK FOR A PAPER THESE GOODS NEED — the exporter, or its clearing agent who knows what this border asks: one of the
+   * catalogue's (a phytosanitary certificate for plants, a health certificate for food), or another paper by name. Once
+   * on the list it counts as missing until given. Who asked is kept on the line, and the other side is told.
+   */
+  addPaper(exportId: string, actorEntityId: string, input: { key: string; title?: string }, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireExport(exportId);
+    const side = this.sideOf(c, actorEntityId);
+    const at = new Date(now).toISOString();
+    const asked = { addedBy: by, addedByEntityId: actorEntityId, addedAt: at };
+    let line: ExportPaper;
+    if (input.key === 'other') {
+      const title = input.title?.trim();
+      if (!title || title.length < 3) throw new GlosError('FIELD_REQUIRED', 'Name the paper — as the buyer or the border calls it', { field: 'title' });
+      if (c.papers.some((p) => paperLabel(p).toLowerCase() === title.toLowerCase())) throw new GlosError('CONFLICT', `${title} is already on the list`);
+      const next = Math.max(0, ...c.papers.map((p) => Number(/^other-(\d+)$/.exec(p.key)?.[1] ?? 0))) + 1;
+      if (next > 99) throw new GlosError('INVALID_STATE', 'This export already holds as many other papers as it can');
+      line = { key: `other-${next}`, title: title.slice(0, 80), ...asked };
+    } else {
+      const key = input.key as KnownExportPaperKey;
+      if (!(EXPORT_PAPER_KEYS as readonly string[]).includes(key)) throw new GlosError('NOT_FOUND', 'No such paper');
+      if (EXPORT_PAPER_GROUP[key] !== 'asked') throw new GlosError('INVALID_STATE', `${EXPORT_PAPER_LABEL[key]} is on every export already`);
+      const there = c.papers.find((p) => p.key === key);
+      // An older record kept a certificate of origin as "if asked for": asked for now, it counts.
+      if (there && !there.optional) throw new GlosError('CONFLICT', `${EXPORT_PAPER_LABEL[key]} is already on the list`);
+      line = { ...(there ?? {}), key, ...asked };
+      delete line.optional;
+    }
+    c.papers = c.papers.some((p) => p.key === line.key) ? c.papers.map((p) => (p.key === line.key ? line : p)) : [...c.papers, line];
+    this.exports.set(c.exportId, c);
+    if (side === 'agent') {
+      this.tell(c, `${c.code}: your clearing agent asks for ${paperNoun(line)}`, `${this.nameOf(actorEntityId)} asks for ${paperNoun(line)} on ${c.code}: it is on the export's list now, counted as missing until you give it.`);
+    } else if (c.agent) {
+      this.tell(c, `${c.code}: ${paperNoun(line)} is on the list`, `${this.nameOf(c.exporterEntityId)} put ${paperNoun(line)} on the list for ${c.code}.`, c.agent.entityId);
+    }
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** Off the list again — only by whoever asked for it, and only while nothing was given for it: a given paper stays on the record. */
+  removePaper(exportId: string, actorEntityId: string, key: ExportPaperKey, now = Date.now()): ExportDetail {
+    const c = this.requireExport(exportId);
+    this.sideOf(c, actorEntityId);
+    const line = c.papers.find((p) => p.key === key);
+    if (!line) throw new GlosError('NOT_FOUND', 'No such paper on this export');
+    if (!line.addedByEntityId) throw new GlosError('INVALID_STATE', `${paperLabel(line)} is on this export's list for good`);
+    if (line.addedByEntityId !== actorEntityId) throw new GlosError('FORBIDDEN', `${line.addedBy ?? 'The other side'} asked for ${paperNoun(line)}: only they take it off the list`);
+    if (line.documentId || line.reference) throw new GlosError('INVALID_STATE', `${paperLabel(line)} has been given: it stays on the record`);
+    c.papers = c.papers.filter((p) => p.key !== key);
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
   /* ------------------------------------------------- EX7 the clearing agent -- */
@@ -637,6 +744,8 @@ export class ExportService {
     const n = number?.trim();
     if (!n || n.length < 3) throw new GlosError('FIELD_REQUIRED', 'Give the bill of lading number your forwarder or the line issued', { field: 'number' });
     c.billOfLading = { number: n.slice(0, 60), recordedAt: new Date(now).toISOString(), recordedBy: by };
+    // Its line holds the copy; until one is attached, the number stands on it.
+    c.papers = c.papers.map((p) => (p.key === 'bill_of_lading' && !p.documentId ? { ...p, reference: c.billOfLading!.number, suppliedAt: c.billOfLading!.recordedAt, suppliedBy: by } : p));
     this.exports.set(c.exportId, c);
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
@@ -650,8 +759,8 @@ export class ExportService {
     if (!c.vgm) out.push('The verified gross mass');
     for (const p of c.papers) {
       // A paper its agent sent back is a gap, whatever was attached: what was given is not what customs will take.
-      if (p.refusedAt) out.push(`${EXPORT_PAPER_LABEL[p.key]} — sent back by your clearing agent: ${p.refusedReason}`);
-      else if (!p.optional && !p.documentId && !p.reference) out.push(EXPORT_PAPER_LABEL[p.key]);
+      if (p.refusedAt) out.push(`${paperLabel(p)} — sent back by your clearing agent: ${p.refusedReason}`);
+      else if (!p.optional && !p.documentId && !p.reference) out.push(paperLabel(p));
     }
     return out;
   }
@@ -672,13 +781,16 @@ export class ExportService {
     const vgm = c.vgm
       ? `${c.vgm.kg.toLocaleString('en')} kg, method ${c.vgm.method}${c.vgm.weighbridge ? `, ${esc(c.vgm.weighbridge)}` : ''}${c.vgm.ticketRef ? `, ticket ${esc(c.vgm.ticketRef)}` : ''} — signed for by ${esc(c.vgm.signatory)}`
       : '';
-    const papers = d.papers
+    const paperRows = (only: (g: ExportPaperGroup) => boolean) => d.papers
+      .filter((p) => only(p.group))
       .map((p) => {
-        const given = p.documentTitle || p.reference ? esc([p.documentTitle, p.reference].filter(Boolean).join(' — ')) : p.optional ? 'Not given (not every destination asks for it)' : missing();
+        const given = p.documentTitle || p.reference ? esc([p.documentTitle, p.reference].filter(Boolean).join(' — ')) : p.optional ? 'None kept here' : missing();
         const word = p.refusedAt ? ` <span class="missing">Sent back by the clearing agent: ${esc(p.refusedReason ?? '')}</span>` : p.acceptedAt ? ` — accepted by ${esc(p.acceptedBy ?? '')}` : '';
-        return row(p.label, given + word);
+        return row(p.group === 'asked' && p.addedBy ? `${p.label} (asked for by ${p.addedBy})` : p.label, given + word);
       })
       .join('');
+    const papers = paperRows((g) => g !== 'kept');
+    const kept = paperRows((g) => g === 'kept');
     const agentRow = row('Clearing agent', d.agent ? esc(d.agent.name) : 'None appointed on SeeBuyGet');
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(c.code)} — handover at ${esc(c.loadingPort)}</title>
 <style>body{font:14px/1.45 system-ui,sans-serif;color:#111;margin:24px auto;max-width:760px;padding:0 16px}h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 6px;border-bottom:1px solid #ccc;padding-bottom:3px}table{border-collapse:collapse;width:100%}th{text-align:left;font-weight:600;width:38%;padding:4px 8px 4px 0;vertical-align:top}td{padding:4px 0}.missing{color:#b00020;font-weight:600}.note{color:#555;font-size:12px;margin-top:18px}@media print{body{margin:0}}</style></head><body>
@@ -688,6 +800,7 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
 <h2>Booking</h2><table>${row('Booking number', esc(c.booking.reference))}${row(c.booking.bookedWith === 'shipping_line' ? 'Shipping line' : 'Forwarder', esc(c.booking.partyName))}${c.booking.vessel ? row('Vessel / voyage', esc(`${c.booking.vessel}${c.booking.voyage ? ` / ${c.booking.voyage}` : ''}`)) : ''}${row('Gate-in cut-off', esc(utc(c.booking.gateCutoffAt)))}${c.booking.vgmCutoffAt ? row('Verified gross mass cut-off', esc(utc(c.booking.vgmCutoffAt))) : ''}${c.booking.docsCutoffAt ? row('Documents cut-off', esc(utc(c.booking.docsCutoffAt))) : ''}${c.booking.emptyReleaseRef ? row('Empty release', esc(c.booking.emptyReleaseRef)) : ''}</table>
 <h2>The box</h2><table>${row('Container number', missing(c.containerNo))}${row('Type', esc(spec ? `${spec.code} — ${spec.label}` : c.containerType ?? ''))}${row('Owner of the box', c.ownBox ? 'The exporter (a shipper-owned container)' : 'The line, on loan for this booking')}${row('Seal', missing(seal || undefined))}${row('Verified gross mass', missing(vgm || undefined))}</table>
 <h2>Papers</h2><table>${agentRow}${papers}</table>
+<h2>Kept with the export</h2><table>${kept}</table>
 <h2>The road to the terminal</h2><table>${row('Terminal', esc(c.terminal.label))}${row('Road consignment note', d.ladenLeg ? esc(`CMR-${d.ladenLeg.code}`) : missing())}${row('Collected', d.timing.collectedAt ? esc(utc(d.timing.collectedAt)) : 'Not yet')}${row('Gated in', d.timing.gatedInAt ? esc(utc(d.timing.gatedInAt)) : 'Not yet')}${row('Bill of lading', c.billOfLading ? esc(c.billOfLading.number) : 'Not issued yet — recorded once your forwarder issues it')}</table>
 <h2>The box’s clock</h2><table>${row('Empty out of the depot', d.box.emptyOutAt ? esc(utc(d.box.emptyOutAt)) : 'Not recorded')}${row('Free days outside the terminal (detention)', esc(freeDaysWords(c, 'detention')))}${row('Free days inside the terminal (demurrage)', esc(freeDaysWords(c, 'demurrage')))}${c.loaded ? row('Loaded on board', esc(utc(c.loaded.at))) : ''}</table><p>${esc(d.box.basis)}</p>
 <p class="note">Made on SeeBuyGet on ${esc(utc(new Date(now).toISOString()))}. SeeBuyGet carried the road leg; the ocean leg, its booking and the bill of lading are your forwarder’s or the line’s. The verified gross mass is the exporter’s declaration, handed to the forwarder — SeeBuyGet sends nothing to a line.</p>
@@ -784,7 +897,7 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
   private suppliedLine(c: ExportConsignment, key: ExportPaperKey): ExportPaper {
     const line = c.papers.find((p) => p.key === key);
     if (!line) throw new GlosError('NOT_FOUND', 'No such paper on this export');
-    if (!line.documentId && !line.reference) throw new GlosError('INVALID_STATE', `Nothing is supplied for ${EXPORT_PAPER_LABEL[key]} yet`);
+    if (!line.documentId && !line.reference) throw new GlosError('INVALID_STATE', `Nothing is supplied for ${paperLabel(line)} yet`);
     return line;
   }
 

@@ -176,6 +176,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/exports/:exportId/vgm': 'none',
   'POST sbg/exports/:exportId/papers': 'none',
   'POST sbg/exports/:exportId/bill-of-lading': 'none',
+  'POST sbg/exports/:exportId/papers/add': 'none',
+  'POST sbg/exports/:exportId/papers/:key/remove': 'none',
   'POST sbg/exports/:exportId/fee': 'none',
   'POST sbg/exports/:exportId/fee/accept': 'none',
   'POST sbg/exports/:exportId/own-box': 'none',

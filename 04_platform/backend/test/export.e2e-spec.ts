@@ -418,4 +418,75 @@ describe('an export to the port, over the wire', () => {
     await http().post(`${path}/free-days`).set(bearer(x.token)).send({ kind: 'detention', days: 7 }).expect(201);
     expect((await read()).box).toMatchObject({ kind: 'detention', overdue: true });
   });
+  /*
+   * THE PAPERS AN EXPORT HOLDS (the user, 2026-10-28: "in the exports field I miss quiet a bit of documents. Shouldn't we
+   * add them? we don't book but we hold documents as a report"). Needed on every export; kept when there is one; asked
+   * for when the goods, the buyer or the destination need it — by the exporter or its agent, attributed; another by name.
+   */
+  it('the papers an export holds: needed, kept when there is one, and asked for these goods — by whoever knows they are needed', async () => {
+    const x = await anExporter();
+    const agent = await anExporter(['clearing_agent'], 'Pwani Clearing');
+    const base = { goodsDescription: 'Fresh avocados, 1,600 cartons', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '45R1', booking: booking(Date.now() + 72 * H), loadingSiteId: x.loading, terminalSiteId: x.terminal };
+    const made = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send(base).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const read = async (token = x.token) => (await http().get(path).set(bearer(token)).expect(200)).body;
+    const line = (d: { papers: Array<{ key: string }> }, key: string) => d.papers.find((p) => p.key === key) as Record<string, unknown> | undefined;
+    const bell = (entityId: string) => app.get(NotificationService).inboxFor(app.get(EntityService).get(entityId).did).map((n) => n.title);
+
+    // Every export: the three needed, the four kept when there is one — and nothing asked for yet.
+    const first = await read();
+    const groups = Object.fromEntries(first.papers.map((p: { key: string; group: string }) => [p.key, p.group]));
+    expect(groups).toEqual({ commercial_invoice: 'needed', packing_list: 'needed', export_entry: 'needed', booking_confirmation: 'kept', shipping_instructions: 'kept', weighbridge_ticket: 'kept', bill_of_lading: 'kept' });
+    for (const kept of ['Booking confirmation', 'Shipping instructions to the forwarder', 'Weighbridge ticket', 'Bill of lading']) expect(first.missing).not.toContain(kept);
+    // Hazardous goods carry their declaration from the start.
+    const hazardous = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ ...base, goodsDescription: 'Paint, 400 drums', natureCode: 'HAZ-CHEM' }).expect(201)).body;
+    expect(hazardous.papers.map((p: { key: string }) => p.key)).toContain('dangerous_goods_declaration');
+    expect((await http().get(`/v1/sbg/exports/${hazardous.exportId}`).set(bearer(x.token)).expect(200)).body.missing).toContain('Dangerous goods declaration');
+
+    // Asked for these goods by the exporter: on the list, counted missing, its own to take off while nothing is given.
+    expect((await http().post(`${path}/papers/add`).set(bearer(x.token)).send({ key: 'packing_list' })).status).toBe(400);
+    expect((await http().post(`${path}/papers/add`).set(bearer(x.token)).send({ key: 'no_such_paper' })).status).toBe(404);
+    const staff = await http().post(`${path}/papers/add`).set(bearer(operator)).send({ key: 'phytosanitary_certificate' });
+    expect([staff.status, staff.body.detail]).toEqual([403, 'An export is the exporter’s to write, signed in as itself: staff read it, and write nothing in its name']);
+    const added = (await http().post(`${path}/papers/add`).set(bearer(x.token)).send({ key: 'phytosanitary_certificate' }).expect(201)).body;
+    expect(line(added, 'phytosanitary_certificate')).toMatchObject({ group: 'asked', addedByEntityId: x.entityId, removable: true });
+    expect(added.missing).toContain('Phytosanitary certificate (plant health)');
+    expect((await http().post(`${path}/papers/add`).set(bearer(x.token)).send({ key: 'phytosanitary_certificate' })).status).toBe(409);
+
+    // Asked for by its agent, who knows the border: the exporter is told, and cannot take the agent's ask off the list.
+    await http().post(`${path}/agent`).set(bearer(x.token)).send({ agentEntityId: agent.entityId }).expect(201);
+    const asked = (await http().post(`${path}/papers/add`).set(bearer(agent.token)).send({ key: 'other', title: 'Maximum residue level test report' }).expect(201)).body;
+    expect(line(asked, 'other-1')).toMatchObject({ title: 'Maximum residue level test report', label: 'Maximum residue level test report', group: 'asked', addedByEntityId: agent.entityId });
+    expect(bell(x.entityId)).toContain(`${made.code}: your clearing agent asks for “Maximum residue level test report”`);
+    expect((await read()).missing).toContain('Maximum residue level test report');
+    expect(line(await read(), 'other-1')?.removable).toBeUndefined();
+    expect((await http().post(`${path}/papers/other-1/remove`).set(bearer(x.token))).status).toBe(403);
+    expect((await http().post(`${path}/papers/add`).set(bearer(agent.token)).send({ key: 'other', title: '' })).status).toBe(400);
+
+    // Given: a file of its own, filed under this export's line, and it stays on the record — nobody takes it off.
+    const pdf = `data:application/pdf;base64,${Buffer.from('%PDF-1.4\n% phyto KE-PC-2026-0091\n%%EOF\n').toString('base64')}`;
+    const doc = (await http().post(`/v1/sbg/entities/${x.entityId}/documents`).set(bearer(x.token)).send({ kind: 'other', title: 'Phytosanitary certificate', relatesTo: `${made.code}:phytosanitary_certificate`, dataUrl: pdf }).expect(201)).body.documentId;
+    await http().post(`${path}/papers`).set(bearer(x.token)).send({ key: 'phytosanitary_certificate', documentId: doc, reference: 'KE-PC-2026-0091' }).expect(201);
+    expect((await http().post(`${path}/papers/phytosanitary_certificate/remove`).set(bearer(x.token))).status).toBe(400);
+    // The agent reads it, gives its word, and the given paper is no longer missing.
+    expect((await http().get(`${path}/papers/phytosanitary_certificate/file`).set(bearer(agent.token))).status).toBe(200);
+    await http().post(`${path}/papers/phytosanitary_certificate/accept`).set(bearer(agent.token)).expect(201);
+    expect((await read()).missing).not.toContain('Phytosanitary certificate (plant health)');
+
+    // The agent takes its own ask off the list while nothing was given.
+    expect(line((await http().post(`${path}/papers/other-1/remove`).set(bearer(agent.token)).expect(201)).body, 'other-1')).toBeUndefined();
+    // A paper asked for by name keeps its name, and who asked, once it is given.
+    await http().post(`${path}/papers/add`).set(bearer(x.token)).send({ key: 'other', title: 'Buyer’s purchase order' }).expect(201);
+    const po = (await http().post(`${path}/papers`).set(bearer(x.token)).send({ key: 'other-1', reference: 'PO-4471' }).expect(201)).body;
+    expect(line(po, 'other-1')).toMatchObject({ title: 'Buyer’s purchase order', label: 'Buyer’s purchase order', reference: 'PO-4471', group: 'asked', addedByEntityId: x.entityId });
+
+    // The bill of lading's number stands on its line until its copy is attached; the file lists what is kept apart.
+    await http().post(`${path}/bill-of-lading`).set(bearer(x.token)).send({ number: 'MEDU8812345' }).expect(201);
+    expect(line(await read(), 'bill_of_lading')).toMatchObject({ reference: 'MEDU8812345' });
+    const file = (await http().get(`${path}/handover.html`).set(bearer(x.token)).expect(200)).text;
+    expect(file).toContain('Kept with the export');
+    expect(file).toContain(`Phytosanitary certificate (plant health) (asked for by`);
+    expect(file).toContain('KE-PC-2026-0091');
+    expect(file).toContain('None kept here');
+  });
 });

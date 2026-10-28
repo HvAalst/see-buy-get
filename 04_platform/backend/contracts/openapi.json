@@ -4540,6 +4540,88 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/papers/add": {
+      "post": {
+        "operationId": "Export.addPaper",
+        "summary": "",
+        "description": "Ask for a paper these goods need — the exporter, or its appointed clearing agent.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportAddPaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/papers/{key}/remove": {
+      "post": {
+        "operationId": "Export.removePaper",
+        "summary": "",
+        "description": "Off the list again: only by whoever asked for it, and only while nothing was given for it.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/exports/{exportId}/papers/{key}/accept": {
       "post": {
         "operationId": "Export.acceptPaper",
@@ -34997,16 +35079,25 @@
         "properties": {
           "key": {
             "type": "string",
-            "enum": [
-              "commercial_invoice",
-              "packing_list",
-              "certificate_of_origin",
-              "export_entry"
-            ]
+            "description": "One of the catalogue's (EXPORT_PAPER_KEYS), or `other-N` for a paper asked for by name."
           },
           "optional": {
             "type": "boolean",
-            "description": "Not every destination asks for it (a certificate of origin): missing is then not a gap."
+            "description": "Kept when there is one, never counted missing (the booking confirmation, the weighbridge ticket …)."
+          },
+          "title": {
+            "type": "string",
+            "description": "The name of a paper asked for by name."
+          },
+          "addedBy": {
+            "type": "string",
+            "description": "Who put it on the list, for these goods — the exporter or its agent. Absent: on every export."
+          },
+          "addedByEntityId": {
+            "type": "string"
+          },
+          "addedAt": {
+            "type": "string"
           },
           "documentId": {
             "type": "string"
@@ -35462,16 +35553,25 @@
         "properties": {
           "key": {
             "type": "string",
-            "enum": [
-              "commercial_invoice",
-              "packing_list",
-              "certificate_of_origin",
-              "export_entry"
-            ]
+            "description": "One of the catalogue's (EXPORT_PAPER_KEYS), or `other-N` for a paper asked for by name."
           },
           "optional": {
             "type": "boolean",
-            "description": "Not every destination asks for it (a certificate of origin): missing is then not a gap."
+            "description": "Kept when there is one, never counted missing (the booking confirmation, the weighbridge ticket …)."
+          },
+          "title": {
+            "type": "string",
+            "description": "The name of a paper asked for by name."
+          },
+          "addedBy": {
+            "type": "string",
+            "description": "Who put it on the list, for these goods — the exporter or its agent. Absent: on every export."
+          },
+          "addedByEntityId": {
+            "type": "string"
+          },
+          "addedAt": {
+            "type": "string"
           },
           "documentId": {
             "type": "string"
@@ -35506,11 +35606,24 @@
           },
           "label": {
             "type": "string"
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "needed",
+              "asked",
+              "kept"
+            ]
+          },
+          "removable": {
+            "type": "boolean",
+            "description": "This reader asked for it and nothing was given for it yet: it may take it off the list."
           }
         },
         "required": [
           "key",
-          "label"
+          "label",
+          "group"
         ]
       },
       "ExportDocumentChoice": {
@@ -35970,13 +36083,8 @@
         "type": "object",
         "properties": {
           "key": {
-            "type": "string",
-            "enum": [
-              "commercial_invoice",
-              "packing_list",
-              "certificate_of_origin",
-              "export_entry"
-            ]
+            "type": "object",
+            "pattern": "/^([a-z_]{3,40}|other-[1-9][0-9]?)$/"
           },
           "documentId": {
             "type": "string"
@@ -36092,6 +36200,22 @@
             "maxLength": 200
           }
         }
+      },
+      "ExportAddPaperDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "key"
+        ]
       },
       "ExportPaperRefusalDto": {
         "type": "object",
