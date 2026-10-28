@@ -14,7 +14,11 @@ import { ArrayMaxSize, IsArray, IsBase64, IsObject, IsOptional, IsString, MaxLen
  */
 
 /** What a column can be. `keep` prints it as it is under its own heading; `ignore` leaves it out. */
-export const PACKING_FIELDS = ['marks', 'itemCode', 'description', 'hsCode', 'quantity', 'unit', 'packages', 'packageKind', 'netKg', 'grossKg', 'volumeM3', 'lengthCm', 'widthCm', 'heightCm'] as const;
+/**
+ * The invoice's own columns are read from the same file (2026-10-28, the commercial invoice drawn from the same lines):
+ * `unitPrice`, `lineValue`, `originCountry`. Prices are kept for the invoice and never printed on the packing list.
+ */
+export const PACKING_FIELDS = ['marks', 'itemCode', 'description', 'hsCode', 'quantity', 'unit', 'packages', 'packageKind', 'netKg', 'grossKg', 'volumeM3', 'lengthCm', 'widthCm', 'heightCm', 'unitPrice', 'lineValue', 'originCountry'] as const;
 export type PackingField = (typeof PACKING_FIELDS)[number];
 export type PackingColumnUse = PackingField | 'keep' | 'ignore';
 export const PACKING_USES: readonly PackingColumnUse[] = [...PACKING_FIELDS, 'keep', 'ignore'];
@@ -38,6 +42,11 @@ export class PackingLine {
   @ApiPropertyOptional() lengthCm?: number;
   @ApiPropertyOptional() widthCm?: number;
   @ApiPropertyOptional() heightCm?: number;
+  /** For the commercial invoice: the price of one unit (or of one package where no quantity is given), and the line's value. */
+  @ApiPropertyOptional() unitPrice?: number;
+  @ApiPropertyOptional() lineValue?: number;
+  /** Where the goods on this line were made, as the shipper wrote it. */
+  @ApiPropertyOptional() originCountry?: string;
   /** The columns kept as they are, by their heading. */
   @ApiPropertyOptional() extra?: Record<string, string>;
 }
@@ -79,6 +88,8 @@ export class PackingCheck {
   @ApiProperty({ type: [String] }) notes: string[];
   @ApiPropertyOptional() sheet?: string;
   @ApiPropertyOptional() refusal?: string;
+  /** A currency the price columns' headings name — "Unit price (USD)", "Value €" — offered to the invoice. */
+  @ApiPropertyOptional() currency?: string;
   @ApiProperty() imported: boolean;
 }
 
@@ -99,6 +110,7 @@ export class ExportPacking {
   @ApiProperty({ type: [String] }) extraColumns: string[];
   @ApiProperty({ enum: ['workbook', 'text', 'rows'] }) source: 'workbook' | 'text' | 'rows';
   @ApiPropertyOptional() sourceName?: string;
+  @ApiPropertyOptional() currency?: string;
   @ApiProperty() importedAt: string;
   @ApiProperty() importedBy: string;
   @ApiProperty({ type: [PackingVersion] }) versions: PackingVersion[];

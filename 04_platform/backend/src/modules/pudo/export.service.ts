@@ -18,6 +18,8 @@ import type { FeeState } from './import.types';
 import { QuoteService } from './quote.service';
 import type { Quote } from './quote.types';
 import { ROUTER, type Router } from './router';
+import { cleanInvoice, INVOICE_TRUTH, invoiceBasis, invoiceGaps, invoiceHtml, invoiceNotes, invoiceTotals } from './export-invoice';
+import type { ExportInvoiceView, InvoiceDraftDto, InvoiceTemplate } from './export-invoice.types';
 import { cellsWithRows, packingBasis, packingHtml, readPacking, summarisePacking, totalsOf, type PackingFacts } from './export-packing';
 import type { ExportPackingView, PackingCheck, PackingImportDto, PackingColumnUse } from './export-packing.types';
 import { readWorkbook } from './workbook';
@@ -108,6 +110,10 @@ export class ExportService {
   private readonly packingCopies = new PersistentMap<string, { html: string; fingerprint: string; basis: string }>('export-packing-copies');
   /** How each business's headings were read, remembered from its last import: its own file is read the same way next time. */
   private readonly packingTemplates = new PersistentMap<string, Record<string, PackingColumnUse>>('export-packing-templates');
+  /** Each signed commercial invoice, exactly as signed. */
+  private readonly invoiceCopies = new PersistentMap<string, { html: string; fingerprint: string }>('export-invoice-copies');
+  /** What a business's last invoice to a country carried — `entityId:country` — offered on its next one there. */
+  private readonly invoiceTemplates = new PersistentMap<string, InvoiceTemplate>('export-invoice-templates');
 
   constructor(
     private readonly entities: EntityService,
@@ -269,6 +275,7 @@ export class ExportService {
       feeState: feeStateOf(fee),
       sli: this.sliViewOf(c, you),
       ...(c.packing ? { packing: this.packingViewOf(c) } : {}),
+      invoice: this.invoiceViewOf(c, you),
     };
   }
 
@@ -520,6 +527,13 @@ export class ExportService {
   paperFile(exportId: string, readerEntityId: string, key: ExportPaperKey, opts: { all?: boolean } = {}) {
     const c = this.requireExport(exportId);
     this.sideOf(c, readerEntityId, opts.all);
+    // The commercial invoice: the exporter's own document where one is attached, else its latest signed version.
+    if (key === 'commercial_invoice' && !c.papers.find((p) => p.key === key)?.documentId) {
+      const version = c.invoice?.versions.length ?? 0;
+      const copy = version ? this.invoiceCopies.get(`${c.exportId}:${version}`) : undefined;
+      if (!copy) throw new GlosError('NOT_FOUND', 'No paper is attached on that line');
+      return { bytes: Buffer.from(copy.html, 'utf8'), contentType: 'text/html; charset=utf-8', fingerprint: copy.fingerprint, intact: createHash('sha256').update(copy.html, 'utf8').digest('hex') === copy.fingerprint };
+    }
     // The packing list: the shipper's own document where one is attached, else its latest signed version, as signed.
     if (key === 'packing_list' && !c.papers.find((p) => p.key === key)?.documentId) {
       const version = c.packing?.versions.length ?? 0;
@@ -705,6 +719,98 @@ export class ExportService {
     };
   }
 
+  /* ------------------------------------- EX11 the commercial invoice, from the same lines -- */
+
+  /** The invoice as the exporter leaves it — saved as often as it likes; nothing is handed over until it is signed. */
+  saveInvoice(exportId: string, actorEntityId: string, input: InvoiceDraftDto, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    c.invoice = { draft: cleanInvoice(input, by, now), versions: c.invoice?.versions ?? [] };
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /**
+   * SIGN THE INVOICE — refused while it lacks what no invoice anywhere goes without; frozen exactly as signed with the
+   * fingerprint of its page, a change a new version. What this invoice carried for its destination (its particulars'
+   * names, its declarations, its terms) is remembered for this business's next invoice to the same country.
+   */
+  signInvoice(exportId: string, actorEntityId: string, signatory: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    const lines = c.packing?.lines ?? [];
+    const draft = c.invoice?.draft;
+    const gaps = invoiceGaps(draft, lines);
+    if (gaps.length) throw new GlosError('FIELD_REQUIRED', `The invoice is not complete: ${gaps.join('; ')}`);
+    const who = signatory?.trim();
+    if (!who || who.length < 2) throw new GlosError('FIELD_REQUIRED', 'Say who signs it, for the exporter', { field: 'signatory' });
+    const versions = c.invoice!.versions;
+    const version = versions.length + 1;
+    const signedAt = new Date(now).toISOString();
+    const html = invoiceHtml(this.sliFactsOf(c), this.consigneeWordsOf(c), draft!, lines, { version, signedBy: who.slice(0, 120), signedAt });
+    const fingerprint = createHash('sha256').update(html, 'utf8').digest('hex');
+    this.invoiceCopies.set(`${c.exportId}:${version}`, { html, fingerprint });
+    const t = invoiceTotals(lines, draft);
+    c.invoice = { draft: draft!, versions: [...versions, { version, signedBy: who.slice(0, 120), signedAt, fingerprint, basis: invoiceBasis(lines), total: t.total, currency: draft!.currency }] };
+    c.papers = c.papers.map((p) =>
+      p.key === 'commercial_invoice'
+        ? { key: p.key, ...(p.optional ? { optional: true } : {}), reference: `Invoice ${draft!.number}, version ${version}, signed by ${who.slice(0, 60)} — ${draft!.currency} ${t.total.toLocaleString('en', { minimumFractionDigits: 2 })}`, suppliedAt: signedAt, suppliedBy: by }
+        : p,
+    );
+    this.invoiceTemplates.set(`${c.exporterEntityId}:${c.destCountry}`, {
+      destCountry: c.destCountry,
+      fieldLabels: draft!.fields.map((f) => f.label),
+      declarations: draft!.declarations,
+      ...(draft!.paymentTerms ? { paymentTerms: draft!.paymentTerms } : {}),
+      fromExport: c.code,
+    });
+    this.exports.set(c.exportId, c);
+    if (c.agent) this.tell(c, `${c.code}: commercial invoice signed, version ${version}`, `${this.nameOf(c.exporterEntityId)} signed its commercial invoice ${draft!.number} for ${c.code}, version ${version}. Read it on the export, and accept it or send it back.`, c.agent.entityId);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** The invoice's page: a signed version exactly as signed (the latest unless one is named), or the exporter's draft. */
+  invoicePage(exportId: string, readerEntityId: string, which: { version?: number; draft?: boolean } = {}, opts: { all?: boolean } = {}): string {
+    const c = this.requireExport(exportId);
+    const side = this.sideOf(c, readerEntityId, opts.all);
+    if (which.draft) {
+      if (side !== 'exporter' || !c.invoice?.draft) throw new GlosError('NOT_FOUND', 'No draft of the invoice');
+      return invoiceHtml(this.sliFactsOf(c), this.consigneeWordsOf(c), c.invoice.draft, c.packing?.lines ?? [], 'draft');
+    }
+    const version = which.version ?? c.invoice?.versions.length ?? 0;
+    const copy = version > 0 ? this.invoiceCopies.get(`${c.exportId}:${version}`) : undefined;
+    if (!copy) throw new GlosError('NOT_FOUND', 'No such version of the invoice');
+    return copy.html;
+  }
+
+  /** The consignee as the letter of instruction names it, in words. */
+  private consigneeWordsOf(c: ExportConsignment): string | undefined {
+    const d = c.sli?.draft;
+    if (!d) return undefined;
+    if (d.consigneeKind === 'named') return d.consignee ? `${d.consignee.name}${d.consignee.address ? `, ${d.consignee.address.replace(/\r?\n/g, ', ')}` : ''}` : undefined;
+    return d.consigneeKind === 'to_order_of_bank' ? `To the order of ${d.orderOfBank ?? '—'}` : 'To order';
+  }
+
+  /** The invoice as this reader sees it: the draft (the exporter's alone), the versions, the totals, what it still needs. */
+  private invoiceViewOf(c: ExportConsignment, you: 'exporter' | 'agent' | 'staff'): ExportInvoiceView {
+    const lines = c.packing?.lines ?? [];
+    const draft = c.invoice?.draft;
+    const versions = c.invoice?.versions ?? [];
+    const last = versions[versions.length - 1];
+    const template = you === 'exporter' ? this.invoiceTemplates.get(`${c.exporterEntityId}:${c.destCountry}`) : undefined;
+    const totals = invoiceTotals(lines, draft);
+    return {
+      ...(you === 'exporter' && draft ? { draft } : {}),
+      versions,
+      totals,
+      gaps: invoiceGaps(draft, lines),
+      notes: invoiceNotes(draft, totals, template, c.destCountry),
+      stale: Boolean(last && last.basis !== invoiceBasis(lines)),
+      ...(template ? { template } : {}),
+      ...(c.packing?.currency ? { currencyFromList: c.packing.currency } : {}),
+      listColumns: c.packing?.extraColumns ?? [],
+      truth: INVOICE_TRUTH,
+    };
+  }
+
   /* --------------------------------------------- EX10 the packing list, imported -- */
 
   /** The shipper's file as cells: CSV or pasted text, an .xlsx workbook, or the rows its system sends. Exactly one. */
@@ -760,6 +866,7 @@ export class ExportService {
       extraColumns: reading.extraColumns,
       source: 'source' in got ? got.source : 'text',
       ...(input.sourceName?.trim() ? { sourceName: input.sourceName.trim().slice(0, 160) } : {}),
+      ...(check.currency ? { currency: check.currency } : {}),
       importedAt: new Date(now).toISOString(),
       importedBy: by,
       versions: c.packing?.versions ?? [],
@@ -1056,6 +1163,8 @@ export class ExportService {
     if (!c.ladenFreightId) out.push('A load to the terminal');
     else if (!this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the terminal');
     if (!c.vgm) out.push('The verified gross mass');
+    const lastInvoice = c.invoice?.versions[c.invoice.versions.length - 1];
+    if (lastInvoice && lastInvoice.basis !== invoiceBasis(c.packing?.lines ?? [])) out.push(`The commercial invoice: the packing list changed since version ${lastInvoice.version} was signed — sign it again`);
     const pv = this.packingViewOf(c);
     if (pv && pv.versions.length && pv.unsigned) out.push(`The packing list: imported again since version ${pv.versions.length} was signed — sign it`);
     const lastSli = c.sli?.versions[c.sli.versions.length - 1];

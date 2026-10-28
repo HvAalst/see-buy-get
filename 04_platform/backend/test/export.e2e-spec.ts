@@ -687,4 +687,85 @@ describe('an export to the port, over the wire', () => {
     const otherLive = (await http().post('/v1/sbg/business/me/keys').set(bearer(other.token)).send({ mode: 'live', label: 'ERP' }).expect(201)).body.secret as string;
     expect((await http().post(`/v1/sbg/api/business/exports/${made.exportId}/packing-list`).set(keyed(otherLive)).send({ rows })).status).toBe(404);
   });
+  /*
+   * EX11 — THE COMMERCIAL INVOICE, FROM THE SAME LINES (the user, 2026-10-28: "right call, build it, but keep in mind
+   * that it must be a flexible document since it is virtually different in every nation").
+   */
+  it('the commercial invoice: its lines and prices from the packing list, a core every invoice carries, the rest per destination — remembered', async () => {
+    const x = await anExporter();
+    const agent = await anExporter(['clearing_agent'], 'Pwani Clearing');
+    const exportTo = async (dest: string) => (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ goodsDescription: 'Fresh avocados', originCountry: 'KE', destCountry: dest, loadingPort: 'Mombasa', containerType: '45R1', booking: booking(Date.now() + 72 * H), loadingSiteId: x.loading, terminalSiteId: x.terminal }).expect(201)).body;
+    const made = await exportTo('NL');
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const read = async (token = x.token) => (await http().get(path).set(bearer(token)).expect(200)).body;
+    await http().post(`${path}/agent`).set(bearer(x.token)).send({ agentEntityId: agent.entityId }).expect(201);
+
+    // One file for both: the packing list's own columns, and its prices and origins for the invoice.
+    const sheet = [
+      'Carton No.\tDescription\tHS Code\tOrigin\tQty\tUnit\tCtns\tUnit price (USD)\tG.W. (kg)\tBatch',
+      '1-800\tFresh avocados, Hass\t0804.40\tKE\t3200\tkg\t800\t2.15\t3600\tB-0911',
+      '801-900\tFresh avocados, Fuerte\t0804.40\t\t400\tkg\t100\t1.60\t450\tB-0912',
+    ].join('\n');
+    expect((await read()).invoice).toMatchObject({ gaps: ['Bring in the packing list: the invoice’s lines are its lines'], versions: [] });
+    const brought = (await http().post(`${path}/packing-list`).set(bearer(x.token)).send({ text: sheet }).expect(201)).body;
+    expect(brought.invoice).toMatchObject({ currencyFromList: 'USD', totals: { lines: 2, goods: 7520, unvalued: 0, withoutOrigin: 1 }, gaps: ['Fill in the invoice'], listColumns: ['Batch'] });
+    expect(brought.invoice.notes).toContain('1 line has no country of origin — many destinations ask for it, line by line.');
+    // The prices are the invoice's: never printed on the packing list.
+    await http().post(`${path}/packing-list/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201);
+    const list = (await http().get(`${path}/packing-list.html`).set(bearer(x.token)).expect(200)).text;
+    expect(list).not.toContain('2.15');
+    expect(list).not.toContain('Unit price');
+
+    // Staff write nothing; half a form is a draft, and signing it says what no invoice goes without.
+    expect((await http().post(`${path}/invoice`).set(bearer(operator)).send({ number: 'X' })).status).toBe(403);
+    await http().post(`${path}/invoice`).set(bearer(x.token)).send({ currency: 'USD' }).expect(201);
+    const half = await http().post(`${path}/invoice/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' });
+    expect([half.status, String(half.body.detail)]).toEqual([400, expect.stringContaining('The invoice’s number; The buyer’s name and address')]);
+
+    // The core, and the rest in the exporter's own words for the Netherlands: particulars by name, an origin statement.
+    const form = {
+      number: 'TA-2026-117',
+      date: '2026-10-28',
+      currency: 'USD',
+      incoterm: 'FOB',
+      incotermPlace: 'Mombasa',
+      paymentTerms: 'Cash against documents',
+      reason: 'sale',
+      buyer: { name: 'Van Rees Fruit BV', address: 'Waalhaven 12, Rotterdam', taxId: 'NL123456789B01' },
+      consigneeIsBuyer: true,
+      charges: [{ label: 'Inland haulage to Mombasa', amount: 450 }],
+      fields: [{ label: 'Buyer’s EORI number', value: 'NL123456789' }, { label: 'Order number', value: 'PO-4471' }],
+      declarations: ['The exporter of the products covered by this document declares that, except where otherwise clearly indicated, these products are of Kenyan preferential origin.'],
+      columns: ['Batch'],
+    };
+    const saved = (await http().post(`${path}/invoice`).set(bearer(x.token)).send(form).expect(201)).body;
+    expect(saved.invoice).toMatchObject({ gaps: [], totals: { goods: 7520, charges: 450, total: 7970 } });
+    expect((await read(agent.token)).invoice.draft).toBeUndefined();
+    expect((await http().get(`${path}/invoice.html?draft=1`).set(bearer(agent.token))).status).toBe(404);
+
+    // Signed: frozen, its paper given, the agent told; the page carries the core, the particulars, the statement.
+    const signed = (await http().post(`${path}/invoice/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201)).body;
+    expect(signed.invoice.versions).toEqual([expect.objectContaining({ version: 1, total: 7970, currency: 'USD' })]);
+    expect(signed.papers.find((p: { key: string }) => p.key === 'commercial_invoice')).toMatchObject({ reference: 'Invoice TA-2026-117, version 1, signed by Wanjiku Mwangi — USD 7,970.00' });
+    expect(app.get(NotificationService).inboxFor(app.get(EntityService).get(agent.entityId).did).map((n) => n.title)).toContain(`${made.code}: commercial invoice signed, version 1`);
+    const page = (await http().get(`${path}/invoice.html`).set(bearer(agent.token)).expect(200)).text;
+    for (const fact of ['Commercial invoice TA-2026-117', 'Van Rees Fruit BV', 'NL123456789B01', 'FOB Mombasa', 'Cash against documents', 'Buyer’s EORI number', 'PO-4471', 'Kenyan preferential origin', 'B-0911', '6,880.00', '640.00', '7,970.00', 'Inland haulage to Mombasa']) expect(page).toContain(fact);
+    expect((await http().get(`${path}/papers/commercial_invoice/file`).set(bearer(agent.token)).expect(200)).headers['x-fingerprint']).toBe(signed.invoice.versions[0].fingerprint);
+
+    // A changed list is a changed invoice: out of date, and listed, until signed again.
+    const dearer = (await http().post(`${path}/packing-list`).set(bearer(x.token)).send({ text: sheet.replace('\t2.15\t', '\t2.25\t') }).expect(201)).body;
+    expect(dearer.invoice.stale).toBe(true);
+    expect(dearer.missing).toContain('The commercial invoice: the packing list changed since version 1 was signed — sign it again');
+
+    // Remembered per destination, for this business: its next invoice to the Netherlands starts from what this one
+    // carried; one to Germany starts from nothing. Offered, never imposed.
+    const next = await exportTo('NL');
+    const nextView = (await http().get(`/v1/sbg/exports/${next.exportId}`).set(bearer(x.token)).expect(200)).body.invoice;
+    expect(nextView.template).toMatchObject({ destCountry: 'NL', fieldLabels: ['Buyer’s EORI number', 'Order number'], declarations: [form.declarations[0]], paymentTerms: 'Cash against documents', fromExport: made.code });
+    const germany = await exportTo('DE');
+    expect((await http().get(`/v1/sbg/exports/${germany.exportId}`).set(bearer(x.token)).expect(200)).body.invoice.template).toBeUndefined();
+    // Another business's invoices teach this one nothing.
+    const theirs = (await http().post('/v1/sbg/exports').set(bearer(agent.token)).send({ goodsDescription: 'Tea', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '22G1', booking: booking(Date.now() + 72 * H), loadingSiteId: agent.loading, terminalSiteId: agent.terminal }).expect(201)).body;
+    expect((await http().get(`/v1/sbg/exports/${theirs.exportId}`).set(bearer(agent.token)).expect(200)).body.invoice.template).toBeUndefined();
+  });
 });

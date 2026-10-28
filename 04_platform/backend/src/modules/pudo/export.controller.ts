@@ -11,6 +11,7 @@ import { BusinessMemberGuard } from './business-member.guard';
 import { ExportService } from './export.service';
 import { SliDraftDto, SliSignDto } from './export-sli.types';
 import { PackingCheck, PackingImportDto, PackingSignDto } from './export-packing.types';
+import { InvoiceDraftDto, InvoiceSignDto } from './export-invoice.types';
 import {
   isExportPaperKey,
   ExportAddPaperDto,
@@ -140,6 +141,34 @@ export class ExportController {
   @Post(':exportId/own-box')
   ownBox(@Param('exportId') exportId: string, @Body() dto: ExportOwnBoxDto, @Actor() actor: IntrospectionResult): ExportDetail {
     return this.exports.setOwnBox(exportId, this.ownCompany(actor), dto.own, auditActor(actor));
+  }
+
+  /* ----------------------------------- EX11 the commercial invoice, from the same lines -- */
+
+  /** Save the invoice — as often as the exporter likes. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/invoice')
+  saveInvoice(@Param('exportId') exportId: string, @Body() dto: InvoiceDraftDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.saveInvoice(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  /** Sign it: refused while incomplete; frozen as a new version; what it carried for its destination remembered. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/invoice/sign')
+  signInvoice(@Param('exportId') exportId: string, @Body() dto: InvoiceSignDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.signInvoice(exportId, this.ownCompany(actor), dto.signatory, auditActor(actor));
+  }
+
+  /** The invoice's page: a signed version as signed, or the exporter's own draft. */
+  @Roles('business', 'entity_admin', 'operator')
+  @ApiQuery({ name: 'version', required: false })
+  @ApiQuery({ name: 'draft', required: false })
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @Header('Cache-Control', 'private, no-store')
+  @Get(':exportId/invoice.html')
+  invoicePage(@Param('exportId') exportId: string, @Actor() actor: IntrospectionResult, @Query('version') version?: string, @Query('draft') draft?: string): string {
+    const which = { ...(version ? { version: Number(version) } : {}), ...(draft === '1' || draft === 'true' ? { draft: true } : {}) };
+    return actor?.role === 'operator' ? this.exports.invoicePage(exportId, '', which, { all: true }) : this.exports.invoicePage(exportId, this.ownCompany(actor), which);
   }
 
   /* ------------------------------------------------- EX10 the packing list, imported -- */

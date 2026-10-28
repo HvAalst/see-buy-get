@@ -31,7 +31,21 @@ const ALIASES: Record<PackingField, string[]> = {
   lengthCm: ['length', 'l', 'len'],
   widthCm: ['width', 'w', 'breadth'],
   heightCm: ['height', 'h', 'ht'],
+  unitPrice: ['unit price', 'price', 'unit value', 'price per unit', 'price each', 'unit cost', 'rate', 'fob price', 'fob unit price', 'selling price'],
+  lineValue: ['value', 'amount', 'total value', 'total amount', 'total price', 'line total', 'line value', 'extended price', 'fob value', 'invoice value'],
+  originCountry: ['origin', 'country of origin', 'coo', 'made in', 'origin country', 'country'],
 };
+
+const CURRENCY_SIGNS: Record<string, string> = { '$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY', ksh: 'KES', tsh: 'TZS', ush: 'UGX' };
+
+/** A currency a price heading names — "Unit price (USD)", "Value €", "Amount KSh". */
+function currencyOf(raw: string): string | undefined {
+  const code = /\b([A-Z]{3})\b/.exec(String(raw ?? '').replace(/\b(FOB|CIF|CFR|EXW|FCA|DAP|DDP|CPT|CIP|DPU|FAS|QTY|PCS|CBM|UOM|COO|SKU)\b/g, ''))?.[1];
+  if (code) return code;
+  const lower = String(raw ?? '').toLowerCase();
+  for (const [sign, cur] of Object.entries(CURRENCY_SIGNS)) if (lower.includes(sign)) return cur;
+  return undefined;
+}
 
 /** Lower-case, punctuation to spaces, a unit in brackets taken off: "Gross Wt. (kg)" → "gross wt". */
 export function headingKey(raw: string): string {
@@ -245,7 +259,7 @@ export function readPacking(cells: string[][], opts: { chosen?: Record<string, s
         return;
       }
       const field = col.use;
-      const numeric: PackingField[] = ['quantity', 'packages', 'netKg', 'grossKg', 'volumeM3', 'lengthCm', 'widthCm', 'heightCm'];
+      const numeric: PackingField[] = ['quantity', 'packages', 'netKg', 'grossKg', 'volumeM3', 'lengthCm', 'widthCm', 'heightCm', 'unitPrice', 'lineValue'];
       if (numeric.includes(field)) {
         const n = numberOf(raw);
         if (n == null || n < 0) {
@@ -278,12 +292,14 @@ export function readPacking(cells: string[][], opts: { chosen?: Record<string, s
     lines.push(line);
   }
   if (!lines.length && !problems.length) return empty('No lines under the headings');
+  const priced = columns.findIndex((col) => col.use === 'unitPrice' || col.use === 'lineValue');
+  const currency = priced >= 0 ? currencyOf(headings[priced]) : undefined;
   const mapping: Record<string, PackingColumnUse> = {};
   headings.forEach((heading, j) => {
     const key = headingKey(heading);
     if (key) mapping[key] = columns[j].use;
   });
-  return { check: { columns, headingRow: rowNo(h), totals: totalsOf(lines), preview: lines.slice(0, 20), problems: problems.slice(0, 50), notes }, lines, extraColumns, mapping };
+  return { check: { columns, headingRow: rowNo(h), totals: totalsOf(lines), preview: lines.slice(0, 20), problems: problems.slice(0, 50), notes, ...(currency ? { currency } : {}) }, lines, extraColumns, mapping };
 }
 
 export function totalsOf(lines: PackingLine[]): PackingTotals {

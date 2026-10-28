@@ -6,6 +6,7 @@ import { FEE_STATES, type FeeState } from './import.types';
 import { Quote } from './quote.types';
 import { ExportSli, ExportSliView } from './export-sli.types';
 import { ExportPacking, ExportPackingView } from './export-packing.types';
+import { ExportInvoice, ExportInvoiceView } from './export-invoice.types';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -255,6 +256,8 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: ExportSli }) sli?: ExportSli;
   /** The packing list, imported from the shipper's own file: its lines and the versions signed. */
   @ApiPropertyOptional({ type: ExportPacking }) packing?: ExportPacking;
+  /** The commercial invoice, drawn from the packing list's lines: the form, and the versions signed. */
+  @ApiPropertyOptional({ type: ExportInvoice }) invoice?: ExportInvoice;
   /** Which warnings were sent, once each: the latest departure near, the cut-off passed, the VGM cut-off near — and the box's free days, once per due date. */
   @ApiPropertyOptional() warned?: { pickup?: string; gate?: string; vgm?: string; box?: string[] };
   @ApiProperty() createdAt: string;
@@ -349,6 +352,7 @@ export class ExportDetail {
   @ApiProperty({ enum: FEE_STATES }) feeState: FeeState;
   @ApiProperty({ type: ExportSliView }) sli: ExportSliView;
   @ApiPropertyOptional({ type: ExportPackingView }) packing?: ExportPackingView;
+  @ApiProperty({ type: ExportInvoiceView }) invoice: ExportInvoiceView;
 }
 
 export class ExportRow {

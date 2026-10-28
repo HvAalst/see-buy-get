@@ -4386,6 +4386,136 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/invoice": {
+      "post": {
+        "operationId": "Export.saveInvoice",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceDraftDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/invoice/sign": {
+      "post": {
+        "operationId": "Export.signInvoice",
+        "summary": "",
+        "description": "Sign it: refused while incomplete; frozen as a new version; what it carried for its destination remembered.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceSignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/invoice.html": {
+      "get": {
+        "operationId": "Export.invoicePage",
+        "summary": "",
+        "description": "The invoice's page: a signed version as signed, or the exporter's own draft.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draft",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/exports/{exportId}/packing-list/check": {
       "post": {
         "operationId": "Export.checkPacking",
@@ -35928,6 +36058,17 @@
           "heightCm": {
             "type": "number"
           },
+          "unitPrice": {
+            "type": "number",
+            "description": "For the commercial invoice: the price of one unit (or of one package where no quantity is given), and the line's value."
+          },
+          "lineValue": {
+            "type": "number"
+          },
+          "originCountry": {
+            "type": "string",
+            "description": "Where the goods on this line were made, as the shipper wrote it."
+          },
           "extra": {
             "type": "object",
             "description": "The columns kept as they are, by their heading."
@@ -35997,6 +36138,9 @@
           "sourceName": {
             "type": "string"
           },
+          "currency": {
+            "type": "string"
+          },
           "importedAt": {
             "type": "string"
           },
@@ -36016,6 +36160,212 @@
           "source",
           "importedAt",
           "importedBy",
+          "versions"
+        ]
+      },
+      "InvoiceParty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "taxId": {
+            "type": "string",
+            "description": "A tax, import or registration number as that party's country knows it — named by the exporter, never assumed."
+          },
+          "contact": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ]
+      },
+      "InvoiceCharge": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "amount"
+        ]
+      },
+      "InvoiceField": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
+      "InvoiceDraft": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "description": "YYYY-MM-DD."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Three letters; the goods' values are in it."
+          },
+          "incoterm": {
+            "type": "string",
+            "enum": [
+              "EXW",
+              "FCA",
+              "CPT",
+              "CIP",
+              "DAP",
+              "DPU",
+              "DDP",
+              "FAS",
+              "FOB",
+              "CFR",
+              "CIF"
+            ]
+          },
+          "incotermPlace": {
+            "type": "string"
+          },
+          "paymentTerms": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "sample",
+              "gift",
+              "repair",
+              "return",
+              "other"
+            ]
+          },
+          "buyer": {
+            "$ref": "#/components/schemas/InvoiceParty"
+          },
+          "consigneeIsBuyer": {
+            "type": "boolean",
+            "description": "The consignee is the buyer, or as the letter of instruction names it."
+          },
+          "charges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceCharge"
+            }
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceField"
+            }
+          },
+          "declarations": {
+            "description": "In the words the destination asks for. The truth of the invoice is declared on every one.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "columns": {
+            "description": "Which of the packing list's own columns the invoice prints too (a batch, a lot).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "savedAt": {
+            "type": "string"
+          },
+          "savedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "date",
+          "currency",
+          "reason",
+          "charges",
+          "fields",
+          "declarations",
+          "columns",
+          "savedAt",
+          "savedBy"
+        ]
+      },
+      "InvoiceVersion": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          },
+          "signedBy": {
+            "type": "string"
+          },
+          "signedAt": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "sha256 of the frozen page's bytes."
+          },
+          "basis": {
+            "type": "string",
+            "description": "sha256 of the lines it was drawn from: a changed list is a changed invoice."
+          },
+          "total": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "signedBy",
+          "signedAt",
+          "fingerprint",
+          "basis",
+          "total",
+          "currency"
+        ]
+      },
+      "ExportInvoice": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/InvoiceDraft"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceVersion"
+            }
+          }
+        },
+        "required": [
           "versions"
         ]
       },
@@ -36159,6 +36509,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ExportPacking"
+              }
+            ]
+          },
+          "invoice": {
+            "description": "The commercial invoice, drawn from the packing list's lines: the form, and the versions signed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportInvoice"
               }
             ]
           },
@@ -36805,6 +37163,142 @@
           "notes"
         ]
       },
+      "InvoiceTotals": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "number"
+          },
+          "goods": {
+            "type": "number"
+          },
+          "charges": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "unvalued": {
+            "type": "number",
+            "description": "Lines that carry no value — the invoice is not signed while there are any."
+          },
+          "withoutHs": {
+            "type": "number",
+            "description": "Lines without an HS code or a country of origin: many destinations ask for both, so said, never refused."
+          },
+          "withoutOrigin": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lines",
+          "goods",
+          "charges",
+          "total",
+          "unvalued",
+          "withoutHs",
+          "withoutOrigin"
+        ]
+      },
+      "InvoiceTemplate": {
+        "type": "object",
+        "properties": {
+          "destCountry": {
+            "type": "string"
+          },
+          "fieldLabels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "declarations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "paymentTerms": {
+            "type": "string"
+          },
+          "fromExport": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "destCountry",
+          "fieldLabels",
+          "declarations",
+          "fromExport"
+        ]
+      },
+      "ExportInvoiceView": {
+        "type": "object",
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/InvoiceDraft"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceVersion"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/InvoiceTotals"
+          },
+          "gaps": {
+            "description": "What signing still needs, in words.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "notes": {
+            "description": "Said, not refused: what many destinations ask for that this one does not carry.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "The list changed since the last signed version."
+          },
+          "template": {
+            "description": "What this business's last invoice to this country carried — offered while there is no draft.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InvoiceTemplate"
+              }
+            ]
+          },
+          "currencyFromList": {
+            "type": "string",
+            "description": "A currency the packing list's price headings named."
+          },
+          "listColumns": {
+            "description": "The packing list's own columns, which the invoice may print.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "truth": {
+            "type": "string",
+            "description": "The declaration every invoice carries, in our words — the exporter may add its own beside it."
+          }
+        },
+        "required": [
+          "versions",
+          "totals",
+          "gaps",
+          "notes",
+          "stale",
+          "listColumns",
+          "truth"
+        ]
+      },
       "ExportDetail": {
         "type": "object",
         "properties": {
@@ -36887,6 +37381,9 @@
           },
           "packing": {
             "$ref": "#/components/schemas/ExportPackingView"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/ExportInvoiceView"
           }
         },
         "required": [
@@ -36900,7 +37397,8 @@
           "you",
           "exporterName",
           "feeState",
-          "sli"
+          "sli",
+          "invoice"
         ]
       },
       "ExportContainerDto": {
@@ -37037,6 +37535,156 @@
           "own"
         ]
       },
+      "InvoicePartyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 400
+          },
+          "taxId": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "contact": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ]
+      },
+      "InvoiceChargeDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "label"
+        ]
+      },
+      "InvoiceFieldDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ]
+      },
+      "InvoiceDraftDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "date": {
+            "type": "string",
+            "maxLength": 10
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3
+          },
+          "incoterm": {
+            "type": "string",
+            "enum": [
+              "EXW",
+              "FCA",
+              "CPT",
+              "CIP",
+              "DAP",
+              "DPU",
+              "DDP",
+              "FAS",
+              "FOB",
+              "CFR",
+              "CIF"
+            ]
+          },
+          "incotermPlace": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "paymentTerms": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "sale",
+              "sample",
+              "gift",
+              "repair",
+              "return",
+              "other"
+            ]
+          },
+          "buyer": {
+            "$ref": "#/components/schemas/InvoicePartyDto"
+          },
+          "consigneeIsBuyer": {
+            "type": "boolean"
+          },
+          "charges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceChargeDto"
+            }
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceFieldDto"
+            }
+          },
+          "declarations": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 1200
+            }
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 80
+            }
+          }
+        }
+      },
+      "InvoiceSignDto": {
+        "type": "object",
+        "properties": {
+          "signatory": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "signatory"
+        ]
+      },
       "PackingImportDto": {
         "type": "object",
         "properties": {
@@ -37098,6 +37746,9 @@
               "lengthCm",
               "widthCm",
               "heightCm",
+              "unitPrice",
+              "lineValue",
+              "originCountry",
               "keep",
               "ignore"
             ]
@@ -37180,6 +37831,10 @@
           },
           "refusal": {
             "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "description": "A currency the price columns' headings name — \"Unit price (USD)\", \"Value €\" — offered to the invoice."
           },
           "imported": {
             "type": "boolean"
@@ -60475,29 +61130,6 @@
           "unitValue",
           "lineValue",
           "originCountry"
-        ]
-      },
-      "InvoiceParty": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "address": {
-            "type": "string"
-          },
-          "country": {
-            "type": "string",
-            "description": "ISO 3166 alpha-2."
-          },
-          "taxNo": {
-            "type": "string",
-            "description": "Their tax or VAT number, where they gave one."
-          }
-        },
-        "required": [
-          "name",
-          "country"
         ]
       },
       "ParcelInvoice": {
