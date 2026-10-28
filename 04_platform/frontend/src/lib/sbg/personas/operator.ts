@@ -455,6 +455,12 @@ export function createOperatorApi(sbg: SbgClient) {
     supplyRequiredPaper: (importId: string, body: { key: string; documentId: string; entityId?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/supply', { params: { path: { importId } }, body: body as never })),
 
+    /** The railway's note, where the box came inland by rail — the importer's or its agent's to keep; staff are refused. */
+    holdImportRail: (importId: string, body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/rail', { params: { path: { importId } }, body: body as never })),
+    /** A draft rail note checked against the law of its lane. Nothing is written. */
+    railCheck: (body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/rail/check', { body: body as never })),
+    railways: () => sbg.request((c) => c.GET('/v1/sbg/rail/railways')),
+
     /**
      * BL1 — the appointed agent records that customs released the container.
      *

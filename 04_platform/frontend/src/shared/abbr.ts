@@ -22,6 +22,12 @@ export const ABBREVIATIONS = [
   'VAT',
   'HS code',
   'CMR',
+  // The rail conventions and what they count in (the rail note, 2026-10-28).
+  'CIM',
+  'SMGS',
+  'ATIT',
+  'SDR',
+  'RID',
   'UN number',
   'KYC',
   'CSV',

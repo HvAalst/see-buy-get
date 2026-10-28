@@ -54,6 +54,7 @@ import {
   type RequiredPaperView,
 } from '../imports';
 import type { TowerActions, TowerState } from '../useTowerApp';
+import { RailNotePanel, type RailNoteCheck, type RailwayRow } from './RailNotePanel';
 
 /**
  * CL2a — A CONTAINER, ITS PAPERS, AND THE AGENT APPOINTED TO CLEAR IT.
@@ -798,6 +799,23 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               </table>
             )}
           </ConsoleFold>
+
+          {/* ---- where the box came inland by rail: the railway's note, held and checked (2026-10-28) ---- */}
+          {client ? (
+            <RailNotePanel
+              code={detail.code}
+              {...(detail.rail ? { rail: detail.rail } : {})}
+              canKeep={isCompany && (detail.youAre === 'importer' || detail.youAre === 'agent')}
+              documents={detail.youAre === 'importer' ? detail.documents.filter((d) => !d.supersededBy).map((d) => ({ documentId: d.documentId, title: d.title })) : []}
+              defaults={{ fromCountry: detail.destCountry, toCountry: detail.destCountry, ...(detail.containerNo ? { containerNo: detail.containerNo } : {}) }}
+              calls={{
+                railways: async () => client.api.railways() as unknown as { data?: { items: RailwayRow[] } },
+                check: async (draft) => client.api.railCheck(draft as never) as unknown as { data?: RailNoteCheck },
+                keep: async (input) => client.api.holdImportRail(detail.importId, input as never),
+              }}
+              onKept={() => openOne(detail.importId, false)}
+            />
+          ) : null}
 
           {/* ---- what the asking is answered with: the papers this company holds ---- */}
           {detail.youAre === 'importer' ? (

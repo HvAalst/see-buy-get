@@ -137,6 +137,8 @@ export interface ImportDetailView extends ImportRow {
    * it: the agent who booked it owes the return, and the importer is the one the charge lands on.
    */
   box?: ContainerBoxView;
+  /** The railway's note, where the box came inland by rail: held, with its check (2026-10-28). */
+  rail?: import('./screens/RailNotePanel').RailNoteView;
 }
 
 export type BoxClockKind = 'demurrage' | 'detention' | 'stopped' | 'unknown';

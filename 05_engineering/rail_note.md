@@ -31,7 +31,7 @@ and [research/rail_brics_2026-10-28.md](research/rail_brics_2026-10-28.md).
 SeeBuyGet issues no rail note. It HOLDS the one the railway issued — a copy, and the particulars as printed on it,
 entered by whoever holds it — and says whether it is complete for the law of its lane, and what a gap costs.
 
-1. **The law of a rail lane, from membership** (`foundation/carriage-law/rail.ts`), as the road note's is:
+1. **BUILT — the law of a rail lane, from membership** (`foundation/carriage-law/rail.ts`), as the road note's is:
    - `cim` both ends in CIM states (Art. 1 §1);
    - `cim_lines` both in CIM, one applying it only on listed lines (Art. 1 §6: AZ EE GE RU UA);
    - `smgs` both ends in SMGS states;
@@ -43,12 +43,12 @@ entered by whoever holds it — and says whether it is complete for the law of i
    - `national` one country — its law and its railway's conditions.
    Suspended members (Iraq, Syria) count as not parties. Every instrument and railway carries its source and the day
    it was checked; a railway not checked says so, never a guess.
-2. **The check of a held note**: the particulars the lane's law asks for, against what is printed; what a gap costs
+2. **BUILT — the check of a held note**: the particulars the lane's law asks for, against what is printed; what a gap costs
    (no CIM statement — Art. 8 §3; no declared value on a Kenya Railways note — KSh 20,000 at most, cl. 9); the claim
    windows; and for an electronic note, its form (Brazil's CT-e key and its check digit, the CIM printout line,
    Russia's electronic-only rule) and where the issuer lets it be looked up. We never say "valid" on our own word:
    "complete for …, as printed", with the day the law was checked.
-3. **Where road meets rail** (the next slice): the road note and the rail note agree before the truck leaves
+3. **NEXT — where road meets rail**: the road note and the rail note agree before the truck leaves
    (container number with its check digit, seals, gross mass against the verified gross mass, consignee, stations);
    the road leg to a rail terminal is timed to the train's cut-off; the pickup at the far end waits for the
    railway's arrival notice; the free days at the terminal run on the box clock.
@@ -58,3 +58,20 @@ Issuing a FIATA FBL makes the issuer the multimodal transport operator for the w
 FIATA national association, with liability insurance and negotiable originals (release only against an original).
 That contradicts "never the sea" and "quotations, never payments". What we can do: hold the FBL a user's forwarder
 issued, check it is genuine and agrees with our papers, and say what it means. To be researched before building.
+
+## Built (2026-10-28)
+- `foundation/carriage-law/rail.ts`: `RAIL_INSTRUMENTS` (CIM 49 counted + IQ SY suspended, AZ EE GE RU UA on listed lines;
+  SMGS 26; ATIT 7), `railRegimeOf`, `RAIL_PARTICULARS` (27), CIM Art. 7 §1 and SMGS Art. 15 §1 as requirement lists,
+  `RAILWAYS` (13: krc urc trc tazara edr rzd china_railway indian_railways brazil kai transnet etihad_rail rai) with limits,
+  claims, electronic rules and a caveat where the note's rules were not read, `cteKeyProblem` (Brazil's 44-digit key,
+  model 57, modulo-11 check digit), `checkRailNote` (findings missing/ask, asked, complete, notChecked, electronic,
+  limits, claims, caveats incl. the Northern and Central Corridor waybill acceptance).
+- `modules/pudo/rail-note.ts` + `rail-note.types.ts`: `holdRailNote` (refused before writing: unknown railway,
+  no station, a day to come, nothing to find it by), `railNoteView` (the check, and the box number — ISO 6346 check
+  digit — and seals against ours).
+- Routes: `POST exports/:id/rail` (exporter with a copy or number; its agent by number only), `POST imports/:id/rail`
+  (importer or agent; staff refused by name), `GET rail/railways`, `POST rail/check` (writes nothing). A replaced note
+  is kept in `formerRail`.
+- Screens: `apps/tower/screens/RailNotePanel.tsx` on the Business app's export and on the import screen (console and
+  Business app); asks only what the lane's rules ask. Help: business-exports note 4. Glossary: CIM, SMGS, ATIT, SDR, RID.
+- Tests: rail.spec.ts (22), test/export-rail.e2e-spec.ts, business.e2e-spec.ts (Djibouti–Modjo), rail-note.test.tsx.

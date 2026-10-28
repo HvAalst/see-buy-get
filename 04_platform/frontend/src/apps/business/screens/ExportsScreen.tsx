@@ -14,6 +14,7 @@ import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
 import { ASKED_PAPERS, boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, paperKindFor, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperGroup, type ExportPaperKey, type ExportRow } from '../exports';
 import { mayAct } from '../logic';
+import { RailNotePanel } from '../../tower/screens/RailNotePanel';
 
 type Problem = { detail?: string; title: string } | null | undefined;
 
@@ -1014,6 +1015,20 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </div>
         ) : null}
       </section>
+
+      {/* Where the box goes to the port by rail: the railway's note, held, checked against its lane's law, matched to the box. */}
+      <RailNotePanel
+        code={c.code}
+        {...(d.rail ? { rail: d.rail } : {})}
+        canKeep={mine || asAgent}
+        documents={mine ? d.documents : []}
+        defaults={{ fromCountry: c.originCountry, toCountry: c.originCountry, ...(c.containerNo ? { containerNo: c.containerNo } : {}) }}
+        calls={{ railways: () => client.exports.railways(), check: (draft) => client.exports.railCheck(draft), keep: (input) => client.exports.rail(c.exportId, input) }}
+        onKept={async () => {
+          await read();
+          await onChanged();
+        }}
+      />
     </>
   );
 }

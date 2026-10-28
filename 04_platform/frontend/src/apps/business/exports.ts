@@ -1,6 +1,7 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import type { QuoteView } from '../../shared/quote';
+import type { RailNoteCheck, RailNoteInput, RailNoteView, RailwayRow } from '../tower/screens/RailNotePanel';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "The missing for goods going to a port should be build"). One container leaving
@@ -184,6 +185,8 @@ export interface ExportDetail {
   packing?: ExportPackingView;
   /** The commercial invoice, drawn from the packing list's lines. */
   invoice: ExportInvoiceView;
+  /** The railway's note, where the box goes to the port by rail: held, with its check. */
+  rail?: RailNoteView;
 }
 
 export interface ExportRow {
@@ -239,6 +242,11 @@ export interface ExportsApi {
   vgm(exportId: string, body: { method: 1 | 2; kg: number; weighbridge?: string; ticketRef?: string; weighedAt?: string; signatory: string }): Promise<Result<ExportDetail>>;
   paper(exportId: string, body: { key: ExportPaperKey; documentId?: string; reference?: string }): Promise<Result<ExportDetail>>;
   billOfLading(exportId: string, number: string): Promise<Result<ExportDetail>>;
+  /** The railway's note, held with what is printed on it. */
+  rail(exportId: string, body: RailNoteInput): Promise<Result<ExportDetail>>;
+  /** A draft rail note, checked against the law of its lane: what it asks for. Nothing is written. */
+  railCheck(body: Parameters<import('../tower/screens/RailNotePanel').RailNoteCalls['check']>[0]): Promise<Result<RailNoteCheck>>;
+  railways(): Promise<Result<{ items: RailwayRow[] }>>;
   /** The file the forwarder takes at the gate, as printable HTML. */
   handover(exportId: string): Promise<Result<string>>;
   freeDays(exportId: string, kind: 'detention' | 'demurrage', days: number): Promise<Result<ExportDetail>>;
@@ -284,6 +292,9 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     vgm: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/vgm`, body),
     paper: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/papers`, body),
     billOfLading: (exportId, number) => post(`/v1/sbg/exports/${id(exportId)}/bill-of-lading`, { number }),
+    rail: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/rail`, body),
+    railCheck: (body) => post('/v1/sbg/rail/check', body),
+    railways: () => call((c) => c.GET('/v1/sbg/rail/railways' as never, {} as never) as never),
     handover: (exportId) => call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/handover.html` as never, { parseAs: 'text' } as never) as never),
     freeDays: (exportId, kind, days) => post(`/v1/sbg/exports/${id(exportId)}/free-days`, { kind, days }),
     emptyOut: (exportId, at) => post(`/v1/sbg/exports/${id(exportId)}/empty-out`, { at }),
