@@ -1,4 +1,5 @@
 import { Quote } from './quote.types';
+import { HeldRailNote, RailNoteView } from './rail-note.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
 import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';
@@ -475,6 +476,10 @@ export class ImportFormerFee {
  * the far end was two weeks nobody used.
  */
 export class ImportConsignment {
+  /** The railway's note, where the box came inland by rail — held, never issued by us (rail-note.ts). */
+  @ApiPropertyOptional({ type: HeldRailNote }) rail?: HeldRailNote;
+  /** The notes it replaced, each kept as it was. */
+  @ApiPropertyOptional({ type: [HeldRailNote] }) formerRail?: HeldRailNote[];
   @ApiProperty() importId: string;
   /** IMP-001. Also the `relatesTo` every paper belonging to THIS container is filed under. */
   @ApiProperty() code: string;
@@ -697,6 +702,8 @@ export class ImportDetail extends ImportRow {
    * either of them would be choosing which one gets surprised.
    */
   @ApiPropertyOptional({ type: ContainerBoxView }) box?: ContainerBoxView;
+  /** The railway's note with its check, and what it says of the box against ours. */
+  @ApiPropertyOptional({ type: RailNoteView }) rail?: RailNoteView;
 }
 
 /* ------------------------- CL6: what a clearing agent says they clear, in their own words -- */

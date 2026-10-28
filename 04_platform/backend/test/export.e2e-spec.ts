@@ -771,4 +771,45 @@ describe('an export to the port, over the wire', () => {
     const theirs = (await http().post('/v1/sbg/exports').set(bearer(agent.token)).send({ goodsDescription: 'Tea', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '22G1', booking: booking(Date.now() + 72 * H), loadingSiteId: agent.loading, terminalSiteId: agent.terminal }).expect(201)).body;
     expect((await http().get(`/v1/sbg/exports/${theirs.exportId}`).set(bearer(agent.token)).expect(200)).body.invoice.template).toBeUndefined();
   });
+  it('the railway’s note: held with what is printed on it, checked against the law of its lane, matched to the box — and kept when replaced', async () => {
+    const x = await anExporter();
+    const agent = await anExporter(['clearing_agent'], 'Pwani Clearing');
+    const made = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ goodsDescription: 'Black tea, 640 sacks', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '22G1', booking: booking(Date.now() + 72 * H), loadingSiteId: x.loading, terminalSiteId: x.terminal }).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    await http().post(`${path}/container`).set(bearer(x.token)).send({ containerNo: 'MSCU1234566' }).expect(201);
+    const today = new Date().toISOString().slice(0, 10);
+    // By the SGR from Nairobi to the port: Kenya Railways' own conditions — no rail convention reaches Kenya.
+    const asKenya = ['from', 'takenOverOn', 'goods', 'packing', 'marks', 'packages', 'mass', 'consignor', 'consignee', 'to', 'charges', 'documents'];
+    const note = { railway: 'krc', from: { name: 'Nairobi Inland Container Depot', country: 'KE' }, to: { name: 'Mombasa Port Reitz', country: 'KE' }, noteNumber: 'KRC-SGR-44120', madeOutOn: today, load: 'container', printed: asKenya, containerNo: 'MSCU 123456-6' };
+
+    // What the lane asks is told before anything is held: the check writes nothing.
+    const draft = (await http().post('/v1/sbg/rail/check').set(bearer(x.token)).send({ railway: 'krc', from: 'KE', to: 'KE', madeOutOn: today, load: 'container', printed: [] }).expect(201)).body;
+    expect(draft).toMatchObject({ regime: 'national', complete: false });
+    expect(draft.asked).toEqual(expect.arrayContaining(['consignorSigned', 'mass', 'consignee']));
+    expect((await http().get('/v1/sbg/rail/railways').set(bearer(x.token)).expect(200)).body.items.find((r: { key: string }) => r.key === 'krc')).toMatchObject({ name: 'Kenya Railways', particularsChecked: true });
+
+    // Staff keep nothing in its name; a stranger is told there is no such export; nothing nobody can find again is held.
+    expect((await http().post(`${path}/rail`).set(bearer(operator)).send(note)).status).toBe(403);
+    expect((await http().post(`${path}/rail`).set(bearer(agent.token)).send(note)).status).toBe(404);
+    expect((await http().post(`${path}/rail`).set(bearer(x.token)).send({ ...note, noteNumber: undefined })).body.detail).toBe('Attach the railway’s note, or give its number');
+    expect((await http().post(`${path}/rail`).set(bearer(x.token)).send({ ...note, railway: 'nowhere' })).status).toBe(404);
+
+    const held = (await http().post(`${path}/rail`).set(bearer(x.token)).send(note).expect(201)).body.rail;
+    // Not signed by the consignor (Conditions cl. 7): not complete, and what that costs if nothing was declared.
+    expect(held.check.findings).toEqual([{ key: 'consignorSigned', rule: 'Conditions cl. 7', kind: 'missing' }]);
+    expect(held.check.complete).toBe(false);
+    expect(held.check.limits.join(' ')).toMatch(/KSh 20,000/);
+    // The box's number as printed agrees with ours.
+    expect(held.matches).toEqual([{ field: 'containerNo', printed: 'MSCU1234566', ours: 'MSCU1234566', agrees: true }]);
+
+    // Appointed, the agent — who often books the train — may give a new note by its number; the one replaced is kept.
+    await http().post(`${path}/agent`).set(bearer(x.token)).send({ agentEntityId: agent.entityId }).expect(201);
+    expect((await http().post(`${path}/rail`).set(bearer(agent.token)).send({ ...note, documentId: 'doc_x' })).status).toBe(400);
+    const again = (await http().post(`${path}/rail`).set(bearer(agent.token)).send({ ...note, printed: [...asKenya, 'consignorSigned'], containerNo: 'MSCU1234567' }).expect(201)).body;
+    expect(again.rail).toMatchObject({ replaced: 1, check: { complete: true } });
+    // A digit wrong on the rail note is caught where road and rail meet: it is not the box we are moving.
+    expect(again.rail.matches[0]).toMatchObject({ field: 'containerNo', printed: 'MSCU1234567', agrees: false });
+    expect(again.consignment.formerRail).toHaveLength(1);
+    expect(again.consignment.formerRail[0].noteNumber).toBe('KRC-SGR-44120');
+  });
 });

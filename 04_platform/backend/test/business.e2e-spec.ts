@@ -70,6 +70,14 @@ describe('a customer’s business, over the wire', () => {
     // Its own work, on the routes importers always used.
     const imp = await http().post('/v1/sbg/imports').set(bearer(biz)).send({ goodsDescription: 'Coffee roaster', originCountry: 'NL', destCountry: 'ET', destPort: 'Modjo dry port' }).expect(201);
     expect(imp.body.importerEntityId).toBe(entityId);
+    // Inland by rail, Djibouti to Modjo: the railway's note held on the import, read against Ethiopia's Proclamation 547/2007
+    // (no rail convention joins the two) — the carrier's signature missing, and the customs papers asked about, never presumed.
+    const railNote = { railway: 'edr', from: { name: 'Nagad', country: 'DJ' }, to: { name: 'Modjo dry port', country: 'ET' }, noteNumber: 'EDR-7731', madeOutOn: new Date().toISOString().slice(0, 10), load: 'container', printed: ['madeOut', 'consignor', 'carrier', 'consignee', 'from', 'takenOverOn', 'to', 'goods', 'packing', 'packages', 'marks', 'mass', 'charges', 'consignorSigned'] };
+    const railHeld = (await http().post(`/v1/sbg/imports/${imp.body.importId}/rail`).set(bearer(biz)).send(railNote).expect(201)).body.rail;
+    expect(railHeld.check).toMatchObject({ regime: 'contract', complete: false, findings: [{ key: 'documents', kind: 'ask' }, { key: 'carrierSigned', kind: 'missing' }] });
+    expect((await http().get(`/v1/sbg/imports/${imp.body.importId}`).set(bearer(biz)).expect(200)).body.rail.noteNumber).toBe('EDR-7731');
+    // Staff keep nothing in the importer's name.
+    expect((await http().post(`/v1/sbg/imports/${imp.body.importId}/rail`).set(bearer(setupKey)).send(railNote)).status).toBe(403);
     await http().get('/v1/sbg/imports').set(bearer(biz)).expect(200);
     await http().get(`/v1/sbg/entities/${entityId}/record`).set(bearer(biz)).expect(200);
 

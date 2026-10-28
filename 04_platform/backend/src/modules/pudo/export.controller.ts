@@ -8,6 +8,7 @@ import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
+import { RailNoteDto } from './rail-note.types';
 import { ExportService } from './export.service';
 import { SliDraftDto, SliSignDto } from './export-sli.types';
 import { PackingCheck, PackingImportDto, PackingSignDto } from './export-packing.types';
@@ -111,6 +112,13 @@ export class ExportController {
   @Post(':exportId/bill-of-lading')
   billOfLading(@Param('exportId') exportId: string, @Body() dto: ExportBillOfLadingDto, @Actor() actor: IntrospectionResult): ExportDetail {
     return this.exports.recordBillOfLading(exportId, this.ownCompany(actor), dto.number, auditActor(actor));
+  }
+
+  /** The railway's note, where the box goes to the port by rail: held, with what is printed on it — the exporter's, or its agent's by number. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/rail')
+  rail(@Param('exportId') exportId: string, @Body() dto: RailNoteDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.holdRail(exportId, this.ownCompany(actor), dto, auditActor(actor));
   }
 
   /* ------------------------------------------------------- EX6 the box's clock -- */

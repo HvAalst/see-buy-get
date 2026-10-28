@@ -7,6 +7,7 @@ import { Quote } from './quote.types';
 import { ExportSli, ExportSliView } from './export-sli.types';
 import { ExportPacking, ExportPackingView } from './export-packing.types';
 import { ExportInvoice, ExportInvoiceView } from './export-invoice.types';
+import { HeldRailNote, RailNoteView } from './rail-note.types';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -260,6 +261,10 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: ExportInvoice }) invoice?: ExportInvoice;
   /** Which warnings were sent, once each: the latest departure near, the cut-off passed, the VGM cut-off near — and the box's free days, once per due date. */
   @ApiPropertyOptional() warned?: { pickup?: string; gate?: string; vgm?: string; box?: string[] };
+  /** The railway's note, where the box goes to the port by rail — held, never issued by us (rail-note.ts). */
+  @ApiPropertyOptional({ type: HeldRailNote }) rail?: HeldRailNote;
+  /** The notes it replaced, each kept as it was. */
+  @ApiPropertyOptional({ type: [HeldRailNote] }) formerRail?: HeldRailNote[];
   @ApiProperty() createdAt: string;
   @ApiProperty() createdBy: string;
 }
@@ -353,6 +358,8 @@ export class ExportDetail {
   @ApiProperty({ type: ExportSliView }) sli: ExportSliView;
   @ApiPropertyOptional({ type: ExportPackingView }) packing?: ExportPackingView;
   @ApiProperty({ type: ExportInvoiceView }) invoice: ExportInvoiceView;
+  /** The railway's note with its check, and what it says of the box against ours. */
+  @ApiPropertyOptional({ type: RailNoteView }) rail?: RailNoteView;
 }
 
 export class ExportRow {

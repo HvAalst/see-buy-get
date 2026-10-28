@@ -26,6 +26,8 @@ import { readWorkbook } from './workbook';
 import { cleanDraft, sliBasis, sliGaps, sliHtml, sliStale, type SliFacts } from './export-sli';
 import type { ExportSliView, SliDraft, SliDraftDto } from './export-sli.types';
 import { SiteService } from './site.service';
+import { holdRailNote, railNoteView } from './rail-note';
+import type { RailNoteDto } from './rail-note.types';
 
 /** The words for each paper, where a sentence names it (the screen translates its own). */
 export const EXPORT_PAPER_LABEL: Record<KnownExportPaperKey, string> = {
@@ -276,7 +278,39 @@ export class ExportService {
       sli: this.sliViewOf(c, you),
       ...(c.packing ? { packing: this.packingViewOf(c) } : {}),
       invoice: this.invoiceViewOf(c, you),
+      ...(c.rail ? { rail: this.railViewOf(c) } : {}),
     };
+  }
+
+  /* ----------------------------------------------------- the railway's note -- */
+
+  /**
+   * THE RAILWAY'S NOTE, HELD (the user, 2026-10-28: "for now we hold the note but we should be able to see whether it is
+   * valid"). Where the box goes to the port by rail, the railway issues the note; the exporter — or its clearing agent, who
+   * often books the train — keeps it here: a copy from the exporter's papers, or its number, and what is printed on it. A
+   * new one replaces it, and the one replaced is kept as it was.
+   */
+  holdRail(exportId: string, actorEntityId: string, dto: RailNoteDto, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireExport(exportId);
+    const side = this.sideOf(c, actorEntityId);
+    if (side === 'agent' && dto.documentId) throw new GlosError('VALIDATION_FAILED', 'Give the rail note’s number: your own documents are not the exporter’s', { field: 'noteNumber' });
+    let document: { documentId: string; title: string } | undefined;
+    if (dto.documentId) {
+      const d = this.documents.list(c.exporterEntityId).find((x) => x.documentId === dto.documentId);
+      if (!d) throw new GlosError('NOT_FOUND', 'No such paper among your company’s documents');
+      if (d.status === 'superseded' || d.status === 'rejected') throw new GlosError('INVALID_STATE', `${d.title} is not a current paper on your record — attach the current one`);
+      document = { documentId: d.documentId, title: d.title };
+    }
+    const held = holdRailNote(dto, { ...(document ? { document } : {}), by, byEntityId: actorEntityId, now });
+    if (c.rail) c.formerRail = [...(c.formerRail ?? []), c.rail];
+    c.rail = held;
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  private railViewOf(c: ExportConsignment) {
+    const seals = c.ladenFreightId ? this.seals.views(c.ladenFreightId).flatMap((s) => (s.number && s.state === 'on' ? [s.number] : [])) : [];
+    return railNoteView(c.rail!, { ...(c.containerNo ? { containerNo: c.containerNo } : {}), seals }, c.formerRail?.length ?? 0);
   }
 
   /**

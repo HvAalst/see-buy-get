@@ -1,6 +1,8 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { QuoteService } from './quote.service';
+import { holdRailNote, railNoteView } from './rail-note';
+import type { RailNoteDto } from './rail-note.types';
 import type { Quote } from './quote.types';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -498,7 +500,31 @@ export class ImportService {
       // Y0/Y1 — the box itself, and the clock. Absent until a number has been recorded, because the box
       // IS its number: there is no entity to derive before somebody names one.
       ...(consignment.containerNo ? { box: this.boxes.viewOf(consignment.containerNo, Date.now(), { importId: consignment.importId }) } : {}),
+      ...(consignment.rail ? { rail: railNoteView(consignment.rail, consignment.containerNo ? { containerNo: consignment.containerNo } : {}, consignment.formerRail?.length ?? 0) } : {}),
     };
+  }
+
+  /**
+   * THE RAILWAY'S NOTE, HELD (the user, 2026-10-28: "for now we hold the note but we should be able to see whether it is
+   * valid"). Where the box came inland by rail — Mombasa to Nairobi, Djibouti to Modjo — the importer or its appointed
+   * agent keeps the railway's note: a copy from its own papers, or its number, and what is printed on it. A new one
+   * replaces it; the one replaced is kept as it was.
+   */
+  holdRail(importId: string, actorEntityId: string, dto: RailNoteDto, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (this.sideOf(consignment, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    let document: { documentId: string; title: string } | undefined;
+    if (dto.documentId) {
+      const d = this.documents.list(actorEntityId).find((x) => x.documentId === dto.documentId);
+      if (!d) throw new GlosError('NOT_FOUND', 'No such paper among your company’s documents');
+      if (d.supersededBy) throw new GlosError('INVALID_STATE', `That version of ${d.title} has been replaced — attach the current one`);
+      document = { documentId: d.documentId, title: d.title };
+    }
+    const held = holdRailNote(dto, { ...(document ? { document } : {}), by, byEntityId: actorEntityId, now });
+    if (consignment.rail) consignment.formerRail = [...(consignment.formerRail ?? []), consignment.rail];
+    consignment.rail = held;
+    this.imports.set(consignment.importId, consignment);
+    return this.detail(consignment.importId, actorEntityId);
   }
 
   /* ------------------------------------------- Y0 + Y1: the box, and its clock -- */

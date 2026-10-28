@@ -1,6 +1,9 @@
 ﻿import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
+import { RailCheckDto, RailNoteDto, type RailNoteCheckView, type RailwayList } from './rail-note.types';
+import { railwayRows } from './rail-note';
+import { checkRailNote } from '../../foundation/carriage-law/rail';
 import type { FleetDriver, FleetManager, FleetSetupRow } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { DepartureNoteService } from './departure-note.service';
@@ -1423,6 +1426,28 @@ export class SbgController {
    * The agent's, because they are the party at the counter and the only one who knows. It is what lets a
    * split chain mint its delivery leg: before it, the box is still the state's business.
    */
+  /** The railway's note, where the box came inland by rail: the importer's or its agent's — staff read it, and write nothing in their name. */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/rail')
+  holdImportRail(@Param('importId') importId: string, @Body() dto: RailNoteDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The railway’s note is the importer’s or its agent’s to keep: staff read it, and write nothing in their name');
+    return this.imports.holdRail(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+  }
+
+  /** The railways we know, and whether we have read what each one's note must carry. */
+  @Roles('operator', 'entity_admin', 'business')
+  @Get('rail/railways')
+  railways(): RailwayList {
+    return { items: railwayRows() };
+  }
+
+  /** A draft rail note, checked against the law of its lane before it is held. Nothing is written. */
+  @Roles('operator', 'entity_admin', 'business')
+  @Post('rail/check')
+  railCheck(@Body() dto: RailCheckDto): RailNoteCheckView {
+    return checkRailNote({ ...dto, from: dto.from.toUpperCase(), to: dto.to.toUpperCase() });
+  }
+
   @Roles('operator', 'entity_admin', 'business')
   @Post('imports/:importId/released')
   recordImportRelease(@Param('importId') importId: string, @Body() dto: ReleaseDto, @Actor() actor: IntrospectionResult): ImportDetail {

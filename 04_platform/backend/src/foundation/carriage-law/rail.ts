@@ -454,6 +454,8 @@ export interface RailNoteCheck {
   checkedOn: string;
   sources: string[];
   findings: RailNoteFinding[];
+  /** Every particular the rules ask of this note — what its holder is asked to look for. */
+  asked: RailParticular[];
   /** True when there were rules to read against and nothing they ask for is missing. */
   complete: boolean;
   /** Said when there are no rules we could read for this note: the particulars were not checked. */
@@ -523,6 +525,7 @@ export function checkRailNote(note: HeldRailNote): RailNoteCheck {
   const applies = (r: RailRequirement) => !r.when || (r.when === 'dangerous' ? Boolean(note.dangerous) : r.when === note.load);
   const seen = new Set<string>();
   const findings: RailNoteFinding[] = [];
+  const asked = [...new Set(rules.filter(applies).map((r) => r.key))];
   for (const r of rules.filter(applies)) {
     if (printed.has(r.key) || seen.has(r.key)) continue;
     seen.add(r.key);
@@ -559,6 +562,7 @@ export function checkRailNote(note: HeldRailNote): RailNoteCheck {
     checkedOn: railway?.checkedOn ?? RAIL_INSTRUMENTS.cim.checkedOn,
     sources,
     findings,
+    asked,
     complete: checked && !findings.some((f) => f.kind === 'missing') && !electronic.some((x) => x.code !== 'electronic_in_question'),
     ...(notChecked ? { notChecked } : {}),
     electronic,

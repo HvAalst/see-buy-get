@@ -4220,6 +4220,48 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/rail": {
+      "post": {
+        "operationId": "Export.rail",
+        "summary": "",
+        "description": "The railway's note, where the box goes to the port by rail: held, with what is printed on it — the exporter's, or its agent's by number.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RailNoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/exports/{exportId}/free-days": {
       "post": {
         "operationId": "Export.freeDays",
@@ -8242,11 +8284,98 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/rail": {
+      "post": {
+        "operationId": "Sbg.holdImportRail",
+        "summary": "",
+        "description": "BL1 — the appointed agent records that customs released the container.\n\nThe agent's, because they are the party at the counter and the only one who knows. It is what lets a\nsplit chain mint its delivery leg: before it, the box is still the state's business.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RailNoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/rail/railways": {
+      "get": {
+        "operationId": "Sbg.railways",
+        "summary": "",
+        "description": "The railways we know, and whether we have read what each one's note must carry.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RailwayList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/rail/check": {
+      "post": {
+        "operationId": "Sbg.railCheck",
+        "summary": "",
+        "description": "A draft rail note, checked against the law of its lane before it is held. Nothing is written.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RailCheckDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RailNoteCheckView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/released": {
       "post": {
         "operationId": "Sbg.recordImportRelease",
-        "summary": "",
-        "description": "BL1 — the appointed agent records that customs released the container.\n\nThe agent's, because they are the party at the counter and the only one who knows. It is what lets a\nsplit chain mint its delivery leg: before it, the box is still the state's business.",
         "parameters": [
           {
             "name": "importId",
@@ -36525,6 +36654,148 @@
           "versions"
         ]
       },
+      "RailStation": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "The station’s country, as a two-letter code."
+          }
+        },
+        "required": [
+          "name",
+          "country"
+        ]
+      },
+      "RailElectronic": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "description": "The note's reference in the railway's (or the state's) system: an e-CIM number, a CT-e key, an eT-RR number."
+          },
+          "printoutLine": {
+            "type": "boolean",
+            "description": "For a printout of an electronic CIM note: whether it carries its printout line."
+          }
+        }
+      },
+      "HeldRailNote": {
+        "type": "object",
+        "properties": {
+          "railway": {
+            "type": "string",
+            "description": "One of the catalogue's railways by its key, or `other`."
+          },
+          "railwayName": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/RailStation"
+          },
+          "to": {
+            "$ref": "#/components/schemas/RailStation"
+          },
+          "noteNumber": {
+            "type": "string"
+          },
+          "madeOutOn": {
+            "type": "string",
+            "description": "The day the note was made out, YYYY-MM-DD: the law is read on that day."
+          },
+          "load": {
+            "type": "string",
+            "enum": [
+              "container",
+              "wagon",
+              "packages"
+            ]
+          },
+          "dangerous": {
+            "type": "boolean"
+          },
+          "printed": {
+            "type": "array",
+            "description": "What its holder found printed on it.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "madeOut",
+                "consignor",
+                "consignee",
+                "carrier",
+                "from",
+                "takenOverOn",
+                "to",
+                "borderStations",
+                "goods",
+                "goodsCode",
+                "packing",
+                "dangerous",
+                "packages",
+                "marks",
+                "mass",
+                "massMethod",
+                "wagon",
+                "container",
+                "seals",
+                "documents",
+                "charges",
+                "transitPeriod",
+                "dates",
+                "noteNumber",
+                "statement",
+                "consignorSigned",
+                "carrierSigned"
+              ]
+            }
+          },
+          "electronic": {
+            "$ref": "#/components/schemas/RailElectronic"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "The copy, from the holder's own company papers."
+          },
+          "documentTitle": {
+            "type": "string"
+          },
+          "containerNo": {
+            "type": "string",
+            "description": "As printed on the rail note — matched against our own record of the box."
+          },
+          "seals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "recordedByEntityId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "railway",
+          "railwayName",
+          "from",
+          "to",
+          "madeOutOn",
+          "load",
+          "printed",
+          "recordedAt",
+          "recordedBy",
+          "recordedByEntityId"
+        ]
+      },
       "ExportConsignment": {
         "type": "object",
         "properties": {
@@ -36698,6 +36969,21 @@
                   "type": "string"
                 }
               }
+            }
+          },
+          "rail": {
+            "description": "The railway's note, where the box goes to the port by rail — held, never issued by us (rail-note.ts).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldRailNote"
+              }
+            ]
+          },
+          "formerRail": {
+            "description": "The notes it replaced, each kept as it was.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HeldRailNote"
             }
           },
           "createdAt": {
@@ -37455,6 +37741,360 @@
           "truth"
         ]
       },
+      "RailNoteFindingView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "madeOut",
+              "consignor",
+              "consignee",
+              "carrier",
+              "from",
+              "takenOverOn",
+              "to",
+              "borderStations",
+              "goods",
+              "goodsCode",
+              "packing",
+              "dangerous",
+              "packages",
+              "marks",
+              "mass",
+              "massMethod",
+              "wagon",
+              "container",
+              "seals",
+              "documents",
+              "charges",
+              "transitPeriod",
+              "dates",
+              "noteNumber",
+              "statement",
+              "consignorSigned",
+              "carrierSigned"
+            ]
+          },
+          "rule": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "ask"
+            ]
+          },
+          "unless": {
+            "type": "string",
+            "enum": [
+              "no_documents",
+              "no_seals",
+              "nothing_to_pay"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "rule",
+          "kind"
+        ]
+      },
+      "RailElectronicFindingView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "detail"
+        ]
+      },
+      "RailNoteCheckView": {
+        "type": "object",
+        "properties": {
+          "regime": {
+            "type": "string",
+            "enum": [
+              "national",
+              "cim",
+              "smgs",
+              "cim_lines",
+              "cim_smgs",
+              "cim_if_agreed",
+              "atit",
+              "contract"
+            ]
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "railway": {
+            "type": "string"
+          },
+          "checkedOn": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RailNoteFindingView"
+            }
+          },
+          "asked": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "madeOut",
+                "consignor",
+                "consignee",
+                "carrier",
+                "from",
+                "takenOverOn",
+                "to",
+                "borderStations",
+                "goods",
+                "goodsCode",
+                "packing",
+                "dangerous",
+                "packages",
+                "marks",
+                "mass",
+                "massMethod",
+                "wagon",
+                "container",
+                "seals",
+                "documents",
+                "charges",
+                "transitPeriod",
+                "dates",
+                "noteNumber",
+                "statement",
+                "consignorSigned",
+                "carrierSigned"
+              ]
+            }
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "notChecked": {
+            "type": "string"
+          },
+          "electronic": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RailElectronicFindingView"
+            }
+          },
+          "limits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "claims": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "caveats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "regime",
+          "rules",
+          "checkedOn",
+          "sources",
+          "findings",
+          "asked",
+          "complete",
+          "electronic",
+          "limits",
+          "claims",
+          "caveats"
+        ]
+      },
+      "RailNoteMatch": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "containerNo",
+              "seals"
+            ]
+          },
+          "printed": {
+            "type": "string"
+          },
+          "ours": {
+            "type": "string"
+          },
+          "agrees": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": "string",
+            "description": "Why it does not agree, where the printed value is wrong in itself (a container number whose check digit fails)."
+          }
+        },
+        "required": [
+          "field",
+          "printed",
+          "agrees"
+        ]
+      },
+      "RailNoteView": {
+        "type": "object",
+        "properties": {
+          "railway": {
+            "type": "string",
+            "description": "One of the catalogue's railways by its key, or `other`."
+          },
+          "railwayName": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/RailStation"
+          },
+          "to": {
+            "$ref": "#/components/schemas/RailStation"
+          },
+          "noteNumber": {
+            "type": "string"
+          },
+          "madeOutOn": {
+            "type": "string",
+            "description": "The day the note was made out, YYYY-MM-DD: the law is read on that day."
+          },
+          "load": {
+            "type": "string",
+            "enum": [
+              "container",
+              "wagon",
+              "packages"
+            ]
+          },
+          "dangerous": {
+            "type": "boolean"
+          },
+          "printed": {
+            "type": "array",
+            "description": "What its holder found printed on it.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "madeOut",
+                "consignor",
+                "consignee",
+                "carrier",
+                "from",
+                "takenOverOn",
+                "to",
+                "borderStations",
+                "goods",
+                "goodsCode",
+                "packing",
+                "dangerous",
+                "packages",
+                "marks",
+                "mass",
+                "massMethod",
+                "wagon",
+                "container",
+                "seals",
+                "documents",
+                "charges",
+                "transitPeriod",
+                "dates",
+                "noteNumber",
+                "statement",
+                "consignorSigned",
+                "carrierSigned"
+              ]
+            }
+          },
+          "electronic": {
+            "$ref": "#/components/schemas/RailElectronic"
+          },
+          "documentId": {
+            "type": "string",
+            "description": "The copy, from the holder's own company papers."
+          },
+          "documentTitle": {
+            "type": "string"
+          },
+          "containerNo": {
+            "type": "string",
+            "description": "As printed on the rail note — matched against our own record of the box."
+          },
+          "seals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "recordedByEntityId": {
+            "type": "string"
+          },
+          "check": {
+            "$ref": "#/components/schemas/RailNoteCheckView"
+          },
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RailNoteMatch"
+            }
+          },
+          "replaced": {
+            "type": "number",
+            "description": "How many notes this one replaced — each is kept, never written over."
+          }
+        },
+        "required": [
+          "railway",
+          "railwayName",
+          "from",
+          "to",
+          "madeOutOn",
+          "load",
+          "printed",
+          "recordedAt",
+          "recordedBy",
+          "recordedByEntityId",
+          "check",
+          "matches",
+          "replaced"
+        ]
+      },
       "ExportDetail": {
         "type": "object",
         "properties": {
@@ -37540,6 +38180,14 @@
           },
           "invoice": {
             "$ref": "#/components/schemas/ExportInvoiceView"
+          },
+          "rail": {
+            "description": "The railway's note with its check, and what it says of the box against ours.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RailNoteView"
+              }
+            ]
           }
         },
         "required": [
@@ -37645,6 +38293,132 @@
         },
         "required": [
           "number"
+        ]
+      },
+      "RailStationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "country": {
+            "type": "string",
+            "pattern": "/^[A-Za-z]{2}$/"
+          }
+        },
+        "required": [
+          "name",
+          "country"
+        ]
+      },
+      "RailElectronicDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "printoutLine": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RailNoteDto": {
+        "type": "object",
+        "properties": {
+          "railway": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "railwayName": {
+            "type": "string",
+            "description": "The railway's name, for one not in the catalogue (`other`).",
+            "maxLength": 80
+          },
+          "from": {
+            "$ref": "#/components/schemas/RailStationDto"
+          },
+          "to": {
+            "$ref": "#/components/schemas/RailStationDto"
+          },
+          "noteNumber": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "madeOutOn": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "load": {
+            "type": "string",
+            "enum": [
+              "container",
+              "wagon",
+              "packages"
+            ]
+          },
+          "dangerous": {
+            "type": "boolean"
+          },
+          "printed": {
+            "type": "string",
+            "enum": [
+              "madeOut",
+              "consignor",
+              "consignee",
+              "carrier",
+              "from",
+              "takenOverOn",
+              "to",
+              "borderStations",
+              "goods",
+              "goodsCode",
+              "packing",
+              "dangerous",
+              "packages",
+              "marks",
+              "mass",
+              "massMethod",
+              "wagon",
+              "container",
+              "seals",
+              "documents",
+              "charges",
+              "transitPeriod",
+              "dates",
+              "noteNumber",
+              "statement",
+              "consignorSigned",
+              "carrierSigned"
+            ]
+          },
+          "electronic": {
+            "$ref": "#/components/schemas/RailElectronicDto"
+          },
+          "documentId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "containerNo": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "seals": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            }
+          }
+        },
+        "required": [
+          "railway",
+          "from",
+          "to",
+          "madeOutOn",
+          "load",
+          "printed"
         ]
       },
       "ExportFreeDaysDto": {
@@ -43688,6 +44462,21 @@
       "ImportConsignment": {
         "type": "object",
         "properties": {
+          "rail": {
+            "description": "The railway's note, where the box came inland by rail — held, never issued by us (rail-note.ts).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldRailNote"
+              }
+            ]
+          },
+          "formerRail": {
+            "description": "The notes it replaced, each kept as it was.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HeldRailNote"
+            }
+          },
           "importId": {
             "type": "string"
           },
@@ -44538,6 +45327,14 @@
                 "$ref": "#/components/schemas/ContainerBoxView"
               }
             ]
+          },
+          "rail": {
+            "description": "The railway's note with its check, and what it says of the box against ours.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RailNoteView"
+              }
+            ]
           }
         },
         "required": [
@@ -44655,6 +45452,125 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "RailwayRow": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conditions": {
+            "type": "string"
+          },
+          "particularsChecked": {
+            "type": "boolean",
+            "description": "Whether we have read what its note must carry."
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "countries",
+          "conditions",
+          "particularsChecked"
+        ]
+      },
+      "RailwayList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RailwayRow"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "RailCheckDto": {
+        "type": "object",
+        "properties": {
+          "railway": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "from": {
+            "type": "string",
+            "pattern": "/^[A-Za-z]{2}$/"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "/^[A-Za-z]{2}$/"
+          },
+          "madeOutOn": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "load": {
+            "type": "string",
+            "enum": [
+              "container",
+              "wagon",
+              "packages"
+            ]
+          },
+          "dangerous": {
+            "type": "boolean"
+          },
+          "printed": {
+            "type": "string",
+            "enum": [
+              "madeOut",
+              "consignor",
+              "consignee",
+              "carrier",
+              "from",
+              "takenOverOn",
+              "to",
+              "borderStations",
+              "goods",
+              "goodsCode",
+              "packing",
+              "dangerous",
+              "packages",
+              "marks",
+              "mass",
+              "massMethod",
+              "wagon",
+              "container",
+              "seals",
+              "documents",
+              "charges",
+              "transitPeriod",
+              "dates",
+              "noteNumber",
+              "statement",
+              "consignorSigned",
+              "carrierSigned"
+            ]
+          },
+          "electronic": {
+            "$ref": "#/components/schemas/RailElectronicDto"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "madeOutOn",
+          "load",
+          "printed"
         ]
       },
       "ReleaseDto": {
