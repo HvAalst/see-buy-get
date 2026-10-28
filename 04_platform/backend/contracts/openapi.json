@@ -19540,11 +19540,107 @@
         }
       }
     },
+    "/v1/sbg/fleet/drivers/{did}/cover": {
+      "post": {
+        "operationId": "Sbg.sendDriverCover",
+        "summary": "",
+        "description": "\"Do not wake me for less than this\", all in, for both bags and freight.\n\nA STANDING setting on the driver, not a filter on a search. The list views already had a minimum, but\nit was a box typed into the request — so the one surface that speaks first, the lock-screen nudge off\na GPS fix, had nothing to read and applied none. A driver could set a minimum, watch the list obey it,\nand still be interrupted at the wheel for a job beneath it.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendDriverCoverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/cover/record": {
+      "post": {
+        "operationId": "Sbg.recordDriverCover",
+        "summary": "",
+        "description": "Staff record a driver's cover off the policy the driver sent: what for, up to how much a load, until when.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordDriverCoverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/drivers/{did}/cover/refuse": {
+      "post": {
+        "operationId": "Sbg.refuseDriverCover",
+        "summary": "",
+        "description": "The policy a driver sent is not accepted, with the reason they are shown.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefuseLicenceRenewalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/fleet/drivers/{did}/carrier-place": {
       "post": {
         "operationId": "Sbg.setCarrierPlace",
         "summary": "",
-        "description": "\"Do not wake me for less than this\", all in, for both bags and freight.\n\nA STANDING setting on the driver, not a filter on a search. The list views already had a minimum, but\nit was a box typed into the request — so the one surface that speaks first, the lock-screen nudge off\na GPS fix, had nothing to read and applied none. A driver could set a minimum, watch the list obey it,\nand still be interrupted at the wheel for a job beneath it.",
+        "description": "Where a driver riding for themselves is, as the carrier on its notes: an address, or a pin of its station (2026-10-28).",
         "parameters": [
           {
             "name": "did",
@@ -53698,6 +53794,78 @@
           "at"
         ]
       },
+      "DriverCover": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "copyRef": {
+            "type": "string",
+            "description": "The policy the cover on record was read from. Absent: nothing on record counts as proof."
+          },
+          "covers": {
+            "type": "object"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "object",
+            "properties": {
+              "copyRef": {
+                "required": true,
+                "type": "string"
+              },
+              "expiresAt": {
+                "required": true,
+                "type": "string"
+              },
+              "reference": {
+                "required": false,
+                "type": "string"
+              },
+              "sentAt": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "refused": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "by": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "sent",
+          "refused"
+        ]
+      },
       "DriverPortrait": {
         "type": "object",
         "properties": {
@@ -53832,6 +54000,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/CarrierPlace"
+              }
+            ]
+          },
+          "cover": {
+            "description": "Riding for themselves: their own insurance cover, sent and read by staff (2026-10-28). A fleet's driver has the fleet's.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DriverCover"
               }
             ]
           },
@@ -55794,6 +55970,59 @@
             "description": "Round 24 — when the driver ended it, by the phone's clock: a shift ended with no signal waits on the phone."
           }
         }
+      },
+      "SendDriverCoverDto": {
+        "type": "object",
+        "properties": {
+          "copyRef": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "expiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "copyRef",
+          "expiresAt"
+        ]
+      },
+      "RecordDriverCoverDto": {
+        "type": "object",
+        "properties": {
+          "expiresAt": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}/"
+          },
+          "policy": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "covers": {
+            "type": "string",
+            "enum": [
+              "goods_in_transit",
+              "carrier_liability",
+              "both"
+            ]
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3
+          }
+        },
+        "required": [
+          "expiresAt"
+        ]
       },
       "CarrierStationDto": {
         "type": "object",

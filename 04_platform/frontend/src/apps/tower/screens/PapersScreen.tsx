@@ -15,6 +15,7 @@ import { paperDay, paperLine, papersToShow, renewalBlocker } from '../../../shar
 import { isStuck, type CourierContact, type CourierPaperRow, type LooseVehicleRow } from '../papers';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { tabAtTheTap } from '../../../shared/openPage';
+import { CourierCover } from './CourierCover';
 
 /**
  * FP4 — the papers only network staff can put right.
@@ -377,6 +378,8 @@ function CourierSheet({ row, state, actions, countryName }: { row: CourierPaperR
       </div>
 
       <LicenceSection row={row} state={state} actions={actions} />
+      {/* Their own insurance cover, sent from the Driver app: read and recorded here, or refused (2026-10-28). */}
+      <CourierCover row={row} state={state} actions={actions} />
 
       <section class="cons__panel">
         <div class="cons__panelhead">

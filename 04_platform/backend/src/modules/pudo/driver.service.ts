@@ -1,4 +1,4 @@
-import { driverPapers, lapsedOf, offRoadLine, paperLapsesAt } from './papers';
+import { driverPapers, lapsedOf, offRoadLine, paperLapsesAt, type CarrierCoverProof } from './papers';
 import { Injectable, Optional } from '@nestjs/common';
 import { MediaService } from './media.service';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -17,7 +17,7 @@ import { FleetManagerService } from './fleet-manager.service';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { NETWORK_CURRENCY, NETWORK_JURISDICTION } from './pudo.config';
-import { catalogueEntry } from '../../foundation/countries/catalogue';
+import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 
 interface RegisterDriverInput {
   displayName: string; // shop-floor label (non-PII)
@@ -908,6 +908,76 @@ export class DriverService {
     if (!address && !station) throw new GlosError('FIELD_REQUIRED', 'Give your business address, or pin the station you work from', { field: 'address' });
     driver.carrierPlace = { ...(address ? { address } : {}), ...(station ? { station } : {}), at: new Date(now).toISOString() };
     return driver;
+  }
+
+  /**
+   * A DRIVER RIDING FOR THEMSELVES SENDS THEIR INSURANCE POLICY (the user, 2026-10-28: "owner drivers should be able to show
+   * cover as well. Someone willing to invest in it should be rewarded for it"). The photograph, the expiry they read, the
+   * policy number: it waits for staff to read the same policy. A fleet's driver is covered by the fleet's, and is told so.
+   */
+  sendCover(did: string, input: { copyRef: string; expiresAt: string; reference?: string }, now = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    if (driver.managerDid) throw new GlosError('FORBIDDEN', 'A fleet’s driver is covered by the fleet’s insurance: the fleet’s office sends its policy from the Fleet app');
+    if (driver.status === 'SUSPENDED') throw new GlosError('INVALID_STATE', 'A suspended driver cannot send papers');
+    if (!input.expiresAt || paperLapsesAt(input.expiresAt) <= now) throw new GlosError('VALIDATION_FAILED', 'That date has already passed — a policy you send runs into the future', { field: 'expiresAt' });
+    if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so a policy cannot be sent');
+    if (!this.media.adopt(input.copyRef, did, { type: 'driver', id: did }, 'kyc_insurance')) throw new GlosError('PHOTO_REQUIRED', 'That photograph could not be attached — take it again');
+    const earlier = driver.cover?.sent?.copyRef;
+    if (earlier && earlier !== input.copyRef) this.media.purgeByOwner(earlier, did);
+    const reference = input.reference?.trim().slice(0, 120);
+    driver.cover = { ...(driver.cover ?? {}), sent: { copyRef: input.copyRef, expiresAt: input.expiresAt, ...(reference ? { reference } : {}), sentAt: new Date(now).toISOString() } };
+    delete driver.cover.refused;
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /**
+   * STAFF READ THE POLICY THEY SENT and record the cover off it: until when, what for, up to how much a load. Only a policy
+   * that was SENT can be recorded — the proof is the document, never somebody's word.
+   */
+  recordCover(did: string, input: { expiresAt: string; policy?: string; covers?: 'goods_in_transit' | 'carrier_liability' | 'both'; limit?: number; currency?: string }, by: string, now = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    const sent = driver.cover?.sent;
+    if (!sent) throw new GlosError('INVALID_STATE', 'No policy has been sent to read: cover counts only when it is read off the policy the driver sent');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(input.expiresAt) || paperLapsesAt(input.expiresAt) <= now) throw new GlosError('VALIDATION_FAILED', 'The expiry read off the policy is a day still to come, written YYYY-MM-DD', { field: 'expiresAt' });
+    const currency = input.currency?.trim().toUpperCase();
+    if (input.limit != null && (!(input.limit > 0) || !isKnownCurrency(currency))) throw new GlosError('VALIDATION_FAILED', 'A cover limit is an amount above nothing, in a currency some country uses — like KES or USD', { field: 'limit' });
+    const previous = driver.cover?.copyRef;
+    if (previous && previous !== sent.copyRef) this.media?.retireAccountDoc(previous, new Date(now));
+    const policy = (input.policy ?? sent.reference)?.trim().slice(0, 120);
+    driver.cover = {
+      ...(policy ? { policy } : {}),
+      expiresAt: input.expiresAt,
+      copyRef: sent.copyRef,
+      ...(input.covers ? { covers: input.covers } : {}),
+      ...(input.limit != null ? { limit: Math.round(input.limit), currency: currency! } : {}),
+      recordedBy: by,
+      recordedAt: new Date(now).toISOString(),
+    };
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /** The policy they sent is not accepted, with a reason they are shown. The photograph is deleted: nothing rests on it. */
+  refuseCover(did: string, reason: string, by?: string, now = Date.now()): FleetDriver {
+    const driver = this.require(did);
+    const sent = driver.cover?.sent;
+    if (!sent) throw new GlosError('INVALID_STATE', 'Nothing has been sent to refuse');
+    const why = reason?.trim();
+    if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the driver is shown it');
+    this.media?.purgeByOwner(sent.copyRef, did);
+    const { sent: _gone, ...kept } = driver.cover!;
+    driver.cover = { ...kept, refused: { reason: why, at: new Date(now).toISOString(), ...(by ? { by } : {}) } };
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /** Their cover, proven: read off the policy they sent, and still running. Nothing otherwise — and nothing for a fleet's driver. */
+  coverOf(did: string, now = Date.now()): CarrierCoverProof | undefined {
+    const d = this.drivers.get(did);
+    const c = d?.cover;
+    if (!d || d.managerDid || !c?.copyRef || !c.expiresAt || paperLapsesAt(c.expiresAt) <= now) return undefined;
+    return { ...(c.policy ? { policy: c.policy } : {}), expiresAt: c.expiresAt, ...(c.covers ? { covers: c.covers } : {}), ...(c.limit != null && c.currency ? { limit: c.limit, currency: c.currency } : {}), ...(c.recordedAt ? { checkedAt: c.recordedAt } : {}) };
   }
 
   setNudgeMinEarn(did: string, amount?: number): FleetDriver {

@@ -1047,6 +1047,11 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Record a courier's renewed licence — the new date is the whole of the renewal. */
     renewLicence: (did: string, body: { number?: string; expiresAt: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence', { params: { path: { did } }, body: body as never })),
+    /** A courier's own insurance cover, read off the policy they sent (2026-10-28); or the policy refused, with the reason. */
+    recordCourierCover: (did: string, body: { expiresAt: string; policy?: string; covers?: 'goods_in_transit' | 'carrier_liability' | 'both'; limit?: number; currency?: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/cover/record', { params: { path: { did } }, body: body as never })),
+    refuseCourierCover: (did: string, body: { reason: string }) =>
+      sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/cover/refuse', { params: { path: { did } }, body: body as never })),
     /** The renewed card a courier sent is not accepted — with the reason they are shown. */
     refuseLicenceRenewal: (did: string, body: { reason: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/licence-renewal/refuse', { params: { path: { did } }, body: body as never })),

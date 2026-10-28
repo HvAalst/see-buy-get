@@ -119,6 +119,29 @@ describe('the yearly security declaration — over the wire', () => {
     expect(placed.carrierPlace).toMatchObject({ station: { lat: -1.28333, lng: 36.81667, label: 'Kencom stage' } });
     expect((await http().get(`/v1/sbg/fleet/drivers/${rider.did}`).set(riderToken).expect(200)).body.carrierPlace).toMatchObject({ station: { label: 'Kencom stage' } });
 
+    // Riding for themselves, the rider may prove their OWN cover (the user, 2026-10-28: "Someone willing to invest in it
+    // should be rewarded for it"): sent from the app, read by staff — and then a load that asks for cover is open to them.
+    const coverAt = `/v1/sbg/fleet/drivers/${rider.did}/cover`;
+    const board = app.get(DispatchService);
+    const coverLoad = board.registerFreight({ description: 'Phones, 2 boxes', pickupLocation: { lat: -1.29, lng: 36.82 }, pickupLabel: 'Kencom', destLabel: 'Westlands', destLocation: { lat: -1.26, lng: 36.8 }, weightKg: 5, coverRequired: true });
+    const coverBlock = () => board.board({ driverDid: rider.did, from: { lat: -1.29, lng: 36.82 } }).find((r) => r.freightId === coverLoad.freightId)?.blockers.find((b) => b.code === 'COVER_REQUIRED')?.message;
+    expect(coverBlock()).toBe('The sender asks for a carrier whose insurance cover SeeBuyGet has checked: you have none on record that is still running. Send your policy from the Driver app.');
+    const inAYear = new Date(Date.now() + 365 * 86_400_000).toISOString().slice(0, 10);
+    const policy = app.get(MediaService).upload({ ownerDid: rider.did, kind: 'kyc_insurance', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' }).mediaId;
+    await http().post(coverAt).set(staff).send({ copyRef: policy, expiresAt: inAYear }).expect(403);
+    expect((await http().post(`${coverAt}/record`).set(staff).send({ expiresAt: inAYear }).expect(400)).body.detail).toMatch(/No policy has been sent/);
+    await http().post(coverAt).set(riderToken).send({ copyRef: policy, expiresAt: inAYear, reference: 'GIT-R-9' }).expect(201);
+    await http().post(`${coverAt}/record`).set(riderToken).send({ expiresAt: inAYear }).expect(403);
+    // Sent is not proof: still closed until staff have read it.
+    expect(coverBlock()).toBeDefined();
+    await http().post(`${coverAt}/record`).set(staff).send({ expiresAt: inAYear, limit: 300000, currency: 'KSH' }).expect(400);
+    const recorded = (await http().post(`${coverAt}/record`).set(staff).send({ expiresAt: inAYear, covers: 'goods_in_transit', limit: 300000, currency: 'KES' }).expect(201)).body;
+    expect(recorded.proven).toMatchObject({ policy: 'GIT-R-9', covers: 'goods_in_transit', limit: 300000, currency: 'KES' });
+    expect(coverBlock()).toBeUndefined();
+    // …until it runs out: the day after, the load is closed to them again, with nobody withdrawing anything.
+    expect(board.board({ driverDid: rider.did, from: { lat: -1.29, lng: 36.82 } }, Date.now() + 400 * 86_400_000).find((r) => r.freightId === coverLoad.freightId)?.blockers.map((x) => x.code)).toContain('COVER_REQUIRED');
+    expect((await http().get(`/v1/sbg/fleet/drivers/${rider.did}`).set(riderToken).expect(200)).body.cover).toMatchObject({ policy: 'GIT-R-9', expiresAt: inAYear });
+
     // A fleet's office signs for the fleet, from its own sign-in.
     const managers = app.get(FleetManagerService);
     const v = digits();
@@ -179,6 +202,8 @@ describe('the yearly security declaration — over the wire', () => {
     await http().post(`/v1/sbg/fleet/drivers/${driver.did}/start-session`).set(bearer(session.body.token.access_token)).send({ vehicleId: truck.vehicleId, pin: '48261' }).expect(201);
     // A fleet's driver carries for the fleet: its depot is the carrier's address, and the driver is never asked for one.
     expect((await http().post(`/v1/sbg/fleet/drivers/${driver.did}/carrier-place`).set(bearer(session.body.token.access_token)).send({ address: 'Home' }).expect(403)).body.detail).toMatch(/the fleet’s depot is the carrier’s address/);
+    // …and is covered by the fleet's insurance, never by a policy of their own.
+    expect((await http().post(`/v1/sbg/fleet/drivers/${driver.did}/cover`).set(bearer(session.body.token.access_token)).send({ copyRef: 'med_x', expiresAt: '2031-01-01' }).expect(403)).body.detail).toMatch(/covered by the fleet’s insurance/);
     const dispatch = app.get(DispatchService);
     const load = dispatch.registerFreight({ description: 'Cement, 40 bags', pickupLocation: { lat: -1.3, lng: 36.85 }, pickupLabel: 'Bamburi depot', destLabel: 'Site 7', destLocation: { lat: -1.25, lng: 36.9 }, weightKg: 2000, packaging: 'palletised' } as never);
     const assign = () => {

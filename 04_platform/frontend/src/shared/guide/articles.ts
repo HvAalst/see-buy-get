@@ -132,7 +132,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'fleet-plan', apps: ['fleet'], group: 'freight', steps: 8, notes: ['why', 'note', 'note', 'why', 'note', 'note', 'why', 'why', 'note', 'note'] },
   { id: 'fleet-plan-adviser', apps: ['fleet'], group: 'freight', steps: 6, notes: ['note', 'note', 'note', 'note', 'why'] },
   { id: 'fleet-partners', apps: ['fleet'], group: 'freight', steps: 8, notes: ['note', 'note', 'note', 'rare'] },
-  { id: 'papers-that-expire', apps: ['fleet', 'driver', 'console'], group: 'account', steps: 6, notes: ['why', 'why', 'rare', 'note'] },
+  { id: 'papers-that-expire', apps: ['fleet', 'driver', 'console'], group: 'account', steps: 6, notes: ['why', 'why', 'rare', 'note', 'note'] },
   { id: 'hand-back', apps: ['driver', 'agent', 'fleet'], group: 'freight', steps: 4, notes: ['note'] },
   { id: 'hours-of-service', apps: ['driver', 'fleet'], group: 'freight', steps: 6, notes: ['why'] },
   { id: 'when-to-change', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'home', 'console'], group: 'account', site: true, steps: 2, notes: ['careful'] },

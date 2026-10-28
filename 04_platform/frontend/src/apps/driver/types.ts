@@ -39,6 +39,8 @@ export interface DriverRecord {
   managerDid?: string;
   /** Riding for themselves: where they are as the carrier on their notes — an address, or a pin of their station. */
   carrierPlace?: { address?: string; station?: { lat: number; lng: number; label?: string }; at: string };
+  /** Riding for themselves: their own insurance cover — a policy sent and waiting, refused, or read and on record. */
+  cover?: { policy?: string; expiresAt?: string; copyRef?: string; covers?: string; limit?: number; currency?: string; recordedAt?: string; sent?: { copyRef: string; expiresAt: string; reference?: string; sentAt: string }; refused?: { reason: string; at: string; by?: string } };
   /** The fleet's name, when a fleet employs them — what the account menu says they drive for. */
   fleetName?: string;
   /**

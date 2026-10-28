@@ -476,7 +476,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     // Riding for themselves, the driver is the carrier: its address, or the station it pinned (2026-10-28).
     const place = own?.carrierPlace;
     const address = place?.address ?? (place?.station ? `Station${place.station.label ? ` ${place.station.label}` : ''} at ${place.station.lat.toFixed(5)}, ${place.station.lng.toFixed(5)}` : undefined);
-    return { name: driverName ?? 'Carrier', ...(address ? { address } : {}), ...(jurisdiction ? { country: countryName(jurisdiction) } : {}), did: f.claimedBy, ...(driverName ? { driverName } : {}), ...vehicle };
+    const ownCover = this.drivers.coverOf?.(f.claimedBy);
+    return { name: driverName ?? 'Carrier', ...(address ? { address } : {}), ...(jurisdiction ? { country: countryName(jurisdiction) } : {}), did: f.claimedBy, ...(driverName ? { driverName } : {}), ...vehicle, ...(ownCover ? { cover: coverLine(ownCover) } : {}) };
   }
 
   /**

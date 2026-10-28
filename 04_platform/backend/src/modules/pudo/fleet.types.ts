@@ -392,6 +392,27 @@ export class CourierAsk {
   askedAt: string;
 }
 
+/**
+ * A DRIVER RIDING FOR THEMSELVES, AND THEIR OWN COVER (the user, 2026-10-28: "owner drivers should be able to show cover as
+ * well. Someone willing to invest in it should be rewarded for it"). The policy they SENT, waiting to be read; and the cover
+ * as staff read it off that policy — what for, up to how much a load, until when. Only what was read off a sent policy counts.
+ */
+export class DriverCover {
+  @ApiPropertyOptional() policy?: string;
+  @ApiPropertyOptional() expiresAt?: string;
+  /** The policy the cover on record was read from. Absent: nothing on record counts as proof. */
+  @ApiPropertyOptional() copyRef?: string;
+  @ApiPropertyOptional() covers?: 'goods_in_transit' | 'carrier_liability' | 'both';
+  @ApiPropertyOptional() limit?: number;
+  @ApiPropertyOptional() currency?: string;
+  @ApiPropertyOptional() recordedBy?: string;
+  @ApiPropertyOptional() recordedAt?: string;
+  /** The policy they sent and nobody has read yet. Its date is their own reading, and switches nothing on. */
+  @ApiPropertyOptional() sent?: { copyRef: string; expiresAt: string; reference?: string; sentAt: string };
+  /** Why the last policy they sent was not accepted, in staff's words. */
+  @ApiPropertyOptional() refused?: { reason: string; at: string; by?: string };
+}
+
 /** A carrier's address, or the pin of the station it works from — one or both. */
 export class CarrierPlace {
   @ApiPropertyOptional() address?: string;
@@ -450,6 +471,8 @@ export class FleetDriver {
    * fleet's depot, and asking where a fleet driver lives would be data for a payment we never make.
    */
   @ApiPropertyOptional({ type: () => CarrierPlace }) carrierPlace?: CarrierPlace;
+  /** Riding for themselves: their own insurance cover, sent and read by staff (2026-10-28). A fleet's driver has the fleet's. */
+  @ApiPropertyOptional({ type: () => DriverCover }) cover?: DriverCover;
   vaultRef: string; // Golden Record PII (name, national ID, mobile) in the vault — never in the core
   displayName: string; // non-PII shop-floor label (e.g. "Driver J.")
   badgeId?: string; // scannable handover badge — issued on activation

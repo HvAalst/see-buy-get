@@ -37,7 +37,11 @@ describe('the consignment note', () => {
   const service = new ConsignmentNoteService(
     // Nothing said on the road yet (round 14): no border, no hub.
     { requireFreightPublic: (id: string) => freights[id] ?? (() => { throw new Error('not found'); })(), passageFacts: () => ({}) } as never,
-    { get: (did: string) => ({ displayName: 'Amos K.', managerDid: did === 'did:drv:amos' ? 'did:fleet:kilima' : undefined, jurisdiction: 'KE', ...(did === 'did:drv:stage' ? { carrierPlace: { station: { lat: -1.28333, lng: 36.81667, label: 'Kencom stage' }, at: '2026-10-28T10:00:00Z' } } : {}) }) } as never,
+    {
+      get: (did: string) => ({ displayName: 'Amos K.', managerDid: did === 'did:drv:amos' ? 'did:fleet:kilima' : undefined, jurisdiction: 'KE', ...(did === 'did:drv:stage' ? { carrierPlace: { station: { lat: -1.28333, lng: 36.81667, label: 'Kencom stage' }, at: '2026-10-28T10:00:00Z' } } : {}) }),
+      // Riding for themselves with their own cover, proven (2026-10-28).
+      coverOf: (did: string) => (did === 'did:drv:stage' ? { policy: 'GIT-R-9', expiresAt: '2027-10-28', covers: 'goods_in_transit', limit: 300000, currency: 'KES', checkedAt: '2026-10-28T11:00:00Z' } : undefined),
+    } as never,
     { get: (did: string) => (did === 'did:fleet:jenga' ? { companyName: 'Jenga Freight', depotAddress: 'Enterprise Rd 4', jurisdiction: 'KE', did } : { companyName: 'Kilima Logistics', depotAddress: '1 Depot Rd', jurisdiction: 'KE', did: 'did:fleet:kilima' }) } as never,
     { get: (did: string) => ({ shopName: did === 'did:shop:a1' ? 'Mama Sarah Shop' : 'Riverside Corner', landmark: 'Next to the market', country: 'KE', did }) } as never,
     { has: (id: string) => id === 'ven_1', get: () => ({ did: 'did:store', name: 'Nairobi Threads', address: 'Biashara St 12', country: 'KE' }) } as never,
@@ -239,6 +243,8 @@ describe('the consignment note', () => {
     expect(service.htmlFor(n)).toContain('<span class="empty">Address not recorded</span>');
     // Riding for themselves with no address but a pinned station: the station is the carrier's address (2026-10-28).
     expect(service.build(base({ claimedBy: 'did:drv:stage', carrierDid: undefined } as never)).carrier?.address).toBe('Station Kencom stage at -1.28333, 36.81667');
+    // …and their own cover beside them, as a fleet's is.
+    expect(service.build(base({ claimedBy: 'did:drv:stage', carrierDid: undefined } as never)).carrier?.cover).toBe('Insurance cover: goods in transit up to 300,000 KES a load, policy GIT-R-9, valid until 2027-10-28 — checked by SeeBuyGet on 2026-10-28');
     // A fleet with its depot: its address, and nothing said of a gap.
     const fleet = service.build(base({}));
     expect(fleet.carrier?.address).toBe('1 Depot Rd');

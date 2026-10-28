@@ -298,6 +298,9 @@ export interface TowerActions {
   recordCourierLicence(did: string, body: { number?: string; expiresAt: string }, name: string): Promise<void>;
   /** FP4 — the card a courier sent is not accepted, with the reason they are shown. */
   refuseLicenceRenewal(did: string, reason: string, name: string): Promise<void>;
+  /** A courier's own insurance cover, read off the policy they sent — or the policy refused, with the reason (2026-10-28). */
+  recordCourierCover(did: string, body: { expiresAt: string; policy?: string; covers?: 'goods_in_transit' | 'carrier_liability' | 'both'; limit?: number; currency?: string }, name: string): Promise<void>;
+  refuseCourierCover(did: string, reason: string, name: string): Promise<void>;
   /** Round 40 — the date a shop's trading licence runs to, read off it; and a renewed one sent back with the reason it is shown. */
   recordShopLicence(did: string, expiresAt: string, name: string): Promise<void>;
   refuseShopLicence(did: string, reason: string, name: string): Promise<void>;
@@ -2039,6 +2042,30 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.shopLicences.refusedDone', { name }) }));
+        await loadPapers(client);
+      },
+      recordCourierCover: async (did, body, name) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, queueError: null, done: null }));
+        const { error } = await client.api.recordCourierCover(did, body);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.courierCover.recordedDone', { name }) }));
+        await loadPapers(client);
+      },
+      refuseCourierCover: async (did, reason, name) => {
+        const client = clientRef.current;
+        if (!client) return;
+        setState((s) => ({ ...s, busyId: did, queueError: null, done: null }));
+        const { error } = await client.api.refuseCourierCover(did, { reason });
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, openId: null, done: t('tower.courierCover.refusedDone', { name }) }));
         await loadPapers(client);
       },
       /** FP4 — the card is not accepted. The reason is the courier's to read, so the server insists on one. */

@@ -60,6 +60,8 @@ export interface CourierPaperRow {
   renewal?: { copyRef: string; expiresAt: string; number?: string; sentAt: string };
   /** Why the last card they sent was not accepted — so the next member of staff knows what was asked. */
   renewalRefusal?: { reason: string; at: string; by?: string };
+  /** Their own insurance cover (2026-10-28): a policy sent and waiting to be read, and the cover on record. */
+  cover?: { sent?: { copyRef: string; expiresAt: string; reference?: string; sentAt: string }; refused?: { reason: string; at: string; by?: string }; policy?: string; expiresAt?: string; copyRef?: string; covers?: string; limit?: number; currency?: string; recordedBy?: string; recordedAt?: string };
   /**
    * The licence and ID the driver actually submitted, so a new expiry date is typed while LOOKING at the
    * document it came from.
@@ -314,6 +316,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
           },
           ...(d.licenceRenewal ? { renewal: { ...d.licenceRenewal } } : {}),
           ...(d.licenceRenewalRefusal ? { renewalRefusal: { ...d.licenceRenewalRefusal } } : {}),
+          ...(d.cover ? { cover: { ...d.cover } } : {}),
           ...(d.kyc ? { documents: { licenceCopyRef: d.kyc.licenceCopyRef, idCopyRef: d.kyc.idCopyRef, submittedAt: d.kyc.submittedAt } } : {}),
           papers,
           offRoad: lapsedOf(papers).map(offRoadLine),
@@ -323,7 +326,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       })
       // A card waiting to be read comes first: that courier has done their part and is waiting on us.
       // Then worst first, as before — lapsed, running out, undated, in date.
-      .sort((a, b) => Number(Boolean(b.renewal)) - Number(Boolean(a.renewal)) || worst(a.papers) - worst(b.papers) || a.displayName.localeCompare(b.displayName));
+      .sort((a, b) => Number(Boolean(b.renewal || b.cover?.sent)) - Number(Boolean(a.renewal || a.cover?.sent)) || worst(a.papers) - worst(b.papers) || a.displayName.localeCompare(b.displayName));
     const vehicles: LooseVehicleRow[] = this.vehicles
       .list()
       .filter((v) => !v.managerDid && v.status !== 'RETIRED')

@@ -4537,8 +4537,10 @@ export class DispatchService {
     if (!f?.coverRequired) return undefined;
     const carrier = this.carrierDidOf(driverDid);
     if (carrier !== driverDid && this.managers?.coverOf(carrier, now)) return undefined;
+    // Riding for themselves, the driver is the carrier: their own cover, proven, opens it (2026-10-28).
+    if (carrier === driverDid && this.drivers.coverOf(driverDid, now)) return undefined;
     return carrier === driverDid
-      ? 'The sender asks for a carrier whose insurance cover SeeBuyGet has checked. A driver riding for themselves cannot show cover yet.'
+      ? 'The sender asks for a carrier whose insurance cover SeeBuyGet has checked: you have none on record that is still running. Send your policy from the Driver app.'
       : 'The sender asks for a carrier whose insurance cover SeeBuyGet has checked: your fleet has none on record that is still running. Your office sends the policy from the Fleet app.';
   }
 

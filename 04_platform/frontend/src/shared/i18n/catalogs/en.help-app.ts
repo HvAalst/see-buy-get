@@ -467,6 +467,7 @@ export const enHelpApp = {
   'help.papers-that-expire.note1': 'Nothing is written into a record as “grounded”: the date is the switch in both directions, so a renewal takes effect the moment it is recorded and there is nothing to unwind.',
   'help.papers-that-expire.note2': 'A card a driver sent is opened by the office of the fleet they drive for and by network staff — not by another fleet, and not by a colleague. A card that is not accepted is deleted at once; one that is recorded is kept as the licence’s own copy, and replaces the one before it.',
   'help.papers-that-expire.note4': 'A sender can ask for a carrier with insurance cover. Your carrier insurance counts once SeeBuyGet has read it off the policy you sent, with what it covers and up to how much a load: from then until it lapses, loads that ask for cover are open to your drivers, and their consignment notes name the cover. Without it, those loads say why they are closed.',
+  'help.papers-that-expire.note5': 'Riding for yourself, you can show your own insurance cover: send your policy from the Driver app, under Your insurance cover. Once SeeBuyGet has read it, loads whose sender asks for cover are open to you until it runs out, and your consignment notes name it. A fleet’s driver is covered by the fleet’s policy.',
   'help.papers-that-expire.note3': 'A driver who is in no fleet — taken off one, or left — has nobody to send a card to, and cannot start a shift until a fleet offers them a place.',
   // hand-back
   'help.hand-back.title': 'Hand a load back before pickup',

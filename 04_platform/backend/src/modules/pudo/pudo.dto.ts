@@ -2360,6 +2360,22 @@ export class SendLicenceRenewalDto {
  * FP4 — the card they sent is not accepted. Type only: an empty reason is refused by the SERVICE, in the
  * sentence the courier is shown, not by a decorator that would answer in its own words instead.
  */
+/** A driver riding for themselves sends their insurance policy: its photograph, the expiry they read off it, its number. */
+export class SendDriverCoverDto {
+  @IsString() @MaxLength(64) copyRef!: string;
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) expiresAt!: string;
+  @IsOptional() @IsString() @MaxLength(120) reference?: string;
+}
+
+/** Staff record a driver's cover as they read it off the policy the driver sent. */
+export class RecordDriverCoverDto {
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}/) expiresAt!: string;
+  @IsOptional() @IsString() @MaxLength(120) policy?: string;
+  @IsOptional() @IsIn(['goods_in_transit', 'carrier_liability', 'both']) covers?: 'goods_in_transit' | 'carrier_liability' | 'both';
+  @IsOptional() @IsNumber() @Min(1) limit?: number;
+  @IsOptional() @IsString() @MaxLength(3) currency?: string;
+}
+
 export class RefuseLicenceRenewalDto {
   @IsString() @MaxLength(500) reason!: string;
   @IsOptional() @IsString() @MaxLength(120) by?: string;

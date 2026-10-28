@@ -690,6 +690,10 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/fleet/drivers/:did/min-earn': 'support',
   // Where a carrier riding for itself works from, for its notes: its own to give, never staff's.
   'POST sbg/fleet/drivers/:did/carrier-place': 'none',
+  // A driver's own policy, sent by them; read and recorded, or refused, by staff who vet papers.
+  'POST sbg/fleet/drivers/:did/cover': 'none',
+  'POST sbg/fleet/drivers/:did/cover/record': 'vetting',
+  'POST sbg/fleet/drivers/:did/cover/refuse': 'vetting',
   'POST sbg/fleet/drivers/:did/ping': 'support',
   'POST sbg/fleet/drivers/:did/rest/tell-me': 'support',
   'POST sbg/fleet/drivers/:did/resume': 'support',
