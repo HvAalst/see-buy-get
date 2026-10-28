@@ -67,9 +67,10 @@ describe('the places a company keeps', () => {
      * THREE, and they are the chain a container travels: the quay, the counter, the yard. The middle
      * one arrived when the user asked how a landlocked import is shown — a reefer discharged at
      * Djibouti and cleared at Modjo is two places and therefore two legs, and a model with one "port"
-     * on it cannot say that.
+     * on it cannot say that. And a FOURTH for the other direction (2026-10-27, exports to the port): `loading`, where an
+     * export box is stuffed — the exporter's own warehouse, the start of the road to the terminal.
      */
-    expect([...SITE_KINDS]).toEqual(['port', 'clearance', 'delivery']);
+    expect([...SITE_KINDS]).toEqual(['port', 'clearance', 'delivery', 'loading']);
   });
 });
 

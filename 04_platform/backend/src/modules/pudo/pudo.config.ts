@@ -96,6 +96,9 @@ export const DOOR_LOAD_REMIND_H = 24;
 export const DOOR_PAY_WINDOW_MIN = 15;
 export const DOOR_MAX_KM = 100;
 
+/** Hours added to the road for a laden export box to queue and gate in at a terminal before the cut-off (2026-10-27). */
+export const EXPORT_GATE_BUFFER_H = 4;
+
 /** A load settled between the parties, delivered this long ago and not said paid: its carrier is asked, once, whether it was (2026-10-27). */
 export const PAID_DIRECT_ASK_H = 72;
 

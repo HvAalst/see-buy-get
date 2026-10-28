@@ -424,6 +424,7 @@ export const enTowerBusiness = {
   'tower.sites.addDelivery': '＋ New place',
   'tower.sites.name': 'Call it',
   'tower.sites.nameDeliveryPh': 'Our warehouse',
+  'tower.sites.nameLoadingPh': 'Our warehouse — loading bay',
   'tower.sites.byPin': 'Pin it on a map',
   'tower.sites.byAddress': 'Write an address',
   'tower.sites.mapLabel': 'Tap the map where the truck should go',

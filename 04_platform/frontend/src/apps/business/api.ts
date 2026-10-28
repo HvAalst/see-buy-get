@@ -7,6 +7,7 @@ import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels }
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
 import { inboundApi, type InboundApi } from './inbound';
+import { exportsApi, type ExportsApi } from './exports';
 import type { QuoteView } from '../../shared/quote';
 import type { ArrivalView, CrossingView, PassageView } from '../../shared/passages';
 import type { SealView } from '../../shared/seals';
@@ -343,6 +344,8 @@ export interface BusinessClient {
   notifications: NotificationsApi;
   /** Inbound, reading A: its receiving points, and what is coming in to them. */
   inbound: InboundApi;
+  /** Exports to the port (2026-10-27): the booking's cut-off, the legs to the terminal, the weight, the papers, the file. */
+  exports: ExportsApi;
   client: SeededAppClient;
   postLoad(load: NewLoad): Promise<Result<PostedLoad & { settlement?: string }>>;
   freightQuote(freightId: string): Promise<Result<{ quote: QuoteView | null }>>;
@@ -416,6 +419,7 @@ export function createBusinessClient(): BusinessClient {
     shipping: createAgentApi(client.sbg),
     notifications: createNotificationsApi(client.sbg),
     inbound: inboundApi(client.sbg),
+    exports: exportsApi(client.sbg),
     client,
     postLoad: (load) => call((c) => c.POST('/v1/sbg/dispatch/freight' as never, { body: load } as never) as never),
     freightQuote: (freightId) => call((c) => c.GET(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/quote` as never, {} as never) as never),

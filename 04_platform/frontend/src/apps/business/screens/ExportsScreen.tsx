@@ -1,0 +1,521 @@
+import { useCallback, useEffect, useState } from 'preact/hooks';
+import { DocumentButton } from '../../../shared/ui';
+import { useT, type MessageKey } from '../../../shared/i18n';
+import { ConsolePick } from '../../tower/ConsolePick';
+import { SitePicker } from '../../tower/screens/SitePicker';
+import type { BusinessClient, BusinessView } from '../api';
+import { fromUtcInput, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperKey, type ExportRow } from '../exports';
+import { mayAct } from '../logic';
+
+type Problem = { detail?: string; title: string } | null | undefined;
+
+/** A leg's state in words, never the machine's own. */
+const LEG_WORD: Record<string, MessageKey> = {
+  scheduled: 'business.exports.leg.scheduled',
+  available: 'business.exports.leg.available',
+  claimed: 'business.exports.leg.claimed',
+  in_transit: 'business.exports.leg.in_transit',
+  delivered: 'business.exports.leg.delivered',
+  cancelled: 'business.exports.leg.cancelled',
+};
+const sayProblem = (e: Problem) => (e ? e.detail || e.title : null);
+
+const PAPER_WORD: Record<ExportPaperKey, MessageKey> = {
+  commercial_invoice: 'business.exports.paper.commercial_invoice',
+  packing_list: 'business.exports.paper.packing_list',
+  certificate_of_origin: 'business.exports.paper.certificate_of_origin',
+  export_entry: 'business.exports.paper.export_entry',
+};
+
+/**
+ * EXPORTS TO THE PORT (the user, 2026-10-27: "The missing for goods going to a port should be build"). The business's own
+ * exports: its forwarder's booking and the gate cut-off, the empty out, the box stuffed and sealed, the load to the
+ * terminal, the verified gross mass, the papers, and the file its forwarder takes at the gate. SeeBuyGet books no ship.
+ */
+export function ExportsScreen({ business, client }: { business: BusinessView; client: BusinessClient | null }) {
+  const t = useT();
+  const works = mayAct(business.you.role);
+  const [rows, setRows] = useState<ExportRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [forming, setForming] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!client) return;
+    const r = await client.exports.list();
+    if (r.error) setError(sayProblem(r.error));
+    else setRows(r.data?.items ?? []);
+  }, [client]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <div class="cons__page">
+      <header class="cons__head">
+        <h1 class="cons__title">{t('business.exports.title')}</h1>
+        <p class="cons__lede">{t('business.exports.lede')}</p>
+      </header>
+      {error ? <p class="cerr">{error}</p> : null}
+
+      {works && client && !forming ? (
+        <div class="twr-panelend">
+          <button type="button" class="cbtn cbtn--primary" onClick={() => setForming(true)}>
+            {t('business.exports.record')}
+          </button>
+        </div>
+      ) : null}
+      {forming && client ? (
+        <RegisterExport
+          business={business}
+          client={client}
+          onDone={async (exportId) => {
+            setForming(false);
+            await load();
+            if (exportId) setOpenId(exportId);
+          }}
+        />
+      ) : null}
+
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('business.exports.listTitle')}</span>
+        </div>
+        {rows === null ? (
+          <p class="cons__empty">{t('business.loading')}</p>
+        ) : rows.length === 0 ? (
+          <p class="cons__empty">{t('business.exports.none')}</p>
+        ) : (
+          <div class="crows">
+            {rows.map((r) => {
+              const tag = timingTag(r.timing, t);
+              return (
+                <button type="button" class="crow" key={r.exportId} onClick={() => setOpenId(openId === r.exportId ? null : r.exportId)} aria-expanded={openId === r.exportId}>
+                  <span class="crow__body">
+                    <span class="crow__top">
+                      <span class="crow__name">
+                        {r.code} — {r.goodsDescription}
+                      </span>
+                      <span class={`ctag ctag--${tag.tone}`}>{tag.word}</span>
+                    </span>
+                    <span class="crow__sub">{t('business.exports.rowLine', { port: r.loadingPort, booking: r.bookingReference, cutoff: utcWords(r.gateCutoffAt) })}</span>
+                    {r.missing ? <span class="crow__sub">{t('business.exports.rowMissing', { n: r.missing })}</span> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {openId && client ? <ExportPanel key={openId} exportId={openId} business={business} client={client} works={works} onChanged={load} /> : null}
+    </div>
+  );
+}
+
+/** The goods, the box, the forwarder's booking with its cut-offs, and the three places. */
+function RegisterExport({ business, client, onDone }: { business: BusinessView; client: BusinessClient; onDone: (exportId?: string) => void | Promise<void> }) {
+  const t = useT();
+  const [form, setForm] = useState({ goods: '', from: business.country ?? '', to: '', port: '', box: '', reference: '', bookedWith: 'forwarder' as 'forwarder' | 'shipping_line', party: '', vessel: '', voyage: '', gateCutoff: '', vgmCutoff: '', docsCutoff: '', release: '' });
+  const [sites, setSites] = useState({ loading: '', terminal: '', depot: '' });
+  const [boxes, setBoxes] = useState<Array<{ code: string; label: string }>>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const set = (k: keyof typeof form) => (e: Event) => setForm({ ...form, [k]: (e.target as HTMLInputElement).value });
+
+  useEffect(() => {
+    void client.api.containerTypes().then((r) => {
+      const items = (r.data as { items?: Array<{ code: string; label: string }> } | undefined)?.items ?? [];
+      setBoxes(items);
+    });
+  }, [client]);
+
+  const send = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await client.exports.register({
+      goodsDescription: form.goods.trim(),
+      originCountry: form.from.trim(),
+      destCountry: form.to.trim(),
+      loadingPort: form.port.trim(),
+      containerType: form.box.trim(),
+      booking: {
+        reference: form.reference.trim(),
+        bookedWith: form.bookedWith,
+        partyName: form.party.trim(),
+        ...(form.vessel.trim() ? { vessel: form.vessel.trim() } : {}),
+        ...(form.voyage.trim() ? { voyage: form.voyage.trim() } : {}),
+        gateCutoffAt: fromUtcInput(form.gateCutoff) ?? '',
+        ...(fromUtcInput(form.vgmCutoff) ? { vgmCutoffAt: fromUtcInput(form.vgmCutoff) } : {}),
+        ...(fromUtcInput(form.docsCutoff) ? { docsCutoffAt: fromUtcInput(form.docsCutoff) } : {}),
+        ...(form.release.trim() ? { emptyReleaseRef: form.release.trim() } : {}),
+      },
+      loadingSiteId: sites.loading,
+      terminalSiteId: sites.terminal,
+      ...(sites.depot ? { emptyDepotSiteId: sites.depot } : {}),
+    });
+    setBusy(false);
+    if (r.error) return setError(sayProblem(r.error));
+    await onDone(r.data?.exportId);
+  };
+
+  const field = (k: keyof typeof form, label: MessageKey, extra: Record<string, string> = {}) => (
+    <label class="cfield">
+      <span class="cfield__label">{t(label)}</span>
+      <input class="cinput" value={form[k]} onInput={set(k)} {...extra} />
+    </label>
+  );
+  const api = client.api as never;
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('business.exports.f.title')}</span>
+      </div>
+      <p class="chint">{t('business.exports.f.hint')}</p>
+      {field('goods', 'business.exports.f.goods', { maxLength: '300' })}
+      <div class="biz-two">
+        {field('from', 'business.exports.f.from', { maxLength: '2', placeholder: 'KE' })}
+        {field('to', 'business.exports.f.to', { maxLength: '2', placeholder: 'NL' })}
+      </div>
+      <div class="biz-two">
+        {field('port', 'business.exports.f.port', { maxLength: '80', placeholder: 'Mombasa' })}
+        <div class="twr-knob">
+          <ConsolePick label={t('business.exports.f.box')} value={form.box} onChange={(box) => setForm({ ...form, box })} options={boxes.map((b) => ({ value: b.code, label: b.code, sub: b.label }))} placeholder="45G1" allowFree={(typed) => (/^[A-Za-z0-9]{4}$/.test(typed) ? typed.toUpperCase() : null)} />
+        </div>
+      </div>
+      <h3 class="cons__sub">{t('business.exports.f.bookingTitle')}</h3>
+      <p class="chint">{t('business.exports.f.bookingHint')}</p>
+      <div class="biz-two">
+        {field('reference', 'business.exports.f.reference', { maxLength: '60' })}
+        <label class="cfield">
+          <span class="cfield__label">{t('business.exports.f.bookedWith')}</span>
+          <select class="cinput" value={form.bookedWith} onChange={(e) => setForm({ ...form, bookedWith: (e.target as HTMLSelectElement).value as 'forwarder' | 'shipping_line' })}>
+            <option value="forwarder">{t('business.exports.f.forwarder')}</option>
+            <option value="shipping_line">{t('business.exports.f.line')}</option>
+          </select>
+        </label>
+      </div>
+      {field('party', 'business.exports.f.party', { maxLength: '120' })}
+      <div class="biz-two">
+        {field('vessel', 'business.exports.f.vessel', { maxLength: '80' })}
+        {field('voyage', 'business.exports.f.voyage', { maxLength: '40' })}
+      </div>
+      <div class="biz-two">
+        {field('gateCutoff', 'business.exports.f.gateCutoff', { type: 'datetime-local' })}
+        {field('vgmCutoff', 'business.exports.f.vgmCutoff', { type: 'datetime-local' })}
+      </div>
+      <div class="biz-two">
+        {field('docsCutoff', 'business.exports.f.docsCutoff', { type: 'datetime-local' })}
+        {field('release', 'business.exports.f.release', { maxLength: '60' })}
+      </div>
+      <p class="chint">{t('business.exports.f.utc')}</p>
+      <h3 class="cons__sub">{t('business.exports.f.placesTitle')}</h3>
+      <SitePicker kind="loading" entityId={business.entityId} api={api} value={sites.loading} onChange={(loading) => setSites({ ...sites, loading })} label={t('business.exports.f.loading')} addLabel={t('business.exports.f.addPlace')} />
+      <SitePicker kind="port" entityId={business.entityId} api={api} value={sites.terminal} onChange={(terminal) => setSites({ ...sites, terminal })} label={t('business.exports.f.terminal')} addLabel={t('business.exports.f.addPlace')} />
+      <SitePicker kind="port" entityId={business.entityId} api={api} value={sites.depot} onChange={(depot) => setSites({ ...sites, depot })} label={t('business.exports.f.depot')} addLabel={t('business.exports.f.addPlace')} />
+      <p class="chint">{t('business.exports.f.depotHint')}</p>
+      {error ? <p class="cerr">{error}</p> : null}
+      <div class="twr-panelend">
+        <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void send()}>
+          {t('business.exports.f.save')}
+        </button>
+        <button type="button" class="cbtn cbtn--ghost" onClick={() => void onDone()}>
+          {t('business.exports.notNow')}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** One export, step by step: the booking and its clock, the box, the empty out, the weight, the papers, the load, the file. */
+function ExportPanel({ exportId, business, client, works, onChanged }: { exportId: string; business: BusinessView; client: BusinessClient; works: boolean; onChanged: () => void | Promise<void> }) {
+  const t = useT();
+  const [d, setD] = useState<ExportDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [boxNo, setBoxNo] = useState('');
+  const [weight, setWeight] = useState('');
+  const [vgm, setVgm] = useState({ method: '1', kg: '', weighbridge: '', ticketRef: '', signatory: business.you.name ?? '' });
+  const [paper, setPaper] = useState<Record<string, { documentId: string; reference: string }>>({});
+  const [bl, setBl] = useState('');
+  const [reweigh, setReweigh] = useState(false);
+  const [changing, setChanging] = useState<Record<string, boolean>>({});
+  const legWord = (status: string) => (LEG_WORD[status] ? t(LEG_WORD[status]) : status);
+
+  const read = useCallback(async () => {
+    const r = await client.exports.detail(exportId);
+    if (r.error) setError(sayProblem(r.error));
+    else setD(r.data ?? null);
+  }, [client, exportId]);
+
+  useEffect(() => {
+    void read();
+  }, [read]);
+
+  const act = async (fn: () => Promise<{ data?: ExportDetail | null; error?: Problem }>, note: string) => {
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    const r = await fn();
+    setBusy(false);
+    if (r.error) return setError(sayProblem(r.error));
+    if (r.data) setD(r.data);
+    setDone(note);
+    await onChanged();
+  };
+
+  if (!d) return error ? <p class="cerr">{error}</p> : <p class="cons__empty">{t('business.loading')}</p>;
+  const c = d.consignment;
+  const tag = timingTag(d.timing, t);
+  const onRoad = Boolean(c.ladenFreightId);
+  const fact = (k: MessageKey, v: string) => (
+    <div class="cons__fact">
+      <dt class="cons__factk">{t(k)}</dt>
+      <dd class="cons__factv">{v}</dd>
+    </div>
+  );
+
+  return (
+    <>
+      {/* EX1 — the booking, and what its clock asks. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">
+            {c.code} — {c.goodsDescription}
+          </span>
+          <span class={`ctag ctag--${tag.tone}`}>{tag.word}</span>
+        </div>
+        <p class="cons__lede">{timingLine(d, t)}</p>
+        {done ? <p class="cnote">{done}</p> : null}
+        {error ? <p class="cerr">{error}</p> : null}
+        <dl class="cons__facts">
+          {fact('business.exports.d.booking', `${c.booking.reference} — ${c.booking.partyName}`)}
+          {c.booking.vessel ? fact('business.exports.d.vessel', `${c.booking.vessel}${c.booking.voyage ? ` / ${c.booking.voyage}` : ''}`) : null}
+          {fact('business.exports.d.gateCutoff', utcWords(c.booking.gateCutoffAt))}
+          {c.booking.vgmCutoffAt ? fact('business.exports.d.vgmCutoff', utcWords(c.booking.vgmCutoffAt)) : null}
+          {c.booking.docsCutoffAt ? fact('business.exports.d.docsCutoff', utcWords(c.booking.docsCutoffAt)) : null}
+          {fact('business.exports.d.route', `${c.loadingPlace.label} → ${c.terminal.label} (${c.loadingPort})`)}
+          {fact('business.exports.d.box', `${c.containerType ?? ''}${c.containerNo ? ` · ${c.containerNo}` : ''}`)}
+        </dl>
+        {d.missing.length ? <p class="chint">{t('business.exports.d.missing', { what: d.missing.join('; ') })}</p> : <p class="chint">{t('business.exports.d.nothingMissing')}</p>}
+      </section>
+
+      {/* EX2 — the box's number, and the empty out. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('business.exports.box.title')}</span>
+        </div>
+        {c.containerNo ? <p class="cons__lede">{t('business.exports.box.number', { number: c.containerNo })}</p> : <p class="chint">{t('business.exports.box.numberHint')}</p>}
+        {works && !onRoad ? (
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.box.numberLabel')}</span>
+              <input class="cinput" maxLength={16} value={boxNo} placeholder="MSCU1234566" onInput={(e) => setBoxNo((e.target as HTMLInputElement).value)} />
+            </label>
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || !boxNo.trim()} onClick={() => void act(() => client.exports.container(c.exportId, boxNo.trim()), t('business.exports.box.saved'))}>
+                {t('business.exports.box.save')}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {c.emptyDepot ? (
+          d.emptyLeg ? (
+            <p class="cons__lede">{t('business.exports.empty.leg', { code: d.emptyLeg.code, status: legWord(d.emptyLeg.status), depot: c.emptyDepot.label })}</p>
+          ) : works && !onRoad ? (
+            <div class="twr-panelend">
+              <span class="chint">{t('business.exports.empty.hint', { depot: c.emptyDepot.label, release: c.booking.emptyReleaseRef ?? '—' })}</span>
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => client.exports.emptyLeg(c.exportId), t('business.exports.empty.posted'))}>
+                {t('business.exports.empty.post')}
+              </button>
+            </div>
+          ) : null
+        ) : (
+          <p class="chint">{t('business.exports.empty.brought')}</p>
+        )}
+      </section>
+
+      {/* EX3 — the verified gross mass. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('business.exports.vgm.title')}</span>
+        </div>
+        {c.vgm ? (
+          <p class="cons__lede">{t('business.exports.vgm.declared', { kg: c.vgm.kg.toLocaleString('en'), method: c.vgm.method, who: c.vgm.signatory })}</p>
+        ) : (
+          <p class="chint">{t('business.exports.vgm.hint')}</p>
+        )}
+        {works && c.vgm && !reweigh ? (
+          <div class="twr-panelend">
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setReweigh(true)}>
+              {t('business.exports.vgm.again')}
+            </button>
+          </div>
+        ) : null}
+        {works && (!c.vgm || reweigh) ? (
+          <>
+            <div class="biz-two">
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.vgm.method')}</span>
+                <select class="cinput" value={vgm.method} onChange={(e) => setVgm({ ...vgm, method: (e.target as HTMLSelectElement).value })}>
+                  <option value="1">{t('business.exports.vgm.method1')}</option>
+                  <option value="2">{t('business.exports.vgm.method2')}</option>
+                </select>
+              </label>
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.vgm.kg')}</span>
+                <input class="cinput" type="number" min={1500} max={45000} value={vgm.kg} onInput={(e) => setVgm({ ...vgm, kg: (e.target as HTMLInputElement).value })} />
+              </label>
+            </div>
+            <div class="biz-two">
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.vgm.weighbridge')}</span>
+                <input class="cinput" maxLength={120} value={vgm.weighbridge} onInput={(e) => setVgm({ ...vgm, weighbridge: (e.target as HTMLInputElement).value })} />
+              </label>
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.vgm.ticket')}</span>
+                <input class="cinput" maxLength={60} value={vgm.ticketRef} onInput={(e) => setVgm({ ...vgm, ticketRef: (e.target as HTMLInputElement).value })} />
+              </label>
+            </div>
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.vgm.signatory')}</span>
+              <input class="cinput" maxLength={120} value={vgm.signatory} onInput={(e) => setVgm({ ...vgm, signatory: (e.target as HTMLInputElement).value })} />
+            </label>
+            <div class="twr-panelend">
+              <button
+                type="button"
+                class="cbtn cbtn--ghost cbtn--sm"
+                disabled={busy || !vgm.kg || !vgm.signatory.trim()}
+                onClick={() =>
+                  void act(
+                    () => client.exports.vgm(c.exportId, { method: vgm.method === '2' ? 2 : 1, kg: Number(vgm.kg), ...(vgm.weighbridge.trim() ? { weighbridge: vgm.weighbridge.trim() } : {}), ...(vgm.ticketRef.trim() ? { ticketRef: vgm.ticketRef.trim() } : {}), signatory: vgm.signatory.trim() }),
+                    t('business.exports.vgm.saved'),
+                  ).then(() => setReweigh(false))
+                }
+              >
+                {t('business.exports.vgm.save')}
+              </button>
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      {/* EX4 — the papers: its own documents, or a reference. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('business.exports.papers.title')}</span>
+        </div>
+        <p class="chint">{t('business.exports.papers.hint')}</p>
+        <div class="crows">
+          {d.papers.map((p) => {
+            const draft = paper[p.key] ?? { documentId: '', reference: '' };
+            const given = p.documentTitle || p.reference;
+            return (
+              <div class="crow" key={p.key}>
+                <span class="crow__body">
+                  <span class="crow__top">
+                    <span class="crow__name">{t(PAPER_WORD[p.key])}</span>
+                    <span class={`ctag ctag--${given ? 'ok' : p.optional ? 'quiet' : 'warn'}`}>{t(given ? 'business.exports.papers.given' : p.optional ? 'business.exports.papers.optional' : 'business.exports.papers.missing')}</span>
+                  </span>
+                  {given ? <span class="crow__sub">{[p.documentTitle, p.reference].filter(Boolean).join(' — ')}</span> : null}
+                  {works && given && !changing[p.key] ? (
+                    <span class="twr-panelend">
+                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: true })}>
+                        {t('business.exports.papers.change')}
+                      </button>
+                    </span>
+                  ) : null}
+                  {works && (!given || changing[p.key]) ? (
+                    <span class="biz-paperline">
+                      {p.key !== 'export_entry' && d.documents.length ? (
+                        <select class="cinput" value={draft.documentId} onChange={(e) => setPaper({ ...paper, [p.key]: { ...draft, documentId: (e.target as HTMLSelectElement).value } })}>
+                          <option value="">{t('business.exports.papers.pick')}</option>
+                          {d.documents.map((doc) => (
+                            <option key={doc.documentId} value={doc.documentId}>
+                              {doc.title}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                      <input class="cinput" maxLength={80} placeholder={t(p.key === 'export_entry' ? 'business.exports.papers.entryPh' : 'business.exports.papers.refPh')} value={draft.reference} onInput={(e) => setPaper({ ...paper, [p.key]: { ...draft, reference: (e.target as HTMLInputElement).value } })} />
+                      <button
+                        type="button"
+                        class="cbtn cbtn--ghost cbtn--sm"
+                        disabled={busy || (!draft.documentId && draft.reference.trim().length < 3)}
+                        onClick={() => void act(() => client.exports.paper(c.exportId, { key: p.key, ...(draft.documentId ? { documentId: draft.documentId } : {}), ...(draft.reference.trim() ? { reference: draft.reference.trim() } : {}) }), t('business.exports.papers.saved')).then(() => setChanging({ ...changing, [p.key]: false }))}
+                      >
+                        {t('business.exports.papers.save')}
+                      </button>
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* EX2 — the load to the terminal; its seal is written on that load, with the seal panel and its photographs. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('business.exports.laden.title')}</span>
+        </div>
+        {d.ladenLeg ? (
+          <>
+            <p class="cons__lede">{t('business.exports.laden.leg', { code: d.ladenLeg.code, status: legWord(d.ladenLeg.status) })}</p>
+            {d.seals.length ? (
+              <p class="chint">{t('business.exports.laden.sealed', { seals: d.seals.map((s) => s.number ?? '—').join(', ') })}</p>
+            ) : (
+              <p class="chint">{t('business.exports.laden.sealIt', { code: d.ladenLeg.code })}</p>
+            )}
+          </>
+        ) : works ? (
+          <>
+            <p class="chint">{t(c.vgm ? 'business.exports.laden.hintVgm' : 'business.exports.laden.hint')}</p>
+            {!c.vgm ? (
+              <label class="cfield">
+                <span class="cfield__label">{t('business.exports.laden.weight')}</span>
+                <input class="cinput" type="number" min={1} value={weight} onInput={(e) => setWeight((e.target as HTMLInputElement).value)} />
+              </label>
+            ) : null}
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || !c.containerNo || (!c.vgm && !weight)} onClick={() => void act(() => client.exports.ladenLeg(c.exportId, c.vgm ? undefined : Number(weight)), t('business.exports.laden.posted'))}>
+                {t('business.exports.laden.post')}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p class="chint">{t('business.exports.laden.none')}</p>
+        )}
+      </section>
+
+      {/* EX5 — the file the forwarder takes at the gate, and the bill of lading's number once issued. */}
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{t('business.exports.handover.title')}</span>
+        </div>
+        <p class="chint">{t('business.exports.handover.hint')}</p>
+        <div class="twr-panelend">
+          <DocumentButton label={t('business.exports.handover.open')} title={t('business.exports.handover.open')} fetch={() => client.exports.handover(c.exportId)} />
+        </div>
+        {c.billOfLading ? (
+          <p class="cons__lede">{t('business.exports.bl.recorded', { number: c.billOfLading.number })}</p>
+        ) : works ? (
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.bl.label')}</span>
+              <input class="cinput" maxLength={60} value={bl} onInput={(e) => setBl((e.target as HTMLInputElement).value)} />
+            </label>
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || bl.trim().length < 3} onClick={() => void act(() => client.exports.billOfLading(c.exportId, bl.trim()), t('business.exports.bl.saved'))}>
+                {t('business.exports.bl.save')}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </>
+  );
+}

@@ -19,7 +19,8 @@ import type { SiteWeek } from './fleet-site.types';
  * different legs and the expeditor needs to know this." Quite so — for a landlocked import the box
  * moves inland under bond and clears at a dry port, and a model with one "port" on it cannot say that.
  */
-export const SITE_KINDS = ['port', 'clearance', 'delivery'] as const;
+/** `loading`: where an export box is stuffed — the exporter's own warehouse or yard (2026-10-27). */
+export const SITE_KINDS = ['port', 'clearance', 'delivery', 'loading'] as const;
 export type SiteKind = (typeof SITE_KINDS)[number];
 
 export interface Site {

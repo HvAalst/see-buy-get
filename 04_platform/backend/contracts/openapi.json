@@ -3876,6 +3876,350 @@
         }
       }
     },
+    "/v1/sbg/exports": {
+      "post": {
+        "operationId": "Export.register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportConsignment"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      },
+      "get": {
+        "operationId": "Export.list",
+        "parameters": [
+          {
+            "name": "entityId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}": {
+      "get": {
+        "operationId": "Export.detail",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/handover.html": {
+      "get": {
+        "operationId": "Export.handover",
+        "summary": "",
+        "description": "The file the forwarder takes at the gate, printable.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/container": {
+      "post": {
+        "operationId": "Export.container",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportContainerDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/empty-leg": {
+      "post": {
+        "operationId": "Export.emptyLeg",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/laden-leg": {
+      "post": {
+        "operationId": "Export.ladenLeg",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportLadenLegDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/vgm": {
+      "post": {
+        "operationId": "Export.vgm",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportVgmDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/papers": {
+      "post": {
+        "operationId": "Export.paper",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportPaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/bill-of-lading": {
+      "post": {
+        "operationId": "Export.billOfLading",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportBillOfLadingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/live": {
       "get": {
         "operationId": "Live.stream",
@@ -8300,7 +8644,8 @@
               "enum": [
                 "port",
                 "clearance",
-                "delivery"
+                "delivery",
+                "loading"
               ],
               "type": "string"
             }
@@ -33979,6 +34324,696 @@
           "action"
         ]
       },
+      "ExportBookingDto": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "bookedWith": {
+            "type": "string",
+            "enum": [
+              "forwarder",
+              "shipping_line"
+            ]
+          },
+          "partyName": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "vessel": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "voyage": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "gateCutoffAt": {
+            "type": "string"
+          },
+          "vgmCutoffAt": {
+            "type": "string"
+          },
+          "docsCutoffAt": {
+            "type": "string"
+          },
+          "emptyReleaseRef": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "reference",
+          "bookedWith",
+          "partyName",
+          "gateCutoffAt"
+        ]
+      },
+      "RegisterExportDto": {
+        "type": "object",
+        "properties": {
+          "exporterEntityId": {
+            "type": "string",
+            "description": "Staff name the company; a business or an administrator acts as its own."
+          },
+          "goodsDescription": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "originCountry": {
+            "type": "string",
+            "maxLength": 2
+          },
+          "destCountry": {
+            "type": "string",
+            "maxLength": 2
+          },
+          "loadingPort": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "containerType": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "natureCode": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "booking": {
+            "$ref": "#/components/schemas/ExportBookingDto"
+          },
+          "loadingSiteId": {
+            "type": "string",
+            "description": "The exporter's saved places: where it is stuffed (kind `loading`), the terminal and the empty depot (kind `port`)."
+          },
+          "terminalSiteId": {
+            "type": "string"
+          },
+          "emptyDepotSiteId": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "goodsDescription",
+          "originCountry",
+          "destCountry",
+          "loadingPort",
+          "booking",
+          "loadingSiteId",
+          "terminalSiteId"
+        ]
+      },
+      "ExportBooking": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "description": "The booking number the forwarder or the line gave."
+          },
+          "bookedWith": {
+            "type": "string",
+            "enum": [
+              "forwarder",
+              "shipping_line"
+            ]
+          },
+          "partyName": {
+            "type": "string",
+            "description": "The forwarder's or the line's name."
+          },
+          "vessel": {
+            "type": "string"
+          },
+          "voyage": {
+            "type": "string"
+          },
+          "gateCutoffAt": {
+            "type": "string",
+            "description": "The terminal's gate-in cut-off: the laden box must be inside the gate before this."
+          },
+          "vgmCutoffAt": {
+            "type": "string",
+            "description": "By when the verified gross mass must be declared to the line (by the forwarder)."
+          },
+          "docsCutoffAt": {
+            "type": "string",
+            "description": "By when the shipping documents must reach the forwarder."
+          },
+          "emptyReleaseRef": {
+            "type": "string",
+            "description": "The empty release number: what the depot hands the empty box out against."
+          }
+        },
+        "required": [
+          "reference",
+          "bookedWith",
+          "partyName",
+          "gateCutoffAt"
+        ]
+      },
+      "ExportPlace": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "location": {
+            "type": "object",
+            "properties": {
+              "lat": {
+                "required": true,
+                "type": "number"
+              },
+              "lng": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          }
+        },
+        "required": [
+          "label",
+          "location"
+        ]
+      },
+      "ExportVgm": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "number",
+            "description": "1: the packed box weighed whole. 2: everything packed weighed, plus the box's tare.",
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "kg": {
+            "type": "number"
+          },
+          "weighbridge": {
+            "type": "string"
+          },
+          "ticketRef": {
+            "type": "string"
+          },
+          "weighedAt": {
+            "type": "string"
+          },
+          "signatory": {
+            "type": "string",
+            "description": "The person who signs for it, for the exporter."
+          },
+          "declaredAt": {
+            "type": "string"
+          },
+          "declaredBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "kg",
+          "signatory",
+          "declaredAt",
+          "declaredBy"
+        ]
+      },
+      "ExportPaper": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "commercial_invoice",
+              "packing_list",
+              "certificate_of_origin",
+              "export_entry"
+            ]
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Not every destination asks for it (a certificate of origin): missing is then not a gap."
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "documentTitle": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "suppliedAt": {
+            "type": "string"
+          },
+          "suppliedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ]
+      },
+      "ExportBillOfLading": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "recordedAt",
+          "recordedBy"
+        ]
+      },
+      "ExportConsignment": {
+        "type": "object",
+        "properties": {
+          "exportId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "EXP-001."
+          },
+          "exporterEntityId": {
+            "type": "string",
+            "description": "The business that owns the goods and books the ocean leg with its forwarder."
+          },
+          "goodsDescription": {
+            "type": "string"
+          },
+          "originCountry": {
+            "type": "string"
+          },
+          "destCountry": {
+            "type": "string"
+          },
+          "loadingPort": {
+            "type": "string",
+            "description": "The port it leaves through — a label, like the import side's ports."
+          },
+          "containerType": {
+            "type": "string",
+            "description": "The ISO 6346 size/type code — selected from the catalogue, so the road leg's facts are derived."
+          },
+          "natureCode": {
+            "type": "string"
+          },
+          "booking": {
+            "$ref": "#/components/schemas/ExportBooking"
+          },
+          "loadingPlace": {
+            "description": "Where the box is stuffed: the exporter's saved place.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportPlace"
+              }
+            ]
+          },
+          "terminal": {
+            "description": "The terminal it is delivered to.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportPlace"
+              }
+            ]
+          },
+          "emptyDepot": {
+            "description": "Where the empty is collected, when the exporter fetches it. Absent: the line or forwarder brings it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportPlace"
+              }
+            ]
+          },
+          "containerNo": {
+            "type": "string",
+            "description": "The box's number, once it is known (at the depot, or when stuffed): ISO 6346, check digit checked."
+          },
+          "emptyFreightId": {
+            "type": "string"
+          },
+          "emptyFreightCode": {
+            "type": "string"
+          },
+          "ladenFreightId": {
+            "type": "string"
+          },
+          "ladenFreightCode": {
+            "type": "string"
+          },
+          "vgm": {
+            "$ref": "#/components/schemas/ExportVgm"
+          },
+          "papers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportPaper"
+            }
+          },
+          "billOfLading": {
+            "$ref": "#/components/schemas/ExportBillOfLading"
+          },
+          "warned": {
+            "type": "object",
+            "properties": {
+              "pickup": {
+                "required": false,
+                "type": "string"
+              },
+              "gate": {
+                "required": false,
+                "type": "string"
+              },
+              "vgm": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exportId",
+          "code",
+          "exporterEntityId",
+          "goodsDescription",
+          "originCountry",
+          "destCountry",
+          "loadingPort",
+          "booking",
+          "loadingPlace",
+          "terminal",
+          "papers",
+          "warned",
+          "createdAt",
+          "createdBy"
+        ]
+      },
+      "ExportTiming": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "on_time",
+              "at_risk",
+              "missed",
+              "gated_in"
+            ]
+          },
+          "leaveByAt": {
+            "type": "string",
+            "description": "The latest the laden truck may leave the loading place and still gate in before the cut-off."
+          },
+          "roadKm": {
+            "type": "number",
+            "description": "The road between them, and the hours it is planned at (with the gate buffer)."
+          },
+          "plannedHours": {
+            "type": "number"
+          },
+          "gatedInAt": {
+            "type": "string",
+            "description": "When the laden box was delivered at the terminal (its leg's delivery), once it was."
+          },
+          "collectedAt": {
+            "type": "string",
+            "description": "When the laden leg was collected at the loading place."
+          }
+        },
+        "required": [
+          "state",
+          "leaveByAt",
+          "roadKm",
+          "plannedHours"
+        ]
+      },
+      "ExportLegView": {
+        "type": "object",
+        "properties": {
+          "freightId": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "pickedUpAt": {
+            "type": "string"
+          },
+          "deliveredAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "freightId",
+          "code",
+          "status"
+        ]
+      },
+      "ExportSealView": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "appliedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "appliedBy"
+        ]
+      },
+      "ExportPaperView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "commercial_invoice",
+              "packing_list",
+              "certificate_of_origin",
+              "export_entry"
+            ]
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Not every destination asks for it (a certificate of origin): missing is then not a gap."
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "documentTitle": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "suppliedAt": {
+            "type": "string"
+          },
+          "suppliedBy": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label"
+        ]
+      },
+      "ExportDocumentChoice": {
+        "type": "object",
+        "properties": {
+          "documentId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "documentId",
+          "title"
+        ]
+      },
+      "ExportDetail": {
+        "type": "object",
+        "properties": {
+          "consignment": {
+            "$ref": "#/components/schemas/ExportConsignment"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/ExportTiming"
+          },
+          "emptyLeg": {
+            "$ref": "#/components/schemas/ExportLegView"
+          },
+          "ladenLeg": {
+            "$ref": "#/components/schemas/ExportLegView"
+          },
+          "seals": {
+            "description": "The seals written on the laden load — the seal is written there, with its photographs, never twice.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportSealView"
+            }
+          },
+          "papers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportPaperView"
+            }
+          },
+          "missing": {
+            "description": "What is still missing before the forwarder can take it at the gate — in words. Empty: nothing.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "documents": {
+            "description": "The exporter's own current papers, to attach one to a line (never a loose upload).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExportDocumentChoice"
+            }
+          }
+        },
+        "required": [
+          "consignment",
+          "timing",
+          "seals",
+          "papers",
+          "missing",
+          "documents"
+        ]
+      },
+      "ExportContainerDto": {
+        "type": "object",
+        "properties": {
+          "containerNo": {
+            "type": "string",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "containerNo"
+        ]
+      },
+      "ExportLadenLegDto": {
+        "type": "object",
+        "properties": {
+          "weightKg": {
+            "type": "number",
+            "description": "The gross weight, where no verified gross mass is declared yet.",
+            "minimum": 1
+          }
+        }
+      },
+      "ExportVgmDto": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "number",
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "kg": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 60000
+          },
+          "weighbridge": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "ticketRef": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "weighedAt": {
+            "type": "string"
+          },
+          "signatory": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "method",
+          "kg",
+          "signatory"
+        ]
+      },
+      "ExportPaperDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "commercial_invoice",
+              "packing_list",
+              "certificate_of_origin",
+              "export_entry"
+            ]
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "key"
+        ]
+      },
+      "ExportBillOfLadingDto": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "number"
+        ]
+      },
       "GeoPoint": {
         "type": "object",
         "properties": {
@@ -41785,7 +42820,8 @@
             "enum": [
               "port",
               "clearance",
-              "delivery"
+              "delivery",
+              "loading"
             ]
           },
           "name": {

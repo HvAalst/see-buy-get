@@ -11,10 +11,10 @@ const member = (over: Partial<Membership>): Membership => ({
 describe('the Business app', () => {
   describe('which sections a business is shown', () => {
     it('shows imports to anybody whose goods or clients cross a border, and a yard only to a yard', () => {
-      expect(sectionsFor(['shipper'])).toEqual(['home', 'loads', 'runs', 'contracts', 'people', 'details']);
+      expect(sectionsFor(['shipper'])).toEqual(['home', 'loads', 'runs', 'contracts', 'exports', 'people', 'details']);
       expect(sectionsFor(['importer'])).toEqual(['home', 'imports', 'people', 'details']);
       expect(sectionsFor(['clearing_agent'])).toContain('imports');
-      expect(sectionsFor(['expeditor'])).toEqual(['home', 'loads', 'runs', 'contracts', 'clients', 'imports', 'people', 'details']);
+      expect(sectionsFor(['expeditor'])).toEqual(['home', 'loads', 'runs', 'contracts', 'clients', 'exports', 'imports', 'people', 'details']);
       expect(sectionsFor(['depot'])).toEqual(['home', 'yard', 'people', 'details']);
       expect(sectionsFor(['importer', 'depot'])).toEqual(['home', 'imports', 'yard', 'people', 'details']);
     });

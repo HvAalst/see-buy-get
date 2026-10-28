@@ -22,6 +22,7 @@ import { RunsScreen } from './screens/RunsScreen';
 import { ClientsScreen } from './screens/ClientsScreen';
 import { ContractsScreen } from './screens/ContractsScreen';
 import { InboundScreen } from './screens/InboundScreen';
+import { ExportsScreen } from './screens/ExportsScreen';
 import '../../shared/screens.css';
 import '../../shared/console.css';
 import '../tower/tower.css';
@@ -33,6 +34,7 @@ const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   runs: { label: 'business.nav.runs', icon: 'route' },
   contracts: { label: 'business.nav.contracts', icon: 'badge' },
   clients: { label: 'business.nav.clients', icon: 'bag' },
+  exports: { label: 'business.nav.exports', icon: 'send' },
   imports: { label: 'business.nav.imports', icon: 'box' },
   yard: { label: 'business.nav.yard', icon: 'grid' },
   inbound: { label: 'business.nav.inbound', icon: 'box' },
@@ -127,6 +129,8 @@ export function App() {
             <ContractsScreen business={business} actions={actions} client={client} />
           ) : section === 'clients' ? (
             <ClientsScreen business={business} actions={actions} client={client} />
+          ) : section === 'exports' ? (
+            <ExportsScreen business={business} client={client} />
           ) : section === 'imports' ? (
             <ImportsScreen state={{ who }} actions={towerActions as never} />
           ) : section === 'yard' ? (

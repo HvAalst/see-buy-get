@@ -6,7 +6,7 @@ import type { GeoPoint } from '../../../shared/geo';
 
 export interface SiteView {
   siteId: string;
-  kind: 'port' | 'clearance' | 'delivery';
+  kind: 'port' | 'clearance' | 'delivery' | 'loading';
   name: string;
   location: GeoPoint;
   address?: string;
@@ -46,7 +46,7 @@ export function SitePicker({
   label,
   addLabel,
 }: {
-  kind: 'port' | 'clearance' | 'delivery';
+  kind: 'port' | 'clearance' | 'delivery' | 'loading';
   entityId: string;
   api: Api | null;
   value: string;
@@ -121,7 +121,7 @@ export function SitePicker({
         <Sheet open onClose={() => setAdding(false)} title={addLabel}>
           <label class="cfield">
             <span class="cfield__label">{t('tower.sites.name')}</span>
-            <input class="cinput" value={name} onChange={(e) => setName((e.target as HTMLInputElement).value)} placeholder={t(kind === 'port' ? 'tower.sites.namePortPh' : 'tower.sites.nameDeliveryPh')} />
+            <input class="cinput" value={name} onChange={(e) => setName((e.target as HTMLInputElement).value)} placeholder={t(kind === 'port' ? 'tower.sites.namePortPh' : kind === 'loading' ? 'tower.sites.nameLoadingPh' : 'tower.sites.nameDeliveryPh')} />
           </label>
 
           <div class="twr-panelend">
