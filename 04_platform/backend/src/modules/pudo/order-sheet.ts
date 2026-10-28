@@ -18,7 +18,7 @@ import { isPackaging, type Packaging } from './packaging';
 /** The most rows one sheet may carry. A day's orders for one shipper, with room; not a way to load a year. */
 export const MAX_SHEET_ROWS = 500;
 
-export type SheetField = 'reference' | 'description' | 'weightKg' | 'dest' | 'destLat' | 'destLng' | 'deliverOn' | 'window' | 'contactName' | 'contactPhone' | 'packaging' | 'pickup' | 'pickupLat' | 'pickupLng' | 'instructions';
+export type SheetField = 'reference' | 'description' | 'weightKg' | 'dest' | 'destLat' | 'destLng' | 'deliverOn' | 'window' | 'contactName' | 'contactPhone' | 'packaging' | 'pickup' | 'pickupLat' | 'pickupLng' | 'instructions' | 'consignee' | 'unNumber' | 'hazardClass' | 'shippingName' | 'packingGroup' | 'customs';
 
 /** What each column may be called. Compared with case, spaces, dots, dashes and underscores taken out. */
 const ALIASES: Record<SheetField, string[]> = {
@@ -37,6 +37,14 @@ const ALIASES: Record<SheetField, string[]> = {
   pickupLat: ['pickuplat', 'fromlat', 'originlat'],
   pickupLng: ['pickuplng', 'pickuplon', 'fromlng', 'originlng'],
   instructions: ['instructions', 'note', 'notes', 'remarks', 'comment', 'opmerking'],
+  // The CMR check (2026-10-28): who receives each order (box 2), its dangerous goods as their safety data sheet names them
+  // (box 9), and its instructions for customs (box 13) — each optional, each read only where the sheet has the column.
+  consignee: ['consignee', 'recipient', 'receivingcompany', 'ontvanger', 'geadresseerde'],
+  unNumber: ['un', 'unnumber', 'unno', 'unnr', 'unnummer'],
+  hazardClass: ['class', 'hazardclass', 'adrclass', 'dgclass', 'klasse'],
+  shippingName: ['shippingname', 'propershippingname', 'psn'],
+  packingGroup: ['packinggroup', 'pg', 'verpakkingsgroep'],
+  customs: ['customs', 'customsinstructions', 'douane'],
 };
 
 /** The columns a sheet must have, whatever they are called. */
@@ -58,6 +66,12 @@ export interface SheetOrder {
   pickup?: string;
   pickupLocation?: { lat: number; lng: number };
   instructions?: string;
+  /** CMR box 2: who receives the goods, named on the sheet. */
+  consignee?: string;
+  /** CMR box 9: dangerous goods by their UN number, proper shipping name, class and packing group. */
+  dangerous?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
+  /** CMR box 13: instructions for customs. */
+  customs?: string;
   /** What is wrong with this line, in words. Empty means it can be imported. */
   problems: string[];
 }
@@ -232,6 +246,21 @@ export function readOrderRows(cells: string[][], today: string, lines?: number[]
 
     const packRaw = get('packaging').toLowerCase();
     const packaging = isPackaging(packRaw) ? packRaw : PACK_WORDS[packRaw];
+    // Dangerous goods, where the sheet names any: all of their recognised description, or the line says what is missing.
+    const un = get('unNumber');
+    const shippingName = get('shippingName').slice(0, 200);
+    const hazardClass = get('hazardClass').slice(0, 8);
+    const packingGroup = get('packingGroup').toUpperCase();
+    let dangerous: SheetOrder['dangerous'];
+    if (un || shippingName || hazardClass) {
+      const digits = /^\s*(UN)?\s*(\d{4})\s*$/i.exec(un)?.[2];
+      if (!digits) problems.push(un ? `"${un}" is not a UN number — UN and four digits, like UN1263` : 'Dangerous goods need their UN number');
+      if (!shippingName) problems.push('Dangerous goods need their proper shipping name');
+      if (!hazardClass) problems.push('Dangerous goods need their class');
+      if (packingGroup && !['I', 'II', 'III'].includes(packingGroup)) problems.push(`"${get('packingGroup')}" is not a packing group — I, II or III`);
+      if (digits && shippingName && hazardClass) dangerous = { unNumber: `UN${digits}`, properShippingName: shippingName, hazardClass, ...(['I', 'II', 'III'].includes(packingGroup) ? { packingGroup } : {}) };
+    }
+
     if (packRaw && !packaging) problems.push(`"${get('packaging')}" is not a way of packing this knows — loose, bagged, palletised, drummed, baled, ibc or piece`);
 
     return {
@@ -249,6 +278,9 @@ export function readOrderRows(cells: string[][], today: string, lines?: number[]
       ...(get('pickup') ? { pickup: get('pickup').slice(0, 160) } : {}),
       ...(pLat !== undefined && pLng !== undefined ? { pickupLocation: { lat: pLat, lng: pLng } } : {}),
       ...(get('instructions') ? { instructions: get('instructions').slice(0, 500) } : {}),
+      ...(get('consignee') ? { consignee: get('consignee').slice(0, 120) } : {}),
+      ...(dangerous ? { dangerous } : {}),
+      ...(get('customs') ? { customs: get('customs').slice(0, 500) } : {}),
       problems,
     };
   });

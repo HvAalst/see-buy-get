@@ -121,5 +121,16 @@ describe('reading a sheet of orders', () => {
       const r = readOrderSheet('ref,goods,kg,address,date,collect from,pickup lat,pickup lng\nA1,x,10,y,2026-10-06,North yard,-1.3,36.8', TODAY);
       expect(r.orders[0]).toMatchObject({ pickup: 'North yard', pickupLocation: { lat: -1.3, lng: 36.8 }, problems: [] });
     });
+
+    // The CMR check (2026-10-28): who receives it, its dangerous goods, its customs instructions — read where the sheet has them.
+    it('reads the consignee, dangerous goods by their recognised description, and customs instructions', () => {
+      const r = readOrderSheet(
+        ['ref,goods,kg,address,date,consignee,UN number,class,proper shipping name,packing group,customs', 'A1,Paint,900,Plot 4 Kampala,2026-10-06,Kampala Build Co,1263,3,Paint,iii,Cleared at Malaba', 'A2,Paint,900,Plot 4,2026-10-06,K,12,,,IV,'].join('\n'),
+        TODAY,
+      );
+      expect(r.orders[0]).toMatchObject({ consignee: 'Kampala Build Co', dangerous: { unNumber: 'UN1263', properShippingName: 'Paint', hazardClass: '3', packingGroup: 'III' }, customs: 'Cleared at Malaba', problems: [] });
+      expect(r.orders[1].dangerous).toBeUndefined();
+      expect(r.orders[1].problems).toEqual(['"12" is not a UN number — UN and four digits, like UN1263', 'Dangerous goods need their proper shipping name', 'Dangerous goods need their class', '"IV" is not a packing group — I, II or III']);
+    });
   });
 });

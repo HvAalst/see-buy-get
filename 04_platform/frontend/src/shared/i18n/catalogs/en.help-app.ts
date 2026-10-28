@@ -403,6 +403,7 @@ export const enHelpApp = {
   'help.fleet-order-sheet.step5': 'An address the map does not know is added without a point and marked in the queue. Open it and place it on the map, or it cannot be planned.',
   'help.fleet-order-sheet.note1': 'Dates are read as 2026-10-06 or day first, 06/10/2026. Weights may be 4000, 4,000 kg or 1.5 t. A date typed as a date in Excel is read whatever format the cell shows it in.',
   'help.fleet-order-sheet.note2': 'Your office can withdraw an order it uploaded, with a reason. An order the shipper placed themselves is theirs to withdraw.',
+  'help.fleet-order-sheet.note4': 'For the consignment note, a sheet may also have a Consignee column (who receives each order at its address), the dangerous goods’ UN number, class, proper shipping name and packing group, and Customs instructions. Each is read only where the sheet has the column; a line whose dangerous goods are named only in part says what is missing and is not imported.',
   'help.fleet-order-sheet.note3': 'Of an Excel workbook the first sheet is read, and you are told its name and which sheets were not read. Problems are reported by the line numbers Excel shows. An old .xls file, a workbook with a password, and a file over 1 MB are not read: save it as .xlsx or as CSV.',
   // fleet-plan
   'help.fleet-plan.title': 'Plan which truck takes which orders',

@@ -27,6 +27,19 @@ sender, carrier, consignee. Number `CMR-<load code>`.
   "Contracted in 16, carrier in 17"); the contracted fleet reads the note. Box numbers are the classic form's, said so.
   For the lawyer: whether SeeBuyGet itself is a party to the carriage when it bills the shipper; the claim window on
   Northern Corridor lanes (ours is the CMR's seven days).
+- **Cover a sender can ask for** (the user, 2026-10-28: "they must prove it" — "Toggle cover needed/not needed"). A fleet's
+  carrier-insurance paper counts only when staff recorded it off the policy the fleet SENT (`insuranceCopyRef`), with what
+  it covers and up to how much a load (`insuranceCovers`, `insuranceLimit`, `insuranceCurrency`), and while it runs
+  (`FleetManagerService.coverOf`). `Freight.coverRequired`: `DispatchService.coverRefusal` is asked at the board
+  (`COVER_REQUIRED`, resolvable), the three offer paths, the take and a contract order. Owner-drivers cannot show cover yet.
+  The note: box 13 "Insurance: the sender requires …" (Art. 6(2)(e)); the carrier's `coverLine` beside it in 16 or 17.
+- **Art. 6(2)**: `declaredValue`, `specialInterest` (box 19), `noTranshipment` (box 13; a reload is written against it),
+  a contract order's agreed time-limit (box 19).
+- **The carrier's place** ("a pin of their legal station"): `FleetDriver.carrierPlace` — address or station pin — for a
+  driver riding for themselves only; staff refused by name. **Reservations** (Art. 8(2)): `answerReservations`, once, by
+  the sender; box 18 says agreed / disputed / "not agreed by the sender, so it does not bind the sender".
+- **A run's note** names the law from its zones' hubs' countries (`MdpService.mdpForZone`), national when unknown.
+  **The fleet's order sheet** reads consignee, UN number, class, proper shipping name, packing group and customs columns.
 - **Everywhere else** it is *Consignment note (CMR layout)*: same boxes, same numbering, said plainly to be the
   network's standard form where no national form applies — so a driver, a shop and an inspector read one page.
 

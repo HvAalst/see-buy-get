@@ -1,7 +1,9 @@
 import { EntityService } from '../../foundation/entity/entity.service';
 import { Injectable, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
-import { ConsignmentNoteService, agentConfirmation, reloadLine } from './consignment-note.service';
+import { ConsignmentNoteService, NOTE_TITLE, agentConfirmation, reloadLine } from './consignment-note.service';
+import { MdpService } from './mdp.service';
+import { roadRegimeOf } from '../../foundation/carriage-law/catalogue';
 import { DepartureService } from './departure.service';
 import { CargoService } from './cargo.service';
 import { AgentService } from './agent.service';
@@ -50,7 +52,15 @@ export class DepartureNoteService {
     private readonly vendors: VendorService,
     // B2 — a customer's business is named as the sender. Optional so the specs that build this by hand keep compiling.
     @Optional() private readonly entities?: EntityService,
+    // The country at each end of the run, from the hub that serves its zone (the CMR check, 2026-10-28).
+    @Optional() private readonly mdps?: MdpService,
   ) {}
+
+  /** The country a zone lies in, from the hub that serves it — or nothing, when no hub says. */
+  private countryOfZone(zone: string): string | undefined {
+    const hub = this.mdps?.mdpForZone(zone);
+    return hub ? this.mdps!.countryOf(hub) : undefined;
+  }
 
   /**
    * The note, for a party to this carriage and nobody else.
@@ -148,10 +158,13 @@ export class DepartureNoteService {
 
     return {
       number: `CMR-${booking.bookingId.replace(/^bkg_/, '').toUpperCase()}`,
-      // A run is a domestic line unless somebody says otherwise; a corridor holds zones, not countries, so
-      // the honest default is the national layout rather than a claim about a border we cannot see.
-      kind: 'national',
-      title: 'Consignment note (CMR layout)',
+      // The law of the run, from the countries its two zones' hubs stand in (the CMR check, 2026-10-28): a run that crosses
+      // a border names the convention as a load does. Where a zone's country is not known, the national layout — never a
+      // claim about a border we cannot see.
+      ...(() => {
+        const lane = roadRegimeOf(this.countryOfZone(departure.originZone), this.countryOfZone(departure.destZone), booking.at.slice(0, 10));
+        return { kind: lane.regime, ...(lane.electronic ? { electronic: true } : {}), title: NOTE_TITLE[lane.regime] };
+      })(),
       freightId: booking.bookingId,
       code: booking.bookingId,
       status: booking.status,

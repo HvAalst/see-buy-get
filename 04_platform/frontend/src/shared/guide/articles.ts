@@ -128,7 +128,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'freight-tracking', apps: ['agent', 'send'], group: 'freight', steps: 3, notes: ['why', 'note', 'note'] },
   { id: 'manager-dispatch', apps: ['fleet', 'driver'], group: 'freight', steps: 3, notes: ['why'] },
   { id: 'fleet-orders', apps: ['fleet'], group: 'freight', steps: 4, notes: ['note', 'note'] },
-  { id: 'fleet-order-sheet', apps: ['fleet'], group: 'freight', steps: 5, notes: ['note', 'note', 'note'] },
+  { id: 'fleet-order-sheet', apps: ['fleet'], group: 'freight', steps: 5, notes: ['note', 'note', 'note', 'note'] },
   { id: 'fleet-plan', apps: ['fleet'], group: 'freight', steps: 8, notes: ['why', 'note', 'note', 'why', 'note', 'note', 'why', 'why', 'note', 'note'] },
   { id: 'fleet-plan-adviser', apps: ['fleet'], group: 'freight', steps: 6, notes: ['note', 'note', 'note', 'note', 'why'] },
   { id: 'fleet-partners', apps: ['fleet'], group: 'freight', steps: 8, notes: ['note', 'note', 'note', 'rare'] },

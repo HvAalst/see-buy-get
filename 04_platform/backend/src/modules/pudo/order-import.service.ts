@@ -79,6 +79,10 @@ export class OrderImportService {
             ...(j.order.contactName ? { contactName: j.order.contactName } : {}),
             ...(j.order.contactPhone ? { contactPhone: j.order.contactPhone } : {}),
             ...(j.order.window ? { deliveryWindow: j.order.window } : {}),
+            // The CMR check (2026-10-28): who receives it at the address it goes to, its dangerous goods, and customs.
+            ...(j.order.consignee ? { consignee: { name: j.order.consignee, address: j.order.dest } } : {}),
+            ...(j.order.dangerous ? { dangerousGoods: j.order.dangerous } : {}),
+            ...(j.order.customs ? { customsInstructions: j.order.customs } : {}),
           },
           now,
         );

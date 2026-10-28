@@ -707,7 +707,7 @@ export function dangerousWords(g: Pick<ConsignmentNote['goods'], 'dangerousGoods
 }
 
 /** The note's title, by the law it is under. */
-const NOTE_TITLE: Record<RoadRegime, string> = {
+export const NOTE_TITLE: Record<RoadRegime, string> = {
   cmr: 'CMR — International consignment note',
   northern_corridor: 'International road consignment note — Northern Corridor',
   contract: 'International road consignment note',

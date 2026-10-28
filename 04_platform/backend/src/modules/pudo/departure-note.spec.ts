@@ -110,6 +110,16 @@ describe('a run’s booking as a contract of carriage', () => {
       expect(notes.note(departureId, own.bookingId, asShipper).agent).toBeUndefined();
     });
 
+    it('names the law of the run from the countries its zones’ hubs stand in, and stays national where it cannot tell', () => {
+      const { service, departureId, bookingId } = setUp();
+      const renderer = new ConsignmentNoteService(undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never, undefined as never);
+      const hubs = (countries: Record<string, string>) => ({ mdpForZone: (zone: string) => (countries[zone] ? { country: countries[zone] } : undefined), countryOf: (m: { country: string }) => m.country });
+      const across = new DepartureNoteService(service, renderer, new CargoService(), agents, vendors, undefined, hubs({ Nairobi: 'KE', Mombasa: 'UG' }) as never);
+      expect(across.note(departureId, bookingId, asShipper)).toMatchObject({ kind: 'northern_corridor', title: 'International road consignment note — Northern Corridor' });
+      const unknown = new DepartureNoteService(service, renderer, new CargoService(), agents, vendors, undefined, hubs({ Nairobi: 'KE' }) as never);
+      expect(unknown.note(departureId, bookingId, asShipper)).toMatchObject({ kind: 'national', title: 'Consignment note (CMR layout)' });
+    });
+
     it('names the sender, the carrier and the vehicle that took the goods', () => {
       const { notes, departureId, bookingId } = setUp();
       const n = notes.note(departureId, bookingId, asShipper);

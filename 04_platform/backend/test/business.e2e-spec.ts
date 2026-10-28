@@ -505,6 +505,14 @@ describe('a customer’s business, over the wire', () => {
     const uploaded = after.body.items.find((r: { orderRef?: string }) => r.orderRef === 'WS-901');
     expect(uploaded).toMatchObject({ uploaded: true, weightKg: 1500, status: 'ordered', pickupLabel: 'Jenga yard' });
     expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/contracts`).set(bearer(setupKey)).expect(200)).body.items[0].pickup).toMatchObject({ label: 'Jenga yard' });
+    // The CMR check (2026-10-28): a sheet that names who receives an order, its dangerous goods and customs — on its note.
+    const dgSheet = ['Order number;Goods;Weight;Deliver to;Date;Consignee;UN number;Class;Proper shipping name;Packing group;Customs', `WS-950;Paint;900;Nairobi;${tomorrow};Kitengela Builders;1263;3;Paint;III;Cleared inland at Embakasi`].join('\n');
+    expect((await http().post(imp).set(bearer(setupKey)).send({ text: dgSheet, ...where, dryRun: false }).expect(201)).body).toMatchObject({ imported: true, ok: 1 });
+    const dgOrder = (await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(setupKey)).expect(200)).body.items.find((r: { orderRef?: string }) => r.orderRef === 'WS-950');
+    const dgNote = (await http().get(`/v1/sbg/dispatch/freight/${dgOrder.freightId}/consignment-note`).set(bearer(setupKey)).expect(200)).body;
+    expect(dgNote.consignee).toMatchObject({ name: 'Kitengela Builders', address: 'Nairobi' });
+    expect(dgNote.goods.dangerousGoods).toEqual({ unNumber: 'UN1263', properShippingName: 'Paint', hazardClass: '3', packingGroup: 'III' });
+    expect(dgNote.instructions).toContain('For customs: Cleared inland at Embakasi');
     expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders/template`).set(bearer(setupKey)).expect(200)).body.csv).toContain('Order number,Goods');
     // An Excel workbook is read as it is: the file Excel saved, base64 in the same call. Its first sheet is named.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -686,6 +694,7 @@ describe('a customer’s business, over the wire', () => {
     // Ended by the shipper: no new orders, and what was ordered stays with the fleet.
     await http().post(`/v1/sbg/business/me/contracts/${contract.contractId}/end`).set(bearer(shop)).send({ reason: 'Season over' }).expect(201);
     await http().post('/v1/sbg/dispatch/freight').set(bearer(shop)).send({ ...load, contractId: contract.contractId, deliverOn: tomorrow }).expect(400);
-    expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(setupKey)).expect(200)).body.total).toBe(3);
+    // Four: the three before, and the sheet's order with its dangerous goods (the CMR check).
+    expect((await http().get(`/v1/sbg/fleet/managers/${fleet.did}/orders`).set(bearer(setupKey)).expect(200)).body.total).toBe(4);
   });
 });
