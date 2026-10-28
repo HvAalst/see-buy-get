@@ -173,7 +173,8 @@ describe('a shipper’s papers, over the wire', () => {
 
     // The consignment note: box 5 lists the invoice, box 6 the SSCCs, box 7 the number of packages.
     const note = (await http().get(`/v1/sbg/dispatch/freight/${id}/consignment-note`).set(bearer(jenga.token)).expect(200)).body;
-    expect(note.kind).toBe('cmr');
+    // Kenya to Uganda: the Northern Corridor's road protocol, never the CMR (no CMR country at either end).
+    expect(note.kind).toBe('northern_corridor');
     expect(note.documents).toContain('Commercial invoice INV-2026-0042 of ' + signed.issuedOn + ', 3 copies');
     expect(note.goods).toMatchObject({ packages: 3, marks: labels.codes.map((c: string) => `SSCC ${c}`) });
 

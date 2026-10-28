@@ -133,13 +133,41 @@ describe('the consignment note', () => {
     expect(chtml).toContain('to be settled between sender and carrier');
   });
 
-  it('is a CMR note when a border is crossed, and names a store’s buyer without a phone number', () => {
+  it('across a border it names the law of the lane, and a store’s buyer without a phone number', () => {
+    // Kenya to Uganda: no CMR country at either end — the Northern Corridor's road protocol (the user, 2026-10-28).
     freights.fr_1 = base({ pickupCountry: 'KE', destCountry: 'UG', shipperDid: 'ven_1', postedByDid: undefined, externalOrderId: 'SO-77', buyerPhoneHash: 'h' });
     const n = service.build(freights.fr_1);
-    expect(n).toMatchObject({ kind: 'cmr', title: 'CMR — International consignment note' });
+    expect(n).toMatchObject({ kind: 'northern_corridor', title: 'International road consignment note — Northern Corridor' });
+    const html = service.htmlFor(n);
+    expect(html).toContain('subject, notwithstanding any clause to the contrary, to the provisions of Protocol No. 6 (road transport) of the Northern Corridor Transit and Transport Agreement');
+    expect(html).not.toContain('(CMR)');
     expect(n.sender).toMatchObject({ name: 'Nairobi Threads', did: 'did:store' });
     expect(n.consignee).toMatchObject({ name: 'The buyer of order SO-77', address: 'Collects at Riverside Corner', country: 'Uganda' });
     expect(JSON.stringify(n)).not.toMatch(/\+254|buyerPhone/);
+  });
+
+  it('says the CMR only where it applies, the e-CMR only where it is in force, and no convention where none joins the two', () => {
+    const cmr = service.build(base({ pickupCountry: 'NL', destCountry: 'DE' }));
+    expect(cmr).toMatchObject({ kind: 'cmr', electronic: true, title: 'CMR — International consignment note' });
+    const cmrPage = service.htmlFor(cmr);
+    expect(cmrPage).toContain('This carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the International Carriage of Goods by Road (CMR).');
+    expect(cmrPage).toContain('Made out electronically under the Additional Protocol to the CMR concerning the electronic consignment note (e-CMR, 2008)');
+    // Belgium signed the e-CMR and never ratified it: the CMR, on paper where paper is asked for.
+    const paper = service.build(base({ pickupCountry: 'BE', destCountry: 'NL' }));
+    expect(paper).toMatchObject({ kind: 'cmr' });
+    expect(paper.electronic).toBeUndefined();
+    expect(service.htmlFor(paper)).toContain('The e-CMR Protocol is not in force between Belgium and Netherlands');
+    // Kenya to Tanzania: neither in the CMR, Tanzania not in the Northern Corridor.
+    const none = service.build(base({ pickupCountry: 'KE', destCountry: 'TZ' }));
+    expect(none).toMatchObject({ kind: 'contract', title: 'International road consignment note' });
+    const nonePage = service.htmlFor(none);
+    expect(nonePage).toContain('No international convention on the carriage of goods by road applies between Kenya and Tanzania');
+    expect(nonePage).not.toContain('(CMR).');
+    // Every note says where its procedures are (e-CMR Art. 5(2)), and has a line for a signature on paper.
+    for (const page of [cmrPage, nonePage, service.htmlFor(service.build(base({})))]) {
+      expect(page).toContain('/help/electronic-note/');
+      expect((page.match(/Signed on paper:/g) ?? []).length).toBe(3);
+    }
   });
 
   it('FP6: the tracking view shows the journey and the carrier at the door, and nothing a stranger with the link should not see', () => {

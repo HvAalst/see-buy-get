@@ -34,8 +34,15 @@ export interface NoteConfirmation {
 export interface ConsignmentNote {
   /** CMR-<load code>: one note per load, for its whole life. */
   number: string;
-  /** `cmr` when the load crosses a border (the Convention applies); `national` otherwise — same layout, said plainly. */
-  kind: 'cmr' | 'national';
+  /**
+   * THE LAW THE CARRIAGE IS UNDER, from where it is taken over and where it is delivered (the user, 2026-10-28: "Per lane,
+   * from membership"; foundation/carriage-law): `cmr` when either country is a party to the CMR; `northern_corridor`
+   * between member states of the Northern Corridor agreement; `contract` between two countries no convention joins;
+   * `national` in one country — the same layout everywhere, the law said plainly.
+   */
+  kind: 'cmr' | 'northern_corridor' | 'contract' | 'national';
+  /** A CMR note between two parties to the e-CMR Protocol (2008): the electronic note stands as the CMR note there. */
+  electronic?: boolean;
   title: string;
   freightId: string;
   code: string;

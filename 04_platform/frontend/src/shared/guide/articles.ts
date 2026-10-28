@@ -98,6 +98,8 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'business-sign-in', apps: ['business', 'home'], group: 'start', site: true, steps: 5 },
   { id: 'business-people', apps: ['business'], group: 'start', steps: 4 },
   { id: 'business-check', apps: ['business', 'console'], group: 'start', site: true, steps: 2, notes: ['note'] },
+  // The procedures every consignment note refers to (e-CMR Art. 5): public, because the note links here for whoever holds it.
+  { id: 'electronic-note', apps: ['business', 'agent', 'driver', 'fleet', 'vendor'], group: 'freight', site: true, steps: 6, notes: ['why', 'note'] },
   { id: 'business-bell', apps: ['business'], group: 'daily', steps: 3, notes: ['note', 'rare', 'note'] },
   { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note'] },
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.

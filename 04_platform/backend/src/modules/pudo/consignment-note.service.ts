@@ -6,7 +6,7 @@ import { GlosEvent } from '../../foundation/events/glos-events';
 import { GlosError } from '../../foundation/http/glos-error';
 import { qrSvgGroup } from '../../foundation/label/qr';
 import { MailService } from '../../foundation/mail/mail.service';
-import { appUrl } from '../../foundation/mail/mail.templates';
+import { appUrl, helpUrl } from '../../foundation/mail/mail.templates';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { AccountService } from './account.service';
 import { AgentService } from './agent.service';
@@ -18,6 +18,7 @@ import { ImportService } from './import.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { tempBand } from './heavy-cargo';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
+import { roadRegimeOf, type RoadRegime } from '../../foundation/carriage-law/catalogue';
 import { NETWORK_CURRENCY } from './pudo.config';
 import { VendorService } from './vendor.service';
 import { BusinessService } from './business.service';
@@ -152,7 +153,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     const sender = this.senderOf(f);
     const agent = f.onBehalfOf ? this.agentOf(f.postedByDid) : undefined;
     const carrier = this.carrierOf(f);
-    const international = Boolean(f.pickupCountry && f.destCountry && f.pickupCountry !== f.destCountry);
+    // Which law: from the two countries, as they stood on the day the note was made out.
+    const lane = roadRegimeOf(f.pickupCountry, f.destCountry, f.createdAt.slice(0, 10));
     const volume = f.dimensionsCm ? Math.round(((f.dimensionsCm[0] * f.dimensionsCm[1] * f.dimensionsCm[2]) / 1_000_000) * 1000) / 1000 : undefined;
     const band = tempBand(f.natureCode);
     const documents: string[] = [];
@@ -210,8 +212,9 @@ export class ConsignmentNoteService implements OnModuleInit {
       : undefined;
     return {
       number: `CMR-${f.code}`,
-      kind: international ? 'cmr' : 'national',
-      title: `${international ? 'CMR — International consignment note' : 'Consignment note (CMR layout)'}${opts.consignee ? ' — the receiver’s copy' : ''}`,
+      kind: lane.regime,
+      ...(lane.electronic ? { electronic: true } : {}),
+      title: `${NOTE_TITLE[lane.regime]}${opts.consignee ? ' — the receiver’s copy' : ''}`,
       ...(opts.consignee ? { copy: 'consignee' as const } : {}),
       freightId: f.freightId,
       code: f.code,
@@ -580,12 +583,15 @@ export class ConsignmentNoteService implements OnModuleInit {
      and know whether they are holding the same document — which is the thing paper did by being paper. */
   .fp { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 8px; color: #777; word-break: break-all; }
   .status { display: inline-block; padding: 1px 8px; border: 1px solid #111; border-radius: 10px; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
-  @media print { body { padding: 0; } }
+  /* On paper only: which original this sheet is, and a line for a signature by hand. */
+  .paper { display: none; }
+  @media print { body { padding: 0; } .paper { display: block; } .hand { display: block; margin-top: 10px; border-top: 1px dotted #555; padding-top: 2px; font-size: 9px; color: #555; } }
 </style></head><body><div class="sheet">
 <header>
   <div>
     <h1>${e(n.title)}</h1>
-    <p class="sub">${n.kind === 'cmr' ? 'This carriage is subject to the Convention on the Contract for the International Carriage of Goods by Road (CMR), notwithstanding any clause to the contrary.' : 'Same layout and numbering as the CMR note, used for every consignment on the network — including where no national form exists.'}</p>
+    <p class="sub">${e(lawStatement(n))}</p>
+    <p class="sub paper">Original for: ☐ the sender &nbsp; ☐ the goods &nbsp; ☐ the carrier</p>
     <p class="sub"><span class="status">${e(n.status.replace('_', ' '))}</span></p>
   </div>
   <div class="num">${e(n.number)}<small>Load ${e(n.code)}${n.trackingKey ? ` · Tracking ${e(n.trackingKey)}` : ''}</small>${qr}</div>
@@ -598,7 +604,7 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(3, 'Place of delivery of the goods (place, country)', `<b>${e(n.delivery.place)}</b>${n.delivery.country ? `<br>${e(n.delivery.country)}` : ''}${n.delivery.at ? `<br>Delivered ${e(when(n.delivery.at))}` : ''}`)}
   ${box(18, 'Carrier’s reservations and observations', list(n.reservations))}
   ${box(4, 'Place and date of taking over the goods (place, country, date)', `<b>${e(n.takingOver.place)}</b>${n.takingOver.country ? `<br>${e(n.takingOver.country)}` : ''}<br>${n.takingOver.at ? e(when(n.takingOver.at)) : '<span class="empty">Not yet taken over</span>'}`)}
-  ${box(19, 'Special agreements', n.kind === 'cmr' ? '<span class="empty">None</span>' : 'Carried under the network’s terms; this note stands as the consignment note where no national form applies.')}
+  ${box(19, 'Special agreements', n.kind === 'national' ? 'Carried under the network’s terms; this note stands as the consignment note where no national form applies.' : '<span class="empty">None</span>')}
   ${box(5, 'Documents attached', list(n.documents))}
   ${box(20, 'To be paid by', `${n.carriage.amount != null ? `<b>${e(String(n.carriage.amount))} ${e(n.carriage.currency ?? '')}</b><br>` : ''}${e(n.carriage.note)}`)}
   ${box('6–12', 'Goods', `<table class="goods"><tr><th>Marks / description</th><th>Packages</th><th>Method of packing</th><th>Nature of the goods</th><th>Gross weight</th><th>Volume</th></tr><tr><td>${e(g.description)}${g.marks?.length ? `<br><span class="did">${g.marks.map((m) => e(m)).join('<br>')}</span>` : ''}${g.fragile ? '<br><i>Fragile</i>' : ''}${g.dangerous ? '<br><b>Dangerous goods</b>' : ''}</td><td>${g.packages == null ? '<span class="empty">Not stated</span>' : g.packages}</td><td>${g.packaging ? e(g.packaging) : '<span class="empty">—</span>'}</td><td>${e(g.nature)} · ${e(g.cargoClass)}${g.temperatureBand ? `<br>${e(g.temperatureBand)}` : ''}</td><td>${e(String(g.grossKg))} kg</td><td>${g.volumeM3 != null ? `${e(String(g.volumeM3))} m³` : '<span class="empty">—</span>'}</td></tr></table>`, 'wide')}
@@ -607,13 +613,50 @@ export class ConsignmentNoteService implements OnModuleInit {
   ${box(14, 'Instructions as to payment for carriage', e(n.carriage.paidBy === 'sender' ? 'Carriage paid' : n.carriage.paidBy === 'between-parties' ? 'Carriage settled between the parties' : 'Not yet agreed'))}
   ${box(21, 'Established in / on', `<b>${e(n.established.place)}</b><br>${e(when(n.established.at))}`)}
   ${box(15, 'Cash on delivery', '<span class="empty">None — the network never collects cash on delivery</span>')}
-  ${box(22, 'Signature and stamp of the sender', conf(n.confirmations.sender, ''))}
-  ${box(23, 'Signature and stamp of the carrier', conf(n.confirmations.carrier, n.cancelled ? 'Never taken over — the load was cancelled' : 'Not yet taken over'))}
-  ${box(24, 'Goods received — signature and stamp of the consignee', (n.confirmations.consignee ? conf(n.confirmations.consignee, '') + (n.refused ? `<div class="claim"><b>${e(n.refused.line)}</b></div>` : '') : `<span class="empty">${box24missing}</span>`) + claimLines, 'wide')}
+  ${box(22, 'Signature and stamp of the sender', conf(n.confirmations.sender, '') + HAND)}
+  ${box(23, 'Signature and stamp of the carrier', conf(n.confirmations.carrier, n.cancelled ? 'Never taken over — the load was cancelled' : 'Not yet taken over') + HAND)}
+  ${box(24, 'Goods received — signature and stamp of the consignee', (n.confirmations.consignee ? conf(n.confirmations.consignee, '') + (n.refused ? `<div class="claim"><b>${e(n.refused.line)}</b></div>` : '') : `<span class="empty">${box24missing}</span>`) + claimLines + HAND, 'wide')}
 </div>
-<footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span><br><span class="fp">Check this copy: ${e(`${appUrl('home')}?note=${noteFingerprint(n)}`)}</span></span></footer>
+<footer><span>Issued by the SeeBuyGet network from its records of this load. Every box is filled from a recorded act; a box that says it is not recorded is not recorded.<br>${e(electronicLine(n))}<br>How this electronic note is made out, kept intact, read, confirmed at delivery, added to and replaced by paper: ${e(helpUrl('electronic-note'))}<br>Box numbers as on the classic CMR form; the IRU’s 2007 model numbers them differently.<br>${e(retentionWords(retentionFor({ finishedAt: n.delivery.at, hasClaim: Boolean(n.claim) })))}</span><span>${e(n.number)}<br><span class="fp">${e(noteFingerprint(n))}</span><br><span class="fp">Check this copy: ${e(`${appUrl('home')}?note=${noteFingerprint(n)}`)}</span></span></footer>
 </div></body></html>`;
   }
+}
+
+/** The note's title, by the law it is under. */
+const NOTE_TITLE: Record<RoadRegime, string> = {
+  cmr: 'CMR — International consignment note',
+  northern_corridor: 'International road consignment note — Northern Corridor',
+  contract: 'International road consignment note',
+  national: 'Consignment note (CMR layout)',
+};
+
+/** A line for a signature by hand, shown on paper only: a printed note signed as the paper originals are. */
+const HAND = '<span class="hand paper">Signed on paper:</span>';
+
+/**
+ * THE STATEMENT OF THE LAW (CMR Art. 6(1)(k); Northern Corridor Protocol No. 6, Art. 21): the convention the carriage is
+ * under, in its own words — or, between two countries no convention joins, that none does. Which national law then
+ * governs is not for the note to say.
+ */
+export function lawStatement(n: Pick<ConsignmentNote, 'kind' | 'takingOver' | 'delivery'>): string {
+  if (n.kind === 'cmr') return 'This carriage is subject, notwithstanding any clause to the contrary, to the Convention on the Contract for the International Carriage of Goods by Road (CMR).';
+  if (n.kind === 'northern_corridor') return 'This carriage is subject, notwithstanding any clause to the contrary, to the provisions of Protocol No. 6 (road transport) of the Northern Corridor Transit and Transport Agreement.';
+  if (n.kind === 'contract') {
+    const from = n.takingOver.country ?? 'the country of taking over';
+    const to = n.delivery.country ?? 'the country of delivery';
+    return `No international convention on the carriage of goods by road applies between ${from} and ${to}: neither is a party to the CMR, and they are not both members of the Northern Corridor agreement. This carriage is under its contract and the national law that governs it.`;
+  }
+  return 'Same layout and numbering as the CMR note, used for every consignment on the network — including where no national form exists.';
+}
+
+/**
+ * WHAT AN ELECTRONIC NOTE IS WORTH HERE (e-CMR Protocol, Arts. 2 and 5): equal to the CMR note between two of its parties;
+ * elsewhere, the record the parties agreed — from which a printed note is signed where paper is asked for.
+ */
+export function electronicLine(n: Pick<ConsignmentNote, 'kind' | 'electronic' | 'takingOver' | 'delivery'>): string {
+  if (n.kind === 'cmr' && n.electronic) return 'Made out electronically under the Additional Protocol to the CMR concerning the electronic consignment note (e-CMR, 2008), in force between these two countries.';
+  if (n.kind === 'cmr') return `Made out electronically. The e-CMR Protocol is not in force between ${n.takingOver.country ?? 'these countries'} and ${n.delivery.country ?? 'the country of delivery'}: where a paper note is asked for, this one is printed and signed by hand by the sender and the carrier.`;
+  return 'Made out electronically, confirmed by each party from its own sign-in. Where a paper note is asked for, this one is printed and signed by hand by the sender and the carrier.';
 }
 
 /**
