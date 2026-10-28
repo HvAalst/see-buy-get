@@ -592,4 +592,99 @@ describe('an export to the port, over the wire', () => {
     await http().post(`${paintPath}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201);
     expect((await http().get(`${paintPath}/sli.html`).set(bearer(x.token)).expect(200)).text).toContain('UN1263');
   });
+  /*
+   * EX10 — THE PACKING LIST, IMPORTED (the user, 2026-10-28: "a shipper doesn't want to import by hand especially if the
+   * packing list is long and detailed, that should be dynamic and adaptable"; then: import it, the letter summarises it).
+   */
+  it('the packing list: read from the shipper’s own file, matched once and remembered, checked, signed — the letter’s goods worked out from it', async () => {
+    const x = await anExporter();
+    const agent = await anExporter(['clearing_agent'], 'Pwani Clearing');
+    const made = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ goodsDescription: 'Fresh avocados', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '45R1', booking: booking(Date.now() + 72 * H), loadingSiteId: x.loading, terminalSiteId: x.terminal }).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const read = async (token = x.token) => (await http().get(path).set(bearer(token)).expect(200)).body;
+    await http().post(`${path}/agent`).set(bearer(x.token)).send({ agentEntityId: agent.entityId }).expect(201);
+    await http().post(`${path}/container`).set(bearer(x.token)).send({ containerNo: 'MSCU1234566' }).expect(201);
+    await http().post(`${path}/vgm`).set(bearer(x.token)).send({ method: 1, kg: 9800, signatory: 'Wanjiku Mwangi' }).expect(201);
+
+    // The shipper's own sheet, pasted: its heading block, its own words, a column in pounds, a batch column, a total row.
+    const sheet = [
+      'Thika Avocados Ltd\t\t\t\t\t\t',
+      'Carton No.\tDescription\tHS Code\tCtns\tPackaging\tG.W. (kg)\tBatch',
+      '1-800\tFresh avocados, Hass\t0804.40\t800\tcartons\t3600\tB-0911',
+      '801-1600\tFresh avocados, Hass\t0804.40\t800\tcartons\t3600\tB-0912',
+      '1601-1700\tFresh avocados, Fuerte\t0804.40\t100\tcartons\t450\tB-0913',
+      'TOTAL\t\t\t1700\t\t7650\t',
+    ].join('\n');
+
+    // Checked: every line read, nothing kept. Staff check nothing in its name.
+    const check = (await http().post(`${path}/packing-list/check`).set(bearer(x.token)).send({ text: sheet }).expect(201)).body;
+    expect(check).toMatchObject({ imported: false, headingRow: 2, totals: { lines: 3, packages: 1700, grossKg: 7650 }, problems: [] });
+    expect(check.columns.map((c: { use: string }) => c.use)).toEqual(['marks', 'description', 'hsCode', 'packages', 'packageKind', 'grossKg', 'keep']);
+    expect((await read()).packing).toBeUndefined();
+    expect((await http().post(`${path}/packing-list/check`).set(bearer(operator)).send({ text: sheet })).status).toBe(403);
+
+    // A line that cannot be kept stops the import — a list with a line left out is a wrong one.
+    const broken = await http().post(`${path}/packing-list`).set(bearer(x.token)).send({ text: sheet.replace('\t800\tcartons\t3600\tB-0911', '\teight hundred\tcartons\t3600\tB-0911') });
+    expect([broken.status, String(broken.body.detail)]).toEqual([400, expect.stringContaining('row 3: “eight hundred” under “Ctns” is not a number')]);
+
+    const imported = (await http().post(`${path}/packing-list`).set(bearer(x.token)).send({ text: sheet, sourceName: 'packing-TA-117.xlsx' }).expect(201)).body;
+    expect(imported.packing).toMatchObject({ lineCount: 3, totals: { packages: 1700, grossKg: 7650 }, extraColumns: ['Batch'], versions: [], unsigned: true, sourceName: 'packing-TA-117.xlsx' });
+    // The letter's goods are worked out from it: one line per description, HS code and kind of package.
+    expect(imported.sli).toMatchObject({ fromPacking: true, goods: [
+      { marks: '1-800 – 801-1600', packages: 1600, packageKind: 'cartons', description: 'Fresh avocados, Hass', hsCode: '080440', grossKg: 7200 },
+      { marks: '1601-1700', packages: 100, packageKind: 'cartons', description: 'Fresh avocados, Fuerte', hsCode: '080440', grossKg: 450 },
+    ] });
+
+    // Its weight against the box: more than the verified gross mass, which includes the box itself, is said.
+    await http().post(`${path}/vgm`).set(bearer(x.token)).send({ method: 1, kg: 7000, signatory: 'Wanjiku Mwangi' }).expect(201);
+    expect((await read()).packing.notes[0]).toContain('is more than the box’s verified gross mass, 7,000 kg');
+    await http().post(`${path}/vgm`).set(bearer(x.token)).send({ method: 1, kg: 9800, signatory: 'Wanjiku Mwangi' }).expect(201);
+
+    // Signed: frozen, its line on the papers given, the agent told; the page lists every line and the batch column.
+    const signed = (await http().post(`${path}/packing-list/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201)).body;
+    expect(signed.packing).toMatchObject({ unsigned: false, versions: [expect.objectContaining({ version: 1, lines: 3, packages: 1700 })] });
+    expect(signed.papers.find((p: { key: string }) => p.key === 'packing_list')).toMatchObject({ reference: 'Version 1, signed by Wanjiku Mwangi — 3 lines, 1,700 packages' });
+    expect(signed.missing).not.toContain('Packing list');
+    expect(app.get(NotificationService).inboxFor(app.get(EntityService).get(agent.entityId).did).map((n) => n.title)).toContain(`${made.code}: packing list signed, version 1`);
+    const page = (await http().get(`${path}/packing-list.html`).set(bearer(agent.token)).expect(200)).text;
+    for (const fact of ['Packing list — ' + made.code + ' — version 1', 'Fresh avocados, Fuerte', 'B-0913', 'Batch', 'Total — 3 lines', '1,700']) expect(page).toContain(fact);
+    const file = await http().get(`${path}/papers/packing_list/file`).set(bearer(agent.token)).expect(200);
+    expect(file.headers['x-fingerprint']).toBe(signed.packing.versions[0].fingerprint);
+    expect((await http().get(`${path}/packing-list.html?draft=1`).set(bearer(agent.token))).status).toBe(404);
+
+    // The letter, signed from the list's summary; a new list is a changed letter — and the list unsigned again.
+    await http().post(`${path}/sli`).set(bearer(x.token)).send({ consigneeKind: 'to_order', notify: { name: 'Van Rees', address: 'Rotterdam' }, dischargePort: 'Rotterdam', freight: 'collect', blRelease: 'sea_waybill', lines: [] }).expect(201);
+    await http().post(`${path}/sli/sign`).set(bearer(x.token)).send({ signatory: 'Wanjiku Mwangi' }).expect(201);
+    expect((await http().get(`${path}/sli.html`).set(bearer(x.token)).expect(200)).text).toContain('Fresh avocados, Fuerte');
+    const more = `${sheet}\n1701-1750\tFresh avocados, Hass\t0804.40\t50\tcartons\t225\tB-0914`;
+    const again = (await http().post(`${path}/packing-list`).set(bearer(x.token)).send({ text: more }).expect(201)).body;
+    expect(again.packing.unsigned).toBe(true);
+    expect(again.sli.stale).toBe(true);
+    expect(again.missing).toEqual(expect.arrayContaining([expect.stringContaining('The packing list: imported again since version 1 was signed'), expect.stringContaining('The letter of instruction: the export changed since version 1')]));
+
+    // Matched once, remembered: a file in the business's own words is read the same way next time, without asking.
+    const dutch = 'Omschrijving\tDozen\tBruto kg\nAvocado’s\t20\t90';
+    expect((await http().post(`${path}/packing-list/check`).set(bearer(x.token)).send({ text: dutch }).expect(201)).body.refusal).toMatch(/No column reads as the goods’ description/);
+    await http().post(`${path}/packing-list`).set(bearer(x.token)).send({ text: dutch, mapping: { Omschrijving: 'description', Dozen: 'packages', 'Bruto kg': 'grossKg' } }).expect(201);
+    const second = (await http().post(`${path}/packing-list/check`).set(bearer(x.token)).send({ text: dutch }).expect(201)).body;
+    expect(second.columns.map((c: { because: string }) => c.because)).toEqual(['remembered', 'remembered', 'remembered']);
+
+    // From its own system, with its key: a test key checks and keeps nothing; a live key imports; neither signs.
+    const live = (await http().post('/v1/sbg/business/me/keys').set(bearer(x.token)).send({ mode: 'live', label: 'ERP' }).expect(201)).body.secret as string;
+    const test = (await http().post('/v1/sbg/business/me/keys').set(bearer(x.token)).send({ mode: 'test', label: 'ERP sandbox' }).expect(201)).body.secret as string;
+    const keyed = (k: string) => ({ 'x-sbg-key': k });
+    const listed = (await http().get('/v1/sbg/api/business/exports').set(keyed(live)).expect(200)).body;
+    expect(listed.items.map((r: { exportId: string }) => r.exportId)).toContain(made.exportId);
+    const rows = more.split('\n').slice(1).map((l) => l.split('\t'));
+    const dry = (await http().post(`/v1/sbg/api/business/exports/${made.exportId}/packing-list`).set(keyed(test)).send({ rows }).expect(201)).body;
+    expect(dry).toMatchObject({ test: true, imported: false, check: { totals: { lines: 4, packages: 1750 } } });
+    expect((await read()).packing.lineCount).toBe(1);
+    const sent = (await http().post(`/v1/sbg/api/business/exports/${made.exportId}/packing-list`).set(keyed(live)).send({ rows }).expect(201)).body;
+    expect(sent).toMatchObject({ test: false, imported: true });
+    expect((await read()).packing).toMatchObject({ lineCount: 4, unsigned: true });
+    // Somebody else's export is no export of its own.
+    const other = await anExporter();
+    const otherLive = (await http().post('/v1/sbg/business/me/keys').set(bearer(other.token)).send({ mode: 'live', label: 'ERP' }).expect(201)).body.secret as string;
+    expect((await http().post(`/v1/sbg/api/business/exports/${made.exportId}/packing-list`).set(keyed(otherLive)).send({ rows })).status).toBe(404);
+  });
 });

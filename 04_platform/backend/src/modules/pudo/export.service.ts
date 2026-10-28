@@ -18,8 +18,11 @@ import type { FeeState } from './import.types';
 import { QuoteService } from './quote.service';
 import type { Quote } from './quote.types';
 import { ROUTER, type Router } from './router';
+import { cellsWithRows, packingBasis, packingHtml, readPacking, summarisePacking, totalsOf, type PackingFacts } from './export-packing';
+import type { ExportPackingView, PackingCheck, PackingImportDto, PackingColumnUse } from './export-packing.types';
+import { readWorkbook } from './workbook';
 import { cleanDraft, sliBasis, sliGaps, sliHtml, sliStale, type SliFacts } from './export-sli';
-import type { ExportSliView, SliDraftDto } from './export-sli.types';
+import type { ExportSliView, SliDraft, SliDraftDto } from './export-sli.types';
 import { SiteService } from './site.service';
 
 /** The words for each paper, where a sentence names it (the screen translates its own). */
@@ -101,6 +104,10 @@ export class ExportService {
   private readonly exports = new PersistentMap<string, ExportConsignment>('export-consignments');
   /** Each signed letter of instruction, exactly as it was signed: `exportId:version` → its page and the fingerprint of its bytes. */
   private readonly sliCopies = new PersistentMap<string, { html: string; fingerprint: string }>('export-sli-copies');
+  /** Each signed packing list, exactly as signed, with the fingerprint of its page and of its lines. */
+  private readonly packingCopies = new PersistentMap<string, { html: string; fingerprint: string; basis: string }>('export-packing-copies');
+  /** How each business's headings were read, remembered from its last import: its own file is read the same way next time. */
+  private readonly packingTemplates = new PersistentMap<string, Record<string, PackingColumnUse>>('export-packing-templates');
 
   constructor(
     private readonly entities: EntityService,
@@ -261,6 +268,7 @@ export class ExportService {
       ...(fee ? { fee } : {}),
       feeState: feeStateOf(fee),
       sli: this.sliViewOf(c, you),
+      ...(c.packing ? { packing: this.packingViewOf(c) } : {}),
     };
   }
 
@@ -512,6 +520,13 @@ export class ExportService {
   paperFile(exportId: string, readerEntityId: string, key: ExportPaperKey, opts: { all?: boolean } = {}) {
     const c = this.requireExport(exportId);
     this.sideOf(c, readerEntityId, opts.all);
+    // The packing list: the shipper's own document where one is attached, else its latest signed version, as signed.
+    if (key === 'packing_list' && !c.papers.find((p) => p.key === key)?.documentId) {
+      const version = c.packing?.versions.length ?? 0;
+      const copy = version ? this.packingCopies.get(`${c.exportId}:${version}`) : undefined;
+      if (!copy) throw new GlosError('NOT_FOUND', 'No paper is attached on that line');
+      return { bytes: Buffer.from(copy.html, 'utf8'), contentType: 'text/html; charset=utf-8', fingerprint: copy.fingerprint, intact: createHash('sha256').update(copy.html, 'utf8').digest('hex') === copy.fingerprint };
+    }
     // The letter of instruction is ours to draw: its latest signed version, exactly as signed.
     if (key === 'shipping_instructions') {
       const version = c.sli?.versions.length ?? 0;
@@ -593,7 +608,7 @@ export class ExportService {
    */
   signSli(exportId: string, actorEntityId: string, signatory: string, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
-    const draft = c.sli?.draft;
+    const draft = this.effectiveSli(c);
     const gaps = sliGaps(draft, { hazardous: this.hazardousOf(c), containerNo: c.containerNo });
     if (gaps.length) throw new GlosError('FIELD_REQUIRED', `The letter of instruction is not complete: ${gaps.join('; ')}`);
     const who = signatory?.trim();
@@ -605,7 +620,7 @@ export class ExportService {
     const html = sliHtml(facts, draft!, { version, signedBy: who.slice(0, 120), signedAt });
     const fingerprint = createHash('sha256').update(html, 'utf8').digest('hex');
     this.sliCopies.set(`${c.exportId}:${version}`, { html, fingerprint });
-    c.sli = { draft: draft!, versions: [...versions, { version, signedBy: who.slice(0, 120), signedAt, fingerprint, basis: sliBasis(facts), ...(facts.vgm ? { vgmKg: facts.vgm.kg } : {}), ...(facts.container.seals.length ? { seals: facts.container.seals } : {}) }] };
+    c.sli = { draft: c.sli!.draft!, versions: [...versions, { version, signedBy: who.slice(0, 120), signedAt, fingerprint, basis: sliBasis(facts), ...(facts.vgm ? { vgmKg: facts.vgm.kg } : {}), ...(facts.container.seals.length ? { seals: facts.container.seals } : {}) }] };
     // Its line on the papers: given by the signing, the agent's word on an earlier version no longer standing.
     c.papers = c.papers.map((p) =>
       p.key === 'shipping_instructions'
@@ -626,7 +641,7 @@ export class ExportService {
     const side = this.sideOf(c, readerEntityId, opts.all);
     if (which.draft) {
       if (side !== 'exporter' || !c.sli?.draft) throw new GlosError('NOT_FOUND', 'No draft of the letter of instruction');
-      return sliHtml(this.sliFactsOf(c), c.sli.draft, 'draft');
+      return sliHtml(this.sliFactsOf(c), this.effectiveSli(c)!, 'draft');
     }
     const versions = c.sli?.versions ?? [];
     const version = which.version ?? versions.length;
@@ -669,6 +684,7 @@ export class ExportService {
       container: { ...(c.containerType ? { type: c.containerType } : {}), ...(c.containerNo ? { number: c.containerNo } : {}), seals },
       ...(c.vgm ? { vgm: { kg: c.vgm.kg, method: c.vgm.method, signatory: c.vgm.signatory } } : {}),
       papers: c.papers.filter((p) => p.key !== 'shipping_instructions' && (p.documentId || p.reference)).map((p) => paperLabel(p)),
+      ...(c.packing?.lines.length ? { goods: packingBasis(c.packing.lines) } : {}),
     };
   }
 
@@ -677,13 +693,171 @@ export class ExportService {
     const versions = c.sli?.versions ?? [];
     const last = versions[versions.length - 1];
     const hazardous = this.hazardousOf(c);
+    const fromPacking = Boolean(c.packing?.lines.length);
     return {
       ...(you === 'exporter' && c.sli?.draft ? { draft: c.sli.draft } : {}),
       versions,
-      gaps: sliGaps(c.sli?.draft, { hazardous, containerNo: c.containerNo }),
+      gaps: sliGaps(this.effectiveSli(c), { hazardous, containerNo: c.containerNo }),
+      fromPacking,
+      ...(fromPacking ? { goods: summarisePacking(c.packing!.lines) } : {}),
       stale: Boolean(last && sliStale(last, this.sliFactsOf(c))),
       hazardous,
     };
+  }
+
+  /* --------------------------------------------- EX10 the packing list, imported -- */
+
+  /** The shipper's file as cells: CSV or pasted text, an .xlsx workbook, or the rows its system sends. Exactly one. */
+  private packingCells(input: PackingImportDto): { cells: string[][]; rowNumbers?: number[]; sheet?: string; source: 'workbook' | 'text' | 'rows' } | { refusal: string } {
+    const given = [input.text?.trim() ? 'text' : '', input.workbook ? 'workbook' : '', input.rows?.length ? 'rows' : ''].filter(Boolean);
+    if (given.length !== 1) return { refusal: given.length ? 'Send the list one way: a file’s text, a workbook, or rows — not more than one' : 'Send the list: a CSV file, an Excel workbook, cells pasted from a spreadsheet, or rows' };
+    if (input.rows?.length) return { cells: input.rows.map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? '').trim()) : [])), source: 'rows' };
+    if (input.workbook) {
+      const wb = readWorkbook(Buffer.from(input.workbook, 'base64'));
+      if ('refusal' in wb) return { refusal: wb.refusal };
+      return { cells: wb.rows, rowNumbers: wb.lines, sheet: wb.sheet, source: 'workbook' };
+    }
+    return { ...cellsWithRows(input.text ?? ''), source: 'text' };
+  }
+
+  /** Read the file against this export — its columns, its lines, its problems, and its weight against the box. Keeps nothing. */
+  private readPackingFor(c: ExportConsignment, input: PackingImportDto) {
+    const got = this.packingCells(input);
+    if ('refusal' in got) return { reading: undefined, got, check: { ...EMPTY_PACKING_CHECK, refusal: got.refusal, imported: false } as PackingCheck };
+    const reading = readPacking(got.cells, { chosen: input.mapping, remembered: this.packingTemplates.get(c.exporterEntityId), ...(got.rowNumbers ? { rowNumbers: got.rowNumbers } : {}) });
+    const notes = [...reading.check.notes, ...this.packingNotes(c, reading.check.totals)];
+    return { reading, got, check: { ...reading.check, notes, ...(got.sheet ? { sheet: got.sheet } : {}), imported: false } as PackingCheck };
+  }
+
+  /** What the list's totals say against the export: its gross weight is part of the box's verified gross mass, never more. */
+  private packingNotes(c: ExportConsignment, t: { grossKg: number }): string[] {
+    if (c.vgm && t.grossKg > c.vgm.kg) return [`The list’s gross weight, ${t.grossKg.toLocaleString('en')} kg, is more than the box’s verified gross mass, ${c.vgm.kg.toLocaleString('en')} kg — which includes the box itself. One of them is wrong.`];
+    return [];
+  }
+
+  /** CHECK the shipper's file: every line read, the totals, what is wrong — nothing kept. */
+  checkPacking(exportId: string, actorEntityId: string, input: PackingImportDto): PackingCheck {
+    const c = this.requireOwn(exportId, actorEntityId);
+    return this.readPackingFor(c, input).check;
+  }
+
+  /**
+   * IMPORT it: refused while a line cannot be kept as it is — a packing list with a line left out is a wrong one. The
+   * lines become the list's draft (replacing the last), and how each heading was read is remembered for the business, so
+   * its next file is read the same way without asking.
+   */
+  importPacking(exportId: string, actorEntityId: string, input: PackingImportDto, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    const { reading, got, check } = this.readPackingFor(c, input);
+    if (!reading || check.refusal) throw new GlosError('VALIDATION_FAILED', check.refusal ?? 'The list could not be read');
+    if (check.problems.length) {
+      const shown = check.problems.slice(0, 5).map((p) => `row ${p.row}: ${p.says}`).join('; ');
+      throw new GlosError('VALIDATION_FAILED', `The list has ${check.problems.length} line${check.problems.length === 1 ? '' : 's'} that cannot be kept as ${check.problems.length === 1 ? 'it is' : 'they are'} — ${shown}${check.problems.length > 5 ? '; …' : ''}. Put the file right, or match the columns, and import it again`);
+    }
+    this.packingTemplates.set(c.exporterEntityId, { ...(this.packingTemplates.get(c.exporterEntityId) ?? {}), ...reading.mapping });
+    c.packing = {
+      lines: reading.lines,
+      extraColumns: reading.extraColumns,
+      source: 'source' in got ? got.source : 'text',
+      ...(input.sourceName?.trim() ? { sourceName: input.sourceName.trim().slice(0, 160) } : {}),
+      importedAt: new Date(now).toISOString(),
+      importedBy: by,
+      versions: c.packing?.versions ?? [],
+    };
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /**
+   * SIGN THE LIST — frozen exactly as it is, with the fingerprint of its page; a change is a new version. Its line among
+   * the papers is given by it (the shipper's own document stays a way to give it), and the agent's word is asked again.
+   */
+  signPacking(exportId: string, actorEntityId: string, signatory: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    const p = c.packing;
+    if (!p?.lines.length) throw new GlosError('INVALID_STATE', 'Import the packing list first');
+    const who = signatory?.trim();
+    if (!who || who.length < 2) throw new GlosError('FIELD_REQUIRED', 'Say who signs it, for the exporter', { field: 'signatory' });
+    const version = p.versions.length + 1;
+    const signedAt = new Date(now).toISOString();
+    const html = packingHtml(this.packingFactsOf(c), p.lines, p.extraColumns, { version, signedBy: who.slice(0, 120), signedAt });
+    const fingerprint = createHash('sha256').update(html, 'utf8').digest('hex');
+    this.packingCopies.set(`${c.exportId}:${version}`, { html, fingerprint, basis: packingBasis(p.lines) });
+    const t = totalsOf(p.lines);
+    p.versions = [...p.versions, { version, signedBy: who.slice(0, 120), signedAt, fingerprint, lines: t.lines, packages: t.packages }];
+    c.papers = c.papers.map((line) =>
+      line.key === 'packing_list'
+        ? { key: line.key, ...(line.optional ? { optional: true } : {}), reference: `Version ${version}, signed by ${who.slice(0, 60)} — ${t.lines.toLocaleString('en')} line${t.lines === 1 ? '' : 's'}, ${t.packages.toLocaleString('en')} packages`, suppliedAt: signedAt, suppliedBy: by }
+        : line,
+    );
+    this.exports.set(c.exportId, c);
+    if (c.agent) this.tell(c, `${c.code}: packing list signed, version ${version}`, `${this.nameOf(c.exporterEntityId)} signed its packing list for ${c.code}, version ${version} (${t.lines.toLocaleString('en')} lines). Read it on the export, and accept it or send it back.`, c.agent.entityId);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** The list's page: a signed version exactly as signed (the latest unless one is named), or the exporter's draft. */
+  packingPage(exportId: string, readerEntityId: string, which: { version?: number; draft?: boolean } = {}, opts: { all?: boolean } = {}): string {
+    const c = this.requireExport(exportId);
+    const side = this.sideOf(c, readerEntityId, opts.all);
+    if (which.draft) {
+      if (side !== 'exporter' || !c.packing?.lines.length) throw new GlosError('NOT_FOUND', 'No draft of the packing list');
+      return packingHtml(this.packingFactsOf(c), c.packing.lines, c.packing.extraColumns, 'draft');
+    }
+    const version = which.version ?? c.packing?.versions.length ?? 0;
+    const copy = version > 0 ? this.packingCopies.get(`${c.exportId}:${version}`) : undefined;
+    if (!copy) throw new GlosError('NOT_FOUND', 'No such version of the packing list');
+    return copy.html;
+  }
+
+  /** The exports a business's own system may send a packing list to — its own, as its Exports screen lists them. */
+  exportsOf(entityId: string, now = Date.now()): ExportRow[] {
+    return this.list(entityId, {}, now).filter((r) => r.you === 'exporter');
+  }
+
+  private packingFactsOf(c: ExportConsignment): PackingFacts {
+    const exporter = this.entities.get(c.exporterEntityId);
+    const a = this.entities.recordOf(c.exporterEntityId).registeredAddress;
+    const seals = c.ladenFreightId ? this.seals.views(c.ladenFreightId).filter((s) => s.state === 'on').map((s) => s.number ?? '—') : [];
+    const consignee = c.sli?.draft?.consigneeKind === 'named' ? c.sli.draft.consignee?.name : c.sli?.draft?.consigneeKind === 'to_order_of_bank' ? `To the order of ${c.sli.draft.orderOfBank ?? '—'}` : c.sli?.draft ? 'To order' : undefined;
+    return {
+      code: c.code,
+      shipper: { name: exporter.name, ...(a ? { address: [a.line1, a.line2, a.city, a.region, a.postalCode].filter(Boolean).join(', ') } : {}), country: c.originCountry },
+      ...(consignee ? { consignee } : {}),
+      booking: c.booking.reference,
+      forwarder: c.booking.partyName,
+      ...(c.booking.vessel ? { vessel: `${c.booking.vessel}${c.booking.voyage ? ` / ${c.booking.voyage}` : ''}` } : {}),
+      loadingPort: c.loadingPort,
+      destCountry: c.destCountry,
+      container: { ...(c.containerType ? { type: c.containerType } : {}), ...(c.containerNo ? { number: c.containerNo } : {}), seals },
+    };
+  }
+
+  /** The list as a reader sees it on the export. */
+  private packingViewOf(c: ExportConsignment): ExportPackingView | undefined {
+    const p = c.packing;
+    if (!p) return undefined;
+    const last = p.versions[p.versions.length - 1];
+    const signedBasis = last ? this.packingCopies.get(`${c.exportId}:${last.version}`)?.basis : undefined;
+    const t = totalsOf(p.lines);
+    return {
+      lineCount: p.lines.length,
+      totals: t,
+      preview: p.lines.slice(0, 20),
+      extraColumns: p.extraColumns,
+      versions: p.versions,
+      importedAt: p.importedAt,
+      importedBy: p.importedBy,
+      ...(p.sourceName ? { sourceName: p.sourceName } : {}),
+      unsigned: !last || signedBasis !== packingBasis(p.lines) || last.lines !== t.lines,
+      notes: this.packingNotes(c, t),
+    };
+  }
+
+  /** The letter as it is drawn: its goods worked out from the packing list where there is one, else as typed. */
+  private effectiveSli(c: ExportConsignment): SliDraft | undefined {
+    const draft = c.sli?.draft;
+    if (!draft || !c.packing?.lines.length) return draft;
+    return { ...draft, lines: summarisePacking(c.packing.lines) };
   }
 
   /* ------------------------------------------------- EX7 the clearing agent -- */
@@ -882,6 +1056,8 @@ export class ExportService {
     if (!c.ladenFreightId) out.push('A load to the terminal');
     else if (!this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the terminal');
     if (!c.vgm) out.push('The verified gross mass');
+    const pv = this.packingViewOf(c);
+    if (pv && pv.versions.length && pv.unsigned) out.push(`The packing list: imported again since version ${pv.versions.length} was signed — sign it`);
     const lastSli = c.sli?.versions[c.sli.versions.length - 1];
     if (lastSli && sliStale(lastSli, this.sliFactsOf(c))) out.push(`The letter of instruction: the export changed since version ${lastSli.version} was signed — sign it again`);
     for (const p of c.papers) {
@@ -1058,6 +1234,8 @@ function moment(value: string | undefined, what: string): string | undefined {
   if (Number.isNaN(at)) throw new GlosError('VALIDATION_FAILED', `${what} must be a date and time`);
   return new Date(at).toISOString();
 }
+
+const EMPTY_PACKING_CHECK = { columns: [], headingRow: 0, totals: { lines: 0, packages: 0, grossKg: 0, netKg: 0, volumeM3: 0 }, preview: [], problems: [], notes: [] };
 
 /** How far the agent's fee has got, read off its quotation every time — the import's words. */
 function feeStateOf(fee?: Quote): FeeState {

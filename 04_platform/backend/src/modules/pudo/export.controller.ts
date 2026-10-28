@@ -10,6 +10,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { ExportService } from './export.service';
 import { SliDraftDto, SliSignDto } from './export-sli.types';
+import { PackingCheck, PackingImportDto, PackingSignDto } from './export-packing.types';
 import {
   isExportPaperKey,
   ExportAddPaperDto,
@@ -139,6 +140,41 @@ export class ExportController {
   @Post(':exportId/own-box')
   ownBox(@Param('exportId') exportId: string, @Body() dto: ExportOwnBoxDto, @Actor() actor: IntrospectionResult): ExportDetail {
     return this.exports.setOwnBox(exportId, this.ownCompany(actor), dto.own, auditActor(actor));
+  }
+
+  /* ------------------------------------------------- EX10 the packing list, imported -- */
+
+  /** Check the shipper's file — its columns, its lines, its problems — keeping nothing. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/packing-list/check')
+  checkPacking(@Param('exportId') exportId: string, @Body() dto: PackingImportDto, @Actor() actor: IntrospectionResult): PackingCheck {
+    return this.exports.checkPacking(exportId, this.ownCompany(actor), dto);
+  }
+
+  /** Import it: refused while a line cannot be kept; how its headings were read is remembered for the business. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/packing-list')
+  importPacking(@Param('exportId') exportId: string, @Body() dto: PackingImportDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.importPacking(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  /** Sign it: frozen as a new version with the fingerprint of its page. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/packing-list/sign')
+  signPacking(@Param('exportId') exportId: string, @Body() dto: PackingSignDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.signPacking(exportId, this.ownCompany(actor), dto.signatory, auditActor(actor));
+  }
+
+  /** The list's page: a signed version as signed, or the exporter's own draft. */
+  @Roles('business', 'entity_admin', 'operator')
+  @ApiQuery({ name: 'version', required: false })
+  @ApiQuery({ name: 'draft', required: false })
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  @Header('Cache-Control', 'private, no-store')
+  @Get(':exportId/packing-list.html')
+  packingPage(@Param('exportId') exportId: string, @Actor() actor: IntrospectionResult, @Query('version') version?: string, @Query('draft') draft?: string): string {
+    const which = { ...(version ? { version: Number(version) } : {}), ...(draft === '1' || draft === 'true' ? { draft: true } : {}) };
+    return actor?.role === 'operator' ? this.exports.packingPage(exportId, '', which, { all: true }) : this.exports.packingPage(exportId, this.ownCompany(actor), which);
   }
 
   /* --------------------------------------- EX9 the shipper's letter of instruction -- */

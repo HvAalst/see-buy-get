@@ -4386,6 +4386,178 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/packing-list/check": {
+      "post": {
+        "operationId": "Export.checkPacking",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackingImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PackingCheck"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/packing-list": {
+      "post": {
+        "operationId": "Export.importPacking",
+        "summary": "",
+        "description": "Import it: refused while a line cannot be kept; how its headings were read is remembered for the business.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackingImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/packing-list/sign": {
+      "post": {
+        "operationId": "Export.signPacking",
+        "summary": "",
+        "description": "Sign it: frozen as a new version with the fingerprint of its page.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackingSignDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/packing-list.html": {
+      "get": {
+        "operationId": "Export.packingPage",
+        "summary": "",
+        "description": "The list's page: a signed version as signed, or the exporter's own draft.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "draft",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/exports/{exportId}/sli": {
       "post": {
         "operationId": "Export.saveSli",
@@ -27698,6 +27870,59 @@
         }
       }
     },
+    "/v1/sbg/api/business/exports": {
+      "get": {
+        "operationId": "CompanyApi.exportsList",
+        "summary": "",
+        "description": "Its exports, as its Exports screen lists them — to send a packing list to the right one.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/api/business/exports/{exportId}/packing-list": {
+      "post": {
+        "operationId": "CompanyApi.packingList",
+        "summary": "",
+        "description": "AN EXPORT'S PACKING LIST, FROM ITS OWN SYSTEM (2026-10-28: \"a shipper doesn't want to import by hand\"): rows, the\nheadings first, read exactly as a file uploaded in the app is — the same headings recognised, the same matching\nremembered, the same checks. A TEST key checks and keeps nothing; a live key imports the list as its draft. Signing\nit stays a person's act, in the app: a key never signs for a business.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PackingImportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/api/fleet/orders": {
       "get": {
         "operationId": "CompanyApi.orders",
@@ -35657,6 +35882,143 @@
           "versions"
         ]
       },
+      "PackingLine": {
+        "type": "object",
+        "properties": {
+          "marks": {
+            "type": "string"
+          },
+          "itemCode": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "hsCode": {
+            "type": "string",
+            "description": "The shipper's own HS code — we never classify."
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "packages": {
+            "type": "number"
+          },
+          "packageKind": {
+            "type": "string"
+          },
+          "netKg": {
+            "type": "number"
+          },
+          "grossKg": {
+            "type": "number"
+          },
+          "volumeM3": {
+            "type": "number"
+          },
+          "lengthCm": {
+            "type": "number"
+          },
+          "widthCm": {
+            "type": "number"
+          },
+          "heightCm": {
+            "type": "number"
+          },
+          "extra": {
+            "type": "object",
+            "description": "The columns kept as they are, by their heading."
+          }
+        },
+        "required": [
+          "description",
+          "packages"
+        ]
+      },
+      "PackingVersion": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number"
+          },
+          "signedBy": {
+            "type": "string"
+          },
+          "signedAt": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "sha256 of the frozen page's bytes."
+          },
+          "lines": {
+            "type": "number"
+          },
+          "packages": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "version",
+          "signedBy",
+          "signedAt",
+          "fingerprint",
+          "lines",
+          "packages"
+        ]
+      },
+      "ExportPacking": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackingLine"
+            }
+          },
+          "extraColumns": {
+            "description": "The kept columns' headings, in the file's order.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "workbook",
+              "text",
+              "rows"
+            ]
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "importedAt": {
+            "type": "string"
+          },
+          "importedBy": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackingVersion"
+            }
+          }
+        },
+        "required": [
+          "lines",
+          "extraColumns",
+          "source",
+          "importedAt",
+          "importedBy",
+          "versions"
+        ]
+      },
       "ExportConsignment": {
         "type": "object",
         "properties": {
@@ -35789,6 +36151,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ExportSli"
+              }
+            ]
+          },
+          "packing": {
+            "description": "The packing list, imported from the shipper's own file: its lines and the versions signed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportPacking"
               }
             ]
           },
@@ -36329,13 +36699,110 @@
           "hazardous": {
             "type": "boolean",
             "description": "Whether the goods are hazardous: the form then asks for their dangerous goods particulars."
+          },
+          "fromPacking": {
+            "type": "boolean",
+            "description": "The goods come from the packing list (worked out, not typed): its summary, as the letter will carry it."
+          },
+          "goods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SliLine"
+            }
           }
         },
         "required": [
           "versions",
           "gaps",
           "stale",
-          "hazardous"
+          "hazardous",
+          "fromPacking"
+        ]
+      },
+      "PackingTotals": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "number"
+          },
+          "packages": {
+            "type": "number"
+          },
+          "grossKg": {
+            "type": "number"
+          },
+          "netKg": {
+            "type": "number"
+          },
+          "volumeM3": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "lines",
+          "packages",
+          "grossKg",
+          "netKg",
+          "volumeM3"
+        ]
+      },
+      "ExportPackingView": {
+        "type": "object",
+        "properties": {
+          "lineCount": {
+            "type": "number"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/PackingTotals"
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackingLine"
+            }
+          },
+          "extraColumns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackingVersion"
+            }
+          },
+          "importedAt": {
+            "type": "string"
+          },
+          "importedBy": {
+            "type": "string"
+          },
+          "sourceName": {
+            "type": "string"
+          },
+          "unsigned": {
+            "type": "boolean",
+            "description": "The draft differs from the last signed version: sign it again for the forwarder to hold this one."
+          },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "lineCount",
+          "totals",
+          "preview",
+          "extraColumns",
+          "versions",
+          "importedAt",
+          "importedBy",
+          "unsigned",
+          "notes"
         ]
       },
       "ExportDetail": {
@@ -36417,6 +36884,9 @@
           },
           "sli": {
             "$ref": "#/components/schemas/ExportSliView"
+          },
+          "packing": {
+            "$ref": "#/components/schemas/ExportPackingView"
           }
         },
         "required": [
@@ -36565,6 +37035,176 @@
         },
         "required": [
           "own"
+        ]
+      },
+      "PackingImportDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "A CSV file's text, or cells pasted from a spreadsheet (tab-separated).",
+            "maxLength": 3000000
+          },
+          "workbook": {
+            "type": "string",
+            "description": "An .xlsx workbook, base64 — a megabyte of workbook at most.",
+            "maxLength": 1400000
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "required": false,
+              "description": "Rows a system sends, the headings first — read exactly as a sheet is.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "mapping": {
+            "type": "object",
+            "description": "Headings matched by hand: heading → a field, `keep` or `ignore`. Remembered for the business on import."
+          },
+          "sourceName": {
+            "type": "string",
+            "description": "The file's name, said back on the export.",
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "rows"
+        ]
+      },
+      "PackingColumn": {
+        "type": "object",
+        "properties": {
+          "heading": {
+            "type": "string"
+          },
+          "use": {
+            "type": "string",
+            "enum": [
+              "marks",
+              "itemCode",
+              "description",
+              "hsCode",
+              "quantity",
+              "unit",
+              "packages",
+              "packageKind",
+              "netKg",
+              "grossKg",
+              "volumeM3",
+              "lengthCm",
+              "widthCm",
+              "heightCm",
+              "keep",
+              "ignore"
+            ]
+          },
+          "because": {
+            "type": "string",
+            "enum": [
+              "heading",
+              "remembered",
+              "chosen",
+              "kept"
+            ]
+          },
+          "convertedFrom": {
+            "type": "string",
+            "description": "A unit read off the heading and converted from: lb, g, cubic feet, litres."
+          }
+        },
+        "required": [
+          "heading",
+          "use",
+          "because"
+        ]
+      },
+      "PackingProblem": {
+        "type": "object",
+        "properties": {
+          "row": {
+            "type": "number",
+            "description": "The row as the spreadsheet numbers it."
+          },
+          "says": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "says"
+        ]
+      },
+      "PackingCheck": {
+        "type": "object",
+        "properties": {
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackingColumn"
+            }
+          },
+          "headingRow": {
+            "type": "number",
+            "description": "The row its headings were found on — a company's own heading block above the table is passed by."
+          },
+          "totals": {
+            "$ref": "#/components/schemas/PackingTotals"
+          },
+          "preview": {
+            "description": "The first lines, as they will be kept.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackingLine"
+            }
+          },
+          "problems": {
+            "description": "Lines that cannot be kept as they are — the list is not imported while there are any.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PackingProblem"
+            }
+          },
+          "notes": {
+            "description": "What is worth knowing and does not stop it: a column missing, a total row passed by, the weight against the box.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sheet": {
+            "type": "string"
+          },
+          "refusal": {
+            "type": "string"
+          },
+          "imported": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "columns",
+          "headingRow",
+          "totals",
+          "preview",
+          "problems",
+          "notes",
+          "imported"
+        ]
+      },
+      "PackingSignDto": {
+        "type": "object",
+        "properties": {
+          "signatory": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "signatory"
         ]
       },
       "SliPartyDto": {

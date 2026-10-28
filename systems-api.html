@@ -221,6 +221,32 @@
   the company of the country the goods are taken over in requires a seal on it. Without one written, the goods are not
   taken over.</p>
 
+  <h3>An export’s packing list</h3>
+  <p><span class="endpoint"><span class="verb get">GET</span>/sbg/api/business/exports</span>
+  &nbsp;<span class="endpoint"><span class="verb">POST</span>/sbg/api/business/exports/{exportId}/packing-list</span></p>
+  <p>Your exports, as the Business app lists them, and the packing list of one sent from your own system rather than
+  typed: the rows of your list, its headings first, exactly as your system has them. They are read as a file uploaded in
+  the app is — each heading recognised by its common words (<em>Description</em>, <em>Ctns</em>, <em>G.W. (lbs)</em>,
+  <em>CBM</em>, <em>HS Code</em>, <em>Carton No.</em> …), or as your business matched it on an earlier import, which is
+  remembered; a heading recognised as nothing is kept and printed as it is. Weights in pounds or grams and volumes in
+  cubic feet or litres are converted where the heading says so. A total row is passed by.</p>
+<pre><code>{
+  "rows": [
+    ["Carton No.", "Description", "HS Code", "Ctns", "G.W. (kg)", "Batch"],
+    ["1-800", "Fresh avocados, Hass", "0804.40", "800", "3600", "B-0911"]
+  ],
+  "mapping": { "Batch": "keep" }
+}</code></pre>
+  <p><code>mapping</code> is optional: a heading and what it is — <code>marks</code>, <code>itemCode</code>,
+  <code>description</code>, <code>hsCode</code>, <code>quantity</code>, <code>unit</code>, <code>packages</code>,
+  <code>packageKind</code>, <code>netKg</code>, <code>grossKg</code>, <code>volumeM3</code>, <code>lengthCm</code>,
+  <code>widthCm</code>, <code>heightCm</code>, <code>keep</code> or <code>ignore</code>.</p>
+<pre><code>{ "test": false, "imported": true, "replayed": false, "check": { "totals": { "lines": 1, "packages": 800, "grossKg": 3600, … }, "columns": [ … ], "problems": [], "notes": [ … ] } }</code></pre>
+  <p>A list with a line that cannot be kept as it is — a number that is not one, an HS code that is not one, a line with
+  no description — is not imported: <code>imported</code> is false and <code>problems</code> says which row and why.
+  With a test key it is checked and nothing is kept. The list becomes the export’s draft: the letter of instruction’s
+  goods are worked out from it. Signing it is a person’s act, in the app — a key never signs for your business.</p>
+
   <h3>Withdraw a load</h3>
   <p><span class="endpoint"><span class="verb">POST</span>/sbg/api/business/loads/{freightId}/withdraw</span>
   &nbsp;<code>{ "reason": "The buyer cancelled" }</code></p>

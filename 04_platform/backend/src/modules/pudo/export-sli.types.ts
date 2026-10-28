@@ -106,6 +106,9 @@ export class ExportSliView {
   @ApiProperty() stale: boolean;
   /** Whether the goods are hazardous: the form then asks for their dangerous goods particulars. */
   @ApiProperty() hazardous: boolean;
+  /** The goods come from the packing list (worked out, not typed): its summary, as the letter will carry it. */
+  @ApiProperty() fromPacking: boolean;
+  @ApiPropertyOptional({ type: [SliLine] }) goods?: SliLine[];
 }
 
 /* -------------------------------------------------------------------- requests -- */

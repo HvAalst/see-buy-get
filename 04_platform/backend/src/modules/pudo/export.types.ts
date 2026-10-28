@@ -5,6 +5,7 @@ import { FREE_DAY_KINDS, type FreeDayKind } from './container-box';
 import { FEE_STATES, type FeeState } from './import.types';
 import { Quote } from './quote.types';
 import { ExportSli, ExportSliView } from './export-sli.types';
+import { ExportPacking, ExportPackingView } from './export-packing.types';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -252,6 +253,8 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: ExportOwnBox }) ownBox?: ExportOwnBox;
   /** The shipper's letter of instruction: the form, and the versions signed. */
   @ApiPropertyOptional({ type: ExportSli }) sli?: ExportSli;
+  /** The packing list, imported from the shipper's own file: its lines and the versions signed. */
+  @ApiPropertyOptional({ type: ExportPacking }) packing?: ExportPacking;
   /** Which warnings were sent, once each: the latest departure near, the cut-off passed, the VGM cut-off near — and the box's free days, once per due date. */
   @ApiPropertyOptional() warned?: { pickup?: string; gate?: string; vgm?: string; box?: string[] };
   @ApiProperty() createdAt: string;
@@ -345,6 +348,7 @@ export class ExportDetail {
   @ApiPropertyOptional({ type: Quote }) fee?: Quote;
   @ApiProperty({ enum: FEE_STATES }) feeState: FeeState;
   @ApiProperty({ type: ExportSliView }) sli: ExportSliView;
+  @ApiPropertyOptional({ type: ExportPackingView }) packing?: ExportPackingView;
 }
 
 export class ExportRow {

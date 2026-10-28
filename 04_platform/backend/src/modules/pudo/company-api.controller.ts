@@ -26,6 +26,8 @@ import { ORDER_SHEET_TEMPLATE } from './order-sheet';
 import { OrderImportService } from './order-import.service';
 import { RegisterFreightDto } from './pudo.dto';
 import { VehicleService } from './vehicle.service';
+import { ExportService } from './export.service';
+import { PackingImportDto } from './export-packing.types';
 
 /** The order sheet's own columns, in its own order: an order a system sends is read exactly as a line of a sheet. */
 const SHEET_COLUMNS = ORDER_SHEET_TEMPLATE.split('\r\n')[0].split(',');
@@ -64,6 +66,8 @@ export class CompanyApiController {
     // Round 33 — the seals on a business's loads, and the photographs they name.
     private readonly seals: LoadSealService,
     private readonly media: MediaService,
+    // 2026-10-28 — an export's packing list, from the business's own system.
+    private readonly exportsSvc: ExportService,
   ) {}
 
   /* --------------------------------------------------------------- a business -- */
@@ -192,6 +196,36 @@ export class CompanyApiController {
     }
     if (!f || f.postedByDid !== entity.did) throw new GlosError('NOT_FOUND', 'No such load of yours');
     return f;
+  }
+
+  /** Its exports, as its Exports screen lists them — to send a packing list to the right one. */
+  @Public()
+  @RateLimit(60, 60)
+  @Get('business/exports')
+  exportsList(@CompanyKey() caller: CompanyCaller) {
+    const items = this.exportsSvc.exportsOf(this.business(caller).entityId);
+    return { items, total: items.length };
+  }
+
+  /**
+   * AN EXPORT'S PACKING LIST, FROM ITS OWN SYSTEM (2026-10-28: "a shipper doesn't want to import by hand"): rows, the
+   * headings first, read exactly as a file uploaded in the app is — the same headings recognised, the same matching
+   * remembered, the same checks. A TEST key checks and keeps nothing; a live key imports the list as its draft. Signing
+   * it stays a person's act, in the app: a key never signs for a business.
+   */
+  @Public()
+  @OwnIdempotency()
+  @RateLimit(30, 60)
+  @Post('business/exports/:exportId/packing-list')
+  async packingList(@Param('exportId') exportId: string, @Body() dto: PackingImportDto, @CompanyKey() caller: CompanyCaller, @Headers('idempotency-key') idempotencyKey?: string) {
+    const entity = this.business(caller);
+    const { result, replayed } = await this.idempotency.run(`api:business/exports/packing:${caller.keyId}`, idempotencyKey, { exportId, ...dto }, () => {
+      const check = this.exportsSvc.checkPacking(exportId, entity.entityId, dto);
+      if (caller.mode === 'test' || check.refusal || check.problems.length) return { test: caller.mode === 'test', imported: false, check };
+      this.exportsSvc.importPacking(exportId, entity.entityId, dto, caller.name);
+      return { test: false, imported: true, check: { ...check, imported: true } };
+    });
+    return { ...result, replayed };
   }
 
   /* ------------------------------------------------------------------- a fleet -- */

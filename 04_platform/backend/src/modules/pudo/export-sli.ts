@@ -107,6 +107,8 @@ export function sliGaps(d: SliDraft | undefined, ctx: { hazardous: boolean; cont
 }
 
 export interface SliFacts {
+  /** The packing list's fingerprint, where the goods come from one: a changed list is a changed letter. */
+  goods?: string;
   code: string;
   shipper: { name: string; address?: string; registrationNo?: string; taxNo?: string; country: string };
   forwarder: string;
