@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, Checkbox, Chip, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, ExplainerReset, SelectionBar, Sheet, TopUpCostNote, PhoneField } from '../../../shared/ui';
+import { AuthImage, Button, Card, Checkbox, Chip, Choice, CodeCard, ErrorNote, GlanceNumber, Icon, Note, Pager, Pill, ReadAloud, PushPrompt, SearchInput, ExplainerReset, SelectionBar, Sheet, TopUpCostNote, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
@@ -427,32 +427,37 @@ function FilterSheet({ open, onClose, query, points, onApply, onClearAll }: { op
   return (
     <Sheet open={open} onClose={onClose} title={t('vendor.orders.filterTitle')}>
       <div class="field">
-        <label class="field__label" for="f-status">{t('vendor.orders.fStatus')}</label>
-        <select id="f-status" class="select" value={draft.status} onChange={(e) => set({ status: e.currentTarget.value })}>
-          <option value="">{t('vendor.orders.anyStatus')}</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{orderStatus(s as OrderRow['status'], t).word}</option>
-          ))}
-        </select>
+        <Choice
+          id="f-status"
+          label={t('vendor.orders.fStatus')}
+          value={draft.status}
+          options={[{ value: '', label: t('vendor.orders.anyStatus') }, ...STATUS_OPTIONS.map((s) => ({ value: s, label: orderStatus(s as OrderRow['status'], t).word }))]}
+          onChange={(status) => set({ status })}
+        />
       </div>
 
       <div class="field">
-        <label class="field__label" for="f-pudo">{t('vendor.orders.fPudo')}</label>
-        <select id="f-pudo" class="select" value={draft.pudo} onChange={(e) => set({ pudo: e.currentTarget.value })}>
-          <option value="">{t('vendor.orders.anyPudo')}</option>
-          {destPudos.map((p) => (
-            <option key={p.did} value={p.did}>{p.shopName}</option>
-          ))}
-        </select>
+        <Choice
+          id="f-pudo"
+          label={t('vendor.orders.fPudo')}
+          value={draft.pudo}
+          options={[{ value: '', label: t('vendor.orders.anyPudo') }, ...destPudos.map((p) => ({ value: p.did, label: p.shopName }))]}
+          onChange={(pudo) => set({ pudo })}
+        />
       </div>
 
       <div class="field">
-        <label class="field__label" for="f-paid">{t('vendor.orders.fPayment')}</label>
-        <select id="f-paid" class="select" value={draft.paid} onChange={(e) => set({ paid: e.currentTarget.value as OrderQuery['paid'] })}>
-          <option value="">{t('vendor.orders.anyPayment')}</option>
-          <option value="paid">{t('vendor.paid.paid')}</option>
-          <option value="unpaid">{t('vendor.paid.unpaid')}</option>
-        </select>
+        <Choice
+          id="f-paid"
+          label={t('vendor.orders.fPayment')}
+          value={draft.paid}
+          options={[
+            { value: '', label: t('vendor.orders.anyPayment') },
+            { value: 'paid', label: t('vendor.paid.paid') },
+            { value: 'unpaid', label: t('vendor.paid.unpaid') },
+          ]}
+          onChange={(paid) => set({ paid: paid as OrderQuery['paid'] })}
+        />
       </div>
 
       <div class="reg__dates">
@@ -467,12 +472,13 @@ function FilterSheet({ open, onClose, query, points, onApply, onClearAll }: { op
       </div>
 
       <div class="field">
-        <label class="field__label" for="f-sort">{t('vendor.sortLabel')}</label>
-        <select id="f-sort" class="select" value={draft.sort} onChange={(e) => set({ sort: e.currentTarget.value as OrderQuery['sort'] })}>
-          {SORT_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
-          ))}
-        </select>
+        <Choice
+          id="f-sort"
+          label={t('vendor.sortLabel')}
+          value={draft.sort}
+          options={SORT_OPTIONS.map((s) => ({ value: s.value, label: t(s.labelKey) }))}
+          onChange={(sort) => set({ sort: sort as OrderQuery['sort'] })}
+        />
       </div>
 
       <Button chevron={false} onClick={() => onApply({ status: draft.status, pudo: draft.pudo, paid: draft.paid, from: draft.from, to: draft.to, sort: draft.sort })}>

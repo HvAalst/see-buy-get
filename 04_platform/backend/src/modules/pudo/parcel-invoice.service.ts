@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
+import { isKnownCurrency } from '../../foundation/countries/catalogue';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { country, invoiceLine, invoicePage, invoiceParty, round, text } from './commercial-invoice.service';
@@ -56,6 +57,8 @@ export class ParcelInvoiceService {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(issuedOn) || Number.isNaN(Date.parse(`${issuedOn}T00:00:00Z`))) throw new GlosError('VALIDATION_FAILED', 'The invoice date is a day: YYYY-MM-DD', { field: 'invoice.issuedOn' });
     const currency = String(input.currency ?? '').trim().toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw new GlosError('VALIDATION_FAILED', 'The money is three letters, like KES or USD', { field: 'invoice.currency' });
+    // Three letters is not yet a currency (the user, 2026-10-28, on the store's papers): "KSH" is none, and customs stops it.
+    if (!isKnownCurrency(currency)) throw new GlosError('VALIDATION_FAILED', `“${currency}” is no currency we know — use its three-letter code, like KES or USD`, { field: 'invoice.currency' });
     const reason = (input.reason ?? 'sale') as ExportReason;
 
     const buyer = text(input.importer?.name, 120);

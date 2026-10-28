@@ -10,6 +10,24 @@ export interface SheetProps {
   dismissible?: boolean;
 }
 
+/** The sheets open now, the last on top: a key belongs to the top one only. */
+const openSheets: object[] = [];
+
+/** Which open sheet a key belongs to. A sheet opened from a sheet (a picker in a filter sheet, a currency over a
+ *  load's details) is on top: Escape closes it alone, and the focus stays in it. Both used to answer. */
+export const sheetStack = {
+  open(me: object): void {
+    openSheets.push(me);
+  },
+  isTop(me: object): boolean {
+    return openSheets[openSheets.length - 1] === me;
+  },
+  close(me: object): void {
+    const at = openSheets.indexOf(me);
+    if (at >= 0) openSheets.splice(at, 1);
+  },
+};
+
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
@@ -39,6 +57,8 @@ export function Sheet({ open, onClose, title, children, dismissible = true }: Sh
     if (!open) return;
 
     restoreTo.current = document.activeElement as HTMLElement | null;
+    const me = {};
+    sheetStack.open(me);
 
     // Scroll-lock the page behind: a sheet that lets the body scroll under it reads as
     // a broken overlay on a phone.
@@ -50,6 +70,8 @@ export function Sheet({ open, onClose, title, children, dismissible = true }: Sh
     (first ?? panel)?.focus();
 
     const onKey = (e: KeyboardEvent) => {
+      // A sheet opened over this one answers its own keys: Escape closes it alone, and the focus stays in it.
+      if (!sheetStack.isTop(me)) return;
       if (e.key === 'Escape' && dismissible) {
         e.preventDefault();
         onCloseRef.current();
@@ -77,6 +99,7 @@ export function Sheet({ open, onClose, title, children, dismissible = true }: Sh
     document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
+      sheetStack.close(me);
       document.body.style.overflow = prevOverflow;
       restoreTo.current?.focus?.();
     };

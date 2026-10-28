@@ -159,6 +159,7 @@ export const en = {
   'common.paidDirect.toastDetail': 'The shipper sees it on the load, with the time.',
   // The look-and-choose picker (OptionPicker), used wherever a list is too long or too visual for a dropdown.
   'common.searchOptions': 'Search the list…',
+  'common.choose': 'Choose…',
   'common.noMatches': 'Nothing in this list matches that.',
   'common.stop': 'Stop',
   // 2026-10-25 — what every sign-up agrees to, and the sheet that asks again after signing in (shared/documents).

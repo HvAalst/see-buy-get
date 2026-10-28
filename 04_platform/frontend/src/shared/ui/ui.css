@@ -2396,6 +2396,39 @@
   color: var(--tx3);
 }
 
+/* --- Choice: one choice, tapped as chips or picked in a sheet — never the phone's own list ------------- */
+
+/* A short list tapped where it stands. The tappable chip is the agent's, the driver's and the fleet's (each app's
+   own stylesheet carries the same rules); here for every app that uses Choice. */
+.choice__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip--tap {
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx2);
+  cursor: pointer;
+}
+.chip--tap.chip--on {
+  color: var(--blue);
+}
+.chip--tap:disabled,
+.optpick:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.choice__search {
+  margin-bottom: 8px;
+}
+.choice__detail {
+  font-size: 14px;
+  color: var(--tx2);
+}
+
 /* ------------------------------------------------------------------- outbox -- */
 /* Work recorded on this device that has not reached the network. The waiting state reuses `.stale`
    deliberately — it is the same voice as "showing what we last knew" and needs no new one. A BLOCKED

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import type { SbgError } from '../../../lib/sbg';
 import { formatDate, useT } from '../../../shared/i18n';
-import { Button, Card, HubReach, Note, Pill, RefusalNote, type PillTone } from '../../../shared/ui';
+import { Button, Card, Choice, HubReach, Note, Pill, RefusalNote, type PillTone } from '../../../shared/ui';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { arrivalWord, bookableDays, bookingReady, HUB_UNIT_KINDS, hoursLine, minutesAt, receivingCost, receivingHours, receivingPaid, receivingWords, todayAt, type ArrivalWord, type HubArrivalView, type HubsApi, type HubUnitKind, type HubWaiting, type StoreHubArrivals } from '../hubs';
 import { money } from '../logic';
@@ -155,16 +155,13 @@ export function HubHandIn({ api, vendorId, onWork, onMoney, lead = false }: { ap
                   })}
                 </div>
                 <div class="field" style="margin-top:12px">
-                  <label class="field__label" for={`hub-kind-${w.mdpId}`}>
-                    {t('vendor.hub.kindLabel')}
-                  </label>
-                  <select id={`hub-kind-${w.mdpId}`} class="input" value={open.unitKind} onChange={(e) => setBooking({ ...open, unitKind: e.currentTarget.value as HubUnitKind })}>
-                    {HUB_UNIT_KINDS.map((k) => (
-                      <option key={k} value={k}>
-                        {t(`vendor.hub.kind.${k}` as never)}
-                      </option>
-                    ))}
-                  </select>
+                  <Choice
+                    id={`hub-kind-${w.mdpId}`}
+                    label={t('vendor.hub.kindLabel')}
+                    value={open.unitKind}
+                    options={HUB_UNIT_KINDS.map((k) => ({ value: k, label: t(`vendor.hub.kind.${k}` as never) }))}
+                    onChange={(v) => setBooking({ ...open, unitKind: v as HubUnitKind })}
+                  />
                 </div>
                 <div class="field" style="margin-top:12px">
                   <label class="field__label" for={`hub-units-${w.mdpId}`}>
@@ -174,16 +171,13 @@ export function HubHandIn({ api, vendorId, onWork, onMoney, lead = false }: { ap
                   <FeeHint bulk={w.bulk} kind={open.unitKind} units={open.units} hub={w.hubName} />
                 </div>
                 <div class="field" style="margin-top:12px">
-                  <label class="field__label" for={`hub-day-${w.mdpId}`}>
-                    {t('vendor.hub.dayLabel')}
-                  </label>
-                  <select id={`hub-day-${w.mdpId}`} class="input" value={open.expectedOn} onChange={(e) => setBooking({ ...open, expectedOn: e.currentTarget.value })}>
-                    {days.map((d) => (
-                      <option key={d} value={d}>
-                        {dayLabel(d)}
-                      </option>
-                    ))}
-                  </select>
+                  <Choice
+                    id={`hub-day-${w.mdpId}`}
+                    label={t('vendor.hub.dayLabel')}
+                    value={open.expectedOn}
+                    options={days.map((d) => ({ value: d, label: dayLabel(d) }))}
+                    onChange={(expectedOn) => setBooking({ ...open, expectedOn })}
+                  />
                   <p class="hint">{w.bulk?.zoneName ? t('vendor.hub.dayHintZone', { hub: w.hubName, zone: w.bulk.zoneName }) : t('vendor.hub.dayHint', { hub: w.hubName })}</p>
                 </div>
                 <div class="field" style="margin-top:12px">

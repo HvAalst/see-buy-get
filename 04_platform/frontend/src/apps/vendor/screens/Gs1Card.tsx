@@ -3,7 +3,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import type { SbgError } from '../../../lib/sbg';
 import { formatDate, useT } from '../../../shared/i18n';
 import { PREFIX_TAKEN, cleanPrefix, maySendLicence, mayTakeBack, stillWorthShowing, type Gs1DisputeView } from '../../../shared/gs1';
-import { Button, Card, Note, Pill, RefusalNote, Sheet } from '../../../shared/ui';
+import { Button, Card, Choice, Note, Pill, RefusalNote, Sheet } from '../../../shared/ui';
 import { storeDisputeLine, storeGs1Line, type StoreGs1Api } from '../gs1';
 import type { VendorState } from '../useVendorApp';
 
@@ -108,16 +108,14 @@ export function Gs1Card({ state, api }: { state: VendorState; api: StoreGs1Api |
           <p class="hint"><Abbreviated text={bad ? t('vendor.gs1.badPrefix') : t('vendor.gs1.prefixHint')} /></p>
         </div>
         <div class="field" style="margin-top:12px">
-          <label class="field__label" for="gs1-digit">
-            {t('vendor.gs1.digit')}
-          </label>
-          <select id="gs1-digit" class="select" value={digit} onChange={(e) => edited(() => setDigit(e.currentTarget.value))}>
-            {Array.from({ length: 10 }, (_, d) => (
-              <option key={d} value={String(d)}>
-                {d}
-              </option>
-            ))}
-          </select>
+          <Choice
+            id="gs1-digit"
+            as="chips"
+            label={t('vendor.gs1.digit')}
+            value={digit}
+            options={Array.from({ length: 10 }, (_, d) => ({ value: String(d), label: String(d) }))}
+            onChange={(v) => edited(() => setDigit(v))}
+          />
           <p class="hint">{t('vendor.gs1.digitHint')}</p>
         </div>
         {refused ? <RefusalNote error={refused} /> : null}

@@ -35,6 +35,7 @@ export { HubReach } from './HubReach';
 export { PaidDirectSheet } from './PaidDirectSheet';
 export { OptionInfo, type OptionHelpItem, type OptionInfoProps } from './OptionInfo';
 export { OptionPicker, type OptionPickerProps, type PickerOption } from './OptionPicker';
+export { Choice, type ChoiceOption, type ChoiceProps } from './Choice';
 export { NotificationBell, type NotificationBellProps } from './NotificationBell';
 export { PushPrompt, type PushPromptProps } from './PushPrompt';
 export { OpenInMaps, type OpenInMapsProps } from './OpenInMaps';

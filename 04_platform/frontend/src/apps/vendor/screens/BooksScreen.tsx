@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { SbgClient } from '../../../lib/sbg';
 import { createFiscalApi } from '../../../lib/sbg/personas/fiscal';
 import { TaxInvoicesCard } from '../../../shared/TaxInvoicesCard';
-import { Button, Card, Checkbox, Chip, ErrorNote, GlanceNumber, Icon, Pager, ReadAloud, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
+import { Button, Card, Checkbox, Chip, Choice, ErrorNote, GlanceNumber, Icon, Pager, ReadAloud, SearchInput, SelectionBar, Sheet } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { triggerDownload } from '../../../shared/download';
 import { toggleAll, toggleId } from '../../../shared/register';
@@ -249,22 +249,27 @@ function LedgerFilterSheet({ open, onClose, query, onApply, onClearAll }: { open
   return (
     <Sheet open={open} onClose={onClose} title={t('vendor.books.filterTitle')}>
       <div class="field">
-        <label class="field__label" for="l-type">{t('vendor.books.fType')}</label>
-        <select id="l-type" class="select" value={draft.type} onChange={(e) => set({ type: e.currentTarget.value as LedgerQuery['type'] })}>
-          <option value="">{t('vendor.books.anyType')}</option>
-          {TYPE_OPTIONS.map((opt) => (
-            <option key={opt} value={opt}>{ledgerTypeWord(opt, t)}</option>
-          ))}
-        </select>
+        <Choice
+          id="l-type"
+          label={t('vendor.books.fType')}
+          value={draft.type}
+          options={[{ value: '', label: t('vendor.books.anyType') }, ...TYPE_OPTIONS.map((opt) => ({ value: opt, label: ledgerTypeWord(opt, t) }))]}
+          onChange={(type) => set({ type: type as LedgerQuery['type'] })}
+        />
       </div>
 
       <div class="field">
-        <label class="field__label" for="l-dir">{t('vendor.books.fDirection')}</label>
-        <select id="l-dir" class="select" value={draft.direction} onChange={(e) => set({ direction: e.currentTarget.value as LedgerQuery['direction'] })}>
-          <option value="">{t('vendor.books.anyDirection')}</option>
-          <option value="in">{t('vendor.books.moneyIn')}</option>
-          <option value="out">{t('vendor.books.moneyOut')}</option>
-        </select>
+        <Choice
+          id="l-dir"
+          label={t('vendor.books.fDirection')}
+          value={draft.direction}
+          options={[
+            { value: '', label: t('vendor.books.anyDirection') },
+            { value: 'in', label: t('vendor.books.moneyIn') },
+            { value: 'out', label: t('vendor.books.moneyOut') },
+          ]}
+          onChange={(direction) => set({ direction: direction as LedgerQuery['direction'] })}
+        />
       </div>
 
       <div class="reg__dates">
@@ -279,12 +284,13 @@ function LedgerFilterSheet({ open, onClose, query, onApply, onClearAll }: { open
       </div>
 
       <div class="field">
-        <label class="field__label" for="l-sort">{t('vendor.sortLabel')}</label>
-        <select id="l-sort" class="select" value={draft.sort} onChange={(e) => set({ sort: e.currentTarget.value as LedgerQuery['sort'] })}>
-          {LEDGER_SORT_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{t(s.labelKey)}</option>
-          ))}
-        </select>
+        <Choice
+          id="l-sort"
+          label={t('vendor.sortLabel')}
+          value={draft.sort}
+          options={LEDGER_SORT_OPTIONS.map((s) => ({ value: s.value, label: t(s.labelKey) }))}
+          onChange={(sort) => set({ sort: sort as LedgerQuery['sort'] })}
+        />
       </div>
 
       <Button chevron={false} onClick={() => onApply({ type: draft.type, direction: draft.direction, from: draft.from, to: draft.to, sort: draft.sort })}>

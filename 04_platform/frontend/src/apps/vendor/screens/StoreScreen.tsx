@@ -1,6 +1,6 @@
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, ErrorNote, Info, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Choice, ErrorNote, Info, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { toPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
@@ -205,23 +205,29 @@ function KeysCard({ state, actions }: { state: VendorState; actions: VendorActio
 
       <Sheet open={open} onClose={() => setOpen(false)} title={t('vendor.keys.newTitle')}>
         <div class="field">
-          <label class="field__label" for="key-kind">
-            {t('vendor.keys.kind')}
-          </label>
-          <select id="key-kind" class="input" value={kind} onChange={(e) => setKind(e.currentTarget.value as 'publishable' | 'secret')}>
-            <option value="publishable">{t('vendor.keys.kindPublishable')}</option>
-            <option value="secret">{t('vendor.keys.kindSecret')}</option>
-          </select>
+          <Choice
+            id="key-kind"
+            label={t('vendor.keys.kind')}
+            value={kind}
+            options={[
+              { value: 'publishable', label: t('vendor.keys.kindPublishable') },
+              { value: 'secret', label: t('vendor.keys.kindSecret') },
+            ]}
+            onChange={(v) => setKind(v as 'publishable' | 'secret')}
+          />
           <p class="card__note">{t(kind === 'secret' ? 'vendor.keys.kindSecretNote' : 'vendor.keys.kindPublishableNote')}</p>
         </div>
         <div class="field" style="margin-top:12px">
-          <label class="field__label" for="key-mode">
-            {t('vendor.keys.mode')}
-          </label>
-          <select id="key-mode" class="input" value={mode} onChange={(e) => setMode(e.currentTarget.value as 'test' | 'live')}>
-            <option value="test">{t('vendor.keys.modeTest')}</option>
-            <option value="live">{t('vendor.keys.modeLive')}</option>
-          </select>
+          <Choice
+            id="key-mode"
+            label={t('vendor.keys.mode')}
+            value={mode}
+            options={[
+              { value: 'test', label: t('vendor.keys.modeTest') },
+              { value: 'live', label: t('vendor.keys.modeLive') },
+            ]}
+            onChange={(v) => setMode(v as 'test' | 'live')}
+          />
           <p class="card__note">{t(mode === 'live' ? 'vendor.keys.modeLiveNote' : 'vendor.keys.modeTestNote')}</p>
         </div>
         <div class="field" style="margin-top:12px">
@@ -359,13 +365,16 @@ function PolicySheet({ open, onClose, state, actions }: { open: boolean; onClose
   return (
     <Sheet open={open} onClose={onClose} title={t('vendor.store.buyerPaysTitle')}>
       <div class="field">
-        <label class="field__label" for="p-mode">
-          {t('vendor.store.split')}
-        </label>
-        <select id="p-mode" class="select" value={mode} onChange={(e) => setMode(e.currentTarget.value as 'full' | 'capped')}>
-          <option value="capped">{t('vendor.store.splitCapped')}</option>
-          <option value="full">{t('vendor.store.splitFull')}</option>
-        </select>
+        <Choice
+          id="p-mode"
+          label={t('vendor.store.split')}
+          value={mode}
+          options={[
+            { value: 'capped', label: t('vendor.store.splitCapped') },
+            { value: 'full', label: t('vendor.store.splitFull') },
+          ]}
+          onChange={(v) => setMode(v as 'full' | 'capped')}
+        />
       </div>
       {mode === 'capped' ? (
         <>

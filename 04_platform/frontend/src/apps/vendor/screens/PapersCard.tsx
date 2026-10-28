@@ -1,9 +1,14 @@
 import { useEffect } from 'preact/hooks';
-import { Button, Card, CheckGate } from '../../../shared/ui';
+import { Button, Card, CheckGate, Choice } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { publicRequest } from '../../../lib/sbg';
+import { countriesLine, likelyFirst, useCurrencies } from '../../../shared/currencies';
+import { vendorConfig } from '../api';
 import { money } from '../logic';
 import { EMPTY_LINE, MAX_ADDRESS, papersGaps, papersTotals, type PapersForm, type PapersLine } from '../papers';
 import type { QuoteView } from '../types';
+
+const catalogueApi = { countryCatalogue: () => publicRequest(vendorConfig(), '/v1/sbg/country-catalogue') };
 
 /**
  * ITS PAPERS ABROAD (the user, round 13: per item "As shippers do"; the buyer "shop or address as per the decision of
@@ -22,6 +27,17 @@ export function PapersCard({ quote, papers, onChange }: { quote: QuoteView; pape
   }, [quote.currency]);
   const crossing = (quote.crossings ?? []).map((c) => `${c.fromCountry} → ${c.toCountry}`).join(', ');
   const totals = papersTotals(papers);
+  // The money is chosen with the countries behind it, never typed (the user, 2026-10-28): the route's countries and the
+  // shipment's own money first. "KSH" is no currency, and the server refuses an invoice in it.
+  const currencies = useCurrencies(catalogueApi);
+  const more = (n: number) => t('vendor.currency.more', { n });
+  const near = (quote.crossings ?? []).flatMap((c) => [c.fromCountry, c.toCountry]);
+  const moneyOptions = likelyFirst(currencies, near, quote.currency ? [quote.currency] : []).map((o) => ({
+    value: o.code,
+    label: `${o.code} — ${o.name}`,
+    detail: o.likely ? `${t('vendor.currency.likely')} · ${countriesLine(o, more)}` : countriesLine(o, more),
+  }));
+  if (papers.currency && !currencies.some((o) => o.code === papers.currency)) moneyOptions.unshift({ value: papers.currency, label: papers.currency, detail: '' });
   const gaps = papersGaps(papers);
   const field = (id: string, label: string, value: string, onInput: (v: string) => void, extra: Record<string, unknown> = {}) => (
     <div class="field">
@@ -36,7 +52,9 @@ export function PapersCard({ quote, papers, onChange }: { quote: QuoteView; pape
     <Card title={t('vendor.papers.title')}>
       <p class="card__note">{t('vendor.papers.lede', { crossing })}</p>
       {field('papers-number', t('vendor.papers.number'), papers.number, (v) => set({ number: v }), { maxLength: 40 })}
-      {field('papers-currency', t('vendor.papers.currency'), papers.currency, (v) => set({ currency: v.toUpperCase() }), { maxLength: 3, autocapitalize: 'characters' })}
+      <div class="field">
+        <Choice id="papers-currency" as="sheet" label={t('vendor.papers.currency')} value={papers.currency} options={moneyOptions} onChange={(currency) => set({ currency })} placeholder={currencies.length ? t('vendor.currency.choose') : t('vendor.currency.reading')} />
+      </div>
       {field('papers-buyer', t('vendor.papers.buyer'), papers.buyerName, (v) => set({ buyerName: v }), { maxLength: 120 })}
       <div class="field">
         <label class="field__label" for="papers-address">

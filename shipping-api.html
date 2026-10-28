@@ -803,6 +803,8 @@ if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received))) retur
   <ul class="plain">
     <li><b>Each item</b>: what it is, how many, its net weight, the value of one, and the country it was made in. An HS code
       only where you have one — your own, never suggested by us.</li>
+    <li><b>The money</b>: <code>currency</code> is the ISO-4217 code of the money the goods were sold in — one some country
+      uses. A code that is none (<code>"KSH"</code> for the Kenyan shilling, which is <code>"KES"</code>) is refused with a 400.</li>
     <li><b>The buyer</b>, by name, and the address you and the buyer settled on: it is <b>carried exactly as you send
       it</b>, line breaks and all, up to 300 characters — longer is refused, never cut. Leave the address out and the
       papers name the shop the buyer collects from.</li>

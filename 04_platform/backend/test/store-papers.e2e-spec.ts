@@ -86,6 +86,9 @@ describe('a store parcel’s papers abroad, over the wire', () => {
     const refused = await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(400);
     expect(refused.body.code).toBe('CUSTOMS_INCOMPLETE');
     expect(refused.body.detail).toMatch(/needs its commercial invoice/);
+    // Its money is a currency some country settles in: "KSH" is three letters and none.
+    const ksh = await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, invoice: { ...invoice, currency: 'KSH' }, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(400);
+    expect(ksh.body.detail).toBe('“KSH” is no currency we know — use its three-letter code, like KES or USD');
     const made = (await http().post('/v1/sbg/inbound/orders').set(store.token).send({ ...order, invoice, contentPhotoRef: await contentPhotoOver(app.getHttpServer(), store.token) }).expect(201)).body;
     const parcelId = made.parcel.parcelId as string;
     expect(made.parcel.customs).toMatchObject({ declaredValue: 3400, currency: 'KES' });
