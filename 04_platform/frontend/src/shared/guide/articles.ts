@@ -104,6 +104,9 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note'] },
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.
   { id: 'business-exports', apps: ['business'], group: 'freight', steps: 6, notes: ['note', 'why', 'note', 'note'] },
+  // Where road meets rail (the user, 2026-10-29: "in help page an explanation as to why and what"): the truck timed to the
+  // train, and the road leg that waits for the railway's word. Read by whoever posts it, carries it, or runs the office.
+  { id: 'road-meets-rail', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 5, notes: ['why', 'why', 'note', 'note'] },
   { id: 'business-note', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'note', 'note', 'note', 'why', 'rare', 'rare'] },
   { id: 'business-runs', apps: ['business'], group: 'freight', steps: 4 },
   { id: 'business-contracts', apps: ['business'], group: 'freight', steps: 3, notes: ['why', 'note', 'rare', 'note', 'note', 'why', 'note', 'note', 'rare'] },

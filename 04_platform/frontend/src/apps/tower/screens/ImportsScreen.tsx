@@ -55,6 +55,7 @@ import {
 } from '../imports';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { RailNotePanel, type RailNoteCheck, type RailwayRow } from './RailNotePanel';
+import { ImportByRail } from './ImportByRail';
 
 /**
  * CL2a — A CONTAINER, ITS PAPERS, AND THE AGENT APPOINTED TO CLEAR IT.
@@ -799,6 +800,23 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               </table>
             )}
           </ConsoleFold>
+
+          {/* ---- inland by rail: the road leg waits for the railway's word (2026-10-29) ---- */}
+          {client ? (
+            <ImportByRail
+              code={detail.code}
+              {...(detail.byRail ? { rail: detail.byRail } : {})}
+              youAre={isCompany ? detail.youAre : 'onlooker'}
+              entityId={state.who?.entityId ?? ''}
+              api={client.api}
+              calls={{
+                set: (body) => client.api.importByRail(detail.importId, body),
+                arrived: (body) => client.api.importRailArrived(detail.importId, body),
+                collectAnyway: (reason) => client.api.importRailCollectAnyway(detail.importId, { reason }),
+              }}
+              onChanged={() => openOne(detail.importId, false)}
+            />
+          ) : null}
 
           {/* ---- where the box came inland by rail: the railway's note, held and checked (2026-10-28) ---- */}
           {client ? (

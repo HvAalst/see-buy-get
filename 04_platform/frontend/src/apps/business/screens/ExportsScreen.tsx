@@ -15,6 +15,7 @@ import type { BusinessClient, BusinessView } from '../api';
 import { ASKED_PAPERS, boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, paperKindFor, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperGroup, type ExportPaperKey, type ExportRow } from '../exports';
 import { mayAct } from '../logic';
 import { RailNotePanel } from '../../tower/screens/RailNotePanel';
+import { ExportByRail } from './ExportByRail';
 
 type Problem = { detail?: string; title: string } | null | undefined;
 
@@ -955,6 +956,18 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         setD(next);
         await onChanged();
       }} />
+
+      {/* By rail to the port (2026-10-29): set before the load is posted — the truck is then timed to the train. */}
+      <ExportByRail
+        d={d}
+        business={business}
+        client={client}
+        mine={mine}
+        onChanged={async () => {
+          await read();
+          await onChanged();
+        }}
+      />
 
       {/* EX2 — the load to the terminal; its seal is written on that load, with the seal panel and its photographs. */}
       <section class="cons__panel">

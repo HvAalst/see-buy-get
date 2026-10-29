@@ -52,6 +52,8 @@ export interface ExportTiming {
   plannedHours: number;
   gatedInAt?: string;
   collectedAt?: string;
+  /** Where our truck hands the box over, and by when: the port gate, or by rail the rail terminal (2026-10-29). */
+  handover?: { place: string; cutoffAt: string; byRail: boolean };
 }
 
 export interface ExportBooking {
@@ -158,6 +160,8 @@ export interface ExportConsignment {
   formerAgents?: Array<{ entityId: string; appointedAt: string; endedAt: string; endedBy: string; reason?: string; feeQuoteId?: string }>;
   /** The box is the exporter's own (a shipper-owned container): no line's clock runs on it. */
   ownBox?: { by: string; at: string };
+  /** By rail to the port: the rail terminal and the train's cut-off there (2026-10-29). */
+  byRail?: { terminal: { label: string; location: { lat: number; lng: number } }; cutoffAt: string; reference?: string; atPort?: { at: string; by: string }; recordedAt: string; recordedBy: string };
   createdAt: string;
 }
 
@@ -244,6 +248,10 @@ export interface ExportsApi {
   billOfLading(exportId: string, number: string): Promise<Result<ExportDetail>>;
   /** The railway's note, held with what is printed on it. */
   rail(exportId: string, body: RailNoteInput): Promise<Result<ExportDetail>>;
+  /** By rail to the port: the rail terminal and the train's cut-off. */
+  byRail(exportId: string, body: { terminalSiteId: string; cutoffAt: string; reference?: string }): Promise<Result<ExportDetail>>;
+  clearByRail(exportId: string): Promise<Result<ExportDetail>>;
+  atPort(exportId: string, at: string): Promise<Result<ExportDetail>>;
   /** A draft rail note, checked against the law of its lane: what it asks for. Nothing is written. */
   railCheck(body: Parameters<import('../tower/screens/RailNotePanel').RailNoteCalls['check']>[0]): Promise<Result<RailNoteCheck>>;
   railways(): Promise<Result<{ items: RailwayRow[] }>>;
@@ -293,6 +301,9 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     paper: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/papers`, body),
     billOfLading: (exportId, number) => post(`/v1/sbg/exports/${id(exportId)}/bill-of-lading`, { number }),
     rail: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/rail`, body),
+    byRail: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/by-rail`, body),
+    clearByRail: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/by-rail/clear`),
+    atPort: (exportId, at) => post(`/v1/sbg/exports/${id(exportId)}/by-rail/at-port`, { at }),
     railCheck: (body) => post('/v1/sbg/rail/check', body),
     railways: () => call((c) => c.GET('/v1/sbg/rail/railways' as never, {} as never) as never),
     handover: (exportId) => call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/handover.html` as never, { parseAs: 'text' } as never) as never),
@@ -839,6 +850,14 @@ export function freeDaysOf(c: Pick<ExportConsignment, 'freeDays'>, kind: 'detent
 /** The one line that says what the clock asks: when it must leave, or that it is inside the gate, or that it missed it. */
 export function timingLine(d: Pick<ExportDetail, 'timing' | 'consignment'>, t: Translate): string {
   const { timing, consignment: c } = d;
+  // By rail, the truck's end is the rail terminal and its clock the train's cut-off (2026-10-29).
+  if (timing.handover?.byRail) {
+    const h = timing.handover;
+    if (timing.state === 'gated_in') return t('business.exports.line.railHanded', { terminal: h.place, when: utcWords(timing.gatedInAt ?? '') });
+    if (timing.state === 'missed') return t('business.exports.line.railMissed', { terminal: h.place, cutoff: utcWords(h.cutoffAt), party: c.booking.partyName });
+    if (timing.collectedAt) return t('business.exports.line.railOnTheRoad', { terminal: h.place, cutoff: utcWords(h.cutoffAt) });
+    return t('business.exports.line.railLeaveBy', { place: c.loadingPlace.label, leaveBy: utcWords(timing.leaveByAt), terminal: h.place, cutoff: utcWords(h.cutoffAt), km: Math.round(timing.roadKm), hours: timing.plannedHours });
+  }
   if (timing.state === 'gated_in') return t('business.exports.line.gatedIn', { terminal: c.terminal.label, when: utcWords(timing.gatedInAt ?? '') });
   if (timing.state === 'missed') return t('business.exports.line.missed', { terminal: c.terminal.label, cutoff: utcWords(c.booking.gateCutoffAt), party: c.booking.partyName });
   if (timing.collectedAt) return t('business.exports.line.onTheRoad', { terminal: c.terminal.label, cutoff: utcWords(c.booking.gateCutoffAt) });

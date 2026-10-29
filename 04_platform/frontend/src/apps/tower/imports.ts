@@ -139,6 +139,8 @@ export interface ImportDetailView extends ImportRow {
   box?: ContainerBoxView;
   /** The railway's note, where the box came inland by rail: held, with its check (2026-10-28). */
   rail?: import('./screens/RailNotePanel').RailNoteView;
+  /** Inland by rail: the arrival, the gate on the road leg, the rail terminal's free days (2026-10-29). */
+  byRail?: import('./screens/ImportByRail').ImportByRailView;
 }
 
 export type BoxClockKind = 'demurrage' | 'detention' | 'stopped' | 'unknown';
