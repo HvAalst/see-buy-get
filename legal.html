@@ -57,7 +57,7 @@
 <div class="wrap">
   <h1>Legal questions — for the lawyer</h1>
   <p class="sub">Every question about the law that came up while building SeeBuyGet, in one place. Each says when it comes up in the product, for which countries, a case to make it concrete, what the product does until it is answered, and where it was raised. Nothing here is decided by the product: where a question is open, the product takes the cautious reading and says so on the screen.</p>
-  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026.</p>
+  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included.</p>
 
   <div class="bar" role="group" aria-label="When it is needed">
     <span class="lab">Needed</span>
@@ -79,203 +79,621 @@
 <script type="application/json" id="data">
 {
   "areas": [
-    { "key": "carriage", "title": "Who answers for the goods", "lede": "When something is lost, broken or late on the road, the rail or the sea, and somebody asks who pays." },
-    { "key": "papers", "title": "What we say about other people’s papers", "lede": "SeeBuyGet holds documents others issued — a forwarder’s bill, a railway’s note, an insurer’s policy — and says what it sees in them." },
-    { "key": "title", "title": "Electronic documents and title to the goods", "lede": "Whether an electronic document can do what the paper one does, country by country." },
-    { "key": "data", "title": "People’s data", "lede": "Where personal data and papers are kept, for how long, and on what basis." },
-    { "key": "terms", "title": "Terms, consumers and goods left behind", "lede": "What people agree to when they sign up, and what may be done with what they leave." },
-    { "key": "money", "title": "Money and tax", "lede": "What our companies must charge and show." }
+    {
+      "key": "carriage",
+      "title": "Who answers for the goods",
+      "lede": "When something is lost, broken or late on the road, the rail or the sea, and somebody asks who pays."
+    },
+    {
+      "key": "papers",
+      "title": "What we say about other people’s papers",
+      "lede": "SeeBuyGet holds documents others issued — a forwarder’s bill, a railway’s note, an insurer’s policy — and says what it sees in them."
+    },
+    {
+      "key": "licences",
+      "title": "Licences a carrier — or we — may need",
+      "lede": "Where a regulator licenses the carriage itself: medicines, secured air cargo, animals."
+    },
+    {
+      "key": "title",
+      "title": "Electronic documents and title to the goods",
+      "lede": "Whether an electronic document can do what the paper one does, country by country."
+    },
+    {
+      "key": "data",
+      "title": "People’s data",
+      "lede": "Where personal data and papers are kept, for how long, and on what basis."
+    },
+    {
+      "key": "terms",
+      "title": "Terms, consumers and goods left behind",
+      "lede": "What people agree to when they sign up, and what may be done with what they leave."
+    },
+    {
+      "key": "money",
+      "title": "Money and tax",
+      "lede": "What our companies must charge and show."
+    }
   ],
   "questions": [
     {
-      "id": "L01", "area": "carriage", "when": "before-test", "status": "open",
+      "id": "L01",
+      "area": "carriage",
+      "when": "before-test",
+      "status": "open",
       "q": "Is SeeBuyGet itself a party to the contract of carriage when it bills the shipper?",
       "moment": "A business posts a load that SeeBuyGet bills — not one it only matches — and a driver or a fleet carries it. The consignment note names the carrier that took the load; SeeBuyGet’s invoice is for the carriage.",
-      "nations": ["all"],
+      "nations": [
+        "all"
+      ],
       "case": "A Nairobi trader posts 40 bags of cement, billed through SeeBuyGet. The fleet’s truck tips the load. The trader claims from SeeBuyGet, the company it paid, not from the fleet it never chose.",
       "meanwhile": "The note names the carrier in its carrier boxes and SeeBuyGet as the platform. Damage is reported, never judged: a damage claim report is made, and no company of ours pays from its own books unless it has stated insurance cover.",
       "source": "The CMR check of the consignment note, 28 October 2026 (05_engineering/consignment_note.md); “damage is reported, not judged”."
     },
     {
-      "id": "L02", "area": "carriage", "when": "before-test", "status": "open",
+      "id": "L02",
+      "area": "carriage",
+      "when": "before-test",
+      "status": "open",
       "q": "Whoever sells the carriage may answer for loss by law, whatever its terms say — above all toward a consumer. Where does that reach us, and how far?",
       "moment": "A person sends or receives a parcel through our shops, and it arrives broken, opened, or not at all.",
-      "nations": ["KE", "UG", "TZ", "RW", "ET"],
+      "nations": [
+        "KE",
+        "UG",
+        "TZ",
+        "RW",
+        "ET"
+      ],
       "case": "A person in Kisumu sends a phone to Eldoret through two shops. It arrives with the screen cracked and asks SeeBuyGet to pay for it.",
       "meanwhile": "A damage claim report — who held the parcel and when, with the photographs — for the person’s insurer. SeeBuyGet pays nothing without stated cover, and says so at take-in.",
       "source": "“Damage is reported, not judged”, October 2026 (progress.html, the damage claim report row)."
     },
     {
-      "id": "L03", "area": "carriage", "when": "before-country", "status": "open",
+      "id": "L03",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
       "q": "How long does a receiver have to make a reservation for damage it could not see, on a road load between two Northern Corridor states?",
       "moment": "A load between, for example, Kenya and Uganda arrives with damage found only after delivery.",
-      "nations": ["KE", "UG", "RW", "BI", "CD", "SS"],
+      "nations": [
+        "KE",
+        "UG",
+        "RW",
+        "BI",
+        "CD",
+        "SS"
+      ],
       "case": "A load from Mombasa to Kampala; the receiver opens the cartons on day 5 and finds water damage.",
       "meanwhile": "The note gives 7 days, as the CMR does. The Northern Corridor road protocol’s own rule was not found, and its road waybill form was not seen.",
       "source": "The CMR check, 28 October 2026."
     },
     {
-      "id": "L04", "area": "carriage", "when": "before-country", "status": "open",
+      "id": "L04",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
       "q": "Which national law governs a road carriage between two countries that no road convention joins?",
       "moment": "A cross-border load between, for example, Kenya and Tanzania, or Kenya and Ethiopia — neither pair is in the CMR or the Northern Corridor agreement together.",
-      "nations": ["KE", "TZ", "ET", "UG"],
+      "nations": [
+        "KE",
+        "TZ",
+        "ET",
+        "UG"
+      ],
       "case": "A load from Nairobi to Arusha; the sender and the carrier disagree on the limit of liability for a lost pallet.",
       "meanwhile": "The note says the carriage is under its contract and the national law that governs it, and names no law.",
       "source": "The CMR check, 28 October 2026."
     },
     {
-      "id": "L05", "area": "carriage", "when": "before-country", "status": "open",
+      "id": "L05",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
       "q": "When a box is damaged on our truck under a forwarder’s road-and-sea FIATA bill, which limit applies — and do the bill’s terms (clause 10) protect our drivers and fleets?",
       "moment": "An export by road to the port, under a FIATA bill the forwarder issued for the whole journey from an inland place.",
-      "nations": ["KE", "UG", "TZ", "RW", "BI"],
+      "nations": [
+        "KE",
+        "UG",
+        "TZ",
+        "RW",
+        "BI"
+      ],
       "case": "A forwarder issues an FBL from Nairobi to Rotterdam. Our truck overturns before Mombasa. No East African state is in the road convention, so the bill’s stage rule finds no road limit.",
       "meanwhile": "The bill’s panel says a loss on the road there is likely held to the bill’s own limit, 2 SDR a kilogram, and that this is a question for a lawyer.",
       "source": "The FBL research, 29 October 2026 (05_engineering/research/fbl_2026-10-29.md, question 6)."
     },
     {
-      "id": "L06", "area": "carriage", "when": "before-country", "status": "open",
+      "id": "L06",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
       "q": "Is Ethiopia’s Proclamation 548/2007 mandatory for multimodal transport to or from Ethiopia, so that it comes before the limits printed on a FIATA bill?",
       "moment": "An import to Ethiopia through Djibouti under a forwarder’s FIATA bill.",
-      "nations": ["ET", "DJ"],
+      "nations": [
+        "ET",
+        "DJ"
+      ],
       "case": "Spare parts from Rotterdam to Addis Ababa through Djibouti under an FBL, found damaged at Modjo.",
       "meanwhile": "The Proclamation’s own limits — 835 SDR a package or 2.5 SDR a kilogram, suit within 2 years — are said beside the bill’s.",
       "source": "The FBL research, 29 October 2026 (question 4)."
     },
     {
-      "id": "L07", "area": "carriage", "when": "before-country", "status": "open",
+      "id": "L07",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
       "q": "With the Kenya Railways Corporation Act repealed by the Government Owned Enterprises Act 2025 (a High Court stay was reported), do the Kenya Railways Tariff Book’s conditions still bind, and under which law?",
       "moment": "A box goes by SGR between Nairobi or Naivasha and Mombasa, and is damaged or late.",
-      "nations": ["KE", "UG"],
+      "nations": [
+        "KE",
+        "UG"
+      ],
       "case": "An export by SGR from the Nairobi inland depot; the box is dropped at Port Reitz, and the railway points to its default limit of KSh 20,000 where no value was declared.",
       "meanwhile": "The railway’s note is read against the Tariff Book, with the repeal said beside it.",
       "source": "The CIM and East African rail research, 28 October 2026 (05_engineering/research/rail_cim_and_east_africa_2026-10-28.md)."
     },
     {
-      "id": "L08", "area": "papers", "when": "before-test", "status": "open",
+      "id": "L08",
+      "area": "papers",
+      "when": "before-test",
+      "status": "open",
       "q": "Could what we say about other people’s papers make us liable to somebody who relies on it — and what wording protects us in each country?",
       "moment": "Our screens say a forwarder’s bill “agrees with our papers”, a railway’s note is “complete as printed”, and a consignment note says a carrier’s insurance was “checked by SeeBuyGet” off the policy it sent.",
-      "nations": ["all"],
+      "nations": [
+        "all"
+      ],
       "case": "A bank pays under a letter of credit after the importer shows it our screen; the bill was forged and copied our container number. Or a sender picks a carrier because the note says its cover was checked; the policy excluded the goods.",
       "meanwhile": "Facts with their sources and dates, never “valid”; “agreeing proves nothing about whether it is genuine”; what FIATA’s page showed is the holder’s own record; the cover line names who read the policy and on what day.",
       "source": "The FBL research, 29 October 2026 (question 1); cover a sender can ask for, 28 October 2026."
     },
     {
-      "id": "L09", "area": "papers", "when": "before-test", "status": "open",
+      "id": "L09",
+      "area": "papers",
+      "when": "before-test",
+      "status": "open",
       "q": "May we keep and show users’ copies of FIATA forms and of other parties’ documents — under copyright, and under Kenya’s Data Protection Act 2019 — and link to FIATA’s verification page?",
       "moment": "An exporter uploads its forwarder’s bill or a railway’s note, and its clearing agent reads it.",
-      "nations": ["KE", "all"],
+      "nations": [
+        "KE",
+        "all"
+      ],
       "case": "An exporter keeps the copy of its FBL on the export; the clearing agent it appointed opens it. The bill names the buyer and shows the freight amount.",
       "meanwhile": "Shown only to the holder and the agent it appointed; never a lookalike of FIATA’s form, never FIATA’s logo; FIATA’s pages linked, never called by our servers.",
       "source": "The FBL research, 29 October 2026 (questions 2 and 8)."
     },
     {
-      "id": "L10", "area": "papers", "when": "before-country", "status": "answered",
+      "id": "L10",
+      "area": "papers",
+      "when": "before-country",
+      "status": "answered",
       "q": "May we hold photographs of official documents — a customs notice, a permit — in a given country?",
       "moment": "A clearing agent photographs what a border asked for, as field knowledge for others.",
-      "nations": ["all"],
+      "nations": [
+        "all"
+      ],
       "case": "An agent at Malaba photographs a customs hold notice to show what was asked.",
       "meanwhile": "Off in every country. Opened only by two gates: the country’s, which no level of presence grants and staff open only with counsel’s note recorded, and the person’s own, against a notice to black out sensitive numbers.",
       "answer": "Answered in principle by the owner, September 2026: two gates, the country’s and the person’s. Still open per country: may that country’s gate be opened?",
       "source": "Clearance and field knowledge, CL5 (05_engineering/clearance_and_field_knowledge.md)."
     },
     {
-      "id": "L11", "area": "title", "when": "before-country", "status": "open",
+      "id": "L11",
+      "area": "title",
+      "when": "before-country",
+      "status": "open",
       "q": "In Kenya and Uganda, is an electronic bill of lading a document of title at all — and what must we tell users?",
       "moment": "An exporter or importer holds an electronic FIATA bill, which FIATA registers but whose transfer of title it leaves to the law.",
-      "nations": ["KE", "UG", "TZ"],
+      "nations": [
+        "KE",
+        "UG",
+        "TZ"
+      ],
       "case": "An importer in Kampala holds an electronic FBL; the line’s agent at Mombasa asks for the original.",
       "meanwhile": "The bill’s panel says Kenya’s and Uganda’s laws on electronic writing do not reach documents of title (Kenya read in its 2011 text), so an electronic bill may not stand as title there.",
       "source": "The FBL research, 29 October 2026 (question 3)."
     },
     {
-      "id": "L12", "area": "title", "when": "later", "status": "open",
+      "id": "L12",
+      "area": "title",
+      "when": "later",
+      "status": "open",
       "q": "Is release only against an original bill at Mombasa a rule of law, or the shipping lines’ practice?",
       "moment": "An import arrives at Mombasa under a negotiable bill.",
-      "nations": ["KE", "UG"],
+      "nations": [
+        "KE",
+        "UG"
+      ],
       "case": "A Ugandan importer’s bank still holds the originals when the box lands; the line will not release it.",
       "meanwhile": "We say the goods are handed over against one original, surrendered duly endorsed — as the bill’s own terms say.",
       "source": "The FBL research, 29 October 2026 (question 7)."
     },
     {
-      "id": "L13", "area": "title", "when": "later", "status": "watch",
+      "id": "L13",
+      "area": "title",
+      "when": "later",
+      "status": "watch",
       "q": "Once Tanzania, Rwanda or another signatory ratifies the Accra Convention on Negotiable Cargo Documents, what changes for the bills our users hold?",
       "moment": "When the Convention enters into force — 180 days after the tenth ratification — for a document that refers to it.",
-      "nations": ["TZ", "RW", "CD", "SS", "DJ"],
+      "nations": [
+        "TZ",
+        "RW",
+        "CD",
+        "SS",
+        "DJ"
+      ],
       "case": "A forwarder in Dar es Salaam begins issuing bills under the Convention.",
       "meanwhile": "Said beside the bill: signed 26 October 2026, not in force, reaching only a document that refers to it.",
       "source": "The FBL research, 29 October 2026 (question 9)."
     },
     {
-      "id": "L14", "area": "title", "when": "later", "status": "open",
+      "id": "L14",
+      "area": "title",
+      "when": "later",
+      "status": "open",
       "q": "Electronic rail notes outside East Africa: does Russia’s electronic-only rail waybill (from 1 September 2026) reach international SMGS and CIM/SMGS waybills, and does an electronic waybill count in Indonesia, where the regulation assumes paper?",
       "moment": "A user holds a railway’s note from one of those networks.",
-      "nations": ["RU", "ID"],
+      "nations": [
+        "RU",
+        "ID"
+      ],
       "case": "An importer holds a CIM/SMGS note for a box railed from China through Russia.",
       "meanwhile": "The rail check says Russia’s note is electronic from that day, and that Indonesia’s question is for counsel.",
       "source": "The BRICS rail research, 28 October 2026 (05_engineering/research/rail_brics_2026-10-28.md)."
     },
     {
-      "id": "L15", "area": "title", "when": "later", "status": "open",
+      "id": "L15",
+      "area": "title",
+      "when": "later",
+      "status": "open",
       "q": "In India, what is the effect of a multimodal document issued by an operator that is not registered under the Multimodal Transportation of Goods Act 1993?",
       "moment": "A user holds a bill issued in India.",
-      "nations": ["IN"],
+      "nations": [
+        "IN"
+      ],
       "case": "An exporter in Mombasa receives goods under a bill issued by an Indian forwarder missing from the public register.",
       "meanwhile": "Said beside the bill: only a registered operator may issue one, and the register is public.",
       "source": "The FBL research, 29 October 2026 (question 5)."
     },
     {
-      "id": "L16", "area": "data", "when": "before-test", "status": "open",
+      "id": "L16",
+      "area": "data",
+      "when": "before-test",
+      "status": "open",
       "q": "Keeping Kenyan personal data in Frankfurt, Germany: on what basis is the transfer lawful under Kenya’s Data Protection Act 2019, and must our Kenyan company register with the Data Commissioner?",
       "moment": "Every sign-up: phone numbers, names, photographs of IDs and licences, and company papers are kept on our server in Frankfurt.",
-      "nations": ["KE"],
+      "nations": [
+        "KE"
+      ],
       "case": "A driver in Nakuru signs up with a photograph of her licence; it is stored in Germany.",
       "meanwhile": "Everything is on the one server in Frankfurt. The privacy page waits for the responsible company’s name, address and data contact.",
       "source": "The baselines check before sign-in, 25 October 2026 (progress.html)."
     },
     {
-      "id": "L17", "area": "data", "when": "before-country", "status": "open",
+      "id": "L17",
+      "area": "data",
+      "when": "before-country",
+      "status": "open",
       "q": "Must a country’s people’s papers be kept inside that country?",
       "moment": "Before a country is switched on.",
-      "nations": ["all"],
+      "nations": [
+        "all"
+      ],
       "case": "Rwanda or Ethiopia is next; its drivers’ ID photographs would join Kenya’s in Frankfurt.",
       "meanwhile": "One store, in Frankfurt. A store per country is designed for, if a country’s law asks it.",
       "source": "Where photographs and papers are kept in production (progress.html)."
     },
     {
-      "id": "L18", "area": "data", "when": "before-test", "status": "open",
+      "id": "L18",
+      "area": "data",
+      "when": "before-test",
+      "status": "open",
       "q": "How long may — or must — we keep the log of who looked at whose identity?",
       "moment": "Every time a member of staff opens a person’s identity record, a line is written.",
-      "nations": ["all"],
+      "nations": [
+        "all"
+      ],
       "case": "A driver asks who at SeeBuyGet looked at his ID, and when, two years ago.",
       "meanwhile": "Kept; 24 months is a placeholder, not a legal answer, and each country’s company is to set its own period once its lawyer says.",
       "source": "The identity vault’s receipt log (progress.html)."
     },
     {
-      "id": "L19", "area": "terms", "when": "before-test", "status": "open",
+      "id": "L19",
+      "area": "terms",
+      "when": "before-test",
+      "status": "open",
       "q": "The terms of use, the privacy notice and the cookies notice — the general texts and each country’s own — including the clause that a country’s text applies where the two differ.",
       "moment": "Every sign-up agrees to them; a new version is told to everybody, and asked again where it changes something.",
-      "nations": ["KE", "all"],
+      "nations": [
+        "KE",
+        "all"
+      ],
       "case": "A shop in Mombasa signs up; it agrees to the general terms and Kenya’s own line.",
       "meanwhile": "Drafts. Staff keep them in the console and two people publish; a country’s terms are published only in the act that switches its company on.",
       "source": "Every sign-up agrees; texts in the console (October 2026)."
     },
     {
-      "id": "L20", "area": "terms", "when": "before-country", "status": "open",
+      "id": "L20",
+      "area": "terms",
+      "when": "before-country",
+      "status": "open",
       "q": "What may be done with a parcel nobody collects, after a holding period and notice to its owner?",
       "moment": "A parcel sits at a shop past its collection window. The goods belong to the buyer; nobody else may abandon them.",
-      "nations": ["all"],
+      "nations": [
+        "all"
+      ],
       "case": "A buyer in Thika never collects a pair of shoes; the shop has held them for six weeks.",
       "meanwhile": "Returns are off for the first test. The facts are recorded — the notice given, when, the period elapsed — for each country’s rule to be applied once known.",
       "source": "Returns and the abandoned parcel (progress.html, waiting on an answer)."
     },
     {
-      "id": "L21", "area": "money", "when": "before-test", "status": "open",
+      "id": "L21",
+      "area": "money",
+      "when": "before-test",
+      "status": "open",
       "q": "Tax on our fees: today every price is shown net and no tax line is charged. What must each of our companies charge and show, and from when?",
       "moment": "Every quotation and invoice for carriage or a platform fee.",
-      "nations": ["KE", "all"],
+      "nations": [
+        "KE",
+        "all"
+      ],
       "case": "A Kenyan business is billed KES 18,000 for a load; its accountant asks where the tax is.",
       "meanwhile": "Prices are net. In Kenya, tax invoices are prepared for the revenue authority’s system and not sent.",
       "source": "Unit economics (the tax account that nothing posts to)."
+    },
+    {
+      "id": "L22",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
+      "q": "When our truck carries cargo to or from an airport under somebody’s air contract, does the Montreal Convention’s presumption (Art. 18(4)) reach our truck — and which law then sets our liability?",
+      "moment": "A road leg from a farm or packhouse to the cargo terminal, or from it to the consignee, booked by a forwarder or an airline under its air waybill; or an airline trucking cargo between airports instead of flying it.",
+      "nations": [
+        "KE",
+        "UG",
+        "TZ",
+        "RW",
+        "ET"
+      ],
+      "case": "Roses stolen from our reefer between Naivasha and JKIA, on a leg the consolidator booked under its house waybill. Or Kampala fish trucked from Entebbe to Nairobi for a Kenya Airways flight.",
+      "meanwhile": "The air research is held; no air leg is built yet. A road leg records whose contract it runs under, and where the law is unclear the screen says “ask”, never a regime.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_law_2026-10-29.md). Questions 1–3; air_ops question 1."
+    },
+    {
+      "id": "L23",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
+      "q": "Is a forwarder that issues a house air waybill a contracting carrier under the Montreal Convention — and would SeeBuyGet become one if it ever arranged the air leg rather than only holding the papers?",
+      "moment": "A claim by a shipper or an importer who holds only the forwarder’s house waybill.",
+      "nations": [
+        "KE",
+        "UG",
+        "TZ",
+        "RW",
+        "ET"
+      ],
+      "case": "Dairy heifers die in transit; the importer holds only the house waybill and asks who to claim from.",
+      "meanwhile": "SeeBuyGet books no air leg; it would hold both the house and the master waybill and link them.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_law_2026-10-29.md). Question 4."
+    },
+    {
+      "id": "L24",
+      "area": "carriage",
+      "when": "later",
+      "status": "open",
+      "q": "Air routes no convention clearly covers, and the figures that change: are Burundi, South Sudan, Eritrea, Djibouti or Somalia bound by any air convention, which law governs if not, and which date picks the limit (22 or 26 SDR a kilogram)?",
+      "moment": "A route to one of those states; a contract made before 28 December 2024 with the loss after it.",
+      "nations": [
+        "BI",
+        "SS",
+        "DJ",
+        "SO",
+        "all"
+      ],
+      "case": "Day-old chicks flown from Nairobi to Juba; a 2024 booking whose loss is found in 2025.",
+      "meanwhile": "The limit is kept with its dates; a route with no convention would say so rather than guess.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_law_2026-10-29.md). Questions 5–7."
+    },
+    {
+      "id": "L25",
+      "area": "title",
+      "when": "before-country",
+      "status": "open",
+      "q": "Is a held electronic air waybill — a cargo receipt or a printed shipment record — enough as evidence, and on a route under the Hague Protocol does a paperless waybill cost the carrier its limit?",
+      "moment": "A claim, or a customs or revenue query, on cargo that travelled under an electronic air waybill.",
+      "nations": [
+        "KE",
+        "UG",
+        "TZ",
+        "RW",
+        "ET"
+      ],
+      "case": "An importer’s claim rests on a cargo-receipt PDF; the airline says no air waybill was ever printed.",
+      "meanwhile": "Not built: the research says when an electronic waybill is possible on a route and keeps the record.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_law_2026-10-29.md). Questions 8–9."
+    },
+    {
+      "id": "L26",
+      "area": "papers",
+      "when": "before-country",
+      "status": "open",
+      "q": "Confirm that SeeBuyGet must refuse to fill in or sign a dangerous goods declaration, a shipper’s certification for live animals or a consignment security declaration for a customer — and what follows if staff ever do.",
+      "moment": "A customer at the export or import desk asks us to “fill it in and sign it”.",
+      "nations": [
+        "all"
+      ],
+      "case": "An exporter of lithium batteries asks staff to sign the dangerous goods declaration because their own person is away.",
+      "meanwhile": "Staff write nothing in a party’s name (a standing rule); these documents are held as copies, never signed.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_special_cargo_2026-10-29.md). Question 7."
+    },
+    {
+      "id": "L27",
+      "area": "papers",
+      "when": "before-country",
+      "status": "open",
+      "q": "At a roadside check between the airport and the quarantine station, does a held digital copy of a veterinary certificate or permit suffice, or must the original ride in the cab?",
+      "moment": "A veterinary or police check on an imported livestock load.",
+      "nations": [
+        "KE",
+        "UG",
+        "TZ",
+        "ET"
+      ],
+      "case": "Heifers on the way from JKIA to a quarantine farm are stopped; the driver has the certificate only on the phone.",
+      "meanwhile": "Not built: the design says where an original must travel the note says so and the driver confirms it at pickup.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_special_cargo_2026-10-29.md). Question 8."
+    },
+    {
+      "id": "L28",
+      "area": "licences",
+      "when": "before-country",
+      "status": "open",
+      "q": "Secured air cargo on our trucks: does Kenya’s aviation security law require a driver carrying it from a known consignor to a regulated agent to be an established employee or sign a haulier declaration — must SeeBuyGet itself hold a regulated agent certificate — and does the EU’s approved-haulier rule (from 1 January 2027) reach those trucks?",
+      "moment": "Carrying flowers screened at a farm that is a known consignor to the cargo terminal at JKIA, bound for the EU.",
+      "nations": [
+        "KE",
+        "ET",
+        "UG",
+        "all"
+      ],
+      "case": "A Naivasha farm, a known consignor, sends secured roses to a regulated agent at JKIA for Schiphol.",
+      "meanwhile": "Not built: SeeBuyGet never claims cargo is “secure” — only a regulated agent or known consignor gives a security status.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_special_cargo_2026-10-29.md). Questions 2–3; air_ops question 2."
+    },
+    {
+      "id": "L29",
+      "area": "licences",
+      "when": "before-country",
+      "status": "open",
+      "q": "Medicines: must the carrier — or SeeBuyGet, where it stands as the contracting carrier — hold Kenya’s Pharmacy and Poisons Board transport licence with the vehicle on it, and what do Rwanda, Ethiopia, Uganda and Tanzania ask; controlled drugs and goods released under seal included?",
+      "moment": "A business posts a medicines or vaccine load, for example from JKIA to a wholesaler’s store.",
+      "nations": [
+        "KE",
+        "RW",
+        "ET",
+        "UG",
+        "TZ"
+      ],
+      "case": "A Nairobi wholesaler books 2–8 °C insulin from JKIA to Industrial Area.",
+      "meanwhile": "Not built: the design would offer medicines only to carriers whose licence staff checked off the licence they sent, as with insurance cover.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_special_cargo_2026-10-29.md). Questions 1, 10, 11; air_ops question 3."
+    },
+    {
+      "id": "L30",
+      "area": "licences",
+      "when": "before-country",
+      "status": "open",
+      "q": "Live animals on the road leg: what Kenya’s animal-welfare law asks of a carrier, who applies for movement permits, whether the truck may go to the farm or only to the place on the permit, and who answers for an animal that dies on the way.",
+      "moment": "Booking a truck from JKIA, Entebbe or Dar es Salaam for imported heifers or day-old chicks.",
+      "nations": [
+        "KE",
+        "TZ",
+        "RW",
+        "UG",
+        "ET"
+      ],
+      "case": "A six-hour drive from JKIA to a quarantine farm, with no rest stop and the importer’s attendant gone home.",
+      "meanwhile": "Not built: the design locks the destination to the place the veterinary officer named; an importer’s override could never change it.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_special_cargo_2026-10-29.md). Questions 5–6; air_ops question 4."
+    },
+    {
+      "id": "L31",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
+      "q": "Who bears a temperature excursion — the logger shows the cargo warmed on our truck and the airline refuses it — and how does our “damage is reported, not judged” rule sit with the medicines rule that every excursion is reported to the distributor and the recipient?",
+      "moment": "Perishables or medicines arrive warm at the terminal.",
+      "nations": [
+        "KE",
+        "all"
+      ],
+      "case": "A flower load rejected at JKIA for warm pulp; a vaccine load breached on the way to the central store.",
+      "meanwhile": "Damage is reported with the evidence, never judged; no company pays without stated cover.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_special_cargo_2026-10-29.md). Question 4."
+    },
+    {
+      "id": "L32",
+      "area": "carriage",
+      "when": "before-country",
+      "status": "open",
+      "q": "Dangerous goods by road in countries outside the road dangerous-goods agreement (ADR): which standard binds a domestic leg to the airport in Kenya, Tanzania, Rwanda or Ethiopia, and what changes crossing from Uganda, which is a party?",
+      "moment": "A lithium-battery or flammable load trucked to JKIA, or from Kampala to JKIA.",
+      "nations": [
+        "KE",
+        "TZ",
+        "RW",
+        "ET",
+        "UG"
+      ],
+      "case": "Lithium batteries trucked from a Nairobi warehouse to JKIA for a cargo-only flight.",
+      "meanwhile": "Every load of dangerous goods carries its UN number, proper shipping name and class from every door it is posted at.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_special_cargo_2026-10-29.md). Question 9; air_ops question 7."
+    },
+    {
+      "id": "L33",
+      "area": "data",
+      "when": "before-country",
+      "status": "open",
+      "q": "Customs and security data we would hold: can EU customs require it of us as a person “holding” it, are we the party in possession under the US advance-data rules when a do-not-load order comes, may we share a driver’s identity with a regulated agent or airline, and may we link to airline tracking pages?",
+      "moment": "EU- or US-bound air exports; secured cargo; showing where a shipment is.",
+      "nations": [
+        "KE",
+        "all"
+      ],
+      "case": "A do-not-load order arrives while the flowers are on our truck; the regulated agent asks for the driver’s ID photo.",
+      "meanwhile": "Not built: we would record such an order and stop the handover, never become a filer, and link to airline pages rather than fetch them (one airline’s site forbids automated access).",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_law_2026-10-29.md). Question 11; air_special_cargo question 12; air_ops question 6."
+    },
+    {
+      "id": "L34",
+      "area": "terms",
+      "when": "before-test",
+      "status": "open",
+      "q": "When an importer sends a truck before the arrival notice or the release, who pays the waiting if it is late — and what is our exposure if a free-days or customs countdown we show is wrong?",
+      "moment": "The importer’s word to “send it anyway” on a rail import (live now), and later on an air import; every free-days countdown.",
+      "nations": [
+        "KE",
+        "UG",
+        "TZ",
+        "RW",
+        "BI",
+        "SS"
+      ],
+      "case": "An importer overrides the rail gate at Nairobi’s inland depot; the box is not there and the truck waits a day.",
+      "meanwhile": "The override is the importer’s alone, with its reason kept, and the screen says the importer pays for waiting; countdowns show their source and date.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_ops_2026-10-29.md). Question 5."
+    },
+    {
+      "id": "L35",
+      "area": "papers",
+      "when": "before-country",
+      "status": "open",
+      "q": "What may we store or show from IATA’s publications — the airline prefix table, the names of the air waybill’s boxes?",
+      "moment": "Building the check of a held air waybill.",
+      "nations": [
+        "all"
+      ],
+      "case": "Showing “Airline: Kenya Airways” for the prefix 706 on a held waybill.",
+      "meanwhile": "IATA resolution numbers are cited; no manual text is copied.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_law_2026-10-29.md). Question 12."
+    },
+    {
+      "id": "L36",
+      "area": "carriage",
+      "when": "later",
+      "status": "open",
+      "q": "Domestic air carriage: what governs a domestic flight in Kenya, Uganda, Tanzania, Ethiopia and Rwanda?",
+      "moment": "A domestic feeder flight before an international one.",
+      "nations": [
+        "KE",
+        "UG",
+        "TZ",
+        "ET",
+        "RW"
+      ],
+      "case": "Fish flown from Kisumu to Nairobi to join an export flight.",
+      "meanwhile": "Not built.",
+      "source": "The air research, 29 October 2026 (05_engineering/research/air_law_2026-10-29.md). Question 13."
     }
   ]
 }
@@ -283,7 +701,7 @@
 <script>
 (function () {
   var data = JSON.parse(document.getElementById('data').textContent);
-  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', IN: 'India', RU: 'Russia', ID: 'Indonesia' };
+  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', SO: 'Somalia', IN: 'India', RU: 'Russia', ID: 'Indonesia' };
   var WHEN = { 'before-test': 'Before the first test', 'before-country': 'Before a country or feature opens', later: 'Later' };
   var STATUS = { open: 'Open', answered: 'Answered in principle', watch: 'To watch' };
   var state = { when: '', nation: '' };
@@ -291,7 +709,7 @@
 
   var nations = [];
   data.questions.forEach(function (q) { q.nations.forEach(function (n) { if (nations.indexOf(n) < 0) nations.push(n); }); });
-  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'IN', 'RU', 'ID'];
+  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'SO', 'IN', 'RU', 'ID'];
   nations.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
   var box = document.getElementById('nations');
   [''].concat(nations.filter(function (n) { return n !== 'all'; })).forEach(function (n) {
