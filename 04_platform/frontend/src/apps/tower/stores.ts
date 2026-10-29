@@ -23,6 +23,8 @@ export interface StoreRow {
   hasDock: boolean;
   address?: string;
   createdAt: string;
+  /** A business's parcel account (2026-10-29): it sends from the Business app, and nobody signs in to it as a store. */
+  forBusiness?: boolean;
 }
 
 export type CallbackState = 'pending' | 'delivered' | 'failed';

@@ -289,3 +289,46 @@
 .biz .cselect__btn {
   max-width: none;
 }
+
+/* Parcels (2026-10-29): how a parcel account works, in three steps. */
+.biz-steps {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  color: var(--tx2);
+}
+.biz-steps li + li {
+  margin-top: 4px;
+}
+
+/* The three figures of a parcel account side by side, on a phone as at a desk. */
+.biz-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 560px) {
+  .biz-kpis {
+    gap: 8px;
+  }
+  .biz-kpis .twr-kpi {
+    padding: 10px 10px;
+  }
+  .biz-kpis .twr-kpi__v {
+    font-size: 18px;
+  }
+}
+
+/* A parcel's four measurements in one row at a desk, two by two on a phone. */
+.biz-size {
+  border: 0;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.biz-size__row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 10px;
+}
+@media (max-width: 560px) {
+  .biz-size__row {
+    grid-template-columns: 1fr 1fr;
+  }
+}

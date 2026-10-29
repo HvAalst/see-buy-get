@@ -28,6 +28,7 @@ export type IconName =
   | 'repeat'
   | 'home'
   | 'truck'
+  | 'parcel'
   | 'bike'
   | 'check'
   | 'speaker'
@@ -138,6 +139,13 @@ const PATHS: Record<IconName, JSX.Element> = {
     <>
       <circle cx="12" cy="8.2" r="3.6" />
       <path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" />
+    </>
+  ),
+  /** A parcel: a box with its tape across the top — a business's parcels (2026-10-29), apart from containers (`box`). */
+  parcel: (
+    <>
+      <path d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5v-9Z" />
+      <path d="M4 7.5 12 11l8-3.5M12 11v9M8 5.8l8 3.5v3" />
     </>
   ),
   bag: (

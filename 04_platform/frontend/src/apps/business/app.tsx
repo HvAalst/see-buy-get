@@ -23,6 +23,7 @@ import { ClientsScreen } from './screens/ClientsScreen';
 import { ContractsScreen } from './screens/ContractsScreen';
 import { InboundScreen } from './screens/InboundScreen';
 import { ExportsScreen } from './screens/ExportsScreen';
+import { ParcelsScreen } from './screens/ParcelsScreen';
 import '../../shared/screens.css';
 import '../../shared/console.css';
 import '../tower/tower.css';
@@ -32,6 +33,7 @@ const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   home: { label: 'business.nav.home', icon: 'home' },
   loads: { label: 'business.nav.domestic', icon: 'truck' },
   runs: { label: 'business.nav.runs', icon: 'route' },
+  parcels: { label: 'business.nav.parcels', icon: 'parcel' },
   contracts: { label: 'business.nav.contracts', icon: 'badge' },
   clients: { label: 'business.nav.clients', icon: 'bag' },
   exports: { label: 'business.nav.exports', icon: 'send' },
@@ -148,6 +150,8 @@ export function App() {
             <LoadsScreen business={business} actions={actions} client={client} />
           ) : section === 'runs' ? (
             <RunsScreen business={business} actions={actions} client={client} />
+          ) : section === 'parcels' ? (
+            <ParcelsScreen business={business} client={client} />
           ) : section === 'contracts' ? (
             <ContractsScreen business={business} actions={actions} client={client} />
           ) : section === 'clients' ? (

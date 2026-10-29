@@ -7,9 +7,9 @@ import { navGroupsFor, navSectionOf } from './logic';
  * sea and air are legs inside a record, never sections; each business sees only the groups its work needs.
  */
 describe('the Business app’s menu', () => {
-  it('an expeditor: shipments first — overview, domestic, exports, imports — then partners and the company', () => {
+  it('an expeditor: shipments first — overview, domestic, parcels, exports, imports — then partners and the company', () => {
     expect(navGroupsFor(['expeditor']).map((g) => [g.key, g.sections])).toEqual([
-      ['shipments', ['home', 'loads', 'exports', 'imports']],
+      ['shipments', ['home', 'loads', 'parcels', 'exports', 'imports']],
       ['partners', ['contracts', 'clients']],
       ['company', ['people', 'details']],
     ]);
@@ -18,6 +18,8 @@ describe('the Business app’s menu', () => {
   it('an importer sees no domestic loads, no exports and no partners; a yard and a receiver get Places', () => {
     expect(navGroupsFor(['importer']).map((g) => g.key)).toEqual(['shipments', 'company']);
     expect(navGroupsFor(['importer'])[0].sections).toEqual(['home', 'imports']);
+    // Parcels are for whoever sends goods (2026-10-29): not an importer's.
+    expect(navGroupsFor(['importer'])[0].sections).not.toContain('parcels');
     expect(navGroupsFor(['importer', 'depot', 'receiver']).find((g) => g.key === 'places')?.sections).toEqual(['inbound', 'yard']);
   });
 

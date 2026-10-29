@@ -2522,6 +2522,7 @@ export const enTowerBusinesses = {
   'tower.stores.tag.empty': 'Float empty',
   'tower.stores.tag.noTill': 'No float held here',
   'tower.stores.tag.bySecret': 'Signs in by its secret',
+  'tower.stores.tag.business': 'A business’s parcels',
   'tower.stores.nothingWrong': 'Nothing stands out',
   'tower.stores.nothingWrongLede': 'Nothing on this store’s record looks wrong: no label is waiting on its float, no payment is outstanding, and nothing sent to its systems has been given up on.',
   'tower.stores.trouble.unpaid': 'Labels waiting on float',

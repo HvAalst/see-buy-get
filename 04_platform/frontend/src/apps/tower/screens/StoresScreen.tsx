@@ -122,7 +122,7 @@ export function StoresScreen({ state, actions }: { state: TowerState; actions: T
                           nothing odd about it carries no tag at all. */}
                       {float === 'empty' ? <span class="ctag ctag--warn">{t('tower.stores.tag.empty')}</span> : null}
                       {float === 'none' ? <span class="ctag ctag--quiet">{t('tower.stores.tag.noTill')}</span> : null}
-                      {r.hasAccount ? null : <span class="ctag ctag--quiet">{t('tower.stores.tag.bySecret')}</span>}
+                      {r.forBusiness ? <span class="ctag ctag--quiet">{t('tower.stores.tag.business')}</span> : r.hasAccount ? null : <span class="ctag ctag--quiet">{t('tower.stores.tag.bySecret')}</span>}
                     </span>
                     <span class="crow__sub">
                       {[r.country, r.companyName, float === 'held' ? floatWords(r, t) : null, r.address].filter(Boolean).join(' · ')}

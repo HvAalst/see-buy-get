@@ -3876,6 +3876,456 @@
         }
       }
     },
+    "/v1/sbg/business/me/parcels/account": {
+      "get": {
+        "operationId": "BusinessParcel.account",
+        "summary": "",
+        "description": "The parcel account: its balance, a payment waiting to be confirmed — or whether one can be opened here.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelAccountView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "BusinessParcel.open",
+        "summary": "",
+        "description": "Open it. Asked again, it answers the one there is.",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/top-up": {
+      "post": {
+        "operationId": "BusinessParcel.topUp",
+        "summary": "",
+        "description": "Ask to pay money in, by M-Pesa or bank. A payment rail confirms it; nothing is credited before.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessTopUpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/book": {
+      "get": {
+        "operationId": "BusinessParcel.book",
+        "summary": "",
+        "description": "The account's book: top-ups, parcels paid, money back.",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "TOP_UP",
+                "BILLING",
+                "REBATE"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "direction",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "in",
+                "out"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "amount_desc",
+                "amount_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelBook"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels": {
+      "get": {
+        "operationId": "BusinessParcel.list",
+        "summary": "",
+        "description": "The parcels it sent, newest first, searched and paged.",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pudo",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "paid",
+                "unpaid"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "newest",
+                "oldest",
+                "cost_desc",
+                "cost_asc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelList"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "BusinessParcel.send",
+        "summary": "",
+        "description": "Send one, from a shop to a shop. Paid from the balance; its label is given once paid.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessParcelDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelSent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/{parcelId}": {
+      "get": {
+        "operationId": "BusinessParcel.detail",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/{parcelId}/label": {
+      "get": {
+        "operationId": "BusinessParcel.label",
+        "summary": "",
+        "description": "Its label, to print, once paid.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelLabel"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/{parcelId}/pay": {
+      "post": {
+        "operationId": "BusinessParcel.pay",
+        "summary": "",
+        "description": "Pay for one the balance did not cover when it was sent.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelSent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/{parcelId}/call-off": {
+      "get": {
+        "operationId": "BusinessParcel.callOffPreview",
+        "summary": "",
+        "description": "What calling it off would do now.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessCallOffView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "BusinessParcel.callOff",
+        "summary": "",
+        "description": "Call it off: withdrawn with its money back, or brought back from a hub at a price.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessCallOffDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessCallOffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/exports": {
       "post": {
         "operationId": "Export.register",
@@ -36050,6 +36500,646 @@
           "glosShipmentId",
           "action"
         ]
+      },
+      "ParcelAccountCompany": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "currency"
+        ]
+      },
+      "ParcelTopUpOpen": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "openedAt": {
+            "type": "string"
+          },
+          "pushed": {
+            "type": "boolean",
+            "description": "The phone was sent a prompt to approve."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "How to pay where no prompt was sent: a paybill and the reference to give."
+          }
+        },
+        "required": [
+          "reference",
+          "amount",
+          "currency",
+          "openedAt"
+        ]
+      },
+      "ParcelTopUpTerms": {
+        "type": "object",
+        "properties": {
+          "freeAbove": {
+            "type": "number"
+          },
+          "amount": {
+            "type": "number"
+          }
+        }
+      },
+      "BusinessParcelAccountView": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean",
+            "description": "It has been opened."
+          },
+          "canOpen": {
+            "type": "boolean",
+            "description": "Not open: whether it can be, here. False where no company of ours holds money in its country."
+          },
+          "whyNot": {
+            "type": "string"
+          },
+          "balance": {
+            "type": "number",
+            "nullable": true
+          },
+          "company": {
+            "$ref": "#/components/schemas/ParcelAccountCompany"
+          },
+          "waiting": {
+            "$ref": "#/components/schemas/ParcelTopUpOpen"
+          },
+          "terms": {
+            "$ref": "#/components/schemas/ParcelTopUpTerms"
+          },
+          "sent": {
+            "type": "number",
+            "description": "Counted over every parcel it sent, never a filtered page."
+          },
+          "unpaid": {
+            "type": "number"
+          },
+          "moving": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "open",
+          "canOpen",
+          "sent",
+          "unpaid",
+          "moving"
+        ]
+      },
+      "BusinessTopUpDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "phone": {
+            "type": "string",
+            "description": "The phone the payment prompt goes to. Without one, a paybill and a reference are shown.",
+            "maxLength": 30
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "ParcelBookLine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "sign": {
+            "type": "string",
+            "enum": [
+              "+",
+              "-"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "sign",
+          "amount",
+          "currency",
+          "at"
+        ]
+      },
+      "ParcelBook": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParcelBookLine"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "balance": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ]
+      },
+      "ParcelEnd": {
+        "type": "object",
+        "properties": {
+          "did": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "did",
+          "name",
+          "zone"
+        ]
+      },
+      "BusinessParcelRow": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Created",
+              "At_PUDO",
+              "On_Bus",
+              "At_MDP",
+              "Ready_For_Pickup",
+              "Unclaimed",
+              "Delivered",
+              "Disputed",
+              "Voided",
+              "Returned",
+              "Lost"
+            ]
+          },
+          "paid": {
+            "type": "boolean",
+            "description": "Paid from the balance; until then it has no label and no shop takes it in."
+          },
+          "reference": {
+            "type": "string"
+          },
+          "receiver": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/ParcelEnd"
+          },
+          "to": {
+            "$ref": "#/components/schemas/ParcelEnd"
+          },
+          "size": {
+            "type": "string"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "collectionCode": {
+            "type": "string",
+            "description": "What the receiver says at the shop, for the business to pass on — while there is something to collect."
+          },
+          "trackingKey": {
+            "type": "string"
+          },
+          "sentBy": {
+            "type": "string",
+            "description": "Who in the business sent it."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "returnParcelId": {
+            "type": "string",
+            "description": "Called off at a hub: the parcel bringing it back."
+          }
+        },
+        "required": [
+          "parcelId",
+          "status",
+          "paid",
+          "receiver",
+          "to",
+          "size",
+          "currency",
+          "createdAt"
+        ]
+      },
+      "BusinessParcelList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessParcelRow"
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ]
+      },
+      "ParcelSizeDto": {
+        "type": "object",
+        "properties": {
+          "l": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "w": {
+            "type": "number",
+            "minimum": 0.1
+          },
+          "h": {
+            "type": "number",
+            "minimum": 0.1
+          }
+        },
+        "required": [
+          "l",
+          "w",
+          "h"
+        ]
+      },
+      "ParcelLineDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "qty": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "name",
+          "qty"
+        ]
+      },
+      "BusinessParcelDto": {
+        "type": "object",
+        "properties": {
+          "natureCode": {
+            "type": "string",
+            "enum": [
+              "GEN",
+              "FOD",
+              "FOP",
+              "HAZ-CHEM",
+              "HAZ-DUST",
+              "HAZ-BIO",
+              "HAZ-FLAM",
+              "FRG",
+              "ODR",
+              "HUM"
+            ]
+          },
+          "routeMode": {
+            "type": "string",
+            "description": "`flexible` holds the most it can cost and gives back the rest on delivery; `locked` pays the cheapest route now.",
+            "enum": [
+              "flexible",
+              "locked"
+            ]
+          },
+          "originPudoDid": {
+            "type": "string",
+            "description": "The shop it is handed in at.",
+            "maxLength": 120
+          },
+          "destPudoDid": {
+            "type": "string",
+            "description": "The shop the receiver collects it from.",
+            "maxLength": 120
+          },
+          "receiverMobile": {
+            "type": "string",
+            "description": "The person who collects it. Never sent a text by us; the code is the business's to pass on.",
+            "maxLength": 30
+          },
+          "dimensionsCm": {
+            "description": "Measured, so it is priced on what it is rather than on a size band.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelSizeDto"
+              }
+            ]
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.01
+          },
+          "contentPhotoRef": {
+            "type": "string",
+            "description": "A photograph of what is inside, uploaded first: what a damage report is read against.",
+            "maxLength": 80
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "reference": {
+            "type": "string",
+            "description": "The business's own reference — an order or an invoice number.",
+            "maxLength": 60
+          },
+          "declaredValue": {
+            "type": "number",
+            "description": "What the goods are worth, for the cover.",
+            "minimum": 0
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParcelLineDto"
+            }
+          },
+          "expectedTotal": {
+            "type": "number",
+            "description": "The price shown when it was quoted. Moved since: refused with the new price, never billed silently.",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "originPudoDid",
+          "destPudoDid",
+          "receiverMobile",
+          "dimensionsCm",
+          "weightKg",
+          "contentPhotoRef"
+        ]
+      },
+      "ParcelStep": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "status"
+        ]
+      },
+      "BusinessParcelDetail": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Created",
+              "At_PUDO",
+              "On_Bus",
+              "At_MDP",
+              "Ready_For_Pickup",
+              "Unclaimed",
+              "Delivered",
+              "Disputed",
+              "Voided",
+              "Returned",
+              "Lost"
+            ]
+          },
+          "paid": {
+            "type": "boolean",
+            "description": "Paid from the balance; until then it has no label and no shop takes it in."
+          },
+          "reference": {
+            "type": "string"
+          },
+          "receiver": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/ParcelEnd"
+          },
+          "to": {
+            "$ref": "#/components/schemas/ParcelEnd"
+          },
+          "size": {
+            "type": "string"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "collectionCode": {
+            "type": "string",
+            "description": "What the receiver says at the shop, for the business to pass on — while there is something to collect."
+          },
+          "trackingKey": {
+            "type": "string"
+          },
+          "sentBy": {
+            "type": "string",
+            "description": "Who in the business sent it."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "returnParcelId": {
+            "type": "string",
+            "description": "Called off at a hub: the parcel bringing it back."
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "fragile": {
+            "type": "boolean"
+          },
+          "routeMode": {
+            "type": "string"
+          },
+          "platformFee": {
+            "type": "number",
+            "description": "The platform fee inside the cost — one line, never what it is made of."
+          },
+          "tax": {
+            "type": "number"
+          },
+          "taxLabel": {
+            "type": "string"
+          },
+          "declaredValue": {
+            "type": "number"
+          },
+          "coverLimit": {
+            "type": "number"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParcelStep"
+            }
+          }
+        },
+        "required": [
+          "parcelId",
+          "status",
+          "paid",
+          "receiver",
+          "to",
+          "size",
+          "currency",
+          "createdAt",
+          "steps"
+        ]
+      },
+      "BusinessParcelSent": {
+        "type": "object",
+        "properties": {
+          "parcel": {
+            "$ref": "#/components/schemas/BusinessParcelDetail"
+          },
+          "paid": {
+            "type": "boolean"
+          },
+          "balance": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "parcel",
+          "paid"
+        ]
+      },
+      "BusinessParcelLabel": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "svg": {
+            "type": "string"
+          },
+          "qrPayload": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "svg",
+          "qrPayload"
+        ]
+      },
+      "BusinessCallOffView": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "description": "`refund` withdrawn with its money back · `bring_back` back to the shop it was handed in at, at a price · `none` it cannot be.",
+            "enum": [
+              "refund",
+              "bring_back",
+              "pick",
+              "to_door",
+              "no"
+            ]
+          },
+          "amount": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "backTo": {
+            "type": "string"
+          },
+          "why": {
+            "type": "string"
+          },
+          "done": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "parcelId",
+          "outcome"
+        ]
+      },
+      "BusinessCallOffDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        }
       },
       "ExportBookingDto": {
         "type": "object",

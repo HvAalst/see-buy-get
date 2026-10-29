@@ -284,8 +284,10 @@ export class BusinessParcelService {
       ...(p.shipmentTax ? { tax: p.shipmentTax } : {}),
       ...(p.taxLabel ? { taxLabel: p.taxLabel } : {}),
       ...(p.declaredValue != null ? { declaredValue: p.declaredValue } : {}),
-      ...(p.coverLimit != null ? { coverLimit: p.coverLimit } : {}),
-      steps: (p.scans ?? []).map((s) => ({ at: s.at, status: String(s.status), ...(s.note ? { note: s.note } : {}) })),
+      // No cover, nothing said: a limit of nothing reads as a promise of something (rule: damage is reported, not judged).
+      ...(p.coverLimit ? { coverLimit: p.coverLimit } : {}),
+      // The first step's note is ours (how the parcel was made), not the sender's; the rest say what happened.
+      steps: (p.scans ?? []).map((s) => ({ at: s.at, status: String(s.status), ...(s.note && s.status !== 'CREATED' ? { note: s.note } : {}) })),
     };
   }
 }

@@ -185,6 +185,7 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
 const GO: Record<Exclude<Section, 'home'>, { label: MessageKey; sub: MessageKey }> = {
   loads: { label: 'business.nav.loads', sub: 'business.home.go.loads' },
   runs: { label: 'business.nav.runs', sub: 'business.home.go.runs' },
+  parcels: { label: 'business.nav.parcels', sub: 'business.home.go.parcels' },
   contracts: { label: 'business.nav.contracts', sub: 'business.home.go.contracts' },
   clients: { label: 'business.nav.clients', sub: 'business.home.go.clients' },
   exports: { label: 'business.nav.exports', sub: 'business.home.go.exports' },

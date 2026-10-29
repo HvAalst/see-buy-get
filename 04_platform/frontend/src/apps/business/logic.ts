@@ -3,7 +3,7 @@ import type { MessageKey, Translate } from '../../shared/i18n';
 import { arrivalWords, crossingWords, passageWords, type When } from '../../shared/passages';
 
 /** Where somebody is in the Business app. */
-export type Section = 'home' | 'loads' | 'runs' | 'contracts' | 'clients' | 'exports' | 'imports' | 'yard' | 'inbound' | 'people' | 'details';
+export type Section = 'home' | 'loads' | 'runs' | 'parcels' | 'contracts' | 'clients' | 'exports' | 'imports' | 'yard' | 'inbound' | 'people' | 'details';
 
 /**
  * WHICH SECTIONS A BUSINESS IS SHOWN — from what it says it does, never from what it is allowed.
@@ -19,6 +19,8 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
     'home',
     // B2 — whoever sends goods, or arranges sending them for clients: post a load, or take space on a carrier's run.
     ...(has('shipper') || has('expeditor') ? (['loads', 'runs'] as Section[]) : []),
+    // Parcels (2026-10-29): whoever sends goods sends parcels too — shop to shop, paid from the business's own balance.
+    ...(has('shipper') || has('expeditor') ? (['parcels'] as Section[]) : []),
     // P1 — the carriers it has a standing contract with, whose queue its orders go straight into.
     ...(has('shipper') || has('expeditor') ? (['contracts'] as Section[]) : []),
     // B4 — an expeditor's own book of the clients it sends for, as their agent.
@@ -50,7 +52,7 @@ export interface NavGroup {
 }
 
 const NAV_GROUPS: NavGroup[] = [
-  { key: 'shipments', label: 'business.group.shipments', sections: ['home', 'loads', 'exports', 'imports'] },
+  { key: 'shipments', label: 'business.group.shipments', sections: ['home', 'loads', 'parcels', 'exports', 'imports'] },
   { key: 'partners', label: 'business.group.partners', sections: ['contracts', 'clients'] },
   { key: 'places', label: 'business.group.places', sections: ['inbound', 'yard'] },
   { key: 'company', label: 'business.group.company', sections: ['people', 'details'] },
