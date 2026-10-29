@@ -4565,7 +4565,9 @@ export class DispatchService {
   setRailGate(freightId: string, gate: FreightRailGate | undefined): boolean {
     const f = this.freights.get(freightId);
     if (!f) return false;
-    if (gate && !f.waitsForRail && (f.claimedBy || !['scheduled', 'available'].includes(f.status))) return false;
+    // Opening a gate is always allowed; closing one never reaches a load that is already taken.
+    const closes = gate && !gate.arrivedAt && !gate.collectAnyway;
+    if (closes && (f.claimedBy || !['scheduled', 'available'].includes(f.status))) return false;
     if (gate) f.waitsForRail = gate;
     else delete f.waitsForRail;
     this.freights.set(freightId, f);

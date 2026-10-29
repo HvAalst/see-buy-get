@@ -48,7 +48,7 @@ entered by whoever holds it — and says whether it is complete for the law of i
    windows; and for an electronic note, its form (Brazil's CT-e key and its check digit, the CIM printout line,
    Russia's electronic-only rule) and where the issuer lets it be looked up. We never say "valid" on our own word:
    "complete for …, as printed", with the day the law was checked.
-3. **NEXT — where road meets rail**: the road note and the rail note agree before the truck leaves
+3. **BUILT 2026-10-29 — where road meets rail**: the road note and the rail note agree before the truck leaves
    (container number with its check digit, seals, gross mass against the verified gross mass, consignee, stations);
    the road leg to a rail terminal is timed to the train's cut-off; the pickup at the far end waits for the
    railway's arrival notice; the free days at the terminal run on the box clock.
@@ -75,3 +75,25 @@ issued, check it is genuine and agrees with our papers, and say what it means. T
 - Screens: `apps/tower/screens/RailNotePanel.tsx` on the Business app's export and on the import screen (console and
   Business app); asks only what the lane's rules ask. Help: business-exports note 4. Glossary: CIM, SMGS, ATIT, SDR, RID.
 - Tests: rail.spec.ts (22), test/export-rail.e2e-spec.ts, business.e2e-spec.ts (Djibouti–Modjo), rail-note.test.tsx.
+
+## Built (2026-10-29) — where road meets rail
+The user: "build the clock with the blocker as you said. and in help page an explanation as to why and what."
+- `rail-leg.types.ts`: `ExportByRail` (rail terminal, train cut-off, reference, `atPort`), `ImportByRail` (terminal,
+  expected, free days, `arrival`, `collectAnyway`, warned), `FreightRailGate` on `Freight.waitsForRail`,
+  `railRefusal` (the board's and the take's words), `railTerminalClock` (not_started / running / due_soon / over /
+  stopped / no_free_days).
+- Export: `handoverOf` — the port gate, or by rail the rail terminal — drives `timingOf`, the laden leg (destination,
+  delivery window, instructions, the refusal after the cut-off) and the bell. The train's cut-off must fall before the
+  gate's and after now; set or cleared only before the load is posted. By rail the line's clock counts the box inside
+  only from `atPort` (recorded), not from our truck's delivery.
+- Import: `setByRail` / `recordRailArrival` (importer or agent) / `collectAnyway` (importer alone, with a reason).
+  By rail the train is the run from the quay (no bonded road leg) and the road leg is collected at the rail terminal
+  (the controller falls back to it when no port is chosen). `gateRoadLeg` sets the gate on an untaken leg and lifts it
+  on the arrival or the importer's word; `DispatchService.setRailGate` never closes a gate on a taken load.
+  `RailTerminalSweeper` → `sweepRail`: the importer and agent told on the last free day and once when over.
+- The gate is asked at the board (`RAIL_NOT_ARRIVED`, resolvable), all three offer paths and the take.
+- Screens: `ExportByRail` (Business app export), `ImportByRail` (import screen, console + Business app); the import's
+  road-leg form names the rail terminal instead of asking for a port. Help: in-app article `road-meets-rail` (business,
+  driver, fleet, console), the why and the what.
+- Known limit: by rail on an import, the line's own clock (demurrage/detention) still keys to our truck's pickup; the
+  train's departure from the port is not recorded yet.

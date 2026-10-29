@@ -570,6 +570,11 @@ export class ImportService {
     return this.detail(consignment.importId, actorEntityId);
   }
 
+  /** Where the train brings the box, when it comes inland by rail — the road leg is collected there. */
+  railTerminalOf(importId: string): { label: string; location: GeoPoint } | undefined {
+    return this.imports.get(importId)?.byRail?.terminal;
+  }
+
   /** The road leg's gate, as the rail leg stands: set while the box is on the train, lifted by the arrival or the importer's word. */
   private gateRoadLeg(consignment: ImportConsignment): void {
     const r = consignment.byRail;

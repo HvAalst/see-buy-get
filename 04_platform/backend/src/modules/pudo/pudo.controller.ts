@@ -2077,7 +2077,8 @@ export class SbgController {
      */
     const from = dto.pickupSiteId ? this.sites.require(acting, dto.pickupSiteId) : undefined;
     const to = dto.destSiteId ? this.sites.require(acting, dto.destSiteId) : undefined;
-    const pickupLocation = from?.location ?? dto.pickupLocation;
+    // Inland by rail (2026-10-29), the box is collected where the train brings it: no port to choose.
+    const pickupLocation = from?.location ?? dto.pickupLocation ?? this.imports.railTerminalOf(importId)?.location;
     if (!pickupLocation) throw new GlosError('FIELD_REQUIRED', 'Say which port it is collected from');
     const destLabel = to ? (to.address ?? to.name) : dto.destLabel;
     if (!destLabel) throw new GlosError('FIELD_REQUIRED', 'Say where the container is going');

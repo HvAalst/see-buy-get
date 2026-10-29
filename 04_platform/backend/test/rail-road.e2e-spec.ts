@@ -107,23 +107,32 @@ describe('where road meets rail, over the wire', () => {
     app.get(DriverService).decideKyc(driver.did, true);
     app.get(FleetService).couple(driver.did, app.get(VehicleService).register({ plate: `KDR ${digits().slice(0, 3)}R`, vehicleClass: 'truck', truckSubtype: 'flatbed', capacityKg: 10_000, ownerName: 'X', equipment: ['TLT', 'FLT'], baseFee: 0.5, pricePerKm: 0.1 } as never).vehicleId);
     declared(app, 'driver', driver.did);
+    // Every door a load is offered through: along a route, nearby, and the one nearest.
     const offered = () => dispatch.suggest(driver.did, { from: load.pickupLocation, to: load.pickupLocation }).some((o) => o.ref === load.freightId);
+    const nearby = () => dispatch.suggestNearby(driver.did, load.pickupLocation, 50).some((o) => o.ref === load.freightId);
     const marked = () => dispatch.board({ driverDid: driver.did, from: load.pickupLocation }).find((r) => r.freightId === load.freightId)?.blockers.find((b) => b.code === 'RAIL_NOT_ARRIVED')?.message;
 
     expect(offered()).toBe(false);
+    expect(nearby()).toBe(false);
+    expect(dispatch.offerNear(driver.did, load.pickupLocation)?.ref).not.toBe(load.freightId);
     expect(marked()).toBe('The box is still on its way by rail to Nairobi Inland Container Depot: the railway has not said it is there. This load opens as soon as its arrival is recorded on IMP-X.');
     expect(() => dispatch.assign(load.freightId, driver.did, { managerDid: 'did:office:x' })).toThrow(/still on its way by rail/);
 
     dispatch.setRailGate(load.freightId, { importId: 'imp_x', importCode: 'IMP-X', terminal: 'Nairobi Inland Container Depot', arrivedAt: new Date().toISOString() });
     expect(marked()).toBeUndefined();
     expect(offered()).toBe(true);
+    expect(nearby()).toBe(true);
+    // Taken, it is never closed again under its driver: a gate set afterwards is refused.
+    dispatch.claim(dispatch.suggest(driver.did, { from: load.pickupLocation, to: load.pickupLocation }).find((o) => o.ref === load.freightId)!.offerId);
+    expect(dispatch.setRailGate(load.freightId, { importId: 'imp_y', importCode: 'IMP-Y', terminal: 'Somewhere' })).toBe(false);
+    expect(dispatch.requireFreightPublic(load.freightId).waitsForRail?.importCode).toBe('IMP-X');
   });
 
   it('an import by rail: the road leg waits for the arrival notice, the importer alone may send it anyway, and the free days are counted and warned', async () => {
     const imp = await aBusiness(['importer'], 'Thika Motors');
     const agent = await aBusiness(['clearing_agent'], 'Pwani Clearing');
     const icd = await imp.site('clearance', 'Nairobi Inland Container Depot', { lat: -1.32, lng: 36.9 });
-    const made = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Spare parts', originCountry: 'CN', destCountry: 'KE', destPort: 'Nairobi Inland Container Depot', containerType: '22G1', containerNo: 'MSCU1234566' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Spare parts', originCountry: 'CN', destCountry: 'KE', destPort: 'Nairobi', containerType: '22G1', containerNo: 'MSCU1234566' }).expect(201)).body;
     const path = `/v1/sbg/imports/${made.importId}`;
     await http().post(`${path}/appoint`).set(bearer(imp.token)).send({ agentEntityId: agent.entityId }).expect(201);
 
@@ -166,10 +175,13 @@ describe('where road meets rail, over the wire', () => {
   it('the importer’s word to go anyway opens the road leg, kept with its reason', async () => {
     const imp = await aBusiness(['importer'], 'Ruiru Foods');
     const icd = await imp.site('clearance', 'Nairobi Inland Container Depot', { lat: -1.32, lng: 36.9 });
-    const made = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Rice, 800 bags', originCountry: 'PK', destCountry: 'KE', destPort: 'Nairobi Inland Container Depot', containerType: '22G1' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Rice, 800 bags', originCountry: 'PK', destCountry: 'KE', destPort: 'Nairobi', containerType: '22G1' }).expect(201)).body;
     const path = `/v1/sbg/imports/${made.importId}`;
     await http().post(`${path}/by-rail`).set(bearer(imp.token)).send({ terminalSiteId: icd }).expect(201);
-    const leg = app.get(ImportService).mintRoadLeg(made.importId, imp.entityId, { pickupLocation: { lat: 0, lng: 0 }, destLabel: 'Ruiru store', weightKg: 20000 }, 'Wanjiku');
+    // Posted from the screen without a port to choose: by rail, it is collected where the train brings it.
+    const store = await imp.site('delivery', 'Ruiru store', { lat: -1.15, lng: 36.96 });
+    const leg = (await http().post(`${path}/road-leg`).set(bearer(imp.token)).send({ destSiteId: store, weightKg: 20000 }).expect(201)).body;
+    expect(app.get(DispatchService).requireFreightPublic(leg.roadFreightId).pickupLabel).toBe('Nairobi Inland Container Depot');
     const after = (await http().post(`${path}/by-rail/collect-anyway`).set(bearer(imp.token)).send({ reason: 'The depot confirmed by phone that it is off the train' }).expect(201)).body;
     expect(after.byRail.collectAnyway.reason).toBe('The depot confirmed by phone that it is off the train');
     expect(after.byRail.roadWaits).toBeUndefined();
