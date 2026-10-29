@@ -94,7 +94,7 @@ export class ExportController {
   @Roles('business', 'entity_admin')
   @Post(':exportId/laden-leg')
   ladenLeg(@Param('exportId') exportId: string, @Body() dto: ExportLadenLegDto, @Actor() actor: IntrospectionResult): ExportDetail {
-    return this.exports.mintLadenLeg(exportId, this.ownCompany(actor), { weightKg: dto.weightKg }, auditActor(actor));
+    return this.exports.mintLadenLeg(exportId, this.ownCompany(actor), { weightKg: dto.weightKg, ...(dto.dangerousGoods ? { dangerousGoods: dto.dangerousGoods } : {}) }, auditActor(actor));
   }
 
   @Roles('business', 'entity_admin')

@@ -32,6 +32,7 @@ export function holdRailNote(dto: RailNoteDto, ctx: { document?: { documentId: s
   if (!ctx.document && !number && !reference) throw new GlosError('FIELD_REQUIRED', 'Attach the railway’s note, or give its number', { field: 'noteNumber' });
   const seals = (dto.seals ?? []).map((s) => s.trim()).filter(Boolean);
   const containerNo = dto.containerNo?.trim() ? normaliseContainerNo(dto.containerNo) : undefined;
+  const grossMassKg = dto.grossMassKg != null && dto.grossMassKg > 0 ? dto.grossMassKg : undefined;
   return {
     railway: known ? known.key : 'other',
     railwayName: railwayName.slice(0, 80),
@@ -47,6 +48,7 @@ export function holdRailNote(dto: RailNoteDto, ctx: { document?: { documentId: s
     // As printed — never corrected to ours: a difference is exactly what the holder needs to see.
     ...(containerNo ? { containerNo } : {}),
     ...(seals.length ? { seals } : {}),
+    ...(grossMassKg ? { grossMassKg } : {}),
     recordedAt: new Date(ctx.now).toISOString(),
     recordedBy: ctx.by,
     recordedByEntityId: ctx.byEntityId,
@@ -57,7 +59,7 @@ export function holdRailNote(dto: RailNoteDto, ctx: { document?: { documentId: s
  * A held note with its check, and what it says of the box against our own record of it — the box's number and its seals,
  * where road and rail meet. Derived on read: the law it is checked against is the catalogue's, with the day it was read.
  */
-export function railNoteView(n: HeldRailNote, ours: { containerNo?: string; seals?: string[] }, replaced: number): RailNoteView {
+export function railNoteView(n: HeldRailNote, ours: { containerNo?: string; seals?: string[]; grossMassKg?: number }, replaced: number): RailNoteView {
   const check = checkRailNote({
     from: n.from.country,
     to: n.to.country,
@@ -79,6 +81,11 @@ export function railNoteView(n: HeldRailNote, ours: { containerNo?: string; seal
     const printed = new Set(n.seals.map(norm));
     const own = new Set(ours.seals.map(norm));
     matches.push({ field: 'seals', printed: n.seals.join(', '), ours: ours.seals.join(', '), agrees: printed.size === own.size && [...printed].every((s) => own.has(s)) });
+  }
+  // The goods' weight against the packing list's, within a percent — as the forwarder's bill is held (the gaps check).
+  if (n.grossMassKg != null && ours.grossMassKg != null) {
+    const tolerance = Math.max(10, ours.grossMassKg * 0.01);
+    matches.push({ field: 'grossMass', printed: `${n.grossMassKg} kg`, ours: `${ours.grossMassKg} kg`, agrees: Math.abs(n.grossMassKg - ours.grossMassKg) <= tolerance });
   }
   return { ...n, check, matches, replaced };
 }

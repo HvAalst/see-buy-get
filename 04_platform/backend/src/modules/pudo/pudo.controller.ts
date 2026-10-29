@@ -168,7 +168,7 @@ import { CompanyPapersWatch } from '../../foundation/entity/company-papers-watch
 import { CompanyDeclarationService, COMPANY_PAPER_KINDS, PAPER_BOUND_SECTIONS, recordKeeper } from '../../foundation/entity/company-declarations.service';
 import { CompanyPaperReportService } from '../../foundation/entity/company-paper-reports.service';
 import { OperatorAccountService, staffIdOf } from '../../foundation/entity/operator-account.service';
-import { CARGO_LANES } from './cargo.types';
+import { CARGO_LANES, dangerousGoodsGap } from './cargo.types';
 import { ReturnService } from './return.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { FundingService } from '../../foundation/funding/funding.service';
@@ -1448,6 +1448,14 @@ export class SbgController {
     const site = this.sites.require(acting, dto.terminalSiteId);
     if (site.kind !== 'port' && site.kind !== 'clearance') throw new GlosError('VALIDATION_FAILED', 'Choose the rail terminal from your port places or places of clearance', { field: 'terminalSiteId' });
     return this.imports.setByRail(importId, acting, { terminal: { label: site.name, location: site.location }, ...(dto.expectedAt ? { expectedAt: dto.expectedAt } : {}), ...(dto.freeDays != null ? { freeDays: dto.freeDays } : {}) }, this.namedActor(actor));
+  }
+
+  /** When the train left the port with the box: the line's clock outside the terminal starts then (2026-10-29). */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/by-rail/left-port')
+  importRailLeftPort(@Param('importId') importId: string, @Body() dto: RailArrivalDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'When the train left is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    return this.imports.recordRailDeparture(importId, this.actingCompany(actor), dto.at, this.namedActor(actor));
   }
 
   /** The railway's arrival notice: the box is at the rail terminal, and the road leg from it opens. */
@@ -3124,6 +3132,9 @@ export class SbgController {
     if (!this.cargo.dedicatedRequired(cargoClass)) {
       throw new GlosError('INVALID_INPUT', `A ${cargoClass} load fits the parcel network — take it in as a normal parcel, not freight.`);
     }
+    // Dangerous goods come with their UN number from the counter too (the gaps check, 2026-10-29).
+    const dangerous = dangerousGoodsGap(dto.natureCode, dto.dangerousGoods);
+    if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
     const freight = this.dispatch.registerFreight({
       description: `Counter freight (${cargoClass}) booked at ${origin.shopName}`,
       pickupLocation: origin.location,
@@ -3156,6 +3167,9 @@ export class SbgController {
       maxSpend: dto.budgetCap, // the cash cap → dispatch won't OFFER or let a driver CLAIM above it
       scheduledPickupAt: dto.scheduledPickupAt,
       allowEarlyClaim: dto.allowEarlyClaim,
+      // CMR boxes 2 and 9, as the clerk took them down (the gaps check, 2026-10-29).
+      ...(dto.consignee?.name?.trim() ? { consignee: { name: dto.consignee.name.trim(), ...(dto.consignee.address?.trim() ? { address: dto.consignee.address.trim() } : {}) } } : {}),
+      ...(dto.dangerousGoods ? { dangerousGoods: dto.dangerousGoods } : {}),
       // FP7 — box 13, as the clerk took it down at the counter.
       instructions: dto.instructions,
       contactName: dto.contactName,

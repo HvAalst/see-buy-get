@@ -8,6 +8,7 @@ import type { CargoNature } from './cargo.types';
 import { boxDueSoon, exportBoxClock, FREE_DAY_KINDS, type FreeDayKind } from './container-box';
 import { ContainerBoxService } from './container-box.service';
 import { containerType } from './container-type';
+import { dangerousGoodsGap } from './cargo.types';
 import { DispatchService } from './dispatch.service';
 import { EXPORT_PAPER_GROUP, EXPORT_PAPER_KEYS, type ExportPaperGroup, type KnownExportPaperKey, type ExportBoxClockView, type ExportConsignment, type ExportDetail, type ExportLegView, type ExportPaper, type ExportPaperKey, type ExportPlace, type ExportRow, type ExportTiming, type BookedWith } from './export.types';
 import { LoadSealService } from './load-seal.service';
@@ -359,7 +360,8 @@ export class ExportService {
 
   private railViewOf(c: ExportConsignment) {
     const seals = c.ladenFreightId ? this.seals.views(c.ladenFreightId).flatMap((s) => (s.number && s.state === 'on' ? [s.number] : [])) : [];
-    return railNoteView(c.rail!, { ...(c.containerNo ? { containerNo: c.containerNo } : {}), seals }, c.formerRail?.length ?? 0);
+    const totals = c.packing?.lines?.length ? totalsOf(c.packing.lines) : undefined;
+    return railNoteView(c.rail!, { ...(c.containerNo ? { containerNo: c.containerNo } : {}), seals, ...(totals?.grossKg ? { grossMassKg: totals.grossKg } : {}) }, c.formerRail?.length ?? 0);
   }
 
   /**
@@ -497,12 +499,16 @@ export class ExportService {
    * delivery window, the booking in its instructions, the VGM as its weight once declared. Its seal is written on this load
    * with the seal panel and its photographs — one way to seal a load. Delivered at the terminal is gated in.
    */
-  mintLadenLeg(exportId: string, actorEntityId: string, input: { weightKg?: number }, by: string, now = Date.now()): ExportDetail {
+  mintLadenLeg(exportId: string, actorEntityId: string, input: { weightKg?: number; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string } }, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
     if (c.ladenFreightId) throw new GlosError('CONFLICT', `${c.code} already has its load to the port (${c.ladenFreightCode}) — a second would send two trucks for one box`);
     if (!c.containerNo) throw new GlosError('INVALID_STATE', `Say the box’s number first: the terminal gates it in by its number`, { field: 'containerNo' });
     const weightKg = c.vgm?.kg ?? Number(input.weightKg);
     if (!(weightKg > 0)) throw new GlosError('FIELD_REQUIRED', 'Say what the packed box weighs — or declare its verified gross mass first', { field: 'weightKg' });
+    // Dangerous goods reach the road note with their UN number (the gaps check, 2026-10-29).
+    const dangerousGoods = input.dangerousGoods ?? c.dangerousGoods;
+    const dangerousGap = dangerousGoodsGap(c.natureCode, dangerousGoods);
+    if (dangerousGap) throw new GlosError('FIELD_REQUIRED', dangerousGap, { field: 'dangerousGoods' });
     const h = this.handoverOf(c);
     if (now > Date.parse(h.cutoffAt)) {
       throw new GlosError('INVALID_STATE', h.byRail ? `The train’s cut-off at ${h.place.label} passed at ${utc(h.cutoffAt)}: ask the railway or ${c.booking.partyName} for the next train, and record its cut-off first` : `The gate closed for this booking at ${utc(c.booking.gateCutoffAt)}: ask your forwarder for the next vessel and a new cut-off first`);
@@ -526,6 +532,7 @@ export class ExportService {
         ...(spec.heightM ? { heightM: spec.heightM } : {}),
         indivisible: true,
         containerNo: c.containerNo,
+        ...(dangerousGoods ? { dangerousGoods } : {}),
         pickupCountry: c.originCountry,
         destCountry: c.originCountry,
         deliveryWindow: (h.byRail ? `At ${h.place.label} before ${utc(h.cutoffAt)} — the train’s cut-off` : `Inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)} — the vessel cut-off`).slice(0, 120),
@@ -538,7 +545,7 @@ export class ExportService {
       },
       now,
     );
-    Object.assign(c, { ladenFreightId: f.freightId, ladenFreightCode: f.code });
+    Object.assign(c, { ladenFreightId: f.freightId, ladenFreightCode: f.code, ...(dangerousGoods ? { dangerousGoods: { unNumber: f.dangerousGoods?.unNumber ?? dangerousGoods.unNumber, properShippingName: dangerousGoods.properShippingName.trim(), hazardClass: dangerousGoods.hazardClass.trim(), ...(dangerousGoods.packingGroup ? { packingGroup: dangerousGoods.packingGroup } : {}) } } : {}) });
     this.exports.set(c.exportId, c);
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
@@ -1364,7 +1371,7 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
 <h2>The box</h2><table>${row('Container number', missing(c.containerNo))}${row('Type', esc(spec ? `${spec.code} — ${spec.label}` : c.containerType ?? ''))}${row('Owner of the box', c.ownBox ? 'The exporter (a shipper-owned container)' : 'The line, on loan for this booking')}${row('Seal', missing(seal || undefined))}${row('Verified gross mass', missing(vgm || undefined))}</table>
 <h2>Papers</h2><table>${agentRow}${papers}</table>
 <h2>Kept with the export</h2><table>${kept}</table>
-<h2>The road to the terminal</h2><table>${row('Terminal', esc(c.terminal.label))}${c.byRail ? row('By rail from', esc(`${c.byRail.terminal.label} — the train’s cut-off ${utc(c.byRail.cutoffAt)}${c.byRail.reference ? `, train ${c.byRail.reference}` : ''}`)) : ''}${row('Road consignment note', d.ladenLeg ? esc(`CMR-${d.ladenLeg.code}`) : missing())}${row('Collected', d.timing.collectedAt ? esc(utc(d.timing.collectedAt)) : 'Not yet')}${row('Gated in', d.timing.gatedInAt ? esc(utc(d.timing.gatedInAt)) : 'Not yet')}${row('Bill of lading', c.billOfLading ? esc(c.billOfLading.number) : 'Not issued yet — recorded once your forwarder issues it')}</table>
+<h2>The road to the terminal</h2><table>${row('Terminal', esc(c.terminal.label))}${c.byRail ? row('By rail from', esc(`${c.byRail.terminal.label} — the train’s cut-off ${utc(c.byRail.cutoffAt)}${c.byRail.reference ? `, train ${c.byRail.reference}` : ''}`)) : ''}${row('Road consignment note', d.ladenLeg ? esc(`CMR-${d.ladenLeg.code}`) : missing())}${row('Collected', d.timing.collectedAt ? esc(utc(d.timing.collectedAt)) : 'Not yet')}${row('Gated in', d.timing.gatedInAt ? esc(utc(d.timing.gatedInAt)) : 'Not yet')}${row('Bill of lading', c.billOfLading ? esc(c.billOfLading.number) : 'Not issued yet — recorded once your forwarder issues it')}${d.fbl ? row('Forwarder’s bill held', esc(`${d.fbl.form === 'fwb' ? 'FIATA waybill (FWB)' : 'FIATA bill of lading (FBL)'} ${d.fbl.number}, issued by ${d.fbl.issuer.name} on ${d.fbl.issuedOn} — ${d.fbl.check.complete ? 'complete as printed' : `not complete: ${d.fbl.check.findings.filter((f) => f.kind === 'missing').length} missing`}${d.fbl.electronic ? `; ${d.fbl.verified === 'registered' ? 'shown as registered on FIATA’s page, as the exporter recorded' : d.fbl.verified === 'not_registered' ? 'NOT shown as registered on FIATA’s page, as the exporter recorded' : 'not checked on FIATA’s page'}` : ''}. A copy — never an original.`)) : ''}${d.rail ? row('Railway’s note held', esc(`${d.rail.railwayName}${d.rail.noteNumber ? ` ${d.rail.noteNumber}` : ''}, ${d.rail.from.name} to ${d.rail.to.name} — ${d.rail.check.notChecked ? 'its rules not read' : d.rail.check.complete ? 'complete as printed' : 'not complete'}`)) : ''}</table>
 <h2>The box’s clock</h2><table>${row('Empty out of the depot', d.box.emptyOutAt ? esc(utc(d.box.emptyOutAt)) : 'Not recorded')}${row('Free days outside the terminal (detention)', esc(freeDaysWords(c, 'detention')))}${row('Free days inside the terminal (demurrage)', esc(freeDaysWords(c, 'demurrage')))}${c.loaded ? row('Loaded on board', esc(utc(c.loaded.at))) : ''}</table><p>${esc(d.box.basis)}</p>
 <p class="note">Made on SeeBuyGet on ${esc(utc(new Date(now).toISOString()))}. SeeBuyGet carried the road leg; the ocean leg, its booking and the bill of lading are your forwarder’s or the line’s. The verified gross mass is the exporter’s declaration, handed to the forwarder — SeeBuyGet sends nothing to a line.</p>
 </body></html>`;

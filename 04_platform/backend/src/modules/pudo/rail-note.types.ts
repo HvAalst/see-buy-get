@@ -40,6 +40,8 @@ export class HeldRailNote {
   /** As printed on the rail note — matched against our own record of the box. */
   @ApiPropertyOptional() containerNo?: string;
   @ApiPropertyOptional({ type: [String] }) seals?: string[];
+  /** The goods' gross mass as printed — the container's own weight is not in it (the gaps check, 2026-10-29). */
+  @ApiPropertyOptional() grossMassKg?: number;
   @ApiProperty() recordedAt: string;
   @ApiProperty() recordedBy: string;
   @ApiProperty() recordedByEntityId: string;
@@ -70,6 +72,7 @@ export class RailNoteDto {
   @IsOptional() @IsString() @MaxLength(80) documentId?: string;
   @IsOptional() @IsString() @MaxLength(20) containerNo?: string;
   @IsOptional() @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) @MaxLength(40, { each: true }) seals?: string[];
+  @IsOptional() @IsNumber() @Min(0) grossMassKg?: number;
 }
 
 /** A draft, checked before it is held: the lane, the load and what is printed. Nothing is written. */
@@ -114,7 +117,7 @@ export class RailNoteCheckView {
 
 /** One thing printed on the rail note, against our own record of the same box. */
 export class RailNoteMatch {
-  @ApiProperty({ enum: ['containerNo', 'seals'] }) field: 'containerNo' | 'seals';
+  @ApiProperty({ enum: ['containerNo', 'seals', 'grossMass'] }) field: 'containerNo' | 'seals' | 'grossMass';
   @ApiProperty() printed: string;
   @ApiPropertyOptional() ours?: string;
   @ApiProperty() agrees: boolean;

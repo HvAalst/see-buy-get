@@ -16,6 +16,20 @@ export type CargoLane = (typeof CARGO_LANES)[number];
 
 /** A commodity's primary cargo nature — the axis the incompatibility matrix and capability rules run on.
  *  A runtime tuple so a DTO can `@IsIn` against it (single source of truth). */
+/**
+ * THE NATURES THAT ARE DANGEROUS GOODS in the sense of the road rules (ADR) and the CMR note's box 9: chemical, biological
+ * and flammable. Hazardous dust (cement, flour) contaminates but is not classed dangerous goods, and has no UN number.
+ * A load of one of these natures carries its UN number, proper shipping name and class from every door it comes in by
+ * (the gaps check, 2026-10-29) — the note prints them and the driver’s papers need them.
+ */
+export const DANGEROUS_GOODS_NATURES = ['HAZ-CHEM', 'HAZ-BIO', 'HAZ-FLAM'] as const;
+
+/** Why a load cannot be posted as it stands — dangerous goods with no UN number — or undefined. */
+export function dangerousGoodsGap(nature: string | undefined, dangerousGoods: unknown): string | undefined {
+  if (!nature || !(DANGEROUS_GOODS_NATURES as readonly string[]).includes(nature) || dangerousGoods) return undefined;
+  return 'These goods are declared dangerous: give their UN number, proper shipping name and class, as on their safety data sheet — the consignment note prints them and the driver’s papers need them.';
+}
+
 export const CARGO_NATURES = [
   'GEN', // General dry — non-sensitive, non-hazardous (furniture, clothing, books, tools)
   'FOD', // Food — dry, packaged (rice, pasta, sealed spices)

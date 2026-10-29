@@ -8560,6 +8560,45 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/by-rail/left-port": {
+      "post": {
+        "operationId": "Sbg.importRailLeftPort",
+        "summary": "",
+        "description": "When the train left the port with the box: the line's clock outside the terminal starts then (2026-10-29).",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RailArrivalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/by-rail/arrived": {
       "post": {
         "operationId": "Sbg.importRailArrived",
@@ -37166,6 +37205,10 @@
               "type": "string"
             }
           },
+          "grossMassKg": {
+            "type": "number",
+            "description": "The goods' gross mass as printed — the container's own weight is not in it (the gaps check, 2026-10-29)."
+          },
           "recordedAt": {
             "type": "string"
           },
@@ -37271,6 +37314,28 @@
           "cutoffAt",
           "recordedAt",
           "recordedBy"
+        ]
+      },
+      "ExportDangerous": {
+        "type": "object",
+        "properties": {
+          "unNumber": {
+            "type": "string"
+          },
+          "properShippingName": {
+            "type": "string"
+          },
+          "hazardClass": {
+            "type": "string"
+          },
+          "packingGroup": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "unNumber",
+          "properShippingName",
+          "hazardClass"
         ]
       },
       "FblIssuer": {
@@ -37627,6 +37692,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ExportByRail"
+              }
+            ]
+          },
+          "dangerousGoods": {
+            "description": "Dangerous goods' UN number, name and class, as given when the load to the terminal was posted.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportDangerous"
               }
             ]
           },
@@ -38631,7 +38704,8 @@
             "type": "string",
             "enum": [
               "containerNo",
-              "seals"
+              "seals",
+              "grossMass"
             ]
           },
           "printed": {
@@ -38743,6 +38817,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "grossMassKg": {
+            "type": "number",
+            "description": "The goods' gross mass as printed — the container's own weight is not in it (the gaps check, 2026-10-29)."
           },
           "recordedAt": {
             "type": "string"
@@ -39285,6 +39363,36 @@
           "containerNo"
         ]
       },
+      "ExportDangerousDto": {
+        "type": "object",
+        "properties": {
+          "unNumber": {
+            "type": "string",
+            "pattern": "/^\\s*(UN)?\\s*\\d{4}\\s*$/i"
+          },
+          "properShippingName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "hazardClass": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "packingGroup": {
+            "type": "string",
+            "enum": [
+              "I",
+              "II",
+              "III"
+            ]
+          }
+        },
+        "required": [
+          "unNumber",
+          "properShippingName",
+          "hazardClass"
+        ]
+      },
       "ExportLadenLegDto": {
         "type": "object",
         "properties": {
@@ -39292,6 +39400,14 @@
             "type": "number",
             "description": "The gross weight, where no verified gross mass is declared yet.",
             "minimum": 1
+          },
+          "dangerousGoods": {
+            "description": "Dangerous goods' UN number, name and class — required where the goods are declared dangerous.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportDangerousDto"
+              }
+            ]
           }
         }
       },
@@ -39478,6 +39594,10 @@
               "type": "string",
               "maxLength": 40
             }
+          },
+          "grossMassKg": {
+            "type": "number",
+            "minimum": 0
           }
         },
         "required": [
@@ -45497,6 +45617,14 @@
             "type": "number",
             "description": "The free days the rail terminal gives before it charges for storage, as the importer's agreement says."
           },
+          "leftPort": {
+            "description": "When the train left the port with the box, as the importer or its agent was told: the line's clock starts then.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RailMoment"
+              }
+            ]
+          },
           "arrival": {
             "description": "The railway's arrival notice: the box is at the terminal. Until then the road leg from it is not taken.",
             "allOf": [
@@ -46521,6 +46649,14 @@
           "freeDays": {
             "type": "number",
             "description": "The free days the rail terminal gives before it charges for storage, as the importer's agreement says."
+          },
+          "leftPort": {
+            "description": "When the train left the port with the box, as the importer or its agent was told: the line's clock starts then.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RailMoment"
+              }
+            ]
           },
           "arrival": {
             "description": "The railway's arrival notice: the box is at the terminal. Until then the road leg from it is not taken.",
@@ -51073,6 +51209,52 @@
           "scans"
         ]
       },
+      "FreightConsigneeDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "FreightDangerousDto": {
+        "type": "object",
+        "properties": {
+          "unNumber": {
+            "type": "string",
+            "pattern": "/^\\s*(UN)?\\s*\\d{4}\\s*$/i"
+          },
+          "properShippingName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "hazardClass": {
+            "type": "string",
+            "maxLength": 8
+          },
+          "packingGroup": {
+            "type": "string",
+            "enum": [
+              "I",
+              "II",
+              "III"
+            ]
+          }
+        },
+        "required": [
+          "unNumber",
+          "properShippingName",
+          "hazardClass"
+        ]
+      },
       "BookFreightDto": {
         "type": "object",
         "properties": {
@@ -51094,6 +51276,7 @@
           },
           "commitMode": {
             "type": "string",
+            "description": "FB0c/FB2b — 'negotiate' posts the load for drivers to name a price the counter then accepts, instead of\n the first fit truck taking it at the computed rate. The cash cap still binds either way: a price above\n what the customer agreed cannot be accepted, whoever named it.",
             "enum": [
               "instant",
               "negotiate"
@@ -51208,6 +51391,17 @@
           "budgetCap": {
             "type": "number",
             "minimum": 0.01
+          },
+          "consignee": {
+            "$ref": "#/components/schemas/FreightConsigneeDto"
+          },
+          "dangerousGoods": {
+            "description": "CMR box 9: dangerous goods by their UN number — required where the goods are declared dangerous.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightDangerousDto"
+              }
+            ]
           },
           "scheduledPickupAt": {
             "type": "string",
@@ -58511,52 +58705,6 @@
             "type": "string"
           }
         }
-      },
-      "FreightConsigneeDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 120
-          },
-          "address": {
-            "type": "string",
-            "maxLength": 300
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "FreightDangerousDto": {
-        "type": "object",
-        "properties": {
-          "unNumber": {
-            "type": "string",
-            "pattern": "/^\\s*(UN)?\\s*\\d{4}\\s*$/i"
-          },
-          "properShippingName": {
-            "type": "string",
-            "maxLength": 200
-          },
-          "hazardClass": {
-            "type": "string",
-            "maxLength": 8
-          },
-          "packingGroup": {
-            "type": "string",
-            "enum": [
-              "I",
-              "II",
-              "III"
-            ]
-          }
-        },
-        "required": [
-          "unNumber",
-          "properShippingName",
-          "hazardClass"
-        ]
       },
       "FreightAmountDto": {
         "type": "object",

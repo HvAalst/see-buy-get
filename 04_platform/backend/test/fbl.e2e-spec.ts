@@ -105,6 +105,11 @@ describe('a forwarder’s FIATA bill, over the wire', () => {
     expect((await http().post(`${path}/fbl/verified`).set(bearer(operator)).send({ registered: true, proofDocumentId: shot })).status).toBe(403);
     const verified = (await http().post(`${path}/fbl/verified`).set(bearer(x.token)).send({ registered: true, fiataId: 'FBL-KE-000114', issuerShown: 'Pwani Forwarders Ltd', proofDocumentId: shot }).expect(201)).body.fbl;
     expect(verified).toMatchObject({ verified: 'registered', verification: { fiataId: 'FBL-KE-000114', proofTitle: 'FIATA verification result' } });
+    // The forwarder's file at the gate names the bill held, as the exporter recorded it — and that it is a copy.
+    const file = (await http().get(`${path}/handover.html`).set(bearer(x.token)).expect(200)).text;
+    expect(file).toContain('Forwarder’s bill held');
+    expect(file).toContain('shown as registered on FIATA’s page, as the exporter recorded');
+    expect(file).toContain('never an original');
   });
 
   it('on an import: the importer holds the bill the goods came under, its agent records what FIATA’s page showed', async () => {

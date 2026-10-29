@@ -2693,6 +2693,10 @@ export class BookFreightDto {
   @IsOptional() @IsString() @MaxLength(32) contactPhone?: string;
   @IsOptional() @IsString() @MaxLength(80) deliveryWindow?: string;
   @IsNumber() @Min(0.01) budgetCap!: number; // the cash cap the customer prepays → the freight's maxSpend ceiling
+  /** CMR box 2 at the counter: who receives it at the other shop (the gaps check, 2026-10-29). */
+  @IsOptional() @ValidateNested() @Type(() => FreightConsigneeDto) consignee?: FreightConsigneeDto;
+  /** CMR box 9: dangerous goods by their UN number — required where the goods are declared dangerous. */
+  @IsOptional() @ValidateNested() @Type(() => FreightDangerousDto) dangerousGoods?: FreightDangerousDto;
   /** FB0c/FB2b — 'negotiate' posts the load for drivers to name a price the counter then accepts, instead of
    *  the first fit truck taking it at the computed rate. The cash cap still binds either way: a price above
    *  what the customer agreed cannot be accepted, whoever named it. */

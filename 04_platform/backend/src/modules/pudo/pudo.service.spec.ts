@@ -9688,6 +9688,23 @@ describe('PUDO Light', () => {
     expect(dispatch.listFreight().find((x) => x.freightId === res.freightId)!.status).toBe('available');
   });
 
+  it('the gaps check: dangerous goods at the counter come with their UN number; who receives them is on the note', () => {
+    // CMR boxes 2 and 9 (2026-10-29): the clerk takes down who receives it at the other shop, and — for goods declared
+    // dangerous — their UN number, name and class. Without them a flammable load is refused before anything is posted.
+    const origin = onboardAgent('Hazard Shop', 'NorthTown', 50);
+    const dest = onboardAgent('Hazard Dest', 'NorthTown', 0);
+    const base = { dimensionsCm: { l: 120, w: 100, h: 100 }, weightKg: 200, destPudoDid: dest.did, budgetCap: 40, natureCode: 'HAZ-FLAM' };
+    const before = dispatch.listFreight().length;
+    expect(() => controller.bookFreight(base as never, { role: 'pudo', did: origin.did } as never)).toThrow(/declared dangerous: give their UN number/);
+    expect(dispatch.listFreight()).toHaveLength(before);
+    const res: any = controller.bookFreight({ ...base, consignee: { name: 'Juma Otieno' }, dangerousGoods: { unNumber: 'UN1075', properShippingName: 'Petroleum gases, liquefied', hazardClass: '2.1' } } as never, { role: 'pudo', did: origin.did } as never);
+    const f = dispatch.listFreight().find((x) => x.freightId === res.freightId)!;
+    expect(f.consignee).toEqual({ name: 'Juma Otieno' });
+    expect(f.dangerousGoods).toMatchObject({ unNumber: 'UN1075', hazardClass: '2.1' });
+    // Hazardous dust (cement) contaminates but has no UN number: it is not asked for one.
+    expect(() => controller.bookFreight({ ...base, natureCode: 'HAZ-DUST' } as never, { role: 'pudo', did: origin.did } as never)).not.toThrow();
+  });
+
   it('FB2d: ruling nothing out stores no preference at all', () => {
     // "The customer did not mind" and "the customer ruled out an empty list of bodies" must not become the
     // same record, or the market series would count a refusal nobody made.

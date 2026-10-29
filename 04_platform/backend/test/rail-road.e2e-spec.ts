@@ -158,6 +158,11 @@ describe('where road meets rail, over the wire', () => {
     expect(freight().waitsForRail?.arrivedAt).toBe(new Date(arrivedAt).toISOString());
     expect(arrived.byRail.roadWaits).toBeUndefined();
     expect(arrived.byRail.clock).toMatchObject({ state: 'running', freeDays: 4, freeUntil: new Date(arrivedAt + 4 * 86_400_000).toISOString() });
+    // The train left the port with it: the line's clock outside the terminal starts then, not at our truck (the gaps check).
+    expect((await http().post(`${path}/by-rail/left-port`).set(bearer(operator)).send({ at: new Date(arrivedAt - 30 * H).toISOString() })).status).toBe(403);
+    const left = (await http().post(`${path}/by-rail/left-port`).set(bearer(agent.token)).send({ at: new Date(arrivedAt - 30 * H).toISOString() }).expect(201)).body;
+    expect(left.byRail.leftPort.at).toBe(new Date(arrivedAt - 30 * H).toISOString());
+    expect(left.box.outGatedAt).toBe(new Date(arrivedAt - 30 * H).toISOString());
     // Once it is there, nothing waits: no word to go anyway is needed.
     expect((await http().post(`${path}/by-rail/collect-anyway`).set(bearer(imp.token)).send({ reason: 'The yard says it is in' })).body.detail).toMatch(/already said the box is there/);
 

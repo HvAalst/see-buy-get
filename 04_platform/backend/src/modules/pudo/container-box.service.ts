@@ -44,6 +44,12 @@ export interface BoxTerm extends BoxTimes {
   /** The road leg out of the gate. Its pickup IS the out-gate — see `gateOf`. */
   roadFreightId?: string;
   /**
+   * By rail (the gaps check, 2026-10-29): the box left the port's gate on a train, as the importer or its agent was
+   * told — the out-gate then, not when our truck collects it inland.
+   */
+  trainOutAt?: string;
+  trainOutBy?: string;
+  /**
    * Y2 — THE LEG HOME, posted to the same board as any other load.
    *
    * Its DELIVERY is the return, in the same way the laden leg's pickup is the out-gate: the box is back
@@ -257,6 +263,19 @@ export class ContainerBoxService {
     if (when > now + 86_400_000) throw new GlosError('VALIDATION_FAILED', 'An arrival is something that happened — this one is in the future');
     term.arrivedAt = new Date(when).toISOString();
     term.arrivedBy = by;
+    this.boxes.set(box.containerNo, box);
+    return this.viewOf(box.containerNo, now)!;
+  }
+
+  /** The box left the port on a train: the out-gate, as somebody was told — our truck only collects it inland. */
+  recordTrainOut(rawNo: string, at: string, by: string, opts: { importId?: string } = {}, now = Date.now()): BoxView {
+    const box = this.require(rawNo);
+    const term = this.openTerm(box, opts.importId);
+    const when = Date.parse(at);
+    if (!Number.isFinite(when)) throw new GlosError('VALIDATION_FAILED', 'Say when the train left the port with it, as a date');
+    if (when > now + 5 * 60_000) throw new GlosError('VALIDATION_FAILED', 'The train leaving is something that happened — this one is in the future');
+    term.trainOutAt = new Date(when).toISOString();
+    term.trainOutBy = by;
     this.boxes.set(box.containerNo, box);
     return this.viewOf(box.containerNo, now)!;
   }
@@ -532,6 +551,8 @@ export class ContainerBoxService {
 
   /** The out-gate, DERIVED: the road leg's pickup, or nothing. A missing leg is not an out-gate. */
   private gateOf(term: BoxTerm): string | undefined {
+    // By rail the box left the port on the train; our truck collects it inland, later.
+    if (term.trainOutAt) return term.trainOutAt;
     if (!term.roadFreightId) return undefined;
     try {
       return this.dispatch.requireFreightPublic(term.roadFreightId).pickedUpAt;

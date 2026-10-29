@@ -62,6 +62,7 @@ describe('the railway’s note on an export, over the wire', () => {
     const made = (await http().post('/v1/sbg/exports').set(bearer(x.token)).send({ goodsDescription: 'Black tea, 640 sacks', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '22G1', booking: booking(Date.now() + 72 * H), loadingSiteId: x.loading, terminalSiteId: x.terminal }).expect(201)).body;
     const path = `/v1/sbg/exports/${made.exportId}`;
     await http().post(`${path}/container`).set(bearer(x.token)).send({ containerNo: 'MSCU1234566' }).expect(201);
+    await http().post(`${path}/packing-list`).set(bearer(x.token)).send({ text: ['Description' + String.fromCharCode(9) + 'Sacks' + String.fromCharCode(9) + 'G.W. (kg)', 'Black tea' + String.fromCharCode(9) + '640' + String.fromCharCode(9) + '32000'].join(String.fromCharCode(10)) }).expect(201);
     const today = new Date().toISOString().slice(0, 10);
     // By the SGR from Nairobi to the port: Kenya Railways' own conditions — no rail convention reaches Kenya.
     const asKenya = ['from', 'takenOverOn', 'goods', 'packing', 'marks', 'packages', 'mass', 'consignor', 'consignee', 'to', 'charges', 'documents'];
@@ -96,5 +97,10 @@ describe('the railway’s note on an export, over the wire', () => {
     expect(again.rail.matches[0]).toMatchObject({ field: 'containerNo', printed: 'MSCU1234567', agrees: false });
     expect(again.consignment.formerRail).toHaveLength(1);
     expect(again.consignment.formerRail[0].noteNumber).toBe('KRC-SGR-44120');
+    // The goods' weight as printed, against the packing list's — within a percent (the gaps check, 2026-10-29).
+    const weighed = (await http().post(`${path}/rail`).set(bearer(x.token)).send({ ...note, documentId: undefined, grossMassKg: 34000 }).expect(201)).body.rail;
+    expect(weighed.matches.find((m: { field: string }) => m.field === 'grossMass')).toEqual({ field: 'grossMass', printed: '34000 kg', ours: '32000 kg', agrees: false });
+    // …and the forwarder's file at the gate names the note held.
+    expect((await http().get(`${path}/handover.html`).set(bearer(x.token)).expect(200)).text).toContain('Railway’s note held');
   });
 });

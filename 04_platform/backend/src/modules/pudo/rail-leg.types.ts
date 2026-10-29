@@ -49,6 +49,8 @@ export class ImportByRail {
   @ApiPropertyOptional() expectedAt?: string;
   /** The free days the rail terminal gives before it charges for storage, as the importer's agreement says. */
   @ApiPropertyOptional() freeDays?: number;
+  /** When the train left the port with the box, as the importer or its agent was told: the line's clock starts then. */
+  @ApiPropertyOptional({ type: RailMoment }) leftPort?: RailMoment;
   /** The railway's arrival notice: the box is at the terminal. Until then the road leg from it is not taken. */
   @ApiPropertyOptional({ type: RailMoment }) arrival?: RailMoment;
   @ApiPropertyOptional({ type: RailCollectAnyway }) collectAnyway?: RailCollectAnyway;

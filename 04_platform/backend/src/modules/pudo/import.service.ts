@@ -47,7 +47,7 @@ import {
 } from './import.types';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
 import { containerType, heightUnstated, outOfGauge } from './container-type';
-import { CARGO_NATURES, type CargoNature } from './cargo.types';
+import { CARGO_NATURES, DANGEROUS_GOODS_NATURES, type CargoNature } from './cargo.types';
 
 /**
  * CL2a — THE IMPORTER'S PAPERS, AND THE AGENT WHO CLEARS THEM.
@@ -572,6 +572,24 @@ export class ImportService {
     };
     this.imports.set(consignment.importId, consignment);
     this.gateRoadLeg(consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * THE TRAIN LEFT THE PORT WITH IT (the gaps check, 2026-10-29): the box is out of the port's gate then, and the shipping
+   * line's clock outside the terminal (detention) starts — not when our truck collects it inland.
+   */
+  recordRailDeparture(importId: string, actorEntityId: string, at: string, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (this.sideOf(consignment, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (!consignment.byRail) throw new GlosError('INVALID_STATE', `${consignment.code} does not come inland by rail`);
+    if (!consignment.containerNo) throw new GlosError('INVALID_STATE', 'Say the box’s number first: the line’s clock runs on the box');
+    const when = Date.parse(at);
+    if (Number.isNaN(when) || when > now + 5 * 60_000) throw new GlosError('VALIDATION_FAILED', 'Say when the train left the port with it — a moment that has come', { field: 'at' });
+    this.boxes.see(consignment.containerNo, { importId: consignment.importId }, now);
+    this.boxes.recordTrainOut(consignment.containerNo, new Date(when).toISOString(), by, { importId: consignment.importId }, now);
+    consignment.byRail = { ...consignment.byRail, leftPort: { at: new Date(when).toISOString(), by, recordedAt: new Date(now).toISOString() } };
+    this.imports.set(consignment.importId, consignment);
     return this.detail(consignment.importId, actorEntityId);
   }
 
@@ -1194,6 +1212,10 @@ export class ImportService {
     if (spec?.kind === 'tank' && (nature === 'FOD' || nature === 'FOP') && !consignment.tank) {
       gaps.push('This is a tank carrying food, and nobody has said what it last held. A tank that carried fuel can never carry food — record the last cargoes and the cleaning certificate.');
     }
+    // The road note's box 9 prints the proper shipping name beside the UN number (the gaps check, 2026-10-29).
+    if (nature && (DANGEROUS_GOODS_NATURES as readonly string[]).includes(nature) && consignment.dangerous && !consignment.dangerous.properShippingName?.trim()) {
+      gaps.push('These goods are declared dangerous and their proper shipping name is missing. Give it as on their safety data sheet, beside the UN number — the consignment note prints both.');
+    }
     if (nature?.startsWith('HAZ') && !consignment.dangerous) {
       gaps.push('These goods are declared hazardous and there is no UN number. The number decides the placards, the driver’s certificate and which roads are closed to the load — it cannot go on a truck without one.');
     }
@@ -1536,6 +1558,8 @@ export class ImportService {
          * `heightM` is the one the hazard map has been waiting for since it was built.
          */
         ...(consignment.natureCode ? { natureCode: consignment.natureCode as CargoNature } : {}),
+        // The importer's own declaration, carried to the road note's box 9 (the gaps check, 2026-10-29).
+        ...(consignment.dangerous?.properShippingName?.trim() ? { dangerousGoods: { unNumber: consignment.dangerous.unNumber, properShippingName: consignment.dangerous.properShippingName.trim(), hazardClass: consignment.dangerous.imdgClass } } : {}),
         ...(spec ? { bodyHint: spec.bodies[0], packaging: 'piece' as const } : {}),
         ...(spec ? { originEquipment: spec.equipment, destEquipment: spec.equipment } : {}),
         /*

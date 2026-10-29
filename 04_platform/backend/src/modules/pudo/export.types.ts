@@ -215,6 +215,14 @@ export class ExportBillOfLading {
   @ApiProperty() recordedBy: string;
 }
 
+/** Dangerous goods as their safety data sheet names them — what the road note's box 9 prints (the gaps check, 2026-10-29). */
+export class ExportDangerous {
+  @ApiProperty() unNumber: string;
+  @ApiProperty() properShippingName: string;
+  @ApiProperty() hazardClass: string;
+  @ApiPropertyOptional() packingGroup?: string;
+}
+
 export class ExportConsignment {
   @ApiProperty() exportId: string;
   /** EXP-001. */
@@ -267,6 +275,8 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: HeldRailNote }) rail?: HeldRailNote;
   /** By rail to the port (2026-10-29): our truck takes the box to a rail terminal, timed to the train's cut-off there. */
   @ApiPropertyOptional({ type: ExportByRail }) byRail?: ExportByRail;
+  /** Dangerous goods' UN number, name and class, as given when the load to the terminal was posted. */
+  @ApiPropertyOptional({ type: ExportDangerous }) dangerousGoods?: ExportDangerous;
   /** The forwarder's FIATA bill or waybill (2026-10-29): held, never issued by us. */
   @ApiPropertyOptional({ type: HeldFbl }) fbl?: HeldFbl;
   @ApiPropertyOptional({ type: [HeldFbl] }) formerFbl?: HeldFbl[];
@@ -432,9 +442,18 @@ export class ExportContainerDto {
   @IsString() @MaxLength(16) containerNo!: string;
 }
 
+export class ExportDangerousDto {
+  @Matches(/^\s*(UN)?\s*\d{4}\s*$/i, { message: 'A UN number is UN and four digits, like UN1263' }) unNumber!: string;
+  @IsString() @MaxLength(200) properShippingName!: string;
+  @IsString() @MaxLength(8) hazardClass!: string;
+  @IsOptional() @IsIn(['I', 'II', 'III']) packingGroup?: string;
+}
+
 export class ExportLadenLegDto {
   /** The gross weight, where no verified gross mass is declared yet. */
   @IsOptional() @IsNumber() @Min(1) weightKg?: number;
+  /** Dangerous goods' UN number, name and class — required where the goods are declared dangerous. */
+  @IsOptional() @ValidateNested() @Type(() => ExportDangerousDto) dangerousGoods?: ExportDangerousDto;
 }
 
 export class ExportVgmDto {

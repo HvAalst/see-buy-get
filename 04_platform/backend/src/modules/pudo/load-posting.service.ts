@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
+import { dangerousGoodsGap } from './cargo.types';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { BusinessClientService } from './business-client.service';
@@ -65,6 +66,9 @@ export class LoadPostingService {
     // CLIENT's code (round 20: the prefix on the client's record), never the forwarder's.
     const coder = actor?.role === 'business' && actor.tenant ? (forClientId ? clientCoder(actor.tenant, forClientId) : actor.tenant) : undefined;
     this.shipperCodes?.assertCanIssue(coder, dto.packages);
+    // Dangerous goods come with their UN number from this door as from every other (the gaps check, 2026-10-29).
+    const dangerous = dangerousGoodsGap(dto.natureCode, dto.dangerousGoods);
+    if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
     const posted = this.dispatch.registerFreight(
       { ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
       Date.now(),
