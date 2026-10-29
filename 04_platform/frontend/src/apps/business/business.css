@@ -332,3 +332,10 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* A parcel's last leg waiting for money (2026-10-29): the note in the warning tag's own colours. */
+.cnote.cnote--warn {
+  background: var(--org-light);
+  border-color: var(--org-light);
+  color: #8a3b00;
+}

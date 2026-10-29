@@ -43,6 +43,22 @@ export interface DockView {
 /** The form's way of saying "collected from its own place" where a shop would be chosen. */
 export const OWN_PLACE = 'own';
 
+/** The form's way of saying "delivered to one of its own places" where the receiving shop would be chosen. */
+export const TO_PLACE = 'place:';
+
+/** A parcel's last leg to its own place (2026-10-29), as the business reads it. */
+export interface ParcelDoor {
+  label: string;
+  via: string;
+  maxSpend: number;
+  currency: string;
+  state: 'waiting' | 'short' | 'posted' | 'handed' | 'delivered' | 'collected';
+  loadCode?: string;
+  loadStatus?: string;
+  driverName?: string;
+  receivedBy?: string;
+}
+
 export interface ParcelEnd {
   did: string;
   name: string;
@@ -59,6 +75,8 @@ export interface BusinessParcel {
   /** Collected by a driver from its own place. */
   fromOwnPlace?: boolean;
   to: ParcelEnd;
+  /** Delivered to its own place: the last leg from the shop. */
+  toOwnPlace?: ParcelDoor;
   size: string;
   cost?: number;
   currency: string;
@@ -135,7 +153,8 @@ export interface ParcelQuote {
 export interface SendParcel {
   originPudoDid?: string;
   fromOwnPlace?: boolean;
-  destPudoDid: string;
+  destPudoDid?: string;
+  toOwnPlace?: { siteId: string; maxSpend: number };
   receiverMobile: string;
   dimensionsCm: { l: number; w: number; h: number };
   weightKg: number;
@@ -159,7 +178,9 @@ export interface ParcelsApi {
   callOffPreview: (parcelId: string, backTo?: 'door') => Promise<Result<ParcelCallOff>>;
   callOff: (parcelId: string, reason?: string, choice?: { backTo?: 'door'; maxSpend?: number }) => Promise<Result<ParcelCallOff>>;
   /** What it costs from a shop or from its own place (`own`), before anything is sent. */
-  price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean }>>;
+  price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean; door?: { via: string; viaDid: string; suggestedMax: number } }>>;
+  postDoor: (parcelId: string) => Promise<Result<BusinessParcelDetail>>;
+  raiseDoor: (parcelId: string, maxSpend: number) => Promise<Result<BusinessParcelDetail>>;
   collectFrom: (siteId: string, bays?: number) => Promise<Result<ParcelAccount>>;
   stopCollecting: () => Promise<Result<ParcelAccount>>;
   dock: () => Promise<Result<DockView>>;
@@ -192,7 +213,9 @@ export function parcelsApi(sbg: SbgClient): ParcelsApi {
     callOff: (parcelId, reason, choice = {}) =>
       call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/call-off` as never, { body: { ...(reason?.trim() ? { reason: reason.trim() } : {}), ...(choice.backTo ? { backTo: choice.backTo } : {}), ...(choice.maxSpend != null ? { maxSpend: choice.maxSpend } : {}) } } as never) as never),
     price: (origin, dest, s, fragile) =>
-      call((c) => c.GET('/v1/sbg/business/me/parcels/price' as never, { params: { query: { origin, dest, l: String(s.l), w: String(s.w), h: String(s.h), kg: String(s.kg), ...(fragile ? { fragile: 'true' } : {}) } } } as never) as never),
+      call((c) => c.GET('/v1/sbg/business/me/parcels/price' as never, { params: { query: { origin, ...(dest.startsWith(TO_PLACE) ? { toPlace: dest.slice(TO_PLACE.length) } : { dest }), l: String(s.l), w: String(s.w), h: String(s.h), kg: String(s.kg), ...(fragile ? { fragile: 'true' } : {}) } } } as never) as never),
+    postDoor: (parcelId) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/door/post` as never, {} as never) as never),
+    raiseDoor: (parcelId, maxSpend) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/door/raise` as never, { body: { maxSpend } } as never) as never),
     collectFrom: (siteId, bays) => call((c) => c.POST('/v1/sbg/business/me/parcels/collect-from' as never, { body: { siteId, ...(bays ? { bays } : {}) } } as never) as never),
     stopCollecting: () => call((c) => c.DELETE('/v1/sbg/business/me/parcels/collect-from' as never, {} as never) as never),
     dock: () => call((c) => c.GET('/v1/sbg/business/me/parcels/dock' as never, {} as never) as never),
@@ -221,9 +244,11 @@ export interface ParcelForm {
   fragile: boolean;
   reference: string;
   photoRef: string;
+  /** Delivered to its own place: the most it pays a driver for the last leg. */
+  most: string;
 }
 
-export const EMPTY_PARCEL: ParcelForm = { originDid: '', destDid: '', receiver: '', l: '', w: '', h: '', kg: '', fragile: false, reference: '', photoRef: '' };
+export const EMPTY_PARCEL: ParcelForm = { originDid: '', destDid: '', receiver: '', l: '', w: '', h: '', kg: '', fragile: false, reference: '', photoRef: '', most: '' };
 
 const positive = (s: string) => {
   const n = Number(s.replace(',', '.'));
@@ -251,6 +276,7 @@ export function parcelSendGaps(f: ParcelForm, t: Translate): string[] {
   const gaps = parcelPriceGaps(f, t);
   if (f.receiver.replace(/\D/g, '').length < 9) gaps.push(t('business.parcels.gap.receiver'));
   if (!f.photoRef) gaps.push(t('business.parcels.gap.photo'));
+  if (f.destDid.startsWith(TO_PLACE) && !(Number(f.most.replace(',', '.')) > 0)) gaps.push(t('business.parcels.gap.most'));
   return gaps;
 }
 
@@ -261,7 +287,8 @@ export function sendBody(f: ParcelForm, expectedTotal: number | undefined): Send
   return {
     // Collected from its own place, or handed in at a shop.
     ...(f.originDid === OWN_PLACE ? { fromOwnPlace: true } : { originPudoDid: f.originDid }),
-    destPudoDid: f.destDid,
+    // Delivered to one of its own places, at most what it allows a driver for the last leg — or collected at a shop.
+    ...(f.destDid.startsWith(TO_PLACE) ? { toOwnPlace: { siteId: f.destDid.slice(TO_PLACE.length), maxSpend: Number(f.most.replace(',', '.')) } } : { destPudoDid: f.destDid }),
     receiverMobile: f.receiver.trim(),
     dimensionsCm: { l: s.l, w: s.w, h: s.h },
     weightKg: s.kg,
@@ -280,10 +307,16 @@ export function shopChoices(shops: NetworkShop[], country: string): NetworkShop[
 
 /* ---------------------------------------------------------------- the list -- */
 
-export type ParcelStage = 'unpaid' | 'to_hand_in' | 'at_your_place' | 'on_its_way' | 'to_collect' | 'collected' | 'called_off' | 'problem';
+export type ParcelStage = 'unpaid' | 'to_hand_in' | 'at_your_place' | 'door_short' | 'door_driver' | 'coming_to_you' | 'at_your_door' | 'on_its_way' | 'to_collect' | 'collected' | 'called_off' | 'problem';
 
 /** Where a parcel stands, in the words its sender reads. */
-export function parcelStage(p: Pick<BusinessParcel, 'status' | 'paid' | 'fromOwnPlace'>): ParcelStage {
+export function parcelStage(p: Pick<BusinessParcel, 'status' | 'paid' | 'fromOwnPlace' | 'toOwnPlace'>): ParcelStage {
+  // Its last leg to its own place, once at the shop: the door's own words.
+  const door = p.toOwnPlace?.state;
+  if (door === 'short') return 'door_short';
+  if (door === 'posted') return 'door_driver';
+  if (door === 'handed') return 'coming_to_you';
+  if (door === 'delivered') return 'at_your_door';
   if (p.status === 'Voided' || p.status === 'Returned') return 'called_off';
   if (p.status === 'Disputed' || p.status === 'Lost') return 'problem';
   if (!p.paid) return 'unpaid';
@@ -298,6 +331,10 @@ export const STAGE_WORD: Record<ParcelStage, MessageKey> = {
   unpaid: 'business.parcels.stage.unpaid',
   to_hand_in: 'business.parcels.stage.toHandIn',
   at_your_place: 'business.parcels.stage.atYourPlace',
+  door_short: 'business.parcels.stage.doorShort',
+  door_driver: 'business.parcels.stage.doorDriver',
+  coming_to_you: 'business.parcels.stage.comingToYou',
+  at_your_door: 'business.parcels.stage.atYourDoor',
   on_its_way: 'business.parcels.stage.onItsWay',
   to_collect: 'business.parcels.stage.toCollect',
   collected: 'business.parcels.stage.collected',
@@ -309,6 +346,10 @@ export const STAGE_TONE: Record<ParcelStage, 'ok' | 'warn' | 'info' | 'quiet'> =
   unpaid: 'warn',
   to_hand_in: 'info',
   at_your_place: 'info',
+  door_short: 'warn',
+  door_driver: 'info',
+  coming_to_you: 'info',
+  at_your_door: 'ok',
   on_its_way: 'info',
   to_collect: 'info',
   collected: 'ok',

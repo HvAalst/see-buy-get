@@ -248,9 +248,14 @@ export class BusinessDoorService implements OnModuleInit {
   hand(shopDid: string, parcelId: string, badgeId: string, byName: string, now: number = Date.now()): ShopDoorHandover[] {
     const d = this.doors.get(parcelId);
     if (!d || d.shopDid !== shopDid || d.state !== 'posted' || !d.freightId) throw new GlosError('NOT_FOUND', `No parcel for a door waits here as ${parcelId}`);
+    // Refused before anything is written: the box must be on this shelf to be handed over.
+    const p = this.parcels.get(parcelId);
+    if (p.destAgentDid !== shopDid || (p.status !== 'Ready_For_Pickup' && p.status !== 'Unclaimed')) throw new GlosError('INVALID_STATE', `${parcelId} is not on this shop's shelf: it is ${p.status}`);
+    if (p.held) throw new GlosError('INVALID_STATE', `${parcelId} is held: it is handed to nobody until it is released`);
     const { load, driverDid } = this.dispatch.handDeliversParcel(d.freightId, shopDid, badgeId, byName, now);
-    this.parcels.releaseToDoorDriver(parcelId, shopDid, driverDid, { freightId: load.freightId, code: load.code }, now);
+    // Handed, before the parcel's own step tells anyone: what hears that step reads it as handed, never as collected.
     this.doors.set(parcelId, { ...d, state: 'handed', handedAt: new Date(now).toISOString() });
+    this.parcels.releaseToDoorDriver(parcelId, shopDid, driverDid, { freightId: load.freightId, code: load.code }, now);
     return this.handoversAt(shopDid);
   }
 
@@ -259,8 +264,6 @@ export class BusinessDoorService implements OnModuleInit {
     const d = this.doors.get(parcelId);
     if (!d || d.state === 'handed' || d.state === 'delivered' || d.state === 'collected') return;
     try {
-      // Handed to its door driver: that is the shop's step above, never a collection.
-      if (this.parcels.get(parcelId).doorLoad) return;
       if (d.freightId) this.dispatch.withdrawDeliversParcel(d.freightId, 'its parcel was collected at the shop');
     } catch (err) {
       this.logger.warn(`door load of ${parcelId} not withdrawn: ${(err as Error).message}`);

@@ -4061,10 +4061,21 @@
           },
           {
             "name": "dest",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "A shop's id — or absent, with `toPlace`.",
             "schema": {
               "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "toPlace",
+            "required": false,
+            "in": "query",
+            "description": "One of its own places, delivered to by a driver from the shop nearest it.",
+            "schema": {
+              "maxLength": 80,
               "type": "string"
             }
           },
@@ -4490,6 +4501,74 @@
         }
       }
     },
+    "/v1/sbg/business/me/parcels/{parcelId}/door/post": {
+      "post": {
+        "operationId": "BusinessParcel.postDoor",
+        "summary": "",
+        "description": "Its last leg to its own place: post it now, after a top-up.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/{parcelId}/door/raise": {
+      "post": {
+        "operationId": "BusinessParcel.raiseDoor",
+        "summary": "",
+        "description": "Its last leg: raise the most it pays a driver, while nobody has taken it.",
+        "parameters": [
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoorRaiseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/parcels/{parcelId}/pay": {
       "post": {
         "operationId": "BusinessParcel.pay",
@@ -4585,6 +4664,88 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BusinessCallOffView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/{did}/door-handovers": {
+      "get": {
+        "operationId": "BusinessDoor.handovers",
+        "summary": "",
+        "description": "The parcels here waiting for the driver of the load that takes them to their business's door.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/agents/{did}/door-handovers/{parcelId}": {
+      "post": {
+        "operationId": "BusinessDoor.hand",
+        "summary": "",
+        "description": "Hand one to the driver who took its load, by their pass.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parcelId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandToDriverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
                 }
               }
             }
@@ -37262,6 +37423,25 @@
           "total"
         ]
       },
+      "ParcelDoorPrice": {
+        "type": "object",
+        "properties": {
+          "via": {
+            "type": "string"
+          },
+          "viaDid": {
+            "type": "string"
+          },
+          "suggestedMax": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "via",
+          "viaDid",
+          "suggestedMax"
+        ]
+      },
       "ParcelPriceView": {
         "type": "object",
         "properties": {
@@ -37278,6 +37458,14 @@
           },
           "crossesBorder": {
             "type": "boolean"
+          },
+          "door": {
+            "description": "Delivered to its own place: the shop it goes via, and the most we suggest allowing a driver for the last leg.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelDoorPrice"
+              }
+            ]
           }
         },
         "required": [
@@ -37323,6 +37511,55 @@
           "zone"
         ]
       },
+      "ParcelDoorView": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string",
+            "description": "The shop it goes via, where a driver collects it."
+          },
+          "maxSpend": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "description": "`waiting` for it at the shop · `short` the balance does not cover the most · `posted` a load waits for a driver · `handed` on the road to it · `delivered` · `collected` at the shop instead.",
+            "enum": [
+              "waiting",
+              "short",
+              "posted",
+              "handed",
+              "delivered",
+              "collected"
+            ]
+          },
+          "loadCode": {
+            "type": "string"
+          },
+          "loadStatus": {
+            "type": "string"
+          },
+          "driverName": {
+            "type": "string"
+          },
+          "receivedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "via",
+          "maxSpend",
+          "currency",
+          "state"
+        ]
+      },
       "BusinessParcelRow": {
         "type": "object",
         "properties": {
@@ -37361,6 +37598,14 @@
           "fromOwnPlace": {
             "type": "boolean",
             "description": "Collected by a driver from its own place, not handed in at a shop."
+          },
+          "toOwnPlace": {
+            "description": "Delivered to its own place: the last leg from the shop.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelDoorView"
+              }
+            ]
           },
           "to": {
             "$ref": "#/components/schemas/ParcelEnd"
@@ -37567,6 +37812,23 @@
           "total"
         ]
       },
+      "ToOwnPlaceDto": {
+        "type": "object",
+        "properties": {
+          "siteId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "maxSpend": {
+            "type": "number",
+            "minimum": 0.01
+          }
+        },
+        "required": [
+          "siteId",
+          "maxSpend"
+        ]
+      },
       "ParcelSizeDto": {
         "type": "object",
         "properties": {
@@ -37643,8 +37905,16 @@
           },
           "destPudoDid": {
             "type": "string",
-            "description": "The shop the receiver collects it from.",
+            "description": "The shop the receiver collects it from. Absent: delivered to its own place (`toOwnPlace`).",
             "maxLength": 120
+          },
+          "toOwnPlace": {
+            "description": "Delivered to one of its own places (2026-10-29): via the shop nearest it, then a driver's load to its door.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ToOwnPlaceDto"
+              }
+            ]
           },
           "receiverMobile": {
             "type": "string",
@@ -37694,7 +37964,6 @@
           }
         },
         "required": [
-          "destPudoDid",
           "receiverMobile",
           "dimensionsCm",
           "weightKg",
@@ -37757,6 +38026,14 @@
           "fromOwnPlace": {
             "type": "boolean",
             "description": "Collected by a driver from its own place, not handed in at a shop."
+          },
+          "toOwnPlace": {
+            "description": "Delivered to its own place: the last leg from the shop.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelDoorView"
+              }
+            ]
           },
           "to": {
             "$ref": "#/components/schemas/ParcelEnd"
@@ -37870,6 +38147,19 @@
           "qrPayload"
         ]
       },
+      "DoorRaiseDto": {
+        "type": "object",
+        "properties": {
+          "maxSpend": {
+            "type": "number",
+            "description": "The new most they allow a driver: more than what they paid; the difference is asked for by mobile money now.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "maxSpend"
+        ]
+      },
       "BusinessCallOffView": {
         "type": "object",
         "properties": {
@@ -37939,6 +38229,19 @@
             "minimum": 0.01
           }
         }
+      },
+      "HandToDriverDto": {
+        "type": "object",
+        "properties": {
+          "badge": {
+            "type": "string",
+            "description": "The pass of the driver who took the load: scanned at the counter.",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "badge"
+        ]
       },
       "ExportBookingDto": {
         "type": "object",
@@ -44878,19 +45181,6 @@
           "size",
           "calledOffAt",
           "load"
-        ]
-      },
-      "HandToDriverDto": {
-        "type": "object",
-        "properties": {
-          "badge": {
-            "type": "string",
-            "description": "The pass of the driver who took the load: scanned at the counter.",
-            "maxLength": 64
-          }
-        },
-        "required": [
-          "badge"
         ]
       },
       "PhygitalLabel": {
@@ -52996,6 +53286,23 @@
               }
             }
           },
+          "doorLoad": {
+            "type": "object",
+            "properties": {
+              "freightId": {
+                "required": true,
+                "type": "string"
+              },
+              "code": {
+                "required": true,
+                "type": "string"
+              },
+              "atDoorAt": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "payAtCollection": {
             "type": "object",
             "properties": {
@@ -53107,6 +53414,7 @@
           "acceptedAt",
           "returnOf",
           "returnLoad",
+          "doorLoad",
           "payAtCollection",
           "doorHold",
           "scans"
@@ -56272,6 +56580,32 @@
           "hubName"
         ]
       },
+      "FreightDeliversParcel": {
+        "type": "object",
+        "properties": {
+          "handedAt": {
+            "type": "string"
+          },
+          "handedBy": {
+            "type": "string",
+            "description": "Who at the shop handed it over."
+          },
+          "parcelId": {
+            "type": "string"
+          },
+          "atShopDid": {
+            "type": "string"
+          },
+          "shopName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "parcelId",
+          "atShopDid",
+          "shopName"
+        ]
+      },
       "FreightClaim": {
         "type": "object",
         "properties": {
@@ -57309,6 +57643,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/FreightBringsBack"
+              }
+            ]
+          },
+          "deliversParcel": {
+            "description": "A business's parcel, from the shop it waits at to the business's own door (2026-10-29).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightDeliversParcel"
               }
             ]
           },
@@ -64009,19 +64351,6 @@
           "maxSpend",
           "currency",
           "phoneMasked"
-        ]
-      },
-      "DoorRaiseDto": {
-        "type": "object",
-        "properties": {
-          "maxSpend": {
-            "type": "number",
-            "description": "The new most they allow a driver: more than what they paid; the difference is asked for by mobile money now.",
-            "minimum": 1
-          }
-        },
-        "required": [
-          "maxSpend"
         ]
       },
       "PodDto": {

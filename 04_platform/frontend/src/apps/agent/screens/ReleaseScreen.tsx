@@ -9,10 +9,14 @@ import { handoverRoute, money, otpValid, releaseBlockedDetail, releaseStage } fr
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { CollectBody } from './CollectScreen';
 import { PhotoField } from './PhotoField';
+import { DoorHandoverCard } from './DoorHandoverCard';
+import type { SbgClient } from '../../../lib/sbg';
 
 export interface ReleaseScreenProps {
   state: AgentState;
   actions: AgentActions;
+  /** For the business parcels waiting here for their door driver (2026-10-29). */
+  sbg?: SbgClient | null;
 }
 
 /**
@@ -29,7 +33,7 @@ export interface ReleaseScreenProps {
  * already in hand. So that path still asks for the label or sticker, but SECOND, and only once we know
  * it is that kind of hand-over.
  */
-export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
+export function ReleaseScreen({ state, actions, sbg = null }: ReleaseScreenProps) {
   const t = useT();
   const f = state.release;
   const p = f.parcel;
@@ -47,6 +51,8 @@ export function ReleaseScreen({ state, actions }: ReleaseScreenProps) {
       <p class="scr__lede">{t('agent.counter.lede')}</p>
 
       {!signal ? <Note tone="warn" icon="warning" title={t('agent.counter.noSignalTitle')} detail={t('agent.counter.noSignalDetail')} /> : null}
+      {/* A business's parcels here on their way to its own door: handed only to their load's driver, by pass. */}
+      <DoorHandoverCard sbg={sbg} shopDid={state.agent?.did} />
       {state.error ? <ErrorNote error={state.error} showDetail={state.error.code === 'SHELF_FULL'} /> : null}
 
       {/* The one question the customer can always answer. */}

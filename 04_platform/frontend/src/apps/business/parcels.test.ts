@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_PARCEL, OWN_PLACE, parcelPriceGaps, parcelSendGaps, parcelSize, parcelStage, sendBody, shopChoices, type ParcelForm } from './parcels';
+import { EMPTY_PARCEL, OWN_PLACE, TO_PLACE, parcelPriceGaps, parcelSendGaps, parcelSize, parcelStage, sendBody, shopChoices, type ParcelForm } from './parcels';
 
 const t = ((key: string) => key) as never;
 
@@ -36,6 +36,25 @@ describe('a business’s parcels', () => {
     expect(body).toMatchObject({ fromOwnPlace: true, destPudoDid: 'did:b' });
     expect(body).not.toHaveProperty('originPudoDid');
     expect(sendBody(full, 9)).not.toHaveProperty('fromOwnPlace');
+  });
+
+  it('delivered to its own place: no receiving shop named, the place and the most for the last leg instead', () => {
+    const door = { ...full, destDid: `${TO_PLACE}site_9`, most: '' };
+    expect(parcelSendGaps(door, t)).toEqual(['business.parcels.gap.most']);
+    const body = sendBody({ ...door, most: '150,5' }, 9);
+    expect(body).toMatchObject({ originPudoDid: 'did:a', toOwnPlace: { siteId: 'site_9', maxSpend: 150.5 } });
+    expect(body).not.toHaveProperty('destPudoDid');
+    expect(sendBody(full, 9)).not.toHaveProperty('toOwnPlace');
+  });
+
+  it('its last leg in the sender’s words: short of money, waiting for a driver, on its way, delivered', () => {
+    const leg = (state: 'waiting' | 'short' | 'posted' | 'handed' | 'delivered' | 'collected') => ({ label: 'Clinic', via: 'Duka', maxSpend: 100, currency: 'KES', state });
+    expect(parcelStage({ status: 'On_Bus', paid: true, toOwnPlace: leg('waiting') })).toBe('on_its_way');
+    expect(parcelStage({ status: 'Ready_For_Pickup', paid: true, toOwnPlace: leg('short') })).toBe('door_short');
+    expect(parcelStage({ status: 'Ready_For_Pickup', paid: true, toOwnPlace: leg('posted') })).toBe('door_driver');
+    expect(parcelStage({ status: 'Delivered', paid: true, toOwnPlace: leg('handed') })).toBe('coming_to_you');
+    expect(parcelStage({ status: 'Delivered', paid: true, toOwnPlace: leg('delivered') })).toBe('at_your_door');
+    expect(parcelStage({ status: 'Delivered', paid: true, toOwnPlace: leg('collected') })).toBe('collected');
   });
 
   it('offers the shops taking new parcels in the business’s own country, by name', () => {

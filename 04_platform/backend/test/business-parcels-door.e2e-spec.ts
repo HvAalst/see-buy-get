@@ -164,6 +164,11 @@ describe('a business’s parcel delivered to its own place', () => {
     const other = app.get(DriverService).register({ displayName: 'Stranger', fullName: 'S', nationalId: `ID-BPO-S-${digits()}`, mobile: `+2547${digits()}2`.slice(0, 13), licenceClasses: ['motorcycle'] } as never);
     expect((await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${id}`).set(kisumu.token).send({ badge: app.get(DriverService).get(other.did).badgeId }).expect(403)).body.detail).toMatch(/That pass is not the driver of load/);
     await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${id}`).set(operator).send({ badge: rider.badge }).expect(403);
+    // A box not on the shelf is handed to nobody — and nothing is written for the load.
+    Object.assign(app.get(ParcelService).get(id), { status: 'At_MDP' });
+    expect((await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${id}`).set(kisumu.token).send({ badge: rider.badge }).expect(400)).body.detail).toMatch(/is not on this shop's shelf/);
+    expect(dispatch.requireFreightPublic(load.freightId).deliversParcel?.handedAt).toBeUndefined();
+    Object.assign(app.get(ParcelService).get(id), { status: 'Ready_For_Pickup' });
     expect(await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${id}`).set(kisumu.token).send({ badge: rider.badge }).expect(201).then((r) => r.body)).toEqual([]);
     const handed = app.get(ParcelService).get(id);
     expect(handed).toMatchObject({ status: 'Delivered', doorLoad: { freightId: load.freightId, code: load.code } });

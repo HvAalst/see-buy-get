@@ -170,7 +170,7 @@ function ScreenRouter({ screen, state, actions, archive, destination, fiscal, sb
     // already bookmarked point at it — but it is the same screen, because it was always the same job.
     case 'release':
     case 'collect':
-      return <ReleaseScreen state={state} actions={actions} />;
+      return <ReleaseScreen state={state} actions={actions} sbg={sbg} />;
     case 'receivebag':
       return <ReceiveBagScreen state={state} actions={actions} />;
     case 'void':

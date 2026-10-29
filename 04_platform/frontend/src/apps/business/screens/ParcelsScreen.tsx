@@ -12,6 +12,7 @@ import {
   EMPTY_PARCEL,
   money,
   OWN_PLACE,
+  TO_PLACE,
   parcelPriceGaps,
   parcelSendGaps,
   parcelSize,
@@ -56,6 +57,8 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
   const [topping, setTopping] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [bookOpen, setBookOpen] = useState(false);
+  // Its own places a parcel can be delivered to (2026-10-29).
+  const [places, setPlaces] = useState<Array<{ siteId: string; name: string }>>([]);
 
   const load = useCallback(async () => {
     if (!api) return;
@@ -76,6 +79,8 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
   useEffect(() => {
     if (!api || !sending || shops.length) return;
     void api.shops().then((r) => setShops(r.error ? [] : shopChoices((r.data as NetworkShop[] | undefined) ?? [], business.country)));
+    const sites = (client?.api as never as { sites?: (entityId: string) => Promise<{ data?: unknown; error?: unknown }> }).sites;
+    void sites?.(business.entityId).then((r) => setPlaces(r.error || !r.data ? [] : (((r.data as { sites?: Array<{ siteId: string; name: string; kind: string }> }).sites ?? []).filter((s) => s.kind === 'delivery' || s.kind === 'loading'))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, sending]);
 
@@ -211,6 +216,7 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
           <SendForm
             api={api}
             shops={shops}
+            places={places}
             collection={account.collection}
             balance={account.balance ?? 0}
             onCancel={() => setSending(false)}
@@ -242,7 +248,7 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
                 <button key={r.parcelId} type="button" class={`crow${openId === r.parcelId ? ' crow--on' : ''}`} onClick={() => setOpenId(openId === r.parcelId ? null : r.parcelId)}>
                   <span class="crow__body">
                     <span class="crow__top">
-                      <span class="crow__name">{r.reference ? `${r.reference} · ` : ''}{t('business.parcels.toShop', { shop: r.to.name })}</span>
+                      <span class="crow__name">{r.reference ? `${r.reference} · ` : ''}{r.toOwnPlace ? t('business.parcels.toPlace', { place: r.toOwnPlace.label }) : t('business.parcels.toShop', { shop: r.to.name })}</span>
                       <span class={`ctag ctag--${STAGE_TONE[stage]}`}>{t(STAGE_WORD[stage])}</span>
                     </span>
                     <span class="crow__sub">{[r.receiver, money(r.cost, r.currency), r.sentBy, when(r.createdAt)].filter(Boolean).join(' · ')}</span>
@@ -496,11 +502,11 @@ function Book({ api, currency }: { api: ReturnType<typeof parcelsApi>; currency:
 
 /* -------------------------------------------------------------------- send -- */
 
-function SendForm({ api, shops, collection, balance, onSent, onCancel }: { api: ReturnType<typeof parcelsApi>; shops: NetworkShop[]; collection?: ParcelCollection; balance: number; onSent: (sent: { parcel: BusinessParcelDetail; paid: boolean }) => void; onCancel: () => void }) {
+function SendForm({ api, shops, places, collection, balance, onSent, onCancel }: { api: ReturnType<typeof parcelsApi>; shops: NetworkShop[]; places: Array<{ siteId: string; name: string }>; collection?: ParcelCollection; balance: number; onSent: (sent: { parcel: BusinessParcelDetail; paid: boolean }) => void; onCancel: () => void }) {
   const t = useT();
   // Collected from its own place, where it set one: offered first, as the way it usually sends.
   const [form, setForm] = useState<ParcelForm>({ ...EMPTY_PARCEL, ...(collection ? { originDid: OWN_PLACE } : {}) });
-  const [quote, setQuote] = useState<{ flexible: number; currency: string } | null>(null);
+  const [quote, setQuote] = useState<{ flexible: number; currency: string; door?: { via: string; suggestedMax: number } } | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -510,6 +516,9 @@ function SendForm({ api, shops, collection, balance, onSent, onCancel }: { api: 
   const priceGaps = parcelPriceGaps(form, t);
   const gaps = parcelSendGaps(form, t);
   const options = shops.map((s) => ({ value: s.did, label: s.shopName, sub: s.zone }));
+  // Delivered to one of its own places, by a driver from the shop nearest it — or collected at a shop.
+  const toOptions = [...places.map((p) => ({ value: `${TO_PLACE}${p.siteId}`, label: t('business.parcels.f.toPlace', { place: p.name }), sub: t('business.parcels.f.toPlaceSub') })), ...options];
+  const toPlace = form.destDid.startsWith(TO_PLACE);
   const fromOptions = [...(collection ? [{ value: OWN_PLACE, label: t('business.parcels.f.ownPlace', { place: collection.label }), sub: t('business.parcels.f.ownPlaceSub') }] : []), ...options];
 
   // Priced as soon as both shops and the four measurements are in, the way the mint will price it.
@@ -521,7 +530,11 @@ function SendForm({ api, shops, collection, balance, onSent, onCancel }: { api: 
     void api.price(form.originDid, form.destDid, size, form.fragile).then((r) => {
       if (!live) return;
       if (r.error) setQuoteError(words(r.error));
-      else setQuote(r.data ?? null);
+      else {
+        setQuote(r.data ?? null);
+        // The most for the last leg starts at what we suggest; theirs to change.
+        if (r.data?.door) setForm((f) => (f.most ? f : { ...f, most: String(r.data!.door!.suggestedMax) }));
+      }
     });
     return () => {
       live = false;
@@ -558,7 +571,7 @@ function SendForm({ api, shops, collection, balance, onSent, onCancel }: { api: 
     <>
       <div class="biz-two">
         <ConsolePick label={t('business.parcels.f.from')} value={form.originDid} placeholder={t('business.parcels.f.pickShop')} options={fromOptions} onChange={(originDid) => set({ originDid })} />
-        <ConsolePick label={t('business.parcels.f.to')} value={form.destDid} placeholder={t('business.parcels.f.pickShop')} options={options} onChange={(destDid) => set({ destDid })} />
+        <ConsolePick label={t('business.parcels.f.to')} value={form.destDid} placeholder={t('business.parcels.f.pickShop')} options={toOptions} onChange={(destDid) => set({ destDid, most: '' })} />
       </div>
       <div class="biz-two">
         <label class="cfield">
@@ -596,6 +609,13 @@ function SendForm({ api, shops, collection, balance, onSent, onCancel }: { api: 
         <span class="chint">{form.photoRef ? t('business.parcels.f.photoKept') : t('business.parcels.f.photoHint')}</span>
       </label>
 
+      {toPlace && quote?.door ? (
+        <label class="cfield">
+          <span class="cfield__label">{t('business.parcels.f.most', { currency: quote.currency })}</span>
+          <input class="cinput" inputMode="decimal" value={form.most} onInput={(e) => set({ most: (e.target as HTMLInputElement).value })} />
+          <span class="chint">{t('business.parcels.f.mostHint', { via: quote.door.via, suggested: money(quote.door.suggestedMax, quote.currency) })}</span>
+        </label>
+      ) : null}
       {quoteError ? <p class="cerr">{quoteError}</p> : null}
       {price != null ? (
         <p class="cnote">
@@ -620,6 +640,57 @@ function SendForm({ api, shops, collection, balance, onSent, onCancel }: { api: 
 async function uploadContent(api: ReturnType<typeof parcelsApi>, dataUrl: string, thumbDataUrl?: string): Promise<string | null> {
   const r = await api.upload(dataUrl, thumbDataUrl);
   return r.error ? null : (r.data?.mediaId ?? null);
+}
+
+/* --------------------------------------------------------- its own door -- */
+
+/**
+ * ITS LAST LEG TO ITS OWN PLACE (2026-10-29): where it stands, and what the business can do — post it once its balance holds
+ * the most, or raise the most while no driver has taken it. Collected at the shop with its code, the leg is withdrawn.
+ */
+function DoorLeg({ api, row, works, busy, act }: { api: ReturnType<typeof parcelsApi>; row: BusinessParcel; works: boolean; busy: string | null; act: (key: string, fn: () => Promise<{ error?: Err }>, note?: string) => Promise<boolean> }) {
+  const t = useT();
+  const d = row.toOwnPlace!;
+  const [most, setMost] = useState('');
+  const line =
+    d.state === 'waiting'
+      ? t('business.parcels.door.waiting', { via: d.via, most: money(d.maxSpend, d.currency) })
+      : d.state === 'short'
+        ? t('business.parcels.door.short', { via: d.via, most: money(d.maxSpend, d.currency) })
+        : d.state === 'posted'
+          ? d.loadStatus === 'claimed'
+            ? t('business.parcels.door.taken', { name: d.driverName ?? '', code: d.loadCode ?? '', via: d.via })
+            : t('business.parcels.door.posted', { code: d.loadCode ?? '', most: money(d.maxSpend, d.currency) })
+          : d.state === 'handed'
+            ? t('business.parcels.door.handed', { name: d.driverName ?? '', place: d.label })
+            : d.state === 'delivered'
+              ? d.receivedBy
+                ? t('business.parcels.door.deliveredBy', { place: d.label, name: d.receivedBy })
+                : t('business.parcels.door.delivered', { place: d.label })
+              : t('business.parcels.door.collected', { via: d.via });
+  const untaken = d.state === 'waiting' || d.state === 'short' || (d.state === 'posted' && d.loadStatus !== 'claimed');
+  return (
+    <div class={`cnote${d.state === 'short' ? ' cnote--warn' : ''}`}>
+      <p>
+        <strong>{t('business.parcels.door.title', { place: d.label })}</strong> {line}
+      </p>
+      {works && d.state === 'short' ? (
+        <div class="twr-panelend">
+          <button type="button" class="cbtn cbtn--primary" disabled={busy !== null} onClick={() => void act(`door:${row.parcelId}`, () => api.postDoor(row.parcelId), t('business.parcels.door.postedNow', { id: row.parcelId }))}>
+            {t('business.parcels.door.post')}
+          </button>
+        </div>
+      ) : null}
+      {works && untaken ? (
+        <div class="twr-panelend">
+          <input class="cinput" inputMode="decimal" aria-label={t('business.parcels.door.newMost')} placeholder={t('business.parcels.door.newMost')} value={most} onInput={(e) => setMost((e.target as HTMLInputElement).value)} />
+          <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null || !(Number(most) > 0)} onClick={() => void act(`raise:${row.parcelId}`, () => api.raiseDoor(row.parcelId, Number(most)), t('business.parcels.door.raised', { most: money(Number(most), d.currency) })).then((ok) => ok && setMost(''))}>
+            {t(d.state === 'posted' ? 'business.parcels.door.raise' : 'business.parcels.door.change')}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ opened -- */
@@ -663,9 +734,9 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
           <dd class="cons__factv">{row.from ? `${row.from.name} · ${row.from.zone}` : '—'}</dd>
         </div>
         <div class="cons__fact">
-          <dt class="cons__factk">{t('business.parcels.fact.to')}</dt>
+          <dt class="cons__factk">{t(row.toOwnPlace ? 'business.parcels.fact.deliveredTo' : 'business.parcels.fact.to')}</dt>
           <dd class="cons__factv">
-            {row.to.name} · {row.to.zone}
+            {row.toOwnPlace ? t('business.parcels.fact.viaShop', { place: row.toOwnPlace.label, shop: row.to.name }) : `${row.to.name} · ${row.to.zone}`}
           </dd>
         </div>
         <div class="cons__fact">
@@ -695,6 +766,8 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
           </div>
         ) : null}
       </dl>
+
+      {row.toOwnPlace ? <DoorLeg api={api} row={row} works={works} busy={busy} act={act} /> : null}
 
       {row.collectionCode ? (
         <>
