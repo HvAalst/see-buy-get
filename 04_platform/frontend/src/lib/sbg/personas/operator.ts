@@ -460,6 +460,9 @@ export function createOperatorApi(sbg: SbgClient) {
     /** A draft rail note checked against the law of its lane. Nothing is written. */
     railCheck: (body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/rail/check', { body: body as never })),
     railways: () => sbg.request((c) => c.GET('/v1/sbg/rail/railways')),
+    /** The forwarder's FIATA bill on an import (2026-10-29): held by the importer or its agent; staff are refused. */
+    holdImportFbl: (importId: string, body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fbl', { params: { path: { importId } }, body: body as never })),
+    importFblVerified: (importId: string, body: { registered: boolean; fiataId?: string; issuerShown?: string; proofDocumentId: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/fbl/verified', { params: { path: { importId } }, body: body as never })),
     /** Inland by rail (2026-10-29): the rail terminal, the railway's arrival notice, and the importer's word to go anyway. */
     importByRail: (importId: string, body: { terminalSiteId: string; expectedAt?: string; freeDays?: number }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail', { params: { path: { importId } }, body: body as never })),
     importRailArrived: (importId: string, body: { at: string; reference?: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail/arrived', { params: { path: { importId } }, body: body as never })),

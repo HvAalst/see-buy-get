@@ -16,6 +16,7 @@ import { ASKED_PAPERS, boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, pape
 import { mayAct } from '../logic';
 import { RailNotePanel } from '../../tower/screens/RailNotePanel';
 import { ExportByRail } from './ExportByRail';
+import { FblPanel, FiataDirectoryHint } from '../../tower/screens/FblPanel';
 
 type Problem = { detail?: string; title: string } | null | undefined;
 
@@ -773,6 +774,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
                 {t('business.exports.agent.choose')}
               </button>
             </div>
+            <FiataDirectoryHint />
             {/* Chosen from the agents' directory, never typed: alphabetical, what each says beside what we have seen. */}
             <ParticipantPicker
               open={picking}
@@ -1028,6 +1030,21 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </div>
         ) : null}
       </section>
+
+      {/* The forwarder's FIATA bill: held, checked against its form, matched to our papers, explained — never issued (2026-10-29). */}
+      <FblPanel
+        code={c.code}
+        {...(d.fbl ? { fbl: d.fbl } : {})}
+        canKeep={mine || asAgent}
+        canVerify={mine}
+        documents={mine ? d.documents : []}
+        defaults={{ ...(c.containerNo ? { containerNo: c.containerNo } : {}), issuerCountry: c.originCountry }}
+        calls={{ keep: (input) => client.exports.fbl(c.exportId, input), verified: (input) => client.exports.fblVerified(c.exportId, input) }}
+        onKept={async () => {
+          await read();
+          await onChanged();
+        }}
+      />
 
       {/* Where the box goes to the port by rail: the railway's note, held, checked against its lane's law, matched to the box. */}
       <RailNotePanel

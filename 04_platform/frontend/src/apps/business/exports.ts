@@ -2,6 +2,7 @@ import type { Result, SbgClient } from '../../lib/sbg';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import type { QuoteView } from '../../shared/quote';
 import type { RailNoteCheck, RailNoteInput, RailNoteView, RailwayRow } from '../tower/screens/RailNotePanel';
+import type { FblInput, FblView } from '../tower/screens/FblPanel';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "The missing for goods going to a port should be build"). One container leaving
@@ -191,6 +192,8 @@ export interface ExportDetail {
   invoice: ExportInvoiceView;
   /** The railway's note, where the box goes to the port by rail: held, with its check. */
   rail?: RailNoteView;
+  /** The forwarder's FIATA bill, held with what it means (2026-10-29). */
+  fbl?: FblView;
 }
 
 export interface ExportRow {
@@ -251,6 +254,9 @@ export interface ExportsApi {
   /** By rail to the port: the rail terminal and the train's cut-off. */
   byRail(exportId: string, body: { terminalSiteId: string; cutoffAt: string; reference?: string }): Promise<Result<ExportDetail>>;
   clearByRail(exportId: string): Promise<Result<ExportDetail>>;
+  /** The forwarder's FIATA bill, held; and what the exporter saw on FIATA's page for an electronic one. */
+  fbl(exportId: string, body: FblInput): Promise<Result<ExportDetail>>;
+  fblVerified(exportId: string, body: { registered: boolean; fiataId?: string; issuerShown?: string; proofDocumentId: string }): Promise<Result<ExportDetail>>;
   atPort(exportId: string, at: string): Promise<Result<ExportDetail>>;
   /** A draft rail note, checked against the law of its lane: what it asks for. Nothing is written. */
   railCheck(body: Parameters<import('../tower/screens/RailNotePanel').RailNoteCalls['check']>[0]): Promise<Result<RailNoteCheck>>;
@@ -303,6 +309,8 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     rail: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/rail`, body),
     byRail: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/by-rail`, body),
     clearByRail: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/by-rail/clear`),
+    fbl: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/fbl`, body),
+    fblVerified: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/fbl/verified`, body),
     atPort: (exportId, at) => post(`/v1/sbg/exports/${id(exportId)}/by-rail/at-port`, { at }),
     railCheck: (body) => post('/v1/sbg/rail/check', body),
     railways: () => call((c) => c.GET('/v1/sbg/rail/railways' as never, {} as never) as never),

@@ -14,7 +14,7 @@ const PLAIN: Record<string, string> = {
   // Everybody reads these without thinking.
   ID: 'everyday', PIN: 'everyday', QR: 'everyday', OK: 'everyday', PDF: 'everyday', PNG: 'everyday', JPEG: 'everyday', SMS: 'everyday', MB: 'everyday', GPS: 'everyday', AI: 'everyday', EU: 'everyday',
   // A currency or a country by its code, beside an amount or in a list of them.
-  KES: 'money', USD: 'money', UGX: 'money', TZS: 'money', ETB: 'money', KE: 'country',
+  KES: 'money', USD: 'money', US: 'money', UGX: 'money', TZS: 'money', ETB: 'money', KE: 'country',
   // How a date or a time is to be written.
   YYYY: 'format', DD: 'format', HH: 'format', MM: 'format',
   // Words in capitals for weight, or as a printed stamp.

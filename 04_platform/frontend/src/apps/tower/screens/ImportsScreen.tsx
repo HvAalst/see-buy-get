@@ -56,6 +56,7 @@ import {
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { RailNotePanel, type RailNoteCheck, type RailwayRow } from './RailNotePanel';
 import { ImportByRail } from './ImportByRail';
+import { FblPanel, FiataDirectoryHint } from './FblPanel';
 
 /**
  * CL2a — A CONTAINER, ITS PAPERS, AND THE AGENT APPOINTED TO CLEAR IT.
@@ -800,6 +801,20 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               </table>
             )}
           </ConsoleFold>
+
+          {/* ---- the forwarder's FIATA bill the goods came under: held and explained, never issued (2026-10-29) ---- */}
+          {client ? (
+            <FblPanel
+              code={detail.code}
+              {...(detail.fbl ? { fbl: detail.fbl } : {})}
+              canKeep={isCompany && (detail.youAre === 'importer' || detail.youAre === 'agent')}
+              canVerify={isCompany && (detail.youAre === 'importer' || detail.youAre === 'agent')}
+              documents={detail.youAre === 'importer' ? detail.documents.filter((d) => !d.supersededBy).map((d) => ({ documentId: d.documentId, title: d.title })) : []}
+              defaults={{ ...(detail.containerNo ? { containerNo: detail.containerNo } : {}), issuerCountry: detail.originCountry }}
+              calls={{ keep: (input) => client.api.holdImportFbl(detail.importId, input as never), verified: (input) => client.api.importFblVerified(detail.importId, input) }}
+              onKept={() => openOne(detail.importId, false)}
+            />
+          ) : null}
 
           {/* ---- inland by rail: the road leg waits for the railway's word (2026-10-29) ---- */}
           {client ? (
@@ -1985,6 +2000,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                 hint={detail.agentName ?? t('tower.imports.fold.noAgent')}
               >
                 <p class="cons__lede">{t('tower.imports.appointHint')}</p>
+                <FiataDirectoryHint />
                 {detail.agentEntityId ? (
                   <div class="twr-knobs__row">
                     <label class="twr-knob cfield">

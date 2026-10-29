@@ -28,6 +28,11 @@ export const ABBREVIATIONS = [
   'ATIT',
   'SDR',
   'RID',
+  // A forwarder's bill of lading, and who stands behind its form (the FBL, 2026-10-29).
+  'FBL',
+  'FWB',
+  'FIATA',
+  'UCP',
   'UN number',
   'KYC',
   'CSV',

@@ -141,6 +141,8 @@ export interface ImportDetailView extends ImportRow {
   rail?: import('./screens/RailNotePanel').RailNoteView;
   /** Inland by rail: the arrival, the gate on the road leg, the rail terminal's free days (2026-10-29). */
   byRail?: import('./screens/ImportByRail').ImportByRailView;
+  /** The forwarder's FIATA bill the goods came under (2026-10-29). */
+  fbl?: import('./screens/FblPanel').FblView;
 }
 
 export type BoxClockKind = 'demurrage' | 'detention' | 'stopped' | 'unknown';
