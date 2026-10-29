@@ -16,7 +16,7 @@ import { ASKED_PAPERS, boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, pape
 import { mayAct } from '../logic';
 import { RailNotePanel } from '../../tower/screens/RailNotePanel';
 import { ExportByRail } from './ExportByRail';
-import { FblPanel, FiataDirectoryHint } from '../../tower/screens/FblPanel';
+import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from '../../tower/screens/FblPanel';
 
 type Problem = { detail?: string; title: string } | null | undefined;
 
@@ -1040,6 +1040,15 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         documents={mine ? d.documents : []}
         defaults={{ ...(c.containerNo ? { containerNo: c.containerNo } : {}), issuerCountry: c.originCountry }}
         calls={{ keep: (input) => client.exports.fbl(c.exportId, input), verified: (input) => client.exports.fblVerified(c.exportId, input) }}
+        {...(mine
+          ? {
+              upload: async (file: File, kind: 'bill_of_lading' | 'other', title: string) => {
+                const r = await client.api.uploadCompanyDocument(business.entityId, { kind, title, dataUrl: await fileAsDataUrl(file), relatesTo: `${c.code}:fbl` });
+                const documentId = (r.data as { documentId?: string } | undefined)?.documentId;
+                return documentId ? { documentId } : { error: (r.error as { detail?: string } | undefined)?.detail ?? '' };
+              },
+            }
+          : {})}
         onKept={async () => {
           await read();
           await onChanged();

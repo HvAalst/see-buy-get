@@ -62,6 +62,15 @@ describe('the forwarder’s bill on an export or an import', () => {
     expect(render(held(), false)).not.toContain(t('tower.fbl.recordCheck'));
   });
 
+  it('a clearing agent with none of the importer’s papers can still upload its own: the result of the check, and the copy', () => {
+    const upload = async () => ({ documentId: 'doc_new' });
+    const html = renderToString(<FblPanel code="IMP-001" fbl={held()} canKeep canVerify documents={[]} upload={upload} defaults={{}} calls={calls} onKept={() => undefined} />);
+    expect(html).toContain(t('tower.fbl.f.uploadProof'));
+    expect(html).toContain(t('tower.fbl.recordCheck'));
+    // Without papers and without an upload, nothing to attach: nothing is offered.
+    expect(render(held(), true, [])).not.toContain(t('tower.fbl.recordCheck'));
+  });
+
   it('what the holder saw is shown as their record, never as a check by us', () => {
     const html = render(held({ verified: 'registered', verification: { registered: true, by: 'Wanjiku', byEntityId: 'ent_1', at: '2026-10-29T07:00:00Z', proofDocumentId: 'doc_1', proofTitle: 'FIATA result', fiataId: 'FBL-KE-000114' } as FblView['verification'] }));
     expect(html).toContain(t('tower.fbl.checkedBy', { by: 'Wanjiku', day: '2026-10-29', proof: 'FIATA result' }));

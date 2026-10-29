@@ -50,12 +50,17 @@ const MATCH_WORD: Record<string, MessageKey> = { containerNo: 'tower.fbl.match.c
  * not for the 1992 form, what agrees with our papers, where to check it is genuine and what the holder saw there, and what
  * the bill means. Never "valid": a forged bill can copy our container number exactly.
  */
-export function FblPanel({ code, fbl, canKeep, canVerify, documents, defaults, calls, onKept }: {
+export function FblPanel({ code, fbl, canKeep, canVerify, documents, upload, defaults, calls, onKept }: {
   code: string;
   fbl?: FblView;
   canKeep: boolean;
   canVerify: boolean;
   documents: Array<{ documentId: string; title: string }>;
+  /**
+   * A file of the holder's own, uploaded right here among its papers (2026-10-29: a clearing agent on an import holds no
+   * papers of the importer's to choose from). Returns the new paper's id.
+   */
+  upload?: (file: File, kind: 'bill_of_lading' | 'other', title: string) => Promise<{ documentId?: string; error?: string }>;
   defaults: { containerNo?: string; issuerCountry?: string };
   calls: FblCalls;
   onKept: () => void | Promise<void>;
@@ -68,6 +73,19 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, defaults, c
   const [check, setCheck] = useState({ registered: true, fiataId: '', issuerShown: '', proof: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Papers uploaded here, offered at once beside the ones the screen already knew.
+  const [added, setAdded] = useState<Array<{ documentId: string; title: string }>>([]);
+  const papers = [...documents, ...added.filter((a) => !documents.some((d) => d.documentId === a.documentId))];
+  const send = async (file: File | undefined, kind: 'bill_of_lading' | 'other', title: string, use: (documentId: string) => void) => {
+    if (!file || !upload) return;
+    setBusy(true);
+    setError(null);
+    const r = await upload(file, kind, title);
+    setBusy(false);
+    if (!r.documentId) return setError(r.error || t('tower.fbl.uploadFailed'));
+    setAdded((list) => [...list, { documentId: r.documentId!, title }]);
+    use(r.documentId);
+  };
 
   const act = async (fn: () => Result, after?: () => void) => {
     setBusy(true);
@@ -144,7 +162,7 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, defaults, c
               {fbl.verification.issuerShown ? ` ${t('tower.fbl.issuerShown', { issuer: fbl.verification.issuerShown })}` : ''}
             </p>
           ) : null}
-          {fbl.electronic && canVerify && documents.length ? (
+          {fbl.electronic && canVerify && (papers.length || upload) ? (
             <div class="twr-knobs">
               <p class="chint">{t('tower.fbl.recordHint')}</p>
               <label class="cfield cfield--check">
@@ -161,7 +179,13 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, defaults, c
                   <input class="cinput" maxLength={160} value={check.issuerShown} onInput={(e) => setCheck({ ...check, issuerShown: (e.target as HTMLInputElement).value })} />
                 </label>
               </div>
-              <ConsolePick label={t('tower.fbl.f.proof')} value={check.proof} onChange={(proof) => setCheck({ ...check, proof })} options={documents.map((d) => ({ value: d.documentId, label: d.title }))} />
+              {papers.length ? <ConsolePick label={t('tower.fbl.f.proof')} value={check.proof} onChange={(proof) => setCheck({ ...check, proof })} options={papers.map((d) => ({ value: d.documentId, label: d.title }))} /> : null}
+              {upload ? (
+                <label class="cfield">
+                  <span class="cfield__label">{t('tower.fbl.f.uploadProof')}</span>
+                  <input class="cinput" type="file" accept="image/*,application/pdf" disabled={busy} onChange={(e) => void send((e.target as HTMLInputElement).files?.[0], 'other', t('tower.fbl.proofTitle', { number: fbl.number }), (proof) => setCheck((c0) => ({ ...c0, proof })))} />
+                </label>
+              ) : null}
               <div class="twr-panelend">
                 <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || !check.proof} onClick={() => void act(() => calls.verified({ registered: check.registered, ...(check.fiataId.trim() ? { fiataId: check.fiataId.trim() } : {}), ...(check.issuerShown.trim() ? { issuerShown: check.issuerShown.trim() } : {}), proofDocumentId: check.proof }))}>
                   {t('tower.fbl.recordCheck')}
@@ -226,8 +250,14 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, defaults, c
             <input type="checkbox" checked={form.seaLeg} onChange={(e) => setForm({ ...form, seaLeg: (e.target as HTMLInputElement).checked })} />
             <span>{t('tower.fbl.f.seaLeg')}</span>
           </label>
-          {documents.length ? (
-            <ConsolePick label={t('tower.fbl.f.copy')} value={form.documentId} onChange={(documentId) => setForm({ ...form, documentId })} options={[{ value: '', label: t('tower.fbl.f.noCopy') }, ...documents.map((d) => ({ value: d.documentId, label: d.title }))]} />
+          {papers.length ? (
+            <ConsolePick label={t('tower.fbl.f.copy')} value={form.documentId} onChange={(documentId) => setForm({ ...form, documentId })} options={[{ value: '', label: t('tower.fbl.f.noCopy') }, ...papers.map((d) => ({ value: d.documentId, label: d.title }))]} />
+          ) : null}
+          {upload ? (
+            <label class="cfield">
+              <span class="cfield__label">{t('tower.fbl.f.uploadCopy')}</span>
+              <input class="cinput" type="file" accept="image/*,application/pdf" disabled={busy} onChange={(e) => void send((e.target as HTMLInputElement).files?.[0], 'bill_of_lading', t('tower.fbl.copyTitle', { number: form.number.trim() || code }), (documentId) => setForm((f0) => ({ ...f0, documentId })))} />
+            </label>
           ) : null}
           <div class="cfield">
             <span class="cfield__label">{t('tower.fbl.f.printed')}</span>
@@ -301,6 +331,15 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, defaults, c
     </ConsoleFold>
   );
 }
+
+/** A picked file as a data URL, for an upload among the company's papers. */
+export const fileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 
 /** Where anybody can look up whether a forwarder or agent is a FIATA member — we check nobody's (2026-10-29). */
 export function FiataDirectoryHint() {

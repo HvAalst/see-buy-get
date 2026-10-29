@@ -56,7 +56,7 @@ import {
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { RailNotePanel, type RailNoteCheck, type RailwayRow } from './RailNotePanel';
 import { ImportByRail } from './ImportByRail';
-import { FblPanel, FiataDirectoryHint } from './FblPanel';
+import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from './FblPanel';
 
 /**
  * CL2a — A CONTAINER, ITS PAPERS, AND THE AGENT APPOINTED TO CLEAR IT.
@@ -812,6 +812,16 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               documents={detail.youAre === 'importer' ? detail.documents.filter((d) => !d.supersededBy).map((d) => ({ documentId: d.documentId, title: d.title })) : []}
               defaults={{ ...(detail.containerNo ? { containerNo: detail.containerNo } : {}), issuerCountry: detail.originCountry }}
               calls={{ keep: (input) => client.api.holdImportFbl(detail.importId, input as never), verified: (input) => client.api.importFblVerified(detail.importId, input) }}
+              // Its own papers, uploaded right here: the importer's — or the agent's, who holds none of the importer's to choose from.
+              {...(isCompany && state.who?.entityId && (detail.youAre === 'importer' || detail.youAre === 'agent')
+                ? {
+                    upload: async (file: File, kind: 'bill_of_lading' | 'other', title: string) => {
+                      const r = await client.api.uploadCompanyDocument(state.who!.entityId!, { kind, title, dataUrl: await fileAsDataUrl(file), relatesTo: `${detail.code}:fbl` });
+                      const documentId = (r.data as { documentId?: string } | undefined)?.documentId;
+                      return documentId ? { documentId } : { error: (r.error as { detail?: string } | undefined)?.detail ?? '' };
+                    },
+                  }
+                : {})}
               onKept={() => openOne(detail.importId, false)}
             />
           ) : null}
