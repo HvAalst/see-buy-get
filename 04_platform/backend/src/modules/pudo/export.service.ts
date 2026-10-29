@@ -372,7 +372,7 @@ export class ExportService {
     );
     const warnings: string[] = [];
     if (a.bookingStatus === 'queued') warnings.push('The airline has not confirmed this booking yet: the truck may go, but the cargo may not fly on this flight. The risk of being left behind is yours.');
-    if (a.security.status === 'secured') warnings.push(`Secured cargo: a lockable body is asked for, the load is sealed where it is loaded and its seal checked at the terminal, by a driver whose ID we checked. Its security status is ${a.security.agentName}’s to give, never SeeBuyGet’s.`);
+    if (a.security.status === 'secured') warnings.push(`Secured cargo: a lockable body is asked for, the load is sealed where it is loaded and its seal checked at the terminal, in a closed vehicle, by a driver whose ID has been seen. Its security status is ${a.security.agentName}’s to give, never SeeBuyGet’s.`);
     else warnings.push('Not secured: the terminal screens it when it arrives, which takes time there.');
     if (a.temp) warnings.push(`Kept between ${a.temp.minC} and ${a.temp.maxC} °C: a reefer or insulated body, its set-point inside the range, and the temperature recorded on the way.`);
     if (a.inspectionAtAirport) warnings.push(`The plant-health inspection is at the airport: about ${AIR_INSPECTION_H} hours there, before the latest acceptance time.`);
@@ -478,6 +478,7 @@ export class ExportService {
   holdFbl(exportId: string, actorEntityId: string, dto: FblDto, by: string, now = Date.now()): ExportDetail {
     const c = this.requireExport(exportId);
     const side = this.sideOf(c, actorEntityId);
+    this.seaOnly(c, 'FIATA bill — the forwarder’s own paper by air is its house air waybill');
     if (side === 'agent' && dto.documentId) throw new GlosError('VALIDATION_FAILED', 'Give the bill’s number: your own documents are not the exporter’s', { field: 'number' });
     const held = holdFbl(dto, { ...(dto.documentId ? { document: this.exporterPaper(c, dto.documentId) } : {}), by, byEntityId: actorEntityId, now });
     if (c.fbl) c.formerFbl = [...(c.formerFbl ?? []), c.fbl];
@@ -523,6 +524,7 @@ export class ExportService {
   holdRail(exportId: string, actorEntityId: string, dto: RailNoteDto, by: string, now = Date.now()): ExportDetail {
     const c = this.requireExport(exportId);
     const side = this.sideOf(c, actorEntityId);
+    this.seaOnly(c, 'rail note');
     if (side === 'agent' && dto.documentId) throw new GlosError('VALIDATION_FAILED', 'Give the rail note’s number: your own documents are not the exporter’s', { field: 'noteNumber' });
     let document: { documentId: string; title: string } | undefined;
     if (dto.documentId) {

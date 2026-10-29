@@ -397,6 +397,9 @@ export interface DetentionHooks {
   current(freightId: string): HeldByAuthority | undefined;
 }
 
+/** Vehicles with nothing to lock or seal: secured air cargo never rides them (2026-10-29). */
+const UNLOCKED_CLASSES: string[] = ['bike', 'motorcycle', 'tuktuk'];
+
 /** The range a load's readings are judged against: the shipper's own, else its cargo's (2–8 °C for cold-chain goods). */
 function bandOf(f: Pick<Freight, 'natureCode' | 'tempRange'>): { minC: number; maxC: number } | null {
   const own = tempBand(f.natureCode);
@@ -891,7 +894,7 @@ export class DispatchService {
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
-      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load))
+      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
     const out: Offer[] = [];
@@ -1014,7 +1017,7 @@ export class DispatchService {
     const out: Offer[] = [];
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle))
       .map((load) => ({ load, km: this.router.roadKm(from, load.pickupLocation) }))
       .filter(({ km }) => km <= radius)
       .sort((a, b) => a.km - b.km);
@@ -1066,7 +1069,7 @@ export class DispatchService {
 
     const candidates = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle))
       .map((load) => ({ load, km: this.router.roadKm(point, load.pickupLocation) }))
       // A rider who declared a patch is asking to hear about their whole patch; anyone else gets the tighter
       // interrupt-someone-driving radius. Either way the declaration below decides whether it is really theirs.
@@ -1355,7 +1358,7 @@ export class DispatchService {
     const rail = railRefusal(f);
     if (rail) throw new GlosError('INVALID_STATE', rail);
     // Secured air cargo (2026-10-29): only a driver whose ID was seen takes it — its security is kept by who holds it.
-    const secured = this.securedRefusal(driverDid, f);
+    const secured = this.securedRefusal(driverDid, f, vehicle);
     if (secured) throw new GlosError('FORBIDDEN', secured);
     // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
     // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
@@ -1495,7 +1498,7 @@ export class DispatchService {
           declaration,
           cover: input.driverDid ? this.coverRefusal(input.driverDid, f, now) : undefined,
           rail: railRefusal(f),
-          secured: input.driverDid ? this.securedRefusal(input.driverDid, f) : undefined,
+          secured: input.driverDid ? this.securedRefusal(input.driverDid, f, vehicle) : undefined,
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //
@@ -4551,7 +4554,7 @@ export class DispatchService {
   sealRefusal(f: Freight): string | undefined {
     const required = this.sealRequiredBy(f);
     if (!required || (this.seals?.on(f.freightId).length ?? 0) > 0) return undefined;
-    return `${required.company} requires a seal on ${required.why === 'crossBorder' ? 'a load that crosses a border' : 'a container leg'}: the shipper writes one before the goods are taken over`;
+    return `${required.company} requires a seal on ${required.why === 'crossBorder' ? 'a load that crosses a border' : required.why === 'secured' ? 'secured air cargo' : 'a container leg'}: the shipper writes one before the goods are taken over`;
   }
 
   private wrapFreight(f: Freight): Claimable {
@@ -4600,18 +4603,24 @@ export class DispatchService {
   }
 
   /**
-   * SECURED AIR CARGO (2026-10-29, the user: carried with safeguards): taken only by a driver whose ID was seen — vetted
-   * before a heavier vehicle rode, approved to ride alone, answered for by a fleet, or the photo looked at by staff.
-   * Undefined = it may, or the load is not secured.
+   * SECURED AIR CARGO (2026-10-29, the user: carried with safeguards): in a closed vehicle that locks and takes a seal —
+   * never on a bike, a motorcycle or a tuk-tuk (open truck bodies the load itself rules out) — and taken only by a driver
+   * whose ID was seen: vetted before a heavier vehicle rode, approved to ride alone, answered for by a fleet, or the photo
+   * looked at by staff. Undefined = it may, or the load is not secured.
    */
-  private securedRefusal(driverDid: string, f: Freight | undefined): string | undefined {
+  private securedRefusal(driverDid: string, f: Freight | undefined, vehicle?: Pick<Vehicle, 'vehicleClass'> | null): string | undefined {
     if (!f?.securedBy) return undefined;
+    if (vehicle && UNLOCKED_CLASSES.includes(vehicle.vehicleClass)) return 'Secured air cargo goes in a closed vehicle that locks and takes a seal — a car, a van or a closed truck: never on a bike, a motorcycle or a tuk-tuk.';
     if (!idUnseen(this.drivers.get(driverDid))) return undefined;
     return 'Secured air cargo goes only with a driver whose ID has been seen: send a photo of your ID from the Driver app, and take it once it has been looked at.';
   }
 
   private coverRefusalFor(driverDid: string, load: Claimable, now = Date.now()): string | undefined {
     return load.kind === 'freight' ? this.coverRefusal(driverDid, this.freights.get(load.ref), now) : undefined;
+  }
+
+  private securedRefusalFor(driverDid: string, load: Claimable, vehicle?: Vehicle | null): string | undefined {
+    return load.kind === 'freight' ? this.securedRefusal(driverDid, this.freights.get(load.ref), vehicle) : undefined;
   }
 
   private railRefusalFor(load: Claimable): string | undefined {

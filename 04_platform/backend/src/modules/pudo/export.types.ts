@@ -453,6 +453,31 @@ export class ExportDocumentChoice {
   @ApiProperty() title: string;
 }
 
+/** The check of an export's air waybill, as its screen reads it. */
+export class ExportAirCheckView {
+  @ApiProperty() number: string;
+  @ApiPropertyOptional({ enum: ['format', 'check_digit'] }) problem?: string;
+  @ApiPropertyOptional() airline?: string;
+  @ApiPropertyOptional() airlineSource?: string;
+  @ApiProperty({ enum: ['mc99', 'warsaw_hague_map4', 'warsaw_hague', 'warsaw_1929', 'none', 'domestic', 'unknown'] }) regime: string;
+  @ApiPropertyOptional() rules?: string;
+  @ApiProperty({ type: [String] }) sources: string[];
+  @ApiProperty({ type: [String] }) missing: string[];
+  @ApiProperty({ type: [String] }) ask: string[];
+  @ApiProperty({ type: [String] }) mismatches: string[];
+  @ApiProperty() electronicPossible: boolean;
+  @ApiProperty({ type: [String] }) limits: string[];
+  @ApiProperty({ type: [String] }) claims: string[];
+  @ApiProperty({ type: [String] }) caveats: string[];
+}
+
+/** An export by air, as its screen reads it: the check, and what the exporter is warned of. */
+export class ExportAirView {
+  @ApiProperty({ type: ExportAirCheckView }) check: ExportAirCheckView;
+  /** In words: an unconfirmed booking, secured cargo's safeguards, a temperature range. */
+  @ApiProperty({ type: [String] }) warnings: string[];
+}
+
 export class ExportDetail {
   @ApiProperty({ type: ExportConsignment }) consignment: ExportConsignment;
   @ApiProperty({ type: ExportTiming }) timing: ExportTiming;
@@ -481,32 +506,7 @@ export class ExportDetail {
   /** The forwarder's bill with what it means, and what it says of the goods against ours. */
   @ApiPropertyOptional({ type: FblView }) fbl?: FblView;
   /** By air: the waybill's check against the law of its route and our papers, and what to watch for. */
-  @ApiPropertyOptional({ type: () => ExportAirView }) air?: ExportAirView;
-}
-
-/** The check of an export's air waybill, as its screen reads it. */
-export class ExportAirCheckView {
-  @ApiProperty() number: string;
-  @ApiPropertyOptional({ enum: ['format', 'check_digit'] }) problem?: string;
-  @ApiPropertyOptional() airline?: string;
-  @ApiPropertyOptional() airlineSource?: string;
-  @ApiProperty({ enum: ['mc99', 'warsaw_hague_map4', 'warsaw_hague', 'warsaw_1929', 'none', 'domestic', 'unknown'] }) regime: string;
-  @ApiPropertyOptional() rules?: string;
-  @ApiProperty({ type: [String] }) sources: string[];
-  @ApiProperty({ type: [String] }) missing: string[];
-  @ApiProperty({ type: [String] }) ask: string[];
-  @ApiProperty({ type: [String] }) mismatches: string[];
-  @ApiProperty() electronicPossible: boolean;
-  @ApiProperty({ type: [String] }) limits: string[];
-  @ApiProperty({ type: [String] }) claims: string[];
-  @ApiProperty({ type: [String] }) caveats: string[];
-}
-
-/** An export by air, as its screen reads it: the check, and what the exporter is warned of. */
-export class ExportAirView {
-  @ApiProperty({ type: ExportAirCheckView }) check: ExportAirCheckView;
-  /** In words: an unconfirmed booking, secured cargo's safeguards, a temperature range. */
-  @ApiProperty({ type: [String] }) warnings: string[];
+  @ApiPropertyOptional({ type: ExportAirView }) air?: ExportAirView;
 }
 
 export class ExportRow {
