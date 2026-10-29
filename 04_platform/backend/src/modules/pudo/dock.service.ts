@@ -116,7 +116,8 @@ export class DockService {
       });
     }
     // Round 36 — closed for the road as at a counter: its coded seal's number and a photograph, or a photograph alone.
-    const keepClosure = this.closures.checkClose(bag, { did: vendor.did, name: input.by?.trim() || vendor.name, place: vendor.name }, vendor.did, input.closure);
+    // The photograph is the business's own where the dock is a business's place (2026-10-29), as its content photos are.
+    const keepClosure = this.closures.checkClose(bag, { did: vendor.did, name: input.by?.trim() || vendor.name, place: vendor.name }, vendor.business?.did ?? vendor.did, input.closure);
     // A knowing omission is stamped exactly as a shop's is, so the control tower reads one story either way.
     if (missed.length) this.parcels.markShortShipped(missed, vendor.did, `bag ${code}`, (input.shortShipReason ?? '').trim() || 'not bagged');
 

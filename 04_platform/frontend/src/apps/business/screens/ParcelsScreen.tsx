@@ -4,12 +4,14 @@ import { CodeCard } from '../../../shared/ui/CodeCard';
 import { downscaleImage } from '../../../shared/media';
 import { tabAtTheTap } from '../../../shared/openPage';
 import { ConsolePick } from '../../tower/ConsolePick';
+import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
 import { mayAct } from '../logic';
 import {
   bookWord,
   EMPTY_PARCEL,
   money,
+  OWN_PLACE,
   parcelPriceGaps,
   parcelSendGaps,
   parcelSize,
@@ -22,12 +24,13 @@ import {
   stepWord,
   type BusinessParcel,
   type BusinessParcelDetail,
+  type DockView,
   type NetworkShop,
+  type ParcelCollection,
   type ParcelAccount,
   type ParcelBookLine,
   type ParcelCallOff,
   type ParcelForm,
-  type ParcelQuote,
 } from '../parcels';
 
 type Err = { detail?: string; title: string } | null | undefined;
@@ -208,6 +211,7 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
           <SendForm
             api={api}
             shops={shops}
+            collection={account.collection}
             balance={account.balance ?? 0}
             onCancel={() => setSending(false)}
             onSent={async (sent) => {
@@ -219,6 +223,8 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
           />
         ) : null}
       </section>
+
+      {api ? <CollectPanel api={api} siteApi={client?.api ?? null} business={business} works={works} collection={account.collection} onChanged={() => void load()} /> : null}
 
       <section class="cons__panel">
         <div class="cons__panelhead">
@@ -261,6 +267,169 @@ function Head() {
       <h1 class="cons__title">{t('business.parcels.title')}</h1>
       <p class="cons__lede">{t('business.parcels.lede')}</p>
     </header>
+  );
+}
+
+/* ------------------------------------------------------- its own place -- */
+
+/**
+ * COLLECTED FROM ITS OWN PLACE (the user, 2026-10-29: "they can set their own (business address) pick up"). One of its
+ * places where goods are loaded becomes where drivers collect its parcels: they are bagged there by where they go, each
+ * bag closed with its seal and a photograph, and the drivers near are told there is a bag to collect.
+ */
+function CollectPanel({ api, siteApi, business, works, collection, onChanged }: { api: ReturnType<typeof parcelsApi>; siteApi: unknown; business: BusinessView; works: boolean; collection?: ParcelCollection; onChanged: () => void }) {
+  const t = useT();
+  const [siteId, setSiteId] = useState('');
+  const [bays, setBays] = useState('2');
+  const [dock, setDock] = useState<DockView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [closing, setClosing] = useState<string | null>(null);
+  const [seal, setSeal] = useState('');
+  const [photoRef, setPhotoRef] = useState('');
+
+  const loadDock = useCallback(async () => {
+    if (!collection) return setDock(null);
+    const r = await api.dock();
+    if (r.error) setError(words(r.error));
+    else setDock(r.data ?? null);
+  }, [api, collection]);
+  useEffect(() => {
+    void loadDock();
+  }, [loadDock]);
+
+  const run = async (fn: () => Promise<{ error?: Err; data?: unknown }>, after?: () => void) => {
+    setBusy(true);
+    setError(null);
+    const r = await fn();
+    setBusy(false);
+    if (r.error) return setError(words(r.error));
+    if (r.data && (r.data as DockView).groups) setDock(r.data as DockView);
+    after?.();
+  };
+
+  const photo = async (file: File | undefined) => {
+    if (!file) return;
+    const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+    const id = await uploadContent(api, dataUrl, thumbDataUrl);
+    setPhotoRef(id ?? '');
+    if (!id) setError(t('business.parcels.photoFailed'));
+  };
+
+  return (
+    <section class="cons__panel">
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('business.parcels.collectTitle')}</span>
+      </div>
+      {error ? <p class="cerr">{error}</p> : null}
+      {!collection ? (
+        <>
+          <p class="chint">{t('business.parcels.collectHint')}</p>
+          {works ? (
+            <>
+              <div class="biz-two">
+                <SitePicker kind="loading" entityId={business.entityId} api={siteApi as never} value={siteId} onChange={setSiteId} label={t('business.parcels.collectPlace')} addLabel={t('business.parcels.collectAdd')} />
+                <label class="cfield">
+                  <span class="cfield__label">{t('business.parcels.collectBays')}</span>
+                  <input class="cinput" inputMode="numeric" value={bays} onInput={(e) => setBays((e.target as HTMLInputElement).value)} />
+                  <span class="chint">{t('business.parcels.collectBaysHint')}</span>
+                </label>
+              </div>
+              <div class="twr-panelend">
+                <button type="button" class="cbtn cbtn--primary" disabled={busy || !siteId} onClick={() => void run(() => api.collectFrom(siteId, Number(bays) || undefined), onChanged)}>
+                  {t('business.parcels.collectSet')}
+                </button>
+              </div>
+            </>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p class="chint">{t('business.parcels.collectAt', { place: collection.label, zone: collection.zone, bays: collection.bays })}</p>
+          {dock && dock.groups.length === 0 && dock.bags.length === 0 ? <p class="cons__empty">{t('business.parcels.dockEmpty')}</p> : null}
+          {dock?.groups.length ? (
+            <div class="crows">
+              {dock.groups.map((g) => (
+                <div class="crow" key={g.zone}>
+                  <span class="crow__body">
+                    <span class="crow__top">
+                      <span class="crow__name">{t('business.parcels.dockFor', { zone: g.zone, n: g.parcels.length })}</span>
+                    </span>
+                    <span class="crow__sub ctbl__mono">{g.parcels.map((p) => p.parcelId).join(' · ')}</span>
+                  </span>
+                  {works ? (
+                    <span class="crow__tail">
+                      {g.openBagCode ? (
+                        <button type="button" class="cbtn cbtn--sm cbtn--primary" disabled={busy} onClick={() => void (async () => { for (const p of g.parcels) await run(() => api.fillBag(g.openBagCode!, p.parcelId)); })()}>
+                          {t('business.parcels.dockFill', { code: g.openBagCode })}
+                        </button>
+                      ) : (
+                        <button type="button" class="cbtn cbtn--sm cbtn--ghost" disabled={busy || dock.used >= dock.capacity} onClick={() => void run(() => api.openBag(g.zone))}>
+                          {t('business.parcels.dockOpen')}
+                        </button>
+                      )}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {dock?.bags.length ? (
+            <div class="crows">
+              {dock.bags.map((b) => (
+                <div class="crow" key={b.code}>
+                  <span class="crow__body">
+                    <span class="crow__top">
+                      <span class="crow__name ctbl__mono">{b.code}</span>
+                      <span class={`ctag ctag--${b.status === 'filling' ? 'info' : 'ok'}`}>{t(b.status === 'filling' ? 'business.parcels.bagOpen' : 'business.parcels.bagClosed')}</span>
+                    </span>
+                    <span class="crow__sub">{[b.destination, t('business.parcels.bagCount', { n: b.parcelIds.length })].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  {works && b.status === 'filling' && b.parcelIds.length ? (
+                    <span class="crow__tail">
+                      <button type="button" class="cbtn cbtn--sm cbtn--primary" onClick={() => { setClosing(b.code); setSeal(''); setPhotoRef(''); }}>
+                        {t('business.parcels.bagClose')}
+                      </button>
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {closing ? (
+            <div class="cnote">
+              <p>{t('business.parcels.bagCloseLede', { code: closing })}</p>
+              <div class="biz-two">
+                <label class="cfield">
+                  <span class="cfield__label">{t('business.parcels.bagSeal')}</span>
+                  <input class="cinput" maxLength={40} value={seal} onInput={(e) => setSeal((e.target as HTMLInputElement).value)} />
+                </label>
+                <label class="cfield">
+                  <span class="cfield__label">{t('business.parcels.bagPhoto')}</span>
+                  <input class="cinput" type="file" accept="image/*" capture="environment" onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
+                  {photoRef ? <span class="chint">{t('business.parcels.f.photoKept')}</span> : null}
+                </label>
+              </div>
+              <div class="twr-panelend">
+                <button type="button" class="cbtn cbtn--primary" disabled={busy || !photoRef} onClick={() => void run(() => api.sealBag(closing, { ...(seal.trim() ? { seal: seal.trim() } : {}), photoRef }), () => setClosing(null))}>
+                  {t('business.parcels.bagCloseNow')}
+                </button>
+                <button type="button" class="cbtn cbtn--ghost" onClick={() => setClosing(null)}>
+                  {t('business.parcels.cancel')}
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {works ? (
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--ghost" disabled={busy} onClick={() => void run(() => api.stopCollecting(), onChanged)}>
+                {t('business.parcels.collectStop')}
+              </button>
+            </div>
+          ) : null}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -327,10 +496,11 @@ function Book({ api, currency }: { api: ReturnType<typeof parcelsApi>; currency:
 
 /* -------------------------------------------------------------------- send -- */
 
-function SendForm({ api, shops, balance, onSent, onCancel }: { api: ReturnType<typeof parcelsApi>; shops: NetworkShop[]; balance: number; onSent: (sent: { parcel: BusinessParcelDetail; paid: boolean }) => void; onCancel: () => void }) {
+function SendForm({ api, shops, collection, balance, onSent, onCancel }: { api: ReturnType<typeof parcelsApi>; shops: NetworkShop[]; collection?: ParcelCollection; balance: number; onSent: (sent: { parcel: BusinessParcelDetail; paid: boolean }) => void; onCancel: () => void }) {
   const t = useT();
-  const [form, setForm] = useState<ParcelForm>(EMPTY_PARCEL);
-  const [quote, setQuote] = useState<ParcelQuote | null>(null);
+  // Collected from its own place, where it set one: offered first, as the way it usually sends.
+  const [form, setForm] = useState<ParcelForm>({ ...EMPTY_PARCEL, ...(collection ? { originDid: OWN_PLACE } : {}) });
+  const [quote, setQuote] = useState<{ flexible: number; currency: string } | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -340,6 +510,7 @@ function SendForm({ api, shops, balance, onSent, onCancel }: { api: ReturnType<t
   const priceGaps = parcelPriceGaps(form, t);
   const gaps = parcelSendGaps(form, t);
   const options = shops.map((s) => ({ value: s.did, label: s.shopName, sub: s.zone }));
+  const fromOptions = [...(collection ? [{ value: OWN_PLACE, label: t('business.parcels.f.ownPlace', { place: collection.label }), sub: t('business.parcels.f.ownPlaceSub') }] : []), ...options];
 
   // Priced as soon as both shops and the four measurements are in, the way the mint will price it.
   useEffect(() => {
@@ -347,7 +518,7 @@ function SendForm({ api, shops, balance, onSent, onCancel }: { api: ReturnType<t
     setQuoteError(null);
     if (priceGaps.length || !size) return;
     let live = true;
-    void api.quote(form.originDid, form.destDid, size, form.fragile).then((r) => {
+    void api.price(form.originDid, form.destDid, size, form.fragile).then((r) => {
       if (!live) return;
       if (r.error) setQuoteError(words(r.error));
       else setQuote(r.data ?? null);
@@ -372,7 +543,7 @@ function SendForm({ api, shops, balance, onSent, onCancel }: { api: ReturnType<t
   };
 
   const send = async () => {
-    const body = sendBody(form, quote?.flexible.gross);
+    const body = sendBody(form, quote?.flexible);
     if (!body) return;
     setBusy(true);
     setError(null);
@@ -382,11 +553,11 @@ function SendForm({ api, shops, balance, onSent, onCancel }: { api: ReturnType<t
     if (r.data) onSent(r.data);
   };
 
-  const price = quote ? quote.flexible.gross : null;
+  const price = quote ? quote.flexible : null;
   return (
     <>
       <div class="biz-two">
-        <ConsolePick label={t('business.parcels.f.from')} value={form.originDid} placeholder={t('business.parcels.f.pickShop')} options={options} onChange={(originDid) => set({ originDid })} />
+        <ConsolePick label={t('business.parcels.f.from')} value={form.originDid} placeholder={t('business.parcels.f.pickShop')} options={fromOptions} onChange={(originDid) => set({ originDid })} />
         <ConsolePick label={t('business.parcels.f.to')} value={form.destDid} placeholder={t('business.parcels.f.pickShop')} options={options} onChange={(destDid) => set({ destDid })} />
       </div>
       <div class="biz-two">
@@ -457,6 +628,7 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
   const t = useT();
   const [d, setD] = useState<BusinessParcelDetail | null>(null);
   const [off, setOff] = useState<ParcelCallOff | null>(null);
+  const [most, setMost] = useState('');
   const [labelError, setLabelError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -557,9 +729,26 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
               ? t('business.parcels.offRefund', { amount: money(off.amount ?? 0, off.currency) })
               : off.outcome === 'bring_back'
                 ? t('business.parcels.offBringBack', { amount: money(off.amount ?? 0, off.currency), shop: off.backTo ?? '' })
-                : off.why || t('business.parcels.offNo')}
+                : off.outcome === 'pick'
+                  ? t('business.parcels.offPick', { place: off.door ?? '' })
+                  : off.outcome === 'to_door'
+                    ? t('business.parcels.offToDoor', { place: off.backTo ?? '', most: money(off.suggestedMax ?? 0, off.currency) })
+                    : off.why || t('business.parcels.offNo')}
           </p>
           <div class="twr-panelend">
+            {off.outcome === 'pick' && off.door ? (
+              <button type="button" class="cbtn cbtn--primary" onClick={() => void api.callOffPreview(row.parcelId, 'door').then((r) => { setOff(r.data ?? { parcelId: row.parcelId, outcome: 'no', why: words(r.error) ?? '' }); setMost(String(r.data?.suggestedMax ?? '')); })}>
+                {t('business.parcels.offToPlace', { place: off.door })}
+              </button>
+            ) : null}
+            {off.outcome === 'to_door' ? (
+              <>
+                <input class="cinput" inputMode="decimal" aria-label={t('business.parcels.offMost')} value={most} onInput={(e) => setMost((e.target as HTMLInputElement).value)} />
+                <button type="button" class="cbtn cbtn--primary" disabled={busy !== null || !(Number(most) > 0)} onClick={() => void act(`off:${row.parcelId}`, () => api.callOff(row.parcelId, undefined, { backTo: 'door', maxSpend: Number(most) }), t('business.parcels.calledOffDoor', { id: row.parcelId })).then((ok) => ok && setOff(null))}>
+                  {t('business.parcels.offConfirmDoor')}
+                </button>
+              </>
+            ) : null}
             {off.outcome === 'refund' || off.outcome === 'bring_back' ? (
               <button type="button" class="cbtn cbtn--primary" disabled={busy !== null} onClick={() => void act(`off:${row.parcelId}`, () => api.callOff(row.parcelId), t('business.parcels.calledOff', { id: row.parcelId })).then((ok) => ok && setOff(null))}>
                 {t(off.outcome === 'refund' ? 'business.parcels.offConfirmRefund' : 'business.parcels.offConfirmBack')}

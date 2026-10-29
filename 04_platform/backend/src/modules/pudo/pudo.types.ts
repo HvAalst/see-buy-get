@@ -696,6 +696,8 @@ export class CollectionPoint {
   location: GeoPoint; // the loading door, which is not always the storefront pin
   bays: number; // floor room for staged bags — the shop's bag bays, at a dock
   enabledAt: string;
+  /** A business's own place it was made from (2026-10-29): which of its saved places drivers collect its parcels at. */
+  siteId?: string;
 }
 
 /** Where a key is allowed to be: in a page, or only on a server. See ApiKeyService. */

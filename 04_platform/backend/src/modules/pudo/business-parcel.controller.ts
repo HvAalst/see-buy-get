@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiQuery } from '@nestjs/swagger';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -9,6 +10,13 @@ import { VendorLedgerQueryDto, VendorOrdersQueryDto } from './pudo.dto';
 import {
   BusinessCallOffDto,
   BusinessCallOffView,
+  BusinessCollectFromDto,
+  BusinessFillBagDto,
+  BusinessOpenBagDto,
+  BusinessSealBagDto,
+  DockView,
+  ParcelPriceQueryDto,
+  ParcelPriceView,
   BusinessParcelAccountView,
   BusinessParcelDetail,
   BusinessParcelDto,
@@ -61,6 +69,53 @@ export class BusinessParcelController {
     return this.parcels.book(memberActor(this.businesses.requireMember(actor)), query);
   }
 
+  /** What a parcel would cost: from a shop or from its own place (`origin=own`), to a shop. */
+  @Roles('business')
+  @Get('business/me/parcels/price')
+  price(@Query() q: ParcelPriceQueryDto, @Actor() actor: IntrospectionResult): ParcelPriceView {
+    return this.parcels.price(memberActor(this.businesses.requireMember(actor)), { origin: q.origin, dest: q.dest, l: q.l, w: q.w, h: q.h, kg: q.kg, fragile: q.fragile === 'true' });
+  }
+
+  /** One of its own places as where drivers collect its parcels (2026-10-29). */
+  @Roles('business')
+  @Post('business/me/parcels/collect-from')
+  collectFrom(@Body() dto: BusinessCollectFromDto, @Actor() actor: IntrospectionResult): BusinessParcelAccountView {
+    return this.parcels.collectFrom(memberActor(this.businesses.requireMember(actor)), dto.siteId, dto.bays);
+  }
+
+  /** Stop collecting there. */
+  @Roles('business')
+  @Delete('business/me/parcels/collect-from')
+  stopCollecting(@Actor() actor: IntrospectionResult): BusinessParcelAccountView {
+    return this.parcels.stopCollecting(memberActor(this.businesses.requireMember(actor)));
+  }
+
+  /** The day's bagging at its own place. */
+  @Roles('business')
+  @Get('business/me/parcels/dock')
+  dock(@Actor() actor: IntrospectionResult): DockView {
+    return this.parcels.dockView(memberActor(this.businesses.requireMember(actor)));
+  }
+
+  @Roles('business')
+  @Post('business/me/parcels/dock/bags')
+  openBag(@Body() dto: BusinessOpenBagDto, @Actor() actor: IntrospectionResult): DockView {
+    return this.parcels.openBag(memberActor(this.businesses.requireMember(actor)), dto.destZone);
+  }
+
+  @Roles('business')
+  @Post('business/me/parcels/dock/bags/:code/parcels')
+  fillBag(@Param('code') code: string, @Body() dto: BusinessFillBagDto, @Actor() actor: IntrospectionResult): DockView {
+    return this.parcels.fillBag(memberActor(this.businesses.requireMember(actor)), code, dto.parcelId);
+  }
+
+  /** Close a bag for the road: drivers near are told it is ready. */
+  @Roles('business')
+  @Post('business/me/parcels/dock/bags/:code/seal')
+  sealBag(@Param('code') code: string, @Body() dto: BusinessSealBagDto, @Actor() actor: IntrospectionResult): DockView {
+    return this.parcels.sealBag(memberActor(this.businesses.requireMember(actor)), code, dto);
+  }
+
   /** The parcels it sent, newest first, searched and paged. */
   @Roles('business')
   @Get('business/me/parcels')
@@ -98,14 +153,15 @@ export class BusinessParcelController {
   /** What calling it off would do now. */
   @Roles('business')
   @Get('business/me/parcels/:parcelId/call-off')
-  callOffPreview(@Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult): BusinessCallOffView {
-    return this.parcels.callOffPreview(memberActor(this.businesses.requireMember(actor)), parcelId);
+  @ApiQuery({ name: 'backTo', required: false, description: 'Collected from its own place and at a hub: door, to bring it back there' })
+  callOffPreview(@Param('parcelId') parcelId: string, @Query('backTo') backTo: string | undefined, @Actor() actor: IntrospectionResult): BusinessCallOffView {
+    return this.parcels.callOffPreview(memberActor(this.businesses.requireMember(actor)), parcelId, backTo === 'door' ? 'door' : undefined);
   }
 
   /** Call it off: withdrawn with its money back, or brought back from a hub at a price. */
   @Roles('business')
   @Post('business/me/parcels/:parcelId/call-off')
   callOff(@Param('parcelId') parcelId: string, @Body() dto: BusinessCallOffDto, @Actor() actor: IntrospectionResult): BusinessCallOffView {
-    return this.parcels.callOff(memberActor(this.businesses.requireMember(actor)), parcelId, dto.reason);
+    return this.parcels.callOff(memberActor(this.businesses.requireMember(actor)), parcelId, dto.reason, { ...(dto.backTo ? { backTo: dto.backTo } : {}), ...(dto.maxSpend != null ? { maxSpend: dto.maxSpend } : {}) });
   }
 }

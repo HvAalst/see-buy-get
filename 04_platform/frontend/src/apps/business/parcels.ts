@@ -19,7 +19,29 @@ export interface ParcelAccount {
   sent: number;
   unpaid: number;
   moving: number;
+  /** Where drivers collect its parcels: one of its own places (2026-10-29). */
+  collection?: ParcelCollection;
 }
+
+export interface ParcelCollection {
+  siteId?: string;
+  label: string;
+  zone: string;
+  bays: number;
+  since: string;
+}
+
+/** The day's bagging at its own place. */
+export interface DockView {
+  collection: ParcelCollection;
+  groups: Array<{ zone: string; parcels: BusinessParcel[]; openBagCode?: string }>;
+  bags: Array<{ code: string; destination?: string; parcelIds: string[]; fillPct: number; status: string }>;
+  capacity: number;
+  used: number;
+}
+
+/** The form's way of saying "collected from its own place" where a shop would be chosen. */
+export const OWN_PLACE = 'own';
 
 export interface ParcelEnd {
   did: string;
@@ -34,6 +56,8 @@ export interface BusinessParcel {
   reference?: string;
   receiver: string;
   from?: ParcelEnd;
+  /** Collected by a driver from its own place. */
+  fromOwnPlace?: boolean;
   to: ParcelEnd;
   size: string;
   cost?: number;
@@ -82,6 +106,11 @@ export interface ParcelCallOff {
   backTo?: string;
   why?: string;
   done?: boolean;
+  /** pick: its own place, which it can come back to. */
+  door?: string;
+  /** to_door: the most we suggest allowing a driver. */
+  suggestedMax?: number;
+  loadCode?: string;
 }
 
 /** A shop on the network, as anybody may see it. */
@@ -104,7 +133,8 @@ export interface ParcelQuote {
 }
 
 export interface SendParcel {
-  originPudoDid: string;
+  originPudoDid?: string;
+  fromOwnPlace?: boolean;
   destPudoDid: string;
   receiverMobile: string;
   dimensionsCm: { l: number; w: number; h: number };
@@ -126,8 +156,16 @@ export interface ParcelsApi {
   pay: (parcelId: string) => Promise<Result<ParcelSent>>;
   label: (parcelId: string) => Promise<Result<{ parcelId: string; svg: string; qrPayload: string }>>;
   book: () => Promise<Result<{ items: ParcelBookLine[]; total: number; balance?: number | null }>>;
-  callOffPreview: (parcelId: string) => Promise<Result<ParcelCallOff>>;
-  callOff: (parcelId: string, reason?: string) => Promise<Result<ParcelCallOff>>;
+  callOffPreview: (parcelId: string, backTo?: 'door') => Promise<Result<ParcelCallOff>>;
+  callOff: (parcelId: string, reason?: string, choice?: { backTo?: 'door'; maxSpend?: number }) => Promise<Result<ParcelCallOff>>;
+  /** What it costs from a shop or from its own place (`own`), before anything is sent. */
+  price: (origin: string, dest: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<{ flexible: number; locked: number; currency: string; crossesBorder: boolean }>>;
+  collectFrom: (siteId: string, bays?: number) => Promise<Result<ParcelAccount>>;
+  stopCollecting: () => Promise<Result<ParcelAccount>>;
+  dock: () => Promise<Result<DockView>>;
+  openBag: (destZone: string) => Promise<Result<DockView>>;
+  fillBag: (code: string, parcelId: string) => Promise<Result<DockView>>;
+  sealBag: (code: string, closure: { seal?: string; photoRef: string }) => Promise<Result<DockView>>;
   shops: () => Promise<Result<NetworkShop[]>>;
   quote: (originDid: string, destDid: string, size: { l: number; w: number; h: number; kg: number }, fragile: boolean) => Promise<Result<ParcelQuote>>;
   /** A photograph of what is inside, kept with us as the business's own. */
@@ -150,8 +188,17 @@ export function parcelsApi(sbg: SbgClient): ParcelsApi {
     pay: (parcelId) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/pay` as never, {} as never) as never),
     label: (parcelId) => call((c) => c.GET(`/v1/sbg/business/me/parcels/${id(parcelId)}/label` as never, {} as never) as never),
     book: () => call((c) => c.GET('/v1/sbg/business/me/parcels/book' as never, { params: { query: { limit: '50' } } } as never) as never),
-    callOffPreview: (parcelId) => call((c) => c.GET(`/v1/sbg/business/me/parcels/${id(parcelId)}/call-off` as never, {} as never) as never),
-    callOff: (parcelId, reason) => call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/call-off` as never, { body: reason?.trim() ? { reason: reason.trim() } : {} } as never) as never),
+    callOffPreview: (parcelId, backTo) => call((c) => c.GET(`/v1/sbg/business/me/parcels/${id(parcelId)}/call-off` as never, { params: { query: backTo ? { backTo } : {} } } as never) as never),
+    callOff: (parcelId, reason, choice = {}) =>
+      call((c) => c.POST(`/v1/sbg/business/me/parcels/${id(parcelId)}/call-off` as never, { body: { ...(reason?.trim() ? { reason: reason.trim() } : {}), ...(choice.backTo ? { backTo: choice.backTo } : {}), ...(choice.maxSpend != null ? { maxSpend: choice.maxSpend } : {}) } } as never) as never),
+    price: (origin, dest, s, fragile) =>
+      call((c) => c.GET('/v1/sbg/business/me/parcels/price' as never, { params: { query: { origin, dest, l: String(s.l), w: String(s.w), h: String(s.h), kg: String(s.kg), ...(fragile ? { fragile: 'true' } : {}) } } } as never) as never),
+    collectFrom: (siteId, bays) => call((c) => c.POST('/v1/sbg/business/me/parcels/collect-from' as never, { body: { siteId, ...(bays ? { bays } : {}) } } as never) as never),
+    stopCollecting: () => call((c) => c.DELETE('/v1/sbg/business/me/parcels/collect-from' as never, {} as never) as never),
+    dock: () => call((c) => c.GET('/v1/sbg/business/me/parcels/dock' as never, {} as never) as never),
+    openBag: (destZone) => call((c) => c.POST('/v1/sbg/business/me/parcels/dock/bags' as never, { body: { destZone } } as never) as never),
+    fillBag: (code, parcelId) => call((c) => c.POST(`/v1/sbg/business/me/parcels/dock/bags/${encodeURIComponent(code)}/parcels` as never, { body: { parcelId } } as never) as never),
+    sealBag: (code, closure) => call((c) => c.POST(`/v1/sbg/business/me/parcels/dock/bags/${encodeURIComponent(code)}/seal` as never, { body: { closure } } as never) as never),
     shops: () => call((c) => c.GET('/v1/sbg/network/points' as never, {} as never) as never),
     upload: (dataUrl, thumbDataUrl) => call((c) => c.POST('/v1/sbg/media' as never, { body: { kind: 'content', dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } } as never) as never),
     quote: (originDid, destDid, s, fragile) =>
@@ -194,7 +241,7 @@ export function parcelPriceGaps(f: ParcelForm, t: Translate): string[] {
   const gaps: string[] = [];
   if (!f.originDid) gaps.push(t('business.parcels.gap.from'));
   if (!f.destDid) gaps.push(t('business.parcels.gap.to'));
-  if (f.originDid && f.originDid === f.destDid) gaps.push(t('business.parcels.gap.sameShop'));
+  if (f.originDid && f.originDid !== OWN_PLACE && f.originDid === f.destDid) gaps.push(t('business.parcels.gap.sameShop'));
   if (!parcelSize(f)) gaps.push(t('business.parcels.gap.size'));
   return gaps;
 }
@@ -212,7 +259,8 @@ export function sendBody(f: ParcelForm, expectedTotal: number | undefined): Send
   const s = parcelSize(f);
   if (!s || !f.originDid || !f.destDid || !f.photoRef) return null;
   return {
-    originPudoDid: f.originDid,
+    // Collected from its own place, or handed in at a shop.
+    ...(f.originDid === OWN_PLACE ? { fromOwnPlace: true } : { originPudoDid: f.originDid }),
     destPudoDid: f.destDid,
     receiverMobile: f.receiver.trim(),
     dimensionsCm: { l: s.l, w: s.w, h: s.h },

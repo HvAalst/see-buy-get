@@ -27,8 +27,10 @@ class ParcelLineDto {
 
 /** Send one parcel: from a shop, to a shop, for somebody who collects it there. */
 export class BusinessParcelDto {
-  /** The shop it is handed in at. */
-  @IsString() @MaxLength(120) originPudoDid!: string;
+  /** The shop it is handed in at. Absent: collected from the business's own place (`fromOwnPlace`). */
+  @IsOptional() @IsString() @MaxLength(120) originPudoDid?: string;
+  /** Collected by a driver from the place the business set for it (2026-10-29), not handed in at a shop. */
+  @IsOptional() @IsBoolean() fromOwnPlace?: boolean;
   /** The shop the receiver collects it from. */
   @IsString() @MaxLength(120) destPudoDid!: string;
   /** The person who collects it. Never sent a text by us; the code is the business's to pass on. */
@@ -51,6 +53,17 @@ export class BusinessParcelDto {
   @IsOptional() @IsNumber() @Min(0) expectedTotal?: number;
 }
 
+/** What a parcel would cost: from a shop's id, or `own` — its own place — to a shop, at its measurements. */
+export class ParcelPriceQueryDto {
+  @IsString() @MaxLength(120) origin!: string;
+  @IsString() @MaxLength(120) dest!: string;
+  @Type(() => Number) @IsNumber() @Min(0.1) l!: number;
+  @Type(() => Number) @IsNumber() @Min(0.1) w!: number;
+  @Type(() => Number) @IsNumber() @Min(0.1) h!: number;
+  @Type(() => Number) @IsNumber() @Min(0.01) kg!: number;
+  @IsOptional() @IsIn(['true', 'false']) fragile?: string;
+}
+
 export class BusinessTopUpDto {
   @IsNumber() @Min(0.01) amount!: number;
   /** The phone the payment prompt goes to. Without one, a paybill and a reference are shown. */
@@ -59,6 +72,85 @@ export class BusinessTopUpDto {
 
 export class BusinessCallOffDto {
   @IsOptional() @IsString() @MaxLength(200) reason?: string;
+  /** At a hub, for one collected from its own place: `door` brings it back there, as a driver's load. */
+  @IsOptional() @IsIn(['door']) backTo?: 'door';
+  /** Back to its door: the most it pays a driver for it. */
+  @IsOptional() @IsNumber() @Min(0.01) maxSpend?: number;
+}
+
+/** One of its own places as where drivers collect its parcels. */
+export class BusinessCollectFromDto {
+  @IsString() @MaxLength(80) siteId!: string;
+  /** How many closed bags fit there, waiting for drivers. */
+  @IsOptional() @IsNumber() @Min(1) bays?: number;
+}
+
+export class BusinessOpenBagDto {
+  @IsString() @MaxLength(120) destZone!: string;
+}
+
+export class BusinessFillBagDto {
+  @IsString() @MaxLength(60) parcelId!: string;
+}
+
+class BagCloseDto {
+  /** Its coded seal's number, when it has one. */
+  @IsOptional() @IsString() @MaxLength(40) seal?: string;
+  /** A photograph of the bag closed, its seal in view. */
+  @IsString() @MaxLength(80) photoRef!: string;
+}
+
+export class BusinessSealBagDto {
+  @ValidateNested() @Type(() => BagCloseDto) closure!: BagCloseDto;
+  /** Close it with paid parcels for its destination still waiting here, on purpose. */
+  @IsOptional() @IsBoolean() acknowledgeShortShip?: boolean;
+  @IsOptional() @IsString() @MaxLength(200) shortShipReason?: string;
+}
+
+/** Where drivers collect its parcels: one of its own places. */
+export class ParcelCollection {
+  @ApiPropertyOptional() siteId?: string;
+  @ApiProperty() label!: string;
+  /** The delivery area it is in, from the shop nearest to it: what routes a bag from there. */
+  @ApiProperty() zone!: string;
+  @ApiProperty() bays!: number;
+  @ApiProperty() since!: string;
+}
+
+/** What it costs, before anything is sent. */
+export class ParcelPriceView {
+  /** Held when sent, and what it costs less given back once it is collected. */
+  @ApiProperty() flexible!: number;
+  /** The cheapest route, paid at once. */
+  @ApiProperty() locked!: number;
+  @ApiProperty() currency!: string;
+  @ApiProperty() crossesBorder!: boolean;
+}
+
+/** A bag on its own place. */
+export class DockBagView {
+  @ApiProperty() code!: string;
+  @ApiPropertyOptional() destination?: string;
+  @ApiProperty({ type: [String] }) parcelIds!: string[];
+  @ApiProperty() fillPct!: number;
+  /** `filling` open, `available` closed and waiting for a driver, `claimed` a driver is coming. */
+  @ApiProperty() status!: string;
+}
+
+/** Parcels waiting at its place for one destination, and the bag open for it. */
+export class DockGroupView {
+  @ApiProperty() zone!: string;
+  @ApiProperty({ type: () => [BusinessParcelRow] }) parcels!: BusinessParcelRow[];
+  @ApiPropertyOptional() openBagCode?: string;
+}
+
+/** The day's bagging at its own place. */
+export class DockView {
+  @ApiProperty({ type: ParcelCollection }) collection!: ParcelCollection;
+  @ApiProperty({ type: [DockGroupView] }) groups!: DockGroupView[];
+  @ApiProperty({ type: [DockBagView] }) bags!: DockBagView[];
+  @ApiProperty() capacity!: number;
+  @ApiProperty() used!: number;
 }
 
 /** The company of ours that holds the balance, and in what money. */
@@ -100,6 +192,8 @@ export class BusinessParcelAccountView {
   @ApiProperty() sent!: number;
   @ApiProperty() unpaid!: number;
   @ApiProperty() moving!: number;
+  /** Where drivers collect its parcels, where it set one of its places for it. */
+  @ApiPropertyOptional({ type: () => ParcelCollection }) collection?: ParcelCollection;
 }
 
 /** A shop at one end of a parcel. */
@@ -118,6 +212,8 @@ export class BusinessParcelRow {
   @ApiPropertyOptional() reference?: string;
   @ApiProperty() receiver!: string;
   @ApiPropertyOptional({ type: ParcelEnd }) from?: ParcelEnd;
+  /** Collected by a driver from its own place, not handed in at a shop. */
+  @ApiPropertyOptional() fromOwnPlace?: boolean;
   @ApiProperty({ type: ParcelEnd }) to!: ParcelEnd;
   @ApiProperty() size!: string;
   @ApiPropertyOptional() cost?: number;
@@ -212,6 +308,11 @@ export class BusinessCallOffView {
   @ApiPropertyOptional() backTo?: string;
   @ApiPropertyOptional() why?: string;
   @ApiPropertyOptional() done?: boolean;
+  /** pick: its own place, which it can come back to. to_door: the most we suggest allowing a driver. */
+  @ApiPropertyOptional() door?: string;
+  @ApiPropertyOptional() suggestedMax?: number;
+  /** to_door: the load bringing it back, by its code. */
+  @ApiPropertyOptional() loadCode?: string;
 }
 
 /** Who in a business sent one of its parcels — kept apart from the parcel, which travels (lesson: a record that travels). */

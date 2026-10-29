@@ -260,7 +260,9 @@ export class CompanyApiController {
   async callOffParcel(@Param('parcelId') parcelId: string, @Body() dto: BusinessCallOffDto, @CompanyKey() caller: CompanyCaller, @Headers('idempotency-key') idempotencyKey?: string) {
     const who = this.parcelActor(caller);
     const { result, replayed } = await this.idempotency.run(`api:business/parcel-off:${caller.keyId}`, idempotencyKey, { parcelId, ...dto }, () =>
-      caller.mode === 'test' ? { test: true, ...this.businessParcels.callOffPreview(who, parcelId) } : { test: false, ...this.businessParcels.callOff(who, parcelId, dto.reason) },
+      caller.mode === 'test'
+        ? { test: true, ...this.businessParcels.callOffPreview(who, parcelId, dto.backTo) }
+        : { test: false, ...this.businessParcels.callOff(who, parcelId, dto.reason, { ...(dto.backTo ? { backTo: dto.backTo } : {}), ...(dto.maxSpend != null ? { maxSpend: dto.maxSpend } : {}) }) },
     );
     return { ...result, replayed };
   }
