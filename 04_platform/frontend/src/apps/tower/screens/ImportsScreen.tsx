@@ -410,6 +410,14 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               {(close) => (
                 <>
                   <div class="twr-knobs__row">
+                    <div class="twr-knob">
+                      <ConsolePick
+                        label={t('tower.imports.f.mode')}
+                        value={form.mode}
+                        options={(['sea', 'air', 'road', 'rail'] as const).map((m) => ({ value: m, label: t(`tower.journey.mode.${m}`) }))}
+                        onChange={(mode) => setForm({ ...form, mode: mode as typeof form.mode, ...(mode === 'air' ? { containerNo: '', dischargeSiteId: '' } : {}) })}
+                      />
+                    </div>
                     <label class="twr-knob cfield">
                       <span class="cfield__label">{t('tower.imports.f.goods')}</span>
                       <input class="cinput" value={form.goodsDescription} onChange={(e) => setForm({ ...form, goodsDescription: (e.target as HTMLInputElement).value })} />
@@ -426,6 +434,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                       * and the first is left empty; for a landlocked one they are Djibouti and Modjo,
                       * and until now the record could only hold one of them.
                       */}
+                    {form.mode === 'air' ? null : (
                     <div class="twr-knob">
                       <SitePicker
                         kind="port"
@@ -437,6 +446,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                         addLabel={t('tower.sites.addPort')}
                       />
                     </div>
+                    )}
                     <div class="twr-knob">
                       <SitePicker
                         kind="clearance"
@@ -448,10 +458,12 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                         addLabel={t('tower.sites.addClearance')}
                       />
                     </div>
+                    {form.mode === 'air' ? null : (
                     <label class="twr-knob cfield">
                       <span class="cfield__label">{t('tower.imports.f.container')}</span>
                       <input class="cinput" value={form.containerNo} onChange={(e) => setForm({ ...form, containerNo: (e.target as HTMLInputElement).value })} />
                     </label>
+                    )}
                     <label class="twr-knob cfield">
                       <span class="cfield__label">{t('tower.imports.f.carrier')}</span>
                       <input class="cinput" value={form.carrierRef} onChange={(e) => setForm({ ...form, carrierRef: (e.target as HTMLInputElement).value })} />
@@ -472,6 +484,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                           'register',
                           async () => {
                             const r = await client!.api.registerImport({
+                              mode: form.mode,
                               goodsDescription: form.goodsDescription.trim(),
                               originCountry: form.originCountry.trim().toUpperCase(),
                               destCountry: form.destCountry.trim().toUpperCase(),

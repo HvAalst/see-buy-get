@@ -140,8 +140,9 @@ export const enTowerBusiness = {
   'tower.depots.rowSaidBy': 'listed by {by} on {d}',
 
   /* ---- CL2a: a container, its papers, and the agent appointed to clear it ---- */
-  'tower.imports.title': 'Containers and clearing',
-  'tower.imports.lede': 'A container on its way, the papers it needs, and the agent appointed to clear it.',
+  'tower.imports.title': 'Imports and clearing',
+  'tower.imports.lede': 'Goods on their way — in a container by sea, or by air — the papers they need, and the agent appointed to clear them.',
+  'tower.imports.f.mode': 'How it comes',
   'tower.imports.caveatT': 'What a border asks for is the agent’s knowledge, not ours.',
   'tower.imports.caveat': 'No tariff classification and no duty figure here — getting those wrong lands on you.',
   'tower.imports.seam': 'Arrival dates are typed by hand.',
@@ -150,7 +151,7 @@ export const enTowerBusiness = {
   'tower.imports.need.goods': 'Say what is in the container.',
   'tower.imports.need.label': 'Name at least one paper.',
 
-  'tower.imports.newTitle': 'Record a container',
+  'tower.imports.newTitle': 'Record an import',
   'tower.imports.f.goods': 'What is in it',
   'tower.imports.f.origin': 'From (country)',
   'tower.imports.f.dest': 'To (country)',
@@ -626,7 +627,7 @@ export const enTowerBusiness = {
   'tower.byAir.fold.waiting': '{n, plural, one {# release} other {# releases}} still to come',
   'tower.byAir.fold.released': 'Released: it may be collected',
   'tower.byAir.fold.anyway': 'Sent before the release, on your word',
-  'tower.byAir.held': 'Air waybill {awb} ({airline}), {flights}. In {handler}’s shed: {pieces} pieces, {kg} kg.',
+  'tower.byAir.held': 'Air waybill {awb} ({airline}), {flights}. Waits at {handler}: {pieces} pieces, {kg} kg.',
   'tower.byAir.temp': 'Kept between {min} and {max} °C on the road.',
   'tower.byAir.waits': 'Waiting',
   'tower.byAir.releasedTag': 'Released',

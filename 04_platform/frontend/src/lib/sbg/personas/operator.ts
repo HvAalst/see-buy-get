@@ -410,6 +410,8 @@ export function createOperatorApi(sbg: SbgClient) {
     /** The importer records a container that is on its way. It exists before it arrives — that is the point. */
     registerImport: (body: {
       importerEntityId?: string;
+      /** How it comes: sea, air, road or rail (2026-10-29). */
+      mode?: 'sea' | 'air' | 'road' | 'rail';
       goodsDescription: string;
       originCountry: string;
       destCountry: string;

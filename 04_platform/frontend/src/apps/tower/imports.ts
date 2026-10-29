@@ -328,6 +328,8 @@ export interface KnownPaper {
 }
 
 export interface RegisterImportForm {
+  /** How it comes (2026-10-29): by sea in a box, or by air — which asks for no box and no quay. */
+  mode: 'sea' | 'air' | 'road' | 'rail';
   goodsDescription: string;
   originCountry: string;
   destCountry: string;
@@ -346,6 +348,7 @@ export interface RegisterImportForm {
 }
 
 export const EMPTY_IMPORT_FORM: RegisterImportForm = {
+  mode: 'sea',
   goodsDescription: '',
   originCountry: '',
   destCountry: '',
