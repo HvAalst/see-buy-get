@@ -43,6 +43,8 @@ export const COUNTER_ACTS: Readonly<Record<string, string | ((body: Record<strin
   scanArrival: 'scanned a store’s parcel in',
   finishArrival: 'finished taking a store’s parcels in',
   missedArrival: 'said a store’s arrival did not come',
+  // 2026-10-29 — a business’s parcel handed, by pass, to the driver taking it to the business’s own door.
+  handToDoorDriver: 'handed a parcel to the driver taking it to its door',
 };
 
 /**

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseInterceptors } from '@nestjs/common';
+import { CounterLogInterceptor } from './shop-staff.controller';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -15,6 +16,8 @@ import { HandToDriverDto } from './call-off.types';
  * a store's box over. The shop's own act: staff read the list to help, and hand nothing over in a shop's name.
  */
 @Controller('sbg')
+// Who at the counter handed it over is kept in the counter's own record, as every counter act is.
+@UseInterceptors(CounterLogInterceptor)
 export class BusinessDoorController {
   constructor(
     private readonly doors: BusinessDoorService,
@@ -34,7 +37,7 @@ export class BusinessDoorController {
   @Roles('agent', 'operator')
   @Post('agents/:did/door-handovers/:parcelId')
   @AtTheCounter()
-  hand(@Param('did') did: string, @Param('parcelId') parcelId: string, @Body() dto: HandToDriverDto, @Actor() actor: IntrospectionResult): ShopDoorHandover[] {
+  handToDoorDriver(@Param('did') did: string, @Param('parcelId') parcelId: string, @Body() dto: HandToDriverDto, @Actor() actor: IntrospectionResult): ShopDoorHandover[] {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'A shop hands over at its own counter, signed in as the shop. Staff hand nothing over in its name');
     const shop = this.shop(did, actor);
     return this.doors.hand(did, parcelId, dto.badge, actor?.actorName?.trim() || shop.shopName);

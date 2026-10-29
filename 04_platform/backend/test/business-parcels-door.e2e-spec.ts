@@ -96,6 +96,15 @@ describe('a business’s parcel delivered to its own place', () => {
     await http().post('/v1/sbg/corridors').set(operator).send({ name: `BpoNairobi → BpoKisumu ${tag}`, originZone: `BpoNairobi${tag}`, destZone: `BpoKisumu${tag}` }).expect(201);
   });
 
+  /** What is sent in the background (a bell, a withdrawn load), checked until it is there — at most five seconds. */
+  const eventually = async (check: () => Promise<boolean> | boolean, ms = 5000): Promise<boolean> => {
+    for (let t = 0; t < ms; t += 50) {
+      if (await check()) return true;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return check();
+  };
+
   /** As the network would: ready on its shop's shelf. */
   const readyAtShop = async (parcelId: string) => {
     Object.assign(app.get(ParcelService).get(parcelId), { status: 'Ready_For_Pickup', binSlot: 'B2', readyAt: new Date().toISOString() });
@@ -187,9 +196,9 @@ describe('a business’s parcel delivered to its own place', () => {
     expect((await http().get(`/v1/sbg/business/me/parcels/${id}`).set(biz.token).expect(200)).body.toOwnPlace).toMatchObject({ state: 'delivered', receivedBy: 'Nurse Achieng' });
     const chain = app.get(ParcelService).get(id).custody!;
     expect(chain.at(-1)).toMatchObject({ holderKind: 'receiver', note: 'at its own door, received by Nurse Achieng', to: expect.any(String) });
-    const heard = app.get(BusinessHookService).view(biz.entityId).messages.map((m) => m.event);
-    expect(heard).toEqual(expect.arrayContaining(['parcel.paid', 'parcel.ready', 'parcel.to_your_door', 'parcel.at_your_door']));
-    expect(heard).not.toContain('parcel.collected');
+    const heard = () => app.get(BusinessHookService).view(biz.entityId).messages.map((m) => m.event);
+    expect(await eventually(() => ['parcel.paid', 'parcel.ready', 'parcel.to_your_door', 'parcel.at_your_door'].every((e) => heard().includes(e)))).toBe(true);
+    expect(heard()).not.toContain('parcel.collected');
   });
 
   it('collected at the shop with its code instead: the load is withdrawn; short of money: nothing posted, the business told, posted once it can', async () => {
@@ -211,8 +220,7 @@ describe('a business’s parcel delivered to its own place', () => {
     const load = dispatch.deliversParcelLoads().find((f) => f.deliversParcel?.parcelId === first.parcelId)!;
     const balance = vendors.balanceOf(till.vendorId);
     app.get(ParcelService).collectConfirm(first.parcelId, kisumu.did, app.get(ParcelService).get(first.parcelId).collectionCode!);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(dispatch.requireFreightPublic(load.freightId).status).toBe('cancelled');
+    expect(await eventually(() => dispatch.requireFreightPublic(load.freightId).status === 'cancelled')).toBe(true);
     expect((await door(first.parcelId)).state).toBe('collected');
     expect(vendors.balanceOf(till.vendorId)).toBeCloseTo(balance, 2);
 
@@ -221,8 +229,11 @@ describe('a business’s parcel delivered to its own place', () => {
     await readyAtShop(second.parcelId);
     expect(await door(second.parcelId)).toMatchObject({ state: 'short' });
     expect(dispatch.deliversParcelLoads().some((f) => f.deliversParcel?.parcelId === second.parcelId)).toBe(false);
-    const told = (await http().get('/v1/sbg/notifications/inbox').set(biz.token).expect(200)).body;
-    expect(((told.items ?? told) as Array<{ kind: string; title: string }>).find((n) => n.kind === 'parcel_door_short')?.title).toBe(`Top up so ${second.parcelId} can come to your door`);
+    const shortTold = async () => {
+      const told = (await http().get('/v1/sbg/notifications/inbox').set(biz.token).expect(200)).body;
+      return ((told.items ?? told) as Array<{ kind: string; title: string }>).some((n) => n.kind === 'parcel_door_short' && n.title === `Top up so ${second.parcelId} can come to your door`);
+    };
+    expect(await eventually(shortTold)).toBe(true);
     expect((await http().post(`/v1/sbg/business/me/parcels/${second.parcelId}/door/post`).set(biz.token).expect(402)).body.code).toBe('WALLET_INSUFFICIENT');
     // A lower most it can pay: posted at once.
     const raised = (await http().post(`/v1/sbg/business/me/parcels/${second.parcelId}/door/raise`).set(biz.token).send({ maxSpend: 120 }).expect(201)).body;
@@ -261,7 +272,9 @@ describe('a business’s parcel delivered to its own place', () => {
     // Ready at the shop, its last leg posted: its receiver is told nothing about coming for it.
     const first = await send(60);
     await readyAtShop(first.parcelId);
-    await new Promise((r) => setTimeout(r, 20));
+    // Its last leg posted — the ready step has been heard — and its receiver told nothing.
+    expect(await eventually(() => doors.viewOf(first.parcelId)?.state === 'posted')).toBe(true);
+    await new Promise((r) => setTimeout(r, 200));
     expect((await inbox(receiver)).filter((n) => n.kind === 'parcel_ready')).toEqual([]);
     // Days pass with no driver: no "still waiting", no closing of the window, no return offered.
     const later = Date.now() + 80 * 3_600_000;
@@ -273,8 +286,7 @@ describe('a business’s parcel delivered to its own place', () => {
     expect(doors.remindUntaken(Date.now() + 23 * 3_600_000)).not.toContain(first.parcelId);
     expect(doors.remindUntaken(Date.now() + 25 * 3_600_000)).toContain(first.parcelId);
     expect(doors.remindUntaken(Date.now() + 26 * 3_600_000)).not.toContain(first.parcelId);
-    await new Promise((r) => setTimeout(r, 20));
-    expect((await inbox(biz.token)).find((n) => n.title === `No driver has taken ${first.parcelId} to your door yet`)).toBeDefined();
+    expect(await eventually(async () => (await inbox(biz.token)).some((n) => n.title === `No driver has taken ${first.parcelId} to your door yet`))).toBe(true);
 
     // Short of money for days, it passed its free days on the shelf: the shop is owed for keeping it.
     const second = await send(10_000);
@@ -297,8 +309,7 @@ describe('a business’s parcel delivered to its own place', () => {
     vendors.billShipment(till.vendorId, 'test-drain', Math.max(0, left - owed / 2));
     expect((await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${second.parcelId}`).set(kisumu.token).send({ badge: rider.badge }).expect(402)).body.detail).toMatch(/owes this shop .* for keeping it past its free days/);
     expect(app.get(DispatchService).requireFreightPublic(load.freightId).deliversParcel?.handedAt).toBeUndefined();
-    await new Promise((r) => setTimeout(r, 20));
-    expect((await inbox(biz.token)).find((n) => n.title === `Top up so Kisumu BPO ${tag} can hand over ${second.parcelId}`)).toBeDefined();
+    expect(await eventually(async () => (await inbox(biz.token)).some((n) => n.title === `Top up so Kisumu BPO ${tag} can hand over ${second.parcelId}`))).toBe(true);
     // Topped up: handed over, the shop paid what it was owed, from the business's balance.
     await http().post('/v1/sbg/business/me/parcels/top-up').set(biz.token).send({ amount: 200 }).expect(201);
     await simulate(app.get(FundingService).openFor(till.vendorId)!.fundingId, 200);

@@ -4705,7 +4705,7 @@
     },
     "/v1/sbg/agents/{did}/door-handovers/{parcelId}": {
       "post": {
-        "operationId": "BusinessDoor.hand",
+        "operationId": "BusinessDoor.handToDoorDriver",
         "summary": "",
         "description": "Hand one to the driver who took its load, by their pass.",
         "parameters": [
