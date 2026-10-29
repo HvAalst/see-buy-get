@@ -642,3 +642,22 @@
 .chip--tap.chip--on {
   color: var(--blue);
 }
+
+/* 2026-10-29 — a business's parcels waiting here for the driver of their last leg: each line on its own, pass and button beside. */
+.doorhand {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.doorhand li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.doorhand__line {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+}

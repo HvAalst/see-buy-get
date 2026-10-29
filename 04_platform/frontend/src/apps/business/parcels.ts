@@ -307,14 +307,14 @@ export function shopChoices(shops: NetworkShop[], country: string): NetworkShop[
 
 /* ---------------------------------------------------------------- the list -- */
 
-export type ParcelStage = 'unpaid' | 'to_hand_in' | 'at_your_place' | 'door_short' | 'door_driver' | 'coming_to_you' | 'at_your_door' | 'on_its_way' | 'to_collect' | 'collected' | 'called_off' | 'problem';
+export type ParcelStage = 'unpaid' | 'to_hand_in' | 'at_your_place' | 'door_short' | 'door_driver' | 'door_taken' | 'coming_to_you' | 'at_your_door' | 'on_its_way' | 'to_collect' | 'collected' | 'called_off' | 'problem';
 
 /** Where a parcel stands, in the words its sender reads. */
 export function parcelStage(p: Pick<BusinessParcel, 'status' | 'paid' | 'fromOwnPlace' | 'toOwnPlace'>): ParcelStage {
   // Its last leg to its own place, once at the shop: the door's own words.
   const door = p.toOwnPlace?.state;
   if (door === 'short') return 'door_short';
-  if (door === 'posted') return 'door_driver';
+  if (door === 'posted') return p.toOwnPlace?.loadStatus === 'claimed' ? 'door_taken' : 'door_driver';
   if (door === 'handed') return 'coming_to_you';
   if (door === 'delivered') return 'at_your_door';
   if (p.status === 'Voided' || p.status === 'Returned') return 'called_off';
@@ -333,6 +333,7 @@ export const STAGE_WORD: Record<ParcelStage, MessageKey> = {
   at_your_place: 'business.parcels.stage.atYourPlace',
   door_short: 'business.parcels.stage.doorShort',
   door_driver: 'business.parcels.stage.doorDriver',
+  door_taken: 'business.parcels.stage.doorTaken',
   coming_to_you: 'business.parcels.stage.comingToYou',
   at_your_door: 'business.parcels.stage.atYourDoor',
   on_its_way: 'business.parcels.stage.onItsWay',
@@ -348,6 +349,7 @@ export const STAGE_TONE: Record<ParcelStage, 'ok' | 'warn' | 'info' | 'quiet'> =
   at_your_place: 'info',
   door_short: 'warn',
   door_driver: 'info',
+  door_taken: 'info',
   coming_to_you: 'info',
   at_your_door: 'ok',
   on_its_way: 'info',

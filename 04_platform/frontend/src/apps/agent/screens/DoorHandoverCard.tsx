@@ -69,17 +69,17 @@ export function DoorHandoverCard({ sbg, shopDid }: { sbg: SbgClient | null; shop
         {done ?? t('agent.door.lede')}
       </p>
       {error ? <p class="hint" role="alert">{error}</p> : null}
-      <ul class="relabel">
+      <ul class="doorhand">
         {items.map((h) => {
           const taken = h.load.status === 'claimed';
           const pass = passes[h.parcelId] ?? '';
           return (
             <li key={h.parcelId}>
-              <span class="mono relabel__ids">{t('agent.door.row', { parcel: h.parcelId, slot: h.binSlot ?? '—', business: h.business })}</span>
-              <span class="hint relabel__ids">{doorHandoverLine(h, t)}</span>
+              <span class="mono doorhand__line">{t('agent.door.row', { parcel: h.parcelId, slot: h.binSlot ?? '—', business: h.business })}</span>
+              <span class="hint doorhand__line">{doorHandoverLine(h, t)}</span>
               {taken ? (
                 <>
-                  <span class="relabel__ids">
+                  <span class="doorhand__line">
                     <ScanField id={`door-${h.parcelId}`} label={t('agent.door.passLabel')} value={pass} onValue={(v) => setPasses((p) => ({ ...p, [h.parcelId]: v }))} expect="badge" placeholder={t('agent.door.passScan')} upper />
                   </span>
                   <Button full={false} chevron={false} busy={busy === h.parcelId} disabled={!pass.trim()} onClick={() => void hand(h)}>

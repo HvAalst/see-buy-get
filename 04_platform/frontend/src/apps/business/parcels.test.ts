@@ -52,6 +52,7 @@ describe('a business’s parcels', () => {
     expect(parcelStage({ status: 'On_Bus', paid: true, toOwnPlace: leg('waiting') })).toBe('on_its_way');
     expect(parcelStage({ status: 'Ready_For_Pickup', paid: true, toOwnPlace: leg('short') })).toBe('door_short');
     expect(parcelStage({ status: 'Ready_For_Pickup', paid: true, toOwnPlace: leg('posted') })).toBe('door_driver');
+    expect(parcelStage({ status: 'Ready_For_Pickup', paid: true, toOwnPlace: { ...leg('posted'), loadStatus: 'claimed' } })).toBe('door_taken');
     expect(parcelStage({ status: 'Delivered', paid: true, toOwnPlace: leg('handed') })).toBe('coming_to_you');
     expect(parcelStage({ status: 'Delivered', paid: true, toOwnPlace: leg('delivered') })).toBe('at_your_door');
     expect(parcelStage({ status: 'Delivered', paid: true, toOwnPlace: leg('collected') })).toBe('collected');

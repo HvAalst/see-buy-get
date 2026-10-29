@@ -718,7 +718,7 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
   };
 
   const stage = parcelStage(row);
-  const callable = works && (stage === 'unpaid' || stage === 'to_hand_in' || stage === 'at_your_place' || stage === 'on_its_way');
+  const callable = works && !row.toOwnPlace?.loadStatus && (stage === 'unpaid' || stage === 'to_hand_in' || stage === 'at_your_place' || stage === 'on_its_way');
   return (
     <section class="cons__panel">
       <div class="cons__panelhead">
@@ -740,7 +740,7 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
           </dd>
         </div>
         <div class="cons__fact">
-          <dt class="cons__factk">{t('business.parcels.fact.receiver')}</dt>
+          <dt class="cons__factk">{t(row.toOwnPlace ? 'business.parcels.fact.receivesIt' : 'business.parcels.fact.receiver')}</dt>
           <dd class="cons__factv">{row.receiver}</dd>
         </div>
         <div class="cons__fact">

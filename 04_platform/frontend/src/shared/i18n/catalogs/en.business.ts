@@ -1503,6 +1503,8 @@ export const enBusiness = {
   'business.parcels.toPlace': 'To {place}',
   'business.parcels.stage.doorShort': 'Top up for the last leg',
   'business.parcels.stage.doorDriver': 'Waiting for a driver',
+  'business.parcels.stage.doorTaken': 'A driver is collecting it',
+  'business.parcels.fact.receivesIt': 'Who receives it at your place',
   'business.parcels.stage.comingToYou': 'On its way to your place',
   'business.parcels.stage.atYourDoor': 'Delivered to your place',
   'business.parcels.fact.deliveredTo': 'Delivered to',
