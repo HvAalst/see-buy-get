@@ -754,13 +754,7 @@ export class ExportService {
     if (now > Date.parse(a.latAt)) throw new GlosError('INVALID_STATE', `The latest acceptance time at ${c.terminal.label} passed at ${utc(a.latAt)}: ask ${c.booking.partyName} for the next flight, and record its new time first`);
     const exporter = this.entities.get(c.exporterEntityId);
     const secured = a.security.status === 'secured';
-    const flights = a.flights.map((f) => `${f.flight} on ${f.date}`).join(', ');
-    const notes = [
-      `Export ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}, ${flights}. Hand it in at ${a.handler ?? c.terminal.label} against this waybill, before the latest acceptance time.`,
-      a.bookingStatus === 'queued' ? 'The airline has not confirmed the booking: it may not fly on this flight.' : '',
-      secured ? `Secured cargo (${a.security.agentName}): keep it locked and sealed, with no stops on the way; the seal is checked at the terminal.` : '',
-      a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
-    ].filter(Boolean);
+    const words = this.airLegWords(c);
     const f = this.dispatch.registerFreight(
       {
         description: `${c.code} — ${c.goodsDescription} (${a.pieces} pieces, for export by air)`.slice(0, 200),
@@ -777,8 +771,8 @@ export class ExportService {
         ...(dangerousGoods ? { dangerousGoods } : {}),
         pickupCountry: c.originCountry,
         destCountry: c.originCountry,
-        deliveryWindow: `At ${c.terminal.label} before ${utc(a.latAt)} — the airline’s latest acceptance time`.slice(0, 120),
-        instructions: notes.join(' ').slice(0, 500),
+        deliveryWindow: words.deliveryWindow,
+        instructions: words.text,
         postedByDid: exporter.did,
         externalOrderId: c.code,
       },
@@ -786,6 +780,64 @@ export class ExportService {
     );
     Object.assign(c, { ladenFreightId: f.freightId, ladenFreightCode: f.code, ...(dangerousGoods ? { dangerousGoods: { unNumber: f.dangerousGoods?.unNumber ?? dangerousGoods.unNumber, properShippingName: dangerousGoods.properShippingName.trim(), hazardClass: dangerousGoods.hazardClass.trim(), ...(dangerousGoods.packingGroup ? { packingGroup: dangerousGoods.packingGroup } : {}) } } : {}) });
     this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** What the driver is told by air: the waybill, the flights, where it is handed in, and what the cargo asks of the road. */
+  private airLegWords(c: ExportConsignment): { text: string; deliveryWindow: string } {
+    const a = c.air!;
+    const flights = a.flights.map((f) => `${f.flight} on ${f.date}`).join(', ');
+    const notes = [
+      `Export ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}, ${flights}. Hand it in at ${a.handler ?? c.terminal.label} against this waybill, before the latest acceptance time.`,
+      a.bookingStatus === 'queued' ? 'The airline has not confirmed the booking: it may not fly on this flight.' : '',
+      a.security.status === 'secured' ? `Secured cargo (${a.security.agentName}): keep it locked and sealed, with no stops on the way; the seal is checked at the terminal.` : '',
+      a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
+    ].filter(Boolean);
+    return { text: notes.join(' ').slice(0, 500), deliveryWindow: `At ${c.terminal.label} before ${utc(a.latAt)} — the airline’s latest acceptance time`.slice(0, 120) };
+  }
+
+  /**
+   * THE BOOKING CHANGED (2026-10-29): the airline confirmed a booking on request, or moved the cargo to another flight with
+   * a new latest acceptance time. The exporter's own record, from its own sign-in; the booking as it stood is kept. The
+   * clock and its warnings follow the new time, and the load to the cargo terminal — while it is not yet delivered — tells
+   * its driver what changed.
+   */
+  changeAirBooking(exportId: string, actorEntityId: string, input: { bookingStatus?: 'confirmed' | 'queued'; flights?: Array<{ flight: string; date: string; from: string; to: string; departsLocal?: string }>; latAt?: string }, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    if (c.mode !== 'air' || !c.air) throw new GlosError('INVALID_STATE', `${c.code} goes by sea: its booking is your forwarder’s or the line’s`);
+    const a = c.air;
+    const flights = input.flights?.length ? input.flights.map((f) => ({ flight: f.flight.replace(/\s+/g, ' ').trim().toUpperCase(), date: f.date, from: f.from.trim().toUpperCase(), to: f.to.trim().toUpperCase(), ...(f.departsLocal ? { departsLocal: f.departsLocal } : {}) })) : undefined;
+    const latAt = input.latAt !== undefined ? moment(input.latAt, 'The latest acceptance time') : undefined;
+    if (input.latAt !== undefined && !latAt) throw new GlosError('FIELD_REQUIRED', 'Give the new latest acceptance time from the airline’s confirmation', { field: 'latAt' });
+    if (latAt && Date.parse(latAt) <= now) throw new GlosError('VALIDATION_FAILED', 'That latest acceptance time has passed already: give the one for the flight it is booked on now', { field: 'latAt' });
+    const status = input.bookingStatus ?? a.bookingStatus;
+    const sameFlights = !flights || JSON.stringify(flights) === JSON.stringify(a.flights);
+    if (status === a.bookingStatus && sameFlights && (!latAt || latAt === a.latAt)) throw new GlosError('FIELD_REQUIRED', 'Say what changed: the airline confirmed it, another flight, or a new latest acceptance time', { field: 'bookingStatus' });
+    const timeMoved = Boolean(latAt && latAt !== a.latAt);
+    c.air = {
+      ...a,
+      bookingStatus: status,
+      ...(flights ? { flights, fromAirport: flights[0].from, toAirport: flights[flights.length - 1].to } : {}),
+      ...(latAt ? { latAt } : {}),
+      formerBookings: [...(a.formerBookings ?? []), { bookingStatus: a.bookingStatus, flights: a.flights, latAt: a.latAt, until: new Date(now).toISOString(), by }].slice(-20),
+    };
+    c.booking = { ...c.booking, gateCutoffAt: c.air.latAt };
+    c.loadingPort = `${c.air.fromAirport} — ${c.terminal.label}`.slice(0, 80);
+    // A new time is a new clock: its warnings are said again, under that time.
+    if (timeMoved && c.warned) {
+      const { pickup: _p, gate: _g, ...rest } = c.warned;
+      c.warned = rest;
+    }
+    this.exports.set(c.exportId, c);
+    // The load to the cargo terminal, still on its way there, carries the new booking: posted, it is rewritten; on the road,
+    // the driver is told what changed.
+    const leg = c.ladenFreightId ? this.legOf(c.ladenFreightId) : undefined;
+    if (leg && ['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(leg.status)) {
+      const exporter = this.entities.get(c.exporterEntityId);
+      const words = this.airLegWords(c);
+      const change = [status !== a.bookingStatus ? (status === 'confirmed' ? 'The airline has confirmed the booking.' : 'The airline has not confirmed the booking: it may not fly on this flight.') : '', !sameFlights ? `Now on ${c.air.flights.map((f) => `${f.flight} on ${f.date}`).join(', ')}.` : '', timeMoved ? `Latest acceptance time now ${utc(c.air.latAt)}.` : ''].filter(Boolean).join(' ');
+      this.dispatch.setInstructions(c.ladenFreightId!, exporter.did, leg.status === 'in_transit' ? { text: `The booking changed: ${change}` } : { text: words.text, deliveryWindow: words.deliveryWindow }, now);
+    }
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 

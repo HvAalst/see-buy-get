@@ -296,11 +296,30 @@ const REGIME_WORD: Record<string, MessageKey> = {
  * THE AIR WAYBILL, READ: the booking as copied, the law of its route on the waybill's day, what that law asks and it lacks,
  * where it disagrees with the packing list, and what the exporter is warned of. Held and checked — never issued.
  */
-export function AirWaybillPanel({ d }: { d: ExportDetail }) {
+export function AirWaybillPanel({ d, client, mine, onDetail }: { d: ExportDetail; client?: BusinessClient; mine?: boolean; onDetail?: (next: ExportDetail) => void | Promise<void> }) {
   const t = useT();
   const a = d.consignment.air;
   const view = d.air;
+  const [moving, setMoving] = useState(false);
+  const [next, setNext] = useState({ flight: '', date: '', from: '', to: '', lat: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
   if (!a || !view) return null;
+  /** The booking changed: the airline's word, recorded by the exporter — the old booking is kept. */
+  const change = async (body: Parameters<BusinessClient['exports']['airBooking']>[1], note: string) => {
+    if (!client) return;
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    const r = await client.exports.airBooking(d.consignment.exportId, body);
+    setBusy(false);
+    if (r.error) return setError(sayProblem(r.error));
+    setMoving(false);
+    setDone(note);
+    if (r.data && onDetail) await onDetail(r.data);
+  };
+  const nextReady = next.flight.trim() && next.date && next.from.trim().length === 3 && next.to.trim().length === 3 && fromUtcInput(next.lat);
   const check = view.check;
   const fact = (k: MessageKey, v: string) => (
     <div class="cons__fact">
@@ -336,6 +355,65 @@ export function AirWaybillPanel({ d }: { d: ExportDetail }) {
         {fact('business.exports.air.d.security', a.security.status === 'secured' ? t('business.exports.air.d.securedBy', { who: a.security.agentName ?? '', number: a.security.agentNumber ? ` (${a.security.agentNumber})` : '' }) : t('business.exports.air.d.notSecured'))}
         {a.temp ? fact('business.exports.air.d.temp', t('business.exports.air.d.tempLine', { min: a.temp.minC, max: a.temp.maxC }) + (a.temp.preCooled ? t('business.exports.air.d.preCooled') : '')) : null}
       </dl>
+      {done ? <p class="cnote">{done}</p> : null}
+      {error ? <p class="cerr">{error}</p> : null}
+      {mine && client ? (
+        <div class="twr-panelend">
+          {a.bookingStatus === 'queued' ? (
+            <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void change({ bookingStatus: 'confirmed' }, t('business.exports.air.confirmedNote'))}>
+              {t('business.exports.air.markConfirmed')}
+            </button>
+          ) : null}
+          {!moving ? (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setMoving(true)}>
+              {t('business.exports.air.moveStart')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {mine && client && moving ? (
+        <>
+          <p class="chint">{t('business.exports.air.moveHint')}</p>
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.air.flight')}</span>
+              <input class="cinput" value={next.flight} maxLength={10} placeholder={a.flights[0]?.flight} onInput={(e) => setNext({ ...next, flight: (e.target as HTMLInputElement).value })} />
+            </label>
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.air.date')}</span>
+              <input class="cinput" type="date" value={next.date} onInput={(e) => setNext({ ...next, date: (e.target as HTMLInputElement).value })} />
+            </label>
+          </div>
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.air.fromAirport')}</span>
+              <input class="cinput" value={next.from} maxLength={3} placeholder={a.fromAirport} onInput={(e) => setNext({ ...next, from: (e.target as HTMLInputElement).value.toUpperCase() })} />
+            </label>
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.air.toAirport')}</span>
+              <input class="cinput" value={next.to} maxLength={3} placeholder={a.toAirport} onInput={(e) => setNext({ ...next, to: (e.target as HTMLInputElement).value.toUpperCase() })} />
+            </label>
+          </div>
+          <label class="cfield">
+            <span class="cfield__label">{t('business.exports.air.lat')}</span>
+            <input class="cinput" type="datetime-local" value={next.lat} onInput={(e) => setNext({ ...next, lat: (e.target as HTMLInputElement).value })} />
+          </label>
+          <div class="twr-panelend">
+            <button
+              type="button"
+              class="cbtn cbtn--primary cbtn--sm"
+              disabled={busy || !nextReady}
+              onClick={() => void change({ flights: [{ flight: next.flight.trim(), date: next.date, from: next.from.trim(), to: next.to.trim() }], latAt: fromUtcInput(next.lat)! }, t('business.exports.air.movedNote'))}
+            >
+              {t('business.exports.air.moveSave')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setMoving(false)}>
+              {t('business.exports.notNow')}
+            </button>
+          </div>
+        </>
+      ) : null}
+      {a.formerBookings?.length ? <p class="chint">{t('business.exports.air.former', { n: a.formerBookings.length, last: a.formerBookings[a.formerBookings.length - 1].flights.map((f) => `${f.flight} ${f.date}`).join(', ') })}</p> : null}
       {lines('business.exports.air.warningsTitle', view.warnings)}
       <h3 class="cons__sub">{t('business.exports.air.lawTitle')}</h3>
       <p class="cons__lede">

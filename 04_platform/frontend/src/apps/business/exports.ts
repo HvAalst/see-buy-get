@@ -202,6 +202,8 @@ export interface ExportAir {
   security: { status: 'secured' | 'unsecured'; agentName?: string; agentNumber?: string; knownConsignor?: boolean };
   temp?: { minC: number; maxC: number; preCooled?: boolean };
   inspectionAtAirport?: boolean;
+  /** The booking as it stood before each change recorded: kept, never overwritten. */
+  formerBookings?: Array<{ bookingStatus: 'confirmed' | 'queued'; flights: ExportFlight[]; latAt: string; until: string; by: string }>;
 }
 
 /** The waybill read against the law of its route and against our papers — what it lacks, where it disagrees. */
@@ -320,6 +322,8 @@ export interface ExportsApi {
   register(input: RegisterExportInput): Promise<Result<{ exportId: string; code: string }>>;
   /** An export by air: the waybill checked before anything is written. */
   registerAir(input: RegisterAirExportInput): Promise<Result<{ exportId: string; code: string }>>;
+  /** By air: the airline confirmed the booking, or moved it to another flight and time. */
+  airBooking(exportId: string, body: { bookingStatus?: 'confirmed' | 'queued'; flights?: ExportFlight[]; latAt?: string }): Promise<Result<ExportDetail>>;
   container(exportId: string, containerNo: string): Promise<Result<ExportDetail>>;
   emptyLeg(exportId: string): Promise<Result<ExportDetail>>;
   ladenLeg(exportId: string, weightKg?: number, dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }): Promise<Result<ExportDetail>>;
@@ -378,6 +382,7 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     detail: (exportId) => call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}` as never, {} as never) as never),
     register: (input) => post('/v1/sbg/exports', input),
     registerAir: (input) => post('/v1/sbg/exports/air', input),
+    airBooking: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/air/booking`, body),
     container: (exportId, containerNo) => post(`/v1/sbg/exports/${id(exportId)}/container`, { containerNo }),
     emptyLeg: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/empty-leg`),
     ladenLeg: (exportId, weightKg, dangerousGoods) => post(`/v1/sbg/exports/${id(exportId)}/laden-leg`, { ...(weightKg ? { weightKg } : {}), ...(dangerousGoods ? { dangerousGoods } : {}) }),

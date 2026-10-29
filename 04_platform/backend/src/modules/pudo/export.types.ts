@@ -299,6 +299,8 @@ export class ExportAir {
   @ApiPropertyOptional({ type: ExportAirTemp }) temp?: ExportAirTemp;
   /** The plant-health inspection is done at the airport before acceptance — about three more hours there. */
   @ApiPropertyOptional() inspectionAtAirport?: boolean;
+  /** The booking as it stood before each change the exporter recorded (2026-10-29): kept, never overwritten. */
+  @ApiPropertyOptional() formerBookings?: Array<{ bookingStatus: 'confirmed' | 'queued'; flights: ExportFlight[]; latAt: string; until: string; by: string }>;
 }
 
 export class ExportConsignment {
@@ -617,6 +619,16 @@ export class RegisterAirExportDto {
   @IsString() terminalSiteId!: string;
   @ValidateNested() @Type(() => ExportAirDto) air!: ExportAirDto;
   @IsOptional() @IsString() @MaxLength(80) by?: string;
+}
+
+/**
+ * THE BOOKING CHANGED (2026-10-29): the airline confirmed it, or moved the cargo to another flight with a new latest
+ * acceptance time. What is not given stays as it was.
+ */
+export class AirBookingChangeDto {
+  @IsOptional() @IsIn(['confirmed', 'queued']) bookingStatus?: 'confirmed' | 'queued';
+  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(6) @ValidateNested({ each: true }) @Type(() => ExportFlightDto) flights?: ExportFlightDto[];
+  @IsOptional() @IsString() latAt?: string;
 }
 
 export class ExportContainerDto {

@@ -185,7 +185,10 @@ describe('an export by air, over the wire', () => {
     const sli = async (form: object) => (await http().post(`${path}/sli`).set(bearer(g.token)).send(form).expect(201)).body.sli.gaps as string[];
     const gaps = await sli({ consigneeKind: 'to_order', notify: { name: 'Royal FloraHolland', address: 'Aalsmeer' }, freight: 'prepaid', lines: [{ packages: 40, packageKind: 'boxes', description: 'Cut roses', grossKg: 603 }] });
     expect(gaps).toEqual(['A named consignee: an air waybill is not negotiable, so it is never made out to order', 'The airport of destination']);
+    const early = await http().post(`${path}/sli/sign`).set(bearer(g.token)).send({ signatory: 'Achieng Otieno' });
+    expect([early.status, String(early.body.detail)]).toEqual([400, expect.stringContaining('A named consignee: an air waybill is not negotiable')]);
     expect(await sli({ consigneeKind: 'named', consignee: { name: 'Royal FloraHolland', address: 'Legmeerdijk 313, Aalsmeer' }, notifySameAsConsignee: true, dischargePort: 'Amsterdam Schiphol', freight: 'prepaid', lines: [{ packages: 40, packageKind: 'boxes', description: 'Cut roses', grossKg: 603 }] })).toEqual([]);
+    await http().post(`${path}/sli/sign`).set(bearer(g.token)).send({ signatory: 'Achieng Otieno' }).expect(201);
     const letter = (await http().get(`${path}/sli.html?draft=1`).set(bearer(g.token)).expect(200)).text;
     for (const fact of ['The flight and the terms', 'Amsterdam Schiphol', '706-12345675 — Kenya Airways', '40 pieces, 600 kg', '2 to 4 °C', 'make out the air waybill. SeeBuyGet books no flight']) expect(letter).toContain(fact);
     expect(letter).not.toContain('The voyage and the terms');
@@ -208,13 +211,35 @@ describe('an export by air, over the wire', () => {
     expect((await http().get(`${path}/handover.html`).set(bearer(g.token)).expect(200)).text).toContain('Delivered at the terminal is not accepted by the airline');
   });
 
-  it('a laden leg after the latest acceptance time is refused: the next flight is asked for first', async () => {
+  it('a missed latest acceptance time: the next flight is recorded, the old booking kept, the clock and its warnings start again', async () => {
     const g = await aGrower();
     const lat = Date.now() + 2 * H;
     const made = (await http().post('/v1/sbg/exports/air').set(bearer(g.token)).send(roses(g, lat)).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const svc = app.get(ExportService);
     // Two hours off, with a drive and the inspection's three: already at risk.
-    expect((await http().get(`/v1/sbg/exports/${made.exportId}`).set(bearer(g.token)).expect(200)).body.timing.state).toBe('at_risk');
-    expect(() => app.get(ExportService).mintLadenLeg(made.exportId, g.entityId, {}, 'test', lat + 1)).toThrow(/^The latest acceptance time at JKIA cargo terminal passed at .*: ask Pwani Forwarders for the next flight/);
+    expect((await http().get(path).set(bearer(g.token)).expect(200)).body.timing.state).toBe('at_risk');
+    expect(() => svc.mintLadenLeg(made.exportId, g.entityId, {}, 'test', lat + 1)).toThrow(/^The latest acceptance time at JKIA cargo terminal passed at .*: ask Pwani Forwarders for the next flight/);
+    expect(svc.sweep(lat + 1)).toContain(`${made.code}:gate`);
+
+    const change = (body: object, token = g.token) => http().post(`${path}/air/booking`).set(bearer(token)).send(body);
+    // Something must change; a time already gone is not a new booking; staff write nothing in its name.
+    expect((await change({ bookingStatus: 'confirmed' })).status).toBe(400);
+    expect(String((await change({ latAt: new Date(Date.now() - H).toISOString() })).body.detail)).toMatch(/^That latest acceptance time has passed already/);
+    expect((await change({ latAt: new Date(Date.now() + 30 * H).toISOString() }, operator)).status).toBe(403);
+    // A box by sea has no airline booking to change.
+    const sea = (await http().post('/v1/sbg/exports').set(bearer(g.token)).send({ goodsDescription: 'Roses by sea, 1 box', originCountry: 'KE', destCountry: 'NL', loadingPort: 'Mombasa', containerType: '22R1', booking: { reference: `MBA${digits()}`, bookedWith: 'forwarder', partyName: 'Pwani Forwarders', gateCutoffAt: new Date(Date.now() + 48 * H).toISOString() }, loadingSiteId: g.packHouse, terminalSiteId: g.terminal }).expect(201)).body;
+    expect(String((await http().post(`/v1/sbg/exports/${sea.exportId}/air/booking`).set(bearer(g.token)).send({ bookingStatus: 'queued' })).body.detail)).toBe(`${sea.code} goes by sea: its booking is your forwarder’s or the line’s`);
+
+    const next = Date.now() + 30 * H;
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const moved = (await change({ flights: [{ flight: 'kq 116', date: tomorrow, from: 'NBO', to: 'AMS' }], latAt: new Date(next).toISOString() }).expect(201)).body;
+    expect(moved.consignment.air).toMatchObject({ flights: [{ flight: 'KQ 116', date: tomorrow }], latAt: new Date(next).toISOString(), formerBookings: [{ bookingStatus: 'confirmed', flights: [{ flight: 'KQ 112' }], latAt: new Date(lat).toISOString(), by: expect.any(String) }] });
+    expect(moved.consignment.booking.gateCutoffAt).toBe(new Date(next).toISOString());
+    expect(moved.timing.state).toBe('on_time');
+    // The road may be posted again under the new time — and its warnings are said again under it.
+    expect(svc.mintLadenLeg(made.exportId, g.entityId, {}, 'test', lat + 1).ladenLeg).toBeDefined();
+    expect(svc.sweep(next + 1)).toContain(`${made.code}:gate`);
   });
 
   it('secured cargo, an unconfirmed booking: warned, sealed, in a closed vehicle, by a driver whose ID was seen', async () => {
@@ -276,7 +301,6 @@ describe('an export by air, over the wire', () => {
     const bike = app.get(VehicleService).register({ plate: `KMB ${digits().slice(0, 3)}A`, vehicleClass: 'motorcycle', ownerName: 'Kamau' } as never);
     app.get(FleetService).couple(rider.did, bike.vehicleId);
     expect(blocker()).toBe('Secured air cargo goes in a closed vehicle that locks and takes a seal — a car, a van or a closed truck: never on a bike, a motorcycle or a tuk-tuk.');
-    expect(dispatch.suggest(rider.did, { from, to: from }).some((o) => o.ref === load.freightId)).toBe(false);
 
     // The take refuses it too — the one commit, whatever offer it came from: an offer made before the load was secured.
     const plain = dispatch.registerFreight({ description: 'Spares, 2 cases', pickupLocation: from, pickupLabel: 'Naivasha pack house', destLabel: 'JKIA cargo terminal', destLocation: load.destLocation, weightKg: 10 });
@@ -284,6 +308,8 @@ describe('an export by air, over the wire', () => {
     const first1 = offerOf();
     expect(first1).toBeDefined();
     Object.assign(dispatch.requireFreightPublic(plain.freightId), { securedBy: 'Swissport Kenya RA' });
+    // Secured, it is no longer offered to a motorcycle.
+    expect(offerOf()).toBeUndefined();
     const take = (offerId: string) => {
       try {
         dispatch.claim(offerId);
@@ -299,6 +325,8 @@ describe('an export by air, over the wire', () => {
     const second = offerOf();
     expect(second).toBeDefined();
     Object.assign(dispatch.requireFreightPublic(plain.freightId), { securedBy: 'Swissport Kenya RA' });
+    // …nor to a closed vehicle whose driver's ID nobody has seen.
+    expect(offerOf()).toBeUndefined();
     expect(take(second!.offerId)).toBe('FORBIDDEN: Secured air cargo goes only with a driver whose ID has been seen: send a photo of your ID from the Driver app, and take it once it has been looked at.');
     // Seen: the board clears it, the offer comes, and it is taken.
     Object.assign(drivers.get(rider.did), { idCheck: { photoRef: 'med_test', sentAt: new Date().toISOString(), seenAt: new Date().toISOString() } });
@@ -315,5 +343,19 @@ describe('an export by air, over the wire', () => {
     expect(dispatch.sealRefusal(load)).toBeUndefined();
     const file = (await http().get(`${path}/handover.html`).set(bearer(g.token)).expect(200)).text;
     for (const fact of ['House waybill', 'PWF-88123', 'Not confirmed by the airline: it may not fly on this flight', 'Secured by Swissport Kenya RA (RA-KE-0042) — its status, not SeeBuyGet’s', 'RA 004211']) expect(file).toContain(fact);
+
+    // The airline confirms it: the warning goes, and the load still to be collected is told so — rewritten, not added to.
+    const confirmed = (await http().post(`${path}/air/booking`).set(bearer(g.token)).send({ bookingStatus: 'confirmed' }).expect(201)).body;
+    expect(confirmed.air.warnings.join(' ')).not.toMatch(/has not confirmed/);
+    expect(confirmed.consignment.air.formerBookings).toEqual([expect.objectContaining({ bookingStatus: 'queued' })]);
+    const posted = dispatch.requireFreightPublic(leg.freightId);
+    expect(posted.instructions?.text).not.toMatch(/has not confirmed/);
+    expect(posted.instructions?.text).toMatch(/air waybill 706-12345675/);
+    // On the road, the driver is told what changed, beside what they were told.
+    Object.assign(posted, { status: 'in_transit', pickedUpAt: new Date().toISOString() });
+    const later = new Date(Date.now() + 40 * H).toISOString();
+    await http().post(`${path}/air/booking`).set(bearer(g.token)).send({ latAt: later }).expect(201);
+    expect(dispatch.requireFreightPublic(leg.freightId).instructionAmendments?.at(-1)?.text).toMatch(/^The booking changed: Latest acceptance time now /);
+    expect((await read()).consignment.air.formerBookings).toHaveLength(2);
   });
 });

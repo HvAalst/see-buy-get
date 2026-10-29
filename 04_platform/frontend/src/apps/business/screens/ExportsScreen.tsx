@@ -583,7 +583,17 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
       </section>
 
       {/* By air: the waybill, read against the law of its route and our papers. */}
-      {byAir ? <AirWaybillPanel d={d} /> : null}
+      {byAir ? (
+        <AirWaybillPanel
+          d={d}
+          client={client}
+          mine={mine}
+          onDetail={async (next) => {
+            setD(next);
+            await onChanged();
+          }}
+        />
+      ) : null}
 
       {/* EX2 — the box's number, and the empty out. */}
       {byAir ? null : (

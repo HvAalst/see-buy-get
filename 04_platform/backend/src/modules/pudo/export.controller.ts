@@ -33,6 +33,7 @@ import {
   ExportRow,
   ExportVgmDto,
   RegisterExportDto,
+  AirBookingChangeDto,
   RegisterAirExportDto,
   type ExportPaperKey,
 } from './export.types';
@@ -98,6 +99,13 @@ export class ExportController {
   @Post(':exportId/empty-leg')
   emptyLeg(@Param('exportId') exportId: string, @Actor() actor: IntrospectionResult): ExportDetail {
     return this.exports.mintEmptyLeg(exportId, this.ownCompany(actor), auditActor(actor));
+  }
+
+  /** By air: the booking changed — confirmed by the airline, or another flight and latest acceptance time (2026-10-29). */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/air/booking')
+  airBooking(@Param('exportId') exportId: string, @Body() dto: AirBookingChangeDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.changeAirBooking(exportId, this.ownCompany(actor), dto, auditActor(actor));
   }
 
   @Roles('business', 'entity_admin')
