@@ -28,6 +28,9 @@ import { RegisterFreightDto } from './pudo.dto';
 import { VehicleService } from './vehicle.service';
 import { ExportService } from './export.service';
 import { PackingImportDto } from './export-packing.types';
+import { BusinessParcelService, type ParcelActor } from './business-parcel.service';
+import { BusinessCallOffDto, BusinessParcelDto } from './business-parcel.types';
+import { VendorOrdersQueryDto } from './pudo.dto';
 
 /** The order sheet's own columns, in its own order: an order a system sends is read exactly as a line of a sheet. */
 const SHEET_COLUMNS = ORDER_SHEET_TEMPLATE.split('\r\n')[0].split(',');
@@ -40,7 +43,8 @@ const SHEET_COLUMNS = ORDER_SHEET_TEMPLATE.split('\r\n')[0].split(',');
  *   - a BUSINESS's key reads its loads as its Loads screen does, posts a load, withdraws one nobody has taken yet;
  *   - a FLEET's key reads its orders and its day's plan, sends orders in (checked exactly as an uploaded sheet is), reads
  *     the board for one of its drivers on a shift, and takes a board load for that driver at its price.
- * Never a key's: accepting a plan, agreeing a negotiated price, anything about money or people.
+ * Never a key's: accepting a plan, agreeing a negotiated price, paying money in, or people. (A business's key does send a
+ * parcel paid from its parcel balance at the shown price, 2026-10-29: its people chose to send "both" on screen and from its system.)
  *
  * Every act goes through the door the app uses (LoadPostingService, OrderImportService, DispatchService.assign), so a key
  * meets the same checks in the same words. A TEST key runs every check and keeps nothing. Each key has its own limit
@@ -68,6 +72,8 @@ export class CompanyApiController {
     private readonly media: MediaService,
     // 2026-10-28 — an export's packing list, from the business's own system.
     private readonly exportsSvc: ExportService,
+    // 2026-10-29 — a business's parcels, from its own system: the same steps its people take in the app.
+    private readonly businessParcels: BusinessParcelService,
   ) {}
 
   /* --------------------------------------------------------------- a business -- */
@@ -183,6 +189,85 @@ export class CompanyApiController {
     const keep = caller.mode !== 'test';
     this.seals.remove(f, sealId, keep);
     return { test: !keep, removed: keep };
+  }
+
+  /*
+   * A BUSINESS'S PARCELS FROM ITS OWN SYSTEM (the user, 2026-10-29: business parcels sent "both" on screen and from its own
+   * system). The same steps its people take in the app (BusinessParcelService), the same checks in the same words, paid from
+   * the same balance. A TEST key runs every check and prices the parcel — nothing is made and nothing is paid. Never a key's:
+   * opening the account or paying money in, which its people do in the app.
+   */
+
+  /** Its parcel account: the balance, and what waits to be confirmed. */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('business/parcels/account')
+  parcelAccount(@CompanyKey() caller: CompanyCaller) {
+    return this.businessParcels.account(this.parcelActor(caller));
+  }
+
+  /** Its parcels, as its Parcels screen reads them. */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('business/parcels')
+  parcels(@Query() query: VendorOrdersQueryDto, @CompanyKey() caller: CompanyCaller) {
+    return this.businessParcels.list(this.parcelActor(caller), query);
+  }
+
+  /** A photograph of what is inside a parcel, sent before the parcel names it: its `photoId`. Unused, it is removed after two days. */
+  @Public()
+  @RateLimit(60, 60)
+  @Post('business/parcels/photos')
+  parcelPhoto(@Body() dto: CompanyPhotoDto, @CompanyKey() caller: CompanyCaller): { photoId: string; keptUnusedUntil: string } {
+    const entity = this.business(caller);
+    const { mediaId } = this.media.upload({ ownerDid: entity.did, kind: 'content', dataUrl: dto.dataUrl, thumbDataUrl: dto.thumbDataUrl });
+    return { photoId: mediaId, keptUnusedUntil: this.media.unusedUntil(mediaId)! };
+  }
+
+  /** Send one, shop to shop, paid from the balance. With a test key: every check and the price, and nothing made. */
+  @Public()
+  @OwnIdempotency()
+  @RateLimit(30, 60)
+  @Post('business/parcels')
+  async sendParcel(@Body() dto: BusinessParcelDto, @CompanyKey() caller: CompanyCaller, @Headers('idempotency-key') idempotencyKey?: string) {
+    const who = this.parcelActor(caller);
+    const { result, replayed } = await this.idempotency.run(`api:business/parcels:${caller.keyId}`, idempotencyKey, dto, () =>
+      caller.mode === 'test' ? this.businessParcels.trial(who, dto) : { test: false, ...this.businessParcels.send(who, dto) },
+    );
+    return { ...result, replayed };
+  }
+
+  @Public()
+  @RateLimit(120, 60)
+  @Get('business/parcels/:parcelId')
+  parcel(@Param('parcelId') parcelId: string, @CompanyKey() caller: CompanyCaller) {
+    return this.businessParcels.detail(this.parcelActor(caller), parcelId);
+  }
+
+  /** Its label, once paid: the picture to print, and what its QR says. */
+  @Public()
+  @RateLimit(120, 60)
+  @Get('business/parcels/:parcelId/label')
+  parcelLabel(@Param('parcelId') parcelId: string, @CompanyKey() caller: CompanyCaller) {
+    return this.businessParcels.label(this.parcelActor(caller), parcelId);
+  }
+
+  /** Call one off: withdrawn with its money back, or brought back from a hub at a price. A test key says which, and does neither. */
+  @Public()
+  @OwnIdempotency()
+  @RateLimit(30, 60)
+  @Post('business/parcels/:parcelId/call-off')
+  async callOffParcel(@Param('parcelId') parcelId: string, @Body() dto: BusinessCallOffDto, @CompanyKey() caller: CompanyCaller, @Headers('idempotency-key') idempotencyKey?: string) {
+    const who = this.parcelActor(caller);
+    const { result, replayed } = await this.idempotency.run(`api:business/parcel-off:${caller.keyId}`, idempotencyKey, { parcelId, ...dto }, () =>
+      caller.mode === 'test' ? { test: true, ...this.businessParcels.callOffPreview(who, parcelId) } : { test: false, ...this.businessParcels.callOff(who, parcelId, dto.reason) },
+    );
+    return { ...result, replayed };
+  }
+
+  /** The business, as the sender of a parcel: its system, named by the key it used. */
+  private parcelActor(caller: CompanyCaller): ParcelActor {
+    return { entity: this.business(caller), name: `its system (${caller.name})` };
   }
 
   /** One of this business's own loads — or, for any other, the same answer as for no load at all. */

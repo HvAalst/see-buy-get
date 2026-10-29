@@ -14,6 +14,9 @@ import type { Parcel, Vendor } from './pudo.types';
 import { RoutingService } from './routing.service';
 import { VendorService, type VendorLedgerQuery } from './vendor.service';
 import type { ActingMember } from './business.service';
+import type { Entity } from '../../foundation/entity/entity.types';
+import { MediaService } from './media.service';
+import type { ShipmentQuote } from './routing.service';
 import type {
   BusinessCallOffView,
   BusinessParcelAccountView,
@@ -23,10 +26,40 @@ import type {
   BusinessParcelList,
   BusinessParcelRow,
   BusinessParcelSent,
+  BusinessParcelTrial,
   ParcelBook,
   ParcelEnd,
   ParcelSender,
 } from './business-parcel.types';
+
+/**
+ * WHO IS SENDING: a person in the business, signed in as themselves — or the business's own system, by its company key
+ * (2026-10-29). Both go through the same steps and meet the same checks; the name is what the parcel's "sent by" says.
+ */
+export interface ParcelActor {
+  entity: Entity;
+  name: string;
+  personDid?: string;
+}
+
+/** A member of the business, as a sender. */
+export function memberActor(a: ActingMember): ParcelActor {
+  return { entity: a.entity, name: a.member.name, ...(a.member.personDid ? { personDid: a.member.personDid } : {}) };
+}
+
+/** A parcel checked and priced, before anything is written. */
+interface Checked {
+  v: Vendor;
+  origin: string;
+  dest: string;
+  receiver: string;
+  dims: { l: number; w: number; h: number };
+  kg: number;
+  size: string;
+  quote: ShipmentQuote;
+  routeMode: 'flexible' | 'locked';
+  price: number;
+}
 
 /** Parcels that have nothing more for the receiver to collect: the code is not shown for them. */
 const DONE: Parcel['status'][] = ['Delivered', 'Voided', 'Returned', 'Lost'];
@@ -57,18 +90,19 @@ export class BusinessParcelService {
     private readonly funding: FundingService,
     private readonly entities: EntityService,
     private readonly callOffs: CallOffService,
+    private readonly media: MediaService,
   ) {}
 
   /* ------------------------------------------------------------------ the account -- */
 
   /** The account, its balance and what waits to be confirmed — or whether one can be opened here. */
-  account(acting: ActingMember): BusinessParcelAccountView {
-    const v = this.vendors.forBusiness(acting.entity.entityId);
+  account(who: ParcelActor): BusinessParcelAccountView {
+    const v = this.vendors.forBusiness(who.entity.entityId);
     if (!v) {
-      const whyNot = this.whyNoAccount(acting.entity.jurisdiction ?? '');
+      const whyNot = this.whyNoAccount(who.entity.jurisdiction ?? '');
       return { open: false, canOpen: !whyNot, ...(whyNot ? { whyNot } : {}), sent: 0, unpaid: 0, moving: 0 };
     }
-    this.vendors.keepBusinessName(v.vendorId, acting.entity.name);
+    this.vendors.keepBusinessName(v.vendorId, who.entity.name);
     const stats = this.parcels.vendorOrderStats(v.vendorId);
     const company = this.vendors.settledBy(v);
     const waiting = this.funding.openFor(v.vendorId);
@@ -87,22 +121,22 @@ export class BusinessParcelService {
   }
 
   /** Open the account. Asked again, it answers the one there is. */
-  open(acting: ActingMember): BusinessParcelAccountView {
-    const e = acting.entity;
+  open(who: ParcelActor): BusinessParcelAccountView {
+    const e = who.entity;
     this.vendors.openForBusiness({ entityId: e.entityId, did: e.did, name: e.name, country: e.jurisdiction ?? '' });
-    return this.account(acting);
+    return this.account(who);
   }
 
   /** Ask to pay money in. A rail confirms it; nothing is credited on our word or the business's. */
-  async topUp(acting: ActingMember, amount: number, phone?: string): Promise<BusinessParcelAccountView> {
-    const v = this.requireAccount(acting);
+  async topUp(who: ParcelActor, amount: number, phone?: string): Promise<BusinessParcelAccountView> {
+    const v = this.requireAccount(who);
     await this.funding.open({ payerKind: 'vendor', payerDid: v.vendorId, amount, payerPhone: phone?.trim() || undefined });
-    return this.account(acting);
+    return this.account(who);
   }
 
   /** The account's book: every top-up, every parcel paid, every refund. */
-  book(acting: ActingMember, q: VendorLedgerQuery): ParcelBook {
-    const v = this.requireAccount(acting);
+  book(who: ParcelActor, q: VendorLedgerQuery): ParcelBook {
+    const v = this.requireAccount(who);
     const page = this.vendors.vendorLedgerPage(v.vendorId, q);
     const currency = this.vendors.currencyOf(v) ?? '';
     return {
@@ -119,8 +153,8 @@ export class BusinessParcelService {
    * written where it cannot go as a parcel: too big (it goes as a load), across a border (its commercial invoice is not
    * taken here yet), or at a price that moved since it was shown.
    */
-  send(acting: ActingMember, input: BusinessParcelDto): BusinessParcelSent {
-    const v = this.requireAccount(acting);
+  private check(who: ParcelActor, input: BusinessParcelDto): Checked {
+    const v = this.requireAccount(who);
     const origin = input.originPudoDid?.trim();
     const dest = input.destPudoDid?.trim();
     if (!origin) throw new GlosError('FIELD_REQUIRED', 'Choose the shop it is handed in at', { field: 'originPudoDid' });
@@ -128,7 +162,7 @@ export class BusinessParcelService {
     if (origin === dest) throw new GlosError('INVALID_INPUT', 'It is handed in and collected at the same shop: choose another shop for one of them', { field: 'destPudoDid' });
     this.agents.assertNamedAtMint(origin);
     this.agents.assertNamedAtMint(dest);
-    const dial = catalogueEntry(acting.entity.jurisdiction ?? '')?.dialCode;
+    const dial = catalogueEntry(who.entity.jurisdiction ?? '')?.dialCode;
     const receiver = normalizePhone(input.receiverMobile ?? '', dial);
     if (!isPlausiblePhone(receiver)) throw new GlosError('FIELD_REQUIRED', 'Give the number of the person who collects it: the shop hands it to them', { field: 'receiverMobile' });
     const dims = input.dimensionsCm;
@@ -142,12 +176,32 @@ export class BusinessParcelService {
     if (quote.crossesBorder) {
       throw new GlosError('INVALID_STATE', 'A parcel across a border goes with its commercial invoice, which the Business app does not take yet: send it to a shop on this side, or as an export', { crossings: quote.crossings.map((c) => `${c.fromCountry}→${c.toCountry}`) });
     }
-    const routeMode = input.routeMode === 'locked' ? 'locked' : 'flexible';
+    const routeMode: 'flexible' | 'locked' = input.routeMode === 'locked' ? 'locked' : 'flexible';
     const price = (routeMode === 'locked' ? quote.locked : quote.flexible).gross;
     // Against the gross: the money that leaves the balance. A price that moved is said, never billed silently.
     if (input.expectedTotal != null && Math.abs(input.expectedTotal - price) > 0.001) {
       throw new GlosError('PRICE_CHANGED', `The price is now ${price.toFixed(2)} ${quote.currency}: look at it again before sending`, { newTotal: price });
     }
+    // The photograph of what is inside: the business's own, held by us and used for nothing else — asked here, so a test key
+    // is refused it exactly as a live one is.
+    if (!this.media.mayAdopt(input.contentPhotoRef, who.entity.did)) {
+      throw new GlosError('PHOTO_REQUIRED', 'We do not hold that photo of the contents. Upload it first, then send its id: a photo the business took of this parcel, used for no other.', { field: 'contentPhotoRef' });
+    }
+    return { v, origin, dest, receiver, dims: { l: dims.l, w: dims.w, h: dims.h }, kg, size, quote, routeMode, price };
+  }
+
+  /**
+   * A TEST KEY'S SEND (2026-10-29): every check a live send meets, and the price — and nothing written, nothing paid. Says
+   * whether the balance would cover it today.
+   */
+  trial(who: ParcelActor, input: BusinessParcelDto): BusinessParcelTrial {
+    const c = this.check(who, input);
+    const balance = this.vendors.balanceOrNone(c.v.vendorId);
+    return { test: true, price: c.price, currency: c.quote.currency, routeMode: c.routeMode, size: c.size, covered: (balance ?? 0) + 1e-9 >= c.price, balance };
+  }
+
+  send(who: ParcelActor, input: BusinessParcelDto): BusinessParcelSent {
+    const { v, origin, dest, receiver, dims, kg, quote, routeMode } = this.check(who, input);
     const { parcel, paid } = this.parcels.createInbound({
       vendorId: v.vendorId,
       ...(input.reference?.trim() ? { externalOrderId: input.reference.trim() } : {}),
@@ -165,14 +219,14 @@ export class BusinessParcelService {
       routeMode,
       quote,
     });
-    const sender: ParcelSender = { parcelId: parcel.parcelId, entityId: acting.entity.entityId, personDid: acting.member.personDid ?? '', name: acting.member.name, at: new Date().toISOString() };
+    const sender: ParcelSender = { parcelId: parcel.parcelId, entityId: who.entity.entityId, personDid: who.personDid ?? '', name: who.name, at: new Date().toISOString() };
     this.senders.set(parcel.parcelId, sender);
     return { parcel: this.detailOf(parcel), paid, balance: this.vendors.balanceOrNone(v.vendorId) };
   }
 
   /** Pay for one that the balance could not cover when it was sent — after a top-up. */
-  settle(acting: ActingMember, parcelId: string): BusinessParcelSent {
-    const v = this.requireAccount(acting);
+  settle(who: ParcelActor, parcelId: string): BusinessParcelSent {
+    const v = this.requireAccount(who);
     this.owned(v, parcelId);
     const { parcel, paid } = this.parcels.settleUnpaid(parcelId);
     if (!paid) throw new GlosError('WALLET_INSUFFICIENT', `The balance does not cover it yet: it costs ${(parcel.shipmentCost ?? 0).toFixed(2)} ${parcelCurrency(parcel)}. Top up, then pay for it.`);
@@ -181,19 +235,19 @@ export class BusinessParcelService {
 
   /* ---------------------------------------------------------------- reading them -- */
 
-  list(acting: ActingMember, q: VendorOrdersQuery): BusinessParcelList {
-    const v = this.vendors.forBusiness(acting.entity.entityId);
+  list(who: ParcelActor, q: VendorOrdersQuery): BusinessParcelList {
+    const v = this.vendors.forBusiness(who.entity.entityId);
     if (!v) return { items: [], total: 0 };
     const page = this.parcels.vendorOrdersPage(v.vendorId, q);
     return { items: page.items.map((r) => this.rowOf(this.parcels.get(r.parcelId))), total: page.total };
   }
 
-  detail(acting: ActingMember, parcelId: string): BusinessParcelDetail {
-    return this.detailOf(this.owned(this.requireAccount(acting), parcelId));
+  detail(who: ParcelActor, parcelId: string): BusinessParcelDetail {
+    return this.detailOf(this.owned(this.requireAccount(who), parcelId));
   }
 
-  label(acting: ActingMember, parcelId: string): BusinessParcelLabel {
-    const v = this.requireAccount(acting);
+  label(who: ParcelActor, parcelId: string): BusinessParcelLabel {
+    const v = this.requireAccount(who);
     const label = this.parcels.orderLabel(v.vendorId, parcelId);
     return { parcelId, svg: label.svg, qrPayload: label.qrPayload };
   }
@@ -201,25 +255,38 @@ export class BusinessParcelService {
   /* --------------------------------------------------------------- calling it off -- */
 
   /** What calling it off would do now: withdrawn with its money back; brought back from a hub at a price; or why not. */
-  callOffPreview(acting: ActingMember, parcelId: string): BusinessCallOffView {
-    const v = this.requireAccount(acting);
+  callOffPreview(who: ParcelActor, parcelId: string): BusinessCallOffView {
+    const v = this.requireAccount(who);
     this.owned(v, parcelId);
     const p = this.callOffs.preview(v.vendorId, parcelId);
     return { parcelId, outcome: p.outcome, ...(p.amount != null ? { amount: p.amount } : {}), ...(p.currency ? { currency: p.currency } : {}), ...(p.backTo ? { backTo: p.backTo } : {}), ...(p.why ? { why: p.why } : {}) };
   }
 
-  callOff(acting: ActingMember, parcelId: string, reason?: string): BusinessCallOffView {
-    const v = this.requireAccount(acting);
+  callOff(who: ParcelActor, parcelId: string, reason?: string): BusinessCallOffView {
+    const v = this.requireAccount(who);
     this.owned(v, parcelId);
-    const done = this.callOffs.callOff(v.vendorId, parcelId, acting.member.name, reason?.trim() || `called off by ${acting.member.name}`);
+    const done = this.callOffs.callOff(v.vendorId, parcelId, who.name, reason?.trim() || `called off by ${who.name}`);
     return { parcelId, outcome: done.outcome, amount: done.amount, currency: done.currency, ...(done.backTo ? { backTo: done.backTo } : {}), done: true };
+  }
+
+  /** One parcel as its business's Parcels screen reads it, and whose it is — for its own system's messages. A store's: nothing. */
+  rowFor(parcelId: string): { entityId: string; row: BusinessParcelRow } | undefined {
+    let p: Parcel;
+    try {
+      p = this.parcels.get(parcelId);
+    } catch {
+      return undefined;
+    }
+    const v = p.vendorId && this.vendors.has(p.vendorId) ? this.vendors.get(p.vendorId) : undefined;
+    if (!v?.business) return undefined;
+    return { entityId: v.business.entityId, row: this.rowOf(p) };
   }
 
   /* ------------------------------------------------------------------- helpers -- */
 
   /** The account, or a refusal that says how to get one. */
-  requireAccount(acting: ActingMember): Vendor {
-    const v = this.vendors.forBusiness(acting.entity.entityId);
+  requireAccount(who: ParcelActor): Vendor {
+    const v = this.vendors.forBusiness(who.entity.entityId);
     if (!v) throw new GlosError('INVALID_STATE', 'Open your parcel account first: parcels are paid from its balance');
     return v;
   }

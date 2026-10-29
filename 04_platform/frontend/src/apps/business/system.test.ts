@@ -21,6 +21,11 @@ describe('a business’s own system, as the screen says it', () => {
     expect(loadCodeOf(message({ body: 'not json' }))).toBeUndefined();
   });
 
+  it('names a parcel’s steps too, and the parcel by its number (2026-10-29)', () => {
+    expect(['parcel.paid', 'parcel.ready', 'parcel.collected', 'parcel.called_off'].map((e) => eventWords(e, t))).toEqual(['A parcel paid', 'A parcel ready to collect', 'A parcel collected', 'A parcel called off']);
+    expect(loadCodeOf(message({ event: 'parcel.ready', body: JSON.stringify({ event: 'parcel.ready', data: { parcel: { parcelId: 'PUD-7Q2AB', collectionCode: 'COL-1' } } }) }))).toBe('PUD-7Q2AB');
+  });
+
   it('says what became of a message: arrived, being sent, tried again by itself and why, or given up', () => {
     expect(systemLine(message({ state: 'delivered', attempts: 1, deliveredAt: '2026-10-19T07:00:02.000Z' }), t)).toMatchObject({ warn: false, text: expect.stringMatching(/^Arrived /) });
     expect(systemLine(message(), t)).toEqual({ warn: false, text: 'Being sent.' });

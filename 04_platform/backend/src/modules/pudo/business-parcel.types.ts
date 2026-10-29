@@ -165,6 +165,18 @@ export class BusinessParcelSent {
   @ApiPropertyOptional({ type: Number, nullable: true }) balance?: number | null;
 }
 
+/** A test key's send: every check run and the price worked out — nothing made, nothing paid. */
+export class BusinessParcelTrial {
+  @ApiProperty() test!: boolean;
+  @ApiProperty() price!: number;
+  @ApiProperty() currency!: string;
+  @ApiProperty({ enum: ['flexible', 'locked'] }) routeMode!: string;
+  @ApiProperty() size!: string;
+  /** Whether the balance would pay for it today. */
+  @ApiProperty() covered!: boolean;
+  @ApiPropertyOptional({ type: Number, nullable: true }) balance?: number | null;
+}
+
 /** Its label, to print: the picture, and what the QR on it says. */
 export class BusinessParcelLabel {
   @ApiProperty() parcelId!: string;

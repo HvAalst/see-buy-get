@@ -7,7 +7,8 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { MailService } from '../../foundation/mail/mail.service';
 import { tryDelivery, type HookMessage } from '../../foundation/outbound/hook-delivery';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { BUSINESS_HOOK_EVENTS, type BusinessHookEvent, type BusinessSystemCounts, type BusinessSystemView } from './business-hook.types';
+import { BUSINESS_HOOK_EVENTS, BUSINESS_PARCEL_EVENTS, type BusinessHookEvent, type BusinessParcelEvent, type BusinessSystemCounts, type BusinessSystemView } from './business-hook.types';
+import { BusinessParcelService } from './business-parcel.service';
 import { BusinessService, type ActingMember } from './business.service';
 import { CompanyKeyService } from './company-key.service';
 import { InboundService } from './inbound.service';
@@ -21,6 +22,18 @@ const DRAIN_MS = Number(process.env.GLOS_CALLBACK_DRAIN_MS ?? 15_000);
 const TELL_EVERY_MS = 24 * 3_600_000;
 
 /** Which of our events is which of the business's, and where the load is in it. */
+/** A business's own parcels (2026-10-29): which of ours is which of its events. Every one carries the parcel's id. */
+const PARCEL_TOPICS: ReadonlyArray<[string, BusinessParcelEvent]> = [
+  [GlosEvent.Pudo.ParcelPaid, 'parcel.paid'],
+  [GlosEvent.Pudo.ParcelAccepted, 'parcel.handed_in'],
+  [GlosEvent.Pudo.ParcelReadyForPickup, 'parcel.ready'],
+  [GlosEvent.Pudo.ParcelReleaseCodeReissued, 'parcel.ready'],
+  [GlosEvent.Pudo.ParcelDelivered, 'parcel.collected'],
+  [GlosEvent.Pudo.ParcelDisputed, 'parcel.disputed'],
+  [GlosEvent.Pudo.ParcelVoided, 'parcel.called_off'],
+  [GlosEvent.Pudo.ParcelLost, 'parcel.lost'],
+];
+
 const TOPICS: ReadonlyArray<[string, BusinessHookEvent, (p: Record<string, unknown>) => string | undefined]> = [
   // A carrier took it: claimed from the board, an accepted price, or an office's own driver.
   [GlosEvent.Pudo.LoadClaimed, 'load.taken', (p) => (p.kind === 'freight' ? String(p.ref ?? '') : undefined)],
@@ -85,6 +98,8 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
     @Optional() private readonly keyring?: CompanyKeyService,
     // Inbound, reading A: the business a load is coming in to hears each step of it too, as its Coming in reads it.
     @Optional() private readonly inbound?: InboundService,
+    // A business's parcels (2026-10-29): what its system hears of them, as its Parcels screen reads them.
+    @Optional() private readonly parcelRows?: BusinessParcelService,
   ) {}
 
   onModuleInit(): void {
@@ -122,6 +137,11 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
     this.events.subscribe<{ freightId?: string }>(GlosEvent.Pudo.InboundClosed, (e) => {
       if (e.payload?.freightId) this.relayInbound('inbound.closed', String(e.payload.freightId));
     });
+    for (const [topic, event] of PARCEL_TOPICS) {
+      this.events.subscribe<{ parcelId?: string }>(topic, (e) => {
+        if (e.payload?.parcelId) this.relayParcel(event, String(e.payload.parcelId));
+      });
+    }
     this.timer = setInterval(() => void this.drain(), DRAIN_MS);
     this.timer.unref?.();
   }
@@ -148,6 +168,12 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
       if (load) this.enqueue(entity.entityId, event, { load, ...also });
     }
     this.relayInbound(`inbound.${event.slice('load.'.length)}`, freightId, also);
+  }
+
+  /** One step of a business's own parcel, to its system: exactly what its Parcels screen reads. A store's parcel: nothing. */
+  relayParcel(event: BusinessParcelEvent, parcelId: string): void {
+    const found = this.parcelRows?.rowFor(parcelId);
+    if (found) this.enqueue(found.entityId, event, { parcel: found.row });
   }
 
   /**
@@ -264,7 +290,7 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
       hasSecret: Boolean(s?.secret),
       ...(s?.secretTurnedAt ? { secretTurnedAt: s.secretTurnedAt } : {}),
       ...extra,
-      events: [...BUSINESS_HOOK_EVENTS],
+      events: [...BUSINESS_HOOK_EVENTS, ...BUSINESS_PARCEL_EVENTS],
       messages: [...this.outbox.values()]
         .filter((m) => m.entityId === entityId)
         .sort((a, b) => b.at.localeCompare(a.at))

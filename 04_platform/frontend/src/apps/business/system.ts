@@ -47,6 +47,14 @@ const EVENT_WORDS: Record<string, MessageKey> = {
   'load.cancelled': 'business.system.event.cancelled',
   'load.claim_opened': 'business.system.event.claimOpened',
   'load.claim_decided': 'business.system.event.claimDecided',
+  // A business's own parcels (2026-10-29).
+  'parcel.paid': 'business.system.event.parcelPaid',
+  'parcel.handed_in': 'business.system.event.parcelHandedIn',
+  'parcel.ready': 'business.system.event.parcelReady',
+  'parcel.collected': 'business.system.event.parcelCollected',
+  'parcel.disputed': 'business.system.event.parcelDisputed',
+  'parcel.called_off': 'business.system.event.parcelCalledOff',
+  'parcel.lost': 'business.system.event.parcelLost',
   test: 'business.system.event.test',
 };
 
@@ -58,7 +66,9 @@ export function eventWords(event: string, t: Translate): string {
 /** The load a message is about, by its code, read from the body that was sent. */
 export function loadCodeOf(m: SystemMessage): string | undefined {
   try {
-    const code = (JSON.parse(m.body) as { data?: { load?: { code?: unknown } } }).data?.load?.code;
+    const data = (JSON.parse(m.body) as { data?: { load?: { code?: unknown }; parcel?: { parcelId?: unknown } } }).data;
+    // A load by its code; a parcel (2026-10-29) by its number.
+    const code = data?.load?.code ?? data?.parcel?.parcelId;
     return typeof code === 'string' ? code : undefined;
   } catch {
     return undefined;
