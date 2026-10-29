@@ -98,7 +98,7 @@ describe('a business’s parcel delivered to its own place', () => {
 
   /** As the network would: ready on its shop's shelf. */
   const readyAtShop = async (parcelId: string) => {
-    Object.assign(app.get(ParcelService).get(parcelId), { status: 'Ready_For_Pickup', binSlot: 'B2' });
+    Object.assign(app.get(ParcelService).get(parcelId), { status: 'Ready_For_Pickup', binSlot: 'B2', readyAt: new Date().toISOString() });
     await app.get(EventBus).publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId, destAgentDid: kisumu.did }, { source: 'test' });
   };
 
