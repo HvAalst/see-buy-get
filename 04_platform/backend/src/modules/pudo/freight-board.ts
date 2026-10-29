@@ -100,6 +100,8 @@ export function blockersFor(
     rail?: string;
     /** Secured air cargo, and nobody has seen this driver's ID yet (2026-10-29): the take's words. */
     secured?: string;
+    /** Air cargo not yet released at the airport (2026-10-29): the take's words. */
+    release?: string;
     indicativeCharge?: number;
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
@@ -129,6 +131,8 @@ export function blockersFor(
     if (ctx.cover) out.push({ kind: 'resolvable', code: 'COVER_REQUIRED', message: ctx.cover });
     // …and a box still on the train: no lorry brings it to the terminal sooner.
     if (ctx.rail) out.push({ kind: 'resolvable', code: 'RAIL_NOT_ARRIVED', message: ctx.rail });
+    // …and air cargo still in the shed: no lorry releases it.
+    if (ctx.release) out.push({ kind: 'resolvable', code: 'NOT_RELEASED', message: ctx.release });
     // …and secured cargo: no lorry shows whose ID was seen.
     if (ctx.secured) out.push({ kind: 'resolvable', code: 'SECURED_CARGO', message: ctx.secured });
     out.push({ kind: 'resolvable', code: 'NO_VEHICLE', message: 'Couple to a vehicle to see whether you can take this' });
@@ -144,6 +148,8 @@ export function blockersFor(
   if (ctx.cover) out.push({ kind: 'resolvable', code: 'COVER_REQUIRED', message: ctx.cover });
   // A box still on its way by rail: a truck sent now waits at the terminal for it (2026-10-29).
   if (ctx.rail) out.push({ kind: 'resolvable', code: 'RAIL_NOT_ARRIVED', message: ctx.rail });
+  // Air cargo not yet released at the airport: a truck sent now waits at the shed (2026-10-29).
+  if (ctx.release) out.push({ kind: 'resolvable', code: 'NOT_RELEASED', message: ctx.release });
   // Secured air cargo: carried only by a driver whose ID was seen (2026-10-29).
   if (ctx.secured) out.push({ kind: 'resolvable', code: 'SECURED_CARGO', message: ctx.secured });
   if (ctx.overHours) {

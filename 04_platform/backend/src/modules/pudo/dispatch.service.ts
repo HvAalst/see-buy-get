@@ -71,6 +71,7 @@ import type { LoadSeal, LoadSealView, SealBreakCause, SealsAtDelivery } from './
 import { FINDING_WORDS, type TamperStage, type UnitHold } from './tamper.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 import { railRefusal, type FreightRailGate } from './rail-leg.types';
+import { releaseRefusal, type FreightReleaseGate } from './air-release';
 
 /**
  * FB0c — how a load may be taken, defaulted ON READ.
@@ -1357,6 +1358,9 @@ export class DispatchService {
     // Where road meets rail (2026-10-29): no truck is sent for a box the railway has not said is there.
     const rail = railRefusal(f);
     if (rail) throw new GlosError('INVALID_STATE', rail);
+    // Air cargo still in the handler's shed (2026-10-29): no truck is sent for what customs or an agency has not released.
+    const release = releaseRefusal(f);
+    if (release) throw new GlosError('INVALID_STATE', release);
     // Secured air cargo (2026-10-29): only a driver whose ID was seen takes it — its security is kept by who holds it.
     const secured = this.securedRefusal(driverDid, f, vehicle);
     if (secured) throw new GlosError('FORBIDDEN', secured);
@@ -1498,6 +1502,7 @@ export class DispatchService {
           declaration,
           cover: input.driverDid ? this.coverRefusal(input.driverDid, f, now) : undefined,
           rail: railRefusal(f),
+          release: releaseRefusal(f),
           secured: input.driverDid ? this.securedRefusal(input.driverDid, f, vehicle) : undefined,
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
@@ -4624,7 +4629,10 @@ export class DispatchService {
   }
 
   private railRefusalFor(load: Claimable): string | undefined {
-    return load.kind === 'freight' ? railRefusal(this.freights.get(load.ref)) : undefined;
+    // The rail's gate, and the airport's (2026-10-29): both keep a load from the offers until the goods may be collected.
+    if (load.kind !== 'freight') return undefined;
+    const f = this.freights.get(load.ref);
+    return railRefusal(f) ?? releaseRefusal(f);
   }
 
   /**
@@ -4632,6 +4640,22 @@ export class DispatchService {
    * lifts it when the railway's arrival notice is recorded or the importer says to collect anyway. Only an untaken load
    * gets a gate: one already taken is the import's to warn about, never pulled from under its driver.
    */
+  /**
+   * WHERE ROAD MEETS AIR (2026-10-29): the import sets the gate on its road leg while the cargo is not released at the
+   * airport, and lifts it when the last release is recorded or the importer says to go anyway. As the rail's: only an
+   * untaken load gets a gate closed on it.
+   */
+  setReleaseGate(freightId: string, gate: FreightReleaseGate | undefined): boolean {
+    const f = this.freights.get(freightId);
+    if (!f) return false;
+    const closes = gate && gate.missing.length && !gate.collectAnyway;
+    if (closes && (f.claimedBy || !['scheduled', 'available'].includes(f.status))) return false;
+    if (gate) f.waitsForRelease = gate;
+    else delete f.waitsForRelease;
+    this.freights.set(freightId, f);
+    return true;
+  }
+
   setRailGate(freightId: string, gate: FreightRailGate | undefined): boolean {
     const f = this.freights.get(freightId);
     if (!f) return false;

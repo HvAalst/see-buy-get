@@ -4,6 +4,7 @@
 
 import { ClientRef } from './business-client.types';
 import { FreightRailGate } from './rail-leg.types';
+import { FreightReleaseGate } from './air-release';
 import { ContractRef } from './carriage-contract.types';
 import { PlannedOn } from './fleet-plan.types';
 import { OrderHandOn } from './fleet-partner.types';
@@ -760,6 +761,8 @@ export class Freight {
   @ApiPropertyOptional() coverRequired?: boolean;
   /** The box is still on its way by rail (2026-10-29): nobody takes this until the railway said it is there, or the importer said to go anyway. */
   @ApiPropertyOptional({ type: FreightRailGate }) waitsForRail?: FreightRailGate;
+  /** Air cargo not yet released at the airport (2026-10-29): nobody takes this until it is, or the importer said to go anyway. */
+  @ApiPropertyOptional({ type: FreightReleaseGate }) waitsForRelease?: FreightReleaseGate;
   /** CMR Art. 6(2)(d) — the value of the goods, and a special interest in delivery, as the sender declared them. */
   @ApiPropertyOptional({ type: FreightAmount }) declaredValue?: FreightAmount;
   @ApiPropertyOptional({ type: FreightAmount }) specialInterest?: FreightAmount;

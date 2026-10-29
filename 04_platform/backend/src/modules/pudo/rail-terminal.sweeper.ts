@@ -20,6 +20,8 @@ export class RailTerminalSweeper implements OnApplicationBootstrap, OnModuleDest
     this.timer = setInterval(() => {
       try {
         this.imports.sweepRail();
+        // The handler's free storage by air (2026-10-29), on the same beat.
+        this.imports.sweepAir();
       } catch (err) {
         this.logger.warn(`the rail terminal sweep did not run: ${(err as Error).message}`);
       }

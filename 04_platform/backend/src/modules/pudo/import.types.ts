@@ -2,6 +2,7 @@ import { Quote } from './quote.types';
 import { HeldRailNote, RailNoteView } from './rail-note.types';
 import { ImportByRail, ImportByRailView, LEG_MODES, type LegMode } from './rail-leg.types';
 import { FblView, HeldFbl } from './fbl-note.types';
+import { ImportAir, ImportAirView } from './air-release';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
 import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';
@@ -484,6 +485,8 @@ export class ImportConsignment {
   @ApiPropertyOptional({ type: [HeldRailNote] }) formerRail?: HeldRailNote[];
   /** Inland by rail (2026-10-29): the rail terminal our truck collects at, and the railway's arrival notice. */
   @ApiPropertyOptional({ type: ImportByRail }) byRail?: ImportByRail;
+  /** By air (2026-10-29): the waybill, the flights, the handler's shed and the release, step by step. */
+  @ApiPropertyOptional({ type: ImportAir }) air?: ImportAir;
   /** The forwarder's FIATA bill or waybill the goods came under (2026-10-29): held, never issued by us. */
   @ApiPropertyOptional({ type: HeldFbl }) fbl?: HeldFbl;
   @ApiPropertyOptional({ type: [HeldFbl] }) formerFbl?: HeldFbl[];
@@ -715,6 +718,8 @@ export class ImportDetail extends ImportRow {
   @ApiPropertyOptional({ type: RailNoteView }) rail?: RailNoteView;
   /** Inland by rail: the arrival, the gate on the road leg, and the rail terminal's free days. */
   @ApiPropertyOptional({ type: ImportByRailView }) byRail?: ImportByRailView;
+  /** By air: the release still missing, the gate on the road leg, the handler's free storage, the waybill read. */
+  @ApiPropertyOptional({ type: ImportAirView }) air?: ImportAirView;
   /** The forwarder's bill with what it means, and what it says of the box against ours. */
   @ApiPropertyOptional({ type: FblView }) fbl?: FblView;
 }

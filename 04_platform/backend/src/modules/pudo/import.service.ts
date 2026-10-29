@@ -46,6 +46,8 @@ import {
   RequiredPaperView,
 } from './import.types';
 import { modeOf } from './import.types';
+import { airAgenciesOf, airReleaseGaps, airStorageClock, releaseRefusal, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release';
+import { airlineOfPrefix, awbDigits, awbProblem, checkAirWaybill, formatAwb } from '../../foundation/carriage-law/air';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
 import { containerType, heightUnstated, outOfGauge } from './container-type';
 import { CARGO_NATURES, DANGEROUS_GOODS_NATURES, type CargoNature } from './cargo.types';
@@ -509,6 +511,7 @@ export class ImportService {
       ...(consignment.containerNo ? { box: this.boxes.viewOf(consignment.containerNo, Date.now(), { importId: consignment.importId }) } : {}),
       ...(consignment.rail ? { rail: railNoteView(consignment.rail, consignment.containerNo ? { containerNo: consignment.containerNo } : {}, consignment.formerRail?.length ?? 0) } : {}),
       ...(consignment.byRail ? { byRail: this.railViewOf(consignment, Date.now()) } : {}),
+      ...(consignment.air ? { air: this.airViewOf(consignment, Date.now()) } : {}),
       ...(consignment.fbl ? { fbl: fblView(consignment.fbl, { ...(consignment.containerNo ? { containerNo: consignment.containerNo } : {}), port: { label: 'discharge', value: consignment.dischargePort ?? consignment.destPort }, countries: [consignment.originCountry, consignment.destCountry] }, consignment.formerFbl?.length ?? 0) } : {}),
     };
   }
@@ -681,6 +684,213 @@ export class ImportService {
         if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:${key}`, data: { importId: c.importId } }).catch(() => undefined);
       }
       told.push(`${c.code}:rail:${clock.state}`);
+    }
+    return told;
+  }
+
+  /* ------------------------------------------------------------ the import by air (2026-10-29) -- */
+
+  /**
+   * AN IMPORT BY AIR: the waybill it came under, its flights, the handler's shed it waits in, the cargo as booked, the
+   * agencies of the destination's list the goods need, and the handler's free storage as on its notice. The importer's or
+   * its agent's to record; recorded again, the release steps already given are kept.
+   */
+  setAir(
+    importId: string,
+    actorEntityId: string,
+    input: { awb: string; waybillKind: 'master' | 'house' | 'direct'; houseNumber?: string; airline?: string; flights: Array<{ flight: string; date: string; from: string; to: string; arrivesLocal?: string }>; handler: string; pieces: number; weightKg: number; minC?: number; maxC?: number; agencies: string[]; freeHours?: number; freeHoursSource?: string },
+    by: string,
+    now = Date.now(),
+  ): ImportDetail {
+    const c = this.requireImport(importId);
+    if (this.sideOf(c, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (c.mode && c.mode !== 'air') throw new GlosError('INVALID_STATE', `${c.code} came by ${c.mode}: an air waybill is for goods that came by air`);
+    if (c.roadFreightId && this.dispatch.requireFreightPublic(c.roadFreightId).claimedBy) throw new GlosError('INVALID_STATE', `A driver has taken the road leg of ${c.code} already: what it collects cannot change now`);
+    // Medicines wait for the lawyer (legal.html L29); live animals for the next step.
+    if (c.natureCode === 'HUM') throw new GlosError('FORBIDDEN', 'Medicines and vaccines are not carried from an airport on SeeBuyGet yet: who must hold a licence to carry them is with our lawyer (legal.html L29).', { reason: 'medicines' });
+    if (c.natureCode === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Live animals and biological goods by air come after this first step: they are not carried from an airport on SeeBuyGet yet.', { reason: 'biological' });
+    const problem = awbProblem(input.awb);
+    if (problem === 'format') throw new GlosError('VALIDATION_FAILED', 'An air waybill number is eleven digits: the airline’s three, and eight more — like 706-12345675', { field: 'awb' });
+    if (problem === 'check_digit') throw new GlosError('VALIDATION_FAILED', 'That air waybill number’s last digit does not check: the first seven of its last eight, divided by 7, leave the last. Look at the number again.', { field: 'awb' });
+    const digits = awbDigits(input.awb);
+    const airline = airlineOfPrefix(digits.slice(0, 3))?.name ?? input.airline?.trim();
+    if (!airline) throw new GlosError('FIELD_REQUIRED', `We do not hold the airline for prefix ${digits.slice(0, 3)}: say which airline it is`, { field: 'airline' });
+    if (input.waybillKind === 'house' && !input.houseNumber?.trim()) throw new GlosError('FIELD_REQUIRED', 'A consolidation: give the forwarder’s house waybill number too', { field: 'houseNumber' });
+    const handler = input.handler?.trim();
+    if (!handler) throw new GlosError('FIELD_REQUIRED', 'Say whose shed it waits in at the airport: the handler named on the notice of arrival', { field: 'handler' });
+    const flights = (input.flights ?? []).map((f) => ({ flight: f.flight.replace(/\s+/g, ' ').trim().toUpperCase(), date: f.date, from: f.from.trim().toUpperCase(), to: f.to.trim().toUpperCase(), ...(f.arrivesLocal ? { arrivesLocal: f.arrivesLocal } : {}) }));
+    if (!flights.length) throw new GlosError('FIELD_REQUIRED', 'Give the flight it came on', { field: 'flights' });
+    if (!(input.pieces > 0) || !(input.weightKg > 0)) throw new GlosError('FIELD_REQUIRED', 'Say how many pieces and what they weigh, as on the air waybill', { field: 'pieces' });
+    const temp = input.minC != null && input.maxC != null ? { minC: input.minC, maxC: input.maxC } : undefined;
+    if (temp && !(temp.minC < temp.maxC)) throw new GlosError('VALIDATION_FAILED', 'The lowest temperature must be below the highest', { field: 'minC' });
+    if (c.natureCode === 'FOP' && !temp) throw new GlosError('FIELD_REQUIRED', 'Perishable goods: give the temperature range they must be kept in, in °C', { field: 'minC' });
+    // The agencies of the destination's list, by key: a key the list does not hold is refused, never kept as a guess.
+    const listed = airAgenciesOf(c.destCountry);
+    const keys = [...new Set(input.agencies ?? [])];
+    const unknown = keys.filter((k) => !listed.some((a) => a.key === k));
+    if (unknown.length) throw new GlosError('VALIDATION_FAILED', `Not an agency we list for ${c.destCountry}: ${unknown.join(', ')}`, { field: 'agencies' });
+    const before = c.air;
+    const air: ImportAir = {
+      awb: formatAwb(digits),
+      waybillKind: input.waybillKind === 'house' ? 'house' : input.waybillKind === 'direct' ? 'direct' : 'master',
+      ...(input.houseNumber?.trim() ? { houseNumber: input.houseNumber.trim().slice(0, 40) } : {}),
+      airline: airline.slice(0, 80),
+      flights,
+      arrivalAirport: flights[flights.length - 1].to,
+      handler: handler.slice(0, 80),
+      pieces: Math.round(input.pieces),
+      weightKg: Math.round(input.weightKg * 10) / 10,
+      ...(temp ? { temp } : {}),
+      ...(before?.notified ? { notified: before.notified } : {}),
+      ...(before?.customs ? { customs: before.customs } : {}),
+      // An agency already released keeps its release; one taken off the list goes; one added waits for its own.
+      agencies: keys.map((key) => before?.agencies.find((a) => a.key === key) ?? { key, name: listed.find((a) => a.key === key)!.name }),
+      ...(before?.deliveryOrder ? { deliveryOrder: before.deliveryOrder } : {}),
+      ...(before?.collectAnyway ? { collectAnyway: before.collectAnyway } : {}),
+      ...(input.freeHours != null ? { freeHours: input.freeHours } : {}),
+      ...(input.freeHoursSource?.trim() ? { freeHoursSource: input.freeHoursSource.trim().slice(0, 160) } : {}),
+      ...(before?.warned ? { warned: before.warned } : {}),
+      recordedAt: new Date(now).toISOString(),
+      recordedBy: by,
+    };
+    c.air = air;
+    c.mode = 'air';
+    this.imports.set(c.importId, c);
+    this.gateAirLeg(c);
+    return this.detail(c.importId, actorEntityId);
+  }
+
+  /**
+   * ONE STEP OF THE RELEASE, as it happened: the handler's notice of arrival (its free storage starts), customs' release,
+   * an agency's release (by its key), the handler's delivery order. Its reference, when, and who said so. The importer or
+   * its agent records it; a step said again is a correction, and keeps the newer word.
+   */
+  recordAirStep(importId: string, actorEntityId: string, input: { step: string; reference?: string; at?: string }, by: string, now = Date.now()): ImportDetail {
+    const c = this.requireImport(importId);
+    if (this.sideOf(c, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (!c.air) throw new GlosError('INVALID_STATE', `${c.code} has no air waybill recorded: say what it came under first`);
+    const at = input.at ? Date.parse(input.at) : now;
+    if (Number.isNaN(at) || at > now + 5 * 60_000) throw new GlosError('VALIDATION_FAILED', 'Say when it happened — a moment that has come', { field: 'at' });
+    const reference = input.reference?.trim().slice(0, 60);
+    const agency = c.air.agencies.find((a) => a.key === input.step);
+    if (!['notified', 'customs', 'delivery_order'].includes(input.step) && !agency) throw new GlosError('VALIDATION_FAILED', 'Which step: the notice of arrival, customs, one of the agencies on this import, or the delivery order', { field: 'step' });
+    // A release is a paper with a number: customs' release order and the handler's delivery order are given by theirs.
+    if ((input.step === 'customs' || input.step === 'delivery_order') && !(reference && reference.length >= 3)) {
+      throw new GlosError('FIELD_REQUIRED', input.step === 'customs' ? 'Give the customs release’s reference — the release order or entry number' : 'Give the delivery order’s number, or the gate pass’s', { field: 'reference' });
+    }
+    const step: AirReleaseStep = { ...(reference ? { reference } : {}), at: new Date(at).toISOString(), by, recordedAt: new Date(now).toISOString() };
+    if (input.step === 'notified') c.air = { ...c.air, notified: step };
+    else if (input.step === 'customs') c.air = { ...c.air, customs: step };
+    else if (input.step === 'delivery_order') c.air = { ...c.air, deliveryOrder: step };
+    else c.air = { ...c.air, agencies: c.air.agencies.map((a) => (a.key === input.step ? { ...a, released: step } : a)) };
+    this.imports.set(c.importId, c);
+    this.gateAirLeg(c);
+    return this.detail(c.importId, actorEntityId);
+  }
+
+  /**
+   * THE IMPORTER'S WORD TO SEND THE TRUCK BEFORE THE RELEASE — the agent says it will be out within the hour, the shed
+   * confirmed by phone. Its decision alone, because its truck is the one that waits: kept with its reason and its own
+   * acknowledgement, and shown wherever the gate would be.
+   */
+  collectAirAnyway(importId: string, actorEntityId: string, input: { reason: string; waitingIsMine: boolean }, by: string, now = Date.now()): ImportDetail {
+    const c = this.requireImport(importId);
+    if (this.sideOf(c, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    this.requireImporter(c, actorEntityId);
+    if (!c.air) throw new GlosError('INVALID_STATE', `${c.code} did not come by air`);
+    if (!airReleaseGaps(c.air).length) throw new GlosError('INVALID_STATE', 'It is released already: nothing waits');
+    const why = input.reason?.trim();
+    if (!why || why.length < 5) throw new GlosError('FIELD_REQUIRED', 'Say why the truck goes before it is released', { field: 'reason' });
+    if (input.waitingIsMine !== true) throw new GlosError('FIELD_REQUIRED', 'A truck sent before the release may wait at the shed: say that its waiting is yours', { field: 'waitingIsMine' });
+    c.air = { ...c.air, collectAnyway: { by, at: new Date(now).toISOString(), reason: why.slice(0, 300) } };
+    this.imports.set(c.importId, c);
+    this.gateAirLeg(c);
+    return this.detail(c.importId, actorEntityId);
+  }
+
+  /** The road leg's gate, as the release stands: closed while something is missing, opened by the last release or the importer's word. */
+  private gateAirLeg(c: ImportConsignment): void {
+    if (!c.air || !c.roadFreightId) return;
+    this.dispatch.setReleaseGate(c.roadFreightId, { importId: c.importId, importCode: c.code, place: c.air.handler, missing: airReleaseGaps(c.air), ...(c.air.collectAnyway ? { collectAnyway: c.air.collectAnyway } : {}) });
+  }
+
+  private airViewOf(c: ImportConsignment, now: number): ImportAirView {
+    const a = c.air!;
+    const leg = c.roadFreightId ? this.dispatch.requireFreightPublic(c.roadFreightId) : undefined;
+    const roadWaits = releaseRefusal(leg);
+    const check = checkAirWaybill({ number: a.awb, kind: a.waybillKind, ...(a.houseNumber ? { houseNumber: a.houseNumber } : {}), from: c.originCountry, to: c.destCountry, madeOutOn: a.flights[0]?.date, pieces: a.pieces, weightKg: a.weightKg }, {}, new Date(now).toISOString().slice(0, 10));
+    return {
+      ...a,
+      gaps: airReleaseGaps(a),
+      clock: airStorageClock({ ...(a.notified ? { notifiedAt: a.notified.at } : {}), ...(a.freeHours != null ? { freeHours: a.freeHours } : {}), ...(leg?.pickedUpAt && leg.status !== 'cancelled' ? { leftAt: leg.pickedUpAt } : {}) }, now),
+      ...(roadWaits ? { roadWaits } : {}),
+      check: { number: check.number, ...(check.problem ? { problem: check.problem } : {}), ...(check.airline ? { airline: check.airline.name } : {}), regime: check.regime, ...(check.rules ? { rules: check.rules } : {}), limits: check.limits, claims: check.claims, caveats: check.caveats, mismatches: check.mismatches },
+    };
+  }
+
+  /** The road leg by air: from the handler's shed, the cargo as on the waybill, chilled in its own range; gated until released. */
+  private mintAirRoadLeg(c: ImportConsignment, actorEntityId: string, input: { pickupLocation: GeoPoint; pickupLabel?: string; destLabel: string; destLocation?: GeoPoint; weightKg: number }, by: string, now: number): ImportDetail {
+    const a = c.air!;
+    if (c.roadFreightId) throw new GlosError('CONFLICT', `${c.code} already has its road leg (${c.roadFreightCode}) — a second would send two trucks for one consignment`);
+    if (c.natureCode === 'HUM' || c.natureCode === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Medicines, vaccines and live animals are not carried from an airport on SeeBuyGet yet (legal.html L29).');
+    if (!input.destLabel?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say where it is going');
+    const importer = this.entities.get(c.importerEntityId);
+    const weightKg = input.weightKg > 0 ? input.weightKg : a.weightKg;
+    const freight = this.dispatch.registerFreight(
+      {
+        description: `${c.code} — ${c.goodsDescription} (${a.pieces} pieces, by air)`.slice(0, 200),
+        pickupLocation: input.pickupLocation,
+        pickupLabel: input.pickupLabel?.trim() || a.handler,
+        destLabel: input.destLabel.trim(),
+        destLocation: input.destLocation,
+        weightKg,
+        packages: a.pieces,
+        packaging: 'piece',
+        ...(a.temp ? { natureCode: 'FOP' as CargoNature, tempRange: { minC: a.temp.minC, maxC: a.temp.maxC } } : c.natureCode ? { natureCode: c.natureCode as CargoNature } : {}),
+        ...(c.dangerous?.properShippingName?.trim() ? { dangerousGoods: { unNumber: c.dangerous.unNumber, properShippingName: c.dangerous.properShippingName.trim(), hazardClass: c.dangerous.imdgClass } } : {}),
+        pickupCountry: c.destCountry,
+        destCountry: c.destCountry,
+        instructions: [`Import ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}. Collect it at ${a.handler} against this waybill and the delivery order.`, a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : ''].filter(Boolean).join(' ').slice(0, 500),
+        postedByDid: importer.did,
+        externalOrderId: c.code,
+      },
+      now,
+    );
+    Object.assign(c, { roadFreightId: freight.freightId, roadFreightCode: freight.code, roadMintedAt: new Date(now).toISOString(), roadMintedBy: by });
+    this.imports.set(c.importId, c);
+    this.gateAirLeg(c);
+    return this.detail(c.importId, actorEntityId);
+  }
+
+  /**
+   * THE HANDLER'S FREE STORAGE, warned in the bell — once in its last six hours, once when it ended with the cargo still in
+   * the shed. Keyed by the end, so a corrected figure is warned afresh. Its importer and its agent are told. Hours, never money.
+   */
+  sweepAir(now = Date.now()): string[] {
+    const told: string[] = [];
+    for (const c of [...this.imports.values()]) {
+      if (!c.air?.notified || c.air.freeHours == null) continue;
+      const clock = this.airViewOf(c, now).clock;
+      if (clock.state !== 'due_soon' && clock.state !== 'over') continue;
+      const key = `${clock.state}@${clock.freeUntil}`;
+      if ((c.air.warned ?? []).includes(key)) continue;
+      c.air = { ...c.air, warned: [...(c.air.warned ?? []), key] };
+      this.imports.set(c.importId, c);
+      const end = clock.freeUntil!.slice(0, 16).replace('T', ' ') + ' UTC';
+      const [title, body] =
+        clock.state === 'over'
+          ? [`${c.code}: the free storage at ${c.air.handler} ended`, `The ${c.air.freeHours} free hours at ${c.air.handler} ended on ${end}, and the cargo is still there. Each hour or day over is the handler’s to charge, under its tariff — collect it.`]
+          : [`${c.code}: the free storage at ${c.air.handler} ends soon`, `The cargo’s ${c.air.freeHours} free hours at ${c.air.handler} end on ${end}. Collect it before then: after that the handler may charge for storage, under its tariff.${airReleaseGaps(c.air).length ? ` Still missing before it may leave: ${airReleaseGaps(c.air).join(', ')}.` : ''}`];
+      for (const entityId of [c.importerEntityId, c.agentEntityId].filter((x): x is string => Boolean(x))) {
+        let did: string | undefined;
+        try {
+          did = this.entities.get(entityId).did;
+        } catch {
+          did = undefined;
+        }
+        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+      }
+      told.push(`${c.code}:air:${clock.state}`);
     }
     return told;
   }
@@ -1487,6 +1697,8 @@ export class ImportService {
   ): ImportDetail {
     const consignment = this.requireImport(importId);
     this.requireImporter(consignment, actorEntityId);
+    // By air (2026-10-29): one leg, from the handler's shed — posted any time, taken only once released.
+    if (consignment.air) return this.mintAirRoadLeg(consignment, actorEntityId, input, by, now);
     /*
      * BL1 — WHICH LEG IS THIS? The chain decides, not the caller.
      *

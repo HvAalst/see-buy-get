@@ -4,6 +4,7 @@ import { PapersWatchService } from './papers-watch.service';
 import { RailCheckDto, RailNoteDto, type RailNoteCheckView, type RailwayList } from './rail-note.types';
 import { railwayRows } from './rail-note';
 import { ImportByRailDto, RailArrivalDto, RailCollectAnywayDto } from './rail-leg.types';
+import { AIR_AGENCIES_SOURCE, airAgenciesOf, ImportAirAnywayDto, ImportAirDto, ImportAirStepDto, type AirAgency } from './air-release';
 import { FblDto, FblVerifiedDto } from './fbl-note.types';
 import { checkRailNote } from '../../foundation/carriage-law/rail';
 import type { FleetDriver, FleetManager, FleetSetupRow } from './fleet.types';
@@ -1336,6 +1337,13 @@ export class SbgController {
     return { items: this.imports.knownPapers(q.country, q.port) };
   }
 
+  /** The agencies that may have to release air cargo in a country, and what each looks at (2026-10-29): the importer or its agent chooses. */
+  @Roles('operator', 'entity_admin', 'business')
+  @Get('imports/air/agencies')
+  importAirAgencies(@Query('country') country?: string): { items: AirAgency[]; source: string } {
+    return { items: airAgenciesOf(country), source: AIR_AGENCIES_SOURCE };
+  }
+
   @Roles('operator', 'entity_admin', 'business')
   @Get('imports/:importId')
   importDetail(@Param('importId') importId: string, @Actor() actor: IntrospectionResult, @Query('entityId') entityId?: string): ImportDetail {
@@ -1464,6 +1472,30 @@ export class SbgController {
   importRailArrived(@Param('importId') importId: string, @Body() dto: RailArrivalDto, @Actor() actor: IntrospectionResult): ImportDetail {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The arrival is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
     return this.imports.recordRailArrival(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+  }
+
+  /** By air (2026-10-29): the waybill, the flights, the handler's shed, the cargo and the agencies the goods need. */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/air')
+  importAir(@Param('importId') importId: string, @Body() dto: ImportAirDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The air waybill is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    return this.imports.setAir(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+  }
+
+  /** One step of the release by air: the notice of arrival, customs, an agency, the delivery order — with its reference. */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/air/release')
+  importAirRelease(@Param('importId') importId: string, @Body() dto: ImportAirStepDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The release is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    return this.imports.recordAirStep(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+  }
+
+  /** The importer's word to send the truck before the release — with why, and that the waiting is its own. */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/air/collect-anyway')
+  importAirCollectAnyway(@Param('importId') importId: string, @Body() dto: ImportAirAnywayDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the importer decides to send a truck before the cargo is released');
+    return this.imports.collectAirAnyway(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
   /** The importer's word to send the truck before the arrival notice — with why. */
