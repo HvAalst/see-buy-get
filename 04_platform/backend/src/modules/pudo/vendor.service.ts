@@ -290,6 +290,39 @@ export class VendorService {
     return vendor;
   }
 
+  /** A business's parcel account, where it opened one (2026-10-29). */
+  forBusiness(entityId: string): Vendor | undefined {
+    return [...this.vendors.values()].find((v) => v.business?.entityId === entityId);
+  }
+
+  /**
+   * OPEN A BUSINESS'S PARCEL ACCOUNT (the user, 2026-10-29: "Billed to the business", from "A prepaid balance"): a till
+   * with the company of ours in its country, as a store has, which its parcels are paid from. Once per business — asked
+   * again, it answers the one it has. Refused where we hold no money: a balance nobody can pay into is a promise nobody
+   * keeps. Nobody signs in to it as a store; the business's own people and its key act on it.
+   */
+  openForBusiness(business: { entityId: string; did: string; name: string; country: string }): Vendor {
+    const had = this.forBusiness(business.entityId);
+    if (had) return had;
+    const country = requireCountryCode(business.country, DEFAULT_VENDOR_COUNTRY);
+    this.presence.require(country, 'holdFloat');
+    if (!this.entities.forJurisdiction(country)) throw new GlosError('FORBIDDEN', `SeeBuyGet holds no money in ${country} yet, so a business there cannot pay for parcels from a balance`);
+    const vendor = this.register({ name: business.name, country });
+    vendor.business = { entityId: business.entityId, did: business.did };
+    this.vendors.set(vendor.vendorId, vendor);
+    return vendor;
+  }
+
+  /** The name a business's parcels go out under follows the business's own (it may rename itself). */
+  keepBusinessName(vendorId: string, name: string): Vendor {
+    const vendor = this.get(vendorId);
+    if (vendor.business && name.trim() && vendor.name !== name.trim()) {
+      vendor.name = name.trim();
+      this.vendors.set(vendor.vendorId, vendor);
+    }
+    return vendor;
+  }
+
   /**
    * Rotate the store's signing secret — proven with the CURRENT secret. The old one stops opening the console at
    * once, every session holding it is signed out, and every callback from now on is signed with the new one (so the
@@ -326,7 +359,8 @@ export class VendorService {
     // secret we issue is ninety-six random bits and nobody guesses it; one a store chose for itself may be anything.
     this.tries.check(vendorId);
     const vendor = this.vendors.get(vendorId);
-    if (!vendor) throw this.tries.wrong(vendorId).error;
+    // A business's parcel account is no store: nobody signs in to it with a store ID (2026-10-29).
+    if (!vendor || vendor.business) throw this.tries.wrong(vendorId).error;
     const a = Buffer.from(String(secret ?? ''));
     const b = Buffer.from(vendor.secret);
     if (a.length !== b.length || !timingSafeEqual(a, b)) throw this.tries.wrong(vendorId).error;

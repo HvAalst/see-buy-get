@@ -47,6 +47,8 @@ export interface StoreRow {
   hasDock: boolean;
   address?: string;
   createdAt: string;
+  /** A business's parcel account (2026-10-29), not a store: its parcels are sent from the Business app; nobody signs in to it as a store. */
+  forBusiness?: boolean;
 }
 
 export interface StoreDesk extends StoreRow {
@@ -101,6 +103,7 @@ export function storeRowOf(vendor: Omit<Vendor, 'secret'>, standing: StoreStandi
     hasDock: Boolean(vendor.collection),
     ...(vendor.address ? { address: vendor.address } : {}),
     createdAt: vendor.createdAt,
+    ...(vendor.business ? { forBusiness: true } : {}),
   };
 }
 

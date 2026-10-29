@@ -770,6 +770,12 @@ export class Vendor {
   balance: number | null;
   shippingPolicy: ShippingPolicy;
   createdAt: string;
+  /**
+   * A BUSINESS'S PARCEL ACCOUNT (the user, 2026-10-29: business parcels "Billed to the business", paid from "A prepaid
+   * balance" like a store's). The same till, the same billing and the same refunds as a store — but nobody signs in to
+   * it: the business's own people send from the Business app, and its system from its company key. Absent: a store.
+   */
+  business?: { entityId: string; did: string };
 }
 
 /**

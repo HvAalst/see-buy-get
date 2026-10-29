@@ -1982,7 +1982,9 @@ export class ParcelService implements OnApplicationBootstrap {
     // Round 30 — THE PHOTO IS WITH US (the user: "A store's content photo, really kept"). A name, or an id we do not hold,
     // is no photo: a damage claim on this parcel would have no "before" to be judged against. It is the store's own and
     // this parcel's alone — refused before anything is written. A return is the same box going back, with its photo.
-    if (!input.photoOfParcel && !this.media.mayAdopt(input.contentPhotoRef, vendor.did)) {
+    // A business's parcel account (2026-10-29): the photo is the business's own, taken in the Business app or sent by its system.
+    const photoOwner = vendor.business?.did ?? vendor.did;
+    if (!input.photoOfParcel && !this.media.mayAdopt(input.contentPhotoRef, photoOwner)) {
       throw new GlosError('PHOTO_REQUIRED', 'We do not hold that photo of the contents. Upload it first, then send its id: a photo the store took of this parcel, used for no other.', { field: 'contentPhotoRef' });
     }
     // Derive the tier from dimensions+weight when provided; otherwise trust the explicit size.
@@ -2041,7 +2043,8 @@ export class ParcelService implements OnApplicationBootstrap {
     const shipmentCost = Math.round((chosen.gross + cover.premium) * 100) / 100;
     const platformFee = Math.round((chosen.total - chosen.base) * 100) / 100;
     // A parcel bringing a store's goods back (called off at a hub) was sold at no checkout: no buyer paid anything for it.
-    const buyerCharge = input.returnOf ? undefined : this.buyerCharge(input.shippingPolicy, shipmentCost, input.subtotal ?? 0);
+    // Nor a business's own parcel (2026-10-29): it pays the whole of it, and has no buyer at a checkout to share it with.
+    const buyerCharge = input.returnOf || vendor.business ? undefined : this.buyerCharge(input.shippingPolicy, shipmentCost, input.subtotal ?? 0);
 
     const parcel: Parcel = {
       parcelId,
@@ -2136,7 +2139,7 @@ export class ParcelService implements OnApplicationBootstrap {
     // shipment-proof bin. Without this link the orphan-reaper would delete it before the parcel is delivered.
     // Round 30 — adopted as the store's own (checked above); a return carries the first leg's photo on with it.
     if (input.photoOfParcel) this.media.link(input.contentPhotoRef, { type: 'parcel', id: parcelId }, 'content');
-    else this.media.adopt(input.contentPhotoRef, vendor.did, { type: 'parcel', id: parcelId }, 'content');
+    else this.media.adopt(input.contentPhotoRef, photoOwner, { type: 'parcel', id: parcelId }, 'content');
 
     // Prepaid gate: bill the vendor's balance with the country daughter company → 'ParcelPaid' or 'unpaid'.
     const bill = this.vendors.billShipment(input.vendorId, parcelId, shipmentCost, quote.fx?.buffer, chosen.tax, Math.round((chosen.provision + cover.premium) * 100) / 100);
