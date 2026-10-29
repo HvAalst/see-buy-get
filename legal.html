@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SBG · Legal questions</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #17181c; --muted: #6b6f76; --line: #e3e3df;
+    --accent: #4c46e0; --open: #b8336a; --test: #a33a3a; --country: #b4690e; --later: #3f6ea8; --done: #1c7c54; --watch: #7a4fa3;
+    --shadow: 0 1px 2px rgba(20,20,25,.06), 0 8px 24px rgba(20,20,25,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+      --accent: #8f8bff; --open: #ec8fb8; --test: #e07a7a; --country: #e0a44a; --later: #7fb0e8; --done: #5cc08c; --watch: #b98fdc;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121317; --panel: #1a1c21; --ink: #eceef2; --muted: #9aa0aa; --line: #2a2d34;
+    --accent: #8f8bff; --open: #ec8fb8; --test: #e07a7a; --country: #e0a44a; --later: #7fb0e8; --done: #5cc08c; --watch: #b98fdc;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 40px 16px 96px; }
+  h1 { font-size: 26px; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+  .sub { color: var(--muted); font-size: 15px; max-width: 72ch; margin: 10px 0 0; }
+  .stamp { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 8px; align-items: center; }
+  .bar .lab { color: var(--muted); font-size: 13px; margin-right: 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+  .chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .chip .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  h2 { font-size: 19px; margin: 40px 0 6px; }
+  .lede { color: var(--muted); font-size: 14px; margin: 0 0 14px; max-width: 72ch; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 18px 20px; margin: 12px 0; }
+  .top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .id { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .q { font-weight: 650; font-size: 16.5px; margin: 2px 0 10px; text-wrap: pretty; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tag { font-size: 12.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; }
+  .tag.before-test { color: var(--test); } .tag.before-country { color: var(--country); } .tag.later { color: var(--later); }
+  .tag.open { color: var(--open); } .tag.answered { color: var(--done); } .tag.watch { color: var(--watch); }
+  .tag.nation { color: var(--muted); }
+  dl { display: grid; grid-template-columns: 11rem 1fr; gap: 6px 16px; margin: 0; font-size: 14.5px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+  @media (max-width: 640px) { dl { grid-template-columns: 1fr; } dt { margin-top: 6px; } }
+  .foot { color: var(--muted); font-size: 14px; margin-top: 48px; max-width: 72ch; }
+  code { font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Legal questions — for the lawyer</h1>
+  <p class="sub">Every question about the law that came up while building SeeBuyGet, in one place. Each says when it comes up in the product, for which countries, a case to make it concrete, what the product does until it is answered, and where it was raised. Nothing here is decided by the product: where a question is open, the product takes the cautious reading and says so on the screen.</p>
+  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026.</p>
+
+  <div class="bar" role="group" aria-label="When it is needed">
+    <span class="lab">Needed</span>
+    <button class="chip" data-when="" aria-pressed="true">All <span class="n" data-count=""></span></button>
+    <button class="chip" data-when="before-test" aria-pressed="false">Before the first test <span class="n" data-count="before-test"></span></button>
+    <button class="chip" data-when="before-country" aria-pressed="false">Before a country or a feature opens <span class="n" data-count="before-country"></span></button>
+    <button class="chip" data-when="later" aria-pressed="false">Later <span class="n" data-count="later"></span></button>
+  </div>
+  <div class="bar" role="group" aria-label="Country">
+    <span class="lab">Country</span>
+    <span id="nations"></span>
+  </div>
+
+  <main id="list"></main>
+
+  <p class="foot">A new question goes here when it comes up — with its moment, countries, a case, what the product does meanwhile, and where it was raised — and the screen that depends on it says “a question for a lawyer” until it is answered. An answer is written under its question with the date and who gave it, and then the product is changed to follow it.</p>
+</div>
+
+<script type="application/json" id="data">
+{
+  "areas": [
+    { "key": "carriage", "title": "Who answers for the goods", "lede": "When something is lost, broken or late on the road, the rail or the sea, and somebody asks who pays." },
+    { "key": "papers", "title": "What we say about other people’s papers", "lede": "SeeBuyGet holds documents others issued — a forwarder’s bill, a railway’s note, an insurer’s policy — and says what it sees in them." },
+    { "key": "title", "title": "Electronic documents and title to the goods", "lede": "Whether an electronic document can do what the paper one does, country by country." },
+    { "key": "data", "title": "People’s data", "lede": "Where personal data and papers are kept, for how long, and on what basis." },
+    { "key": "terms", "title": "Terms, consumers and goods left behind", "lede": "What people agree to when they sign up, and what may be done with what they leave." },
+    { "key": "money", "title": "Money and tax", "lede": "What our companies must charge and show." }
+  ],
+  "questions": [
+    {
+      "id": "L01", "area": "carriage", "when": "before-test", "status": "open",
+      "q": "Is SeeBuyGet itself a party to the contract of carriage when it bills the shipper?",
+      "moment": "A business posts a load that SeeBuyGet bills — not one it only matches — and a driver or a fleet carries it. The consignment note names the carrier that took the load; SeeBuyGet’s invoice is for the carriage.",
+      "nations": ["all"],
+      "case": "A Nairobi trader posts 40 bags of cement, billed through SeeBuyGet. The fleet’s truck tips the load. The trader claims from SeeBuyGet, the company it paid, not from the fleet it never chose.",
+      "meanwhile": "The note names the carrier in its carrier boxes and SeeBuyGet as the platform. Damage is reported, never judged: a damage claim report is made, and no company of ours pays from its own books unless it has stated insurance cover.",
+      "source": "The CMR check of the consignment note, 28 October 2026 (05_engineering/consignment_note.md); “damage is reported, not judged”."
+    },
+    {
+      "id": "L02", "area": "carriage", "when": "before-test", "status": "open",
+      "q": "Whoever sells the carriage may answer for loss by law, whatever its terms say — above all toward a consumer. Where does that reach us, and how far?",
+      "moment": "A person sends or receives a parcel through our shops, and it arrives broken, opened, or not at all.",
+      "nations": ["KE", "UG", "TZ", "RW", "ET"],
+      "case": "A person in Kisumu sends a phone to Eldoret through two shops. It arrives with the screen cracked and asks SeeBuyGet to pay for it.",
+      "meanwhile": "A damage claim report — who held the parcel and when, with the photographs — for the person’s insurer. SeeBuyGet pays nothing without stated cover, and says so at take-in.",
+      "source": "“Damage is reported, not judged”, October 2026 (progress.html, the damage claim report row)."
+    },
+    {
+      "id": "L03", "area": "carriage", "when": "before-country", "status": "open",
+      "q": "How long does a receiver have to make a reservation for damage it could not see, on a road load between two Northern Corridor states?",
+      "moment": "A load between, for example, Kenya and Uganda arrives with damage found only after delivery.",
+      "nations": ["KE", "UG", "RW", "BI", "CD", "SS"],
+      "case": "A load from Mombasa to Kampala; the receiver opens the cartons on day 5 and finds water damage.",
+      "meanwhile": "The note gives 7 days, as the CMR does. The Northern Corridor road protocol’s own rule was not found, and its road waybill form was not seen.",
+      "source": "The CMR check, 28 October 2026."
+    },
+    {
+      "id": "L04", "area": "carriage", "when": "before-country", "status": "open",
+      "q": "Which national law governs a road carriage between two countries that no road convention joins?",
+      "moment": "A cross-border load between, for example, Kenya and Tanzania, or Kenya and Ethiopia — neither pair is in the CMR or the Northern Corridor agreement together.",
+      "nations": ["KE", "TZ", "ET", "UG"],
+      "case": "A load from Nairobi to Arusha; the sender and the carrier disagree on the limit of liability for a lost pallet.",
+      "meanwhile": "The note says the carriage is under its contract and the national law that governs it, and names no law.",
+      "source": "The CMR check, 28 October 2026."
+    },
+    {
+      "id": "L05", "area": "carriage", "when": "before-country", "status": "open",
+      "q": "When a box is damaged on our truck under a forwarder’s road-and-sea FIATA bill, which limit applies — and do the bill’s terms (clause 10) protect our drivers and fleets?",
+      "moment": "An export by road to the port, under a FIATA bill the forwarder issued for the whole journey from an inland place.",
+      "nations": ["KE", "UG", "TZ", "RW", "BI"],
+      "case": "A forwarder issues an FBL from Nairobi to Rotterdam. Our truck overturns before Mombasa. No East African state is in the road convention, so the bill’s stage rule finds no road limit.",
+      "meanwhile": "The bill’s panel says a loss on the road there is likely held to the bill’s own limit, 2 SDR a kilogram, and that this is a question for a lawyer.",
+      "source": "The FBL research, 29 October 2026 (05_engineering/research/fbl_2026-10-29.md, question 6)."
+    },
+    {
+      "id": "L06", "area": "carriage", "when": "before-country", "status": "open",
+      "q": "Is Ethiopia’s Proclamation 548/2007 mandatory for multimodal transport to or from Ethiopia, so that it comes before the limits printed on a FIATA bill?",
+      "moment": "An import to Ethiopia through Djibouti under a forwarder’s FIATA bill.",
+      "nations": ["ET", "DJ"],
+      "case": "Spare parts from Rotterdam to Addis Ababa through Djibouti under an FBL, found damaged at Modjo.",
+      "meanwhile": "The Proclamation’s own limits — 835 SDR a package or 2.5 SDR a kilogram, suit within 2 years — are said beside the bill’s.",
+      "source": "The FBL research, 29 October 2026 (question 4)."
+    },
+    {
+      "id": "L07", "area": "carriage", "when": "before-country", "status": "open",
+      "q": "With the Kenya Railways Corporation Act repealed by the Government Owned Enterprises Act 2025 (a High Court stay was reported), do the Kenya Railways Tariff Book’s conditions still bind, and under which law?",
+      "moment": "A box goes by SGR between Nairobi or Naivasha and Mombasa, and is damaged or late.",
+      "nations": ["KE", "UG"],
+      "case": "An export by SGR from the Nairobi inland depot; the box is dropped at Port Reitz, and the railway points to its default limit of KSh 20,000 where no value was declared.",
+      "meanwhile": "The railway’s note is read against the Tariff Book, with the repeal said beside it.",
+      "source": "The CIM and East African rail research, 28 October 2026 (05_engineering/research/rail_cim_and_east_africa_2026-10-28.md)."
+    },
+    {
+      "id": "L08", "area": "papers", "when": "before-test", "status": "open",
+      "q": "Could what we say about other people’s papers make us liable to somebody who relies on it — and what wording protects us in each country?",
+      "moment": "Our screens say a forwarder’s bill “agrees with our papers”, a railway’s note is “complete as printed”, and a consignment note says a carrier’s insurance was “checked by SeeBuyGet” off the policy it sent.",
+      "nations": ["all"],
+      "case": "A bank pays under a letter of credit after the importer shows it our screen; the bill was forged and copied our container number. Or a sender picks a carrier because the note says its cover was checked; the policy excluded the goods.",
+      "meanwhile": "Facts with their sources and dates, never “valid”; “agreeing proves nothing about whether it is genuine”; what FIATA’s page showed is the holder’s own record; the cover line names who read the policy and on what day.",
+      "source": "The FBL research, 29 October 2026 (question 1); cover a sender can ask for, 28 October 2026."
+    },
+    {
+      "id": "L09", "area": "papers", "when": "before-test", "status": "open",
+      "q": "May we keep and show users’ copies of FIATA forms and of other parties’ documents — under copyright, and under Kenya’s Data Protection Act 2019 — and link to FIATA’s verification page?",
+      "moment": "An exporter uploads its forwarder’s bill or a railway’s note, and its clearing agent reads it.",
+      "nations": ["KE", "all"],
+      "case": "An exporter keeps the copy of its FBL on the export; the clearing agent it appointed opens it. The bill names the buyer and shows the freight amount.",
+      "meanwhile": "Shown only to the holder and the agent it appointed; never a lookalike of FIATA’s form, never FIATA’s logo; FIATA’s pages linked, never called by our servers.",
+      "source": "The FBL research, 29 October 2026 (questions 2 and 8)."
+    },
+    {
+      "id": "L10", "area": "papers", "when": "before-country", "status": "answered",
+      "q": "May we hold photographs of official documents — a customs notice, a permit — in a given country?",
+      "moment": "A clearing agent photographs what a border asked for, as field knowledge for others.",
+      "nations": ["all"],
+      "case": "An agent at Malaba photographs a customs hold notice to show what was asked.",
+      "meanwhile": "Off in every country. Opened only by two gates: the country’s, which no level of presence grants and staff open only with counsel’s note recorded, and the person’s own, against a notice to black out sensitive numbers.",
+      "answer": "Answered in principle by the owner, September 2026: two gates, the country’s and the person’s. Still open per country: may that country’s gate be opened?",
+      "source": "Clearance and field knowledge, CL5 (05_engineering/clearance_and_field_knowledge.md)."
+    },
+    {
+      "id": "L11", "area": "title", "when": "before-country", "status": "open",
+      "q": "In Kenya and Uganda, is an electronic bill of lading a document of title at all — and what must we tell users?",
+      "moment": "An exporter or importer holds an electronic FIATA bill, which FIATA registers but whose transfer of title it leaves to the law.",
+      "nations": ["KE", "UG", "TZ"],
+      "case": "An importer in Kampala holds an electronic FBL; the line’s agent at Mombasa asks for the original.",
+      "meanwhile": "The bill’s panel says Kenya’s and Uganda’s laws on electronic writing do not reach documents of title (Kenya read in its 2011 text), so an electronic bill may not stand as title there.",
+      "source": "The FBL research, 29 October 2026 (question 3)."
+    },
+    {
+      "id": "L12", "area": "title", "when": "later", "status": "open",
+      "q": "Is release only against an original bill at Mombasa a rule of law, or the shipping lines’ practice?",
+      "moment": "An import arrives at Mombasa under a negotiable bill.",
+      "nations": ["KE", "UG"],
+      "case": "A Ugandan importer’s bank still holds the originals when the box lands; the line will not release it.",
+      "meanwhile": "We say the goods are handed over against one original, surrendered duly endorsed — as the bill’s own terms say.",
+      "source": "The FBL research, 29 October 2026 (question 7)."
+    },
+    {
+      "id": "L13", "area": "title", "when": "later", "status": "watch",
+      "q": "Once Tanzania, Rwanda or another signatory ratifies the Accra Convention on Negotiable Cargo Documents, what changes for the bills our users hold?",
+      "moment": "When the Convention enters into force — 180 days after the tenth ratification — for a document that refers to it.",
+      "nations": ["TZ", "RW", "CD", "SS", "DJ"],
+      "case": "A forwarder in Dar es Salaam begins issuing bills under the Convention.",
+      "meanwhile": "Said beside the bill: signed 26 October 2026, not in force, reaching only a document that refers to it.",
+      "source": "The FBL research, 29 October 2026 (question 9)."
+    },
+    {
+      "id": "L14", "area": "title", "when": "later", "status": "open",
+      "q": "Electronic rail notes outside East Africa: does Russia’s electronic-only rail waybill (from 1 September 2026) reach international SMGS and CIM/SMGS waybills, and does an electronic waybill count in Indonesia, where the regulation assumes paper?",
+      "moment": "A user holds a railway’s note from one of those networks.",
+      "nations": ["RU", "ID"],
+      "case": "An importer holds a CIM/SMGS note for a box railed from China through Russia.",
+      "meanwhile": "The rail check says Russia’s note is electronic from that day, and that Indonesia’s question is for counsel.",
+      "source": "The BRICS rail research, 28 October 2026 (05_engineering/research/rail_brics_2026-10-28.md)."
+    },
+    {
+      "id": "L15", "area": "title", "when": "later", "status": "open",
+      "q": "In India, what is the effect of a multimodal document issued by an operator that is not registered under the Multimodal Transportation of Goods Act 1993?",
+      "moment": "A user holds a bill issued in India.",
+      "nations": ["IN"],
+      "case": "An exporter in Mombasa receives goods under a bill issued by an Indian forwarder missing from the public register.",
+      "meanwhile": "Said beside the bill: only a registered operator may issue one, and the register is public.",
+      "source": "The FBL research, 29 October 2026 (question 5)."
+    },
+    {
+      "id": "L16", "area": "data", "when": "before-test", "status": "open",
+      "q": "Keeping Kenyan personal data in Frankfurt, Germany: on what basis is the transfer lawful under Kenya’s Data Protection Act 2019, and must our Kenyan company register with the Data Commissioner?",
+      "moment": "Every sign-up: phone numbers, names, photographs of IDs and licences, and company papers are kept on our server in Frankfurt.",
+      "nations": ["KE"],
+      "case": "A driver in Nakuru signs up with a photograph of her licence; it is stored in Germany.",
+      "meanwhile": "Everything is on the one server in Frankfurt. The privacy page waits for the responsible company’s name, address and data contact.",
+      "source": "The baselines check before sign-in, 25 October 2026 (progress.html)."
+    },
+    {
+      "id": "L17", "area": "data", "when": "before-country", "status": "open",
+      "q": "Must a country’s people’s papers be kept inside that country?",
+      "moment": "Before a country is switched on.",
+      "nations": ["all"],
+      "case": "Rwanda or Ethiopia is next; its drivers’ ID photographs would join Kenya’s in Frankfurt.",
+      "meanwhile": "One store, in Frankfurt. A store per country is designed for, if a country’s law asks it.",
+      "source": "Where photographs and papers are kept in production (progress.html)."
+    },
+    {
+      "id": "L18", "area": "data", "when": "before-test", "status": "open",
+      "q": "How long may — or must — we keep the log of who looked at whose identity?",
+      "moment": "Every time a member of staff opens a person’s identity record, a line is written.",
+      "nations": ["all"],
+      "case": "A driver asks who at SeeBuyGet looked at his ID, and when, two years ago.",
+      "meanwhile": "Kept; 24 months is a placeholder, not a legal answer, and each country’s company is to set its own period once its lawyer says.",
+      "source": "The identity vault’s receipt log (progress.html)."
+    },
+    {
+      "id": "L19", "area": "terms", "when": "before-test", "status": "open",
+      "q": "The terms of use, the privacy notice and the cookies notice — the general texts and each country’s own — including the clause that a country’s text applies where the two differ.",
+      "moment": "Every sign-up agrees to them; a new version is told to everybody, and asked again where it changes something.",
+      "nations": ["KE", "all"],
+      "case": "A shop in Mombasa signs up; it agrees to the general terms and Kenya’s own line.",
+      "meanwhile": "Drafts. Staff keep them in the console and two people publish; a country’s terms are published only in the act that switches its company on.",
+      "source": "Every sign-up agrees; texts in the console (October 2026)."
+    },
+    {
+      "id": "L20", "area": "terms", "when": "before-country", "status": "open",
+      "q": "What may be done with a parcel nobody collects, after a holding period and notice to its owner?",
+      "moment": "A parcel sits at a shop past its collection window. The goods belong to the buyer; nobody else may abandon them.",
+      "nations": ["all"],
+      "case": "A buyer in Thika never collects a pair of shoes; the shop has held them for six weeks.",
+      "meanwhile": "Returns are off for the first test. The facts are recorded — the notice given, when, the period elapsed — for each country’s rule to be applied once known.",
+      "source": "Returns and the abandoned parcel (progress.html, waiting on an answer)."
+    },
+    {
+      "id": "L21", "area": "money", "when": "before-test", "status": "open",
+      "q": "Tax on our fees: today every price is shown net and no tax line is charged. What must each of our companies charge and show, and from when?",
+      "moment": "Every quotation and invoice for carriage or a platform fee.",
+      "nations": ["KE", "all"],
+      "case": "A Kenyan business is billed KES 18,000 for a load; its accountant asks where the tax is.",
+      "meanwhile": "Prices are net. In Kenya, tax invoices are prepared for the revenue authority’s system and not sent.",
+      "source": "Unit economics (the tax account that nothing posts to)."
+    }
+  ]
+}
+</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('data').textContent);
+  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', IN: 'India', RU: 'Russia', ID: 'Indonesia' };
+  var WHEN = { 'before-test': 'Before the first test', 'before-country': 'Before a country or feature opens', later: 'Later' };
+  var STATUS = { open: 'Open', answered: 'Answered in principle', watch: 'To watch' };
+  var state = { when: '', nation: '' };
+  var el = function (tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  var nations = [];
+  data.questions.forEach(function (q) { q.nations.forEach(function (n) { if (nations.indexOf(n) < 0) nations.push(n); }); });
+  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'IN', 'RU', 'ID'];
+  nations.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+  var box = document.getElementById('nations');
+  [''].concat(nations.filter(function (n) { return n !== 'all'; })).forEach(function (n) {
+    var b = el('button', 'chip', n ? NATION[n] || n : 'Any');
+    b.setAttribute('aria-pressed', n === '' ? 'true' : 'false');
+    b.dataset.nation = n;
+    b.addEventListener('click', function () { state.nation = n; render(); });
+    box.appendChild(b);
+    box.appendChild(document.createTextNode(' '));
+  });
+  document.querySelectorAll('[data-when]').forEach(function (b) {
+    b.addEventListener('click', function () { state.when = b.dataset.when; render(); });
+  });
+
+  function matches(q) {
+    var okWhen = !state.when || q.when === state.when;
+    var okNation = !state.nation || q.nations.indexOf(state.nation) >= 0 || q.nations.indexOf('all') >= 0;
+    return okWhen && okNation;
+  }
+
+  function render() {
+    document.querySelectorAll('[data-when]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.when === state.when)); });
+    document.querySelectorAll('[data-nation]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.nation === state.nation)); });
+    document.querySelectorAll('[data-count]').forEach(function (s) {
+      var w = s.dataset.count;
+      s.textContent = String(data.questions.filter(function (q) { return (!w || q.when === w) && (!state.nation || q.nations.indexOf(state.nation) >= 0 || q.nations.indexOf('all') >= 0); }).length);
+    });
+    var list = document.getElementById('list');
+    list.textContent = '';
+    data.areas.forEach(function (a) {
+      var qs = data.questions.filter(function (q) { return q.area === a.key && matches(q); });
+      if (!qs.length) return;
+      list.appendChild(el('h2', null, a.title));
+      list.appendChild(el('p', 'lede', a.lede));
+      qs.forEach(function (q) {
+        var card = el('article', 'card');
+        var top = el('div', 'top');
+        top.appendChild(el('span', 'id', q.id));
+        card.appendChild(top);
+        card.appendChild(el('p', 'q', q.q));
+        var tags = el('div', 'tags');
+        tags.appendChild(el('span', 'tag ' + q.when, WHEN[q.when]));
+        tags.appendChild(el('span', 'tag ' + q.status, STATUS[q.status]));
+        q.nations.forEach(function (n) { tags.appendChild(el('span', 'tag nation', NATION[n] || n)); });
+        card.appendChild(tags);
+        var dl = el('dl');
+        var row = function (k, v) { if (!v) return; dl.appendChild(el('dt', null, k)); dl.appendChild(el('dd', null, v)); };
+        row('When it comes up', q.moment);
+        row('A case', q.case);
+        row('Until it is answered', q.meanwhile);
+        row('The answer', q.answer);
+        row('Raised', q.source);
+        card.appendChild(dl);
+        list.appendChild(card);
+      });
+    });
+    if (!list.children.length) list.appendChild(el('p', 'lede', 'No question for that choice.'));
+  }
+  render();
+})();
+</script>
+</body>
+</html>
