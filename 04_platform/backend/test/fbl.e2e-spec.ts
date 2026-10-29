@@ -91,11 +91,13 @@ describe('a forwarder’s FIATA bill, over the wire', () => {
     // Appointed, the agent gives the electronic bill by its number; the paper one is kept as it was.
     await http().post(`${path}/agent`).set(bearer(x.token)).send({ agentEntityId: agent.entityId }).expect(201);
     expect((await http().post(`${path}/fbl`).set(bearer(agent.token)).send({ ...bill, documentId: copy })).status).toBe(400);
-    const electronic = (await http().post(`${path}/fbl`).set(bearer(agent.token)).send({ ...bill, documentId: undefined, electronic: true, printed: ALL, containerNo: 'MSCU 123456-6', packages: 790 }).expect(201)).body;
+    const electronic = (await http().post(`${path}/fbl`).set(bearer(agent.token)).send({ ...bill, documentId: undefined, electronic: true, printed: ALL, containerNo: 'MSCU 123456-6', packages: 790, grossWeightKg: 3900 }).expect(201)).body;
     expect(electronic.fbl).toMatchObject({ replaced: 1, verified: 'not_checked', check: { complete: true, genuine: { where: 'https://fiata.org/document-verification/' } } });
     expect(electronic.consignment.formerFbl[0].documentTitle).toBe('FBL KE-114 copy');
     // A count that does not agree with the packing list is said, beside ours.
     expect(electronic.fbl.matches.find((m: { field: string }) => m.field === 'packages')).toEqual({ field: 'packages', printed: '790', ours: '800', agrees: false });
+    // …and a weight beyond a percent of the packing list's.
+    expect(electronic.fbl.matches.find((m: { field: string }) => m.field === 'grossWeight')).toEqual({ field: 'grossWeight', printed: '3900 kg', ours: '3600 kg', agrees: false });
 
     // What FIATA's page showed is the exporter's word, attached from its papers — the agent attaches nothing of its own here.
     const shot = await x.paper('FIATA verification result', 'other');

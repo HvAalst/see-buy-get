@@ -43,3 +43,19 @@ An export or an import holds the FBL (or FWB) its forwarder issued: a copy from 
    and when; paper: the association to ask; the issuer in FIATA's directory for its country; India's DG Shipping register.
 4. **What it means, in plain words** — negotiable or not, originals and surrender, the limits in SDR with an approximate
    dollar figure at a dated rate, delay, the deadlines, where to sue, and a country's own law where it overrides.
+
+## Decided and built (2026-10-29)
+The user's choices: the holder records FIATA's check of an electronic bill, with the result attached; no membership mark
+in the agents' directory — "we do not check, but users can check, so we put a fiata link to their directory
+https://fiata.org/directory/"; the limits in SDR with "about US$" at a rate kept as data with its date.
+- `foundation/carriage-law/fbl.ts`: the two forms (FBL 1992, FWB 1997), the 18 boxes with their rule and kind (missing
+  or only asked; the vessel and ports only with a sea leg; originals and the delivery agent only on the FBL), `SDR_RATE`
+  (US$1.35178, IMF, 2026-10-28), the country notes (KE, UG, ET, IN, and the Accra signatories), `FIATA_VERIFY_URL`,
+  `FIATA_DIRECTORY_URL`, `checkFbl` — meaning, limits, claims, country, where to check and what that proves.
+- `modules/pudo/fbl-note.ts` + types: `holdFbl` (a paper bill needs its copy; an electronic one may go by number; a
+  waybill has no originals; no day to come), `verifyFbl` (electronic only; the proof from the holder's own papers),
+  `fblView` (box, seals, packages and weight against the packing list, the port).
+- Routes: `POST exports/:id/fbl`, `…/fbl/verified` (the exporter; its agent gives an electronic bill by number);
+  `POST imports/:id/fbl`, `…/fbl/verified` (importer or agent); staff refused. A replaced bill is kept in `formerFbl`.
+- Screens: `FblPanel` on the export and the import; `FiataDirectoryHint` beside both clearing-agent pickers. Help:
+  in-app `business-fbl`. Glossary: FBL, FWB, FIATA, UCP.
