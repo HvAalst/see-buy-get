@@ -15,6 +15,7 @@ import {
   BusinessOpenBagDto,
   BusinessSealBagDto,
   DockView,
+  DoorRaiseDto,
   ParcelPriceQueryDto,
   ParcelPriceView,
   BusinessParcelAccountView,
@@ -73,7 +74,7 @@ export class BusinessParcelController {
   @Roles('business')
   @Get('business/me/parcels/price')
   price(@Query() q: ParcelPriceQueryDto, @Actor() actor: IntrospectionResult): ParcelPriceView {
-    return this.parcels.price(memberActor(this.businesses.requireMember(actor)), { origin: q.origin, dest: q.dest, l: q.l, w: q.w, h: q.h, kg: q.kg, fragile: q.fragile === 'true' });
+    return this.parcels.price(memberActor(this.businesses.requireMember(actor)), { origin: q.origin, ...(q.dest ? { dest: q.dest } : {}), ...(q.toPlace ? { toPlace: q.toPlace } : {}), l: q.l, w: q.w, h: q.h, kg: q.kg, fragile: q.fragile === 'true' });
   }
 
   /** One of its own places as where drivers collect its parcels (2026-10-29). */
@@ -141,6 +142,20 @@ export class BusinessParcelController {
   @Get('business/me/parcels/:parcelId/label')
   label(@Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult): BusinessParcelLabel {
     return this.parcels.label(memberActor(this.businesses.requireMember(actor)), parcelId);
+  }
+
+  /** Its last leg to its own place: post it now, after a top-up. */
+  @Roles('business')
+  @Post('business/me/parcels/:parcelId/door/post')
+  postDoor(@Param('parcelId') parcelId: string, @Actor() actor: IntrospectionResult): BusinessParcelDetail {
+    return this.parcels.postDoor(memberActor(this.businesses.requireMember(actor)), parcelId);
+  }
+
+  /** Its last leg: raise the most it pays a driver, while nobody has taken it. */
+  @Roles('business')
+  @Post('business/me/parcels/:parcelId/door/raise')
+  raiseDoor(@Param('parcelId') parcelId: string, @Body() dto: DoorRaiseDto, @Actor() actor: IntrospectionResult): BusinessParcelDetail {
+    return this.parcels.raiseDoor(memberActor(this.businesses.requireMember(actor)), parcelId, dto.maxSpend);
   }
 
   /** Pay for one the balance did not cover when it was sent. */

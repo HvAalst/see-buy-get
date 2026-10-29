@@ -17,6 +17,8 @@ import type { ActingMember } from './business.service';
 import type { Entity } from '../../foundation/entity/entity.types';
 import { MediaService } from './media.service';
 import { DockService } from './dock.service';
+import { DispatchService } from './dispatch.service';
+import { BusinessDoorService } from './business-door.service';
 import { SiteService, type SiteKind } from './site.service';
 import { haversineKm } from './geo';
 import type { Agent } from './pudo.types';
@@ -74,6 +76,8 @@ interface Checked {
   quote: ShipmentQuote;
   routeMode: 'flexible' | 'locked';
   price: number;
+  /** Delivered to its own place: the place, the shop nearest it it goes via, and the most for the last leg. */
+  door?: { site: { siteId: string; name: string; location: { lat: number; lng: number } }; shop: Agent; maxSpend: number };
 }
 
 /** Parcels that have nothing more for the receiver to collect: the code is not shown for them. */
@@ -108,6 +112,8 @@ export class BusinessParcelService {
     private readonly media: MediaService,
     private readonly dock: DockService,
     private readonly sites: SiteService,
+    private readonly dispatch: DispatchService,
+    private readonly doors: BusinessDoorService,
   ) {}
 
   /* ------------------------------------------------------------------ the account -- */
@@ -203,11 +209,40 @@ export class BusinessParcelService {
    * WHAT IT COSTS, before anything is sent: from a shop, or from its own place, to a shop — priced on the measurements,
    * the way the send will price it.
    */
-  price(who: ParcelActor, q: { origin: string; dest: string; l: number; w: number; h: number; kg: number; fragile?: boolean }): ParcelPriceView {
+  price(who: ParcelActor, q: { origin: string; dest?: string; toPlace?: string; l: number; w: number; h: number; kg: number; fragile?: boolean }): ParcelPriceView {
     const v = this.requireAccount(who);
     const own = q.origin === 'own';
-    const { quote } = this.quoteOf(v, own ? undefined : q.origin, q.dest, { l: q.l, w: q.w, h: q.h }, q.kg, q.fragile ?? false);
-    return { flexible: quote.flexible.gross, locked: quote.locked.gross, currency: quote.currency, crossesBorder: quote.crossesBorder };
+    const door = q.toPlace ? this.doorTo(who, q.toPlace) : undefined;
+    const dest = door ? door.shop.did : q.dest;
+    if (!dest) throw new GlosError('FIELD_REQUIRED', 'Choose the shop it is collected at, or one of your places', { field: 'dest' });
+    const { quote } = this.quoteOf(v, own ? undefined : q.origin, dest, { l: q.l, w: q.w, h: q.h }, q.kg, q.fragile ?? false);
+    const suggestedMax = door ? this.dispatch.doorGuide({ from: door.shop.location, to: door.site.location, weightKg: q.kg, fragile: q.fragile ?? false, shipperDid: v.vendorId }).suggestedMax : undefined;
+    return { flexible: quote.flexible.gross, locked: quote.locked.gross, currency: quote.currency, crossesBorder: quote.crossesBorder, ...(door ? { door: { via: door.shop.shopName, viaDid: door.shop.did, suggestedMax: suggestedMax! } } : {}) };
+  }
+
+  /** Post the last leg to its own place now — after a top-up, where it waited for the money. */
+  postDoor(who: ParcelActor, parcelId: string): BusinessParcelDetail {
+    const v = this.requireAccount(who);
+    this.owned(v, parcelId);
+    this.doors.postNow(v.vendorId, parcelId);
+    return this.detail(who, parcelId);
+  }
+
+  /** Raise the most it pays a driver for the last leg, while nobody has taken it. */
+  raiseDoor(who: ParcelActor, parcelId: string, maxSpend: number): BusinessParcelDetail {
+    const v = this.requireAccount(who);
+    this.owned(v, parcelId);
+    this.doors.raise(v.vendorId, parcelId, maxSpend);
+    return this.detail(who, parcelId);
+  }
+
+  /** One of its own places as where a parcel is delivered: the place, and the shop nearest it the parcel goes via. */
+  private doorTo(who: ParcelActor, siteId: string): { site: { siteId: string; name: string; location: { lat: number; lng: number } }; shop: Agent } {
+    const site = this.sites.require(who.entity.entityId, siteId);
+    if (!OWN_PLACES.includes(site.kind)) throw new GlosError('INVALID_INPUT', `${site.name} is a port or a clearing place, not one of your own: choose a place of yours`, { field: 'toOwnPlace.siteId' });
+    const shop = this.nearestShop(site.location);
+    if (!shop) throw new GlosError('INVALID_STATE', `No shop of ours is within ${COLLECT_NEAR_KM} km of ${site.name}, so no driver can bring it there yet: choose a shop to collect it at`, { field: 'toOwnPlace.siteId' });
+    return { site: { siteId: site.siteId, name: site.name, location: site.location }, shop };
   }
 
   /** Open the account. Asked again, it answers the one there is. */
@@ -246,7 +281,11 @@ export class BusinessParcelService {
   private check(who: ParcelActor, input: BusinessParcelDto): Checked {
     const v = this.requireAccount(who);
     const origin = input.originPudoDid?.trim() || undefined;
-    const dest = input.destPudoDid?.trim();
+    const toPlace = input.toOwnPlace;
+    if (toPlace && input.destPudoDid?.trim()) throw new GlosError('INVALID_INPUT', 'Delivered to your place, or collected at a shop — not both', { field: 'destPudoDid' });
+    const door = toPlace ? this.doorTo(who, toPlace.siteId) : undefined;
+    if (door && !(Number(toPlace!.maxSpend) > 0)) throw new GlosError('FIELD_REQUIRED', 'Say the most you will pay a driver to bring it from the shop to your place', { field: 'toOwnPlace.maxSpend' });
+    const dest = door ? door.shop.did : input.destPudoDid?.trim();
     const own = input.fromOwnPlace === true;
     if (own && origin) throw new GlosError('INVALID_INPUT', 'Collected from your place, or handed in at a shop — not both', { field: 'originPudoDid' });
     if (!own && !origin) throw new GlosError('FIELD_REQUIRED', 'Choose the shop it is handed in at', { field: 'originPudoDid' });
@@ -275,7 +314,7 @@ export class BusinessParcelService {
     if (!this.media.mayAdopt(input.contentPhotoRef, who.entity.did)) {
       throw new GlosError('PHOTO_REQUIRED', 'We do not hold that photo of the contents. Upload it first, then send its id: a photo the business took of this parcel, used for no other.', { field: 'contentPhotoRef' });
     }
-    return { v, ...(origin ? { origin } : { originZone: v.collection!.zone }), dest, receiver, dims: { l: dims.l, w: dims.w, h: dims.h }, kg, size, quote, routeMode, price };
+    return { v, ...(origin ? { origin } : { originZone: v.collection!.zone }), dest, receiver, dims: { l: dims.l, w: dims.w, h: dims.h }, kg, size, quote, routeMode, price, ...(door ? { door: { ...door, maxSpend: Math.round(Number(toPlace!.maxSpend) * 100) / 100 } } : {}) };
   }
 
   /**
@@ -285,11 +324,13 @@ export class BusinessParcelService {
   trial(who: ParcelActor, input: BusinessParcelDto): BusinessParcelTrial {
     const c = this.check(who, input);
     const balance = this.vendors.balanceOrNone(c.v.vendorId);
-    return { test: true, price: c.price, currency: c.quote.currency, routeMode: c.routeMode, size: c.size, covered: (balance ?? 0) + 1e-9 >= c.price, balance };
+    // Delivered to its own place, the balance must hold the last leg's most as well, by the time it is ready at the shop.
+    const needed = c.price + (c.door?.maxSpend ?? 0);
+    return { test: true, price: c.price, currency: c.quote.currency, routeMode: c.routeMode, size: c.size, covered: (balance ?? 0) + 1e-9 >= needed, balance };
   }
 
   send(who: ParcelActor, input: BusinessParcelDto): BusinessParcelSent {
-    const { v, origin, originZone, dest, receiver, dims, kg, quote, routeMode } = this.check(who, input);
+    const { v, origin, originZone, dest, receiver, dims, kg, quote, routeMode, door } = this.check(who, input);
     const { parcel, paid } = this.parcels.createInbound({
       vendorId: v.vendorId,
       ...(input.reference?.trim() ? { externalOrderId: input.reference.trim() } : {}),
@@ -307,6 +348,10 @@ export class BusinessParcelService {
       routeMode,
       quote,
     });
+    // Delivered to its own place: its last leg, posted once it is ready at the shop.
+    if (door) {
+      this.doors.open({ parcelId: parcel.parcelId, entityId: who.entity.entityId, vendorId: v.vendorId, siteId: door.site.siteId, label: door.site.name, location: door.site.location, country: this.agents.countryOf(door.shop), shopDid: door.shop.did, shopName: door.shop.shopName, maxSpend: door.maxSpend, currency: quote.currency });
+    }
     const sender: ParcelSender = { parcelId: parcel.parcelId, entityId: who.entity.entityId, personDid: who.personDid ?? '', name: who.name, at: new Date().toISOString() };
     this.senders.set(parcel.parcelId, sender);
     return { parcel: this.detailOf(parcel), paid, balance: this.vendors.balanceOrNone(v.vendorId) };
@@ -389,7 +434,7 @@ export class BusinessParcelService {
   private nearestShop(at: { lat: number; lng: number }): Agent | undefined {
     let best: { agent: Agent; km: number } | undefined;
     for (const a of this.agents.list()) {
-      if (!a.location || a.idHold || a.status === 'DRAFT' || a.status === 'KYC_PENDING') continue;
+      if (!a.location || a.idHold || a.status === 'DRAFT' || a.status === 'KYC_PENDING' || this.agents.isResting(a.did)) continue;
       const km = haversineKm(at, a.location);
       if (km <= COLLECT_NEAR_KM && (!best || km < best.km)) best = { agent: a, km };
     }
@@ -476,6 +521,7 @@ export class BusinessParcelService {
       ...(sender ? { sentBy: sender.name } : {}),
       createdAt: p.acceptedAt ?? p.scans?.[0]?.at ?? '',
       ...(p.returnParcelId ? { returnParcelId: p.returnParcelId } : {}),
+      ...(this.doors.viewOf(p.parcelId) ? { toOwnPlace: this.doors.viewOf(p.parcelId) } : {}),
     };
   }
 

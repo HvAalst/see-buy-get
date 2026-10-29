@@ -236,6 +236,11 @@ export const NOTIFICATION_KINDS = [
    * notice"). To every company holding a live key; its owners, or its contact email, are emailed too.
    */
   'api_version',
+  /**
+   * A business's parcel is ready at the shop for its last leg to the business's own door, and the parcel balance does not
+   * cover the most it allows a driver (2026-10-29). To the business: top up and post it, or collect it at the shop.
+   */
+  'parcel_door_short',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

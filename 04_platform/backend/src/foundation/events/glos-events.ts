@@ -174,6 +174,7 @@ export const GlosEvent = {
     OrderPlaced: 'pudo.order_placed', // an order came in under a fleet's contract — from its shipper, or a sheet the office uploaded
     InboundAddressed: 'pudo.inbound_addressed', // a load posted to a business's receiving point: it is coming in to them (inbound, reading A)
     ParcelTakenInAtHub: 'pudo.parcel_taken_in_at_hub', // a store's parcel scanned off its pallet at a hub it was handed in at (inbound, reading B) — or a person's goods turned round at a hub: either way its journey starts there
+    ParcelAtDoor: 'pudo.parcel_at_door', // a business's parcel delivered at its own door by the driver of its last leg (2026-10-29)
     ParcelWithdrawn: 'pudo.parcel_withdrawn', // staff withdrew a person's parcel at a hub: it goes back to the shop it was handed in at, as a new parcel to its sender (2026-10-27)
     InboundClosed: 'pudo.inbound_closed', // the receiver closed what was still expected of a delivered load: it came after all, or is not coming (D9)
     OrderChanged: 'pudo.order_changed', // the office changed an order in a way nothing else says: pinned where it goes, took it back off the board

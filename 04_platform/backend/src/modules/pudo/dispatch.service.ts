@@ -575,7 +575,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -715,6 +715,8 @@ export class DispatchService {
       ...(input.returnOf ? { returnOf: { freightId: input.returnOf.freightId, code: input.returnOf.code } } : {}),
       // A store's parcel called off at a hub, going to the store's own door as this load (2026-10-27).
       ...(input.bringsBack ? { bringsBack: { parcelId: input.bringsBack.parcelId, atMdpId: input.bringsBack.atMdpId, hubName: input.bringsBack.hubName } } : {}),
+      // A business's parcel going on from the shop it waits at to its own door (2026-10-29).
+      ...(input.deliversParcel ? { deliversParcel: { parcelId: input.deliversParcel.parcelId, atShopDid: input.deliversParcel.atShopDid, shopName: input.deliversParcel.shopName } } : {}),
       // BL1 — uncleared goods. The country defaults to the leg's own, because a bond is held where the
       // wheels turn; it is stated separately only so a caller cannot quietly mean a different one.
       ...(input.bonded ? { bonded: true, bondCountry: (input.bondCountry ?? input.pickupCountry ?? '').toUpperCase() } : {}),
@@ -1798,7 +1800,7 @@ export class DispatchService {
         ...(f.proofOfDelivery?.exceptions?.length ? { exceptions: exceptionViewsOf(f) } : {}),
         cancelledAt: f.cancelledAt,
         // A load bringing a store's parcel home is never simply withdrawn: the store raises its most, or sends it to a shop.
-        canCancel: !f.bringsBack && (f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed'),
+        canCancel: !f.bringsBack && !f.deliversParcel && (f.status === 'scheduled' || f.status === 'available' || f.status === 'claimed'),
         ...(f.deliveryAttempts?.length ? { attempts: f.deliveryAttempts } : {}),
         // Refused at the door (the user, 2026-10-27): by when the sender decides, what it decided, and where "back" is.
         ...(f.refusal ? { refusal: f.refusal, canDecideRefusal: (f.status === 'in_transit' || (f.status === 'delivered' && Boolean(f.refusal.part))) && !f.refusal.decision, pickupLabel: f.pickupLabel } : {}),
@@ -3097,6 +3099,8 @@ export class DispatchService {
     // A store's parcel waiting at a hub (2026-10-27): the hub hands it over first, by the driver's pass — the box is the hub's
     // to hand on, and it hands it to nobody but the driver who took this load.
     if (f.bringsBack && !f.bringsBack.handedAt) throw new GlosError('SET_ASIDE', `Parcel ${f.bringsBack.parcelId} waits at ${f.bringsBack.hubName}: show your pass at its counter, and they hand it to you first`, { parcelId: f.bringsBack.parcelId });
+    // A business's parcel waiting at a shop for its door (2026-10-29): the same, at the shop's counter.
+    if (f.deliversParcel && !f.deliversParcel.handedAt) throw new GlosError('SET_ASIDE', `Parcel ${f.deliversParcel.parcelId} waits at ${f.deliversParcel.shopName}: show your pass at its counter, and they hand it to you first`, { parcelId: f.deliversParcel.parcelId });
     // Round 35 — held under the tamper protocol: not taken over until operations releases it.
     this.refuseIfHeld(f);
     // A load reserved ahead of its date can't be picked up before it — the cargo (or the consolidated lot)
@@ -3465,6 +3469,35 @@ export class DispatchService {
   }
 
   /**
+   * A SHOP HANDS A BUSINESS'S PARCEL TO THE DRIVER WHO TOOK ITS LOAD TO ITS DOOR (2026-10-29), by their pass: nobody else's,
+   * and not before a driver has taken it. Refused, in words the counter can act on, before anything is written.
+   */
+  handDeliversParcel(freightId: string, shopDid: string, badgeId: string, byName: string, now: number = Date.now()): { load: Freight; driverDid: string } {
+    const f = this.requireFreight(freightId);
+    if (!f.deliversParcel || f.deliversParcel.atShopDid !== shopDid) throw new GlosError('NOT_FOUND', 'No parcel waits here for that load');
+    if (f.deliversParcel.handedAt) throw new GlosError('INVALID_STATE', `Parcel ${f.deliversParcel.parcelId} was handed to its driver already`);
+    if (f.status === 'available' || f.status === 'scheduled') throw new GlosError('INVALID_STATE', `No driver has taken load ${f.code} yet: hand it to the one who has`);
+    if (f.status !== 'claimed') throw new GlosError('INVALID_STATE', `Load ${f.code} is ${f.status}`);
+    const driver = this.fleet.resolveBadge(String(badgeId ?? '').trim());
+    if (!driver || driver.driverDid !== f.claimedBy) throw new GlosError('FORBIDDEN', `That pass is not the driver of load ${f.code}: hand it only to the driver who took it`);
+    f.deliversParcel = { ...f.deliversParcel, handedAt: new Date(now).toISOString(), handedBy: byName.slice(0, 80) };
+    this.freights.set(f.freightId, f);
+    return { load: f, driverDid: driver.driverDid };
+  }
+
+  /** A business's load to its door, withdrawn because its parcel was collected at the shop after all — never once on the road. */
+  withdrawDeliversParcel(freightId: string, why: string, now: number = Date.now()): Freight | undefined {
+    const f = this.requireFreight(freightId);
+    if (!f.deliversParcel || f.status === 'cancelled' || f.status === 'delivered' || f.status === 'in_transit') return undefined;
+    return this.withdraw(f, { did: f.shipperDid ?? 'system', role: 'shipper' }, why, now);
+  }
+
+  /** Every load taking a business's parcel to its door. */
+  deliversParcelLoads(): Freight[] {
+    return [...this.freights.values()].filter((f) => Boolean(f.deliversParcel));
+  }
+
+  /**
    * A HUB HANDS A STORE'S PARCEL TO THE DRIVER WHO TOOK ITS LOAD (2026-10-27), by their pass: nobody else's, and not before a
    * driver has taken the load. Refused, in words the counter can act on, before anything is written. Answers the driver.
    */
@@ -3488,7 +3521,8 @@ export class DispatchService {
    */
   raiseMaxSpend(freightId: string, vendorId: string, amount: number): Freight {
     const f = this.requireFreight(freightId);
-    if (!f.bringsBack || f.shipperDid !== vendorId) throw new GlosError('NOT_FOUND', 'No load of yours brings a parcel back');
+    // A store's load bringing its parcel home, or a business's taking its parcel to its own door (2026-10-29).
+    if (!(f.bringsBack || f.deliversParcel) || f.shipperDid !== vendorId) throw new GlosError('NOT_FOUND', 'No load of yours brings a parcel back');
     if (f.status !== 'available') throw new GlosError('INVALID_STATE', `Load ${f.code} was taken already: its price is fixed`);
     const most = Math.round(Number(amount) * 100) / 100;
     if (!Number.isFinite(most) || most <= (f.maxSpend ?? 0)) throw new GlosError('INVALID_INPUT', `Say more than ${f.maxSpend ?? 0}: the most can only be raised`, { field: 'maxSpend' });
@@ -3935,6 +3969,7 @@ export class DispatchService {
     if (f.status === 'in_transit') throw new GlosError('INVALID_STATE', 'The goods are already on the road — a load that has been taken over cannot be cancelled; talk to the driver');
     // The only way home for a store's parcel called off at a hub: withdrawn, the goods would wait there for nobody.
     if (f.bringsBack) throw new GlosError('INVALID_STATE', `This load brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}: it is not withdrawn. If no driver takes it, the store raises the most it pays, or sends it to a shop instead`);
+    if (f.deliversParcel) throw new GlosError('INVALID_STATE', `This load takes parcel ${f.deliversParcel.parcelId} from ${f.deliversParcel.shopName} to its door: it is withdrawn by collecting the parcel at the shop with its code, or the most it pays is raised`);
     return this.withdraw(f, by, why, now);
   }
 
@@ -4523,7 +4558,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */

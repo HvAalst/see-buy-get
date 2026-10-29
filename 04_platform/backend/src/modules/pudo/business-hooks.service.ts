@@ -138,10 +138,14 @@ export class BusinessHookService implements OnModuleInit, OnModuleDestroy {
       if (e.payload?.freightId) this.relayInbound('inbound.closed', String(e.payload.freightId));
     });
     for (const [topic, event] of PARCEL_TOPICS) {
-      this.events.subscribe<{ parcelId?: string }>(topic, (e) => {
-        if (e.payload?.parcelId) this.relayParcel(event, String(e.payload.parcelId));
+      this.events.subscribe<{ parcelId?: string; toDoor?: string }>(topic, (e) => {
+        // Handed at its shop to the driver of its last leg (2026-10-29): on its way to its door, not collected.
+        if (e.payload?.parcelId) this.relayParcel(event === 'parcel.collected' && e.payload.toDoor ? 'parcel.to_your_door' : event, String(e.payload.parcelId));
       });
     }
+    this.events.subscribe<{ parcelId?: string }>(GlosEvent.Pudo.ParcelAtDoor, (e) => {
+      if (e.payload?.parcelId) this.relayParcel('parcel.at_your_door', String(e.payload.parcelId));
+    });
     this.timer = setInterval(() => void this.drain(), DRAIN_MS);
     this.timer.unref?.();
   }

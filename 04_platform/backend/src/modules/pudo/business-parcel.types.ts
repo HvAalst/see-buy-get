@@ -20,6 +20,12 @@ class ParcelSizeDto {
   @IsNumber() @Min(0.1) h!: number;
 }
 
+/** Delivered to one of its own places: which, and the most it pays a driver for the last leg from the shop nearest it. */
+class ToOwnPlaceDto {
+  @IsString() @MaxLength(80) siteId!: string;
+  @IsNumber() @Min(0.01) maxSpend!: number;
+}
+
 class ParcelLineDto {
   @IsString() @MaxLength(120) name!: string;
   @IsNumber() @Min(1) qty!: number;
@@ -31,8 +37,10 @@ export class BusinessParcelDto {
   @IsOptional() @IsString() @MaxLength(120) originPudoDid?: string;
   /** Collected by a driver from the place the business set for it (2026-10-29), not handed in at a shop. */
   @IsOptional() @IsBoolean() fromOwnPlace?: boolean;
-  /** The shop the receiver collects it from. */
-  @IsString() @MaxLength(120) destPudoDid!: string;
+  /** The shop the receiver collects it from. Absent: delivered to its own place (`toOwnPlace`). */
+  @IsOptional() @IsString() @MaxLength(120) destPudoDid?: string;
+  /** Delivered to one of its own places (2026-10-29): via the shop nearest it, then a driver's load to its door. */
+  @IsOptional() @ValidateNested() @Type(() => ToOwnPlaceDto) toOwnPlace?: ToOwnPlaceDto;
   /** The person who collects it. Never sent a text by us; the code is the business's to pass on. */
   @IsString() @MaxLength(30) receiverMobile!: string;
   /** Measured, so it is priced on what it is rather than on a size band. */
@@ -56,7 +64,10 @@ export class BusinessParcelDto {
 /** What a parcel would cost: from a shop's id, or `own` — its own place — to a shop, at its measurements. */
 export class ParcelPriceQueryDto {
   @IsString() @MaxLength(120) origin!: string;
-  @IsString() @MaxLength(120) dest!: string;
+  /** A shop's id — or absent, with `toPlace`. */
+  @IsOptional() @IsString() @MaxLength(120) dest?: string;
+  /** One of its own places, delivered to by a driver from the shop nearest it. */
+  @IsOptional() @IsString() @MaxLength(80) toPlace?: string;
   @Type(() => Number) @IsNumber() @Min(0.1) l!: number;
   @Type(() => Number) @IsNumber() @Min(0.1) w!: number;
   @Type(() => Number) @IsNumber() @Min(0.1) h!: number;
@@ -117,6 +128,13 @@ export class ParcelCollection {
   @ApiProperty() since!: string;
 }
 
+/** Delivered to its own place: the shop it goes via, and the most we suggest for the last leg. */
+export class ParcelDoorPrice {
+  @ApiProperty() via!: string;
+  @ApiProperty() viaDid!: string;
+  @ApiProperty() suggestedMax!: number;
+}
+
 /** What it costs, before anything is sent. */
 export class ParcelPriceView {
   /** Held when sent, and what it costs less given back once it is collected. */
@@ -125,6 +143,27 @@ export class ParcelPriceView {
   @ApiProperty() locked!: number;
   @ApiProperty() currency!: string;
   @ApiProperty() crossesBorder!: boolean;
+  /** Delivered to its own place: the shop it goes via, and the most we suggest allowing a driver for the last leg. */
+  @ApiPropertyOptional({ type: () => ParcelDoorPrice }) door?: ParcelDoorPrice;
+}
+
+/** A parcel's last leg to its own place, as the business reads it. */
+export class ParcelDoorView {
+  @ApiProperty() label!: string;
+  /** The shop it goes via, where a driver collects it. */
+  @ApiProperty() via!: string;
+  @ApiProperty() maxSpend!: number;
+  @ApiProperty() currency!: string;
+  /** `waiting` for it at the shop · `short` the balance does not cover the most · `posted` a load waits for a driver · `handed` on the road to it · `delivered` · `collected` at the shop instead. */
+  @ApiProperty({ enum: ['waiting', 'short', 'posted', 'handed', 'delivered', 'collected'] }) state!: string;
+  @ApiPropertyOptional() loadCode?: string;
+  @ApiPropertyOptional() loadStatus?: string;
+  @ApiPropertyOptional() driverName?: string;
+  @ApiPropertyOptional() receivedBy?: string;
+}
+
+export class DoorRaiseDto {
+  @IsNumber() @Min(0.01) maxSpend!: number;
 }
 
 /** A bag on its own place. */
@@ -214,6 +253,8 @@ export class BusinessParcelRow {
   @ApiPropertyOptional({ type: ParcelEnd }) from?: ParcelEnd;
   /** Collected by a driver from its own place, not handed in at a shop. */
   @ApiPropertyOptional() fromOwnPlace?: boolean;
+  /** Delivered to its own place: the last leg from the shop. */
+  @ApiPropertyOptional({ type: () => ParcelDoorView }) toOwnPlace?: ParcelDoorView;
   @ApiProperty({ type: ParcelEnd }) to!: ParcelEnd;
   @ApiProperty() size!: string;
   @ApiPropertyOptional() cost?: number;

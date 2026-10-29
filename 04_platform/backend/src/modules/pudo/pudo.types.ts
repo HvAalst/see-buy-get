@@ -1213,6 +1213,11 @@ export class Parcel {
   /** Called off at a hub and going to the store's own door as a load (2026-10-27: "As a load to its door"): that load. */
   returnLoad?: { freightId: string; code: string };
   /**
+   * A business's parcel taken on from its shop to the business's own door (2026-10-29: "At the nearest shop"): the load that
+   * does it. Set when the shop hands it to that load's driver; the parcel's part ends there, the load's begins.
+   */
+  doorLoad?: { freightId: string; code: string; atDoorAt?: string };
+  /**
    * A PERSON'S PARCEL TURNED ROUND AT A HUB (the user, 2026-10-27: "Back to its shop, sender pays"): its way back is paid in
    * cash at the counter it comes back to, by its sender as they collect it — this parcel's price, charged to that shop's
    * float at the hand-over, as a take-in is. `paidAt` once it was.

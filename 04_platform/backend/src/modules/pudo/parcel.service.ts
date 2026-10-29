@@ -2668,6 +2668,46 @@ export class ParcelService implements OnApplicationBootstrap {
   }
 
   /**
+   * A BUSINESS'S PARCEL HANDED, AT ITS SHOP, TO THE DRIVER TAKING IT TO THE BUSINESS'S OWN DOOR (the user, 2026-10-29: "At the
+   * nearest shop"). The shop has checked the driver's pass against the load (DispatchService.handDeliversParcel); no code is
+   * asked, because the receiver is not at the counter — the business sent its own driver's load for it. The shop's part ends
+   * here exactly as at a collection: its slot is freed, it is paid for the hand-over, a flexible price gives back what was
+   * not used. The parcel goes on in the driver's hands, under the load.
+   */
+  releaseToDoorDriver(parcelId: string, agentDid: string, driverDid: string, load: { freightId: string; code: string }, now: number = Date.now()): Parcel {
+    const parcel = this.require(parcelId);
+    this.refuseIfLost(parcel);
+    this.refuseIfHeld(parcel);
+    if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
+    if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Handed over only at the shop it waits at');
+    const at = new Date(now).toISOString();
+    parcel.status = 'Delivered';
+    parcel.deliveredAt = at;
+    parcel.doorLoad = { freightId: load.freightId, code: load.code };
+    this.shelf.release(agentDid, parcelId);
+    this.handTo(parcel, 'driver', driverDid, `handed to the driver of load ${load.code}, for its own door`, { at });
+    this.scan(parcel, 'Delivered', agentDid, `handed to the driver of load ${load.code} · to its own door`);
+    this.gate.payLabour(agentDid, this.releasePayOf(agentDid, parcel), parcelId, 'parcel', parcel.sellerEntityId);
+    this.rebateFlexible(parcel);
+    this.persist(parcel);
+    void this.events.publish(GlosEvent.Pudo.ParcelDelivered, { parcelId, agentDid, vendorId: parcel.vendorId, externalOrderId: parcel.externalOrderId, toDoor: load.code }, { source: 'pudo' }).catch(() => undefined);
+    return parcel;
+  }
+
+  /** At its door: the driver of its load handed it over, signed for. The chain ends with whoever signed. */
+  atItsDoor(parcelId: string, receivedBy: string | undefined, at: string): Parcel {
+    const parcel = this.require(parcelId);
+    if (!parcel.doorLoad || parcel.status !== 'Delivered') throw new GlosError('INVALID_STATE', `${parcelId} is not on its way to a door`);
+    if (parcel.doorLoad.atDoorAt) return parcel;
+    parcel.doorLoad = { ...parcel.doorLoad, atDoorAt: at };
+    this.handTo(parcel, 'receiver', parcel.receiverPhoneHash ?? 'receiver', `at its own door${receivedBy ? `, received by ${receivedBy}` : ''}`, { at });
+    this.endCustody(parcel);
+    this.media.anchorParcelTerminal(parcelId);
+    this.persist(parcel);
+    return parcel;
+  }
+
+  /**
    * Stamp parcels as knowingly left behind. Shared by the two ways a load can be short: a driver's
    * manifest at handover, and a shop sealing a bag without everything that was waiting for it. Both
    * record the SAME thing, so the control tower cannot tell which flow left a parcel on the shelf —

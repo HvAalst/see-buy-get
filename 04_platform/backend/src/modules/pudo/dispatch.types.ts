@@ -258,6 +258,19 @@ export class FreightBringsBack {
   @ApiPropertyOptional() remindedAt?: string;
 }
 
+/**
+ * A BUSINESS'S PARCEL GOING ON TO ITS OWN DOOR (the user, 2026-10-29: "At the nearest shop"): the shop it waits at, and
+ * whether the shop has handed it to the driver who took this load — by their pass, to nobody else.
+ */
+export class FreightDeliversParcel {
+  parcelId: string;
+  atShopDid: string;
+  shopName: string;
+  @ApiPropertyOptional() handedAt?: string;
+  /** Who at the shop handed it over. */
+  @ApiPropertyOptional() handedBy?: string;
+}
+
 /** The same, as its driver reads it: where to collect the box, and whether the hub has handed it over yet. */
 export class FreightCollectAtHub {
   parcelId: string;
@@ -685,6 +698,8 @@ export class Freight {
   @ApiPropertyOptional({ type: FreightLink }) returnOf?: FreightLink;
   /** A store's parcel called off at a hub, going back to the store's own door as this load (2026-10-27). */
   @ApiPropertyOptional({ type: FreightBringsBack }) bringsBack?: FreightBringsBack;
+  /** A business's parcel, from the shop it waits at to the business's own door (2026-10-29). */
+  @ApiPropertyOptional({ type: FreightDeliversParcel }) deliversParcel?: FreightDeliversParcel;
   /** FP3b — the sender's claim against the delivered goods, and how it ended. One per load. */
   @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for

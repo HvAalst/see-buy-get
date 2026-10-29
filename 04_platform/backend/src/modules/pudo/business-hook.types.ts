@@ -14,7 +14,7 @@ export type BusinessHookEvent = (typeof BUSINESS_HOOK_EVENTS)[number];
  * when one is given), collected, a problem reported, called off, declared lost. Each carries the parcel exactly as its
  * Parcels screen reads it — the code to collect it included, which is the business's to pass on.
  */
-export const BUSINESS_PARCEL_EVENTS = ['parcel.paid', 'parcel.handed_in', 'parcel.ready', 'parcel.collected', 'parcel.disputed', 'parcel.called_off', 'parcel.lost'] as const;
+export const BUSINESS_PARCEL_EVENTS = ['parcel.paid', 'parcel.handed_in', 'parcel.ready', 'parcel.collected', 'parcel.to_your_door', 'parcel.at_your_door', 'parcel.disputed', 'parcel.called_off', 'parcel.lost'] as const;
 export type BusinessParcelEvent = (typeof BUSINESS_PARCEL_EVENTS)[number];
 
 export class BusinessHookMessageView {
