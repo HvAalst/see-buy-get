@@ -56,6 +56,8 @@ import {
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { RailNotePanel, type RailNoteCheck, type RailwayRow } from './RailNotePanel';
 import { ImportByRail } from './ImportByRail';
+import type { Translate } from '../../../shared/i18n';
+import { JourneyStrip, ModeFilter, modesPresent, type JourneyLeg, type LegMode } from './JourneyStrip';
 import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from './FblPanel';
 
 /**
@@ -71,6 +73,46 @@ import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from './FblPanel';
  * B1 — it reads only who is signed in and the API client, so the Business app hosts it as it stands: an importer
  * and a clearing agent see the same screen whichever app signed them in.
  */
+/**
+ * AN IMPORT'S JOURNEY, BY ITS LEGS (the navigation by direction, 2026-10-29): how it came — by sea, air, road or rail —
+ * the train inland where it goes by rail, and our truck; each with its document and where it stands.
+ */
+function importJourney(d: ImportDetailView, tt: Translate): JourneyLeg[] {
+  const modes = d.modes ?? ['sea', 'road'];
+  const main = (modes[0] ?? 'sea') as LegMode;
+  const landed = d.dischargePort ?? d.destPort;
+  const legs: JourneyLeg[] = [];
+  if (main !== 'road') {
+    legs.push({
+      mode: main,
+      from: d.originCountry,
+      to: landed,
+      doc: d.fbl ? tt('tower.journey.fbl', { number: d.fbl.number }) : tt('tower.journey.noDoc'),
+      state: d.box?.arrivedAt ? tt('tower.journey.state.arrived') : d.etaAt ? tt('tower.journey.state.expected', { day: d.etaAt.slice(0, 10) }) : tt('tower.journey.state.onItsWay'),
+      tone: d.box?.arrivedAt ? 'ok' : 'quiet',
+    });
+  }
+  if (d.byRail) {
+    legs.push({
+      mode: 'rail',
+      from: landed,
+      to: d.byRail.terminal.label,
+      doc: d.rail ? tt('tower.journey.railNote', { railway: d.rail.railwayName, number: d.rail.noteNumber ?? '' }).trim() : tt('tower.journey.noDoc'),
+      state: tt(d.byRail.arrival ? 'tower.journey.state.atTheTerminal' : d.byRail.leftPort ? 'tower.journey.state.onTheTrain' : 'tower.journey.state.atThePort'),
+      tone: d.byRail.arrival ? 'ok' : 'quiet',
+    });
+  }
+  legs.push({
+    mode: 'road',
+    from: d.byRail ? d.byRail.terminal.label : main === 'road' ? d.originCountry : d.destPort,
+    to: tt('tower.journey.ours'),
+    doc: d.roadFreightCode ? tt('tower.journey.roadNote', { code: `CMR-${d.roadFreightCode}` }) : tt('tower.journey.noDoc'),
+    state: tt(d.roadFreightCode ? 'tower.journey.state.posted' : 'tower.journey.state.notPosted'),
+    tone: d.roadFreightCode ? 'ok' : 'quiet',
+  });
+  return legs;
+}
+
 export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who'>; actions: Pick<TowerActions, 'client'> }) {
   const t = useT();
   const client = actions.client();
@@ -248,7 +290,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const [onlyWaiting, setOnlyWaiting] = useState(false);
-  const slice = onlyWaiting ? (rows ?? []).filter((r) => r.waitingOnYou > 0) : (rows ?? []);
+  // The list by its modes (2026-10-29): all, or those with a leg of one mode.
+  const [mode, setMode] = useState<LegMode | ''>('');
+  const slice = (onlyWaiting ? (rows ?? []).filter((r) => r.waitingOnYou > 0) : (rows ?? [])).filter((r) => !mode || (r.modes ?? []).includes(mode));
   const found = slice.filter((r) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
@@ -570,6 +614,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
             />
           ) : null}
         </div>
+        <ModeFilter present={modesPresent(rows ?? [])} value={mode} onChange={(m) => { setMode(m); setPage(0); }} />
         {rows === null ? (
           <p class="cons__empty">{t('tower.imports.loading')}</p>
         ) : rows.length === 0 ? (
@@ -801,6 +846,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               </table>
             )}
           </ConsoleFold>
+
+          {/* ---- the journey, by its legs (2026-10-29): how it came, the train inland, our truck ---- */}
+          <JourneyStrip legs={importJourney(detail, t)} />
 
           {/* ---- the forwarder's FIATA bill the goods came under: held and explained, never issued (2026-10-29) ---- */}
           {client ? (

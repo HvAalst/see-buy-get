@@ -54,6 +54,8 @@ export interface RequiredPaperView {
 
 export interface ImportRow {
   importId: string;
+  /** The journey's legs in order (2026-10-29): how it came, the train inland where it goes by rail, our road leg. */
+  modes?: Array<'road' | 'rail' | 'sea' | 'air'>;
   code: string;
   status: ImportStatus;
   goodsDescription: string;

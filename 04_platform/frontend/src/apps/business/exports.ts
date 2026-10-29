@@ -201,6 +201,8 @@ export interface ExportDetail {
 
 export interface ExportRow {
   exportId: string;
+  /** The journey's legs in order (2026-10-29): road, rail where it goes by train, sea. */
+  modes?: Array<'road' | 'rail' | 'sea' | 'air'>;
   code: string;
   goodsDescription: string;
   loadingPort: string;

@@ -50,7 +50,11 @@ export type IconName =
   | 'info'
   // The help's light-or-dark switch (2026-10-22).
   | 'moon'
-  | 'sun';
+  | 'sun'
+  // The legs of a journey (2026-10-29): a truck is already here; a train, a ship and a plane join it.
+  | 'train'
+  | 'ship'
+  | 'plane';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chevronRight: <path d="m9 5 7 7-7 7" />,
@@ -61,6 +65,19 @@ const PATHS: Record<IconName, JSX.Element> = {
   arrowLeft: <path d="M20 12H4m0 0 6-6m-6 6 6 6" />,
   arrowUp: <path d="M12 20V4.6m0 0-6.4 6.4M12 4.6 18.4 11" />,
   scan: <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M4 16v2.5A1.5 1.5 0 0 0 5.5 20H8m8-16h2.5A1.5 1.5 0 0 1 20 5.5V8m0 8v2.5a1.5 1.5 0 0 1-1.5 1.5H16M7 12h10" />,
+  train: (
+    <>
+      <rect x="6" y="3.5" width="12" height="13" rx="3" />
+      <path d="M6 10h12M9.5 13.5h.01M14.5 13.5h.01M9 16.5l-2 4M15 16.5l2 4" />
+    </>
+  ),
+  ship: (
+    <>
+      <path d="M3.5 14h17l-2.2 4.2a2 2 0 0 1-1.8 1.1H7.5a2 2 0 0 1-1.8-1.1L3.5 14Z" />
+      <path d="M7 14V9.5h10V14M10 9.5V6h4v3.5" />
+    </>
+  ),
+  plane: <path d="M21 15.5v-2l-7.5-4.5V4.5a1.5 1.5 0 0 0-3 0V9L3 13.5v2l7.5-2.2V18l-2 1.5V21l3.5-1 3.5 1v-1.5l-2-1.5v-4.7l7.5 2.2Z" />,
   route: (
     <>
       <circle cx="6" cy="6" r="2.4" />

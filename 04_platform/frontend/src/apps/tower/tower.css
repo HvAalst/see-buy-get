@@ -1133,6 +1133,44 @@
 }
 
 /* A row of buttons that choose what a list shows (Messages: open, answered, closed; then a category). */
+/* The journey, by its legs (2026-10-29): one record, its modes in order, each with its document and where it stands. */
+.journey {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.journey__leg {
+  flex: 1 1 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--c-line, #e3e3df);
+  border-radius: 10px;
+  background: var(--c-panel, transparent);
+  min-width: 0;
+}
+.journey__mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.journey__way,
+.journey__doc {
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.journey__doc {
+  color: var(--c-muted, #6b6f76);
+}
+.journey__leg .ctag {
+  align-self: flex-start;
+}
+
 .twr-tabs {
   display: flex;
   flex-wrap: wrap;

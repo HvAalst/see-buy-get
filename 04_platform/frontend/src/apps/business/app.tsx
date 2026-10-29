@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { HelpLink } from '../../shared/guide/HelpLink';
-import { BottomNav, BrandMark, Icon, NotificationBell } from '../../shared/ui';
+import { BottomNav, BrandMark, Icon, NotificationBell, Sheet } from '../../shared/ui';
 import { useT, type MessageKey } from '../../shared/i18n';
 import type { IconName } from '../../shared/ui/Icon';
 import { useWideScreen } from '../../shared/useWideScreen';
@@ -10,7 +10,7 @@ import { useAccount } from '../../shared/account/useAccount';
 import { ConsoleMenu } from '../tower/ConsoleMenu';
 import { ImportsScreen } from '../tower/screens/ImportsScreen';
 import { DepotsScreen } from '../tower/screens/DepotsScreen';
-import { mayAct, sectionsFor, type Section } from './logic';
+import { mayAct, navGroupsFor, navSectionOf, sectionsFor, type Section } from './logic';
 import { useBusinessApp } from './useBusinessApp';
 import { SignInScreen } from './screens/SignInScreen';
 import { ChooseScreen } from './screens/ChooseScreen';
@@ -30,7 +30,7 @@ import './business.css';
 
 const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   home: { label: 'business.nav.home', icon: 'home' },
-  loads: { label: 'business.nav.loads', icon: 'truck' },
+  loads: { label: 'business.nav.domestic', icon: 'truck' },
   runs: { label: 'business.nav.runs', icon: 'route' },
   contracts: { label: 'business.nav.contracts', icon: 'badge' },
   clients: { label: 'business.nav.clients', icon: 'bag' },
@@ -58,6 +58,7 @@ export function App() {
   const wide = useWideScreen();
   const [settings, setSettings] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [more, setMore] = useState(false);
   const client = actions.businessClient();
   // The person's own account (PIN, recovery email, phone) — reached through the business session, which carries them.
   const account = useAccount(client?.client.sbg ?? null, state.phase === 'ready');
@@ -69,6 +70,22 @@ export function App() {
   const business = state.business;
   const sections = sectionsFor(business.activities);
   const section = sections.includes(state.section) ? state.section : 'home';
+  // The menu in groups (2026-10-29): shipments first, by the way the goods go; then partners, places, the company.
+  const groups = navGroupsFor(business.activities);
+  const marked = navSectionOf(section);
+  const shipments = groups.find((g) => g.key === 'shipments')?.sections ?? [];
+  const others = groups.filter((g) => g.key !== 'shipments');
+  const inMore = others.some((g) => g.sections.includes(marked));
+  // Domestic holds two ways to send in the country: a load of your own, or space on a carrier's run.
+  const domesticTabs = (section === 'loads' || section === 'runs') && sections.includes('runs') ? (
+    <div class="twr-tabs" role="tablist" aria-label={t('business.nav.domestic')}>
+      {(['loads', 'runs'] as Section[]).map((s) => (
+        <button key={s} type="button" role="tab" aria-selected={section === s} class={`cbtn cbtn--sm ${section === s ? 'cbtn--on' : 'cbtn--ghost'}`} onClick={() => actions.go(s)}>
+          {t(s === 'loads' ? 'business.nav.loads' : 'business.nav.runs')}
+        </button>
+      ))}
+    </div>
+  ) : null;
   // The console's screens read who is signed in and a client; a business member is "a company" to them.
   const who = { mode: 'company' as const, name: business.you.name, entityId: business.entityId };
   const towerActions = { client: () => client };
@@ -103,12 +120,17 @@ export function App() {
       <div class="cons__body">
         {wide ? (
           <nav class="cons__rail" aria-label={t('business.nav.heading')}>
-            {sections.map((s) => (
-              <div class="cons__railgroup" key={s}>
-                <button type="button" class={`cons__railitem${section === s ? ' cons__railitem--on' : ''}`} aria-current={section === s ? 'page' : undefined} onClick={() => actions.go(s)}>
-                  <Icon name={SECTION[s].icon} size={18} />
-                  <span>{t(SECTION[s].label)}</span>
-                </button>
+            {groups.map((g) => (
+              <div class="cons__railgroup" key={g.key}>
+                {/* A heading over several; a group of one is drawn as its one item (a heading over a single row is a
+                    label for a list that is not a list — the console's own rule). */}
+                <p class="cons__railhead">{t(g.label)}</p>
+                {g.sections.map((s) => (
+                  <button key={s} type="button" class={`cons__railitem${marked === s ? ' cons__railitem--on' : ''}`} aria-current={marked === s ? 'page' : undefined} onClick={() => actions.go(s)}>
+                    <Icon name={SECTION[s].icon} size={18} />
+                    <span>{t(SECTION[s].label)}</span>
+                  </button>
+                ))}
               </div>
             ))}
           </nav>
@@ -121,6 +143,7 @@ export function App() {
               <span>{state.note}</span>
             </p>
           ) : null}
+          {domesticTabs}
           {section === 'loads' ? (
             <LoadsScreen business={business} actions={actions} client={client} />
           ) : section === 'runs' ? (
@@ -148,7 +171,30 @@ export function App() {
       </div>
 
       {wide ? null : (
-        <BottomNav labels={false} items={sections.map((s) => ({ key: s, label: t(SECTION[s].label), icon: SECTION[s].icon }))} active={section} onSelect={(s) => actions.go(s as Section)} />
+        <>
+          {/* On a phone the shipments are one tap away — the day's work — and the rest is under More. */}
+          <BottomNav
+            labels={false}
+            items={[...shipments.map((s) => ({ key: s as string, label: t(SECTION[s].label), icon: SECTION[s].icon })), ...(others.length ? [{ key: 'more', label: t('business.nav.more'), icon: 'grid' as IconName }] : [])]}
+            active={inMore ? 'more' : marked}
+            onSelect={(s) => (s === 'more' ? setMore(true) : actions.go(s as Section))}
+          />
+          <Sheet open={more} onClose={() => setMore(false)} title={t('business.nav.more')}>
+            <div class="cons__sheetlist">
+              {others.map((g) => (
+                <div key={g.key}>
+                  <p class="cons__railhead">{t(g.label)}</p>
+                  {g.sections.map((s) => (
+                    <button key={s} type="button" class={`cons__sheetitem${marked === s ? ' cons__sheetitem--on' : ''}`} aria-current={marked === s ? 'page' : undefined} onClick={() => { setMore(false); actions.go(s); }}>
+                      <Icon name={SECTION[s].icon} size={22} />
+                      <span>{t(SECTION[s].label)}</span>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </Sheet>
+        </>
       )}
 
       <SettingsSheet open={settings} onClose={() => setSettings(false)} api={account} onSignOut={actions.signOut} />

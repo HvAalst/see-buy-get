@@ -36,6 +36,37 @@ export function sectionsFor(activities: BusinessActivity[]): Section[] {
 }
 
 /**
+ * THE MENU, IN GROUPS (the user, 2026-10-29: "Since we are growing, we must make careful decisions regarding the
+ * navigation" — and the choices: by direction with the mode inside, a menu grouped with headings). Shipments by the way
+ * the goods go — in the country, out, in — with road, rail, sea and air as legs inside each record, never sections of
+ * their own; then who it works with, its places, and the company. A group shows only the sections the business's work
+ * needs, and a group left empty is not shown. Space on runs is not in the menu: it is a tab of Domestic.
+ */
+export type NavGroupKey = 'shipments' | 'partners' | 'places' | 'company';
+export interface NavGroup {
+  key: NavGroupKey;
+  label: MessageKey;
+  sections: Section[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  { key: 'shipments', label: 'business.group.shipments', sections: ['home', 'loads', 'exports', 'imports'] },
+  { key: 'partners', label: 'business.group.partners', sections: ['contracts', 'clients'] },
+  { key: 'places', label: 'business.group.places', sections: ['inbound', 'yard'] },
+  { key: 'company', label: 'business.group.company', sections: ['people', 'details'] },
+];
+
+export function navGroupsFor(activities: BusinessActivity[]): NavGroup[] {
+  const shown = sectionsFor(activities);
+  return NAV_GROUPS.map((g) => ({ ...g, sections: g.sections.filter((s) => shown.includes(s)) })).filter((g) => g.sections.length > 0);
+}
+
+/** The menu item that stands for where somebody is: Space on runs is a tab of Domestic. */
+export function navSectionOf(section: Section): Section {
+  return section === 'runs' ? 'loads' : section;
+}
+
+/**
  * WHAT THE CHECK NEEDS FROM THEM NEXT, as one step. The overview leads with it until the business is verified.
  *
  * `papers` add the two papers · `ask` ask for the check · `waiting` staff have it · `refused` put right what they

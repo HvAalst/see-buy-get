@@ -538,6 +538,12 @@ export const enBusiness = {
   /* ---- the shell ---- */
   'business.nav.heading': 'Business',
   'business.nav.home': 'Overview',
+  'business.nav.domestic': 'Domestic',
+  'business.nav.more': 'More',
+  'business.group.shipments': 'Shipments',
+  'business.group.partners': 'Partners',
+  'business.group.places': 'Places',
+  'business.group.company': 'Company',
   'business.nav.imports': 'Imports',
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.
   'business.nav.exports': "Exports",

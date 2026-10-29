@@ -16,6 +16,7 @@ import { ASKED_PAPERS, boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, pape
 import { isDangerousNature, mayAct } from '../logic';
 import { RailNotePanel } from '../../tower/screens/RailNotePanel';
 import { ExportByRail } from './ExportByRail';
+import { exportJourney, JourneyStrip, ModeFilter, modesPresent, type LegMode } from '../../tower/screens/JourneyStrip';
 import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from '../../tower/screens/FblPanel';
 
 type Problem = { detail?: string; title: string } | null | undefined;
@@ -73,6 +74,8 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
   const [error, setError] = useState<string | null>(null);
   const [forming, setForming] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  // The list by its modes (2026-10-29): all, or those with a leg of one mode.
+  const [mode, setMode] = useState<LegMode | ''>('');
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -117,13 +120,14 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
         <div class="cons__panelhead">
           <span class="cons__panelt">{t(sends ? 'business.exports.listTitle' : 'business.exports.listTitleAgent')}</span>
         </div>
+        <ModeFilter present={modesPresent(rows ?? [])} value={mode} onChange={setMode} />
         {rows === null ? (
           <p class="cons__empty">{t('business.loading')}</p>
         ) : rows.length === 0 ? (
           <p class="cons__empty">{t(sends ? 'business.exports.none' : 'business.exports.noneAgent')}</p>
         ) : (
           <div class="crows">
-            {rows.map((r) => {
+            {rows.filter((r) => !mode || (r.modes ?? []).includes(mode)).map((r) => {
               const tag = timingTag(r.timing, t);
               const clock = boxTag(r.box, t);
               return (
@@ -541,6 +545,8 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           <span class={`ctag ctag--${tag.tone}`}>{tag.word}</span>
         </div>
         <p class="cons__lede">{timingLine(d, t)}</p>
+        {/* The journey, by its legs (2026-10-29): the truck, the train where it goes by rail, the ship. */}
+        <JourneyStrip legs={exportJourney(d, t)} />
         {done ? <p class="cnote">{done}</p> : null}
         {error ? <p class="cerr">{error}</p> : null}
         <dl class="cons__facts">
@@ -550,7 +556,8 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           {fact('business.exports.d.gateCutoff', utcWords(c.booking.gateCutoffAt))}
           {c.booking.vgmCutoffAt ? fact('business.exports.d.vgmCutoff', utcWords(c.booking.vgmCutoffAt)) : null}
           {c.booking.docsCutoffAt ? fact('business.exports.d.docsCutoff', utcWords(c.booking.docsCutoffAt)) : null}
-          {fact('business.exports.d.route', `${c.loadingPlace.label} → ${c.terminal.label} (${c.loadingPort})`)}
+          {/* Our truck's road: to the port's gate, or by rail to the rail terminal (the journey strip above shows every leg). */}
+          {fact('business.exports.d.route', `${c.loadingPlace.label} → ${c.byRail ? c.byRail.terminal.label : `${c.terminal.label} (${c.loadingPort})`}`)}
           {fact('business.exports.d.box', `${c.containerType ?? ''}${c.containerNo ? ` · ${c.containerNo}` : ''}`)}
         </dl>
         {d.missing.length ? <p class="chint">{t('business.exports.d.missing', { what: d.missing.join('; ') })}</p> : <p class="chint">{t('business.exports.d.nothingMissing')}</p>}
