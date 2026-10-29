@@ -95,5 +95,7 @@ The user: "build the clock with the blocker as you said. and in help page an exp
 - Screens: `ExportByRail` (Business app export), `ImportByRail` (import screen, console + Business app); the import's
   road-leg form names the rail terminal instead of asking for a port. Help: in-app article `road-meets-rail` (business,
   driver, fleet, console), the why and the what.
-- Known limit: by rail on an import, the line's own clock (demurrage/detention) still keys to our truck's pickup; the
-  train's departure from the port is not recorded yet.
+- Closed 2026-10-29 (the gaps check before air): the importer or agent records when the train left the port
+  (`POST imports/:id/by-rail/left-port`); the line's clock takes that as the out-gate (`BoxTerm.trainOutAt`, first in
+  `gateOf`), not our truck's pickup inland. The rail note's gross mass is matched to the packing list's (1%), and the
+  export's handover file names the railway's note and the forwarder's bill held.

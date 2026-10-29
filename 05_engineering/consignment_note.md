@@ -102,3 +102,10 @@ carrier, the time, the carriage charges and the note number. A store's system he
 A stated number of packages (the posting form does not ask); successive carriers; a signed PDF — the printable page
 is the document today. Turning a load back to the sender after failed attempts (CMR art. 15 instructions); a carrier
 clawback on an upheld claim; the consignee's own confirmation (today the driver records the name).
+
+- **Every door (the gaps check before air, 2026-10-29).** Goods of a dangerous nature (`DANGEROUS_GOODS_NATURES`:
+  HAZ-CHEM, HAZ-BIO, HAZ-FLAM — not hazardous dust) carry their UN number, proper shipping name and class from every door
+  a person declares them at: the Business app and the systems API (`LoadPostingService`), the shop counter
+  (`parcels/book-freight`, which also takes who receives it, box 2), an export's load to the terminal (asked then, kept on
+  the export) and an import's road leg (the importer's own declaration, its proper shipping name now asked). Refused
+  before anything is posted (`dangerousGoodsGap`). Not yet: a store's heavy order diverted to freight, and a co-op lot.
