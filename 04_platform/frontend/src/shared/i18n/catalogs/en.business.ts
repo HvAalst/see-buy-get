@@ -893,6 +893,7 @@ export const enBusiness = {
   'business.exports.laden.hint': "Post the load to the terminal once the box is stuffed: a driver sees the gate cut-off and your booking. Give its weight, or declare the verified gross mass first.",
   'business.exports.laden.hintRail': 'Post the load to {terminal} once the box is stuffed: a driver sees the train’s cut-off and your booking. Give its weight, or declare the verified gross mass first.',
   'business.exports.laden.hintRailVgm': 'Post the load to {terminal} once the box is stuffed: a driver sees the train’s cut-off and your booking, and its weight is the verified gross mass.',
+  'business.exports.laden.dangerousHint': 'These goods are declared dangerous: give their UN number, proper shipping name and class, from the safety data sheet. The consignment note prints them, and the driver needs them.',
   'business.exports.laden.hintVgm': "Post the load to the terminal once the box is stuffed: a driver sees the gate cut-off and your booking, and its weight is the verified gross mass.",
   'business.exports.laden.weight': "What the packed box weighs (kg)",
   'business.exports.laden.post': "Post the load to the terminal",

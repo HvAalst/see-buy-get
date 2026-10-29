@@ -9,7 +9,7 @@ import { timingLine, type ExportDetail } from '../business/exports';
  * for the railway's word, the importer alone sends it anyway, and the terminal's free days are said; an export's truck is
  * timed to the train's cut-off.
  */
-const calls = { set: async () => ({}), arrived: async () => ({}), collectAnyway: async () => ({}) };
+const calls = { set: async () => ({}), arrived: async () => ({}), collectAnyway: async () => ({}), leftPort: async () => ({}) };
 const rail = (over: Partial<ImportByRailView> = {}): ImportByRailView =>
   ({ terminal: { label: 'Nairobi Inland Container Depot', location: { lat: -1.32, lng: 36.9 } }, freeDays: 4, recordedAt: '2026-10-29T06:00:00Z', recordedBy: 'Wanjiku', clock: { state: 'not_started', freeDays: 4 }, ...over }) as ImportByRailView;
 const render = (r: ImportByRailView | undefined, youAre: string) =>
@@ -40,6 +40,12 @@ describe('an import inland by rail', () => {
     expect(html).toContain('KRC-AN-5521');
     expect(html).toContain(t('tower.byRail.clock.dueSoon', { terminal: 'Nairobi Inland Container Depot', until: '2026-11-02 06:00 UTC' }));
     expect(render(rail({ collectAnyway: { by: 'Wanjiku', at: '2026-10-29T06:00:00Z', reason: 'The depot confirmed by phone' } }), 'importer')).toContain('The depot confirmed by phone');
+  });
+
+  it('when the train left the port is asked of the importer or agent, and said once recorded', () => {
+    expect(render(rail(), 'agent')).toContain(t('tower.byRail.recordLeftPort'));
+    expect(render(rail(), 'onlooker')).not.toContain(t('tower.byRail.recordLeftPort'));
+    expect(render(rail({ leftPort: { at: '2026-10-28T06:00:00Z', by: 'Juma', recordedAt: '2026-10-28T07:00:00Z' } }), 'importer')).toContain(t('tower.byRail.leftPortAt', { when: '2026-10-28 06:00 UTC', by: 'Juma' }));
   });
 
   it('a road leg taken before the rail leg was recorded is said, so its driver can be told', () => {

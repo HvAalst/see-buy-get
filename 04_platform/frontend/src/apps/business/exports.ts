@@ -161,6 +161,9 @@ export interface ExportConsignment {
   formerAgents?: Array<{ entityId: string; appointedAt: string; endedAt: string; endedBy: string; reason?: string; feeQuoteId?: string }>;
   /** The box is the exporter's own (a shipper-owned container): no line's clock runs on it. */
   ownBox?: { by: string; at: string };
+  natureCode?: string;
+  /** Dangerous goods' UN number, name and class, as given when the load to the terminal was posted (2026-10-29). */
+  dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
   /** By rail to the port: the rail terminal and the train's cut-off there (2026-10-29). */
   byRail?: { terminal: { label: string; location: { lat: number; lng: number } }; cutoffAt: string; reference?: string; atPort?: { at: string; by: string }; recordedAt: string; recordedBy: string };
   createdAt: string;
@@ -245,7 +248,7 @@ export interface ExportsApi {
   register(input: RegisterExportInput): Promise<Result<{ exportId: string; code: string }>>;
   container(exportId: string, containerNo: string): Promise<Result<ExportDetail>>;
   emptyLeg(exportId: string): Promise<Result<ExportDetail>>;
-  ladenLeg(exportId: string, weightKg?: number): Promise<Result<ExportDetail>>;
+  ladenLeg(exportId: string, weightKg?: number, dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }): Promise<Result<ExportDetail>>;
   vgm(exportId: string, body: { method: 1 | 2; kg: number; weighbridge?: string; ticketRef?: string; weighedAt?: string; signatory: string }): Promise<Result<ExportDetail>>;
   paper(exportId: string, body: { key: ExportPaperKey; documentId?: string; reference?: string }): Promise<Result<ExportDetail>>;
   billOfLading(exportId: string, number: string): Promise<Result<ExportDetail>>;
@@ -302,7 +305,7 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     register: (input) => post('/v1/sbg/exports', input),
     container: (exportId, containerNo) => post(`/v1/sbg/exports/${id(exportId)}/container`, { containerNo }),
     emptyLeg: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/empty-leg`),
-    ladenLeg: (exportId, weightKg) => post(`/v1/sbg/exports/${id(exportId)}/laden-leg`, weightKg ? { weightKg } : {}),
+    ladenLeg: (exportId, weightKg, dangerousGoods) => post(`/v1/sbg/exports/${id(exportId)}/laden-leg`, { ...(weightKg ? { weightKg } : {}), ...(dangerousGoods ? { dangerousGoods } : {}) }),
     vgm: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/vgm`, body),
     paper: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/papers`, body),
     billOfLading: (exportId, number) => post(`/v1/sbg/exports/${id(exportId)}/bill-of-lading`, { number }),

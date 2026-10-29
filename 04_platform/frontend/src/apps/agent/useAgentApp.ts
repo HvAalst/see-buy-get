@@ -25,7 +25,7 @@ import { signal } from '../../shared/feedback';
 import { downloadZpl, triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import type { CustodyCapView } from '../../shared/custodyCap';
-import { bodyHintValue, bookFreightMissing, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
+import { bodyHintValue, bookFreightMissing, dangerousGoodsValue, isDangerousNature, busScan, EMPTY_ACCEPT, type BusList, excludedBodiesValue, handoverRoute, incotermValue, money, otpValid, packagingValue, parseBudget, parseDims, plannedPickupIso, putAwayList, termsBlock, type AcceptForm, type DimsForm } from './logic';
 import type { GeoPoint } from '../../shared/geo';
 import { peopleApi } from './people';
 import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter, type StaffSession } from './staff';
@@ -1646,6 +1646,9 @@ export function useAgentApp() {
         contactName: f.contactName.trim() || undefined,
         contactPhone: f.contactPhone.trim() || undefined,
         deliveryWindow: f.deliveryWindow.trim() || undefined,
+        // CMR boxes 2 and 9 (2026-10-29) — who receives it, and dangerous goods by their UN number.
+        ...(f.consigneeName.trim() ? { consignee: { name: f.consigneeName.trim() } } : {}),
+        ...(isDangerousNature(f.natureCode) && dangerousGoodsValue(f) ? { dangerousGoods: dangerousGoodsValue(f) } : {}),
         // CL1 — sent only when the clerk was told. No term means the sender claims, as before.
         incoterm: incotermValue(f.incoterm),
         namedPlace: f.namedPlace.trim() || undefined,

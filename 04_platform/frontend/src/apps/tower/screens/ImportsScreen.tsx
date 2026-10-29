@@ -838,6 +838,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                 set: (body) => client.api.importByRail(detail.importId, body),
                 arrived: (body) => client.api.importRailArrived(detail.importId, body),
                 collectAnyway: (reason) => client.api.importRailCollectAnyway(detail.importId, { reason }),
+                leftPort: (at) => client.api.importRailLeftPort(detail.importId, { at }),
               }}
               onChanged={() => openOne(detail.importId, false)}
             />
@@ -1083,7 +1084,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
           {/* ---- CL2b: the road leg, minted by a person from the port ---- */}
           {detail.youAre === 'importer' ? (
             <ConsoleFold
-              title={t('tower.imports.roadTitle')}
+              title={t(detail.byRail ? 'tower.imports.roadTitleRail' : 'tower.imports.roadTitle')}
               hint={detail.roadFreightCode ? t('tower.imports.fold.road', { code: detail.roadFreightCode }) : t('tower.imports.fold.noRoad')}
             >
               <p class="cons__lede">{t('tower.imports.roadHint')}</p>

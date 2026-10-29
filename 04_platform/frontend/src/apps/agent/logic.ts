@@ -355,6 +355,12 @@ export interface AcceptForm {
   contactName: string;
   contactPhone: string;
   deliveryWindow: string;
+  // CMR boxes 2 and 9 at the counter (the gaps check, 2026-10-29): who receives it, and dangerous goods by their UN number.
+  consigneeName: string;
+  dgUn: string;
+  dgName: string;
+  dgClass: string;
+  dgGroup: '' | 'I' | 'II' | 'III';
   // CL1 — the trade term the customer agreed with their buyer, and the place it names.
   incoterm: IncotermChoice;
   namedPlace: string;
@@ -505,6 +511,11 @@ export const EMPTY_ACCEPT: AcceptForm = {
   contactName: '',
   contactPhone: '',
   deliveryWindow: '',
+  consigneeName: '',
+  dgUn: '',
+  dgName: '',
+  dgClass: '',
+  dgGroup: '',
   incoterm: '',
   namedPlace: '',
 };
@@ -601,6 +612,17 @@ export function plannedPickupIso(f: Pick<AcceptForm, 'freightWhen' | 'freightDat
  * first missing thing is the next thing to do. No sticker and no proof photo — freight isn't scanned onto a
  * shelf; the tracking code IS the artefact. `now` is injected so this stays pure and testable.
  */
+/** The natures that are dangerous goods (ADR): chemical, biological, flammable. Hazardous dust has no UN number. */
+export const DANGEROUS_NATURES = ['HAZ-CHEM', 'HAZ-BIO', 'HAZ-FLAM'] as const;
+export const isDangerousNature = (code: string | undefined) => (DANGEROUS_NATURES as readonly string[]).includes(code ?? '');
+
+/** The dangerous goods as the clerk took them down, or nothing until all three are given. */
+export function dangerousGoodsValue(f: Pick<AcceptForm, 'dgUn' | 'dgName' | 'dgClass' | 'dgGroup'>): { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: 'I' | 'II' | 'III' } | undefined {
+  const un = /^\s*(UN)?\s*(\d{4})\s*$/i.exec(f.dgUn)?.[2];
+  if (!un || !f.dgName.trim() || !f.dgClass.trim()) return undefined;
+  return { unNumber: `UN${un}`, properShippingName: f.dgName.trim(), hazardClass: f.dgClass.trim(), ...(f.dgGroup ? { packingGroup: f.dgGroup } : {}) };
+}
+
 export function bookFreightMissing(f: AcceptForm, now: number, t: Translate): string | null {
   if (!parseDims(f.dims)) return t('agent.logic.freightMeasure');
   if (!f.destPudoDid) return t('agent.logic.acceptPickDest');
@@ -609,6 +631,8 @@ export function bookFreightMissing(f: AcceptForm, now: number, t: Translate): st
   // deployment default and stamps a body from it, so an unasked question becomes a recorded claim about a
   // load nobody looked at. The clerk is looking at it.
   if (!packagingValue(f.packaging)) return t('agent.logic.freightPackaging');
+  // Dangerous goods come with their UN number, name and class — the server refuses them without (2026-10-29).
+  if (isDangerousNature(f.natureCode) && !dangerousGoodsValue(f)) return t('agent.logic.freightDangerous');
   if (f.freightWhen === 'planned') {
     const at = Date.parse(f.freightDate);
     if (!f.freightDate || Number.isNaN(at)) return t('agent.logic.freightPlannedDate');

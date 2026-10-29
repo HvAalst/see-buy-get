@@ -26,6 +26,7 @@ export interface RailNoteInput {
   documentId?: string;
   containerNo?: string;
   seals?: string[];
+  grossMassKg?: number;
 }
 
 /** A draft, checked against the law of its lane before anything is kept (rail/check). */
@@ -90,6 +91,7 @@ export function RailNotePanel({ code, rail, canKeep, documents, defaults, calls,
     documentId: '',
     containerNo: defaults.containerNo ?? '',
     seals: '',
+    gross: '',
   });
   const [printed, setPrinted] = useState<Particular[]>([]);
   const [asked, setAsked] = useState<RailNoteCheck | null>(null);
@@ -134,6 +136,7 @@ export function RailNotePanel({ code, rail, canKeep, documents, defaults, calls,
       ...(form.documentId ? { documentId: form.documentId } : {}),
       ...(form.containerNo.trim() ? { containerNo: form.containerNo.trim() } : {}),
       ...(seals.length ? { seals } : {}),
+      ...(Number(form.gross) > 0 ? { grossMassKg: Number(form.gross) } : {}),
     });
     setBusy(false);
     if (r.error) return setError(r.error.detail || r.error.title || t('tower.rail.failed'));
@@ -196,7 +199,7 @@ export function RailNotePanel({ code, rail, canKeep, documents, defaults, calls,
             <div class="crow" key={m.field}>
               <span class="crow__body">
                 <span class="crow__top">
-                  <span class="crow__name">{t(m.field === 'containerNo' ? 'tower.rail.match.box' : 'tower.rail.match.seals')}</span>
+                  <span class="crow__name">{t(m.field === 'containerNo' ? 'tower.rail.match.box' : m.field === 'grossMass' ? 'tower.rail.match.grossMass' : 'tower.rail.match.seals')}</span>
                   <span class={`ctag ctag--${m.agrees ? 'ok' : 'warn'}`}>{t(m.agrees ? 'tower.rail.match.agrees' : 'tower.rail.match.differs')}</span>
                 </span>
                 <span class="crow__sub">{t('tower.rail.match.line', { printed: m.printed, ours: m.ours ?? t('tower.rail.match.oursNone') })}</span>
@@ -299,6 +302,10 @@ export function RailNotePanel({ code, rail, canKeep, documents, defaults, calls,
               <input class="cinput" maxLength={200} value={form.seals} onInput={(e) => setForm({ ...form, seals: (e.target as HTMLInputElement).value })} />
             </label>
           </div>
+          <label class="twr-knob cfield">
+            <span class="cfield__label">{t('tower.rail.f.grossMass')}</span>
+            <input class="cinput" type="number" min={0} value={form.gross} onInput={(e) => setForm({ ...form, gross: (e.target as HTMLInputElement).value })} />
+          </label>
           <label class="cfield cfield--check">
             <input type="checkbox" checked={form.dangerous} onChange={(e) => setForm({ ...form, dangerous: (e.target as HTMLInputElement).checked })} />
             <span>{t('tower.rail.f.dangerous')}</span>

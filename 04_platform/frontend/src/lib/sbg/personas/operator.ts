@@ -466,6 +466,7 @@ export function createOperatorApi(sbg: SbgClient) {
     /** Inland by rail (2026-10-29): the rail terminal, the railway's arrival notice, and the importer's word to go anyway. */
     importByRail: (importId: string, body: { terminalSiteId: string; expectedAt?: string; freeDays?: number }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail', { params: { path: { importId } }, body: body as never })),
     importRailArrived: (importId: string, body: { at: string; reference?: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail/arrived', { params: { path: { importId } }, body: body as never })),
+    importRailLeftPort: (importId: string, body: { at: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail/left-port', { params: { path: { importId } }, body: body as never })),
     importRailCollectAnyway: (importId: string, body: { reason: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail/collect-anyway', { params: { path: { importId } }, body: body as never })),
 
     /**

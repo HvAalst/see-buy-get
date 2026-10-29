@@ -13,7 +13,7 @@ import { QuotePanel } from '../../tower/screens/QuotePanel';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
 import { ASKED_PAPERS, boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, paperKindFor, timingLine, timingTag, utcWords, type ExportDetail, type ExportPaperGroup, type ExportPaperKey, type ExportRow } from '../exports';
-import { mayAct } from '../logic';
+import { isDangerousNature, mayAct } from '../logic';
 import { RailNotePanel } from '../../tower/screens/RailNotePanel';
 import { ExportByRail } from './ExportByRail';
 import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from '../../tower/screens/FblPanel';
@@ -284,6 +284,8 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
   const [busy, setBusy] = useState(false);
   const [boxNo, setBoxNo] = useState('');
   const [weight, setWeight] = useState('');
+  // Dangerous goods for the road note's box 9, asked when the load to the terminal is posted (2026-10-29).
+  const [dg, setDg] = useState({ un: '', name: '', cls: '', group: '' });
   const [vgm, setVgm] = useState({ method: '1', kg: '', weighbridge: '', ticketRef: '', signatory: business.you.name ?? '' });
   const [paper, setPaper] = useState<Record<string, { documentId: string; reference: string }>>({});
   const [bl, setBl] = useState('');
@@ -341,6 +343,9 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
   const tag = timingTag(d.timing, t);
   // The exporter writes; its appointed agent gives its word on the papers; staff read.
   const mine = works && d.you === 'exporter';
+  const needsDg = isDangerousNature(d.consignment.natureCode) && !d.consignment.dangerousGoods;
+  const dgDigits = /^\s*(UN)?\s*(\d{4})\s*$/i.exec(dg.un)?.[2];
+  const dgValue = needsDg && dgDigits && dg.name.trim() && dg.cls.trim() ? { unNumber: `UN${dgDigits}`, properShippingName: dg.name.trim(), hazardClass: dg.cls.trim(), ...(['I', 'II', 'III'].includes(dg.group) ? { packingGroup: dg.group } : {}) } : undefined;
   const asAgent = works && d.you === 'agent';
   const clock = boxLine(d.box, t);
   const clockTag = boxTag(d.box, t);
@@ -994,8 +999,21 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
                 <input class="cinput" type="number" min={1} value={weight} onInput={(e) => setWeight((e.target as HTMLInputElement).value)} />
               </label>
             ) : null}
+            {needsDg ? (
+              <>
+                <p class="chint">{t('business.exports.laden.dangerousHint')}</p>
+                <div class="biz-two">
+                  <label class="cfield"><span class="cfield__label">{t('business.exports.sli.unNumber')}</span><input class="cinput" maxLength={8} value={dg.un} onInput={(e) => setDg({ ...dg, un: (e.target as HTMLInputElement).value })} /></label>
+                  <label class="cfield"><span class="cfield__label">{t('business.exports.sli.hazardClass')}</span><input class="cinput" maxLength={8} value={dg.cls} onInput={(e) => setDg({ ...dg, cls: (e.target as HTMLInputElement).value })} /></label>
+                </div>
+                <div class="biz-two">
+                  <label class="cfield"><span class="cfield__label">{t('business.exports.sli.shippingName')}</span><input class="cinput" maxLength={200} value={dg.name} onInput={(e) => setDg({ ...dg, name: (e.target as HTMLInputElement).value })} /></label>
+                  <label class="cfield"><span class="cfield__label">{t('business.exports.sli.packingGroup')}</span><input class="cinput" maxLength={3} value={dg.group} onInput={(e) => setDg({ ...dg, group: (e.target as HTMLInputElement).value.toUpperCase() })} /></label>
+                </div>
+              </>
+            ) : null}
             <div class="twr-panelend">
-              <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || !c.containerNo || (!c.vgm && !weight)} onClick={() => void act(() => client.exports.ladenLeg(c.exportId, c.vgm ? undefined : Number(weight)), t('business.exports.laden.posted'))}>
+              <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || !c.containerNo || (!c.vgm && !weight) || (needsDg && !dgValue)} onClick={() => void act(() => client.exports.ladenLeg(c.exportId, c.vgm ? undefined : Number(weight), dgValue), t('business.exports.laden.posted'))}>
                 {t('business.exports.laden.post')}
               </button>
             </div>

@@ -749,6 +749,12 @@ export const enTowerBusiness = {
   'tower.byRail.f.expected': 'When the railway expects it (UTC)',
   'tower.byRail.f.freeDays': 'Free days at the terminal',
   'tower.byRail.save': 'Save',
+  'tower.byRail.leftPortAt': 'The train left the port with it at {when} — recorded by {by}. The line’s clock outside the terminal runs from then.',
+  'tower.byRail.f.leftPort': 'When the train left the port with it (UTC)',
+  'tower.byRail.recordLeftPort': 'Record it',
+  'tower.imports.roadTitleRail': 'The road leg from the rail terminal',
+  'tower.rail.match.grossMass': 'The goods’ gross weight',
+  'tower.rail.f.grossMass': 'Gross weight of the goods, as printed (kg)',
   'tower.byRail.collectedAt': 'Collected at {terminal}, where the train brings it.',
   /* The railway's note, held on an export or an import (RailNotePanel; the user, 2026-10-28). */
   'tower.rail.title': 'The railway’s note',

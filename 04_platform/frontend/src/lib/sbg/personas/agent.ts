@@ -210,6 +210,9 @@ export function createAgentApi(sbg: SbgClient) {
       /** FB2d — bodies the CUSTOMER rules out. Unlike the hint above this one BINDS: a driver on an excluded
        *  body still sees the load on the board, marked with the shipper's refusal, and is refused the claim. */
       excludedBodies?: ('flatbed' | 'box' | 'curtain_side' | 'refrigerated' | 'tipper' | 'lowboy' | 'skeletal')[];
+      // CMR boxes 2 and 9 at the counter (2026-10-29).
+      consignee?: { name: string; address?: string };
+      dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: 'I' | 'II' | 'III' };
       // FP7 — box 13 at the counter.
       instructions?: string;
       contactName?: string;

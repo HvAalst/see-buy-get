@@ -4,7 +4,7 @@ import { useState } from 'preact/hooks';
 import { Button, Card, CheckGate, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, toggleExcludedBody, type BodyHint, type PackagingChoice } from '../logic';
+import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, toggleExcludedBody, type BodyHint, type PackagingChoice, isDangerousNature } from '../logic';
 import type { NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -581,6 +581,46 @@ function FreightBookingCard({ state, actions }: { state: AgentState; actions: Ag
         <PhoneField id="freight-phone" value={f.customerMobile} onInput={(v) => actions.setAccept({ customerMobile: v })} autoComplete="off" />
       </div>
       <p class="card__note">{t('agent.accept.customerPhoneNote')}</p>
+
+      {/* CMR box 2 (the gaps check, 2026-10-29): who receives it at the other shop, printed on the note as the consignee. */}
+      <div class="field" style="margin-top:12px">
+        <label class="field__label" for="freight-consignee">
+          {t('agent.accept.consignee')}
+        </label>
+        <input id="freight-consignee" class="input" maxLength={120} value={f.consigneeName} onInput={(e) => actions.setAccept({ consigneeName: e.currentTarget.value })} autocomplete="off" />
+      </div>
+      <p class="card__note">{t('agent.accept.consigneeNote')}</p>
+
+      {/* CMR box 9: dangerous goods by their UN number, name and class — asked only of goods declared dangerous. */}
+      {isDangerousNature(f.natureCode) ? (
+        <>
+          <p class="field__label" style="margin-top:12px">{t('agent.accept.dangerousTitle')}</p>
+          <p class="card__note">{t('agent.accept.dangerousNote')}</p>
+          <div class="grid2">
+            <div class="field">
+              <label class="field__label" for="freight-un">{t('agent.accept.dgUn')}</label>
+              <input id="freight-un" class="input" maxLength={8} inputMode="numeric" value={f.dgUn} onInput={(e) => actions.setAccept({ dgUn: e.currentTarget.value })} placeholder="1075" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label class="field__label" for="freight-class">{t('agent.accept.dgClass')}</label>
+              <input id="freight-class" class="input" maxLength={8} value={f.dgClass} onInput={(e) => actions.setAccept({ dgClass: e.currentTarget.value })} placeholder="2.1" autocomplete="off" />
+            </div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="freight-psn">{t('agent.accept.dgName')}</label>
+            <input id="freight-psn" class="input" maxLength={200} value={f.dgName} onInput={(e) => actions.setAccept({ dgName: e.currentTarget.value })} autocomplete="off" />
+          </div>
+          <div class="field">
+            <label class="field__label" for="freight-pg">{t('agent.accept.dgGroup')}</label>
+            <select id="freight-pg" class="input" value={f.dgGroup} onChange={(e) => actions.setAccept({ dgGroup: e.currentTarget.value as never })}>
+              <option value="">{t('agent.accept.dgGroupNone')}</option>
+              <option value="I">I</option>
+              <option value="II">II</option>
+              <option value="III">III</option>
+            </select>
+          </div>
+        </>
+      ) : null}
 
       {/* FP7 — CMR box 13, taken down at the counter. The contact is a FIELD, not a line in the note: the driver
           dials it, and the public tracking page must be able to leave it out. */}

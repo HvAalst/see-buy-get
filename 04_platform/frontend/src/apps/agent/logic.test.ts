@@ -14,6 +14,7 @@ import {
   acceptMissing,
   bodyHintValue,
   bookFreightMissing,
+  dangerousGoodsValue,
   canAccept,
   chooseBodyHint,
   consignmentProgress,
@@ -263,6 +264,15 @@ describe('book freight (F2)', () => {
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '' }, now, t)).toContain('planned pickup date');
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-09T09:00' }, now, t)).toContain('future'); // a past date
     expect(bookFreightMissing({ ...base, freightWhen: 'planned', freightDate: '2026-08-20T09:00' }, now, t)).toBeNull();
+  });
+
+  it('the gaps check: goods declared dangerous are booked only with their UN number, name and class; hazardous dust is not asked', () => {
+    const base = { ...EMPTY_ACCEPT, dims, destPudoDid: 'did:agent:b', budgetCap: '40', packaging: 'bagged' as const, freightWhen: 'now' as const };
+    expect(bookFreightMissing({ ...base, natureCode: 'HAZ-FLAM' }, now, t)).toBe(t('agent.logic.freightDangerous'));
+    expect(bookFreightMissing({ ...base, natureCode: 'HAZ-FLAM', dgUn: '1075', dgName: 'Petroleum gases, liquefied', dgClass: '2.1' }, now, t)).toBeNull();
+    expect(dangerousGoodsValue({ dgUn: 'un 1075', dgName: ' LPG ', dgClass: '2.1', dgGroup: '' })).toEqual({ unNumber: 'UN1075', properShippingName: 'LPG', hazardClass: '2.1' });
+    expect(dangerousGoodsValue({ dgUn: '107', dgName: 'LPG', dgClass: '2.1', dgGroup: '' })).toBeUndefined();
+    expect(bookFreightMissing({ ...base, natureCode: 'HAZ-DUST' }, now, t)).toBeNull();
   });
 });
 

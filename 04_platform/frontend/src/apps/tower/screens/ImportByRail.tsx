@@ -11,6 +11,8 @@ export interface ImportByRailCalls {
   set(body: { terminalSiteId: string; expectedAt?: string; freeDays?: number }): Result;
   arrived(body: { at: string; reference?: string }): Result;
   collectAnyway(reason: string): Result;
+  /** When the train left the port with the box: the line's clock outside the terminal starts then (2026-10-29). */
+  leftPort(at: string): Result;
 }
 
 /** A moment typed as UTC (the console's times are UTC), or nothing. */
@@ -40,6 +42,7 @@ export function ImportByRail({ code, rail, youAre, entityId, api, calls, onChang
   const [form, setForm] = useState({ site: '', expected: '', freeDays: '' });
   const [arrival, setArrival] = useState({ at: '', reference: '' });
   const [reason, setReason] = useState('');
+  const [leftAt, setLeftAt] = useState('');
   const [busy, setBusy] = useState(false);
   const [changing, setChanging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +90,19 @@ export function ImportByRail({ code, rail, youAre, entityId, api, calls, onChang
             {t('tower.byRail.set', { terminal: rail.terminal.label })}
             {rail.expectedAt ? ` ${t('tower.byRail.expected', { when: utc(rail.expectedAt) })}` : ''}
           </p>
+          {rail.leftPort ? (
+            <p class="chint">{t('tower.byRail.leftPortAt', { when: utc(rail.leftPort.at), by: rail.leftPort.by })}</p>
+          ) : canAct ? (
+            <div class="twr-knobs__row">
+              <label class="twr-knob cfield">
+                <span class="cfield__label">{t('tower.byRail.f.leftPort')}</span>
+                <input class="cinput" type="datetime-local" value={leftAt} onInput={(e) => setLeftAt((e.target as HTMLInputElement).value)} />
+              </label>
+              <div class="twr-panelend">
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy || !utcIn(leftAt)} onClick={() => void act(() => calls.leftPort(utcIn(leftAt)!))}>{t('tower.byRail.recordLeftPort')}</button>
+              </div>
+            </div>
+          ) : null}
           {rail.arrival ? (
             <p class="chint">
               <span class="ctag ctag--ok">{t('tower.byRail.there')}</span> {t('tower.byRail.arrivedAt', { when: utc(rail.arrival.at), by: rail.arrival.by })}
