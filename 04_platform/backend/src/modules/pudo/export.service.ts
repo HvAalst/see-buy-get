@@ -372,7 +372,7 @@ export class ExportService {
     );
     const warnings: string[] = [];
     if (a.bookingStatus === 'queued') warnings.push('The airline has not confirmed this booking yet: the truck may go, but the cargo may not fly on this flight. The risk of being left behind is yours.');
-    if (a.security.status === 'secured') warnings.push(`Secured cargo: a lockable body is asked for, the load is sealed where it is loaded and its seal checked at the terminal, in a closed vehicle, by a driver whose ID has been seen. Its security status is ${a.security.agentName}’s to give, never SeeBuyGet’s.`);
+    if (a.security.status === 'secured') warnings.push(`Secured cargo: it goes in a closed vehicle that locks, sealed where it is loaded and its seal checked at the terminal, with a driver whose ID has been seen. Its security status is ${a.security.agentName}’s to give, never SeeBuyGet’s.`);
     else warnings.push('Not secured: the terminal screens it when it arrives, which takes time there.');
     if (a.temp) warnings.push(`Kept between ${a.temp.minC} and ${a.temp.maxC} °C: a reefer or insulated body, its set-point inside the range, and the temperature recorded on the way.`);
     if (a.inspectionAtAirport) warnings.push(`The plant-health inspection is at the airport: about ${AIR_INSPECTION_H} hours there, before the latest acceptance time.`);
@@ -1618,7 +1618,7 @@ export class ExportService {
     if (c.mode === 'air') {
       if (!c.ladenFreightId) out.push('A load to the cargo terminal');
       else if (c.air?.security.status === 'secured' && !this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the cargo terminal — secured cargo travels sealed');
-      for (const m of this.airViewOf(c, Date.now()).check.mismatches) out.push(`The air waybill and the packing list disagree — ${m}`);
+      for (const m of this.airViewOf(c, Date.now()).check.mismatches) out.push(`The air waybill and the packing list disagree — ${m.replace(/\.$/, '')}`);
     } else {
       if (!c.containerNo) out.push('The box’s number');
       if (!c.ladenFreightId) out.push('A load to the terminal');

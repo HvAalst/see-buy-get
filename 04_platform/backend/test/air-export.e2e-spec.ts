@@ -159,7 +159,7 @@ describe('an export by air, over the wire', () => {
     // The packing list disagreeing with the waybill is said, until they agree.
     const sheet = (kg: number) => ({ rows: [['Description', 'Boxes', 'G.W. (kg)'], ['Cut roses', '40', String(kg)]] });
     await http().post(`${path}/packing-list`).set(bearer(g.token)).send(sheet(640)).expect(201);
-    expect((await read()).missing).toContain('The air waybill and the packing list disagree — Weight: the waybill says 600 kg, our papers 640 kg.');
+    expect((await read()).missing).toContain('The air waybill and the packing list disagree — Weight: the waybill says 600 kg, our papers 640 kg');
     await http().post(`${path}/packing-list`).set(bearer(g.token)).send(sheet(603)).expect(201);
     expect((await read()).missing.some((m: string) => m.startsWith('The air waybill and the packing list disagree'))).toBe(false);
 
@@ -268,7 +268,7 @@ describe('an export by air, over the wire', () => {
     const first = await read();
     expect(first.air.warnings).toEqual([
       'The airline has not confirmed this booking yet: the truck may go, but the cargo may not fly on this flight. The risk of being left behind is yours.',
-      'Secured cargo: a lockable body is asked for, the load is sealed where it is loaded and its seal checked at the terminal, in a closed vehicle, by a driver whose ID has been seen. Its security status is Swissport Kenya RA’s to give, never SeeBuyGet’s.',
+      'Secured cargo: it goes in a closed vehicle that locks, sealed where it is loaded and its seal checked at the terminal, with a driver whose ID has been seen. Its security status is Swissport Kenya RA’s to give, never SeeBuyGet’s.',
     ]);
     // A house waybill, its number given: whose contract is whose is said, and nothing more is asked of it.
     expect(first.air.check.ask).not.toContain('The forwarder’s house waybill number, and the master waybill it travels under.');

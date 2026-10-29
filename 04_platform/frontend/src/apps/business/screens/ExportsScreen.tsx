@@ -158,7 +158,7 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
                     </span>
                     {r.you === 'agent' ? <span class="crow__sub">{t('business.exports.rowFor', { exporter: r.exporterName })}</span> : null}
                     <span class="crow__sub">{r.mode === 'air' ? t('business.exports.rowLineAir', { airport: r.loadingPort, awb: r.bookingReference, cutoff: utcWords(r.gateCutoffAt) }) : t('business.exports.rowLine', { port: r.loadingPort, booking: r.bookingReference, cutoff: utcWords(r.gateCutoffAt) })}</span>
-                    {r.missing ? <span class="crow__sub">{t('business.exports.rowMissing', { n: r.missing })}</span> : null}
+                    {r.missing ? <span class="crow__sub">{t(r.mode === 'air' ? 'business.exports.rowMissingAir' : 'business.exports.rowMissing', { n: r.missing })}</span> : null}
                   </span>
                 </button>
               );
