@@ -16,6 +16,7 @@ import { ASKED_PAPERS, boxLine, boxTag, dayWords, freeDaysOf, fromUtcInput, pape
 import { isDangerousNature, mayAct } from '../logic';
 import { RailNotePanel } from '../../tower/screens/RailNotePanel';
 import { ExportByRail } from './ExportByRail';
+import { AirWaybillPanel, RegisterAirExport } from './ExportByAir';
 import { exportJourney, JourneyStrip, ModeFilter, modesPresent, type LegMode } from '../../tower/screens/JourneyStrip';
 import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from '../../tower/screens/FblPanel';
 
@@ -72,7 +73,8 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
   const sends = business.activities.some((a) => a === 'shipper' || a === 'expeditor');
   const [rows, setRows] = useState<ExportRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [forming, setForming] = useState(false);
+  // Recording one: by sea through a port, or by air through an airport (2026-10-29).
+  const [forming, setForming] = useState<'sea' | 'air' | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   // The list by its modes (2026-10-29): all, or those with a leg of one mode.
   const [mode, setMode] = useState<LegMode | ''>('');
@@ -99,17 +101,31 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
 
       {works && sends && client && !forming ? (
         <div class="twr-panelend">
-          <button type="button" class="cbtn cbtn--primary" onClick={() => setForming(true)}>
-            {t('business.exports.record')}
+          <button type="button" class="cbtn cbtn--primary" onClick={() => setForming('sea')}>
+            {t('business.exports.recordSea')}
+          </button>
+          <button type="button" class="cbtn cbtn--primary" onClick={() => setForming('air')}>
+            {t('business.exports.recordAir')}
           </button>
         </div>
       ) : null}
-      {forming && client ? (
+      {forming === 'air' && client ? (
+        <RegisterAirExport
+          business={business}
+          client={client}
+          onDone={async (exportId) => {
+            setForming(null);
+            await load();
+            if (exportId) setOpenId(exportId);
+          }}
+        />
+      ) : null}
+      {forming === 'sea' && client ? (
         <RegisterExport
           business={business}
           client={client}
           onDone={async (exportId) => {
-            setForming(false);
+            setForming(null);
             await load();
             if (exportId) setOpenId(exportId);
           }}
@@ -141,7 +157,7 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
                       {clock ? <span class={`ctag ctag--${clock.tone}`}>{clock.word}</span> : null}
                     </span>
                     {r.you === 'agent' ? <span class="crow__sub">{t('business.exports.rowFor', { exporter: r.exporterName })}</span> : null}
-                    <span class="crow__sub">{t('business.exports.rowLine', { port: r.loadingPort, booking: r.bookingReference, cutoff: utcWords(r.gateCutoffAt) })}</span>
+                    <span class="crow__sub">{r.mode === 'air' ? t('business.exports.rowLineAir', { airport: r.loadingPort, awb: r.bookingReference, cutoff: utcWords(r.gateCutoffAt) }) : t('business.exports.rowLine', { port: r.loadingPort, booking: r.bookingReference, cutoff: utcWords(r.gateCutoffAt) })}</span>
                     {r.missing ? <span class="crow__sub">{t('business.exports.rowMissing', { n: r.missing })}</span> : null}
                   </span>
                 </button>
@@ -357,6 +373,9 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
   const inClaim = freeDaysOf(c, 'demurrage');
   const emptyByLoad = Boolean(d.emptyLeg && d.emptyLeg.status !== 'cancelled');
   const onRoad = Boolean(c.ladenFreightId);
+  // By air (2026-10-29): no box, no box clock, no weighing, no train, no bill of lading — the waybill is the airline's.
+  const byAir = c.mode === 'air';
+  const secured = c.air?.security.status === 'secured';
   const fact = (k: MessageKey, v: string) => (
     <div class="cons__fact">
       <dt class="cons__factk">{t(k)}</dt>
@@ -551,19 +570,23 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         {error ? <p class="cerr">{error}</p> : null}
         <dl class="cons__facts">
           {d.you !== 'exporter' ? fact('business.exports.d.exporter', d.exporterName) : null}
-          {fact('business.exports.d.booking', `${c.booking.reference} — ${c.booking.partyName}`)}
+          {fact(byAir ? 'business.exports.d.bookedWith' : 'business.exports.d.booking', byAir ? c.booking.partyName : `${c.booking.reference} — ${c.booking.partyName}`)}
           {c.booking.vessel ? fact('business.exports.d.vessel', `${c.booking.vessel}${c.booking.voyage ? ` / ${c.booking.voyage}` : ''}`) : null}
-          {fact('business.exports.d.gateCutoff', utcWords(c.booking.gateCutoffAt))}
+          {byAir ? null : fact('business.exports.d.gateCutoff', utcWords(c.booking.gateCutoffAt))}
           {c.booking.vgmCutoffAt ? fact('business.exports.d.vgmCutoff', utcWords(c.booking.vgmCutoffAt)) : null}
           {c.booking.docsCutoffAt ? fact('business.exports.d.docsCutoff', utcWords(c.booking.docsCutoffAt)) : null}
           {/* Our truck's road: to the port's gate, or by rail to the rail terminal (the journey strip above shows every leg). */}
-          {fact('business.exports.d.route', `${c.loadingPlace.label} → ${c.byRail ? c.byRail.terminal.label : `${c.terminal.label} (${c.loadingPort})`}`)}
-          {fact('business.exports.d.box', `${c.containerType ?? ''}${c.containerNo ? ` · ${c.containerNo}` : ''}`)}
+          {fact('business.exports.d.route', `${c.loadingPlace.label} → ${c.byRail ? c.byRail.terminal.label : `${c.terminal.label} (${c.air ? c.air.fromAirport : c.loadingPort})`}`)}
+          {byAir ? null : fact('business.exports.d.box', `${c.containerType ?? ''}${c.containerNo ? ` · ${c.containerNo}` : ''}`)}
         </dl>
-        {d.missing.length ? <p class="chint">{t('business.exports.d.missing', { what: d.missing.join('; ') })}</p> : <p class="chint">{t('business.exports.d.nothingMissing')}</p>}
+        {d.missing.length ? <p class="chint">{t(byAir ? 'business.exports.d.missingAir' : 'business.exports.d.missing', { what: d.missing.join('; ') })}</p> : <p class="chint">{t(byAir ? 'business.exports.d.nothingMissingAir' : 'business.exports.d.nothingMissing')}</p>}
       </section>
 
+      {/* By air: the waybill, read against the law of its route and our papers. */}
+      {byAir ? <AirWaybillPanel d={d} /> : null}
+
       {/* EX2 — the box's number, and the empty out. */}
+      {byAir ? null : (
       <section class="cons__panel">
         <div class="cons__panelhead">
           <span class="cons__panelt">{t('business.exports.box.title')}</span>
@@ -597,8 +620,10 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           <p class="chint">{t('business.exports.empty.brought')}</p>
         )}
       </section>
+      )}
 
       {/* EX6 — the box's clock: outside the terminal until the gate, inside it until loaded on board. Days, never money. */}
+      {byAir ? null : (
       <section class="cons__panel">
         <div class="cons__panelhead">
           <span class="cons__panelt">{t('business.exports.clock.title')}</span>
@@ -686,8 +711,10 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </div>
         ) : null}
       </section>
+      )}
 
       {/* EX3 — the verified gross mass. */}
+      {byAir ? null : (
       <section class="cons__panel">
         <div class="cons__panelhead">
           <span class="cons__panelt">{t('business.exports.vgm.title')}</span>
@@ -753,6 +780,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </>
         ) : null}
       </section>
+      )}
 
       {/* EX7 — the clearing agent: appointed by the exporter, reads the papers attached here, gives its word on each. */}
       <section class="cons__panel">
@@ -972,35 +1000,37 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
       }} />
 
       {/* By rail to the port (2026-10-29): set before the load is posted — the truck is then timed to the train. */}
-      <ExportByRail
-        d={d}
-        business={business}
-        client={client}
-        mine={mine}
-        onChanged={async () => {
-          await read();
-          await onChanged();
-        }}
-      />
+      {byAir ? null : (
+        <ExportByRail
+          d={d}
+          business={business}
+          client={client}
+          mine={mine}
+          onChanged={async () => {
+            await read();
+            await onChanged();
+          }}
+        />
+      )}
 
       {/* EX2 — the load to the terminal; its seal is written on that load, with the seal panel and its photographs. */}
       <section class="cons__panel">
         <div class="cons__panelhead">
-          <span class="cons__panelt">{t('business.exports.laden.title')}</span>
+          <span class="cons__panelt">{t(byAir ? 'business.exports.laden.titleAir' : 'business.exports.laden.title')}</span>
         </div>
         {d.ladenLeg ? (
           <>
             <p class="cons__lede">{t('business.exports.laden.leg', { code: d.ladenLeg.code, status: legWord(d.ladenLeg.status) })}</p>
             {d.seals.length ? (
               <p class="chint">{t('business.exports.laden.sealed', { seals: d.seals.map((s) => s.number ?? '—').join(', ') })}</p>
-            ) : (
-              <p class="chint">{t('business.exports.laden.sealIt', { code: d.ladenLeg.code })}</p>
+            ) : byAir && !secured ? null : (
+              <p class="chint">{t(byAir ? 'business.exports.laden.sealItSecured' : 'business.exports.laden.sealIt', { code: d.ladenLeg.code })}</p>
             )}
           </>
         ) : mine ? (
           <>
-            <p class="chint">{c.byRail ? t(c.vgm ? 'business.exports.laden.hintRailVgm' : 'business.exports.laden.hintRail', { terminal: c.byRail.terminal.label }) : t(c.vgm ? 'business.exports.laden.hintVgm' : 'business.exports.laden.hint')}</p>
-            {!c.vgm ? (
+            <p class="chint">{byAir ? t(secured ? 'business.exports.laden.hintAirSecured' : 'business.exports.laden.hintAir', { terminal: c.terminal.label }) : c.byRail ? t(c.vgm ? 'business.exports.laden.hintRailVgm' : 'business.exports.laden.hintRail', { terminal: c.byRail.terminal.label }) : t(c.vgm ? 'business.exports.laden.hintVgm' : 'business.exports.laden.hint')}</p>
+            {!c.vgm && !byAir ? (
               <label class="cfield">
                 <span class="cfield__label">{t('business.exports.laden.weight')}</span>
                 <input class="cinput" type="number" min={1} value={weight} onInput={(e) => setWeight((e.target as HTMLInputElement).value)} />
@@ -1020,13 +1050,13 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
               </>
             ) : null}
             <div class="twr-panelend">
-              <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || !c.containerNo || (!c.vgm && !weight) || (needsDg && !dgValue)} onClick={() => void act(() => client.exports.ladenLeg(c.exportId, c.vgm ? undefined : Number(weight), dgValue), t('business.exports.laden.posted'))}>
-                {t('business.exports.laden.post')}
+              <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy || (!byAir && (!c.containerNo || (!c.vgm && !weight))) || (needsDg && !dgValue)} onClick={() => void act(() => client.exports.ladenLeg(c.exportId, c.vgm || byAir ? undefined : Number(weight), dgValue), t(byAir ? 'business.exports.laden.postedAir' : 'business.exports.laden.posted'))}>
+                {t(byAir ? 'business.exports.laden.postAir' : 'business.exports.laden.post')}
               </button>
             </div>
           </>
         ) : (
-          <p class="chint">{t('business.exports.laden.none')}</p>
+          <p class="chint">{t(byAir ? 'business.exports.laden.noneAir' : 'business.exports.laden.none')}</p>
         )}
       </section>
 
@@ -1035,11 +1065,11 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         <div class="cons__panelhead">
           <span class="cons__panelt">{t('business.exports.handover.title')}</span>
         </div>
-        <p class="chint">{t('business.exports.handover.hint')}</p>
+        <p class="chint">{t(byAir ? 'business.exports.handover.hintAir' : 'business.exports.handover.hint')}</p>
         <div class="twr-panelend">
           <DocumentButton label={t('business.exports.handover.open')} title={t('business.exports.handover.open')} fetch={() => client.exports.handover(c.exportId)} />
         </div>
-        {c.billOfLading ? (
+        {byAir ? null : c.billOfLading ? (
           <p class="cons__lede">{t('business.exports.bl.recorded', { number: c.billOfLading.number })}</p>
         ) : mine ? (
           <div class="biz-two">
@@ -1057,6 +1087,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
       </section>
 
       {/* The forwarder's FIATA bill: held, checked against its form, matched to our papers, explained — never issued (2026-10-29). */}
+      {byAir ? null : (
       <FblPanel
         code={c.code}
         {...(d.fbl ? { fbl: d.fbl } : {})}
@@ -1079,8 +1110,10 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           await onChanged();
         }}
       />
+      )}
 
       {/* Where the box goes to the port by rail: the railway's note, held, checked against its lane's law, matched to the box. */}
+      {byAir ? null : (
       <RailNotePanel
         code={c.code}
         {...(d.rail ? { rail: d.rail } : {})}
@@ -1093,6 +1126,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           await onChanged();
         }}
       />
+      )}
     </>
   );
 }

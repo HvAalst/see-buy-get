@@ -54,12 +54,14 @@ export interface ExportTiming {
   gatedInAt?: string;
   collectedAt?: string;
   /** Where our truck hands the box over, and by when: the port gate, or by rail the rail terminal (2026-10-29). */
-  handover?: { place: string; cutoffAt: string; byRail: boolean };
+  handover?: { place: string; cutoffAt: string; byRail: boolean; byAir?: boolean };
+  /** By air: the leave-by's working — the drive, the hour before the acceptance time, the inspection's hours at the airport. */
+  air?: { driveHours: number; bufferHours: number; inspectionHours: number };
 }
 
 export interface ExportBooking {
   reference: string;
-  bookedWith: 'forwarder' | 'shipping_line';
+  bookedWith: 'forwarder' | 'shipping_line' | 'airline';
   partyName: string;
   vessel?: string;
   voyage?: string;
@@ -166,7 +168,58 @@ export interface ExportConsignment {
   dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
   /** By rail to the port: the rail terminal and the train's cut-off there (2026-10-29). */
   byRail?: { terminal: { label: string; location: { lat: number; lng: number } }; cutoffAt: string; reference?: string; atPort?: { at: string; by: string }; recordedAt: string; recordedBy: string };
+  /** By air (2026-10-29): the airline's booking as copied off its confirmation; absent, it goes by sea. */
+  mode?: 'air';
+  air?: ExportAir;
   createdAt: string;
+}
+
+/** One flight of an air booking, as on the airline's confirmation. */
+export interface ExportFlight {
+  flight: string;
+  date: string;
+  from: string;
+  to: string;
+  departsLocal?: string;
+}
+
+/** The airline's booking: its waybill, its flights, the latest acceptance time our truck must beat, the cargo as booked. */
+export interface ExportAir {
+  awb: string;
+  waybillKind: 'master' | 'house' | 'direct';
+  houseNumber?: string;
+  airline: string;
+  bookingStatus: 'confirmed' | 'queued';
+  flights: ExportFlight[];
+  latAt: string;
+  pieces: number;
+  weightKg: number;
+  volumeM3?: number;
+  aircraft?: 'passenger' | 'freighter';
+  handler?: string;
+  fromAirport: string;
+  toAirport: string;
+  security: { status: 'secured' | 'unsecured'; agentName?: string; agentNumber?: string; knownConsignor?: boolean };
+  temp?: { minC: number; maxC: number; preCooled?: boolean };
+  inspectionAtAirport?: boolean;
+}
+
+/** The waybill read against the law of its route and against our papers — what it lacks, where it disagrees. */
+export interface ExportAirCheck {
+  number: string;
+  problem?: 'format' | 'check_digit';
+  airline?: string;
+  airlineSource?: string;
+  regime: 'mc99' | 'warsaw_hague_map4' | 'warsaw_hague' | 'warsaw_1929' | 'none' | 'domestic' | 'unknown';
+  rules?: string;
+  sources: string[];
+  missing: string[];
+  ask: string[];
+  mismatches: string[];
+  electronicPossible: boolean;
+  limits: string[];
+  claims: string[];
+  caveats: string[];
 }
 
 export type ExportReader = 'exporter' | 'agent' | 'staff';
@@ -197,12 +250,16 @@ export interface ExportDetail {
   rail?: RailNoteView;
   /** The forwarder's FIATA bill, held with what it means (2026-10-29). */
   fbl?: FblView;
+  /** By air: the waybill's check, and what the exporter is warned of. */
+  air?: { check: ExportAirCheck; warnings: string[] };
 }
 
 export interface ExportRow {
   exportId: string;
   /** The journey's legs in order (2026-10-29): road, rail where it goes by train, sea. */
   modes?: Array<'road' | 'rail' | 'sea' | 'air'>;
+  /** By air (2026-10-29); absent, by sea. */
+  mode?: 'air';
   code: string;
   goodsDescription: string;
   loadingPort: string;
@@ -244,10 +301,25 @@ export interface RegisterExportInput {
   ownBox?: boolean;
 }
 
+/** An export by air, from the airline's booking confirmation (2026-10-29). */
+export interface RegisterAirExportInput {
+  goodsDescription: string;
+  originCountry: string;
+  destCountry: string;
+  natureCode?: string;
+  bookedWith: 'forwarder' | 'airline';
+  partyName: string;
+  loadingSiteId: string;
+  terminalSiteId: string;
+  air: Omit<ExportAir, 'airline' | 'fromAirport' | 'toAirport'> & { airline?: string };
+}
+
 export interface ExportsApi {
   list(): Promise<Result<{ items: ExportRow[] }>>;
   detail(exportId: string): Promise<Result<ExportDetail>>;
   register(input: RegisterExportInput): Promise<Result<{ exportId: string; code: string }>>;
+  /** An export by air: the waybill checked before anything is written. */
+  registerAir(input: RegisterAirExportInput): Promise<Result<{ exportId: string; code: string }>>;
   container(exportId: string, containerNo: string): Promise<Result<ExportDetail>>;
   emptyLeg(exportId: string): Promise<Result<ExportDetail>>;
   ladenLeg(exportId: string, weightKg?: number, dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }): Promise<Result<ExportDetail>>;
@@ -305,6 +377,7 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     list: () => call((c) => c.GET('/v1/sbg/exports' as never, {} as never) as never),
     detail: (exportId) => call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}` as never, {} as never) as never),
     register: (input) => post('/v1/sbg/exports', input),
+    registerAir: (input) => post('/v1/sbg/exports/air', input),
     container: (exportId, containerNo) => post(`/v1/sbg/exports/${id(exportId)}/container`, { containerNo }),
     emptyLeg: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/empty-leg`),
     ladenLeg: (exportId, weightKg, dangerousGoods) => post(`/v1/sbg/exports/${id(exportId)}/laden-leg`, { ...(weightKg ? { weightKg } : {}), ...(dangerousGoods ? { dangerousGoods } : {}) }),
@@ -863,6 +936,15 @@ export function freeDaysOf(c: Pick<ExportConsignment, 'freeDays'>, kind: 'detent
 /** The one line that says what the clock asks: when it must leave, or that it is inside the gate, or that it missed it. */
 export function timingLine(d: Pick<ExportDetail, 'timing' | 'consignment'>, t: Translate): string {
   const { timing, consignment: c } = d;
+  // By air, the truck's end is the cargo terminal and its clock the airline's latest acceptance time (2026-10-29).
+  if (c.air) {
+    const a = c.air;
+    if (timing.state === 'gated_in') return t('business.exports.line.airHanded', { terminal: c.terminal.label, when: utcWords(timing.gatedInAt ?? '') });
+    if (timing.state === 'missed') return t('business.exports.line.airMissed', { terminal: c.terminal.label, cutoff: utcWords(a.latAt), party: c.booking.partyName });
+    if (timing.collectedAt) return t('business.exports.line.airOnTheRoad', { terminal: c.terminal.label, cutoff: utcWords(a.latAt) });
+    const w = timing.air ?? { driveHours: timing.plannedHours, bufferHours: 0, inspectionHours: 0 };
+    return t(w.inspectionHours ? 'business.exports.line.airLeaveByInspected' : 'business.exports.line.airLeaveBy', { place: c.loadingPlace.label, leaveBy: utcWords(timing.leaveByAt), terminal: c.terminal.label, cutoff: utcWords(a.latAt), km: Math.round(timing.roadKm), drive: w.driveHours, buffer: w.bufferHours, inspection: w.inspectionHours });
+  }
   // By rail, the truck's end is the rail terminal and its clock the train's cut-off (2026-10-29).
   if (timing.handover?.byRail) {
     const h = timing.handover;

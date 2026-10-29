@@ -113,7 +113,7 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
           <ConsolePick
             label={t('business.exports.sli.consigneeKind')}
             value={form.consigneeKind}
-            options={(['named', 'to_order', 'to_order_of_bank'] as const).map((k) => ({ value: k, label: t(`business.exports.sli.kind.${k}`) }))}
+            options={(c.air ? (['named'] as const) : (['named', 'to_order', 'to_order_of_bank'] as const)).map((k) => ({ value: k, label: t(`business.exports.sli.kind.${k}`) }))}
             onChange={(v) => set({ consigneeKind: v as SliForm['consigneeKind'] })}
           />
           {form.consigneeKind === 'named' ? (
@@ -140,9 +140,10 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
             </>
           ) : null}
 
-          <h3 class="cons__sub">{t('business.exports.sli.voyage')}</h3>
+          {c.air ? <p class="chint">{t('business.exports.sli.airNamed')}</p> : null}
+          <h3 class="cons__sub">{t(c.air ? 'business.exports.sli.flight' : 'business.exports.sli.voyage')}</h3>
           <div class="biz-two">
-            {input(t('business.exports.sli.dischargePort'), form.dischargePort, (v) => set({ dischargePort: v }), { max: 80, placeholder: 'Rotterdam' })}
+            {input(t(c.air ? 'business.exports.sli.destAirport' : 'business.exports.sli.dischargePort'), form.dischargePort, (v) => set({ dischargePort: v }), { max: 80, placeholder: c.air ? 'Amsterdam Schiphol' : 'Rotterdam' })}
             {input(t('business.exports.sli.placeOfDelivery'), form.placeOfDelivery, (v) => set({ placeOfDelivery: v }), { max: 80 })}
           </div>
           <div class="biz-two">
@@ -165,6 +166,7 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
               ]}
               onChange={(freight) => set({ freight })}
             />
+            {c.air ? <span /> : (
             <ConsolePick
               label={t('business.exports.sli.release')}
               value={form.blRelease}
@@ -172,9 +174,10 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
               options={(['originals', 'sea_waybill', 'telex_release'] as const).map((k) => ({ value: k, label: t(`business.exports.sli.release.${k}`) }))}
               onChange={(blRelease) => set({ blRelease })}
             />
+            )}
           </div>
           <div class="biz-two">
-            {form.blRelease === 'originals' ? input(t('business.exports.sli.originals'), form.originals, (v) => set({ originals: v }), { type: 'number' }) : <span />}
+            {form.blRelease === 'originals' && !c.air ? input(t('business.exports.sli.originals'), form.originals, (v) => set({ originals: v }), { type: 'number' }) : <span />}
             {input(t('business.exports.sli.copies'), form.copies, (v) => set({ copies: v }), { type: 'number' })}
           </div>
 

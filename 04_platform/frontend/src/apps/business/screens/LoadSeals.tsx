@@ -78,7 +78,7 @@ export function LoadSeals({ row, client, act }: { row: PostedLoad; client: Busin
       {/* Round 38 — whose rule, and what it asks: a required seal not written and the goods are not taken over. */}
       {view.required ? (
         <p class={view.seals.some((s) => s.state === 'on') ? 'chint' : 'chint biz-papers__held'}>
-          {t(view.required.why === 'crossBorder' ? 'business.seals.requiredCrossBorder' : 'business.seals.requiredContainer', { company: view.required.company })}
+          {t(view.required.why === 'crossBorder' ? 'business.seals.requiredCrossBorder' : view.required.why === 'secured' ? 'business.seals.requiredSecured' : 'business.seals.requiredContainer', { company: view.required.company })}
         </p>
       ) : null}
       {view.seals.length ? (

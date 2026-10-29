@@ -82,6 +82,18 @@ export function exportJourney(d: ExportDetail, t: Translate): JourneyLeg[] {
     ? { doc: t('tower.journey.roadNote', { code: `CMR-${d.ladenLeg.code}` }), state: t(d.timing.state === 'gated_in' ? 'tower.journey.state.handedIn' : d.timing.state === 'missed' ? 'tower.journey.state.late' : d.timing.collectedAt ? 'tower.journey.state.onTheRoad' : 'tower.journey.state.posted'), tone: (d.timing.state === 'gated_in' ? 'ok' : d.timing.state === 'missed' || d.timing.state === 'at_risk' ? 'warn' : 'quiet') as 'ok' | 'warn' | 'quiet' }
     : { doc: t('tower.journey.noDoc'), state: t('tower.journey.state.planned'), tone: 'quiet' as const };
   const legs: JourneyLeg[] = [{ mode: 'road', from: c.loadingPlace.label, to: roadTo, ...road }];
+  // By air (2026-10-29): our truck to the cargo terminal, then the airline's flights under its waybill.
+  if (c.air) {
+    legs.push({
+      mode: 'air',
+      from: c.air.fromAirport,
+      to: c.air.toAirport,
+      doc: t('tower.journey.awb', { number: c.air.awb }),
+      state: t(c.air.bookingStatus === 'queued' ? 'tower.journey.state.notConfirmed' : 'tower.journey.state.booked'),
+      tone: c.air.bookingStatus === 'queued' ? 'warn' : 'quiet',
+    });
+    return legs;
+  }
   if (c.byRail) {
     legs.push({
       mode: 'rail',
