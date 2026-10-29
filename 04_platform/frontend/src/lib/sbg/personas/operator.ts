@@ -468,6 +468,11 @@ export function createOperatorApi(sbg: SbgClient) {
     importRailArrived: (importId: string, body: { at: string; reference?: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail/arrived', { params: { path: { importId } }, body: body as never })),
     importRailLeftPort: (importId: string, body: { at: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail/left-port', { params: { path: { importId } }, body: body as never })),
     importRailCollectAnyway: (importId: string, body: { reason: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/by-rail/collect-anyway', { params: { path: { importId } }, body: body as never })),
+    /** By air (2026-10-29): the waybill and the agencies, each step of the release, the importer's word to go anyway. */
+    importAirAgencies: (country: string) => sbg.request((c) => c.GET('/v1/sbg/imports/air/agencies', { params: { query: { country } } })),
+    importAir: (importId: string, body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/air', { params: { path: { importId } }, body: body as never })),
+    importAirRelease: (importId: string, body: { step: string; reference?: string; at?: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/air/release', { params: { path: { importId } }, body: body as never })),
+    importAirCollectAnyway: (importId: string, body: { reason: string; waitingIsMine: boolean }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/air/collect-anyway', { params: { path: { importId } }, body: body as never })),
 
     /**
      * BL1 — the appointed agent records that customs released the container.

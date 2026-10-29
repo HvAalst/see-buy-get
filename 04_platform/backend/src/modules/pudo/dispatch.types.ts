@@ -4,7 +4,7 @@
 
 import { ClientRef } from './business-client.types';
 import { FreightRailGate } from './rail-leg.types';
-import { FreightReleaseGate } from './air-release';
+import { FreightReleaseGate } from './air-release.types';
 import { ContractRef } from './carriage-contract.types';
 import { PlannedOn } from './fleet-plan.types';
 import { OrderHandOn } from './fleet-partner.types';

@@ -4,7 +4,7 @@ import { PapersWatchService } from './papers-watch.service';
 import { RailCheckDto, RailNoteDto, type RailNoteCheckView, type RailwayList } from './rail-note.types';
 import { railwayRows } from './rail-note';
 import { ImportByRailDto, RailArrivalDto, RailCollectAnywayDto } from './rail-leg.types';
-import { AIR_AGENCIES_SOURCE, airAgenciesOf, ImportAirAnywayDto, ImportAirDto, ImportAirStepDto, type AirAgency } from './air-release';
+import { AIR_AGENCIES_SOURCE, airAgenciesOf, ImportAirAnywayDto, ImportAirDto, ImportAirStepDto, type AirAgency } from './air-release.types';
 import { FblDto, FblVerifiedDto } from './fbl-note.types';
 import { checkRailNote } from '../../foundation/carriage-law/rail';
 import type { FleetDriver, FleetManager, FleetSetupRow } from './fleet.types';

@@ -46,7 +46,7 @@ import {
   RequiredPaperView,
 } from './import.types';
 import { modeOf } from './import.types';
-import { airAgenciesOf, airReleaseGaps, airStorageClock, releaseRefusal, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release';
+import { airAgenciesOf, airReleaseGaps, airStorageClock, releaseRefusal, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
 import { airlineOfPrefix, awbDigits, awbProblem, checkAirWaybill, formatAwb } from '../../foundation/carriage-law/air';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
 import { containerType, heightUnstated, outOfGauge } from './container-type';

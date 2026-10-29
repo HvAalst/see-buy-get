@@ -2,7 +2,7 @@ import { Quote } from './quote.types';
 import { HeldRailNote, RailNoteView } from './rail-note.types';
 import { ImportByRail, ImportByRailView, LEG_MODES, type LegMode } from './rail-leg.types';
 import { FblView, HeldFbl } from './fbl-note.types';
-import { ImportAir, ImportAirView } from './air-release';
+import { ImportAir, ImportAirView } from './air-release.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
 import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';

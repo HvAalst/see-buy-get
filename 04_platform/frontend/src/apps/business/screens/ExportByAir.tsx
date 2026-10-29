@@ -5,20 +5,12 @@ import { ConsolePick } from '../../tower/ConsolePick';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
 import { fromUtcInput, utcWords, type ExportDetail, type ExportFlight } from '../exports';
+import { awbState } from '../../../shared/awb';
 
 type Problem = { detail?: string; title: string } | null | undefined;
 const sayProblem = (e: Problem) => (e ? e.detail || e.title : null);
 
-/**
- * THE AIR WAYBILL NUMBER'S OWN CHECK, before anything is sent: eleven digits, the airline's three and eight more, the last
- * the remainder of the seven before it divided by 7. Said on the field as the exporter types; the server checks it again.
- */
-export function awbState(typed: string): 'empty' | 'short' | 'ok' | 'wrong' {
-  const digits = typed.replace(/[\s-]/g, '');
-  if (!digits) return 'empty';
-  if (!/^\d{11}$/.test(digits)) return 'short';
-  return Number(digits.slice(3, 10)) % 7 === Number(digits[10]) ? 'ok' : 'wrong';
-}
+export { awbState } from '../../../shared/awb';
 
 const AWB_WORD: Record<'short' | 'ok' | 'wrong', MessageKey> = {
   short: 'business.exports.air.awbShort',

@@ -71,7 +71,7 @@ import type { LoadSeal, LoadSealView, SealBreakCause, SealsAtDelivery } from './
 import { FINDING_WORDS, type TamperStage, type UnitHold } from './tamper.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 import { railRefusal, type FreightRailGate } from './rail-leg.types';
-import { releaseRefusal, type FreightReleaseGate } from './air-release';
+import { releaseRefusal, type FreightReleaseGate } from './air-release.types';
 
 /**
  * FB0c — how a load may be taken, defaulted ON READ.

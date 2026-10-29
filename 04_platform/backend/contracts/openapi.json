@@ -9202,6 +9202,28 @@
         }
       }
     },
+    "/v1/sbg/imports/air/agencies": {
+      "get": {
+        "operationId": "Sbg.importAirAgencies",
+        "summary": "",
+        "description": "The agencies that may have to release air cargo in a country, and what each looks at (2026-10-29): the importer or its agent chooses.",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}": {
       "get": {
         "operationId": "Sbg.importDetail",
@@ -9572,6 +9594,123 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RailArrivalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/air": {
+      "post": {
+        "operationId": "Sbg.importAir",
+        "summary": "",
+        "description": "By air (2026-10-29): the waybill, the flights, the handler's shed, the cargo and the agencies the goods need.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportAirDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/air/release": {
+      "post": {
+        "operationId": "Sbg.importAirRelease",
+        "summary": "",
+        "description": "One step of the release by air: the notice of arrival, customs, an agency, the delivery order — with its reference.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportAirStepDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/air/collect-anyway": {
+      "post": {
+        "operationId": "Sbg.importAirCollectAnyway",
+        "summary": "",
+        "description": "The importer's word to send the truck before the release — with why, and that the waiting is its own.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportAirAnywayDto"
               }
             }
           }
@@ -48500,6 +48639,197 @@
           "recordedBy"
         ]
       },
+      "ImportAirFlight": {
+        "type": "object",
+        "properties": {
+          "flight": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "arrivesLocal": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "flight",
+          "date",
+          "from",
+          "to"
+        ]
+      },
+      "AirReleaseStep": {
+        "type": "object",
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "recordedAt"
+        ]
+      },
+      "AirAgencyRelease": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "released": {
+            "$ref": "#/components/schemas/AirReleaseStep"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ]
+      },
+      "ImportAir": {
+        "type": "object",
+        "properties": {
+          "awb": {
+            "type": "string"
+          },
+          "waybillKind": {
+            "type": "string",
+            "enum": [
+              "master",
+              "house",
+              "direct"
+            ]
+          },
+          "houseNumber": {
+            "type": "string"
+          },
+          "airline": {
+            "type": "string"
+          },
+          "flights": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportAirFlight"
+            }
+          },
+          "arrivalAirport": {
+            "type": "string"
+          },
+          "handler": {
+            "type": "string",
+            "description": "The handler's shed it waits in and is collected from."
+          },
+          "pieces": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "temp": {
+            "type": "object",
+            "properties": {
+              "minC": {
+                "required": true,
+                "type": "number"
+              },
+              "maxC": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
+          "notified": {
+            "description": "The handler's notice that it has arrived: its free storage starts here. Never enough on its own to collect.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AirReleaseStep"
+              }
+            ]
+          },
+          "customs": {
+            "$ref": "#/components/schemas/AirReleaseStep"
+          },
+          "agencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AirAgencyRelease"
+            }
+          },
+          "deliveryOrder": {
+            "$ref": "#/components/schemas/AirReleaseStep"
+          },
+          "collectAnyway": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "freeHours": {
+            "type": "number",
+            "description": "The handler's free storage, in hours, as on its notice or tariff — and where that figure came from."
+          },
+          "freeHoursSource": {
+            "type": "string"
+          },
+          "warned": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "awb",
+          "waybillKind",
+          "airline",
+          "flights",
+          "arrivalAirport",
+          "handler",
+          "pieces",
+          "weightKg",
+          "temp",
+          "agencies",
+          "collectAnyway",
+          "recordedAt",
+          "recordedBy"
+        ]
+      },
       "TankDeclaration": {
         "type": "object",
         "properties": {
@@ -48749,6 +49079,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ImportByRail"
+              }
+            ]
+          },
+          "air": {
+            "description": "By air (2026-10-29): the waybill, the flights, the handler's shed and the release, step by step.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImportAir"
               }
             ]
           },
@@ -49545,6 +49883,235 @@
           "clock"
         ]
       },
+      "AirStorageClock": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "running",
+              "due_soon",
+              "over",
+              "stopped",
+              "no_free_hours"
+            ]
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "freeHours": {
+            "type": "number"
+          },
+          "freeUntil": {
+            "type": "string"
+          },
+          "hoursLeft": {
+            "type": "number"
+          },
+          "leftAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "ImportAirView": {
+        "type": "object",
+        "properties": {
+          "awb": {
+            "type": "string"
+          },
+          "waybillKind": {
+            "type": "string",
+            "enum": [
+              "master",
+              "house",
+              "direct"
+            ]
+          },
+          "houseNumber": {
+            "type": "string"
+          },
+          "airline": {
+            "type": "string"
+          },
+          "flights": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportAirFlight"
+            }
+          },
+          "arrivalAirport": {
+            "type": "string"
+          },
+          "handler": {
+            "type": "string",
+            "description": "The handler's shed it waits in and is collected from."
+          },
+          "pieces": {
+            "type": "number"
+          },
+          "weightKg": {
+            "type": "number"
+          },
+          "temp": {
+            "type": "object",
+            "properties": {
+              "minC": {
+                "required": true,
+                "type": "number"
+              },
+              "maxC": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
+          "notified": {
+            "description": "The handler's notice that it has arrived: its free storage starts here. Never enough on its own to collect.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AirReleaseStep"
+              }
+            ]
+          },
+          "customs": {
+            "$ref": "#/components/schemas/AirReleaseStep"
+          },
+          "agencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AirAgencyRelease"
+            }
+          },
+          "deliveryOrder": {
+            "$ref": "#/components/schemas/AirReleaseStep"
+          },
+          "collectAnyway": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "freeHours": {
+            "type": "number",
+            "description": "The handler's free storage, in hours, as on its notice or tariff — and where that figure came from."
+          },
+          "freeHoursSource": {
+            "type": "string"
+          },
+          "warned": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "gaps": {
+            "description": "What still keeps it in the shed, in words.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "clock": {
+            "$ref": "#/components/schemas/AirStorageClock"
+          },
+          "roadWaits": {
+            "type": "string",
+            "description": "The road leg's gate in the take's own words, while it is closed."
+          },
+          "check": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "required": true,
+                "type": "string"
+              },
+              "problem": {
+                "required": false,
+                "type": "string"
+              },
+              "airline": {
+                "required": false,
+                "type": "string"
+              },
+              "regime": {
+                "required": true,
+                "type": "string"
+              },
+              "rules": {
+                "required": false,
+                "type": "string"
+              },
+              "limits": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "claims": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "caveats": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "mismatches": {
+                "required": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "awb",
+          "waybillKind",
+          "airline",
+          "flights",
+          "arrivalAirport",
+          "handler",
+          "pieces",
+          "weightKg",
+          "temp",
+          "agencies",
+          "collectAnyway",
+          "recordedAt",
+          "recordedBy",
+          "gaps",
+          "clock",
+          "check"
+        ]
+      },
       "ImportDetail": {
         "type": "object",
         "properties": {
@@ -49748,6 +50315,14 @@
               }
             ]
           },
+          "air": {
+            "description": "By air: the release still missing, the gate on the road leg, the handler's free storage, the waybill read.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImportAirView"
+              }
+            ]
+          },
           "fbl": {
             "description": "The forwarder's bill with what it means, and what it says of the box against ours.",
             "allOf": [
@@ -49909,6 +50484,153 @@
         },
         "required": [
           "at"
+        ]
+      },
+      "ImportAirFlightDto": {
+        "type": "object",
+        "properties": {
+          "flight": {
+            "type": "string",
+            "pattern": "/^\\s*[A-Z0-9]{2}\\s?\\d{1,4}[A-Z]?\\s*$/i"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "from": {
+            "type": "string",
+            "pattern": "/^\\s*[A-Za-z]{3}\\s*$/"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "/^\\s*[A-Za-z]{3}\\s*$/"
+          },
+          "arrivesLocal": {
+            "type": "string",
+            "pattern": "/^\\d{2}:\\d{2}$/"
+          }
+        },
+        "required": [
+          "flight",
+          "date",
+          "from",
+          "to"
+        ]
+      },
+      "ImportAirDto": {
+        "type": "object",
+        "properties": {
+          "awb": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "waybillKind": {
+            "type": "string",
+            "enum": [
+              "master",
+              "house",
+              "direct"
+            ]
+          },
+          "houseNumber": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "airline": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "flights": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportAirFlightDto"
+            }
+          },
+          "handler": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "pieces": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "weightKg": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 200000
+          },
+          "minC": {
+            "type": "number",
+            "minimum": -30,
+            "maximum": 30
+          },
+          "maxC": {
+            "type": "number",
+            "minimum": -30,
+            "maximum": 30
+          },
+          "agencies": {
+            "description": "The agencies of the destination's list these goods need, by key.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "freeHours": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 720
+          },
+          "freeHoursSource": {
+            "type": "string",
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "awb",
+          "waybillKind",
+          "flights",
+          "handler",
+          "pieces",
+          "weightKg",
+          "agencies"
+        ]
+      },
+      "ImportAirStepDto": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "step"
+        ]
+      },
+      "ImportAirAnywayDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "waitingIsMine": {
+            "type": "boolean",
+            "description": "The importer accepts that a truck sent before the release may wait, and that its waiting is the importer's."
+          }
+        },
+        "required": [
+          "reason",
+          "waitingIsMine"
         ]
       },
       "RailCollectAnywayDto": {
@@ -57424,6 +58146,52 @@
           "terminal"
         ]
       },
+      "FreightReleaseGate": {
+        "type": "object",
+        "properties": {
+          "importId": {
+            "type": "string"
+          },
+          "importCode": {
+            "type": "string"
+          },
+          "place": {
+            "type": "string",
+            "description": "Where it waits: the handler's shed."
+          },
+          "missing": {
+            "description": "What is still missing, in words; empty once released.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "collectAnyway": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "reason": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "importId",
+          "importCode",
+          "place",
+          "missing",
+          "collectAnyway"
+        ]
+      },
       "FreightAmount": {
         "type": "object",
         "properties": {
@@ -58373,6 +59141,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/FreightRailGate"
+              }
+            ]
+          },
+          "waitsForRelease": {
+            "description": "Air cargo not yet released at the airport (2026-10-29): nobody takes this until it is, or the importer said to go anyway.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightReleaseGate"
               }
             ]
           },

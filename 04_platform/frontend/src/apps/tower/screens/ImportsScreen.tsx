@@ -56,6 +56,7 @@ import {
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { RailNotePanel, type RailNoteCheck, type RailwayRow } from './RailNotePanel';
 import { ImportByRail } from './ImportByRail';
+import { ImportByAir, type AirAgencyRow } from './ImportByAir';
 import type { Translate } from '../../../shared/i18n';
 import { JourneyStrip, ModeFilter, modesPresent, type JourneyLeg, type LegMode } from './JourneyStrip';
 import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from './FblPanel';
@@ -87,8 +88,8 @@ function importJourney(d: ImportDetailView, tt: Translate): JourneyLeg[] {
       mode: main,
       from: d.originCountry,
       to: landed,
-      doc: d.fbl ? tt('tower.journey.fbl', { number: d.fbl.number }) : tt('tower.journey.noDoc'),
-      state: d.box?.arrivedAt ? tt('tower.journey.state.arrived') : d.etaAt ? tt('tower.journey.state.expected', { day: d.etaAt.slice(0, 10) }) : tt('tower.journey.state.onItsWay'),
+      doc: d.air ? tt('tower.journey.awb', { number: d.air.awb }) : d.fbl ? tt('tower.journey.fbl', { number: d.fbl.number }) : tt('tower.journey.noDoc'),
+      state: d.air ? tt(d.air.notified ? 'tower.journey.state.arrived' : 'tower.journey.state.onItsWay') : d.box?.arrivedAt ? tt('tower.journey.state.arrived') : d.etaAt ? tt('tower.journey.state.expected', { day: d.etaAt.slice(0, 10) }) : tt('tower.journey.state.onItsWay'),
       tone: d.box?.arrivedAt ? 'ok' : 'quiet',
     });
   }
@@ -104,7 +105,7 @@ function importJourney(d: ImportDetailView, tt: Translate): JourneyLeg[] {
   }
   legs.push({
     mode: 'road',
-    from: d.byRail ? d.byRail.terminal.label : main === 'road' ? d.originCountry : d.destPort,
+    from: d.air ? d.air.handler : d.byRail ? d.byRail.terminal.label : main === 'road' ? d.originCountry : d.destPort,
     to: tt('tower.journey.ours'),
     doc: d.roadFreightCode ? tt('tower.journey.roadNote', { code: `CMR-${d.roadFreightCode}` }) : tt('tower.journey.noDoc'),
     state: tt(d.roadFreightCode ? 'tower.journey.state.posted' : 'tower.journey.state.notPosted'),
@@ -874,8 +875,29 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
             />
           ) : null}
 
+          {/* ---- by air: the road leg waits for every release at the airport (2026-10-29) ---- */}
+          {client && (detail.modes ?? [])[0] === 'air' ? (
+            <ImportByAir
+              code={detail.code}
+              {...(detail.air ? { air: detail.air } : {})}
+              youAre={isCompany ? detail.youAre : 'onlooker'}
+              {...(detail.natureCode ? { natureCode: detail.natureCode } : {})}
+              destCountry={detail.destCountry}
+              calls={{
+                agencies: async () => {
+                  const r = await client.api.importAirAgencies(detail.destCountry);
+                  return { data: (r.data as { items: AirAgencyRow[]; source: string } | undefined) ?? null };
+                },
+                set: (body) => client.api.importAir(detail.importId, body),
+                step: (body) => client.api.importAirRelease(detail.importId, body),
+                anyway: (body) => client.api.importAirCollectAnyway(detail.importId, body),
+              }}
+              onChanged={() => openOne(detail.importId, false)}
+            />
+          ) : null}
+
           {/* ---- inland by rail: the road leg waits for the railway's word (2026-10-29) ---- */}
-          {client ? (
+          {client && (detail.modes ?? [])[0] !== 'air' ? (
             <ImportByRail
               code={detail.code}
               {...(detail.byRail ? { rail: detail.byRail } : {})}

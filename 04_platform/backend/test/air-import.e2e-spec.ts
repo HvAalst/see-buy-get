@@ -144,6 +144,12 @@ describe('an import by air, over the wire', () => {
     const released = (await step({ step: 'delivery_order', reference: 'DO-55120' }).expect(201)).body;
     expect(released.air).toMatchObject({ gaps: [], customs: { reference: '2026NBOIM448120' }, deliveryOrder: { reference: 'DO-55120' }, agencies: [{ key: 'kebs', released: { reference: 'KEBS-CoC-7781' } }] });
     expect(released.air.roadWaits).toBeUndefined();
+    // Recorded again with another agency: the releases already given are kept, and the new one is waited for.
+    const again = (await air({ ...phones(), agencies: ['kebs', 'port_health'] }, agent.token).expect(201)).body;
+    expect(again.air).toMatchObject({ customs: { reference: '2026NBOIM448120' }, deliveryOrder: { reference: 'DO-55120' }, agencies: [{ key: 'kebs', released: { reference: 'KEBS-CoC-7781' } }, { key: 'port_health' }] });
+    expect(again.air.gaps).toEqual(['the release by Port Health']);
+    expect(marked()).toMatch(/still waiting for the release by Port Health\./);
+    await step({ step: 'port_health', reference: 'PH-2210' }).expect(201);
     expect(marked()).toBeUndefined();
     expect(offered()).toBe(true);
     // Released, nothing waits: no word to go anyway.
@@ -163,6 +169,10 @@ describe('an import by air, over the wire', () => {
     dispatch.claim(dispatch.suggest(driver, { from, to: from }).find((o) => o.ref === leg.roadFreightId)!.offerId);
     expect(dispatch.setReleaseGate(leg.roadFreightId, { importId: made.importId, importCode: made.code, place: 'x', missing: ['y'] })).toBe(false);
     expect(String((await air(phones(), agent.token)).body.detail)).toMatch(/A driver has taken the road leg/);
+    // Collected from the shed: the free storage stops there.
+    const picked = new Date(notifiedAt + 50 * H).toISOString();
+    Object.assign(dispatch.requireFreightPublic(leg.roadFreightId), { status: 'in_transit', pickedUpAt: picked });
+    expect((await http().get(path).set(bearer(imp.token)).expect(200)).body.air.clock).toMatchObject({ state: 'stopped', leftAt: picked });
   });
 
   it('the importer alone may send the truck before the release — with why, and its waiting its own; medicines and other modes refused', async () => {
