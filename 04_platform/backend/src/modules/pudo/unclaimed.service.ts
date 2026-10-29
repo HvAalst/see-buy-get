@@ -8,6 +8,7 @@ import { ReturnService } from './return.service';
 import { WalletGateService } from './wallet-gate.service';
 import { EXTENSION_H, FREE_EXTENSIONS, UNCOLLECTED_H } from './pudo.config';
 import { Parcel, ReceiverIntent, isCollectable } from './pudo.types';
+import { BusinessDoorService } from './business-door.service';
 
 /** One line an operator can act on, for a parcel whose owner has given up their claim. */
 export interface DisposalRow {
@@ -56,6 +57,8 @@ export class UnclaimedService {
     private readonly gate: WalletGateService,
     // Optional so the specs that build this by hand keep working — app.boot.spec catches it missing.
     @Optional() private readonly agents?: AgentService,
+    // A business's parcel whose last leg to its door is looking for a driver (2026-10-29): not waiting for its receiver.
+    @Optional() private readonly doors?: BusinessDoorService,
   ) {}
 
   /**
@@ -77,6 +80,8 @@ export class UnclaimedService {
       // Its receiver is not being shown the code (their account was moved without its PIN): the free window does not
       // run out on somebody who cannot collect. It closes on the first sweep after the code shows again.
       if (this.parcels.codeHeldUntil(parcel, now)) continue;
+      // Its last leg to its business's door is looking for a driver: nobody is late to collect it.
+      if (this.doors?.driverSought(parcel.parcelId)) continue;
       moved.push(this.parcels.markUnclaimed(parcel.parcelId, now));
     }
     return moved;

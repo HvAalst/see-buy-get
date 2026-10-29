@@ -15,6 +15,10 @@ import { DriverService } from '../src/modules/pudo/driver.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { FleetService } from '../src/modules/pudo/fleet.service';
 import { BusinessHookService } from '../src/modules/pudo/business-hooks.service';
+import { BusinessDoorService } from '../src/modules/pudo/business-door.service';
+import { NotificationDispatcher } from '../src/modules/pudo/notification-dispatcher.service';
+import { UnclaimedService } from '../src/modules/pudo/unclaimed.service';
+import { WalletGateService } from '../src/modules/pudo/wallet-gate.service';
 
 /**
  * A BUSINESS'S PARCEL DELIVERED TO ITS OWN PLACE, over the wire (the user, 2026-10-29: "A driver's last leg, priced on the
@@ -228,5 +232,80 @@ describe('a business’s parcel delivered to its own place', () => {
     const rival = await aBusiness('Mlima Pharmacy');
     await http().post('/v1/sbg/business/me/parcels/account').set(rival.token).expect(201);
     await http().post(`/v1/sbg/business/me/parcels/${second.parcelId}/door/raise`).set(rival.token).send({ maxSpend: 200 }).expect(404);
+  });
+  it('while a driver is sought its receiver is not told to come, the clock waits, and after a day the business is reminded; kept past its free days, the shop is paid from the balance at the hand-over', async () => {
+    const biz = await aBusiness('Lakeside Opticians');
+    const vendors = app.get(VendorService);
+    await http().post('/v1/sbg/business/me/parcels/account').set(biz.token).expect(201);
+    await http().post('/v1/sbg/business/me/parcels/top-up').set(biz.token).send({ amount: 500 }).expect(201);
+    const till = vendors.forBusiness(biz.entityId)!;
+    await simulate(app.get(FundingService).openFor(till.vendorId)!.fundingId, 500);
+    const shopPlace = (await http().post(`/v1/sbg/entities/${biz.entityId}/sites`).set(biz.token).send({ kind: 'delivery', name: 'Kibuye branch', location: { lat: -0.095, lng: 34.76 } }).expect(201)).body.siteId as string;
+    // Its receiver at the branch has an account of their own.
+    seq += 1;
+    const phone = `+2547${digits()}${seq}`.slice(0, 13);
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone });
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    const email = `bpdoor-r-${tag}-${seq}@example.com`;
+    const mailed = await http().post('/v1/sbg/identity/email/request').send({ email });
+    const receiver = bearer((await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: '48261', email, emailCode: mailed.body.code }).expect(201)).body.token.access_token as string);
+    const photo = async () => (await http().post('/v1/sbg/media').set(biz.token).send({ kind: 'content', dataUrl: CONTENTS_PNG }).expect(201)).body.mediaId as string;
+    const send = async (maxSpend: number) => (await http().post('/v1/sbg/business/me/parcels').set(biz.token).send({ originPudoDid: nairobi, receiverMobile: phone, dimensionsCm: { l: 20, w: 20, h: 10 }, weightKg: 1, contentPhotoRef: await photo(), toOwnPlace: { siteId: shopPlace, maxSpend } }).expect(201)).body.parcel;
+    const inbox = async (token: { authorization: string }) => {
+      const r = (await http().get('/v1/sbg/notifications/inbox').set(token).expect(200)).body;
+      return (r.items ?? r) as Array<{ kind: string; title: string }>;
+    };
+    const parcels = app.get(ParcelService);
+    const doors = app.get(BusinessDoorService);
+
+    // Ready at the shop, its last leg posted: its receiver is told nothing about coming for it.
+    const first = await send(60);
+    await readyAtShop(first.parcelId);
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await inbox(receiver)).filter((n) => n.kind === 'parcel_ready')).toEqual([]);
+    // Days pass with no driver: no "still waiting", no closing of the window, no return offered.
+    const later = Date.now() + 80 * 3_600_000;
+    await app.get(NotificationDispatcher).remindUncollected(later);
+    expect((await inbox(receiver)).filter((n) => n.kind === 'parcel_ready')).toEqual([]);
+    expect(app.get(UnclaimedService).sweep(later).map((p) => p.parcelId)).not.toContain(first.parcelId);
+    expect(parcels.get(first.parcelId).status).toBe('Ready_For_Pickup');
+    // A day with no driver: its business is told, once — and not before the day is out.
+    expect(doors.remindUntaken(Date.now() + 23 * 3_600_000)).not.toContain(first.parcelId);
+    expect(doors.remindUntaken(Date.now() + 25 * 3_600_000)).toContain(first.parcelId);
+    expect(doors.remindUntaken(Date.now() + 26 * 3_600_000)).not.toContain(first.parcelId);
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await inbox(biz.token)).find((n) => n.title === `No driver has taken ${first.parcelId} to your door yet`)).toBeDefined();
+
+    // Short of money for days, it passed its free days on the shelf: the shop is owed for keeping it.
+    const second = await send(10_000);
+    await readyAtShop(second.parcelId);
+    expect(doors.viewOf(second.parcelId)?.state).toBe('short');
+    Object.assign(parcels.get(second.parcelId), { readyAt: new Date(Date.now() - 80 * 3_600_000).toISOString() });
+    expect(app.get(UnclaimedService).sweep().map((p) => p.parcelId)).toContain(second.parcelId);
+    Object.assign(parcels.get(second.parcelId), { unclaimedAt: new Date(Date.now() - 3 * 86_400_000 + 3_600_000).toISOString() });
+    const owed = parcels.holdingOwed(parcels.get(second.parcelId)).amount;
+    expect(owed).toBeGreaterThan(0);
+    // Posted once the most is one the balance holds — with what the shop is owed on top.
+    vendors.billShipment(till.vendorId, 'test-drain-1', vendors.balanceOf(till.vendorId) - (40 + owed / 2));
+    expect((await http().post(`/v1/sbg/business/me/parcels/${second.parcelId}/door/raise`).set(biz.token).send({ maxSpend: 40 }).expect(201)).body.toOwnPlace.state).toBe('short');
+    const posted = (await http().post(`/v1/sbg/business/me/parcels/${second.parcelId}/door/raise`).set(biz.token).send({ maxSpend: 30 }).expect(201)).body;
+    expect(posted.toOwnPlace.state).toBe('posted');
+    const load = app.get(DispatchService).deliversParcelLoads().find((f) => f.deliversParcel?.parcelId === second.parcelId)!;
+    const rider = aRiderTakes(load.freightId);
+    // Its balance drained: the hand-over waits, the shop is not left unpaid, and the business is told.
+    const left = vendors.balanceOf(till.vendorId);
+    vendors.billShipment(till.vendorId, 'test-drain', Math.max(0, left - owed / 2));
+    expect((await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${second.parcelId}`).set(kisumu.token).send({ badge: rider.badge }).expect(402)).body.detail).toMatch(/owes this shop .* for keeping it past its free days/);
+    expect(app.get(DispatchService).requireFreightPublic(load.freightId).deliversParcel?.handedAt).toBeUndefined();
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await inbox(biz.token)).find((n) => n.title === `Top up so Kisumu BPO ${tag} can hand over ${second.parcelId}`)).toBeDefined();
+    // Topped up: handed over, the shop paid what it was owed, from the business's balance.
+    await http().post('/v1/sbg/business/me/parcels/top-up').set(biz.token).send({ amount: 200 }).expect(201);
+    await simulate(app.get(FundingService).openFor(till.vendorId)!.fundingId, 200);
+    const before = vendors.balanceOf(till.vendorId);
+    await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${second.parcelId}`).set(kisumu.token).send({ badge: rider.badge }).expect(201);
+    expect(before - vendors.balanceOf(till.vendorId)).toBeCloseTo(owed, 1);
+    expect(app.get(WalletGateService).entries({ did: kisumu.did }).some((e) => e.reference === second.parcelId && Math.abs(e.amount - owed) < 0.01)).toBe(true);
+    expect(parcels.holdingOwed(parcels.get(second.parcelId)).amount).toBe(0);
   });
 });

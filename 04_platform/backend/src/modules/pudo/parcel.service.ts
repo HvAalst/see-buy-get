@@ -2674,13 +2674,15 @@ export class ParcelService implements OnApplicationBootstrap {
    * here exactly as at a collection: its slot is freed, it is paid for the hand-over, a flexible price gives back what was
    * not used. The parcel goes on in the driver's hands, under the load.
    */
-  releaseToDoorDriver(parcelId: string, agentDid: string, driverDid: string, load: { freightId: string; code: string }, now: number = Date.now()): Parcel {
+  releaseToDoorDriver(parcelId: string, agentDid: string, driverDid: string, load: { freightId: string; code: string }, now: number = Date.now(), holdingPaid = 0): Parcel {
     const parcel = this.require(parcelId);
     this.refuseIfLost(parcel);
     this.refuseIfHeld(parcel);
     if (!isCollectable(parcel.status)) throw new GlosError('INVALID_STATE', `Parcel is ${parcel.status}, expected Ready_For_Pickup`);
     if (parcel.destAgentDid !== agentDid) throw new GlosError('WRONG_PUDO', 'Handed over only at the shop it waits at');
     const at = new Date(now).toISOString();
+    // What the shop was owed for keeping it past its free days, paid by its business at the hand-over: the debt is gone.
+    if (holdingPaid > 0) parcel.holdingSettled = (parcel.holdingSettled ?? 0) + holdingPaid;
     parcel.status = 'Delivered';
     parcel.deliveredAt = at;
     parcel.doorLoad = { freightId: load.freightId, code: load.code };

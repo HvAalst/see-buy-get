@@ -1,4 +1,5 @@
 import type { OrderHandedOn } from './fleet-overflow.types';
+import { BusinessDoorService } from './business-door.service';
 import type { DriverRostered } from './fleet-roster.service';
 import { ITEM_WORDS, type VehicleDefectDecided, type VehicleDefectReported, type VehicleServiceDue } from './vehicle-care.service';
 import { CAUSE_WORDS, type VehicleBreakdownResolved, type VehicleBrokeDown, type VehicleLoadsHandedOver } from './vehicle-breakdown.service';
@@ -277,6 +278,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     private readonly vendors: VendorService,
     /** The buyer's email — the channel that works before they have an account. Optional for the hand-built specs. */
     @Optional() private readonly mail?: MailService,
+    // A business's parcels going on to its own door (2026-10-29).
+    @Optional() private readonly doors?: BusinessDoorService,
   ) {}
 
   /** The uncollected sweep's timer. Self-unref'd: a reminder is never a reason to hold the process open. */
@@ -1631,6 +1634,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
 
   private async onParcelReadyForPickup(parcelId: string): Promise<void> {
     try {
+      // It goes on to its business's own door (2026-10-29): its receiver is not told to come for it — its business is.
+      if (this.doors?.goesToADoor(parcelId)) return;
       const parcel = this.parcels.get(parcelId);
       // The email goes whether or not the buyer has an account: a push can be off, a phone can be flat, and the
       // buyer expected mail from the store's checkout anyway. The code is NOT in it — the Send app is.
@@ -1684,6 +1689,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       if (!since) continue; // written before the fact was stamped — no honest clock to age it from
       if (now - new Date(since).getTime() < UNCOLLECTED_REMINDER_H * 3_600_000) continue;
       if (parcel.uncollectedRemindedAt) continue; // said once
+      // Going on to its business's door: nobody is to come for it.
+      if (this.doors?.goesToADoor(parcel.parcelId)) continue;
       // "Bring your collection code" to somebody who is not being shown it is a reminder they cannot act on: it waits.
       if (this.parcels.codeHeldUntil(parcel, now)) continue;
       const person = accountFor(this.parcels.receiverOf(parcel), this.persons);

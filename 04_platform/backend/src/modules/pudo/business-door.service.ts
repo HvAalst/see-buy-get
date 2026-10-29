@@ -12,6 +12,8 @@ import { NotificationService } from './notification.service';
 import { ParcelService } from './parcel.service';
 import type { GeoPoint } from './pudo.types';
 import { VendorService } from './vendor.service';
+import { WalletGateService } from './wallet-gate.service';
+import { DOOR_LOAD_REMIND_H } from './pudo.config';
 
 /**
  * Where a business's parcel stands on its way to its own door: `waiting` for it to be ready at the shop; `short` ready, but
@@ -43,6 +45,10 @@ export interface BusinessDoor {
   handedAt?: string;
   deliveredAt?: string;
   receivedBy?: string;
+  /** When the business was told no driver had taken its last leg in a day. Once. */
+  remindedAt?: string;
+  /** What the shop was owed for keeping it past its free days, paid from the business's balance at the hand-over. */
+  holdingPaid?: { amount: number; currency: string; billed: number };
 }
 
 /** As a shop's counter reads one: the parcel, the load, and whether a driver has taken it yet. */
@@ -92,6 +98,7 @@ export class BusinessDoorService implements OnModuleInit {
     private readonly entities: EntityService,
     private readonly events: EventBus,
     private readonly drivers: DriverService,
+    private readonly gate: WalletGateService,
     @Optional() private readonly notifications?: NotificationService,
   ) {}
 
@@ -149,8 +156,9 @@ export class BusinessDoorService implements OnModuleInit {
     } catch {
       return d;
     }
-    if (p.status !== 'Ready_For_Pickup' || p.destAgentDid !== d.shopDid) return d;
-    if (this.vendors.balanceOf(d.vendorId) + 1e-9 < d.maxSpend) {
+    // On its shelf — within its free days or past them (it is there either way, and can still go to its door).
+    if ((p.status !== 'Ready_For_Pickup' && p.status !== 'Unclaimed') || p.destAgentDid !== d.shopDid) return d;
+    if (this.vendors.balanceOf(d.vendorId) + 1e-9 < d.maxSpend + (this.holdingOf(d, p, now)?.billed ?? 0)) {
       if (d.state !== 'short') {
         this.doors.set(parcelId, { ...d, state: 'short' });
         this.tellShort(d);
@@ -252,10 +260,23 @@ export class BusinessDoorService implements OnModuleInit {
     const p = this.parcels.get(parcelId);
     if (p.destAgentDid !== shopDid || (p.status !== 'Ready_For_Pickup' && p.status !== 'Unclaimed')) throw new GlosError('INVALID_STATE', `${parcelId} is not on this shop's shelf: it is ${p.status}`);
     if (p.held) throw new GlosError('INVALID_STATE', `${parcelId} is held: it is handed to nobody until it is released`);
+    // Kept past its free days (its balance was short for a while): what the shop is owed for that is paid from the
+    // business's balance now — nobody at this counter pays it in cash, as a receiver would. Refused before anything moves
+    // where the balance does not hold it, and the business is told: the shop is never left unpaid by the hand-over.
+    const holding = this.holdingOf(d, p, now);
+    if (holding === null) throw new GlosError('FX_REQUIRED', 'No rate today between the shop’s money and the business’s for what the shop is owed: try again later');
+    if (holding && this.vendors.balanceOf(d.vendorId) + 1e-9 < holding.billed) {
+      this.tellHoldingShort(d, holding);
+      throw new GlosError('WALLET_INSUFFICIENT', `${this.vendors.get(d.vendorId).name} owes this shop ${holding.amount.toFixed(2)} ${holding.currency} for keeping it past its free days, and its balance does not hold that yet. They are told; hand it over once they have topped up.`);
+    }
     const { load, driverDid } = this.dispatch.handDeliversParcel(d.freightId, shopDid, badgeId, byName, now);
+    if (holding) {
+      this.vendors.billShipment(d.vendorId, parcelId, holding.billed, 0, 0, 0, { kind: 'holding', note: `kept at ${d.shopName} past its free days` });
+      this.gate.payLabour(shopDid, holding.amount, parcelId, 'parcel', p.sellerEntityId);
+    }
     // Handed, before the parcel's own step tells anyone: what hears that step reads it as handed, never as collected.
-    this.doors.set(parcelId, { ...d, state: 'handed', handedAt: new Date(now).toISOString() });
-    this.parcels.releaseToDoorDriver(parcelId, shopDid, driverDid, { freightId: load.freightId, code: load.code }, now);
+    this.doors.set(parcelId, { ...d, state: 'handed', handedAt: new Date(now).toISOString(), ...(holding ? { holdingPaid: holding } : {}) });
+    this.parcels.releaseToDoorDriver(parcelId, shopDid, driverDid, { freightId: load.freightId, code: load.code }, now, holding ? holding.amount : 0);
     return this.handoversAt(shopDid);
   }
 
@@ -285,6 +306,74 @@ export class BusinessDoorService implements OnModuleInit {
     } catch (err) {
       this.logger.warn(`door of ${d.parcelId} not written: ${(err as Error).message}`);
     }
+  }
+
+  /**
+   * WHILE A DRIVER IS BEING FOUND FOR ITS LAST LEG (the user, 2026-10-29: "fix and recommendation go first"): the parcel is
+   * not waiting for its receiver, so the uncollected clock does not run on it — no final notice, no return offered.
+   */
+  driverSought(parcelId: string): boolean {
+    return this.doors.get(parcelId)?.state === 'posted';
+  }
+
+  /** It goes on to its business's own door: its receiver is not told to come and collect it — its business is told instead. */
+  goesToADoor(parcelId: string): boolean {
+    const state = this.doors.get(parcelId)?.state;
+    return state === 'waiting' || state === 'short' || state === 'posted';
+  }
+
+  /**
+   * A DAY WITH NO DRIVER: a business whose last leg nobody has taken in DOOR_LOAD_REMIND_H hours is told, once, that it can
+   * raise the most it pays, or collect the parcel at the shop with its code. Answers the parcels it told.
+   */
+  remindUntaken(now: number = Date.now()): string[] {
+    const told: string[] = [];
+    for (const d of this.doors.values()) {
+      if (d.state !== 'posted' || d.remindedAt || !d.postedAt) continue;
+      if (now - Date.parse(d.postedAt) < DOOR_LOAD_REMIND_H * 3_600_000) continue;
+      const f = this.loadOf(d);
+      if (!f || f.status !== 'available') continue;
+      this.doors.set(d.parcelId, { ...d, remindedAt: new Date(now).toISOString() });
+      told.push(d.parcelId);
+      const entity = this.entities.find(d.entityId);
+      if (!entity) continue;
+      void this.notifications
+        ?.notify(entity.did, {
+          kind: 'parcel_door_short',
+          title: `No driver has taken ${d.parcelId} to your door yet`,
+          body: `It waits at ${d.shopName}; its last leg, load ${f.code}, has had no driver for a day at up to ${(f.maxSpend ?? d.maxSpend).toFixed(2)} ${d.currency}. Raise the most you pay under Parcels — or collect it at the shop with its code.`,
+          link: '/',
+          data: { parcelId: d.parcelId, freightId: f.freightId },
+        })
+        .catch((err: Error) => this.logger.warn(`door reminder not sent: ${err.message}`));
+    }
+    return told;
+  }
+
+  /**
+   * What the shop is owed for keeping it past its free days, in the shop's money, and the same in the business's — or nothing
+   * where nothing is owed; null where no rate converts it today.
+   */
+  private holdingOf(d: BusinessDoor, p: ReturnType<ParcelService['get']>, now: number): { amount: number; currency: string; billed: number } | undefined | null {
+    const owed = this.parcels.holdingOwed(p, now);
+    if (!(owed.amount > 0)) return undefined;
+    const billed = this.parcels.inMoney(owed.amount, owed.currency, d.currency, true);
+    return billed === undefined ? null : { amount: owed.amount, currency: owed.currency, billed };
+  }
+
+  /** Its bell: the shop is owed for keeping it, and the hand-over waits for that. */
+  private tellHoldingShort(d: BusinessDoor, holding: { amount: number; currency: string; billed: number }): void {
+    const entity = this.entities.find(d.entityId);
+    if (!entity) return;
+    void this.notifications
+      ?.notify(entity.did, {
+        kind: 'parcel_door_short',
+        title: `Top up so ${d.shopName} can hand over ${d.parcelId}`,
+        body: `Its driver is at the shop. The shop is owed ${holding.amount.toFixed(2)} ${holding.currency} for keeping it past its free days (${holding.billed.toFixed(2)} ${d.currency} from your balance), and your balance does not hold it yet.`,
+        link: '/',
+        data: { parcelId: d.parcelId },
+      })
+      .catch((err: Error) => this.logger.warn(`holding notice not sent: ${err.message}`));
   }
 
   private requireOwn(vendorId: string, parcelId: string): BusinessDoor {
