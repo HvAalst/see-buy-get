@@ -98,6 +98,13 @@ export const DOOR_MAX_KM = 100;
 
 /** Hours added to the road for a laden export box to queue and gate in at a terminal before the cut-off (2026-10-27). */
 export const EXPORT_GATE_BUFFER_H = 4;
+/**
+ * BY AIR (2026-10-29): the buffer before the airline's latest acceptance time — the queue at the cargo terminal and the
+ * acceptance itself — and the time the plant-health inspection takes when it is done at the airport (KEPHIS: about three
+ * hours). Said with the leave-by time, so the exporter sees how it was worked out.
+ */
+export const AIR_LAT_BUFFER_H = 1;
+export const AIR_INSPECTION_H = 3;
 
 /** A load settled between the parties, delivered this long ago and not said paid: its carrier is asked, once, whether it was (2026-10-27). */
 export const PAID_DIRECT_ASK_H = 72;

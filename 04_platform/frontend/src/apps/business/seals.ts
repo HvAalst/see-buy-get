@@ -26,7 +26,7 @@ export interface SealsView {
   seals: SealView[];
   editable: boolean;
   /** Round 38 — required by the company of the country the goods are taken over in. */
-  required?: { why: 'crossBorder' | 'container'; company: string };
+  required?: { why: 'crossBorder' | 'container' | 'secured'; company: string };
 }
 
 /** What is still missing before the seal can be written, in the order the form asks it. */

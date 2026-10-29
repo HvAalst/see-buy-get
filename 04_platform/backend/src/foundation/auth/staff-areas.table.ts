@@ -184,6 +184,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/exports/:exportId/sli.html': 'support',
   'GET sbg/exports/:exportId/papers/:key/file': 'support',
   'POST sbg/exports': 'none',
+  'POST sbg/exports/air': 'none',
   'POST sbg/exports/:exportId/container': 'none',
   'POST sbg/exports/:exportId/empty-leg': 'none',
   'POST sbg/exports/:exportId/laden-leg': 'none',

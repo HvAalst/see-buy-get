@@ -700,6 +700,13 @@ export class Freight {
   @ApiPropertyOptional({ type: FreightBringsBack }) bringsBack?: FreightBringsBack;
   /** A business's parcel, from the shop it waits at to the business's own door (2026-10-29). */
   @ApiPropertyOptional({ type: FreightDeliversParcel }) deliversParcel?: FreightDeliversParcel;
+  /**
+   * The shipper's own temperature range for the goods (2026-10-29, by air: roses are not fish), in °C. Readings are judged
+   * against it; absent, a cold-chain load keeps the network's 2–8 °C.
+   */
+  @ApiPropertyOptional() tempRange?: { minC: number; maxC: number };
+  /** Secured air cargo (2026-10-29): who secured it — the regulated agent or known consignor. It travels sealed. */
+  @ApiPropertyOptional() securedBy?: string;
   /** FP3b — the sender's claim against the delivered goods, and how it ended. One per load. */
   @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for

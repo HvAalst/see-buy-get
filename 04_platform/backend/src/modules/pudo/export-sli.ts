@@ -87,22 +87,24 @@ export function cleanDraft(input: SliDraftDto, by: string, now: number): SliDraf
 }
 
 /** What signing still needs, in words — the forwarder cannot draft a bill of lading without any of it. */
-export function sliGaps(d: SliDraft | undefined, ctx: { hazardous: boolean; containerNo?: string }): string[] {
+export function sliGaps(d: SliDraft | undefined, ctx: { hazardous: boolean; containerNo?: string; air?: boolean }): string[] {
   if (!d) return ['Fill in the form'];
   const out: string[] = [];
+  // By air (2026-10-29): an air waybill is not negotiable — never made out to order — and carries no box and no bill.
+  if (ctx.air && d.consigneeKind !== 'named') out.push('A named consignee: an air waybill is not negotiable, so it is never made out to order');
   if (d.consigneeKind === 'named' && !(d.consignee?.name && d.consignee.address)) out.push('The consignee’s name and address');
   if (d.consigneeKind === 'to_order_of_bank' && !d.orderOfBank) out.push('The bank the bill is made out to the order of');
   if (d.consigneeKind !== 'named' && !d.notifySameAsConsignee && !(d.notify?.name && d.notify.address)) out.push('Who is notified on arrival — a bill made out to order names nobody else');
   if (d.consigneeKind === 'named' && !d.notifySameAsConsignee && !(d.notify?.name && d.notify.address)) out.push('Who is notified on arrival (or “the same as the consignee”)');
-  if (!d.dischargePort) out.push('The port of discharge');
+  if (!d.dischargePort) out.push(ctx.air ? 'The airport of destination' : 'The port of discharge');
   if (!d.freight) out.push('Freight prepaid or collect');
-  if (!d.blRelease) out.push('How the bill of lading is released');
+  if (!ctx.air && !d.blRelease) out.push('How the bill of lading is released');
   if (!d.lines.length) out.push('The goods: at least one line');
   d.lines.forEach((l, i) => {
     if (!(l.packages > 0 && l.packageKind && l.description && l.grossKg > 0)) out.push(`Goods line ${i + 1}: packages, their kind, the description and the gross weight`);
   });
   if (ctx.hazardous && !(d.dangerous && /^UN\d{4}$/.test(d.dangerous.unNumber) && d.dangerous.hazardClass)) out.push('The dangerous goods’ UN number and class');
-  if (!ctx.containerNo) out.push('The box’s number, on the export');
+  if (!ctx.air && !ctx.containerNo) out.push('The box’s number, on the export');
   return out;
 }
 
@@ -124,6 +126,8 @@ export interface SliFacts {
   container: { type?: string; number?: string; seals: string[] };
   vgm?: { kg: number; method: number; signatory: string };
   papers: string[];
+  /** By air: the waybill, the flights and the cargo as booked — in place of the box and the bill of lading. */
+  air?: { awb: string; airline: string; flights: string; fromAirport: string; toAirport: string; pieces: number; weightKg: number; security: string; temp?: string };
 }
 
 const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -156,13 +160,14 @@ ${draft ? '<p class="draft">A draft: not signed, and not for the forwarder to ac
 <div>To ${esc(f.forwarder)} (${esc(f.bookedWith)}) · booking ${esc(f.booking)}${f.vessel ? ` · ${esc(f.vessel)}${f.voyage ? ` / ${esc(f.voyage)}` : ''}` : ''}</div>
 <h2>The parties</h2>
 <div class="two"><div class="box"><div class="h">Shipper</div>${shipper}</div><div class="box"><div class="h">Consignee</div>${consignee}</div><div class="box"><div class="h">Notify party</div>${notify}</div><div class="box"><div class="h">Forwarder</div><b>${esc(f.forwarder)}</b></div></div>
-<h2>The voyage and the terms</h2><table>${row('Port of loading', esc(`${f.loadingPort} — ${f.terminal}`))}${row('Port of discharge', esc(d.dischargePort ?? '—'))}${d.placeOfDelivery ? row('Place of delivery', esc(d.placeOfDelivery)) : ''}${row('From → to', esc(`${countryName(f.originCountry)} → ${countryName(f.destCountry)}`))}${d.incoterm ? row('Incoterm', esc(`${d.incoterm}${d.incotermPlace ? ` ${d.incotermPlace}` : ''} (Incoterms 2020)`)) : ''}${row('Freight', d.freight === 'collect' ? 'Collect' : d.freight === 'prepaid' ? 'Prepaid' : '—')}${row('Bill of lading', d.blRelease ? esc(`${RELEASE_WORDS[d.blRelease]}${d.blRelease === 'originals' ? ` — ${d.originals ?? 3} original${(d.originals ?? 3) === 1 ? '' : 's'}` : ''}${d.copies != null ? `, ${d.copies} cop${d.copies === 1 ? 'y' : 'ies'}` : ''}`) : '—')}${d.letterOfCredit ? row('Letter of credit', esc(d.letterOfCredit)) : ''}${f.docsCutoffAt ? row('Documents cut-off', esc(utc(f.docsCutoffAt))) : ''}</table>
-<h2>The box</h2><table>${row('Container', esc(`${f.container.number ?? '—'}${f.container.type ? ` (${f.container.type})` : ''}`))}${row('Seal', esc(f.container.seals.join(', ') || '—'))}${row('Verified gross mass', f.vgm ? esc(`${n(f.vgm.kg, 0)} kg, method ${f.vgm.method}, signed for by ${f.vgm.signatory}`) : '—')}</table>
+${f.air ? `<h2>The flight and the terms</h2><table>${row('Airport of departure', esc(`${f.air.fromAirport} — ${f.terminal}`))}${row('Airport of destination', esc(d.dischargePort ?? f.air.toAirport))}${row('Flights', esc(f.air.flights))}${row('Air waybill', esc(`${f.air.awb} — ${f.air.airline}`))}${row('From → to', esc(`${countryName(f.originCountry)} → ${countryName(f.destCountry)}`))}${d.incoterm ? row('Incoterm', esc(`${d.incoterm}${d.incotermPlace ? ` ${d.incotermPlace}` : ''} (Incoterms 2020)`)) : ''}${row('Freight', d.freight === 'collect' ? 'Collect' : d.freight === 'prepaid' ? 'Prepaid' : '—')}${d.letterOfCredit ? row('Letter of credit', esc(d.letterOfCredit)) : ''}</table>
+<h2>The cargo as booked</h2><table>${row('Pieces and weight', esc(`${f.air.pieces} pieces, ${f.air.weightKg} kg`))}${row('Security', esc(f.air.security))}${f.air.temp ? row('Temperature', esc(f.air.temp)) : ''}${row('Seal', esc(f.container.seals.join(', ') || '—'))}</table>` : `<h2>The voyage and the terms</h2><table>${row('Port of loading', esc(`${f.loadingPort} — ${f.terminal}`))}${row('Port of discharge', esc(d.dischargePort ?? '—'))}${d.placeOfDelivery ? row('Place of delivery', esc(d.placeOfDelivery)) : ''}${row('From → to', esc(`${countryName(f.originCountry)} → ${countryName(f.destCountry)}`))}${d.incoterm ? row('Incoterm', esc(`${d.incoterm}${d.incotermPlace ? ` ${d.incotermPlace}` : ''} (Incoterms 2020)`)) : ''}${row('Freight', d.freight === 'collect' ? 'Collect' : d.freight === 'prepaid' ? 'Prepaid' : '—')}${row('Bill of lading', d.blRelease ? esc(`${RELEASE_WORDS[d.blRelease]}${d.blRelease === 'originals' ? ` — ${d.originals ?? 3} original${(d.originals ?? 3) === 1 ? '' : 's'}` : ''}${d.copies != null ? `, ${d.copies} cop${d.copies === 1 ? 'y' : 'ies'}` : ''}`) : '—')}${d.letterOfCredit ? row('Letter of credit', esc(d.letterOfCredit)) : ''}${f.docsCutoffAt ? row('Documents cut-off', esc(utc(f.docsCutoffAt))) : ''}</table>
+<h2>The box</h2><table>${row('Container', esc(`${f.container.number ?? '—'}${f.container.type ? ` (${f.container.type})` : ''}`))}${row('Seal', esc(f.container.seals.join(', ') || '—'))}${row('Verified gross mass', f.vgm ? esc(`${n(f.vgm.kg, 0)} kg, method ${f.vgm.method}, signed for by ${f.vgm.signatory}`) : '—')}</table>`}
 <h2>The goods</h2><table class="goods"><tr><th>#</th><th>Marks and numbers</th><th class="r">Packages</th><th>Description</th><th>HS code</th><th class="r">Gross kg</th><th class="r">Net kg</th><th class="r">m³</th></tr>${lines}<tr><th></th><th>Total</th><th class="r">${n(totals.packages, 0)}</th><th></th><th></th><th class="r">${n(totals.gross)}</th><th class="r">${totals.net ? n(totals.net) : '—'}</th><th class="r">${totals.m3 ? n(totals.m3, 2) : '—'}</th></tr></table>
 ${d.dangerous ? `<h2>Dangerous goods</h2><table>${row('UN number', esc(d.dangerous.unNumber))}${row('Class', esc(d.dangerous.hazardClass))}${d.dangerous.properShippingName ? row('Proper shipping name', esc(d.dangerous.properShippingName)) : ''}${d.dangerous.packingGroup ? row('Packing group', esc(d.dangerous.packingGroup)) : ''}</table>` : ''}
 ${d.instructions ? `<h2>Special instructions</h2><p>${esc(d.instructions).replace(/\r?\n/g, '<br>')}</p>` : ''}
 <h2>Papers enclosed</h2><p>${f.papers.length ? f.papers.map(esc).join(' · ') : 'None yet'}</p>
 <h2>Signed</h2><p>${draft ? '<span class="draft">Not signed.</span>' : `${esc(sign.signedBy)}, for ${esc(f.shipper.name)}, on ${esc(utc(sign.signedAt))} — version ${sign.version}.`}</p>
-<p class="note">Drawn on SeeBuyGet from the exporter’s own record and words, for its forwarder to draft the bill of lading. SeeBuyGet books no ship and sends this to nobody: the exporter hands it over. A signed version is kept exactly as signed; a change is a new version.</p>
+<p class="note">Drawn on SeeBuyGet from the exporter’s own record and words, for its forwarder to ${f.air ? 'make out the air waybill. SeeBuyGet books no flight' : 'draft the bill of lading. SeeBuyGet books no ship'} and sends this to nobody: the exporter hands it over. A signed version is kept exactly as signed; a change is a new version.</p>
 </body></html>`;
 }

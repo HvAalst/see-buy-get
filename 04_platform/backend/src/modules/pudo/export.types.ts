@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { FREE_DAY_KINDS, type FreeDayKind } from './container-box';
 import { FEE_STATES, type FeeState } from './import.types';
 import { Quote } from './quote.types';
@@ -24,7 +24,8 @@ import { FblView, HeldFbl } from './fbl-note.types';
  */
 
 /** Who the exporter booked the ocean leg with. A label of the relationship — we book nothing. */
-export const BOOKED_WITH = ['forwarder', 'shipping_line'] as const;
+/** Who the main carriage is booked with: a forwarder, the shipping line, or (by air) the airline itself. */
+export const BOOKED_WITH = ['forwarder', 'shipping_line', 'airline'] as const;
 export type BookedWith = (typeof BOOKED_WITH)[number];
 
 /**
@@ -61,6 +62,9 @@ export const EXPORT_PAPER_KEYS = [
   'insurance_certificate',
   'dangerous_goods_declaration',
   'letter_of_credit',
+  // By air (2026-10-29): the waybill's copy, and the regulated agent's security declaration for secured cargo.
+  'air_waybill',
+  'consignment_security_declaration',
 ] as const;
 export type KnownExportPaperKey = (typeof EXPORT_PAPER_KEYS)[number];
 /** A paper of the catalogue, or another paper asked for by name. */
@@ -88,7 +92,14 @@ export const EXPORT_PAPER_GROUP: Record<KnownExportPaperKey, ExportPaperGroup> =
   insurance_certificate: 'asked',
   dangerous_goods_declaration: 'asked',
   letter_of_credit: 'asked',
+  air_waybill: 'kept',
+  consignment_security_declaration: 'kept',
 };
+
+/** The papers that belong to the sea alone, never on an export by air. */
+export const SEA_ONLY_PAPERS: KnownExportPaperKey[] = ['weighbridge_ticket', 'bill_of_lading'];
+/** The papers that belong to the air alone, never on an export by sea. */
+export const AIR_ONLY_PAPERS: KnownExportPaperKey[] = ['air_waybill', 'consignment_security_declaration'];
 
 const OTHER_KEY = /^other-([1-9][0-9]?)$/;
 
@@ -223,6 +234,73 @@ export class ExportDangerous {
   @ApiPropertyOptional() packingGroup?: string;
 }
 
+/** How the goods leave the country after our road: by sea (a box through a port), or by air (through a cargo terminal). */
+export const EXPORT_MODES = ['sea', 'air'] as const;
+export type ExportMode = (typeof EXPORT_MODES)[number];
+
+/** One flight of the booking, as the confirmation gives it. */
+export class ExportFlight {
+  /** "KQ 512". */
+  @ApiProperty() flight: string;
+  /** YYYY-MM-DD, the day it departs. */
+  @ApiProperty() date: string;
+  /** Airports, by their three-letter codes. */
+  @ApiProperty() from: string;
+  @ApiProperty() to: string;
+  /** Departure, in the airport's own local time (HH:MM), as printed. */
+  @ApiPropertyOptional() departsLocal?: string;
+}
+
+/**
+ * THE SECURITY OF AIR CARGO, as the exporter says it (the user, 2026-10-29: secured cargo carried "with safeguards").
+ * SeeBuyGet gives no security status: only a regulated agent or a known consignor does. Secured, our truck is a lockable
+ * body, sealed at the loading place, the seal checked at the terminal, by a driver whose ID was checked.
+ */
+export class ExportAirSecurity {
+  @ApiProperty({ enum: ['secured', 'unsecured'] }) status: 'secured' | 'unsecured';
+  /** Who secured it — the regulated agent or known consignor — and its approval number, as it gives them. */
+  @ApiPropertyOptional() agentName?: string;
+  @ApiPropertyOptional() agentNumber?: string;
+  @ApiPropertyOptional() knownConsignor?: boolean;
+}
+
+/** The shipper's own temperature range for the goods, in °C — the truck's set-point must sit inside it. */
+export class ExportAirTemp {
+  @ApiProperty() minC: number;
+  @ApiProperty() maxC: number;
+  /** The goods were pre-cooled before loading. */
+  @ApiPropertyOptional() preCooled?: boolean;
+}
+
+/** AN EXPORT BY AIR (2026-10-29): the booking with the airline, as the exporter copied it off its confirmation. */
+export class ExportAir {
+  /** The airline's air waybill number, "706-12345675" — the master's, for a consolidation. */
+  @ApiProperty() awb: string;
+  @ApiProperty({ enum: ['master', 'house', 'direct'] }) waybillKind: 'master' | 'house' | 'direct';
+  /** The forwarder's own house waybill number, for a consolidation. */
+  @ApiPropertyOptional() houseNumber?: string;
+  /** The airline, by name: from the waybill's prefix where we hold it, else as given. */
+  @ApiProperty() airline: string;
+  /** Confirmed by the airline, or still on request: a truck may go to an unconfirmed booking, said so everywhere. */
+  @ApiProperty({ enum: ['confirmed', 'queued'] }) bookingStatus: 'confirmed' | 'queued';
+  @ApiProperty({ type: [ExportFlight] }) flights: ExportFlight[];
+  /** The latest acceptance time at the cargo terminal, as printed on the confirmation — the truck's deadline. */
+  @ApiProperty() latAt: string;
+  @ApiProperty() pieces: number;
+  @ApiProperty() weightKg: number;
+  @ApiPropertyOptional() volumeM3?: number;
+  @ApiPropertyOptional({ enum: ['passenger', 'freighter'] }) aircraft?: 'passenger' | 'freighter';
+  /** Who receives it at the cargo terminal (the handler), as the confirmation names it. */
+  @ApiPropertyOptional() handler?: string;
+  /** The airport of departure and of destination, by their three-letter codes. */
+  @ApiProperty() fromAirport: string;
+  @ApiProperty() toAirport: string;
+  @ApiProperty({ type: ExportAirSecurity }) security: ExportAirSecurity;
+  @ApiPropertyOptional({ type: ExportAirTemp }) temp?: ExportAirTemp;
+  /** The plant-health inspection is done at the airport before acceptance — about three more hours there. */
+  @ApiPropertyOptional() inspectionAtAirport?: boolean;
+}
+
 export class ExportConsignment {
   @ApiProperty() exportId: string;
   /** EXP-001. */
@@ -282,6 +360,10 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: [HeldFbl] }) formerFbl?: HeldFbl[];
   /** The notes it replaced, each kept as it was. */
   @ApiPropertyOptional({ type: [HeldRailNote] }) formerRail?: HeldRailNote[];
+  /** How the goods leave after our road. Absent: by sea, as every export was before air. */
+  @ApiPropertyOptional({ enum: EXPORT_MODES }) mode?: ExportMode;
+  /** By air: the booking with the airline. */
+  @ApiPropertyOptional({ type: ExportAir }) air?: ExportAir;
   @ApiProperty() createdAt: string;
   @ApiProperty() createdBy: string;
 }
@@ -292,6 +374,15 @@ export class ExportHandover {
   @ApiProperty() place: string;
   @ApiProperty() cutoffAt: string;
   @ApiProperty() byRail: boolean;
+  /** By air: the cut-off is the airline's latest acceptance time at the cargo terminal. */
+  @ApiPropertyOptional() byAir?: boolean;
+}
+
+/** By air: how the leave-by time was worked out — the drive, the buffer, and the inspection at the airport. */
+export class ExportAirWorking {
+  @ApiProperty() driveHours: number;
+  @ApiProperty() bufferHours: number;
+  @ApiProperty() inspectionHours: number;
 }
 
 export class ExportTiming {
@@ -306,6 +397,8 @@ export class ExportTiming {
   @ApiPropertyOptional() gatedInAt?: string;
   /** When the laden leg was collected at the loading place. */
   @ApiPropertyOptional() collectedAt?: string;
+  /** By air: how the leave-by time was worked out, to be shown. */
+  @ApiPropertyOptional({ type: ExportAirWorking }) air?: ExportAirWorking;
 }
 
 /** A leg of this export, as the screen reads it. */
@@ -387,6 +480,33 @@ export class ExportDetail {
   @ApiPropertyOptional({ type: RailNoteView }) rail?: RailNoteView;
   /** The forwarder's bill with what it means, and what it says of the goods against ours. */
   @ApiPropertyOptional({ type: FblView }) fbl?: FblView;
+  /** By air: the waybill's check against the law of its route and our papers, and what to watch for. */
+  @ApiPropertyOptional({ type: () => ExportAirView }) air?: ExportAirView;
+}
+
+/** The check of an export's air waybill, as its screen reads it. */
+export class ExportAirCheckView {
+  @ApiProperty() number: string;
+  @ApiPropertyOptional({ enum: ['format', 'check_digit'] }) problem?: string;
+  @ApiPropertyOptional() airline?: string;
+  @ApiPropertyOptional() airlineSource?: string;
+  @ApiProperty({ enum: ['mc99', 'warsaw_hague_map4', 'warsaw_hague', 'warsaw_1929', 'none', 'domestic', 'unknown'] }) regime: string;
+  @ApiPropertyOptional() rules?: string;
+  @ApiProperty({ type: [String] }) sources: string[];
+  @ApiProperty({ type: [String] }) missing: string[];
+  @ApiProperty({ type: [String] }) ask: string[];
+  @ApiProperty({ type: [String] }) mismatches: string[];
+  @ApiProperty() electronicPossible: boolean;
+  @ApiProperty({ type: [String] }) limits: string[];
+  @ApiProperty({ type: [String] }) claims: string[];
+  @ApiProperty({ type: [String] }) caveats: string[];
+}
+
+/** An export by air, as its screen reads it: the check, and what the exporter is warned of. */
+export class ExportAirView {
+  @ApiProperty({ type: ExportAirCheckView }) check: ExportAirCheckView;
+  /** In words: an unconfirmed booking, secured cargo's safeguards, a temperature range. */
+  @ApiProperty({ type: [String] }) warnings: string[];
 }
 
 export class ExportRow {
@@ -396,6 +516,7 @@ export class ExportRow {
   @ApiProperty() loadingPort: string;
   @ApiProperty() bookingReference: string;
   @ApiProperty() gateCutoffAt: string;
+  @ApiPropertyOptional({ enum: EXPORT_MODES }) mode?: ExportMode;
   /** The journey's legs in order — road to the terminal, rail where it goes by train, then the sea. */
   @ApiProperty({ enum: LEG_MODES, isArray: true }) modes: LegMode[];
   @ApiPropertyOptional() containerNo?: string;
@@ -437,6 +558,64 @@ export class RegisterExportDto {
   @IsOptional() @IsString() emptyDepotSiteId?: string;
   /** The box is the exporter's own (a shipper-owned container): no line's free days run on it. */
   @IsOptional() @IsBoolean() ownBox?: boolean;
+  @IsOptional() @IsString() @MaxLength(80) by?: string;
+}
+
+class ExportFlightDto {
+  @Matches(/^\s*[A-Z0-9]{2}\s?\d{1,4}[A-Z]?\s*$/i, { message: 'A flight is the airline’s two-character code and its number, like KQ 512' }) flight!: string;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'The day it departs, as YYYY-MM-DD' }) date!: string;
+  @Matches(/^\s*[A-Za-z]{3}\s*$/, { message: 'An airport by its three-letter code, like NBO' }) from!: string;
+  @Matches(/^\s*[A-Za-z]{3}\s*$/, { message: 'An airport by its three-letter code, like AMS' }) to!: string;
+  @IsOptional() @Matches(/^\d{2}:\d{2}$/, { message: 'Its departure as HH:MM, local time' }) departsLocal?: string;
+}
+
+class ExportAirSecurityDto {
+  @IsIn(['secured', 'unsecured']) status!: 'secured' | 'unsecured';
+  @IsOptional() @IsString() @MaxLength(120) agentName?: string;
+  @IsOptional() @IsString() @MaxLength(40) agentNumber?: string;
+  @IsOptional() @IsBoolean() knownConsignor?: boolean;
+}
+
+class ExportAirTempDto {
+  @IsNumber() @Min(-30) @Max(30) minC!: number;
+  @IsNumber() @Min(-30) @Max(30) maxC!: number;
+  @IsOptional() @IsBoolean() preCooled?: boolean;
+}
+
+class ExportAirDto {
+  @IsString() @MaxLength(20) awb!: string;
+  @IsIn(['master', 'house', 'direct']) waybillKind!: 'master' | 'house' | 'direct';
+  @IsOptional() @IsString() @MaxLength(40) houseNumber?: string;
+  /** The airline's name, where its prefix is not one we hold. */
+  @IsOptional() @IsString() @MaxLength(80) airline?: string;
+  @IsIn(['confirmed', 'queued']) bookingStatus!: 'confirmed' | 'queued';
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(6) @ValidateNested({ each: true }) @Type(() => ExportFlightDto) flights!: ExportFlightDto[];
+  /** The latest acceptance time, as printed on the confirmation (an ISO moment). */
+  @IsString() latAt!: string;
+  @IsInt() @Min(1) @Max(100000) pieces!: number;
+  @IsNumber() @Min(0.1) @Max(150000) weightKg!: number;
+  @IsOptional() @IsNumber() @Min(0) volumeM3?: number;
+  @IsOptional() @IsIn(['passenger', 'freighter']) aircraft?: 'passenger' | 'freighter';
+  @IsOptional() @IsString() @MaxLength(80) handler?: string;
+  @ValidateNested() @Type(() => ExportAirSecurityDto) security!: ExportAirSecurityDto;
+  @IsOptional() @ValidateNested() @Type(() => ExportAirTempDto) temp?: ExportAirTempDto;
+  @IsOptional() @IsBoolean() inspectionAtAirport?: boolean;
+}
+
+/** AN EXPORT BY AIR: the goods, the countries, the two places and the booking with the airline. */
+export class RegisterAirExportDto {
+  @IsOptional() @IsString() exporterEntityId?: string;
+  @IsString() @MaxLength(300) goodsDescription!: string;
+  @IsString() @MaxLength(2) originCountry!: string;
+  @IsString() @MaxLength(2) destCountry!: string;
+  @IsOptional() @IsString() @MaxLength(8) natureCode?: string;
+  /** Who it is booked with: the forwarder, or the airline itself. */
+  @IsIn(['forwarder', 'airline']) bookedWith!: 'forwarder' | 'airline';
+  @IsString() @MaxLength(120) partyName!: string;
+  /** Where it is loaded (kind `loading`), and the cargo terminal at the airport (kind `port`). */
+  @IsString() loadingSiteId!: string;
+  @IsString() terminalSiteId!: string;
+  @ValidateNested() @Type(() => ExportAirDto) air!: ExportAirDto;
   @IsOptional() @IsString() @MaxLength(80) by?: string;
 }
 

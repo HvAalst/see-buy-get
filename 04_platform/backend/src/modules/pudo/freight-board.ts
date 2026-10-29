@@ -98,6 +98,8 @@ export function blockersFor(
     cover?: string;
     /** The box is still on its way by rail and the railway has not said it is there (2026-10-29): the take's words. */
     rail?: string;
+    /** Secured air cargo, and nobody has seen this driver's ID yet (2026-10-29): the take's words. */
+    secured?: string;
     indicativeCharge?: number;
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
@@ -127,6 +129,8 @@ export function blockersFor(
     if (ctx.cover) out.push({ kind: 'resolvable', code: 'COVER_REQUIRED', message: ctx.cover });
     // …and a box still on the train: no lorry brings it to the terminal sooner.
     if (ctx.rail) out.push({ kind: 'resolvable', code: 'RAIL_NOT_ARRIVED', message: ctx.rail });
+    // …and secured cargo: no lorry shows whose ID was seen.
+    if (ctx.secured) out.push({ kind: 'resolvable', code: 'ID_NOT_SEEN', message: ctx.secured });
     out.push({ kind: 'resolvable', code: 'NO_VEHICLE', message: 'Couple to a vehicle to see whether you can take this' });
     return out;
   }
@@ -140,6 +144,8 @@ export function blockersFor(
   if (ctx.cover) out.push({ kind: 'resolvable', code: 'COVER_REQUIRED', message: ctx.cover });
   // A box still on its way by rail: a truck sent now waits at the terminal for it (2026-10-29).
   if (ctx.rail) out.push({ kind: 'resolvable', code: 'RAIL_NOT_ARRIVED', message: ctx.rail });
+  // Secured air cargo: carried only by a driver whose ID was seen (2026-10-29).
+  if (ctx.secured) out.push({ kind: 'resolvable', code: 'ID_NOT_SEEN', message: ctx.secured });
   if (ctx.overHours) {
     out.push({ kind: 'resolvable', code: 'HOURS_EXCEEDED', message: 'Over the shift hours limit — deliver what is aboard, end the shift and rest before taking more' });
   }

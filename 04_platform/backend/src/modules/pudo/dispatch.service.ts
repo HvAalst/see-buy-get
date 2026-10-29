@@ -24,7 +24,7 @@ import { MdpService } from './mdp.service';
 import { ToteService } from './tote.service';
 import { GeoPoint, Tote, ToteHaul } from './pudo.types';
 import { haversineKm } from './geo';
-import { DriverService } from './driver.service';
+import { DriverService, idUnseen } from './driver.service';
 import { FleetService } from './fleet.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, Equipment, VehicleCapability } from './cargo.types';
@@ -397,6 +397,12 @@ export interface DetentionHooks {
   current(freightId: string): HeldByAuthority | undefined;
 }
 
+/** The range a load's readings are judged against: the shipper's own, else its cargo's (2–8 °C for cold-chain goods). */
+function bandOf(f: Pick<Freight, 'natureCode' | 'tempRange'>): { minC: number; maxC: number } | null {
+  const own = tempBand(f.natureCode);
+  return own && f.tempRange ? { minC: f.tempRange.minC, maxC: f.tempRange.maxC } : own;
+}
+
 @Injectable()
 export class DispatchService {
   // Durable: a freight job is a real transport obligation (a diverted P4+ order is a paid commitment),
@@ -575,7 +581,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -717,6 +723,9 @@ export class DispatchService {
       ...(input.bringsBack ? { bringsBack: { parcelId: input.bringsBack.parcelId, atMdpId: input.bringsBack.atMdpId, hubName: input.bringsBack.hubName } } : {}),
       // A business's parcel going on from the shop it waits at to its own door (2026-10-29).
       ...(input.deliversParcel ? { deliversParcel: { parcelId: input.deliversParcel.parcelId, atShopDid: input.deliversParcel.atShopDid, shopName: input.deliversParcel.shopName } } : {}),
+      // By air (2026-10-29): the shipper's own range, and who secured the cargo — it travels sealed.
+      ...(input.tempRange && input.tempRange.minC < input.tempRange.maxC ? { tempRange: { minC: input.tempRange.minC, maxC: input.tempRange.maxC } } : {}),
+      ...(input.securedBy?.trim() ? { securedBy: input.securedBy.trim().slice(0, 120) } : {}),
       // BL1 — uncleared goods. The country defaults to the leg's own, because a bond is held where the
       // wheels turn; it is stated separately only so a caller cannot quietly mean a different one.
       ...(input.bonded ? { bonded: true, bondCountry: (input.bondCountry ?? input.pickupCountry ?? '').toUpperCase() } : {}),
@@ -1345,6 +1354,9 @@ export class DispatchService {
     // Where road meets rail (2026-10-29): no truck is sent for a box the railway has not said is there.
     const rail = railRefusal(f);
     if (rail) throw new GlosError('INVALID_STATE', rail);
+    // Secured air cargo (2026-10-29): only a driver whose ID was seen takes it — its security is kept by who holds it.
+    const secured = this.securedRefusal(driverDid, f);
+    if (secured) throw new GlosError('FORBIDDEN', secured);
     // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
     // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
     // given, which is the invisible exclusion the whole board exists to remove; enforcing it here, where the
@@ -1483,6 +1495,7 @@ export class DispatchService {
           declaration,
           cover: input.driverDid ? this.coverRefusal(input.driverDid, f, now) : undefined,
           rail: railRefusal(f),
+          secured: input.driverDid ? this.securedRefusal(input.driverDid, f) : undefined,
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //
@@ -4096,7 +4109,7 @@ export class DispatchService {
     const f = this.requireFreight(freightId);
     if (driverDid && f.claimedBy !== driverDid) throw new GlosError('FORBIDDEN', 'This freight was claimed by another driver');
     if (f.status !== 'in_transit') throw new GlosError('INVALID_STATE', `Freight is ${f.status}, expected in_transit`);
-    const band = tempBand(f.natureCode);
+    const band = bandOf(f);
     if (!band) throw new GlosError('NOT_TEMPERATURE_CONTROLLED', 'This freight is not temperature-controlled — no reading to log');
     if (!Number.isFinite(celsius)) throw new GlosError('INVALID_INPUT', 'A numeric temperature reading is required');
     const c = Math.round(celsius * 10) / 10;
@@ -4491,7 +4504,9 @@ export class DispatchService {
    * the goods are taken over in requires one on loads that cross a border, or on container legs. Said with that company, so
    * the shipper and the driver read whose rule it is. Undefined where no rule asks for one.
    */
-  sealRequiredBy(f: Freight): { why: 'crossBorder' | 'container'; company: string } | undefined {
+  sealRequiredBy(f: Freight): { why: 'crossBorder' | 'container' | 'secured'; company: string } | undefined {
+    // Secured air cargo is sealed whatever any company's rule says: its security is kept by the seal (2026-10-29).
+    if (f.securedBy) return { why: 'secured', company: f.securedBy };
     const entity = f.pickupCountry ? this.entities.forJurisdiction(f.pickupCountry) : undefined;
     if (!entity) return undefined;
     const rules = this.entities.sealRulesFor(entity.entityId);
@@ -4558,7 +4573,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: tempBand(f.natureCode) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */
@@ -4582,6 +4597,17 @@ export class DispatchService {
     return carrier === driverDid
       ? 'The sender asks for a carrier whose insurance cover SeeBuyGet has checked: you have none on record that is still running. Send your policy from the Driver app.'
       : 'The sender asks for a carrier whose insurance cover SeeBuyGet has checked: your fleet has none on record that is still running. Your office sends the policy from the Fleet app.';
+  }
+
+  /**
+   * SECURED AIR CARGO (2026-10-29, the user: carried with safeguards): taken only by a driver whose ID was seen — vetted
+   * before a heavier vehicle rode, approved to ride alone, answered for by a fleet, or the photo looked at by staff.
+   * Undefined = it may, or the load is not secured.
+   */
+  private securedRefusal(driverDid: string, f: Freight | undefined): string | undefined {
+    if (!f?.securedBy) return undefined;
+    if (!idUnseen(this.drivers.get(driverDid))) return undefined;
+    return 'Secured air cargo goes only with a driver whose ID has been seen: send a photo of your ID from the Driver app, and take it once it has been looked at.';
   }
 
   private coverRefusalFor(driverDid: string, load: Claimable, now = Date.now()): string | undefined {
@@ -4915,7 +4941,7 @@ export function carrierNow(f: Freight, takenOverBy: string | undefined): { drive
  */
 export function coldChainBreachOf(f: Freight): ColdChainBreachView | undefined {
   const r = f.tempBreached ? f.tempReadings?.find((x) => x.breach) : undefined;
-  const band = tempBand(f.natureCode);
+  const band = bandOf(f);
   if (!r || !band) return undefined;
   return { celsius: r.celsius, at: r.at, minC: band.minC, maxC: band.maxC, ...(r.receivedAt ? { receivedAt: r.receivedAt } : {}) };
 }

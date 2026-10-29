@@ -32,6 +32,10 @@ import { journeyModes, type ExportByRailDto } from './rail-leg.types';
 import { fblView, holdFbl, verifyFbl } from './fbl-note';
 import type { FblDto, FblVerifiedDto } from './fbl-note.types';
 import type { RailNoteDto } from './rail-note.types';
+import { airlineOfPrefix, awbDigits, awbProblem, checkAirWaybill, formatAwb } from '../../foundation/carriage-law/air';
+import { AIR_INSPECTION_H, AIR_LAT_BUFFER_H } from './pudo.config';
+import { AIR_ONLY_PAPERS, SEA_ONLY_PAPERS, type ExportAir, type ExportAirView } from './export.types';
+import type { TruckSubtype } from './fleet.config';
 
 /** The words for each paper, where a sentence names it (the screen translates its own). */
 export const EXPORT_PAPER_LABEL: Record<KnownExportPaperKey, string> = {
@@ -52,6 +56,8 @@ export const EXPORT_PAPER_LABEL: Record<KnownExportPaperKey, string> = {
   insurance_certificate: 'Insurance certificate',
   dangerous_goods_declaration: 'Dangerous goods declaration',
   letter_of_credit: 'Letter of credit',
+  air_waybill: 'Air waybill (copy)',
+  consignment_security_declaration: 'Consignment security declaration (from the regulated agent)',
 };
 
 /** The same papers mid-sentence: "sent back the packing list". */
@@ -73,7 +79,12 @@ const EXPORT_PAPER_NOUN: Record<KnownExportPaperKey, string> = {
   insurance_certificate: 'the insurance certificate',
   dangerous_goods_declaration: 'the dangerous goods declaration',
   letter_of_credit: 'the letter of credit',
+  air_waybill: 'the air waybill',
+  consignment_security_declaration: 'the consignment security declaration',
 };
+
+/** The bodies that cannot be locked or sealed: secured air cargo never rides in one (2026-10-29, "with safeguards"). */
+const OPEN_BODIES: TruckSubtype[] = ['flatbed', 'dropside', 'curtain_side', 'tipper', 'cement_mixer', 'grain_hopper', 'car_carrier', 'livestock', 'skeletal', 'crane'];
 
 /** A line's name: the catalogue's, or the name it was asked for by. */
 export function paperLabel(p: Pick<ExportPaper, 'key' | 'title'>): string {
@@ -213,7 +224,7 @@ export class ExportService {
       ...(emptyDepot ? { emptyDepot } : {}),
       ...(input.ownBox ? { ownBox: { by, at: new Date(now).toISOString() } } : {}),
       // Every export's papers — needed, and kept when there is one — and, for hazardous goods, their declaration.
-      papers: EXPORT_PAPER_KEYS.filter((key) => EXPORT_PAPER_GROUP[key] !== 'asked' || (key === 'dangerous_goods_declaration' && hazardous)).map((key) => ({
+      papers: EXPORT_PAPER_KEYS.filter((key) => !AIR_ONLY_PAPERS.includes(key) && (EXPORT_PAPER_GROUP[key] !== 'asked' || (key === 'dangerous_goods_declaration' && hazardous))).map((key) => ({
         key,
         ...(EXPORT_PAPER_GROUP[key] === 'kept' ? { optional: true } : {}),
       })),
@@ -222,6 +233,172 @@ export class ExportService {
     };
     this.exports.set(consignment.exportId, consignment);
     return consignment;
+  }
+
+  /**
+   * AN EXPORT BY AIR (the user, 2026-10-29: "flower exports … perishables"): the goods, the countries, where it is loaded,
+   * the cargo terminal at the airport, and the booking with the airline as the exporter copied it off its confirmation —
+   * the air waybill, the flights, and the latest acceptance time our truck must beat. Refused before anything is written
+   * where the waybill number cannot be one, where a fact the road needs is missing, or where the goods are ones we do not
+   * carry to an airport yet: medicines wait for the lawyer (legal.html L29), live animals for the next slice.
+   */
+  registerAir(
+    input: {
+      exporterEntityId: string;
+      goodsDescription: string;
+      originCountry: string;
+      destCountry: string;
+      natureCode?: string;
+      bookedWith: 'forwarder' | 'airline';
+      partyName: string;
+      loadingSiteId: string;
+      terminalSiteId: string;
+      air: {
+        awb: string;
+        waybillKind: 'master' | 'house' | 'direct';
+        houseNumber?: string;
+        airline?: string;
+        bookingStatus: 'confirmed' | 'queued';
+        flights: Array<{ flight: string; date: string; from: string; to: string; departsLocal?: string }>;
+        latAt: string;
+        pieces: number;
+        weightKg: number;
+        volumeM3?: number;
+        aircraft?: 'passenger' | 'freighter';
+        handler?: string;
+        security: { status: 'secured' | 'unsecured'; agentName?: string; agentNumber?: string; knownConsignor?: boolean };
+        temp?: { minC: number; maxC: number; preCooled?: boolean };
+        inspectionAtAirport?: boolean;
+      };
+    },
+    by: string,
+    now = Date.now(),
+  ): ExportConsignment {
+    const exporter = this.entities.get(input.exporterEntityId);
+    const goodsDescription = input.goodsDescription?.trim();
+    if (!goodsDescription) throw new GlosError('FIELD_REQUIRED', 'Say what is in it — the forwarder, the papers and the truck all start from what the goods are', { field: 'goodsDescription' });
+    const originCountry = country(input.originCountry, 'where it is sent from');
+    const destCountry = country(input.destCountry, 'where it is going');
+    const nature = input.natureCode?.trim().toUpperCase() || undefined;
+    if (nature === 'HUM') throw new GlosError('FORBIDDEN', 'Medicines and vaccines are not carried to or from an airport on SeeBuyGet yet: who must hold a licence to carry them is with our lawyer (legal.html L29).', { field: 'natureCode', reason: 'medicines' });
+    if (nature === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Live animals and biological goods by air come after this first step: they are not carried to an airport on SeeBuyGet yet.', { field: 'natureCode', reason: 'biological' });
+    const partyName = input.partyName?.trim();
+    if (!partyName) throw new GlosError('FIELD_REQUIRED', 'Say who it is booked with: your forwarder, or the airline', { field: 'partyName' });
+    const a = input.air ?? ({} as typeof input.air);
+    // The airline's waybill number: eleven digits, the last a check digit — a wrong one is never kept.
+    const problem = awbProblem(a.awb);
+    if (problem === 'format') throw new GlosError('VALIDATION_FAILED', 'An air waybill number is eleven digits: the airline’s three, and eight more — like 706-12345675', { field: 'air.awb' });
+    if (problem === 'check_digit') throw new GlosError('VALIDATION_FAILED', 'That air waybill number’s last digit does not check: the first seven of its last eight, divided by 7, leave the last. Look at the number again.', { field: 'air.awb' });
+    const digits = awbDigits(a.awb);
+    const line = airlineOfPrefix(digits.slice(0, 3));
+    const airline = line?.name ?? a.airline?.trim();
+    if (!airline) throw new GlosError('FIELD_REQUIRED', `We do not hold the airline for prefix ${digits.slice(0, 3)}: say which airline it is`, { field: 'air.airline' });
+    if (a.waybillKind === 'house' && !a.houseNumber?.trim()) throw new GlosError('FIELD_REQUIRED', 'A consolidation: give the forwarder’s house waybill number too', { field: 'air.houseNumber' });
+    const flights = (a.flights ?? []).map((f) => ({ flight: f.flight.replace(/\s+/g, ' ').trim().toUpperCase(), date: f.date, from: f.from.trim().toUpperCase(), to: f.to.trim().toUpperCase(), ...(f.departsLocal ? { departsLocal: f.departsLocal } : {}) }));
+    if (!flights.length) throw new GlosError('FIELD_REQUIRED', 'Give the flight it is booked on', { field: 'air.flights' });
+    const latAt = moment(a.latAt, 'The latest acceptance time');
+    if (!latAt) throw new GlosError('FIELD_REQUIRED', 'Give the latest acceptance time from the airline’s booking confirmation: the cargo must be accepted at the terminal before it', { field: 'air.latAt' });
+    if (!(a.pieces > 0) || !(a.weightKg > 0)) throw new GlosError('FIELD_REQUIRED', 'Say how many pieces and what they weigh, as on the booking', { field: 'air.pieces' });
+    const sec = a.security ?? ({ status: 'unsecured' } as typeof a.security);
+    if (sec.status === 'secured' && !sec.agentName?.trim()) throw new GlosError('FIELD_REQUIRED', 'Secured cargo: say which regulated agent or known consignor secured it — only it can give a security status', { field: 'air.security.agentName' });
+    // Perishable goods travel cold: their own range, which a reefer's set-point must sit inside.
+    if (nature === 'FOP' && !a.temp) throw new GlosError('FIELD_REQUIRED', 'Perishable goods: give the temperature range they must be kept in, in °C', { field: 'air.temp' });
+    if (a.temp && !(a.temp.minC < a.temp.maxC)) throw new GlosError('VALIDATION_FAILED', 'The lowest temperature must be below the highest', { field: 'air.temp' });
+    const placeOf = (siteId: string | undefined, kind: 'loading' | 'port', what: string): ExportPlace => {
+      if (!siteId) throw new GlosError('FIELD_REQUIRED', `Choose ${what} from your places`, { field: what });
+      const site = this.sites.require(exporter.entityId, siteId);
+      if (site.kind !== kind) throw new GlosError('VALIDATION_FAILED', `That place is not one of your ${kind === 'loading' ? 'loading places' : 'port and airport places'}`, { field: what });
+      return { label: site.name, location: site.location };
+    };
+    const loadingPlace = placeOf(input.loadingSiteId, 'loading', 'where it is loaded');
+    const terminal = placeOf(input.terminalSiteId, 'port', 'the cargo terminal');
+    const hazardous = /^HAZ/.test(nature ?? '');
+    const air: ExportAir = {
+      awb: formatAwb(digits),
+      waybillKind: a.waybillKind === 'house' ? 'house' : a.waybillKind === 'direct' ? 'direct' : 'master',
+      ...(a.houseNumber?.trim() ? { houseNumber: a.houseNumber.trim().slice(0, 40) } : {}),
+      airline: airline.slice(0, 80),
+      bookingStatus: a.bookingStatus === 'queued' ? 'queued' : 'confirmed',
+      flights,
+      latAt,
+      pieces: Math.round(a.pieces),
+      weightKg: Math.round(a.weightKg * 10) / 10,
+      ...(a.volumeM3 ? { volumeM3: Math.round(a.volumeM3 * 100) / 100 } : {}),
+      ...(a.aircraft ? { aircraft: a.aircraft } : {}),
+      ...(a.handler?.trim() ? { handler: a.handler.trim().slice(0, 80) } : {}),
+      fromAirport: flights[0].from,
+      toAirport: flights[flights.length - 1].to,
+      security: { status: sec.status === 'secured' ? 'secured' : 'unsecured', ...(sec.agentName?.trim() ? { agentName: sec.agentName.trim().slice(0, 120) } : {}), ...(sec.agentNumber?.trim() ? { agentNumber: sec.agentNumber.trim().slice(0, 40) } : {}), ...(sec.knownConsignor ? { knownConsignor: true } : {}) },
+      ...(a.temp ? { temp: { minC: a.temp.minC, maxC: a.temp.maxC, ...(a.temp.preCooled ? { preCooled: true } : {}) } } : {}),
+      ...(a.inspectionAtAirport ? { inspectionAtAirport: true } : {}),
+    };
+    const consignment: ExportConsignment = {
+      exportId: `exp_${randomBytes(8).toString('hex')}`,
+      code: this.nextCode(),
+      exporterEntityId: exporter.entityId,
+      goodsDescription: goodsDescription.slice(0, 300),
+      originCountry,
+      destCountry,
+      loadingPort: `${air.fromAirport} — ${terminal.label}`.slice(0, 80),
+      ...(nature ? { natureCode: nature } : {}),
+      mode: 'air',
+      air,
+      // One deadline for every clock: by air, the cut-off is the airline's latest acceptance time at the terminal.
+      booking: { reference: air.awb, bookedWith: input.bookedWith === 'airline' ? 'airline' : 'forwarder', partyName: partyName.slice(0, 120), gateCutoffAt: latAt },
+      loadingPlace,
+      terminal,
+      // An air export's papers: no weighbridge ticket and no bill of lading; the waybill's copy, the security declaration
+      // where it is secured, the phytosanitary certificate where the plant inspection is at the airport.
+      papers: EXPORT_PAPER_KEYS.filter(
+        (key) =>
+          !SEA_ONLY_PAPERS.includes(key) &&
+          (key === 'consignment_security_declaration' ? air.security.status === 'secured' : EXPORT_PAPER_GROUP[key] !== 'asked' || (key === 'dangerous_goods_declaration' && hazardous) || (key === 'phytosanitary_certificate' && Boolean(air.inspectionAtAirport))),
+      ).map((key) => ({ key, ...(EXPORT_PAPER_GROUP[key] === 'kept' ? { optional: true } : {}) })),
+      createdAt: new Date(now).toISOString(),
+      createdBy: by,
+    };
+    this.exports.set(consignment.exportId, consignment);
+    return consignment;
+  }
+
+  /** The waybill's check, and what the exporter is warned of — for an export by air. */
+  private airViewOf(c: ExportConsignment, now: number): ExportAirView {
+    const a = c.air!;
+    const totals = c.packing?.lines.length ? c.packing.lines.reduce((t, l) => ({ pieces: t.pieces + (l.packages ?? 0), kg: t.kg + (l.grossKg ?? 0) }), { pieces: 0, kg: 0 }) : undefined;
+    const check = checkAirWaybill(
+      { number: a.awb, kind: a.waybillKind, ...(a.houseNumber ? { houseNumber: a.houseNumber } : {}), from: c.originCountry, to: c.destCountry, madeOutOn: a.flights[0]?.date, pieces: a.pieces, weightKg: a.weightKg },
+      totals ? { pieces: totals.pieces, weightKg: Math.round(totals.kg * 10) / 10 } : {},
+      new Date(now).toISOString().slice(0, 10),
+    );
+    const warnings: string[] = [];
+    if (a.bookingStatus === 'queued') warnings.push('The airline has not confirmed this booking yet: the truck may go, but the cargo may not fly on this flight. The risk of being left behind is yours.');
+    if (a.security.status === 'secured') warnings.push(`Secured cargo: a lockable body is asked for, the load is sealed where it is loaded and its seal checked at the terminal, by a driver whose ID we checked. Its security status is ${a.security.agentName}’s to give, never SeeBuyGet’s.`);
+    else warnings.push('Not secured: the terminal screens it when it arrives, which takes time there.');
+    if (a.temp) warnings.push(`Kept between ${a.temp.minC} and ${a.temp.maxC} °C: a reefer or insulated body, its set-point inside the range, and the temperature recorded on the way.`);
+    if (a.inspectionAtAirport) warnings.push(`The plant-health inspection is at the airport: about ${AIR_INSPECTION_H} hours there, before the latest acceptance time.`);
+    return {
+      check: {
+        number: check.number,
+        ...(check.problem ? { problem: check.problem } : {}),
+        ...(check.airline ? { airline: check.airline.name, airlineSource: check.airline.source } : {}),
+        regime: check.regime,
+        ...(check.rules ? { rules: check.rules } : {}),
+        sources: check.sources,
+        missing: check.missing,
+        ask: check.ask,
+        mismatches: check.mismatches,
+        electronicPossible: check.electronicPossible,
+        limits: check.limits,
+        claims: check.claims,
+        caveats: check.caveats,
+      },
+      warnings,
+    };
+  }
+
+  /** Sea-only steps, refused by name for an export by air: it has no box, no weighed box, no bill of lading, no train. */
+  private seaOnly(c: ExportConsignment, what: string): void {
+    if (c.mode === 'air') throw new GlosError('INVALID_STATE', `${c.code} goes by air: it has no ${what}`);
   }
 
   /** The exports this company is a party to: its own as exporter, and the ones it was appointed to clear. */
@@ -236,7 +413,8 @@ export class ExportService {
         loadingPort: c.loadingPort,
         bookingReference: c.booking.reference,
         gateCutoffAt: c.booking.gateCutoffAt,
-        modes: journeyModes(['road', c.byRail ? 'rail' : undefined, 'sea']),
+        modes: c.mode === 'air' ? journeyModes(['road', 'air']) : journeyModes(['road', c.byRail ? 'rail' : undefined, 'sea']),
+        ...(c.mode === 'air' ? { mode: 'air' as const } : {}),
         ...(c.containerNo ? { containerNo: c.containerNo } : {}),
         timing: this.timingOf(c, now),
         missing: this.missingOf(c).length,
@@ -285,6 +463,7 @@ export class ExportService {
       invoice: this.invoiceViewOf(c, you),
       ...(c.rail ? { rail: this.railViewOf(c) } : {}),
       ...(c.fbl ? { fbl: this.fblViewOf(c) } : {}),
+      ...(c.air ? { air: this.airViewOf(c, now) } : {}),
     };
   }
 
@@ -373,14 +552,19 @@ export class ExportService {
   timingOf(c: ExportConsignment, now = Date.now()): ExportTiming {
     const h = this.handoverOf(c);
     const roadKm = Math.round(this.router.roadKm(c.loadingPlace.location, h.place.location) * 10) / 10;
-    const plannedHours = Math.round((roadKm / VEHICLE_SPEED_KMH.truck + EXPORT_GATE_BUFFER_H) * 10) / 10;
+    // By air: a shorter buffer before the latest acceptance time, and the plant inspection's hours where it is at the airport.
+    const byAir = c.mode === 'air';
+    const driveHours = Math.round((roadKm / VEHICLE_SPEED_KMH.truck) * 10) / 10;
+    const bufferHours = byAir ? AIR_LAT_BUFFER_H : EXPORT_GATE_BUFFER_H;
+    const inspectionHours = byAir && c.air?.inspectionAtAirport ? AIR_INSPECTION_H : 0;
+    const plannedHours = Math.round((roadKm / VEHICLE_SPEED_KMH.truck + bufferHours + inspectionHours) * 10) / 10;
     const cutoff = Date.parse(h.cutoffAt);
     const leaveByAt = new Date(cutoff - plannedHours * H).toISOString();
     const laden = c.ladenFreightId ? this.legOf(c.ladenFreightId) : undefined;
     const collectedAt = laden?.pickedUpAt;
     const gatedInAt = laden?.status === 'delivered' ? laden.deliveredAt : undefined;
     const state = gatedInAt ? 'gated_in' : now > cutoff ? 'missed' : !collectedAt && now > Date.parse(leaveByAt) ? 'at_risk' : 'on_time';
-    return { handover: { place: h.place.label, cutoffAt: h.cutoffAt, byRail: h.byRail }, state, leaveByAt, roadKm, plannedHours, ...(gatedInAt ? { gatedInAt } : {}), ...(collectedAt ? { collectedAt } : {}) };
+    return { handover: { place: h.place.label, cutoffAt: h.cutoffAt, byRail: h.byRail, ...(byAir ? { byAir: true } : {}) }, state, leaveByAt, roadKm, plannedHours, ...(gatedInAt ? { gatedInAt } : {}), ...(collectedAt ? { collectedAt } : {}), ...(byAir ? { air: { driveHours, bufferHours, inspectionHours } } : {}) };
   }
 
   /**
@@ -398,6 +582,7 @@ export class ExportService {
    */
   setByRail(exportId: string, actorEntityId: string, input: ExportByRailDto, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'train to the port');
     this.refuseOnceSent(c);
     const site = this.sites.require(c.exporterEntityId, input.terminalSiteId);
     if (site.kind !== 'port' && site.kind !== 'clearance') throw new GlosError('VALIDATION_FAILED', 'Choose the rail terminal from your port places or places of clearance', { field: 'terminalSiteId' });
@@ -446,6 +631,7 @@ export class ExportService {
   /** The box's number, once the depot released it or it was stuffed: ISO 6346, check digit checked — the arithmetic only. */
   setContainer(exportId: string, actorEntityId: string, containerNo: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'box');
     if (c.ladenFreightId) throw new GlosError('INVALID_STATE', `The box is on its way to the port as load ${c.ladenFreightCode}: its number is on that load and its papers`);
     c.containerNo = ContainerBoxService.validate(containerNo);
     this.exports.set(c.exportId, c);
@@ -458,6 +644,7 @@ export class ExportService {
    */
   mintEmptyLeg(exportId: string, actorEntityId: string, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'empty box to fetch');
     if (!c.emptyDepot) throw new GlosError('INVALID_STATE', `${c.code} names no depot to fetch the empty from: the line or your forwarder brings it`);
     if (c.emptyFreightId) throw new GlosError('CONFLICT', `${c.code} already has its empty run (${c.emptyFreightCode})`);
     if (c.emptyOut) throw new GlosError('INVALID_STATE', `You recorded the empty leaving the depot on ${utc(c.emptyOut.at)}: it is already out`);
@@ -503,6 +690,7 @@ export class ExportService {
   mintLadenLeg(exportId: string, actorEntityId: string, input: { weightKg?: number; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string } }, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
     if (c.ladenFreightId) throw new GlosError('CONFLICT', `${c.code} already has its load to the port (${c.ladenFreightCode}) — a second would send two trucks for one box`);
+    if (c.mode === 'air') return this.mintAirLeg(c, actorEntityId, input, by, now);
     if (!c.containerNo) throw new GlosError('INVALID_STATE', `Say the box’s number first: the terminal gates it in by its number`, { field: 'containerNo' });
     const weightKg = c.vgm?.kg ?? Number(input.weightKg);
     if (!(weightKg > 0)) throw new GlosError('FIELD_REQUIRED', 'Say what the packed box weighs — or declare its verified gross mass first', { field: 'weightKg' });
@@ -551,6 +739,54 @@ export class ExportService {
     return this.detail(c.exportId, actorEntityId, {}, now);
   }
 
+  /**
+   * THE ROAD TO THE CARGO TERMINAL, BY AIR (2026-10-29): posted for the first truck that fits, timed to the airline's latest
+   * acceptance time. Chilled goods ride a reefer or an insulated body, kept in the shipper's own range; secured cargo a
+   * lockable body, sealed at loading. An unconfirmed booking is said on the note: it may not fly on this flight.
+   */
+  private mintAirLeg(c: ExportConsignment, actorEntityId: string, input: { dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string } }, by: string, now: number): ExportDetail {
+    const a = c.air!;
+    const dangerousGoods = input.dangerousGoods ?? c.dangerousGoods;
+    const dangerousGap = dangerousGoodsGap(c.natureCode, dangerousGoods);
+    if (dangerousGap) throw new GlosError('FIELD_REQUIRED', dangerousGap, { field: 'dangerousGoods' });
+    if (now > Date.parse(a.latAt)) throw new GlosError('INVALID_STATE', `The latest acceptance time at ${c.terminal.label} passed at ${utc(a.latAt)}: ask ${c.booking.partyName} for the next flight, and record its new time first`);
+    const exporter = this.entities.get(c.exporterEntityId);
+    const secured = a.security.status === 'secured';
+    const flights = a.flights.map((f) => `${f.flight} on ${f.date}`).join(', ');
+    const notes = [
+      `Export ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}, ${flights}. Hand it in at ${a.handler ?? c.terminal.label} against this waybill, before the latest acceptance time.`,
+      a.bookingStatus === 'queued' ? 'The airline has not confirmed the booking: it may not fly on this flight.' : '',
+      secured ? `Secured cargo (${a.security.agentName}): keep it locked and sealed, with no stops on the way; the seal is checked at the terminal.` : '',
+      a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
+    ].filter(Boolean);
+    const f = this.dispatch.registerFreight(
+      {
+        description: `${c.code} — ${c.goodsDescription} (${a.pieces} pieces, for export by air)`.slice(0, 200),
+        pickupLocation: c.loadingPlace.location,
+        pickupLabel: c.loadingPlace.label,
+        destLabel: c.terminal.label,
+        destLocation: c.terminal.location,
+        weightKg: a.weightKg,
+        packages: a.pieces,
+        packaging: 'piece',
+        // Chilled goods are cold-chain goods on the road, kept in the shipper's own range.
+        ...(a.temp ? { natureCode: 'FOP' as CargoNature, tempRange: { minC: a.temp.minC, maxC: a.temp.maxC } } : c.natureCode ? { natureCode: c.natureCode as CargoNature } : {}),
+        ...(secured ? { excludedBodies: OPEN_BODIES, securedBy: a.security.agentName } : {}),
+        ...(dangerousGoods ? { dangerousGoods } : {}),
+        pickupCountry: c.originCountry,
+        destCountry: c.originCountry,
+        deliveryWindow: `At ${c.terminal.label} before ${utc(a.latAt)} — the airline’s latest acceptance time`.slice(0, 120),
+        instructions: notes.join(' ').slice(0, 500),
+        postedByDid: exporter.did,
+        externalOrderId: c.code,
+      },
+      now,
+    );
+    Object.assign(c, { ladenFreightId: f.freightId, ladenFreightCode: f.code, ...(dangerousGoods ? { dangerousGoods: { unNumber: f.dangerousGoods?.unNumber ?? dangerousGoods.unNumber, properShippingName: dangerousGoods.properShippingName.trim(), hazardClass: dangerousGoods.hazardClass.trim(), ...(dangerousGoods.packingGroup ? { packingGroup: dangerousGoods.packingGroup } : {}) } } : {}) });
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
   /* -------------------------------------------------------- EX3 the VGM -- */
 
   /**
@@ -560,6 +796,7 @@ export class ExportService {
    */
   declareVgm(exportId: string, actorEntityId: string, input: { method: 1 | 2; kg: number; weighbridge?: string; ticketRef?: string; weighedAt?: string; signatory: string }, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'box to weigh');
     const method = Number(input.method);
     if (method !== 1 && method !== 2) throw new GlosError('VALIDATION_FAILED', 'Say how it was weighed: 1, the packed box whole; 2, its contents and the box’s tare', { field: 'method' });
     const kg = Math.round(Number(input.kg));
@@ -779,7 +1016,7 @@ export class ExportService {
   signSli(exportId: string, actorEntityId: string, signatory: string, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
     const draft = this.effectiveSli(c);
-    const gaps = sliGaps(draft, { hazardous: this.hazardousOf(c), containerNo: c.containerNo });
+    const gaps = sliGaps(draft, { hazardous: this.hazardousOf(c), containerNo: c.containerNo, air: c.mode === 'air' });
     if (gaps.length) throw new GlosError('FIELD_REQUIRED', `The letter of instruction is not complete: ${gaps.join('; ')}`);
     const who = signatory?.trim();
     if (!who || who.length < 2) throw new GlosError('FIELD_REQUIRED', 'Say who signs it, for the exporter', { field: 'signatory' });
@@ -855,6 +1092,7 @@ export class ExportService {
       ...(c.vgm ? { vgm: { kg: c.vgm.kg, method: c.vgm.method, signatory: c.vgm.signatory } } : {}),
       papers: c.papers.filter((p) => p.key !== 'shipping_instructions' && (p.documentId || p.reference)).map((p) => paperLabel(p)),
       ...(c.packing?.lines.length ? { goods: packingBasis(c.packing.lines) } : {}),
+      ...(c.air ? { air: { awb: c.air.awb, airline: c.air.airline, flights: c.air.flights.map((f) => `${f.flight} ${f.date} ${f.from}→${f.to}`).join(', '), fromAirport: c.air.fromAirport, toAirport: c.air.toAirport, pieces: c.air.pieces, weightKg: c.air.weightKg, security: c.air.security.status === 'secured' ? `Secured by ${c.air.security.agentName}` : 'Not secured — screened at the terminal', ...(c.air.temp ? { temp: `${c.air.temp.minC} to ${c.air.temp.maxC} °C` } : {}) } } : {}),
     };
   }
 
@@ -867,7 +1105,7 @@ export class ExportService {
     return {
       ...(you === 'exporter' && c.sli?.draft ? { draft: c.sli.draft } : {}),
       versions,
-      gaps: sliGaps(this.effectiveSli(c), { hazardous, containerNo: c.containerNo }),
+      gaps: sliGaps(this.effectiveSli(c), { hazardous, containerNo: c.containerNo, air: c.mode === 'air' }),
       fromPacking,
       ...(fromPacking ? { goods: summarisePacking(c.packing!.lines) } : {}),
       stale: Boolean(last && sliStale(last, this.sliFactsOf(c))),
@@ -1229,6 +1467,7 @@ export class ExportService {
    */
   setOwnBox(exportId: string, actorEntityId: string, own: boolean, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'box');
     if (own) c.ownBox = { by, at: new Date(now).toISOString() };
     else delete c.ownBox;
     this.exports.set(c.exportId, c);
@@ -1243,6 +1482,7 @@ export class ExportService {
    */
   claimFreeDays(exportId: string, actorEntityId: string, kind: FreeDayKind, days: number, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'box with free days');
     if (!(FREE_DAY_KINDS as readonly string[]).includes(kind)) throw new GlosError('VALIDATION_FAILED', 'Say which free days: outside the terminal (detention) or inside it (demurrage)', { field: 'kind' });
     if (!Number.isInteger(days) || days < 0 || days > 90) throw new GlosError('VALIDATION_FAILED', 'Free days are a whole number of days, 0 to 90', { field: 'days' });
     if (c.loaded) throw new GlosError('INVALID_STATE', `${c.code} was loaded on board on ${utc(c.loaded.at)}: the box’s clock has stopped`);
@@ -1258,6 +1498,7 @@ export class ExportService {
    */
   recordEmptyOut(exportId: string, actorEntityId: string, at: string, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'empty box');
     if (c.emptyFreightId && this.legOf(c.emptyFreightId).status !== 'cancelled') {
       throw new GlosError('INVALID_STATE', `The empty is fetched on load ${c.emptyFreightCode}: its pickup says when it left the depot`);
     }
@@ -1272,6 +1513,7 @@ export class ExportService {
   /** LOADED ON BOARD, from the forwarder's or the line's word: what stops the box's clock. Only once it is inside the gate. */
   recordLoaded(exportId: string, actorEntityId: string, at: string, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'vessel to load');
     const gatedInAt = this.timingOf(c, now).gatedInAt;
     if (!gatedInAt) throw new GlosError('INVALID_STATE', `${c.code} is not inside the terminal yet: a box is loaded on board only after it gated in`);
     const when = pastMoment(at, 'When it was loaded on board', now);
@@ -1306,6 +1548,7 @@ export class ExportService {
   /** The bill of lading's number, once the forwarder issued it — recorded back so the receiving end can match it. */
   recordBillOfLading(exportId: string, actorEntityId: string, number: string, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
+    this.seaOnly(c, 'bill of lading — its waybill is the airline’s');
     const n = number?.trim();
     if (!n || n.length < 3) throw new GlosError('FIELD_REQUIRED', 'Give the bill of lading number your forwarder or the line issued', { field: 'number' });
     c.billOfLading = { number: n.slice(0, 60), recordedAt: new Date(now).toISOString(), recordedBy: by };
@@ -1318,10 +1561,16 @@ export class ExportService {
   /** What is still missing before the forwarder can take it at the gate, in words. */
   missingOf(c: ExportConsignment): string[] {
     const out: string[] = [];
-    if (!c.containerNo) out.push('The box’s number');
-    if (!c.ladenFreightId) out.push('A load to the terminal');
-    else if (!this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the terminal');
-    if (!c.vgm) out.push('The verified gross mass');
+    if (c.mode === 'air') {
+      if (!c.ladenFreightId) out.push('A load to the cargo terminal');
+      else if (c.air?.security.status === 'secured' && !this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the cargo terminal — secured cargo travels sealed');
+      for (const m of this.airViewOf(c, Date.now()).check.mismatches) out.push(`The air waybill and the packing list disagree — ${m}`);
+    } else {
+      if (!c.containerNo) out.push('The box’s number');
+      if (!c.ladenFreightId) out.push('A load to the terminal');
+      else if (!this.seals.views(c.ladenFreightId).some((s) => s.state === 'on')) out.push('A seal written on the load to the terminal');
+      if (!c.vgm) out.push('The verified gross mass');
+    }
     const lastInvoice = c.invoice?.versions[c.invoice.versions.length - 1];
     if (lastInvoice && lastInvoice.basis !== invoiceBasis(c.packing?.lines ?? [])) out.push(`The commercial invoice: the packing list changed since version ${lastInvoice.version} was signed — sign it again`);
     const pv = this.packingViewOf(c);
@@ -1345,6 +1594,7 @@ export class ExportService {
     const d = this.detail(exportId, readerEntityId, opts, now);
     const c = d.consignment;
     const exporter = this.entities.get(c.exporterEntityId);
+    if (c.mode === 'air') return this.airHandoverHtml(d, exporter.name, now);
     const spec = containerType(c.containerType);
     const missing = (s?: string) => (s ? esc(s) : '<span class="missing">Missing</span>');
     const row = (k: string, v: string) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`;
@@ -1378,6 +1628,32 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
 </body></html>`;
   }
 
+  /** The forwarder's file for an export by air: the waybill and its check, the papers, the road to the cargo terminal. */
+  private airHandoverHtml(d: ExportDetail, exporterName: string, now: number): string {
+    const c = d.consignment;
+    const a = c.air!;
+    const check = d.air!.check;
+    const missing = (s?: string) => (s ? esc(s) : '<span class="missing">Missing</span>');
+    const row = (k: string, v: string) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`;
+    const seal = d.seals.filter((s) => s.state === 'on').map((s) => s.number ?? '—').join(', ');
+    const paperRows = (only: (g: ExportPaperGroup) => boolean) => d.papers
+      .filter((p) => only(p.group))
+      .map((p) => row(p.label, p.documentTitle || p.reference ? esc([p.documentTitle, p.reference].filter(Boolean).join(' — ')) : p.optional ? 'None kept here' : missing()))
+      .join('');
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(c.code)} — handover at ${esc(c.terminal.label)}</title>
+<style>body{font:14px/1.45 system-ui,sans-serif;color:#111;margin:24px auto;max-width:760px;padding:0 16px}h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:22px 0 6px;border-bottom:1px solid #ccc;padding-bottom:3px}table{border-collapse:collapse;width:100%}th{text-align:left;font-weight:600;width:38%;padding:4px 8px 4px 0;vertical-align:top}td{padding:4px 0}.missing{color:#b00020;font-weight:600}.note{color:#555;font-size:12px;margin-top:18px}@media print{body{margin:0}}</style></head><body>
+<h1>Handover at ${esc(c.terminal.label)} — ${esc(c.code)}</h1>
+<div>${esc(exporterName)} · ${esc(c.goodsDescription)} · ${esc(c.originCountry)} → ${esc(c.destCountry)}</div>
+${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; '))}.</p>` : ''}
+<h2>The air booking</h2><table>${row('Air waybill', esc(`${a.awb} — ${a.airline}${check.airline ? '' : ' (airline as given: its prefix is not one we hold)'}`))}${a.houseNumber ? row('House waybill', esc(a.houseNumber)) : ''}${row(c.booking.bookedWith === 'airline' ? 'Airline' : 'Forwarder', esc(c.booking.partyName))}${row('Flights', esc(a.flights.map((f) => `${f.flight} ${f.date} ${f.from}→${f.to}${f.departsLocal ? ` ${f.departsLocal}` : ''}`).join('; ')))}${row('Booking', a.bookingStatus === 'confirmed' ? 'Confirmed by the airline' : '<span class="missing">Not confirmed by the airline: it may not fly on this flight</span>')}${row('Latest acceptance time', esc(utc(a.latAt)))}${row('Pieces and weight', esc(`${a.pieces} pieces, ${a.weightKg} kg${a.volumeM3 ? `, ${a.volumeM3} m³` : ''}`))}${a.handler ? row('Received by', esc(a.handler)) : ''}${row('Security', esc(a.security.status === 'secured' ? `Secured by ${a.security.agentName}${a.security.agentNumber ? ` (${a.security.agentNumber})` : ''} — its status, not SeeBuyGet’s` : 'Not secured: screened at the terminal'))}${a.temp ? row('Temperature', esc(`${a.temp.minC} to ${a.temp.maxC} °C${a.temp.preCooled ? ', pre-cooled' : ''}`)) : ''}</table>
+<h2>The waybill, read against the law of its route</h2><table>${row('Convention', esc(check.rules ?? (check.regime === 'none' ? 'None joins these two countries' : check.regime === 'domestic' ? 'Domestic carriage' : 'Not read for this route')))}${row('Limit', esc(check.limits.join(' ')))}${row('Complaints', esc(check.claims.join(' ')))}${check.mismatches.length ? row('Against our papers', `<span class="missing">${esc(check.mismatches.join(' '))}</span>`) : ''}</table>
+<h2>Papers</h2><table>${paperRows((g) => g !== 'kept')}</table>
+<h2>Kept with the export</h2><table>${paperRows((g) => g === 'kept')}</table>
+<h2>The road to the cargo terminal</h2><table>${row('Cargo terminal', esc(c.terminal.label))}${row('Road consignment note', d.ladenLeg ? esc(`CMR-${d.ladenLeg.code}`) : missing())}${a.security.status === 'secured' ? row('Seal', missing(seal || undefined)) : ''}${row('Leave by', esc(utc(d.timing.leaveByAt)))}${row('Collected', d.timing.collectedAt ? esc(utc(d.timing.collectedAt)) : 'Not yet')}${row('Delivered at the terminal', d.timing.gatedInAt ? esc(utc(d.timing.gatedInAt)) : 'Not yet')}</table>
+<p class="note">Made on SeeBuyGet on ${esc(utc(new Date(now).toISOString()))}. SeeBuyGet carried the road to the cargo terminal; the air carriage, its booking and its waybill are the airline’s and your forwarder’s. Delivered at the terminal is not accepted by the airline: acceptance is the airline’s word. SeeBuyGet gives no security status.</p>
+</body></html>`;
+  }
+
   /* ----------------------------------------------------------- the cut-off watch -- */
 
   /**
@@ -1406,13 +1682,14 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
       const cutoff = Date.parse(h.cutoffAt);
       if (!t.gatedInAt && !warned.pickup && !t.collectedAt && now < cutoff && now >= Date.parse(t.leaveByAt) - PICKUP_WARN_H * H) {
         warned.pickup = new Date(now).toISOString();
-        const to = h.byRail ? `To be at ${h.place.label} before the train’s cut-off at ${utc(h.cutoffAt)}` : `To be inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)}`;
-        this.tell(c, `${c.code}: the box must leave by ${utc(t.leaveByAt)}`, `${to}, a truck must leave ${c.loadingPlace.label} by ${utc(t.leaveByAt)}. ${c.ladenFreightId ? `No driver has collected load ${c.ladenFreightCode} yet.` : 'Post the load to the terminal now.'}`);
+        const to = c.mode === 'air' ? `To be at ${c.terminal.label} before the airline’s latest acceptance time at ${utc(h.cutoffAt)}` : h.byRail ? `To be at ${h.place.label} before the train’s cut-off at ${utc(h.cutoffAt)}` : `To be inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)}`;
+        this.tell(c, `${c.code}: the ${c.mode === 'air' ? 'cargo' : 'box'} must leave by ${utc(t.leaveByAt)}`, `${to}, a truck must leave ${c.loadingPlace.label} by ${utc(t.leaveByAt)}. ${c.ladenFreightId ? `No driver has collected load ${c.ladenFreightCode} yet.` : `Post the load to the ${c.mode === 'air' ? 'cargo terminal' : 'terminal'} now.`}`);
         told.push(`${c.code}:pickup`);
       }
       if (!t.gatedInAt && !warned.gate && now >= cutoff) {
         warned.gate = new Date(now).toISOString();
-        if (h.byRail) this.tell(c, `${c.code}: the train’s cut-off passed without the box`, `The train’s cut-off at ${h.place.label} was ${utc(h.cutoffAt)} and the box is not there. Ask the railway or ${c.booking.partyName} for the next train — it must still reach the port before the gate closes at ${utc(c.booking.gateCutoffAt)}.`);
+        if (c.mode === 'air') this.tell(c, `${c.code}: the latest acceptance time passed without the cargo`, `The latest acceptance time at ${c.terminal.label} was ${utc(h.cutoffAt)} and the cargo has not been delivered there. Tell ${c.booking.partyName} at once: it may go on a later flight, under a new time.`);
+        else if (h.byRail) this.tell(c, `${c.code}: the train’s cut-off passed without the box`, `The train’s cut-off at ${h.place.label} was ${utc(h.cutoffAt)} and the box is not there. Ask the railway or ${c.booking.partyName} for the next train — it must still reach the port before the gate closes at ${utc(c.booking.gateCutoffAt)}.`);
         else this.tell(c, `${c.code}: the gate closed without the box`, `The gate-in cut-off at ${c.terminal.label} was ${utc(c.booking.gateCutoffAt)} and the box is not inside. Tell ${c.booking.partyName} at once: it may go on the next vessel, under a new cut-off.`);
         told.push(`${c.code}:gate`);
       }

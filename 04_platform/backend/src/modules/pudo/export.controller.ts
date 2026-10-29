@@ -33,6 +33,7 @@ import {
   ExportRow,
   ExportVgmDto,
   RegisterExportDto,
+  RegisterAirExportDto,
   type ExportPaperKey,
 } from './export.types';
 
@@ -55,6 +56,14 @@ export class ExportController {
   register(@Body() dto: RegisterExportDto, @Actor() actor: IntrospectionResult) {
     const exporterEntityId = this.ownCompany(actor, dto.exporterEntityId);
     return this.exports.register({ ...dto, exporterEntityId }, auditActor(actor, dto.by));
+  }
+
+  /** An export by air (2026-10-29): the booking with the airline, and the road to its cargo terminal. The exporter's to write. */
+  @Roles('business', 'entity_admin')
+  @Post('air')
+  registerAir(@Body() dto: RegisterAirExportDto, @Actor() actor: IntrospectionResult) {
+    const exporterEntityId = this.ownCompany(actor, dto.exporterEntityId);
+    return this.exports.registerAir({ ...dto, exporterEntityId }, auditActor(actor, dto.by));
   }
 
   @Roles('business', 'entity_admin', 'operator')

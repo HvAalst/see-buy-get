@@ -139,7 +139,8 @@ export class SealToFind {
 
 /** Round 38 — a seal required on this load by its pickup country's company: on a load that crosses a border, or a container leg. */
 export class SealRequired {
-  @ApiProperty({ enum: ['crossBorder', 'container'] }) why: 'crossBorder' | 'container';
+  /** `secured`: secured air cargo (2026-10-29) — `company` is then the regulated agent or known consignor that secured it. */
+  @ApiProperty({ enum: ['crossBorder', 'container', 'secured'] }) why: 'crossBorder' | 'container' | 'secured';
   company: string;
 }
 
