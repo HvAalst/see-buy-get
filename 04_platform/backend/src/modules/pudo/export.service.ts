@@ -27,6 +27,7 @@ import { cleanDraft, sliBasis, sliGaps, sliHtml, sliStale, type SliFacts } from 
 import type { ExportSliView, SliDraft, SliDraftDto } from './export-sli.types';
 import { SiteService } from './site.service';
 import { holdRailNote, railNoteView } from './rail-note';
+import type { ExportByRailDto } from './rail-leg.types';
 import type { RailNoteDto } from './rail-note.types';
 
 /** The words for each paper, where a sentence names it (the screen translates its own). */
@@ -319,15 +320,74 @@ export class ExportService {
    * buffer), and whether it was collected, delivered, or is late.
    */
   timingOf(c: ExportConsignment, now = Date.now()): ExportTiming {
-    const roadKm = Math.round(this.router.roadKm(c.loadingPlace.location, c.terminal.location) * 10) / 10;
+    const h = this.handoverOf(c);
+    const roadKm = Math.round(this.router.roadKm(c.loadingPlace.location, h.place.location) * 10) / 10;
     const plannedHours = Math.round((roadKm / VEHICLE_SPEED_KMH.truck + EXPORT_GATE_BUFFER_H) * 10) / 10;
-    const cutoff = Date.parse(c.booking.gateCutoffAt);
+    const cutoff = Date.parse(h.cutoffAt);
     const leaveByAt = new Date(cutoff - plannedHours * H).toISOString();
     const laden = c.ladenFreightId ? this.legOf(c.ladenFreightId) : undefined;
     const collectedAt = laden?.pickedUpAt;
     const gatedInAt = laden?.status === 'delivered' ? laden.deliveredAt : undefined;
     const state = gatedInAt ? 'gated_in' : now > cutoff ? 'missed' : !collectedAt && now > Date.parse(leaveByAt) ? 'at_risk' : 'on_time';
-    return { state, leaveByAt, roadKm, plannedHours, ...(gatedInAt ? { gatedInAt } : {}), ...(collectedAt ? { collectedAt } : {}) };
+    return { handover: { place: h.place.label, cutoffAt: h.cutoffAt, byRail: h.byRail }, state, leaveByAt, roadKm, plannedHours, ...(gatedInAt ? { gatedInAt } : {}), ...(collectedAt ? { collectedAt } : {}) };
+  }
+
+  /**
+   * WHERE OUR TRUCK HANDS THE BOX OVER, and by when: inside the port gate before the vessel's cut-off — or, by rail, at
+   * the rail terminal before the train's (2026-10-29). Everything that times the road reads it from here.
+   */
+  private handoverOf(c: ExportConsignment): { place: ExportPlace; cutoffAt: string; byRail: boolean } {
+    return c.byRail ? { place: c.byRail.terminal, cutoffAt: c.byRail.cutoffAt, byRail: true } : { place: c.terminal, cutoffAt: c.booking.gateCutoffAt, byRail: false };
+  }
+
+  /**
+   * BY RAIL TO THE PORT (the user, 2026-10-29: "build the clock with the blocker as you said"): the rail terminal our truck
+   * takes the box to, and the train's cut-off there — which must fall before the port gate closes, or the train arrives too
+   * late for the vessel. Set before the load to the terminal is posted: once a truck is sent, its destination stands.
+   */
+  setByRail(exportId: string, actorEntityId: string, input: ExportByRailDto, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    this.refuseOnceSent(c);
+    const site = this.sites.require(c.exporterEntityId, input.terminalSiteId);
+    if (site.kind !== 'port' && site.kind !== 'clearance') throw new GlosError('VALIDATION_FAILED', 'Choose the rail terminal from your port places or places of clearance', { field: 'terminalSiteId' });
+    const cutoffAt = moment(input.cutoffAt, 'The train’s cut-off');
+    if (!cutoffAt) throw new GlosError('FIELD_REQUIRED', 'Give the train’s cut-off at the rail terminal', { field: 'cutoffAt' });
+    if (Date.parse(cutoffAt) <= now) throw new GlosError('VALIDATION_FAILED', `That cut-off has passed (${utc(cutoffAt)}): ask the railway or ${c.booking.partyName} for the next train`, { field: 'cutoffAt' });
+    if (Date.parse(cutoffAt) >= Date.parse(c.booking.gateCutoffAt)) {
+      throw new GlosError('VALIDATION_FAILED', `The train’s cut-off (${utc(cutoffAt)}) is not before the port gate closes (${utc(c.booking.gateCutoffAt)}): the box would reach the port too late for the vessel — check both with ${c.booking.partyName}`, { field: 'cutoffAt' });
+    }
+    const reference = input.reference?.trim();
+    c.byRail = { terminal: { label: site.name, location: site.location }, cutoffAt, ...(reference ? { reference: reference.slice(0, 60) } : {}), recordedAt: new Date(now).toISOString(), recordedBy: by };
+    // A new cut-off is warned afresh.
+    if (c.warned) c.warned = { ...c.warned, pickup: undefined, gate: undefined };
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** Back to the road: the truck takes the box to the port gate after all. Only before the load is posted. */
+  clearByRail(exportId: string, actorEntityId: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    this.refuseOnceSent(c);
+    delete c.byRail;
+    if (c.warned) c.warned = { ...c.warned, pickup: undefined, gate: undefined };
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** When the train brought the box inside the port gate, as the exporter was told: the line's clock moves inside from then. */
+  recordAtPort(exportId: string, actorEntityId: string, at: string, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    if (!c.byRail) throw new GlosError('INVALID_STATE', `${c.code} goes to the port by road: its truck’s delivery is the gate-in`);
+    const when = moment(at, 'When it reached the port');
+    if (!when || Date.parse(when) > now + 5 * 60_000) throw new GlosError('VALIDATION_FAILED', 'Say when the train brought it inside the port gate — a moment that has come', { field: 'at' });
+    c.byRail = { ...c.byRail, atPort: { at: when, by, recordedAt: new Date(now).toISOString() } };
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  private refuseOnceSent(c: ExportConsignment): void {
+    const laden = c.ladenFreightId ? this.legOf(c.ladenFreightId) : undefined;
+    if (laden && laden.status !== 'cancelled') throw new GlosError('CONFLICT', `The load to ${this.handoverOf(c).place.label} is already posted (${c.ladenFreightCode}): its truck’s destination stands`);
   }
 
   /* -------------------------------------------------- EX2 empty, stuffed, laden -- */
@@ -395,7 +455,10 @@ export class ExportService {
     if (!c.containerNo) throw new GlosError('INVALID_STATE', `Say the box’s number first: the terminal gates it in by its number`, { field: 'containerNo' });
     const weightKg = c.vgm?.kg ?? Number(input.weightKg);
     if (!(weightKg > 0)) throw new GlosError('FIELD_REQUIRED', 'Say what the packed box weighs — or declare its verified gross mass first', { field: 'weightKg' });
-    if (now > Date.parse(c.booking.gateCutoffAt)) throw new GlosError('INVALID_STATE', `The gate closed for this booking at ${utc(c.booking.gateCutoffAt)}: ask your forwarder for the next vessel and a new cut-off first`);
+    const h = this.handoverOf(c);
+    if (now > Date.parse(h.cutoffAt)) {
+      throw new GlosError('INVALID_STATE', h.byRail ? `The train’s cut-off at ${h.place.label} passed at ${utc(h.cutoffAt)}: ask the railway or ${c.booking.partyName} for the next train, and record its cut-off first` : `The gate closed for this booking at ${utc(c.booking.gateCutoffAt)}: ask your forwarder for the next vessel and a new cut-off first`);
+    }
     const exporter = this.entities.get(c.exporterEntityId);
     const spec = containerType(c.containerType)!;
     const vessel = c.booking.vessel ? `, vessel ${c.booking.vessel}${c.booking.voyage ? ` voyage ${c.booking.voyage}` : ''}` : '';
@@ -404,8 +467,8 @@ export class ExportService {
         description: `${c.code} — ${c.goodsDescription} (${spec.label}, for export)`.slice(0, 200),
         pickupLocation: c.loadingPlace.location,
         pickupLabel: c.loadingPlace.label,
-        destLabel: c.terminal.label,
-        destLocation: c.terminal.location,
+        destLabel: h.place.label,
+        destLocation: h.place.location,
         weightKg,
         ...(c.natureCode ? { natureCode: c.natureCode as CargoNature } : {}),
         bodyHint: spec.bodies[0],
@@ -417,8 +480,11 @@ export class ExportService {
         containerNo: c.containerNo,
         pickupCountry: c.originCountry,
         destCountry: c.originCountry,
-        deliveryWindow: `Inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)} — the vessel cut-off`.slice(0, 120),
-        instructions: `Export ${c.code}: container ${c.containerNo}, booking ${c.booking.reference} with ${c.booking.partyName}${vessel}. Hand it in at the terminal gate against this booking, before the cut-off.`.slice(0, 500),
+        deliveryWindow: (h.byRail ? `At ${h.place.label} before ${utc(h.cutoffAt)} — the train’s cut-off` : `Inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)} — the vessel cut-off`).slice(0, 120),
+        instructions: (h.byRail
+          ? `Export ${c.code}: container ${c.containerNo}, booking ${c.booking.reference} with ${c.booking.partyName}${vessel}, by rail from ${h.place.label}${c.byRail?.reference ? ` (train ${c.byRail.reference})` : ''} to ${c.terminal.label}. Hand it in at the rail terminal against this booking, before the train’s cut-off.`
+          : `Export ${c.code}: container ${c.containerNo}, booking ${c.booking.reference} with ${c.booking.partyName}${vessel}. Hand it in at the terminal gate against this booking, before the cut-off.`
+        ).slice(0, 500),
         postedByDid: exporter.did,
         externalOrderId: c.code,
       },
@@ -1167,7 +1233,9 @@ export class ExportService {
     const clock = exportBoxClock(
       {
         ...(emptyOutAt ? { emptyOutAt } : {}),
-        ...(timing.gatedInAt ? { gatedInAt: timing.gatedInAt } : {}),
+        // By rail, our truck's delivery is the hand-over to the railway: the box is inside the port gate only once the
+        // train brought it there, as the exporter records — until then the line's clock counts it outside.
+        ...((c.byRail ? c.byRail.atPort?.at : timing.gatedInAt) ? { gatedInAt: (c.byRail ? c.byRail.atPort?.at : timing.gatedInAt)! } : {}),
         ...(c.loaded ? { loaded: { at: c.loaded.at, by: c.loaded.by } } : {}),
         ...(c.ownBox ? { owned: { by: c.ownBox.by } } : {}),
         freeDays: c.freeDays ?? [],
@@ -1248,7 +1316,7 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
 <h2>The box</h2><table>${row('Container number', missing(c.containerNo))}${row('Type', esc(spec ? `${spec.code} — ${spec.label}` : c.containerType ?? ''))}${row('Owner of the box', c.ownBox ? 'The exporter (a shipper-owned container)' : 'The line, on loan for this booking')}${row('Seal', missing(seal || undefined))}${row('Verified gross mass', missing(vgm || undefined))}</table>
 <h2>Papers</h2><table>${agentRow}${papers}</table>
 <h2>Kept with the export</h2><table>${kept}</table>
-<h2>The road to the terminal</h2><table>${row('Terminal', esc(c.terminal.label))}${row('Road consignment note', d.ladenLeg ? esc(`CMR-${d.ladenLeg.code}`) : missing())}${row('Collected', d.timing.collectedAt ? esc(utc(d.timing.collectedAt)) : 'Not yet')}${row('Gated in', d.timing.gatedInAt ? esc(utc(d.timing.gatedInAt)) : 'Not yet')}${row('Bill of lading', c.billOfLading ? esc(c.billOfLading.number) : 'Not issued yet — recorded once your forwarder issues it')}</table>
+<h2>The road to the terminal</h2><table>${row('Terminal', esc(c.terminal.label))}${c.byRail ? row('By rail from', esc(`${c.byRail.terminal.label} — the train’s cut-off ${utc(c.byRail.cutoffAt)}${c.byRail.reference ? `, train ${c.byRail.reference}` : ''}`)) : ''}${row('Road consignment note', d.ladenLeg ? esc(`CMR-${d.ladenLeg.code}`) : missing())}${row('Collected', d.timing.collectedAt ? esc(utc(d.timing.collectedAt)) : 'Not yet')}${row('Gated in', d.timing.gatedInAt ? esc(utc(d.timing.gatedInAt)) : 'Not yet')}${row('Bill of lading', c.billOfLading ? esc(c.billOfLading.number) : 'Not issued yet — recorded once your forwarder issues it')}</table>
 <h2>The box’s clock</h2><table>${row('Empty out of the depot', d.box.emptyOutAt ? esc(utc(d.box.emptyOutAt)) : 'Not recorded')}${row('Free days outside the terminal (detention)', esc(freeDaysWords(c, 'detention')))}${row('Free days inside the terminal (demurrage)', esc(freeDaysWords(c, 'demurrage')))}${c.loaded ? row('Loaded on board', esc(utc(c.loaded.at))) : ''}</table><p>${esc(d.box.basis)}</p>
 <p class="note">Made on SeeBuyGet on ${esc(utc(new Date(now).toISOString()))}. SeeBuyGet carried the road leg; the ocean leg, its booking and the bill of lading are your forwarder’s or the line’s. The verified gross mass is the exporter’s declaration, handed to the forwarder — SeeBuyGet sends nothing to a line.</p>
 </body></html>`;
@@ -1278,15 +1346,18 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
           told.push(`${c.code}:box:${box.kind}:${box.overdue ? 'over' : 'soon'}`);
         }
       }
-      const cutoff = Date.parse(c.booking.gateCutoffAt);
+      const h = this.handoverOf(c);
+      const cutoff = Date.parse(h.cutoffAt);
       if (!t.gatedInAt && !warned.pickup && !t.collectedAt && now < cutoff && now >= Date.parse(t.leaveByAt) - PICKUP_WARN_H * H) {
         warned.pickup = new Date(now).toISOString();
-        this.tell(c, `${c.code}: the box must leave by ${utc(t.leaveByAt)}`, `To be inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)}, a truck must leave ${c.loadingPlace.label} by ${utc(t.leaveByAt)}. ${c.ladenFreightId ? `No driver has collected load ${c.ladenFreightCode} yet.` : 'Post the load to the terminal now.'}`);
+        const to = h.byRail ? `To be at ${h.place.label} before the train’s cut-off at ${utc(h.cutoffAt)}` : `To be inside the gate at ${c.terminal.label} before ${utc(c.booking.gateCutoffAt)}`;
+        this.tell(c, `${c.code}: the box must leave by ${utc(t.leaveByAt)}`, `${to}, a truck must leave ${c.loadingPlace.label} by ${utc(t.leaveByAt)}. ${c.ladenFreightId ? `No driver has collected load ${c.ladenFreightCode} yet.` : 'Post the load to the terminal now.'}`);
         told.push(`${c.code}:pickup`);
       }
       if (!t.gatedInAt && !warned.gate && now >= cutoff) {
         warned.gate = new Date(now).toISOString();
-        this.tell(c, `${c.code}: the gate closed without the box`, `The gate-in cut-off at ${c.terminal.label} was ${utc(c.booking.gateCutoffAt)} and the box is not inside. Tell ${c.booking.partyName} at once: it may go on the next vessel, under a new cut-off.`);
+        if (h.byRail) this.tell(c, `${c.code}: the train’s cut-off passed without the box`, `The train’s cut-off at ${h.place.label} was ${utc(h.cutoffAt)} and the box is not there. Ask the railway or ${c.booking.partyName} for the next train — it must still reach the port before the gate closes at ${utc(c.booking.gateCutoffAt)}.`);
+        else this.tell(c, `${c.code}: the gate closed without the box`, `The gate-in cut-off at ${c.terminal.label} was ${utc(c.booking.gateCutoffAt)} and the box is not inside. Tell ${c.booking.partyName} at once: it may go on the next vessel, under a new cut-off.`);
         told.push(`${c.code}:gate`);
       }
       if (!t.gatedInAt && c.booking.vgmCutoffAt && !c.vgm && !warned.vgm && now >= Date.parse(c.booking.vgmCutoffAt) - VGM_WARN_H * H) {

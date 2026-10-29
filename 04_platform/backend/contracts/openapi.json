@@ -4262,6 +4262,120 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/by-rail": {
+      "post": {
+        "operationId": "Export.byRail",
+        "summary": "",
+        "description": "By rail to the port: the rail terminal and the train's cut-off there — our truck is timed to it (2026-10-29).",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportByRailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/by-rail/clear": {
+      "post": {
+        "operationId": "Export.byRoad",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/by-rail/at-port": {
+      "post": {
+        "operationId": "Export.atPort",
+        "summary": "",
+        "description": "When the train brought the box inside the port gate, as the exporter was told.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportMomentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/exports/{exportId}/free-days": {
       "post": {
         "operationId": "Export.freeDays",
@@ -8305,6 +8419,123 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RailNoteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/by-rail": {
+      "post": {
+        "operationId": "Sbg.importByRail",
+        "summary": "",
+        "description": "INLAND BY RAIL (2026-10-29): the rail terminal the box comes to, from the acting company's own places — the importer's\nor its agent's. Staff write nothing in their name.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportByRailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/by-rail/arrived": {
+      "post": {
+        "operationId": "Sbg.importRailArrived",
+        "summary": "",
+        "description": "The railway's arrival notice: the box is at the rail terminal, and the road leg from it opens.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RailArrivalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/by-rail/collect-anyway": {
+      "post": {
+        "operationId": "Sbg.importRailCollectAnyway",
+        "summary": "",
+        "description": "The importer's word to send the truck before the arrival notice — with why.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RailCollectAnywayDto"
               }
             }
           }
@@ -36796,6 +37027,90 @@
           "recordedByEntityId"
         ]
       },
+      "RailTerminal": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "location": {
+            "type": "object",
+            "properties": {
+              "lat": {
+                "required": true,
+                "type": "number"
+              },
+              "lng": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          }
+        },
+        "required": [
+          "label",
+          "location"
+        ]
+      },
+      "RailMoment": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "description": "The railway's own reference for it, as given: its arrival notice number."
+          }
+        },
+        "required": [
+          "at",
+          "by",
+          "recordedAt"
+        ]
+      },
+      "ExportByRail": {
+        "type": "object",
+        "properties": {
+          "terminal": {
+            "$ref": "#/components/schemas/RailTerminal"
+          },
+          "cutoffAt": {
+            "type": "string",
+            "description": "By when the box must be at the rail terminal for its train, as the railway or the forwarder said."
+          },
+          "reference": {
+            "type": "string",
+            "description": "The train or the rail booking's reference."
+          },
+          "atPort": {
+            "description": "When the train brought the box inside the port gate, as the exporter was told: the line's clock moves inside then.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RailMoment"
+              }
+            ]
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "terminal",
+          "cutoffAt",
+          "recordedAt",
+          "recordedBy"
+        ]
+      },
       "ExportConsignment": {
         "type": "object",
         "properties": {
@@ -36979,6 +37294,14 @@
               }
             ]
           },
+          "byRail": {
+            "description": "By rail to the port (2026-10-29): our truck takes the box to a rail terminal, timed to the train's cut-off there.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExportByRail"
+              }
+            ]
+          },
           "formerRail": {
             "description": "The notes it replaced, each kept as it was.",
             "type": "array",
@@ -37010,9 +37333,31 @@
           "createdBy"
         ]
       },
+      "ExportHandover": {
+        "type": "object",
+        "properties": {
+          "place": {
+            "type": "string"
+          },
+          "cutoffAt": {
+            "type": "string"
+          },
+          "byRail": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "place",
+          "cutoffAt",
+          "byRail"
+        ]
+      },
       "ExportTiming": {
         "type": "object",
         "properties": {
+          "handover": {
+            "$ref": "#/components/schemas/ExportHandover"
+          },
           "state": {
             "type": "string",
             "enum": [
@@ -37043,6 +37388,7 @@
           }
         },
         "required": [
+          "handover",
           "state",
           "leaveByAt",
           "roadKm",
@@ -38421,6 +38767,39 @@
           "printed"
         ]
       },
+      "ExportByRailDto": {
+        "type": "object",
+        "properties": {
+          "terminalSiteId": {
+            "type": "string",
+            "description": "The rail terminal, from the exporter's own places.",
+            "maxLength": 80
+          },
+          "cutoffAt": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "terminalSiteId",
+          "cutoffAt"
+        ]
+      },
+      "ExportMomentDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "description": "When it happened, as ISO-8601."
+          }
+        },
+        "required": [
+          "at"
+        ]
+      },
       "ExportFreeDaysDto": {
         "type": "object",
         "properties": {
@@ -38440,18 +38819,6 @@
         "required": [
           "kind",
           "days"
-        ]
-      },
-      "ExportMomentDto": {
-        "type": "object",
-        "properties": {
-          "at": {
-            "type": "string",
-            "description": "When it happened, as ISO-8601."
-          }
-        },
-        "required": [
-          "at"
         ]
       },
       "ExportOwnBoxDto": {
@@ -44233,6 +44600,70 @@
           "destPort"
         ]
       },
+      "RailCollectAnyway": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "reason"
+        ]
+      },
+      "ImportByRail": {
+        "type": "object",
+        "properties": {
+          "terminal": {
+            "$ref": "#/components/schemas/RailTerminal"
+          },
+          "expectedAt": {
+            "type": "string",
+            "description": "When the railway expects the box there, as it said. Never a promise of ours."
+          },
+          "freeDays": {
+            "type": "number",
+            "description": "The free days the rail terminal gives before it charges for storage, as the importer's agreement says."
+          },
+          "arrival": {
+            "description": "The railway's arrival notice: the box is at the terminal. Until then the road leg from it is not taken.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RailMoment"
+              }
+            ]
+          },
+          "collectAnyway": {
+            "$ref": "#/components/schemas/RailCollectAnyway"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "warned": {
+            "description": "Bell warnings already given, so each is given once.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "terminal",
+          "recordedAt",
+          "recordedBy"
+        ]
+      },
       "TankDeclaration": {
         "type": "object",
         "properties": {
@@ -44476,6 +44907,14 @@
             "items": {
               "$ref": "#/components/schemas/HeldRailNote"
             }
+          },
+          "byRail": {
+            "description": "Inland by rail (2026-10-29): the rail terminal our truck collects at, and the railway's arrival notice.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImportByRail"
+              }
+            ]
           },
           "importId": {
             "type": "string"
@@ -45154,6 +45593,100 @@
           "clock"
         ]
       },
+      "RailTerminalClock": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "not_started",
+              "running",
+              "due_soon",
+              "over",
+              "stopped",
+              "no_free_days"
+            ]
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "freeDays": {
+            "type": "number"
+          },
+          "freeUntil": {
+            "type": "string",
+            "description": "The end of the last free day."
+          },
+          "leftAt": {
+            "type": "string",
+            "description": "When our truck took the box out of the terminal: the clock stops."
+          },
+          "daysOver": {
+            "type": "number",
+            "description": "Days past the free days, counted whole and begun."
+          }
+        },
+        "required": [
+          "state"
+        ]
+      },
+      "ImportByRailView": {
+        "type": "object",
+        "properties": {
+          "terminal": {
+            "$ref": "#/components/schemas/RailTerminal"
+          },
+          "expectedAt": {
+            "type": "string",
+            "description": "When the railway expects the box there, as it said. Never a promise of ours."
+          },
+          "freeDays": {
+            "type": "number",
+            "description": "The free days the rail terminal gives before it charges for storage, as the importer's agreement says."
+          },
+          "arrival": {
+            "description": "The railway's arrival notice: the box is at the terminal. Until then the road leg from it is not taken.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RailMoment"
+              }
+            ]
+          },
+          "collectAnyway": {
+            "$ref": "#/components/schemas/RailCollectAnyway"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "warned": {
+            "description": "Bell warnings already given, so each is given once.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "clock": {
+            "$ref": "#/components/schemas/RailTerminalClock"
+          },
+          "roadWaits": {
+            "type": "string",
+            "description": "Whether the road leg from the terminal may be taken now — and if not, why, in the board's own words."
+          },
+          "takenBefore": {
+            "type": "boolean",
+            "description": "The road leg was taken before the rail leg was recorded: its driver may arrive before the box."
+          }
+        },
+        "required": [
+          "terminal",
+          "recordedAt",
+          "recordedBy",
+          "clock"
+        ]
+      },
       "ImportDetail": {
         "type": "object",
         "properties": {
@@ -45335,6 +45868,14 @@
                 "$ref": "#/components/schemas/RailNoteView"
               }
             ]
+          },
+          "byRail": {
+            "description": "Inland by rail: the arrival, the gate on the road leg, and the rail terminal's free days.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImportByRailView"
+              }
+            ]
           }
         },
         "required": [
@@ -45448,6 +45989,55 @@
           },
           "by": {
             "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "ImportByRailDto": {
+        "type": "object",
+        "properties": {
+          "terminalSiteId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "expectedAt": {
+            "type": "string"
+          },
+          "freeDays": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 60
+          }
+        },
+        "required": [
+          "terminalSiteId"
+        ]
+      },
+      "RailArrivalDto": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "description": "When the railway said the box was at the terminal, as ISO-8601."
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "at"
+        ]
+      },
+      "RailCollectAnywayDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 300
           }
         },
         "required": [
@@ -52827,6 +53417,31 @@
           "hazardClass"
         ]
       },
+      "FreightRailGate": {
+        "type": "object",
+        "properties": {
+          "importId": {
+            "type": "string"
+          },
+          "importCode": {
+            "type": "string"
+          },
+          "terminal": {
+            "type": "string"
+          },
+          "arrivedAt": {
+            "type": "string"
+          },
+          "collectAnyway": {
+            "$ref": "#/components/schemas/RailCollectAnyway"
+          }
+        },
+        "required": [
+          "importId",
+          "importCode",
+          "terminal"
+        ]
+      },
       "FreightAmount": {
         "type": "object",
         "properties": {
@@ -53745,6 +54360,14 @@
           "coverRequired": {
             "type": "boolean",
             "description": "The sender asks for a carrier whose insurance cover SeeBuyGet checked (2026-10-28): nobody else may take it."
+          },
+          "waitsForRail": {
+            "description": "The box is still on its way by rail (2026-10-29): nobody takes this until the railway said it is there, or the importer said to go anyway.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightRailGate"
+              }
+            ]
           },
           "declaredValue": {
             "description": "CMR Art. 6(2)(d) — the value of the goods, and a special interest in delivery, as the sender declared them.",

@@ -2,6 +2,8 @@ import { Injectable, Optional } from '@nestjs/common';
 import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { QuoteService } from './quote.service';
 import { holdRailNote, railNoteView } from './rail-note';
+import { railRefusal, railTerminalClock, type ImportByRailView } from './rail-leg.types';
+import { NotificationService } from './notification.service';
 import type { RailNoteDto } from './rail-note.types';
 import type { Quote } from './quote.types';
 import { randomBytes } from 'crypto';
@@ -103,6 +105,8 @@ export class ImportService {
     // The agent's fee is a quotation (2026-10-04). Optional with a stand-in so the specs that build this by hand keep
     // working; the module provides the one every route shares.
     @Optional() private readonly quotes: QuoteService = new QuoteService(),
+    // The rail terminal's free days are warned in the bell (2026-10-29). Optional: specs that build this by hand pass none.
+    @Optional() private readonly notifications?: NotificationService,
   ) {}
 
   /* ------------------------------------------------------------ the container -- */
@@ -501,7 +505,123 @@ export class ImportService {
       // IS its number: there is no entity to derive before somebody names one.
       ...(consignment.containerNo ? { box: this.boxes.viewOf(consignment.containerNo, Date.now(), { importId: consignment.importId }) } : {}),
       ...(consignment.rail ? { rail: railNoteView(consignment.rail, consignment.containerNo ? { containerNo: consignment.containerNo } : {}, consignment.formerRail?.length ?? 0) } : {}),
+      ...(consignment.byRail ? { byRail: this.railViewOf(consignment, Date.now()) } : {}),
     };
+  }
+
+  /* ------------------------------------------------- where road meets rail -- */
+
+  /**
+   * INLAND BY RAIL (the user, 2026-10-29: "build the clock with the blocker as you said"). The box goes from the port on a
+   * train — Mombasa to Nairobi, Djibouti to Modjo — and our truck collects it at the rail terminal. Until the railway has
+   * said the box is there (its arrival notice), the road leg from the terminal is not taken by anybody: a truck sent for a
+   * box still on the train is a truck sent to wait, and somebody pays for the waiting. Recorded by the importer or its
+   * agent, whoever booked the train.
+   */
+  setByRail(importId: string, actorEntityId: string, input: { terminal: { label: string; location: GeoPoint }; expectedAt?: string; freeDays?: number }, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (this.sideOf(consignment, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (consignment.byRail?.arrival) throw new GlosError('INVALID_STATE', `The railway already said the box is at ${consignment.byRail.terminal.label}: the rail leg is done`);
+    const expectedAt = input.expectedAt?.trim() ? new Date(Date.parse(input.expectedAt)).toISOString() : undefined;
+    if (input.expectedAt?.trim() && Number.isNaN(Date.parse(input.expectedAt))) throw new GlosError('VALIDATION_FAILED', 'When the railway expects it must be a date and time', { field: 'expectedAt' });
+    const before = consignment.byRail;
+    consignment.byRail = {
+      terminal: input.terminal,
+      ...(expectedAt ? { expectedAt } : {}),
+      ...(input.freeDays != null ? { freeDays: input.freeDays } : {}),
+      ...(before?.collectAnyway ? { collectAnyway: before.collectAnyway } : {}),
+      recordedAt: new Date(now).toISOString(),
+      recordedBy: by,
+    };
+    this.imports.set(consignment.importId, consignment);
+    this.gateRoadLeg(consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /** The railway's arrival notice: the box is at the rail terminal. The road leg from it opens, and the free days start. */
+  recordRailArrival(importId: string, actorEntityId: string, input: { at: string; reference?: string }, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (this.sideOf(consignment, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (!consignment.byRail) throw new GlosError('INVALID_STATE', `${consignment.code} does not come inland by rail: say which rail terminal it comes to first`);
+    const at = Date.parse(input.at);
+    if (Number.isNaN(at) || at > now + 5 * 60_000) throw new GlosError('VALIDATION_FAILED', 'Say when the railway said the box was there — a moment that has come', { field: 'at' });
+    const reference = input.reference?.trim();
+    consignment.byRail = { ...consignment.byRail, arrival: { at: new Date(at).toISOString(), by, recordedAt: new Date(now).toISOString(), ...(reference ? { reference: reference.slice(0, 60) } : {}) } };
+    this.imports.set(consignment.importId, consignment);
+    this.gateRoadLeg(consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /**
+   * THE IMPORTER'S WORD TO GO ANYWAY — the terminal confirmed by phone, the notice is late, the box is seen in the yard. Its
+   * decision alone, because it pays for a truck that waits; kept with its reason, and shown wherever the gate would be.
+   */
+  collectAnyway(importId: string, actorEntityId: string, reason: string, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (this.sideOf(consignment, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    this.requireImporter(consignment, actorEntityId);
+    if (!consignment.byRail) throw new GlosError('INVALID_STATE', `${consignment.code} does not come inland by rail`);
+    if (consignment.byRail.arrival) throw new GlosError('INVALID_STATE', 'The railway already said the box is there: nothing waits');
+    const why = reason?.trim();
+    if (!why || why.length < 5) throw new GlosError('FIELD_REQUIRED', 'Say why the truck goes before the railway said the box is there', { field: 'reason' });
+    consignment.byRail = { ...consignment.byRail, collectAnyway: { by, at: new Date(now).toISOString(), reason: why.slice(0, 300) } };
+    this.imports.set(consignment.importId, consignment);
+    this.gateRoadLeg(consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /** The road leg's gate, as the rail leg stands: set while the box is on the train, lifted by the arrival or the importer's word. */
+  private gateRoadLeg(consignment: ImportConsignment): void {
+    const r = consignment.byRail;
+    if (!r || !consignment.roadFreightId) return;
+    this.dispatch.setRailGate(consignment.roadFreightId, {
+      importId: consignment.importId,
+      importCode: consignment.code,
+      terminal: r.terminal.label,
+      ...(r.arrival ? { arrivedAt: r.arrival.at } : {}),
+      ...(r.collectAnyway ? { collectAnyway: r.collectAnyway } : {}),
+    });
+  }
+
+  private railViewOf(consignment: ImportConsignment, now: number): ImportByRailView {
+    const r = consignment.byRail!;
+    const leg = consignment.roadFreightId ? this.dispatch.requireFreightPublic(consignment.roadFreightId) : undefined;
+    const roadWaits = railRefusal(leg);
+    const takenBefore = Boolean(leg && !leg.waitsForRail && !r.arrival && !r.collectAnyway && leg.status !== 'cancelled');
+    return { ...r, clock: railTerminalClock({ ...(r.arrival ? { arrivedAt: r.arrival.at } : {}), ...(r.freeDays != null ? { freeDays: r.freeDays } : {}), ...(leg?.pickedUpAt ? { leftAt: leg.pickedUpAt } : {}) }, now), ...(roadWaits ? { roadWaits } : {}), ...(takenBefore ? { takenBefore } : {}) };
+  }
+
+  /**
+   * THE RAIL TERMINAL'S FREE DAYS, warned in the bell — once on the last free day, once when they ended with the box still
+   * there. Keyed by the date, so a corrected figure is warned afresh. Its importer and its agent are told.
+   */
+  sweepRail(now = Date.now()): string[] {
+    const told: string[] = [];
+    for (const c of [...this.imports.values()]) {
+      if (!c.byRail?.arrival || c.byRail.freeDays == null) continue;
+      const clock = this.railViewOf(c, now).clock;
+      if (clock.state !== 'due_soon' && clock.state !== 'over') continue;
+      const key = `${clock.state}@${clock.freeUntil}`;
+      if ((c.byRail.warned ?? []).includes(key)) continue;
+      c.byRail = { ...c.byRail, warned: [...(c.byRail.warned ?? []), key] };
+      this.imports.set(c.importId, c);
+      const day = clock.freeUntil!.slice(0, 16).replace('T', ' ') + ' UTC';
+      const [title, body] =
+        clock.state === 'over'
+          ? [`${c.code}: the free days at ${c.byRail.terminal.label} ended`, `The ${c.byRail.freeDays} free days at ${c.byRail.terminal.label} ended on ${day}, and the box is still there. Each day over is the terminal’s to charge, under your agreement with it — send the truck for it.`]
+          : [`${c.code}: the last free day at ${c.byRail.terminal.label}`, `The box’s ${c.byRail.freeDays} free days at ${c.byRail.terminal.label} end on ${day}. Collect it before then: after that the terminal may charge for each day, under your agreement with it.`];
+      for (const entityId of [c.importerEntityId, c.agentEntityId].filter((x): x is string => Boolean(x))) {
+        let did: string | undefined;
+        try {
+          did = this.entities.get(entityId).did;
+        } catch {
+          did = undefined;
+        }
+        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+      }
+      told.push(`${c.code}:rail:${clock.state}`);
+    }
+    return told;
   }
 
   /**
@@ -1314,7 +1434,8 @@ export class ImportService {
      * one leg, which made the sentence a promise the system could not keep.
      */
     const split = Boolean(consignment.dischargePort?.trim());
-    const bondedNow = split && !consignment.bondedFreightId;
+    // Inland by rail (2026-10-29), the train is the run from the quay: what our truck carries is the delivery leg.
+    const bondedNow = split && !consignment.bondedFreightId && !consignment.byRail;
 
     if (bondedNow && consignment.roadFreightId) {
       throw new GlosError('INVALID_STATE', `${consignment.code} already has its delivery leg — the bonded run comes first, not after`);
@@ -1354,8 +1475,9 @@ export class ImportService {
     const freight = this.dispatch.registerFreight(
       {
         description: `${consignment.code} — ${consignment.goodsDescription}${spec ? ` (${spec.label})` : ''}`,
-        pickupLocation: input.pickupLocation,
-        pickupLabel: input.pickupLabel?.trim() || consignment.destPort,
+        // By rail, the box is collected where the train brings it.
+        pickupLocation: consignment.byRail ? consignment.byRail.terminal.location : input.pickupLocation,
+        pickupLabel: consignment.byRail ? consignment.byRail.terminal.label : input.pickupLabel?.trim() || consignment.destPort,
         destLabel: input.destLabel.trim(),
         destLocation: input.destLocation,
         weightKg: input.weightKg,
@@ -1408,6 +1530,8 @@ export class ImportService {
         : { roadFreightId: freight.freightId, roadFreightCode: freight.code, roadMintedAt: new Date(now).toISOString(), roadMintedBy: by },
     );
     this.imports.set(consignment.importId, consignment);
+    // Still on the train: the leg is posted, and nobody takes it until the railway said the box is there.
+    if (!bondedNow) this.gateRoadLeg(consignment);
     /*
      * Y1 — THE LEG WE MINT IS WHAT STARTS THE CLOCK, and now that is true in code rather than in prose.
      *

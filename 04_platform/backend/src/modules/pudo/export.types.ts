@@ -8,6 +8,7 @@ import { ExportSli, ExportSliView } from './export-sli.types';
 import { ExportPacking, ExportPackingView } from './export-packing.types';
 import { ExportInvoice, ExportInvoiceView } from './export-invoice.types';
 import { HeldRailNote, RailNoteView } from './rail-note.types';
+import { ExportByRail } from './rail-leg.types';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -263,6 +264,8 @@ export class ExportConsignment {
   @ApiPropertyOptional() warned?: { pickup?: string; gate?: string; vgm?: string; box?: string[] };
   /** The railway's note, where the box goes to the port by rail — held, never issued by us (rail-note.ts). */
   @ApiPropertyOptional({ type: HeldRailNote }) rail?: HeldRailNote;
+  /** By rail to the port (2026-10-29): our truck takes the box to a rail terminal, timed to the train's cut-off there. */
+  @ApiPropertyOptional({ type: ExportByRail }) byRail?: ExportByRail;
   /** The notes it replaced, each kept as it was. */
   @ApiPropertyOptional({ type: [HeldRailNote] }) formerRail?: HeldRailNote[];
   @ApiProperty() createdAt: string;
@@ -270,7 +273,15 @@ export class ExportConsignment {
 }
 
 /** Where the timing stands, said on every read. */
+/** Where our truck hands the box over, and by when: the port gate, or — by rail — the rail terminal. */
+export class ExportHandover {
+  @ApiProperty() place: string;
+  @ApiProperty() cutoffAt: string;
+  @ApiProperty() byRail: boolean;
+}
+
 export class ExportTiming {
+  @ApiProperty({ type: ExportHandover }) handover: ExportHandover;
   @ApiProperty({ enum: EXPORT_TIMING }) state: ExportTimingState;
   /** The latest the laden truck may leave the loading place and still gate in before the cut-off. */
   @ApiProperty() leaveByAt: string;

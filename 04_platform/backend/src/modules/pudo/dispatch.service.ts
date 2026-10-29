@@ -70,6 +70,7 @@ import { LedgerService } from '../../foundation/ledger/ledger.service';
 import type { LoadSeal, LoadSealView, SealBreakCause, SealsAtDelivery } from './load-seal.types';
 import { FINDING_WORDS, type TamperStage, type UnitHold } from './tamper.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
+import { railRefusal, type FreightRailGate } from './rail-leg.types';
 
 /**
  * FB0c — how a load may be taken, defaulted ON READ.
@@ -879,7 +880,7 @@ export class DispatchService {
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
-      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now))
+      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
     const out: Offer[] = [];
@@ -1002,7 +1003,7 @@ export class DispatchService {
     const out: Offer[] = [];
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load))
       .map((load) => ({ load, km: this.router.roadKm(from, load.pickupLocation) }))
       .filter(({ km }) => km <= radius)
       .sort((a, b) => a.km - b.km);
@@ -1054,7 +1055,7 @@ export class DispatchService {
 
     const candidates = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load))
       .map((load) => ({ load, km: this.router.roadKm(point, load.pickupLocation) }))
       // A rider who declared a patch is asking to hear about their whole patch; anyone else gets the tighter
       // interrupt-someone-driving radius. Either way the declaration below decides whether it is really theirs.
@@ -1339,6 +1340,9 @@ export class DispatchService {
     // The cover the sender asked for (2026-10-28): whoever answers for the driver must hold it, checked and running.
     const cover = this.coverRefusal(driverDid, f, now);
     if (cover) throw new GlosError('FORBIDDEN', cover);
+    // Where road meets rail (2026-10-29): no truck is sent for a box the railway has not said is there.
+    const rail = railRefusal(f);
+    if (rail) throw new GlosError('INVALID_STATE', rail);
     // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
     // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
     // given, which is the invisible exclusion the whole board exists to remove; enforcing it here, where the
@@ -1476,6 +1480,7 @@ export class DispatchService {
           overHours,
           declaration,
           cover: input.driverDid ? this.coverRefusal(input.driverDid, f, now) : undefined,
+          rail: railRefusal(f),
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //
@@ -4546,6 +4551,25 @@ export class DispatchService {
 
   private coverRefusalFor(driverDid: string, load: Claimable, now = Date.now()): string | undefined {
     return load.kind === 'freight' ? this.coverRefusal(driverDid, this.freights.get(load.ref), now) : undefined;
+  }
+
+  private railRefusalFor(load: Claimable): string | undefined {
+    return load.kind === 'freight' ? railRefusal(this.freights.get(load.ref)) : undefined;
+  }
+
+  /**
+   * WHERE ROAD MEETS RAIL (2026-10-29): the import sets the gate on its road leg while the box is on its way by rail, and
+   * lifts it when the railway's arrival notice is recorded or the importer says to collect anyway. Only an untaken load
+   * gets a gate: one already taken is the import's to warn about, never pulled from under its driver.
+   */
+  setRailGate(freightId: string, gate: FreightRailGate | undefined): boolean {
+    const f = this.freights.get(freightId);
+    if (!f) return false;
+    if (gate && !f.waitsForRail && (f.claimedBy || !['scheduled', 'available'].includes(f.status))) return false;
+    if (gate) f.waitsForRail = gate;
+    else delete f.waitsForRail;
+    this.freights.set(freightId, f);
+    return true;
   }
 
   /**

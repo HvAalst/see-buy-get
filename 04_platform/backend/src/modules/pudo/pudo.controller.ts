@@ -3,6 +3,7 @@ import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { PapersWatchService } from './papers-watch.service';
 import { RailCheckDto, RailNoteDto, type RailNoteCheckView, type RailwayList } from './rail-note.types';
 import { railwayRows } from './rail-note';
+import { ImportByRailDto, RailArrivalDto, RailCollectAnywayDto } from './rail-leg.types';
 import { checkRailNote } from '../../foundation/carriage-law/rail';
 import type { FleetDriver, FleetManager, FleetSetupRow } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
@@ -1432,6 +1433,36 @@ export class SbgController {
   holdImportRail(@Param('importId') importId: string, @Body() dto: RailNoteDto, @Actor() actor: IntrospectionResult): ImportDetail {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The railway’s note is the importer’s or its agent’s to keep: staff read it, and write nothing in their name');
     return this.imports.holdRail(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+  }
+
+  /**
+   * INLAND BY RAIL (2026-10-29): the rail terminal the box comes to, from the acting company's own places — the importer's
+   * or its agent's. Staff write nothing in their name.
+   */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/by-rail')
+  importByRail(@Param('importId') importId: string, @Body() dto: ImportByRailDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The rail leg is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    const acting = this.actingCompany(actor);
+    const site = this.sites.require(acting, dto.terminalSiteId);
+    if (site.kind !== 'port' && site.kind !== 'clearance') throw new GlosError('VALIDATION_FAILED', 'Choose the rail terminal from your port places or places of clearance', { field: 'terminalSiteId' });
+    return this.imports.setByRail(importId, acting, { terminal: { label: site.name, location: site.location }, ...(dto.expectedAt ? { expectedAt: dto.expectedAt } : {}), ...(dto.freeDays != null ? { freeDays: dto.freeDays } : {}) }, this.namedActor(actor));
+  }
+
+  /** The railway's arrival notice: the box is at the rail terminal, and the road leg from it opens. */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/by-rail/arrived')
+  importRailArrived(@Param('importId') importId: string, @Body() dto: RailArrivalDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The arrival is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    return this.imports.recordRailArrival(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+  }
+
+  /** The importer's word to send the truck before the arrival notice — with why. */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/by-rail/collect-anyway')
+  importRailCollectAnyway(@Param('importId') importId: string, @Body() dto: RailCollectAnywayDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the importer decides to send a truck before the box is there');
+    return this.imports.collectAnyway(importId, this.actingCompany(actor), dto.reason, this.namedActor(actor));
   }
 
   /** The railways we know, and whether we have read what each one's note must carry. */

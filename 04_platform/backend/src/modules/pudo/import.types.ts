@@ -1,5 +1,6 @@
 import { Quote } from './quote.types';
 import { HeldRailNote, RailNoteView } from './rail-note.types';
+import { ImportByRail, ImportByRailView } from './rail-leg.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
 import { BOX_ENDINGS, CONDITION_STANCES, FREE_DAY_KINDS, INTERCHANGE_SIDES } from './container-box';
@@ -480,6 +481,8 @@ export class ImportConsignment {
   @ApiPropertyOptional({ type: HeldRailNote }) rail?: HeldRailNote;
   /** The notes it replaced, each kept as it was. */
   @ApiPropertyOptional({ type: [HeldRailNote] }) formerRail?: HeldRailNote[];
+  /** Inland by rail (2026-10-29): the rail terminal our truck collects at, and the railway's arrival notice. */
+  @ApiPropertyOptional({ type: ImportByRail }) byRail?: ImportByRail;
   @ApiProperty() importId: string;
   /** IMP-001. Also the `relatesTo` every paper belonging to THIS container is filed under. */
   @ApiProperty() code: string;
@@ -704,6 +707,8 @@ export class ImportDetail extends ImportRow {
   @ApiPropertyOptional({ type: ContainerBoxView }) box?: ContainerBoxView;
   /** The railway's note with its check, and what it says of the box against ours. */
   @ApiPropertyOptional({ type: RailNoteView }) rail?: RailNoteView;
+  /** Inland by rail: the arrival, the gate on the road leg, and the rail terminal's free days. */
+  @ApiPropertyOptional({ type: ImportByRailView }) byRail?: ImportByRailView;
 }
 
 /* ------------------------- CL6: what a clearing agent says they clear, in their own words -- */

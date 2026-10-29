@@ -9,6 +9,7 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { RailNoteDto } from './rail-note.types';
+import { ExportByRailDto } from './rail-leg.types';
 import { ExportService } from './export.service';
 import { SliDraftDto, SliSignDto } from './export-sli.types';
 import { PackingCheck, PackingImportDto, PackingSignDto } from './export-packing.types';
@@ -119,6 +120,26 @@ export class ExportController {
   @Post(':exportId/rail')
   rail(@Param('exportId') exportId: string, @Body() dto: RailNoteDto, @Actor() actor: IntrospectionResult): ExportDetail {
     return this.exports.holdRail(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  /** By rail to the port: the rail terminal and the train's cut-off there — our truck is timed to it (2026-10-29). */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/by-rail')
+  byRail(@Param('exportId') exportId: string, @Body() dto: ExportByRailDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.setByRail(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/by-rail/clear')
+  byRoad(@Param('exportId') exportId: string, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.clearByRail(exportId, this.ownCompany(actor));
+  }
+
+  /** When the train brought the box inside the port gate, as the exporter was told. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/by-rail/at-port')
+  atPort(@Param('exportId') exportId: string, @Body() dto: ExportMomentDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.recordAtPort(exportId, this.ownCompany(actor), dto.at, auditActor(actor));
   }
 
   /* ------------------------------------------------------- EX6 the box's clock -- */
