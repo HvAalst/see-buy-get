@@ -1,6 +1,6 @@
 import { Quote } from './quote.types';
 import { HeldRailNote, RailNoteView } from './rail-note.types';
-import { ImportByRail, ImportByRailView } from './rail-leg.types';
+import { ImportByRail, ImportByRailView, LEG_MODES, type LegMode } from './rail-leg.types';
 import { FblView, HeldFbl } from './fbl-note.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { CompanyDocument } from '../../foundation/entity/company-documents.service';
@@ -634,6 +634,8 @@ export class RequiredPaperView extends RequiredPaper {
 
 /** One consignment as a list reads it. */
 export class ImportRow {
+  /** The journey's legs in order — how it came (sea, air, road or rail), the train inland where it goes by rail, our road leg. */
+  @ApiProperty({ enum: LEG_MODES, isArray: true }) modes: LegMode[];
   @ApiProperty() importId: string;
   @ApiProperty() code: string;
   @ApiProperty({ enum: IMPORT_STATUSES }) status: ImportStatus;

@@ -76,6 +76,8 @@ describe('where road meets rail, over the wire', () => {
 
     const set = (await http().post(`${path}/by-rail`).set(bearer(x.token)).send({ terminalSiteId: icd, cutoffAt: new Date(train).toISOString(), reference: 'SGR-FRT-12' }).expect(201)).body;
     expect(set.timing.handover).toEqual({ place: 'Naivasha Inland Container Depot', cutoffAt: new Date(train).toISOString(), byRail: true });
+    // The journey in the list, by its legs: the truck, the train, the ship (2026-10-29, the navigation by direction).
+    expect((await http().get('/v1/sbg/exports').set(bearer(x.token)).expect(200)).body.items.find((r: { exportId: string }) => r.exportId === made.exportId).modes).toEqual(['road', 'rail', 'sea']);
     // The truck's leave-by is worked back from the train's cut-off, not the port gate's.
     expect(Date.parse(set.timing.leaveByAt)).toBeLessThan(train);
 
@@ -140,6 +142,8 @@ describe('where road meets rail, over the wire', () => {
     expect((await http().post(`${path}/by-rail/arrived`).set(bearer(imp.token)).send({ at: new Date().toISOString() })).body.detail).toMatch(/does not come inland by rail/);
     const set = (await http().post(`${path}/by-rail`).set(bearer(imp.token)).send({ terminalSiteId: icd, freeDays: 4, expectedAt: new Date(Date.now() + 24 * H).toISOString() }).expect(201)).body;
     expect(set.byRail).toMatchObject({ terminal: { label: 'Nairobi Inland Container Depot' }, freeDays: 4, clock: { state: 'not_started' } });
+    // By sea, inland by train, then our truck — one import, three legs (the navigation by direction, 2026-10-29).
+    expect(set.modes).toEqual(['sea', 'rail', 'road']);
 
     // The road leg is posted — collected where the train brings it — and nobody takes it yet.
     const leg = app.get(ImportService).mintRoadLeg(made.importId, imp.entityId, { pickupLocation: { lat: 0, lng: 0 }, destLabel: 'Thika yard', destLocation: { lat: -1.03, lng: 37.07 }, weightKg: 12000 }, 'Wanjiku');

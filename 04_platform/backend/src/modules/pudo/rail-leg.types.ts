@@ -11,6 +11,20 @@ import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'cla
  * until the railway has said it is there — the arrival notice — unless the importer says, with a reason, to collect anyway.
  * The free days the rail terminal gives are counted from the arrival until our truck takes the box out.
  */
+/**
+ * THE MODES OF A JOURNEY, IN ORDER (the user, 2026-10-29, on the navigation: "by direction, mode inside"). Road, rail,
+ * sea and air are legs of one export or import, never sections of their own; a list can be filtered by them.
+ */
+export const LEG_MODES = ['road', 'rail', 'sea', 'air'] as const;
+export type LegMode = (typeof LEG_MODES)[number];
+
+/** The legs' modes in order, a repeat folded into one (a truck that hands to a truck is one road). */
+export function journeyModes(modes: Array<LegMode | undefined>): LegMode[] {
+  const out: LegMode[] = [];
+  for (const m of modes) if (m && out[out.length - 1] !== m) out.push(m);
+  return out;
+}
+
 export class RailTerminal {
   @ApiProperty() label: string;
   @ApiProperty() location: { lat: number; lng: number };

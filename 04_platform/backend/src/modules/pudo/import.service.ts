@@ -2,7 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { QuoteService } from './quote.service';
 import { holdRailNote, railNoteView } from './rail-note';
-import { railRefusal, railTerminalClock, type ImportByRailView } from './rail-leg.types';
+import { journeyModes, railRefusal, railTerminalClock, type ImportByRailView } from './rail-leg.types';
 import { NotificationService } from './notification.service';
 import { fblView, holdFbl, verifyFbl } from './fbl-note';
 import type { FblDto, FblVerifiedDto } from './fbl-note.types';
@@ -45,6 +45,7 @@ import {
   RequiredPaper,
   RequiredPaperView,
 } from './import.types';
+import { modeOf } from './import.types';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
 import { containerType, heightUnstated, outOfGauge } from './container-type';
 import { CARGO_NATURES, DANGEROUS_GOODS_NATURES, type CargoNature } from './cargo.types';
@@ -1715,6 +1716,7 @@ export class ImportService {
       code: consignment.code,
       status: consignment.status,
       goodsDescription: consignment.goodsDescription,
+      modes: journeyModes([modeOf(consignment), consignment.byRail ? 'rail' : undefined, 'road']),
       ...(consignment.containerNo ? { containerNo: consignment.containerNo } : {}),
       originCountry: consignment.originCountry,
       destCountry: consignment.destCountry,

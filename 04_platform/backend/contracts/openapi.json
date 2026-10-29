@@ -46704,6 +46704,19 @@
       "ImportDetail": {
         "type": "object",
         "properties": {
+          "modes": {
+            "type": "array",
+            "description": "The journey's legs in order — how it came (sea, air, road or rail), the train inland where it goes by rail, our road leg.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "road",
+                "rail",
+                "sea",
+                "air"
+              ]
+            }
+          },
           "importId": {
             "type": "string"
           },
@@ -46901,6 +46914,7 @@
           }
         },
         "required": [
+          "modes",
           "importId",
           "code",
           "status",

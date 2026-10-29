@@ -8,7 +8,7 @@ import { ExportSli, ExportSliView } from './export-sli.types';
 import { ExportPacking, ExportPackingView } from './export-packing.types';
 import { ExportInvoice, ExportInvoiceView } from './export-invoice.types';
 import { HeldRailNote, RailNoteView } from './rail-note.types';
-import { ExportByRail } from './rail-leg.types';
+import { ExportByRail, LEG_MODES, type LegMode } from './rail-leg.types';
 import { FblView, HeldFbl } from './fbl-note.types';
 
 /**
@@ -396,6 +396,8 @@ export class ExportRow {
   @ApiProperty() loadingPort: string;
   @ApiProperty() bookingReference: string;
   @ApiProperty() gateCutoffAt: string;
+  /** The journey's legs in order — road to the terminal, rail where it goes by train, then the sea. */
+  @ApiProperty({ enum: LEG_MODES, isArray: true }) modes: LegMode[];
   @ApiPropertyOptional() containerNo?: string;
   @ApiProperty({ type: ExportTiming }) timing: ExportTiming;
   @ApiProperty() missing: number;

@@ -28,7 +28,7 @@ import { cleanDraft, sliBasis, sliGaps, sliHtml, sliStale, type SliFacts } from 
 import type { ExportSliView, SliDraft, SliDraftDto } from './export-sli.types';
 import { SiteService } from './site.service';
 import { holdRailNote, railNoteView } from './rail-note';
-import type { ExportByRailDto } from './rail-leg.types';
+import { journeyModes, type ExportByRailDto } from './rail-leg.types';
 import { fblView, holdFbl, verifyFbl } from './fbl-note';
 import type { FblDto, FblVerifiedDto } from './fbl-note.types';
 import type { RailNoteDto } from './rail-note.types';
@@ -236,6 +236,7 @@ export class ExportService {
         loadingPort: c.loadingPort,
         bookingReference: c.booking.reference,
         gateCutoffAt: c.booking.gateCutoffAt,
+        modes: journeyModes(['road', c.byRail ? 'rail' : undefined, 'sea']),
         ...(c.containerNo ? { containerNo: c.containerNo } : {}),
         timing: this.timingOf(c, now),
         missing: this.missingOf(c).length,
