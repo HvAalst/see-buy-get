@@ -4,6 +4,8 @@ import { QuoteService } from './quote.service';
 import { holdRailNote, railNoteView } from './rail-note';
 import { railRefusal, railTerminalClock, type ImportByRailView } from './rail-leg.types';
 import { NotificationService } from './notification.service';
+import { fblView, holdFbl, verifyFbl } from './fbl-note';
+import type { FblDto, FblVerifiedDto } from './fbl-note.types';
 import type { RailNoteDto } from './rail-note.types';
 import type { Quote } from './quote.types';
 import { randomBytes } from 'crypto';
@@ -506,7 +508,42 @@ export class ImportService {
       ...(consignment.containerNo ? { box: this.boxes.viewOf(consignment.containerNo, Date.now(), { importId: consignment.importId }) } : {}),
       ...(consignment.rail ? { rail: railNoteView(consignment.rail, consignment.containerNo ? { containerNo: consignment.containerNo } : {}, consignment.formerRail?.length ?? 0) } : {}),
       ...(consignment.byRail ? { byRail: this.railViewOf(consignment, Date.now()) } : {}),
+      ...(consignment.fbl ? { fbl: fblView(consignment.fbl, { ...(consignment.containerNo ? { containerNo: consignment.containerNo } : {}), port: { label: 'discharge', value: consignment.dischargePort ?? consignment.destPort }, countries: [consignment.originCountry, consignment.destCountry] }, consignment.formerFbl?.length ?? 0) } : {}),
     };
+  }
+
+  /* ------------------------------------------------- the forwarder's bill (FBL) -- */
+
+  /**
+   * THE FORWARDER'S BILL, HELD (the user, 2026-10-28: "if we optimize for FBL, we must know and report for our users"). The
+   * FIATA bill — or waybill — the goods came under, kept by the importer or its agent with what is printed on it, and read
+   * back with what it means. A new one replaces it; the one replaced is kept.
+   */
+  holdFbl(importId: string, actorEntityId: string, dto: FblDto, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (this.sideOf(consignment, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    const held = holdFbl(dto, { ...(dto.documentId ? { document: this.ownPaper(actorEntityId, dto.documentId) } : {}), by, byEntityId: actorEntityId, now });
+    if (consignment.fbl) consignment.formerFbl = [...(consignment.formerFbl ?? []), consignment.fbl];
+    consignment.fbl = held;
+    this.imports.set(consignment.importId, consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  /** What the importer or its agent saw on FIATA's page for an electronic bill, with the page's result attached. */
+  verifyFbl(importId: string, actorEntityId: string, dto: FblVerifiedDto, by: string, now = Date.now()): ImportDetail {
+    const consignment = this.requireImport(importId);
+    if (this.sideOf(consignment, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (!consignment.fbl) throw new GlosError('INVALID_STATE', `No bill is held on ${consignment.code} yet`);
+    consignment.fbl = verifyFbl(consignment.fbl, dto, this.ownPaper(actorEntityId, dto.proofDocumentId), by, actorEntityId, now);
+    this.imports.set(consignment.importId, consignment);
+    return this.detail(consignment.importId, actorEntityId);
+  }
+
+  private ownPaper(entityId: string, documentId: string): { documentId: string; title: string } {
+    const d = this.documents.list(entityId).find((x) => x.documentId === documentId);
+    if (!d) throw new GlosError('NOT_FOUND', 'No such paper among your company’s documents');
+    if (d.supersededBy) throw new GlosError('INVALID_STATE', `That version of ${d.title} has been replaced — attach the current one`);
+    return { documentId: d.documentId, title: d.title };
   }
 
   /* ------------------------------------------------- where road meets rail -- */

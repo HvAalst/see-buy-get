@@ -28,6 +28,8 @@ import type { ExportSliView, SliDraft, SliDraftDto } from './export-sli.types';
 import { SiteService } from './site.service';
 import { holdRailNote, railNoteView } from './rail-note';
 import type { ExportByRailDto } from './rail-leg.types';
+import { fblView, holdFbl, verifyFbl } from './fbl-note';
+import type { FblDto, FblVerifiedDto } from './fbl-note.types';
 import type { RailNoteDto } from './rail-note.types';
 
 /** The words for each paper, where a sentence names it (the screen translates its own). */
@@ -280,7 +282,53 @@ export class ExportService {
       ...(c.packing ? { packing: this.packingViewOf(c) } : {}),
       invoice: this.invoiceViewOf(c, you),
       ...(c.rail ? { rail: this.railViewOf(c) } : {}),
+      ...(c.fbl ? { fbl: this.fblViewOf(c) } : {}),
     };
+  }
+
+  /* ------------------------------------------------- the forwarder's bill (FBL) -- */
+
+  /**
+   * THE FORWARDER'S BILL, HELD (the user, 2026-10-28: "if we optimize for FBL, we must know and report for our users"). The
+   * FIATA bill the exporter's forwarder issued — or its waybill — kept with what is printed on it: a copy from the exporter's
+   * papers (its agent gives an electronic one by number), and read back with what it means. A new one replaces it; the one
+   * replaced is kept.
+   */
+  holdFbl(exportId: string, actorEntityId: string, dto: FblDto, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireExport(exportId);
+    const side = this.sideOf(c, actorEntityId);
+    if (side === 'agent' && dto.documentId) throw new GlosError('VALIDATION_FAILED', 'Give the bill’s number: your own documents are not the exporter’s', { field: 'number' });
+    const held = holdFbl(dto, { ...(dto.documentId ? { document: this.exporterPaper(c, dto.documentId) } : {}), by, byEntityId: actorEntityId, now });
+    if (c.fbl) c.formerFbl = [...(c.formerFbl ?? []), c.fbl];
+    c.fbl = held;
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  /** What the exporter saw on FIATA's page for an electronic bill, with the page's result attached from its papers. */
+  verifyFbl(exportId: string, actorEntityId: string, dto: FblVerifiedDto, by: string, now = Date.now()): ExportDetail {
+    const c = this.requireOwn(exportId, actorEntityId);
+    if (!c.fbl) throw new GlosError('INVALID_STATE', `No bill is held on ${c.code} yet`);
+    c.fbl = verifyFbl(c.fbl, dto, this.exporterPaper(c, dto.proofDocumentId), by, actorEntityId, now);
+    this.exports.set(c.exportId, c);
+    return this.detail(c.exportId, actorEntityId, {}, now);
+  }
+
+  private exporterPaper(c: ExportConsignment, documentId: string): { documentId: string; title: string } {
+    const d = this.documents.list(c.exporterEntityId).find((x) => x.documentId === documentId);
+    if (!d) throw new GlosError('NOT_FOUND', 'No such paper among your company’s documents');
+    if (d.status === 'superseded' || d.status === 'rejected') throw new GlosError('INVALID_STATE', `${d.title} is not a current paper on your record — attach the current one`);
+    return { documentId: d.documentId, title: d.title };
+  }
+
+  private fblViewOf(c: ExportConsignment) {
+    const seals = c.ladenFreightId ? this.seals.views(c.ladenFreightId).flatMap((s) => (s.number && s.state === 'on' ? [s.number] : [])) : [];
+    const totals = c.packing?.lines?.length ? totalsOf(c.packing.lines) : undefined;
+    return fblView(
+      c.fbl!,
+      { ...(c.containerNo ? { containerNo: c.containerNo } : {}), seals, ...(totals ? { packages: totals.packages, ...(totals.grossKg ? { grossWeightKg: totals.grossKg } : {}) } : {}), port: { label: 'loading', value: c.loadingPort }, countries: [c.originCountry, c.destCountry] },
+      c.formerFbl?.length ?? 0,
+    );
   }
 
   /* ----------------------------------------------------- the railway's note -- */

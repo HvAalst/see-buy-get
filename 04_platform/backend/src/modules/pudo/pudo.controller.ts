@@ -4,6 +4,7 @@ import { PapersWatchService } from './papers-watch.service';
 import { RailCheckDto, RailNoteDto, type RailNoteCheckView, type RailwayList } from './rail-note.types';
 import { railwayRows } from './rail-note';
 import { ImportByRailDto, RailArrivalDto, RailCollectAnywayDto } from './rail-leg.types';
+import { FblDto, FblVerifiedDto } from './fbl-note.types';
 import { checkRailNote } from '../../foundation/carriage-law/rail';
 import type { FleetDriver, FleetManager, FleetSetupRow } from './fleet.types';
 import { ConsignmentNoteService } from './consignment-note.service';
@@ -1463,6 +1464,22 @@ export class SbgController {
   importRailCollectAnyway(@Param('importId') importId: string, @Body() dto: RailCollectAnywayDto, @Actor() actor: IntrospectionResult): ImportDetail {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'Only the importer decides to send a truck before the box is there');
     return this.imports.collectAnyway(importId, this.actingCompany(actor), dto.reason, this.namedActor(actor));
+  }
+
+  /** The forwarder's FIATA bill or waybill the goods came under: the importer's or its agent's to keep (2026-10-29). */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/fbl')
+  holdImportFbl(@Param('importId') importId: string, @Body() dto: FblDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The bill is the importer’s or its agent’s to keep: staff read it, and write nothing in their name');
+    return this.imports.holdFbl(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+  }
+
+  /** What the importer or its agent saw on FIATA's page for an electronic bill, with the result attached: their word, never ours. */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/fbl/verified')
+  importFblVerified(@Param('importId') importId: string, @Body() dto: FblVerifiedDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'What FIATA’s page showed is the holder’s to record: staff write nothing in their name');
+    return this.imports.verifyFbl(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
   /** The railways we know, and whether we have read what each one's note must carry. */

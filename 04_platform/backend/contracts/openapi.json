@@ -4262,6 +4262,90 @@
         ]
       }
     },
+    "/v1/sbg/exports/{exportId}/fbl": {
+      "post": {
+        "operationId": "Export.fbl",
+        "summary": "",
+        "description": "The forwarder's FIATA bill or waybill, held with what is printed on it — the exporter's, or its agent's by number (2026-10-29).",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FblDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
+    "/v1/sbg/exports/{exportId}/fbl/verified": {
+      "post": {
+        "operationId": "Export.fblVerified",
+        "summary": "",
+        "description": "What the exporter saw on FIATA's page for an electronic bill, with the result attached: its word, never ours.",
+        "parameters": [
+          {
+            "name": "exportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FblVerifiedDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportDetail"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "sbg"
+        ]
+      }
+    },
     "/v1/sbg/exports/{exportId}/by-rail": {
       "post": {
         "operationId": "Export.byRail",
@@ -8536,6 +8620,84 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RailCollectAnywayDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/fbl": {
+      "post": {
+        "operationId": "Sbg.holdImportFbl",
+        "summary": "",
+        "description": "The forwarder's FIATA bill or waybill the goods came under: the importer's or its agent's to keep (2026-10-29).",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FblDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/imports/{importId}/fbl/verified": {
+      "post": {
+        "operationId": "Sbg.importFblVerified",
+        "summary": "",
+        "description": "What the importer or its agent saw on FIATA's page for an electronic bill, with the result attached: their word, never ours.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FblVerifiedDto"
               }
             }
           }
@@ -37111,6 +37273,172 @@
           "recordedBy"
         ]
       },
+      "FblIssuer": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "The issuer’s country, as a two-letter code."
+          }
+        },
+        "required": [
+          "name",
+          "country"
+        ]
+      },
+      "FblVerification": {
+        "type": "object",
+        "properties": {
+          "registered": {
+            "type": "boolean"
+          },
+          "fiataId": {
+            "type": "string"
+          },
+          "issuerShown": {
+            "type": "string"
+          },
+          "proofDocumentId": {
+            "type": "string"
+          },
+          "proofTitle": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "byEntityId": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "registered",
+          "proofDocumentId",
+          "proofTitle",
+          "by",
+          "byEntityId",
+          "at"
+        ]
+      },
+      "HeldFbl": {
+        "type": "object",
+        "properties": {
+          "form": {
+            "type": "string",
+            "enum": [
+              "fbl",
+              "fwb"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "issuer": {
+            "$ref": "#/components/schemas/FblIssuer"
+          },
+          "issuedOn": {
+            "type": "string",
+            "description": "YYYY-MM-DD, as printed."
+          },
+          "electronic": {
+            "type": "boolean"
+          },
+          "seaLeg": {
+            "type": "boolean",
+            "description": "The carriage includes a sea or inland-waterway leg."
+          },
+          "printed": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "consignor",
+                "consignedTo",
+                "notify",
+                "placeOfReceipt",
+                "vessel",
+                "portOfLoading",
+                "portOfDischarge",
+                "placeOfDelivery",
+                "marks",
+                "packages",
+                "description",
+                "grossWeight",
+                "measurement",
+                "freightPayableAt",
+                "originals",
+                "placeDateOfIssue",
+                "signature",
+                "deliveryAgent"
+              ]
+            }
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "documentTitle": {
+            "type": "string"
+          },
+          "containerNo": {
+            "type": "string",
+            "description": "As printed — matched against our own record, never corrected to it."
+          },
+          "seals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "packages": {
+            "type": "number"
+          },
+          "grossWeightKg": {
+            "type": "number"
+          },
+          "portOfLoading": {
+            "type": "string"
+          },
+          "portOfDischarge": {
+            "type": "string"
+          },
+          "consignedTo": {
+            "type": "string"
+          },
+          "originals": {
+            "type": "number"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/FblVerification"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "recordedByEntityId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "form",
+          "number",
+          "issuer",
+          "issuedOn",
+          "electronic",
+          "seaLeg",
+          "printed",
+          "recordedAt",
+          "recordedBy",
+          "recordedByEntityId"
+        ]
+      },
       "ExportConsignment": {
         "type": "object",
         "properties": {
@@ -37301,6 +37629,20 @@
                 "$ref": "#/components/schemas/ExportByRail"
               }
             ]
+          },
+          "fbl": {
+            "description": "The forwarder's FIATA bill or waybill (2026-10-29): held, never issued by us.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldFbl"
+              }
+            ]
+          },
+          "formerFbl": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HeldFbl"
+            }
           },
           "formerRail": {
             "description": "The notes it replaced, each kept as it was.",
@@ -38441,6 +38783,378 @@
           "replaced"
         ]
       },
+      "FblFindingView": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "consignor",
+              "consignedTo",
+              "notify",
+              "placeOfReceipt",
+              "vessel",
+              "portOfLoading",
+              "portOfDischarge",
+              "placeOfDelivery",
+              "marks",
+              "packages",
+              "description",
+              "grossWeight",
+              "measurement",
+              "freightPayableAt",
+              "originals",
+              "placeDateOfIssue",
+              "signature",
+              "deliveryAgent"
+            ]
+          },
+          "rule": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "ask"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "rule",
+          "kind"
+        ]
+      },
+      "FblCountryNoteView": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "says": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "says",
+          "source"
+        ]
+      },
+      "FblGenuineView": {
+        "type": "object",
+        "properties": {
+          "where": {
+            "type": "string"
+          },
+          "says": {
+            "type": "string"
+          },
+          "directory": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "where",
+          "says",
+          "directory"
+        ]
+      },
+      "FblSdrRateView": {
+        "type": "object",
+        "properties": {
+          "usd": {
+            "type": "number"
+          },
+          "on": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "usd",
+          "on",
+          "source"
+        ]
+      },
+      "FblCheckView": {
+        "type": "object",
+        "properties": {
+          "form": {
+            "type": "string"
+          },
+          "conditions": {
+            "type": "string"
+          },
+          "negotiable": {
+            "type": "boolean"
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FblFindingView"
+            }
+          },
+          "asked": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "consignor",
+                "consignedTo",
+                "notify",
+                "placeOfReceipt",
+                "vessel",
+                "portOfLoading",
+                "portOfDischarge",
+                "placeOfDelivery",
+                "marks",
+                "packages",
+                "description",
+                "grossWeight",
+                "measurement",
+                "freightPayableAt",
+                "originals",
+                "placeDateOfIssue",
+                "signature",
+                "deliveryAgent"
+              ]
+            }
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "meaning": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "claims": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "country": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FblCountryNoteView"
+            }
+          },
+          "genuine": {
+            "$ref": "#/components/schemas/FblGenuineView"
+          },
+          "sdrRate": {
+            "$ref": "#/components/schemas/FblSdrRateView"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "form",
+          "conditions",
+          "negotiable",
+          "findings",
+          "asked",
+          "complete",
+          "meaning",
+          "limits",
+          "claims",
+          "country",
+          "genuine",
+          "sdrRate",
+          "sources"
+        ]
+      },
+      "FblMatch": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "containerNo",
+              "seals",
+              "packages",
+              "grossWeight",
+              "port"
+            ]
+          },
+          "printed": {
+            "type": "string"
+          },
+          "ours": {
+            "type": "string"
+          },
+          "agrees": {
+            "type": "boolean"
+          },
+          "why": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "printed",
+          "ours",
+          "agrees"
+        ]
+      },
+      "FblView": {
+        "type": "object",
+        "properties": {
+          "form": {
+            "type": "string",
+            "enum": [
+              "fbl",
+              "fwb"
+            ]
+          },
+          "number": {
+            "type": "string"
+          },
+          "issuer": {
+            "$ref": "#/components/schemas/FblIssuer"
+          },
+          "issuedOn": {
+            "type": "string",
+            "description": "YYYY-MM-DD, as printed."
+          },
+          "electronic": {
+            "type": "boolean"
+          },
+          "seaLeg": {
+            "type": "boolean",
+            "description": "The carriage includes a sea or inland-waterway leg."
+          },
+          "printed": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "consignor",
+                "consignedTo",
+                "notify",
+                "placeOfReceipt",
+                "vessel",
+                "portOfLoading",
+                "portOfDischarge",
+                "placeOfDelivery",
+                "marks",
+                "packages",
+                "description",
+                "grossWeight",
+                "measurement",
+                "freightPayableAt",
+                "originals",
+                "placeDateOfIssue",
+                "signature",
+                "deliveryAgent"
+              ]
+            }
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "documentTitle": {
+            "type": "string"
+          },
+          "containerNo": {
+            "type": "string",
+            "description": "As printed — matched against our own record, never corrected to it."
+          },
+          "seals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "packages": {
+            "type": "number"
+          },
+          "grossWeightKg": {
+            "type": "number"
+          },
+          "portOfLoading": {
+            "type": "string"
+          },
+          "portOfDischarge": {
+            "type": "string"
+          },
+          "consignedTo": {
+            "type": "string"
+          },
+          "originals": {
+            "type": "number"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/FblVerification"
+          },
+          "recordedAt": {
+            "type": "string"
+          },
+          "recordedBy": {
+            "type": "string"
+          },
+          "recordedByEntityId": {
+            "type": "string"
+          },
+          "check": {
+            "$ref": "#/components/schemas/FblCheckView"
+          },
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FblMatch"
+            }
+          },
+          "verified": {
+            "type": "string",
+            "description": "Where the electronic bill's check stands, in the holder's own record.",
+            "enum": [
+              "paper",
+              "not_checked",
+              "registered",
+              "not_registered"
+            ]
+          },
+          "replaced": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "form",
+          "number",
+          "issuer",
+          "issuedOn",
+          "electronic",
+          "seaLeg",
+          "printed",
+          "recordedAt",
+          "recordedBy",
+          "recordedByEntityId",
+          "check",
+          "matches",
+          "verified",
+          "replaced"
+        ]
+      },
       "ExportDetail": {
         "type": "object",
         "properties": {
@@ -38532,6 +39246,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/RailNoteView"
+              }
+            ]
+          },
+          "fbl": {
+            "description": "The forwarder's bill with what it means, and what it says of the goods against ours.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FblView"
               }
             ]
           }
@@ -38765,6 +39487,148 @@
           "madeOutOn",
           "load",
           "printed"
+        ]
+      },
+      "FblIssuerDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "country": {
+            "type": "string",
+            "pattern": "/^[A-Za-z]{2}$/"
+          }
+        },
+        "required": [
+          "name",
+          "country"
+        ]
+      },
+      "FblDto": {
+        "type": "object",
+        "properties": {
+          "form": {
+            "type": "string",
+            "enum": [
+              "fbl",
+              "fwb"
+            ]
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "issuer": {
+            "$ref": "#/components/schemas/FblIssuerDto"
+          },
+          "issuedOn": {
+            "type": "string",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
+          },
+          "electronic": {
+            "type": "boolean"
+          },
+          "seaLeg": {
+            "type": "boolean"
+          },
+          "printed": {
+            "type": "string",
+            "enum": [
+              "consignor",
+              "consignedTo",
+              "notify",
+              "placeOfReceipt",
+              "vessel",
+              "portOfLoading",
+              "portOfDischarge",
+              "placeOfDelivery",
+              "marks",
+              "packages",
+              "description",
+              "grossWeight",
+              "measurement",
+              "freightPayableAt",
+              "originals",
+              "placeDateOfIssue",
+              "signature",
+              "deliveryAgent"
+            ]
+          },
+          "documentId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "containerNo": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "seals": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "packages": {
+            "type": "number",
+            "minimum": 0
+          },
+          "grossWeightKg": {
+            "type": "number",
+            "minimum": 0
+          },
+          "portOfLoading": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "portOfDischarge": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "consignedTo": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "originals": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "form",
+          "number",
+          "issuer",
+          "issuedOn",
+          "electronic",
+          "seaLeg",
+          "printed"
+        ]
+      },
+      "FblVerifiedDto": {
+        "type": "object",
+        "properties": {
+          "registered": {
+            "type": "boolean"
+          },
+          "fiataId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "issuerShown": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "proofDocumentId": {
+            "type": "string",
+            "description": "What FIATA's page showed — a screenshot or its PDF — from the company's own papers.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "registered",
+          "proofDocumentId"
         ]
       },
       "ExportByRailDto": {
@@ -44916,6 +45780,20 @@
               }
             ]
           },
+          "fbl": {
+            "description": "The forwarder's FIATA bill or waybill the goods came under (2026-10-29): held, never issued by us.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HeldFbl"
+              }
+            ]
+          },
+          "formerFbl": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HeldFbl"
+            }
+          },
           "importId": {
             "type": "string"
           },
@@ -45874,6 +46752,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ImportByRailView"
+              }
+            ]
+          },
+          "fbl": {
+            "description": "The forwarder's bill with what it means, and what it says of the box against ours.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FblView"
               }
             ]
           }

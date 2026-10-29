@@ -9,6 +9,7 @@ import { ExportPacking, ExportPackingView } from './export-packing.types';
 import { ExportInvoice, ExportInvoiceView } from './export-invoice.types';
 import { HeldRailNote, RailNoteView } from './rail-note.types';
 import { ExportByRail } from './rail-leg.types';
+import { FblView, HeldFbl } from './fbl-note.types';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -266,6 +267,9 @@ export class ExportConsignment {
   @ApiPropertyOptional({ type: HeldRailNote }) rail?: HeldRailNote;
   /** By rail to the port (2026-10-29): our truck takes the box to a rail terminal, timed to the train's cut-off there. */
   @ApiPropertyOptional({ type: ExportByRail }) byRail?: ExportByRail;
+  /** The forwarder's FIATA bill or waybill (2026-10-29): held, never issued by us. */
+  @ApiPropertyOptional({ type: HeldFbl }) fbl?: HeldFbl;
+  @ApiPropertyOptional({ type: [HeldFbl] }) formerFbl?: HeldFbl[];
   /** The notes it replaced, each kept as it was. */
   @ApiPropertyOptional({ type: [HeldRailNote] }) formerRail?: HeldRailNote[];
   @ApiProperty() createdAt: string;
@@ -371,6 +375,8 @@ export class ExportDetail {
   @ApiProperty({ type: ExportInvoiceView }) invoice: ExportInvoiceView;
   /** The railway's note with its check, and what it says of the box against ours. */
   @ApiPropertyOptional({ type: RailNoteView }) rail?: RailNoteView;
+  /** The forwarder's bill with what it means, and what it says of the goods against ours. */
+  @ApiPropertyOptional({ type: FblView }) fbl?: FblView;
 }
 
 export class ExportRow {

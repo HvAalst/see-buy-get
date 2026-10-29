@@ -10,6 +10,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { RailNoteDto } from './rail-note.types';
 import { ExportByRailDto } from './rail-leg.types';
+import { FblDto, FblVerifiedDto } from './fbl-note.types';
 import { ExportService } from './export.service';
 import { SliDraftDto, SliSignDto } from './export-sli.types';
 import { PackingCheck, PackingImportDto, PackingSignDto } from './export-packing.types';
@@ -120,6 +121,20 @@ export class ExportController {
   @Post(':exportId/rail')
   rail(@Param('exportId') exportId: string, @Body() dto: RailNoteDto, @Actor() actor: IntrospectionResult): ExportDetail {
     return this.exports.holdRail(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  /** The forwarder's FIATA bill or waybill, held with what is printed on it — the exporter's, or its agent's by number (2026-10-29). */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/fbl')
+  fbl(@Param('exportId') exportId: string, @Body() dto: FblDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.holdFbl(exportId, this.ownCompany(actor), dto, auditActor(actor));
+  }
+
+  /** What the exporter saw on FIATA's page for an electronic bill, with the result attached: its word, never ours. */
+  @Roles('business', 'entity_admin')
+  @Post(':exportId/fbl/verified')
+  fblVerified(@Param('exportId') exportId: string, @Body() dto: FblVerifiedDto, @Actor() actor: IntrospectionResult): ExportDetail {
+    return this.exports.verifyFbl(exportId, this.ownCompany(actor), dto, auditActor(actor));
   }
 
   /** By rail to the port: the rail terminal and the train's cut-off there — our truck is timed to it (2026-10-29). */
