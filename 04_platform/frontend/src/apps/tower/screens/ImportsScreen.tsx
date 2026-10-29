@@ -1113,17 +1113,21 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                     * to interpret — for the same port, every time, on every container.
                     */}
                   <div class="twr-knobs__row">
-                    <div class="twr-knob">
-                      <SitePicker
-                        kind="port"
-                        entityId={detail.importerEntityId}
-                        api={client?.api as never}
-                        value={roadForm.pickupSiteId}
-                        onChange={(pickupSiteId) => setRoadForm({ ...roadForm, pickupSiteId })}
-                        label={t('tower.imports.f.collectedFrom')}
-                        addLabel={t('tower.sites.addPort')}
-                      />
-                    </div>
+                    {detail.byRail ? (
+                      <p class="twr-knob chint">{t('tower.byRail.collectedAt', { terminal: detail.byRail.terminal.label })}</p>
+                    ) : (
+                      <div class="twr-knob">
+                        <SitePicker
+                          kind="port"
+                          entityId={detail.importerEntityId}
+                          api={client?.api as never}
+                          value={roadForm.pickupSiteId}
+                          onChange={(pickupSiteId) => setRoadForm({ ...roadForm, pickupSiteId })}
+                          label={t('tower.imports.f.collectedFrom')}
+                          addLabel={t('tower.sites.addPort')}
+                        />
+                      </div>
+                    )}
                     <div class="twr-knob">
                       <SitePicker
                         kind="delivery"
@@ -1141,17 +1145,17 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                     </label>
                   </div>
                   <div class="twr-panelend">
-                    {roadBlocker(roadForm) ? <span class="chint">{t(roadBlocker(roadForm)!)}</span> : null}
+                    {roadBlocker(roadForm, Boolean(detail.byRail)) ? <span class="chint">{t(roadBlocker(roadForm, Boolean(detail.byRail))!)}</span> : null}
                     <button
                       type="button"
                       class="cbtn cbtn--primary"
-                      disabled={Boolean(roadBlocker(roadForm)) || busy === 'road'}
+                      disabled={Boolean(roadBlocker(roadForm, Boolean(detail.byRail))) || busy === 'road'}
                       onClick={() =>
                         run(
                           'road',
                           () =>
                             client!.api.mintImportRoadLeg(detail.importId, {
-                              pickupSiteId: roadForm.pickupSiteId,
+                              ...(roadForm.pickupSiteId && !detail.byRail ? { pickupSiteId: roadForm.pickupSiteId } : {}),
                               destSiteId: roadForm.destSiteId,
                               weightKg: Number(roadForm.weightKg),
                               ...(who ? { by: who } : {}),
@@ -1161,7 +1165,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                         )
                       }
                     >
-                      {detail.dischargePort && !detail.bondedFreightCode ? t('tower.imports.bondedMint') : t('tower.imports.mintRoad')}
+                      {detail.dischargePort && !detail.bondedFreightCode && !detail.byRail ? t('tower.imports.bondedMint') : t('tower.imports.mintRoad')}
                     </button>
                   </div>
                 </>

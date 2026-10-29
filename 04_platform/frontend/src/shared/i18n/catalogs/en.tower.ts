@@ -720,7 +720,6 @@ export const enTower = {
   'tower.sites.namePortPh': 'Mombasa — gate 4',
   'tower.imports.noteOpen': 'Open the note',
   'tower.imports.roadAlready': 'Already on the board as {code}.',
-  'tower.imports.needDest': 'Say where the container is going.',
   'tower.borders.title': 'Crossing a border',
   'tower.borders.lede': 'The rules of carrying goods from one country into another: where a border may be crossed and when, the permits and regional insurance a vehicle must carry, the size a crossing allows — and whether a foreign vehicle may carry loads inside the country at all.',
   'tower.borders.caveatT': 'No rule means no permission.',

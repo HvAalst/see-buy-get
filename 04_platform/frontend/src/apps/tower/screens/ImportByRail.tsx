@@ -41,6 +41,7 @@ export function ImportByRail({ code, rail, youAre, entityId, api, calls, onChang
   const [arrival, setArrival] = useState({ at: '', reference: '' });
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [changing, setChanging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const act = async (fn: () => Result) => {
     setBusy(true);
@@ -48,6 +49,7 @@ export function ImportByRail({ code, rail, youAre, entityId, api, calls, onChang
     const r = await fn();
     setBusy(false);
     if (r.error) return setError(r.error.detail || r.error.title || '');
+    setChanging(false);
     await onChanged();
   };
 
@@ -137,7 +139,12 @@ export function ImportByRail({ code, rail, youAre, entityId, api, calls, onChang
         </>
       ) : null}
 
-      {canAct && !rail?.arrival ? (
+      {canAct && rail && !rail.arrival && !changing ? (
+        <div class="twr-panelend">
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging(true)}>{t('tower.byRail.changeTitle')}</button>
+        </div>
+      ) : null}
+      {canAct && !rail?.arrival && (!rail || changing) ? (
         <div class="twr-knobs">
           <p class="cfield__label">{t(rail ? 'tower.byRail.changeTitle' : 'tower.byRail.setTitle')}</p>
           <SitePicker kind="clearance" entityId={entityId} api={api as never} value={form.site} onChange={(site) => setForm({ ...form, site })} label={t('tower.byRail.f.terminal')} addLabel={t('tower.sites.addPort')} />

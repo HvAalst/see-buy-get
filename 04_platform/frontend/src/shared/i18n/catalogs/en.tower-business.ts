@@ -580,6 +580,7 @@ export const enTowerBusiness = {
   'tower.imports.holdRelease': 'It has been released',
   'tower.imports.holdReleasedOk': 'Release recorded.',
   'tower.imports.needPort': 'Give the port’s position, so a driver knows where to collect.',
+  'tower.imports.needDest': 'Say where the container is going.',
   'tower.company.signing.alone': 'Alone',
   'tower.company.signing.jointly': 'Only together with another',
   'tower.company.signing.none': 'May not sign',
@@ -655,6 +656,7 @@ export const enTowerBusiness = {
   'tower.byRail.f.expected': 'When the railway expects it (UTC)',
   'tower.byRail.f.freeDays': 'Free days at the terminal',
   'tower.byRail.save': 'Save',
+  'tower.byRail.collectedAt': 'Collected at {terminal}, where the train brings it.',
   /* The railway's note, held on an export or an import (RailNotePanel; the user, 2026-10-28). */
   'tower.rail.title': 'The railway’s note',
   'tower.rail.lede': 'Where the box goes by rail, the railway issues the note — on paper or in its own system. Keep it here with what is printed on it: it is checked against the rules of its route, and its box number and seals against ours.',

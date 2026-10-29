@@ -985,7 +985,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </>
         ) : mine ? (
           <>
-            <p class="chint">{t(c.vgm ? 'business.exports.laden.hintVgm' : 'business.exports.laden.hint')}</p>
+            <p class="chint">{c.byRail ? t(c.vgm ? 'business.exports.laden.hintRailVgm' : 'business.exports.laden.hintRail', { terminal: c.byRail.terminal.label }) : t(c.vgm ? 'business.exports.laden.hintVgm' : 'business.exports.laden.hint')}</p>
             {!c.vgm ? (
               <label class="cfield">
                 <span class="cfield__label">{t('business.exports.laden.weight')}</span>
