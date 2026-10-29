@@ -280,14 +280,15 @@ export function shopChoices(shops: NetworkShop[], country: string): NetworkShop[
 
 /* ---------------------------------------------------------------- the list -- */
 
-export type ParcelStage = 'unpaid' | 'to_hand_in' | 'on_its_way' | 'to_collect' | 'collected' | 'called_off' | 'problem';
+export type ParcelStage = 'unpaid' | 'to_hand_in' | 'at_your_place' | 'on_its_way' | 'to_collect' | 'collected' | 'called_off' | 'problem';
 
 /** Where a parcel stands, in the words its sender reads. */
-export function parcelStage(p: Pick<BusinessParcel, 'status' | 'paid'>): ParcelStage {
+export function parcelStage(p: Pick<BusinessParcel, 'status' | 'paid' | 'fromOwnPlace'>): ParcelStage {
   if (p.status === 'Voided' || p.status === 'Returned') return 'called_off';
   if (p.status === 'Disputed' || p.status === 'Lost') return 'problem';
   if (!p.paid) return 'unpaid';
-  if (p.status === 'Created') return 'to_hand_in';
+  // Collected from its own place: it waits there for its bag and a driver, not for a trip to a shop.
+  if (p.status === 'Created') return p.fromOwnPlace ? 'at_your_place' : 'to_hand_in';
   if (p.status === 'Ready_For_Pickup' || p.status === 'Unclaimed') return 'to_collect';
   if (p.status === 'Delivered') return 'collected';
   return 'on_its_way';
@@ -296,6 +297,7 @@ export function parcelStage(p: Pick<BusinessParcel, 'status' | 'paid'>): ParcelS
 export const STAGE_WORD: Record<ParcelStage, MessageKey> = {
   unpaid: 'business.parcels.stage.unpaid',
   to_hand_in: 'business.parcels.stage.toHandIn',
+  at_your_place: 'business.parcels.stage.atYourPlace',
   on_its_way: 'business.parcels.stage.onItsWay',
   to_collect: 'business.parcels.stage.toCollect',
   collected: 'business.parcels.stage.collected',
@@ -306,6 +308,7 @@ export const STAGE_WORD: Record<ParcelStage, MessageKey> = {
 export const STAGE_TONE: Record<ParcelStage, 'ok' | 'warn' | 'info' | 'quiet'> = {
   unpaid: 'warn',
   to_hand_in: 'info',
+  at_your_place: 'info',
   on_its_way: 'info',
   to_collect: 'info',
   collected: 'ok',

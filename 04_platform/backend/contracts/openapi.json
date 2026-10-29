@@ -4044,6 +4044,265 @@
         }
       }
     },
+    "/v1/sbg/business/me/parcels/price": {
+      "get": {
+        "operationId": "BusinessParcel.price",
+        "summary": "",
+        "description": "What a parcel would cost: from a shop or from its own place (`origin=own`), to a shop.",
+        "parameters": [
+          {
+            "name": "origin",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "dest",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 120,
+              "type": "string"
+            }
+          },
+          {
+            "name": "l",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 0.1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "w",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 0.1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "h",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 0.1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "kg",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 0.01,
+              "type": "number"
+            }
+          },
+          {
+            "name": "fragile",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParcelPriceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/collect-from": {
+      "post": {
+        "operationId": "BusinessParcel.collectFrom",
+        "summary": "",
+        "description": "One of its own places as where drivers collect its parcels (2026-10-29).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessCollectFromDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelAccountView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "BusinessParcel.stopCollecting",
+        "summary": "",
+        "description": "Stop collecting there.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BusinessParcelAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/dock": {
+      "get": {
+        "operationId": "BusinessParcel.dock",
+        "summary": "",
+        "description": "The day's bagging at its own place.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DockView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/dock/bags": {
+      "post": {
+        "operationId": "BusinessParcel.openBag",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessOpenBagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DockView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/dock/bags/{code}/parcels": {
+      "post": {
+        "operationId": "BusinessParcel.fillBag",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessFillBagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DockView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/parcels/dock/bags/{code}/seal": {
+      "post": {
+        "operationId": "BusinessParcel.sealBag",
+        "summary": "",
+        "description": "Close a bag for the road: drivers near are told it is ready.",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BusinessSealBagDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DockView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/parcels": {
       "get": {
         "operationId": "BusinessParcel.list",
@@ -4273,6 +4532,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "backTo",
+            "required": false,
+            "in": "query",
+            "description": "Collected from its own place and at a hub: door, to bring it back there",
+            "schema": {}
           }
         ],
         "responses": {
@@ -36835,6 +37101,33 @@
           }
         }
       },
+      "ParcelCollection": {
+        "type": "object",
+        "properties": {
+          "siteId": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "zone": {
+            "type": "string",
+            "description": "The delivery area it is in, from the shop nearest to it: what routes a bag from there."
+          },
+          "bays": {
+            "type": "number"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "zone",
+          "bays",
+          "since"
+        ]
+      },
       "BusinessParcelAccountView": {
         "type": "object",
         "properties": {
@@ -36871,6 +37164,14 @@
           },
           "moving": {
             "type": "number"
+          },
+          "collection": {
+            "description": "Where drivers collect its parcels, where it set one of its places for it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ParcelCollection"
+              }
+            ]
           }
         },
         "required": [
@@ -36961,6 +37262,48 @@
           "total"
         ]
       },
+      "ParcelPriceView": {
+        "type": "object",
+        "properties": {
+          "flexible": {
+            "type": "number",
+            "description": "Held when sent, and what it costs less given back once it is collected."
+          },
+          "locked": {
+            "type": "number",
+            "description": "The cheapest route, paid at once."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "crossesBorder": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "flexible",
+          "locked",
+          "currency",
+          "crossesBorder"
+        ]
+      },
+      "BusinessCollectFromDto": {
+        "type": "object",
+        "properties": {
+          "siteId": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "bays": {
+            "type": "number",
+            "description": "How many closed bags fit there, waiting for drivers.",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "siteId"
+        ]
+      },
       "ParcelEnd": {
         "type": "object",
         "properties": {
@@ -37015,6 +37358,10 @@
           "from": {
             "$ref": "#/components/schemas/ParcelEnd"
           },
+          "fromOwnPlace": {
+            "type": "boolean",
+            "description": "Collected by a driver from its own place, not handed in at a shop."
+          },
           "to": {
             "$ref": "#/components/schemas/ParcelEnd"
           },
@@ -37055,6 +37402,151 @@
           "size",
           "currency",
           "createdAt"
+        ]
+      },
+      "DockGroupView": {
+        "type": "object",
+        "properties": {
+          "zone": {
+            "type": "string"
+          },
+          "parcels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BusinessParcelRow"
+            }
+          },
+          "openBagCode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone",
+          "parcels"
+        ]
+      },
+      "DockBagView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "parcelIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "fillPct": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "description": "`filling` open, `available` closed and waiting for a driver, `claimed` a driver is coming."
+          }
+        },
+        "required": [
+          "code",
+          "parcelIds",
+          "fillPct",
+          "status"
+        ]
+      },
+      "DockView": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "$ref": "#/components/schemas/ParcelCollection"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DockGroupView"
+            }
+          },
+          "bags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DockBagView"
+            }
+          },
+          "capacity": {
+            "type": "number"
+          },
+          "used": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "collection",
+          "groups",
+          "bags",
+          "capacity",
+          "used"
+        ]
+      },
+      "BusinessOpenBagDto": {
+        "type": "object",
+        "properties": {
+          "destZone": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "destZone"
+        ]
+      },
+      "BusinessFillBagDto": {
+        "type": "object",
+        "properties": {
+          "parcelId": {
+            "type": "string",
+            "maxLength": 60
+          }
+        },
+        "required": [
+          "parcelId"
+        ]
+      },
+      "BagCloseDto": {
+        "type": "object",
+        "properties": {
+          "seal": {
+            "type": "string",
+            "description": "Its coded seal's number, when it has one.",
+            "maxLength": 40
+          },
+          "photoRef": {
+            "type": "string",
+            "description": "A photograph of the bag closed, its seal in view.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "photoRef"
+        ]
+      },
+      "BusinessSealBagDto": {
+        "type": "object",
+        "properties": {
+          "closure": {
+            "$ref": "#/components/schemas/BagCloseDto"
+          },
+          "acknowledgeShortShip": {
+            "type": "boolean",
+            "description": "Close it with paid parcels for its destination still waiting here, on purpose."
+          },
+          "shortShipReason": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "closure"
         ]
       },
       "BusinessParcelList": {
@@ -37142,8 +37634,12 @@
           },
           "originPudoDid": {
             "type": "string",
-            "description": "The shop it is handed in at.",
+            "description": "The shop it is handed in at. Absent: collected from the business's own place (`fromOwnPlace`).",
             "maxLength": 120
+          },
+          "fromOwnPlace": {
+            "type": "boolean",
+            "description": "Collected by a driver from the place the business set for it (2026-10-29), not handed in at a shop."
           },
           "destPudoDid": {
             "type": "string",
@@ -37198,7 +37694,6 @@
           }
         },
         "required": [
-          "originPudoDid",
           "destPudoDid",
           "receiverMobile",
           "dimensionsCm",
@@ -37258,6 +37753,10 @@
           },
           "from": {
             "$ref": "#/components/schemas/ParcelEnd"
+          },
+          "fromOwnPlace": {
+            "type": "boolean",
+            "description": "Collected by a driver from its own place, not handed in at a shop."
           },
           "to": {
             "$ref": "#/components/schemas/ParcelEnd"
@@ -37402,6 +37901,17 @@
           },
           "done": {
             "type": "boolean"
+          },
+          "door": {
+            "type": "string",
+            "description": "pick: its own place, which it can come back to. to_door: the most we suggest allowing a driver."
+          },
+          "suggestedMax": {
+            "type": "number"
+          },
+          "loadCode": {
+            "type": "string",
+            "description": "to_door: the load bringing it back, by its code."
           }
         },
         "required": [
@@ -37415,6 +37925,18 @@
           "reason": {
             "type": "string",
             "maxLength": 200
+          },
+          "backTo": {
+            "type": "string",
+            "description": "At a hub, for one collected from its own place: `door` brings it back there, as a driver's load.",
+            "enum": [
+              "door"
+            ]
+          },
+          "maxSpend": {
+            "type": "number",
+            "description": "Back to its door: the most it pays a driver for it.",
+            "minimum": 0.01
           }
         }
       },

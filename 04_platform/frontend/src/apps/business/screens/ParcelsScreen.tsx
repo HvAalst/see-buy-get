@@ -406,7 +406,7 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
                 </label>
                 <label class="cfield">
                   <span class="cfield__label">{t('business.parcels.bagPhoto')}</span>
-                  <input class="cinput" type="file" accept="image/*" capture="environment" onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
+                  <input class="cinput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
                   {photoRef ? <span class="chint">{t('business.parcels.f.photoKept')}</span> : null}
                 </label>
               </div>
@@ -592,7 +592,7 @@ function SendForm({ api, shops, collection, balance, onSent, onCancel }: { api: 
       </label>
       <label class="cfield">
         <span class="cfield__label">{t('business.parcels.f.photo')}</span>
-        <input class="cinput" type="file" accept="image/*" capture="environment" disabled={photoBusy} onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
+        <input class="cinput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photoBusy} onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
         <span class="chint">{form.photoRef ? t('business.parcels.f.photoKept') : t('business.parcels.f.photoHint')}</span>
       </label>
 
@@ -647,7 +647,7 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
   };
 
   const stage = parcelStage(row);
-  const callable = works && (stage === 'unpaid' || stage === 'to_hand_in' || stage === 'on_its_way');
+  const callable = works && (stage === 'unpaid' || stage === 'to_hand_in' || stage === 'at_your_place' || stage === 'on_its_way');
   return (
     <section class="cons__panel">
       <div class="cons__panelhead">
@@ -659,7 +659,7 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
       </div>
       <dl class="cons__facts">
         <div class="cons__fact">
-          <dt class="cons__factk">{t('business.parcels.fact.from')}</dt>
+          <dt class="cons__factk">{t(row.fromOwnPlace ? 'business.parcels.fact.collectedFrom' : 'business.parcels.fact.from')}</dt>
           <dd class="cons__factv">{row.from ? `${row.from.name} · ${row.from.zone}` : '—'}</dd>
         </div>
         <div class="cons__fact">

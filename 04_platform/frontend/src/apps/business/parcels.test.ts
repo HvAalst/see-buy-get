@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_PARCEL, parcelPriceGaps, parcelSendGaps, parcelSize, parcelStage, sendBody, shopChoices, type ParcelForm } from './parcels';
+import { EMPTY_PARCEL, OWN_PLACE, parcelPriceGaps, parcelSendGaps, parcelSize, parcelStage, sendBody, shopChoices, type ParcelForm } from './parcels';
 
 const t = ((key: string) => key) as never;
 
@@ -29,6 +29,15 @@ describe('a business’s parcels', () => {
     expect(sendBody({ ...full, photoRef: '' }, 1)).toBeNull();
   });
 
+  it('collected from its own place: no shop named, the place said instead — and never “the same shop” against a shop', () => {
+    const own = { ...full, originDid: OWN_PLACE };
+    expect(parcelPriceGaps(own, t)).toEqual([]);
+    const body = sendBody(own, 9);
+    expect(body).toMatchObject({ fromOwnPlace: true, destPudoDid: 'did:b' });
+    expect(body).not.toHaveProperty('originPudoDid');
+    expect(sendBody(full, 9)).not.toHaveProperty('fromOwnPlace');
+  });
+
   it('offers the shops taking new parcels in the business’s own country, by name', () => {
     const shops = [
       { did: '1', shopName: 'Zebra Shop', zone: 'Z', country: 'KE' },
@@ -42,6 +51,7 @@ describe('a business’s parcels', () => {
   it('says where a parcel stands in the sender’s words: unpaid first, then hand in, on its way, ready, collected', () => {
     expect(parcelStage({ status: 'Created', paid: false })).toBe('unpaid');
     expect(parcelStage({ status: 'Created', paid: true })).toBe('to_hand_in');
+    expect(parcelStage({ status: 'Created', paid: true, fromOwnPlace: true })).toBe('at_your_place');
     expect(parcelStage({ status: 'On_Bus', paid: true })).toBe('on_its_way');
     expect(parcelStage({ status: 'At_MDP', paid: true })).toBe('on_its_way');
     expect(parcelStage({ status: 'Ready_For_Pickup', paid: true })).toBe('to_collect');
