@@ -1,0 +1,172 @@
+/* The logistics directory (/directory/, /directory/<cc>/): the pages' reading column (pages.css), the public site's paper. */
+
+.dir__crumb {
+  margin: 0 0 4px;
+}
+
+.dir__crumb .land__link {
+  margin-top: 0;
+}
+
+.dir__map {
+  margin: 12px 0 16px;
+  border: 1px solid var(--p-rule, var(--bd-soft));
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+
+.dir__countries .land__p {
+  margin: 0;
+}
+
+/* What they do, as buttons in a row that wraps — the chosen one filled. */
+.dir__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 16px;
+}
+
+.dir__kind {
+  min-height: 44px;
+  padding: 0.45rem 0.9rem;
+  border: 2px solid var(--p-ink, var(--navy));
+  border-radius: 999px;
+  background: var(--p-paper, #fff);
+  color: var(--p-ink, var(--navy));
+  font: 600 0.95rem var(--p-body, inherit);
+  cursor: pointer;
+}
+
+.dir__kind[aria-pressed='true'] {
+  background: var(--p-ink, var(--navy));
+  color: var(--p-paper, #fff);
+}
+
+.dir__find {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 16px;
+  max-width: 28rem;
+}
+
+.dir__findl {
+  font-weight: 700;
+}
+
+.dir__input {
+  min-height: 48px;
+  padding: 0 12px;
+  border: 2px solid var(--p-rule, var(--bd-soft));
+  border-radius: 4px;
+  background: var(--p-paper, #fff);
+  color: var(--p-ink, var(--navy));
+  font: inherit;
+}
+
+.dir__firms {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.dir__firm {
+  padding: 16px;
+  background: var(--p-paper, var(--card));
+  border: 1px solid var(--p-rule, var(--bd-soft));
+  border-radius: var(--r-card);
+  scroll-margin-top: 80px;
+}
+
+.dir__name {
+  font-family: var(--font-display);
+  font-size: 21px;
+  line-height: 1.25;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dir__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 6px 0 0;
+}
+
+.dir__tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--blue-light);
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.dir__since {
+  font-size: 14px;
+  color: var(--p-muted, var(--tx2));
+}
+
+.dir__h3 {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 0;
+}
+
+.dir__words,
+.dir__seen,
+.dir__checks {
+  margin-top: 14px;
+}
+
+/* Their own words: set apart by a rule in their colour, and always followed by whose words they are. */
+.dir__words {
+  padding-left: 12px;
+  border-left: 3px solid var(--p-orange, var(--org));
+}
+
+.dir__quote {
+  margin: 4px 0 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--p-ink, var(--tx));
+  overflow-wrap: anywhere;
+}
+
+.dir__list {
+  margin: 4px 0 0;
+  padding-inline-start: 20px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tx2);
+}
+
+.dir__reach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 16px;
+}
+
+.dir__btn {
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+}
+
+.dir__reach .dir__page {
+  margin-top: 0;
+}
+
+@media (max-width: 420px) {
+  .dir__reach .dir__btn {
+    flex: 1 1 auto;
+  }
+}

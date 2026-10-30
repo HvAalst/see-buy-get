@@ -25,6 +25,23 @@ export const DocumentLinkPage = screen(() => import('../../shared/archive/Docume
 export const DamageReportLinkPage = screen(() => import('../../shared/damage/DamageReportLinkPage').then((m) => m.DamageReportLinkPage));
 
 /*
+ * THE LOGISTICS DIRECTORY: pages of their own, finished HTML at build time — its code, its map and its words are brought
+ * in BEFORE it is drawn (main.tsx, prerender.tsx), like the help's.
+ */
+let directory: typeof import('./screens/DirectoryScreen').DirectoryScreen | null = null;
+
+/** The directory screen, once it is here. */
+export function directoryScreen(): typeof directory {
+  return directory;
+}
+
+/** Bring the directory screen and its words in, once. */
+export async function loadDirectoryPage(): Promise<void> {
+  if (directory) return;
+  directory = (await import('./screens/DirectoryScreen')).DirectoryScreen;
+}
+
+/*
  * THE HELP: a page of its own, finished HTML at build time — so its code and its words (the biggest catalog there is)
  * are brought in BEFORE it is drawn (main.tsx, prerender.tsx), never in the middle of taking over its markup.
  */

@@ -10,7 +10,7 @@ import { PublicShell } from './screens/PublicShell';
 import { welcomeSpoken } from './logic';
 import { lookAtDocumentLink, lookAtReportLink, takeDocumentLink, takeReportLink, verifyNote } from './api';
 // Not in the homepage's first download: each is fetched when it is opened (lazyScreens.ts).
-import { AgentsScreen, DamageReportLinkPage, DocumentLinkPage, JoinScreen, MarketScreen, NoteCheck, ProfileScreen, RolesScreen, SignInScreen, StoreScreen, helpScreen, loadHelpPage } from './lazyScreens';
+import { AgentsScreen, DamageReportLinkPage, DocumentLinkPage, JoinScreen, MarketScreen, NoteCheck, ProfileScreen, RolesScreen, SignInScreen, StoreScreen, directoryScreen, helpScreen, loadDirectoryPage, loadHelpPage } from './lazyScreens';
 import { roleMeta } from './logic';
 import { useHomeApp } from './useHomeApp';
 import '../../shared/screens.css';
@@ -30,6 +30,7 @@ export function App() {
   const [, helpArrived] = useState(0);
   useEffect(() => {
     if (state.screen === 'help' && !helpScreen()) void loadHelpPage().then(() => helpArrived((n) => n + 1));
+    if (state.screen === 'directory' && !directoryScreen()) void loadDirectoryPage().then(() => helpArrived((n) => n + 1));
   }, [state.screen]);
 
   /**
@@ -74,6 +75,11 @@ export function App() {
         <InfoScreen page={state.infoPage} />
       </PublicShell>
     );
+  }
+  // The logistics directory: the public site's frame, its code brought in before it is drawn (main.tsx).
+  if (state.screen === 'directory' && state.directoryPage) {
+    const Directory = directoryScreen();
+    return <PublicShell update={update}>{Directory ? <Directory page={state.directoryPage} /> : <div class="pg" aria-busy="true" />}</PublicShell>;
   }
 
   return (

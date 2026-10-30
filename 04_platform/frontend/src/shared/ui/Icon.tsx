@@ -55,7 +55,9 @@ export type IconName =
   // The legs of a journey (2026-10-29): a truck is already here; a train, a ship and a plane join it.
   | 'train'
   | 'ship'
-  | 'plane';
+  | 'plane'
+  // A firm's website, in the logistics directory (2026-10-30).
+  | 'globe';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chevronRight: <path d="m9 5 7 7-7 7" />,
@@ -79,6 +81,7 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   plane: <path d="M21 15.5v-2l-7.5-4.5V4.5a1.5 1.5 0 0 0-3 0V9L3 13.5v2l7.5-2.2V18l-2 1.5V21l3.5-1 3.5 1v-1.5l-2-1.5v-4.7l7.5 2.2Z" />,
+  globe: <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm-9 9h18M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.6-3.6-9S9.6 5.6 12 3Z" />,
   route: (
     <>
       <circle cx="6" cy="6" r="2.4" />

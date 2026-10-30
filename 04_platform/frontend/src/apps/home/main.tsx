@@ -2,7 +2,7 @@ import './english';
 import { hydrate, render } from 'preact';
 import '../../shared/tokens.css';
 import { App } from './app';
-import { loadHelpPage } from './lazyScreens';
+import { loadDirectoryPage, loadHelpPage } from './lazyScreens';
 import { getLocale, initI18n } from '../../shared/i18n';
 
 /**
@@ -36,5 +36,6 @@ function mount(el: HTMLElement): void {
  */
 if (host) {
   if (/^\/help(\/|$)/.test(location.pathname)) void loadHelpPage().then(() => mount(host), () => mount(host));
+  else if (/^\/directory(\/|$)/.test(location.pathname)) void loadDirectoryPage().then(() => mount(host), () => mount(host));
   else mount(host);
 }

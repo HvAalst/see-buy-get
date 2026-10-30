@@ -1,7 +1,9 @@
 import './prerenderEnglish';
 import { renderToString } from 'preact-render-to-string';
 import { App } from './app';
-import { loadHelpPage } from './lazyScreens';
+import { loadDirectoryPage, loadHelpPage } from './lazyScreens';
+import { DIRECTORY_PATH, directoryCountryPath, directoryPageOf, type DirectoryBuilt, type DirectoryCountryView, type DirectoryIndex, type DirectoryPage } from './directory';
+import { countryNameIn } from '../../shared/documents/documents';
 import { t } from '../../shared/i18n';
 import { FAQ } from './screens/WelcomeScreen';
 import type { TownPage } from './api';
@@ -67,10 +69,32 @@ function loadDocuments(): Promise<Partial<Record<Notice, PublishedDocument>>> {
   return documentsOnce;
 }
 
+/**
+ * THE LOGISTICS DIRECTORY as the server has it — its countries read ONCE, and each country's firms when its page is built.
+ * A build that cannot reach the server builds the directory's front page empty and no country pages: the browser fetches.
+ */
+let directoryOnce: Promise<DirectoryIndex | null> | null = null;
+function loadDirectory(): Promise<DirectoryIndex | null> {
+  directoryOnce ??= fetch(`${API}/v1/sbg/directory`, { signal: AbortSignal.timeout(8000) })
+    .then((r) => (r.ok ? (r.json() as Promise<DirectoryIndex>) : null))
+    .then((d) => (d && Array.isArray(d.countries) ? d : null))
+    .catch(() => {
+      console.warn(`[prerender] could not reach ${API} for the directory — building its page without countries`);
+      return null;
+    });
+  return directoryOnce;
+}
+function loadDirectoryCountry(country: string): Promise<DirectoryCountryView | null> {
+  return fetch(`${API}/v1/sbg/directory/${country}`, { signal: AbortSignal.timeout(8000) })
+    .then((r) => (r.ok ? (r.json() as Promise<DirectoryCountryView>) : null))
+    .then((d) => (d && Array.isArray(d.entries) ? d : null))
+    .catch(() => null);
+}
+
 export async function prerender(data: { url: string }): Promise<{
   html: string;
   links?: Set<string>;
-  data: { towns: TownPage[]; documents: Partial<Record<Notice, PublishedDocument>> };
+  data: { towns: TownPage[]; documents: Partial<Record<Notice, PublishedDocument>>; directory?: DirectoryBuilt };
   head: { lang: string; title: string; elements: Set<HeadElement> };
 }> {
   const towns = await loadTowns();
@@ -78,21 +102,29 @@ export async function prerender(data: { url: string }): Promise<{
   // The help page's code is fetched on demand in the browser (lazyScreens.ts); here it is brought in before rendering.
   await loadHelpPage();
   const url = data.url || '/';
-  (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url, towns, documents };
+  // A directory page: its code and words first (lazyScreens.ts), and what the server lists for it.
+  const dirPage = directoryPageOf(url);
+  if (dirPage) await loadDirectoryPage();
+  const index = dirPage?.kind === 'index' || url === '/' ? await loadDirectory() : null;
+  const countryView = dirPage?.kind === 'country' ? await loadDirectoryCountry(dirPage.country) : null;
+  const directory: DirectoryBuilt | undefined = dirPage ? { ...(index ? { index } : {}), ...(countryView ? { country: countryView } : {}) } : undefined;
+  (globalThis as { __SBG_PRERENDER__?: unknown }).__SBG_PRERENDER__ = { url, towns, documents, ...(directory ? { directory } : {}) };
   const html = renderToString(<App />);
 
   const slug = townSlugFromPath(url);
   const town = slug ? towns.find((p) => p.slug === slug) : undefined;
   const help = helpPageOf(url);
   const info = infoPageOf(url);
-  const head = town ? townHead(town) : help ? helpHead(help) : info ? infoHead(info) : frontHead();
+  const head = town ? townHead(town) : help ? helpHead(help) : info ? infoHead(info) : dirPage ? directoryHead(dirPage, directory ?? {}) : frontHead();
   return {
     html,
     // From the front page, every town page and the help — and from the help, every article and writing to us. The
     // plugin renders each of them in turn.
-    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, ...AUDIENCES.map((a) => forPath(a.who)), NOTICES.terms.path, NOTICES.privacy.path, NOTICES.cookies.path]) } : {}),
+    ...(url === '/' ? { links: new Set([...towns.map((p) => `/towns/${p.slug}`), HELP_PATH, ABOUT_PATH, DIRECTORY_PATH, ...AUDIENCES.map((a) => forPath(a.who)), NOTICES.terms.path, NOTICES.privacy.path, NOTICES.cookies.path]) } : {}),
     ...(help?.kind === 'index' ? { links: new Set([...siteArticles().map((a) => articlePath(a.id)), CONTACT_PATH]) } : {}),
-    data: { towns, documents },
+    // From the directory, a page per country that has firms listed.
+    ...(dirPage?.kind === 'index' && index ? { links: new Set(index.countries.map((c) => directoryCountryPath(c.country))) } : {}),
+    data: { towns, documents, ...(directory ? { directory } : {}) },
     head: { lang: 'en', ...head },
   };
 }
@@ -240,4 +272,48 @@ function townHead(town: TownPage): { title: string; elements: Set<HeadElement> }
   };
   // With the trailing slash: a static host serves this page from /towns/<slug>/index.html, at that address.
   return { title, elements: new Set([...common(title, description, `/towns/${town.slug}/`), ldScript(ld)]) };
+}
+
+/**
+ * The directory: its front page as a collection, a country's page as a list of the organisations on it, each by its
+ * public page. Their own words are left out of what a machine reads: on the page they are marked as theirs, and a
+ * machine that quotes the data would lose that mark.
+ */
+function directoryHead(page: DirectoryPage, built: DirectoryBuilt): { title: string; elements: Set<HeadElement> } {
+  const crumbs = (last?: { name: string; path: string }) => ({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'SeeBuyGet', ...(SITE ? { item: `${SITE}/` } : {}) },
+      { '@type': 'ListItem', position: 2, name: t('directory.title'), ...(SITE ? { item: `${SITE}${DIRECTORY_PATH}` } : {}) },
+      ...(last ? [{ '@type': 'ListItem', position: 3, name: last.name, ...(SITE ? { item: `${SITE}${last.path}` } : {}) }] : []),
+    ],
+  });
+  if (page.kind === 'index') {
+    const title = t('directory.metaTitle');
+    const description = t('directory.metaDescription');
+    const ld = [{ '@context': 'https://schema.org', '@type': 'CollectionPage', name: t('directory.title'), description, about: { '@type': 'Organization', name: 'SeeBuyGet' } }, crumbs()];
+    return { title, elements: new Set([...common(title, description, DIRECTORY_PATH), ldScript(ld)]) };
+  }
+  const view = built.country;
+  const name = countryNameIn(page.country, 'en') || view?.name || page.country;
+  const path = directoryCountryPath(page.country);
+  const entries = view?.entries ?? [];
+  const title = t('directory.countryMetaTitle', { country: name });
+  const description = t('directory.countryMetaDescription', { country: name, n: entries.length });
+  const ld = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name: t('directory.countryTitle', { country: name }),
+      itemListOrder: 'https://schema.org/ItemListOrderAscending',
+      itemListElement: entries.map((e, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        item: { '@type': 'Organization', name: e.name, address: { '@type': 'PostalAddress', addressCountry: e.country }, ...(SITE ? { url: `${SITE}/@${e.handle}` } : {}) },
+      })),
+    },
+    crumbs({ name, path }),
+  ];
+  return { title, elements: new Set([...common(title, description, path), ldScript(ld)]) };
 }

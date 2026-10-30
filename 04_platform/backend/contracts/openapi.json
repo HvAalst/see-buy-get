@@ -4671,6 +4671,169 @@
         }
       }
     },
+    "/v1/sbg/directory": {
+      "get": {
+        "operationId": "Directory.index",
+        "summary": "",
+        "description": "The countries with firms listed, and how many of each kind — the map and the list of countries.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryIndex"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/directory/{country}": {
+      "get": {
+        "operationId": "Directory.country",
+        "summary": "",
+        "description": "One country's firms, alphabetical.",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryCountryView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/directory": {
+      "get": {
+        "operationId": "Directory.mine",
+        "summary": "",
+        "description": "A business's own place in the directory.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryListingView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Directory.setMine",
+        "summary": "",
+        "description": "Shown or taken off, and its own line — an owner's to say.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DirectoryListingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryListingView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/fleet/managers/{did}/directory": {
+      "get": {
+        "operationId": "Directory.fleet",
+        "summary": "",
+        "description": "A fleet's own place in the directory.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryListingView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Directory.setFleet",
+        "summary": "",
+        "description": "Shown or taken off, its line, and the contact it ticks to show — the fleet office's to say, never staff's.",
+        "parameters": [
+          {
+            "name": "did",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FleetDirectoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryListingView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/agents/{did}/door-handovers": {
       "get": {
         "operationId": "BusinessDoor.handovers",
@@ -38443,6 +38606,332 @@
             "minimum": 0.01
           }
         }
+      },
+      "DirectoryCountry": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "total": {
+            "type": "number"
+          },
+          "forwarder": {
+            "type": "number"
+          },
+          "clearing_agent": {
+            "type": "number"
+          },
+          "haulier": {
+            "type": "number"
+          },
+          "depot": {
+            "type": "number"
+          },
+          "at": {
+            "type": "object",
+            "properties": {
+              "lat": {
+                "required": true,
+                "type": "number"
+              },
+              "lng": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          }
+        },
+        "required": [
+          "country",
+          "name",
+          "total",
+          "forwarder",
+          "clearing_agent",
+          "haulier",
+          "depot",
+          "at"
+        ]
+      },
+      "DirectoryIndex": {
+        "type": "object",
+        "properties": {
+          "countries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryCountry"
+            }
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "countries",
+          "basis"
+        ]
+      },
+      "DirectorySays": {
+        "type": "object",
+        "properties": {
+          "clears": {
+            "description": "Its specialisms, by their ids (`vehicles`, `sea_container` …).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "places": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "clears",
+          "places"
+        ]
+      },
+      "DirectorySeen": {
+        "type": "object",
+        "properties": {
+          "appointed": {
+            "type": "number",
+            "description": "A clearing agent: the imports it was appointed on, and how many got on the road."
+          },
+          "cleared": {
+            "type": "number"
+          },
+          "delivered": {
+            "type": "number",
+            "description": "A haulier: the loads its drivers delivered on SeeBuyGet."
+          },
+          "arranged": {
+            "type": "number",
+            "description": "A forwarder: the loads it posted that were delivered."
+          }
+        }
+      },
+      "DirectoryCheck": {
+        "type": "object",
+        "properties": {
+          "paper": {
+            "type": "string",
+            "description": "Which paper: a company paper's kind, or `fleet_papers` — for a page to name it in its reader's language."
+          },
+          "what": {
+            "type": "string",
+            "description": "What staff checked, in words."
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "paper",
+          "what",
+          "at"
+        ]
+      },
+      "DirectoryContact": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "string"
+          }
+        }
+      },
+      "DirectoryEntry": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Its public page: seebuyget.com/@handle."
+          },
+          "name": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "forwarder",
+                "clearing_agent",
+                "haulier",
+                "depot"
+              ]
+            }
+          },
+          "country": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "description": "On SeeBuyGet since."
+          },
+          "words": {
+            "type": "string",
+            "description": "Its own line about itself — its words, not checked by us."
+          },
+          "says": {
+            "description": "A clearing agent's own list of what it clears and where — its claim, not checked by us.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DirectorySays"
+              }
+            ]
+          },
+          "seen": {
+            "$ref": "#/components/schemas/DirectorySeen"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryCheck"
+            }
+          },
+          "contact": {
+            "$ref": "#/components/schemas/DirectoryContact"
+          }
+        },
+        "required": [
+          "handle",
+          "name",
+          "kinds",
+          "country",
+          "since",
+          "seen",
+          "checks"
+        ]
+      },
+      "DirectoryCountryView": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryEntry"
+            }
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "name",
+          "entries",
+          "basis"
+        ]
+      },
+      "DirectoryListingView": {
+        "type": "object",
+        "properties": {
+          "listed": {
+            "type": "boolean"
+          },
+          "eligible": {
+            "type": "boolean",
+            "description": "It may be listed: verified, and doing something the directory lists."
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "forwarder",
+                "clearing_agent",
+                "haulier",
+                "depot"
+              ]
+            }
+          },
+          "words": {
+            "type": "string"
+          },
+          "contact": {
+            "$ref": "#/components/schemas/DirectoryContact"
+          },
+          "why": {
+            "type": "string",
+            "description": "Why it is not shown, in words, where it is not."
+          },
+          "handle": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "listed",
+          "eligible",
+          "kinds"
+        ]
+      },
+      "DirectoryListingDto": {
+        "type": "object",
+        "properties": {
+          "listed": {
+            "type": "boolean"
+          },
+          "words": {
+            "type": "string",
+            "description": "Its own line: what it does and where, in its words.",
+            "maxLength": 240
+          }
+        },
+        "required": [
+          "listed"
+        ]
+      },
+      "FleetDirectoryDto": {
+        "type": "object",
+        "properties": {
+          "listed": {
+            "type": "boolean"
+          },
+          "words": {
+            "type": "string",
+            "description": "Its own line: what it does and where, in its words.",
+            "maxLength": 240
+          },
+          "phone": {
+            "type": "string",
+            "pattern": "/^(\\+?[\\d\\s()\\-.]{6,24})?$/"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "website": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "listed"
+        ]
       },
       "HandToDriverDto": {
         "type": "object",

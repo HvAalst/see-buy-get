@@ -31,6 +31,7 @@ import {
 import { currentPath, townSlugFromPath } from './prerendered';
 import { helpPageOf, type HelpPage } from './help';
 import { infoPageOf, type InfoPage } from './pages';
+import { directoryPageOf, type DirectoryPage } from './directory';
 import { readLinkKey } from '../../shared/archive/documentLink';
 import { readReportKey } from '../../shared/damage/damageReport';
 import { EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
@@ -38,7 +39,7 @@ import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 import { isPinReset } from '../../shared/account/recovery';
 import { enrollPerson, mySignups, sendPapersAgain, signUpDriver, signUpFleet, uploadPaper, type FleetSignupView, type PersonSession } from './api';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help' | 'info';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help' | 'info' | 'directory';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -106,6 +107,8 @@ export interface HomeState {
   helpPage: HelpPage | null;
   /** /about/ or /for/<who>/: the pages written to be quoted. */
   infoPage: InfoPage | null;
+  /** /directory/ or /directory/<cc>/: the logistics directory. */
+  directoryPage: DirectoryPage | null;
   /* --- a fleet signs itself up --- */
   /** The person, signed in after the PIN step: in memory only, for the papers and the sign-up. */
   person: PersonSession | null;
@@ -126,6 +129,7 @@ const INITIAL: HomeState = {
   townSlug: null,
   helpPage: null,
   infoPage: null,
+  directoryPage: null,
   agents: null,
   agentsBasis: null,
   agentsState: 'idle',
@@ -185,6 +189,8 @@ export function useHomeApp() {
     // The help is an address too: its pages are built into HTML, and the first frame must be that page.
     const helpPage = helpPageOf(path);
     if (helpPage) return { ...INITIAL, screen: 'help', helpPage };
+    const directoryPage = directoryPageOf(path);
+    if (directoryPage) return { ...INITIAL, screen: 'directory', directoryPage };
     const infoPage = infoPageOf(path);
     return infoPage ? { ...INITIAL, screen: 'info', infoPage } : INITIAL;
   });
