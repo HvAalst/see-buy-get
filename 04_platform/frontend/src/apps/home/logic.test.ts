@@ -40,7 +40,7 @@ const role = (id: string): RoleSpec => roleById(id)!;
 const filled = (over: Partial<JoinForm> = {}): JoinForm => ({
   ...EMPTY_JOIN,
   phone: '+254700111222',
-  code: '1234',
+  code: '123456',
   email: 'me@example.com',
   password: 'hunter22',
   displayName: 'Mama Sarah Shop',
@@ -113,7 +113,10 @@ describe('wizard steps', () => {
 describe('stepBlocker', () => {
   it('walks a shop through in order', () => {
     const shop = role('pudo');
-    expect(stepBlocker(shop, 'phone', EMPTY_JOIN, t)).toContain('phone');
+    // The country first, then the number — a country we do not reach is said on this first step.
+    expect(stepBlocker(shop, 'phone', EMPTY_JOIN, t)).toBe(t('home.block.country'));
+    expect(stepBlocker(shop, 'phone', { ...EMPTY_JOIN, country: 'NL' }, t, ['NL'])).toBe(t('home.block.countryNotActive'));
+    expect(stepBlocker(shop, 'phone', { ...EMPTY_JOIN, country: 'KE' }, t, ['NL'])).toContain('phone');
     expect(stepBlocker(shop, 'phone', filled(), t)).toBeNull();
     expect(stepBlocker(shop, 'about', { ...filled(), displayName: '' }, t)).toContain('shop');
     expect(stepBlocker(shop, 'about', { ...filled(), fullName: '' }, t)).toContain('full name');

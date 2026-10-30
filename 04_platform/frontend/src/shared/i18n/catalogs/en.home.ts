@@ -492,6 +492,7 @@ export const enHome = {
   'home.join.about.phStore': 'Nairobi Threads',
   // Country picker (JoinScreen CountryField) — shown only where there is more than one to choose from.
   'home.join.country.label': 'Country',
+  'home.join.where.inCountry': 'In {country}. To change the country, go back to the first step.',
   'home.join.country.choose': 'Choose a country',
   'home.join.country.noMoney': 'not active yet',
   'home.join.country.notHere': 'we are not here yet',

@@ -345,6 +345,10 @@ export function prevStep(kind: JoinKind, step: JoinStep): JoinStep {
 export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Translate, notJoinable?: string[]): string | null {
   switch (step) {
     case 'phone':
+      // THE COUNTRY FIRST (the owner, 2026-10-30, refused at the map after a pin and a message: "the country selector
+      // should come first"): one we do not reach is said here, before a code is sent or anything else is typed.
+      if (!f.country.trim()) return t('home.block.country');
+      if (notJoinable?.includes(f.country)) return t('home.block.countryNotActive');
       return phoneLooksValid(f.phone) ? null : t('home.block.phone');
     case 'code':
       return codeLooksValid(f.code) ? null : t('home.block.code');

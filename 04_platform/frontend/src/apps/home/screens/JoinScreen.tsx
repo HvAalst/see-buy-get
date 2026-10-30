@@ -139,14 +139,22 @@ function AlreadyRegistered({ state, actions }: JoinScreenProps) {
 function PhoneStep({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
-  const blocker = stepBlocker(role, 'phone', state.form, t);
+  const blocker = stepBlocker(role, 'phone', state.form, t, notJoinable(state));
+  // The country, from the number typed, where none is chosen yet — offered, never forced: the list stays open to change.
+  useEffect(() => {
+    if (state.form.country) return;
+    const cc = countryOfNumber(state.form.phone);
+    if (cc && state.countries.some((c) => c.country === cc)) actions.setForm({ country: cc, zone: '' });
+  }, [state.form.phone, state.countries.length]);
   return (
     <>
       <h1 class="scr__title">{t('home.join.joinAs', { role: roleMeta(role, t).labelLower })}</h1>
       <p class="scr__lede">{t(role.kind === 'vendor' ? 'home.join.phone.ledeStore' : role.kind === 'fleet' ? 'home.join.phone.ledeFleet' : 'home.join.phone.lede')}</p>
 
       <Card>
-        <div class="field">
+        {/* Where they will work, first: it decides whether they can sign up at all, and where their map opens. */}
+        <CountryField id="join-country" state={state} actions={actions} />
+        <div class="field" style="margin-top:12px">
           <label class="field__label" for="phone">
             {t('home.join.phone.label')}
           </label>
@@ -614,7 +622,6 @@ function AboutStep({ state, actions }: JoinScreenProps) {
           />
         </div>
 
-        {role.id === 'vendor' ? <CountryField id="country" state={state} actions={actions} /> : null}
         {role.id === 'vendor' ? (
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="store-address">
@@ -881,8 +888,8 @@ function WhereStep({ state, actions }: JoinScreenProps) {
       )}
 
       <Card label={t('home.join.where.areaTitle')}>
-        {/* Which country first: it narrows the areas below, and it is what decides who contracts them. */}
-        <CountryField id="join-country" state={state} actions={actions} />
+        {/* The country was chosen on the first step: said here, where the map opened on it. */}
+        {f.country ? <p class="card__note">{t('home.join.where.inCountry', { country: state.countries.find((c) => c.country === f.country)?.name ?? f.country })}</p> : null}
         {/* A fleet's depot: the pin above, and the address its letters go to. No delivery area — that is a shop's. */}
         {role.kind === 'fleet' ? (
           <div class="field" style="margin-top:12px">
