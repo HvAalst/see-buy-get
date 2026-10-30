@@ -95,6 +95,16 @@ export function waitingLine(p: StaffWaiting, named: boolean, t: Translate, day: 
   return t('tower.staff.waiting.theirs', said);
 }
 
+/**
+ * WHAT IS SAID ONCE AN ACCOUNT IS ASKED FOR: who approves it. While the one asking is the only one able to sign in, that
+ * is the setup key — said so, or "a second person approves it" reads as the new colleague having to say yes before
+ * their own email is sent (the owner, 2026-10-30, asking for the second account on the live console).
+ */
+export function askedLine(asked: { name: string; email: string }, waiting: Array<Pick<StaffWaiting, 'mine' | 'email' | 'forSetupKey' | 'kind'>>, t: Translate): string {
+  const it = waiting.find((p) => p.mine && !p.kind && p.email.trim().toLowerCase() === asked.email.trim().toLowerCase());
+  return t(it?.forSetupKey ? 'tower.staff.askedKey' : 'tower.staff.asked', { name: asked.name });
+}
+
 /** The folded panel's one line: how many are on staff, and — only when there are some — how many were asked for. */
 export function staffFoldHint(staff: number, waiting: number, t: Translate): string {
   return waiting ? t('tower.network.fold.staffWaiting', { n: staff, w: waiting }) : t('tower.network.fold.staff', { n: staff });

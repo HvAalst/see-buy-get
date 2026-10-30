@@ -23,7 +23,7 @@ import {
 } from '../network';
 import { amount, floatsLine } from '../queues';
 import { fleetSystemWords, type FleetSystemCounts } from '../fleets';
-import { linkWords, opensItself, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, waitingRoles, type StaffWaiting } from '../staff';
+import { askedLine, linkWords, opensItself, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, waitingRoles, type StaffWaiting } from '../staff';
 import { holds, ROLE_WORDS, rolesOf, STAFF_ROLES, type StaffRole } from '../staffRoles';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
@@ -553,7 +553,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
   const [rows, setRows] = useState<StaffRow[] | null>(null);
   const [waiting, setWaiting] = useState<StaffWaiting[]>([]);
   // Asked for, not made: said until the next thing is done here.
-  const [asked, setAsked] = useState<string | null>(null);
+  const [asked, setAsked] = useState<{ name: string; email: string } | null>(null);
   const [declining, setDeclining] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   // Opened for the reader when an account waits that is theirs to decide: work behind a click is work nobody does.
@@ -603,7 +603,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
       const r = await client.api.askStaff({ ...body, roles: pick });
       setBusy(null);
       if (r.error) return setError(r.error.detail || r.error.title);
-      setAsked(body.name);
+      setAsked(body);
     } else {
       const r = await client.api.createStaff(body);
       setBusy(null);
@@ -694,7 +694,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
       {asked ? (
         <p class="twr-done">
           <Icon name="check" size={16} />
-          {t('tower.staff.asked', { name: asked })}
+          {askedLine(asked, waiting, t)}
         </p>
       ) : null}
       {said ? (

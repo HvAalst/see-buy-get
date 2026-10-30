@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n';
-import { linkWords, opensItself, passwordBlocker, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, welcomeTokenFrom, type StaffWaiting } from './staff';
+import { askedLine, linkWords, opensItself, passwordBlocker, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, welcomeTokenFrom, type StaffWaiting } from './staff';
 
 const day = (iso: string) => iso.slice(0, 10);
 const asked: StaffWaiting = { proposalId: 'spr_1', email: 'chloe@sbg.test', name: 'Chloe Wanjiru', askedBy: 'Amina Otieno', askedAt: '2026-10-11T09:00:00Z', until: '2026-10-18T09:00:00Z', mine: false, forSetupKey: false };
@@ -44,6 +44,18 @@ describe('adding a member of staff takes two people', () => {
     const lone = { ...asked, forSetupKey: true };
     expect(waitingLine({ ...lone, mine: true }, true, t, day)).toBe('You asked on 2026-10-11. You are the only one who can sign in, so the setup key approves this one. It waits until 2026-10-18.');
     expect(waitingLine(lone, false, t, day)).toBe('Amina Otieno asked on 2026-10-11 and is the only one who can sign in, so the setup key is their second. Approve it only if you know this person and this is their address. It waits until 2026-10-18.');
+  });
+
+  it('says who approves it straight after asking: the setup key while the one asking is alone, else a second person', () => {
+    const chloe = { name: 'Chloe Wanjiru', email: 'Chloe@sbg.test ' };
+    expect(askedLine(chloe, [{ ...asked, mine: true, forSetupKey: true }], t)).toBe(
+      'Asked. Nothing is made yet. You are the only one who can sign in, so you approve it yourself with the setup key: sign out, sign in with the setup key, and approve it under Network staff. Then Chloe Wanjiru is emailed a link to choose a password. Nobody on staff is shown one.',
+    );
+    expect(askedLine(chloe, [{ ...asked, mine: true }], t)).toBe(t('tower.staff.asked', { name: 'Chloe Wanjiru' }));
+    // Somebody else's, a change of roles, or another address: not this one.
+    expect(askedLine(chloe, [{ ...asked, mine: false, forSetupKey: true }], t)).toBe(t('tower.staff.asked', { name: 'Chloe Wanjiru' }));
+    expect(askedLine(chloe, [{ ...asked, mine: true, forSetupKey: true, kind: 'roles' }], t)).toBe(t('tower.staff.asked', { name: 'Chloe Wanjiru' }));
+    expect(askedLine(chloe, [{ ...asked, email: 'amina@sbg.test', mine: true, forSetupKey: true }], t)).toBe(t('tower.staff.asked', { name: 'Chloe Wanjiru' }));
   });
 
   it('counts the ones asked for on the folded panel only when there are some', () => {

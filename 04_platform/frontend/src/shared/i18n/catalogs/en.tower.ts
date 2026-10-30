@@ -105,6 +105,7 @@ export const enTower = {
   'tower.setup.lede': 'You are signed in with the setup key. On this server it sets network staff up and does nothing else: it opens no other screen, decides nothing and acts for nobody. Make the first account here, then sign in with it.',
   'tower.staff.ask': 'Ask for the account',
   'tower.staff.asked': 'Asked. Nothing is made yet. When a second person approves it, {name} is emailed a link to choose a password. Nobody on staff is shown one.',
+  'tower.staff.askedKey': 'Asked. Nothing is made yet. You are the only one who can sign in, so you approve it yourself with the setup key: sign out, sign in with the setup key, and approve it under Network staff. Then {name} is emailed a link to choose a password. Nobody on staff is shown one.',
   'tower.staff.waiting.title': 'Asked for, waiting for a second member of staff',
   'tower.staff.waiting.tag': '{n} waiting',
   'tower.staff.waiting.mine': 'You asked on {when}. A second member of staff approves it. It waits until {until}.',

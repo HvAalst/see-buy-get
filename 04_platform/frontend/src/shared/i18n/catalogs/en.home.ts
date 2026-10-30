@@ -482,9 +482,9 @@ export const enHome = {
   // Join wizard — step: about.
   'home.join.about.titleDriver': 'About you',
   'home.join.about.titlePlace': 'About your place',
-  'home.join.about.nameShop': 'Shop name',
-  'home.join.about.nameHub': 'Hub name',
-  'home.join.about.nameStore': 'Store name',
+  'home.join.about.nameShop': 'Choose your shop name',
+  'home.join.about.nameHub': 'Choose your hub name',
+  'home.join.about.nameStore': 'Choose your store name',
   'home.join.about.nameDriver': 'Your name as drivers see it',
   'home.join.about.phShop': 'Mama Sarah Shop',
   'home.join.about.phDriver': 'Amos K.',
