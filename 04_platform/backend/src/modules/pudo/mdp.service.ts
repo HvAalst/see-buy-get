@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
 import { CorridorService } from './corridor.service';
@@ -18,7 +19,6 @@ import { FleetService } from './fleet.service';
 import { WalletGateService } from './wallet-gate.service';
 import { CargoService } from './cargo.service';
 import { CargoNature, VehicleCapability } from './cargo.types';
-import { NETWORK_CURRENCY } from './pudo.config';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -96,10 +96,13 @@ export class MdpService {
     return mdp.entityId ?? this.entities.forJurisdiction(this.countryOf(mdp))?.entityId;
   }
 
-  /** The money a hub's sort fee is in: the company's that contracts it, as a shop's price is its company's. The
-   *  network's for a hub no company of ours contracts — what it was always shown in. */
+  /**
+   * The money a hub's sort fee is in: the company's that contracts it, as a shop's price is its company's. Where no
+   * company of ours stands yet, the money of the country the hub is in — a hub signing up in the Netherlands before a
+   * company there was shown its fee in Kenyan shillings (the owner, 2026-10-30: "we must settle for EURO").
+   */
   currencyOf(mdp: Mdp): string {
-    return this.entities.amountsFor(this.entityIdOrNone(mdp)).currency ?? NETWORK_CURRENCY;
+    return this.entities.amountsFor(this.entityIdOrNone(mdp)).currency ?? currencyForJurisdiction(this.countryOf(mdp));
   }
 
   // --- cargo helpers (S31): the tote path's view of what its parcels are + need ---

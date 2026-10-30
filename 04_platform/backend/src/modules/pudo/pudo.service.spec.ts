@@ -4133,6 +4133,19 @@ describe('PUDO Light', () => {
       expect(gate.entries({ type: 'DRIVER_PAYOUT' }).filter((e) => e.reference === d.did).map((e) => e.amount)).toEqual([35]);
     });
 
+    it('says a courier’s pay in their own country’s money where no company of ours stands there yet — never shillings', () => {
+      // The owner, 2026-10-30, signing up in the Netherlands before any company of ours: "we must settle for EURO".
+      // Luxembourg: a euro country no other test opens, taking sign-ups, put back as it was found.
+      const was = presence.resolve('LU').level;
+      presence.set({ jurisdiction: 'LU', level: 'coming', by: 'test' });
+      try {
+        const courier = drivers.register({ displayName: 'Lux', fullName: 'L X', nationalId: 'DRV-LU-PAY', mobile: '+352621000101', licenceClasses: ['bike'], jurisdiction: 'LU' });
+        expect(drivers.payTermsOf(courier.did).currency).toBe('EUR');
+      } finally {
+        presence.set({ jurisdiction: 'LU', level: was, by: 'test' });
+      }
+    });
+
     it('shows what the pay is MADE of — how many parcels, and how full the bag is', () => {
       // A figure with nothing behind it is a figure taken on trust. These two are also the only way to tell
       // a bag worth a whole slot in the hold from one worth a fifth of it, which is the real decision when

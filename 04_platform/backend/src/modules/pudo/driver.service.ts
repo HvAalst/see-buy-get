@@ -1,4 +1,5 @@
 import { driverPapers, lapsedOf, offRoadLine, paperLapsesAt, type CarrierCoverProof } from './papers';
+import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { Injectable, Optional } from '@nestjs/common';
 import { MediaService } from './media.service';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -153,7 +154,23 @@ export class DriverService {
    */
   payTermsOf(did: string): { bagLoadPay: number; currency: string } {
     const list = this.entities.amountsFor(this.payeeOrNone(did).entityId);
-    return { bagLoadPay: list.toteLoadFee, currency: list.currency ?? NETWORK_CURRENCY };
+    return { bagLoadPay: list.toteLoadFee, currency: list.currency ?? currencyForJurisdiction(this.countryOfWork(did)) };
+  }
+
+  /**
+   * The country a driver's work is settled in: their fleet's, or their own for a courier. Where no company of ours
+   * stands there yet, its money is the one their figures are said in — never the network's (the owner, 2026-10-30).
+   */
+  private countryOfWork(did: string): string {
+    const driver = this.require(did);
+    if (driver.managerDid) {
+      try {
+        return this.managers.get(driver.managerDid).jurisdiction ?? NETWORK_JURISDICTION;
+      } catch {
+        // A fleet no longer on record: the driver's own country.
+      }
+    }
+    return driver.jurisdiction ?? NETWORK_JURISDICTION;
   }
 
   /**

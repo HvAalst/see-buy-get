@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { RestingAccounts } from '../../foundation/auth/resting-accounts';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -155,10 +156,13 @@ export class AgentService {
   /**
    * What this shop is charged for a parcel and paid for each step, in its company's own money (amounts.ts). A shop
    * that stands where no company of ours does is answered with what every company starts from: it holds no float
-   * and is paid by whoever sold the shipment, so nothing here is ever measured against those figures.
+   * and is paid by whoever sold the shipment, so nothing here is ever measured against those figures — said in the
+   * money of the country it stands in, never the network's (the owner, 2026-10-30: a Dutch sign-up shown shillings).
    */
   amountsOf(did: string): Amounts & { currency?: string } {
-    return this.entities.amountsFor(this.entityIdOrNone(this.require(did)));
+    const agent = this.require(did);
+    const list = this.entities.amountsFor(this.entityIdOrNone(agent));
+    return list.currency ? list : { ...list, currency: currencyForJurisdiction(this.countryOf(agent)) };
   }
 
   entityIdOf(agent: Agent): string {
