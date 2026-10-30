@@ -11,6 +11,7 @@ import { ACTIVITY_LABEL, ACTIVITY_SUB } from './ChooseScreen';
 import { Gs1Panel } from './Gs1Panel';
 import { SystemPanel } from './SystemPanel';
 import { KeysPanel } from './KeysPanel';
+import { DirectoryPanel } from './DirectoryPanel';
 
 /**
  * WHAT THE BUSINESS SAYS ABOUT ITSELF — its name and numbers, what it does, how to reach it, the places it uses.
@@ -174,6 +175,9 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
 
       {/* How anybody reaches them, published on their page and in every directory — once they are checked. */}
       <ContactCardPanel entityId={business.entityId} who={business.you.name} client={client as never} />
+
+      {/* Its place in SeeBuyGet's public logistics directory, and its own line there (2026-10-30): an owner's to say. */}
+      <DirectoryPanel client={client} owner={owner} actions={actions} />
 
       {/* The global barcode on its packages, beside ours: a GS1 company prefix is the business's own to give. */}
       <Gs1Panel business={business} actions={actions} client={client} owner={owner} />

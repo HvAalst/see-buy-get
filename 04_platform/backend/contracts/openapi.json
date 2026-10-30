@@ -38881,6 +38881,10 @@
           },
           "handle": {
             "type": "string"
+          },
+          "country": {
+            "type": "string",
+            "description": "The country whose page it is on: /directory/<country>/."
           }
         },
         "required": [
@@ -38893,23 +38897,22 @@
         "type": "object",
         "properties": {
           "listed": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Shown, or taken off. Left out, it stays as it was — a firm saving only its line."
           },
           "words": {
             "type": "string",
             "description": "Its own line: what it does and where, in its words.",
             "maxLength": 240
           }
-        },
-        "required": [
-          "listed"
-        ]
+        }
       },
       "FleetDirectoryDto": {
         "type": "object",
         "properties": {
           "listed": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Shown, or taken off. Left out, it stays as it was — a firm saving only its line."
           },
           "words": {
             "type": "string",
@@ -38928,10 +38931,7 @@
             "type": "string",
             "maxLength": 200
           }
-        },
-        "required": [
-          "listed"
-        ]
+        }
       },
       "HandToDriverDto": {
         "type": "object",

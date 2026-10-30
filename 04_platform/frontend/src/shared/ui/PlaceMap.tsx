@@ -66,6 +66,11 @@ export interface PlaceMapProps {
    * newcomer "has no way to confirm" a place on a map of the whole network). Unset, every pin is framed, as before.
    */
   nearest?: number;
+  /**
+   * The closest the map frames itself — a map of countries is read at a country's scale, never a street's (the logistics
+   * directory, 2026-10-30). Unset: a street's, as for a shop.
+   */
+  maxZoom?: number;
 }
 
 /** How far a pin may be and still be framed with a marked place: past this, the place is shown alone, close up. */

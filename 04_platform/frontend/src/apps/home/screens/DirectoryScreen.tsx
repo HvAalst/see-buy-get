@@ -52,7 +52,7 @@ function useMounted(): boolean {
 }
 
 function firmsLine(n: number, t: ReturnType<typeof useT>): string {
-  return n === 1 ? t('directory.firmsOne') : t('directory.firms', { n });
+  return t('directory.firms', { n });
 }
 
 function Countries() {
@@ -75,6 +75,7 @@ function Countries() {
   }, []);
 
   const named = (c: DirectoryCountry) => countryNameIn(c.country, locale) || c.name;
+  const unplaced = countries.filter((c) => !c.at);
   const pins = countries.filter((c) => c.at).map((c) => ({ id: c.country, label: `${named(c)} · ${firmsLine(c.total, t)}`, point: c.at! }));
 
   return (
@@ -92,9 +93,11 @@ function Countries() {
           <>
             {mounted && pins.length ? (
               <div class="dir__map">
-                <PlaceMap pins={pins} onPick={(cc) => location.assign(directoryCountryPath(cc))} label={t('directory.mapLabel')} />
+                <PlaceMap pins={pins} maxZoom={4} onPick={(cc) => location.assign(directoryCountryPath(cc))} label={t('directory.mapLabel')} />
               </div>
             ) : null}
+            {/* A country sits where its own firms' places are — never a spot we chose for it; one with none is said, not guessed. */}
+            {mounted && pins.length && unplaced.length ? <p class="pg__asof">{t('directory.notOnMap', { n: unplaced.length, countries: unplaced.map(named).join(', ') })}</p> : null}
             <ul class="pg__who dir__countries">
               {countries.map((c) => (
                 <li key={c.country}>

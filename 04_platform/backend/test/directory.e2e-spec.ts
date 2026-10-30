@@ -138,7 +138,7 @@ describe('the directory, over the wire', () => {
 
     // Its own line, and its own contact entry — said as its own; an owner's to change, never staff's.
     const mine = (await http().post('/v1/sbg/business/me/directory').set(bearer(zebra.token)).send({ listed: true, words: 'Air and sea forwarding from Nairobi, door to door.' }).expect(201)).body;
-    expect(mine).toMatchObject({ listed: true, eligible: true, kinds: ['forwarder'], words: 'Air and sea forwarding from Nairobi, door to door.' });
+    expect(mine).toMatchObject({ listed: true, eligible: true, country: 'KE', kinds: ['forwarder'], words: 'Air and sea forwarding from Nairobi, door to door.' });
     expect((await http().post('/v1/sbg/business/me/directory').set(bearer(setupKey)).send({ listed: false })).status).toBe(403);
     const booker = await aPerson();
     await http().post('/v1/sbg/business/me/members').set(bearer(zebra.token)).send({ phone: booker.phone, name: 'Bekele Booker', role: 'booker' }).expect(201);
@@ -163,6 +163,8 @@ describe('the directory, over the wire', () => {
     // Off the directory — and on again.
     expect((await http().post('/v1/sbg/business/me/directory').set(bearer(zebra.token)).send({ listed: false }).expect(201)).body).toMatchObject({ listed: false, why: 'You took your business off the directory.', words: 'Air and sea forwarding from Nairobi, door to door.' });
     expect((await ours()).map((e) => e.name)).not.toContain(zebra.name);
+    // Its line saved alone leaves it off.
+    expect((await http().post('/v1/sbg/business/me/directory').set(bearer(zebra.token)).send({ words: 'Air and sea forwarding from Nairobi, door to door.' }).expect(201)).body.listed).toBe(false);
     await http().post('/v1/sbg/business/me/directory').set(bearer(zebra.token)).send({ listed: true }).expect(201);
     expect((await ours()).find((e) => e.name === zebra.name)?.words).toBe('Air and sea forwarding from Nairobi, door to door.');
     // An empty line clears it — and a clearing agent's own offer words show where it wrote no line of its own.
@@ -220,7 +222,7 @@ describe('the directory, over the wire', () => {
     expect((await http().post(path).set(bearer(other)).send({ listed: true })).status).toBe(403);
     await http().get(path).set(bearer(setupKey)).expect(200);
     const said = (await http().post(path).set(bearer(office)).send({ listed: true, words: 'Flatbeds and box trucks, Nairobi to Kampala.', phone: '+254 711 000 333', website: 'https://rift.example' }).expect(201)).body;
-    expect(said).toMatchObject({ listed: true, words: 'Flatbeds and box trucks, Nairobi to Kampala.', contact: { phone: '+254 711 000 333', website: 'https://rift.example' } });
+    expect(said).toMatchObject({ listed: true, country: 'KE', words: 'Flatbeds and box trucks, Nairobi to Kampala.', contact: { phone: '+254 711 000 333', website: 'https://rift.example' } });
     expect(await entry()).toMatchObject({ words: 'Flatbeds and box trucks, Nairobi to Kampala.', contact: { phone: '+254 711 000 333', website: 'https://rift.example' } });
     expect((await entry())!.contact!.email).toBeUndefined();
     // The country's marker: the middle of its firms' pins, rounded — never one firm's own spot.
@@ -230,6 +232,7 @@ describe('the directory, over the wire', () => {
     expect((await http().post(path).set(bearer(office)).send({ listed: true, website: 'rift.example' })).status).toBe(400);
     expect((await http().post(path).set(bearer(office)).send({ listed: false }).expect(201)).body).toMatchObject({ listed: false, why: 'You took your fleet off the directory.', words: 'Flatbeds and box trucks, Nairobi to Kampala.', contact: { phone: '+254 711 000 333', website: 'https://rift.example' } });
     expect(await entry()).toBeUndefined();
+    expect((await http().post(path).set(bearer(office)).send({ website: 'https://rift.example' }).expect(201)).body.listed).toBe(false);
     await http().post(path).set(bearer(office)).send({ listed: true, phone: '' }).expect(201);
     expect(await entry()).toMatchObject({ words: 'Flatbeds and box trucks, Nairobi to Kampala.', contact: { website: 'https://rift.example' } });
     expect((await entry())!.contact!.phone).toBeUndefined();

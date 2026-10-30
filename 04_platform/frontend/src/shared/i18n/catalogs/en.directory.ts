@@ -1,9 +1,12 @@
+import { enDirectoryCard } from './en.directory-card';
+
 /**
  * THE LOGISTICS DIRECTORY (the user, 2026-10-30: "a directory much similar to that of fiata.org but in our own style").
  * The public pages (/directory/ and one per country) bring these in with their own code, never in the front page's first
  * download; the Business and Fleet apps add them for the card where a firm says whether it is shown and in what words.
  */
 export const enDirectory = {
+  ...enDirectoryCard,
   'directory.title': 'Logistics directory',
   'directory.metaTitle': 'Logistics directory — freight forwarders, clearing agents, depots and hauliers by country | SeeBuyGet',
   'directory.metaDescription':
@@ -11,8 +14,8 @@ export const enDirectory = {
   'directory.lede': 'Freight forwarders, clearing agents, container depots and hauliers on SeeBuyGet whose papers our staff have checked — by country, in alphabetical order.',
   'directory.countriesTitle': 'Countries',
   'directory.mapLabel': 'Map of the countries with firms in the directory. Choose a country to see its firms.',
-  'directory.firms': '{n} firms',
-  'directory.firmsOne': '1 firm',
+  'directory.notOnMap': '{n, plural, one {Not on the map yet: {countries} — none of its firms has put a place on SeeBuyGet.} other {Not on the map yet: {countries} — none of their firms has put a place on SeeBuyGet.}}',
+  'directory.firms': '{n, plural, one {# firm} other {# firms}}',
   'directory.none': 'No firms are listed yet.',
   'directory.noneBody': 'A firm is listed once two of our staff have checked its papers. Forwarders, clearing agents and container depots join with a business account; hauliers with a fleet account.',
   'directory.unreachable': 'We could not reach SeeBuyGet just now. The list below is the one this page was built with.',
@@ -28,10 +31,6 @@ export const enDirectory = {
   'directory.joinBusiness': 'Forwarders, clearing agents and depots: a business account',
   'directory.joinFleet': 'Hauliers: a fleet account',
 
-  'directory.kind.forwarder': 'Freight forwarder',
-  'directory.kind.clearing_agent': 'Clearing agent',
-  'directory.kind.depot': 'Container depot',
-  'directory.kind.haulier': 'Haulier',
   'directory.kinds.forwarder': 'Freight forwarders',
   'directory.kinds.clearing_agent': 'Clearing agents',
   'directory.kinds.depot': 'Container depots',
@@ -40,7 +39,7 @@ export const enDirectory = {
 
   'directory.countryTitle': 'Logistics firms in {country}',
   'directory.countryMetaTitle': 'Freight forwarders, clearing agents, depots and hauliers in {country} | SeeBuyGet directory',
-  'directory.countryMetaDescription': '{n} logistics firms in {country} whose papers our staff checked — each firm’s own words beside what we have seen of its work. Alphabetical, never ranked.',
+  'directory.countryMetaDescription': '{n, plural, one {# logistics firm} other {# logistics firms}} in {country} whose papers our staff checked — each firm’s own words beside what we have seen of its work. Alphabetical, never ranked.',
   'directory.countryLede': 'The firms in {country} whose papers our staff have checked, in alphabetical order.',
   'directory.countryNone': 'No firms in {country} are listed yet.',
   'directory.allCountries': 'All countries',
@@ -55,9 +54,9 @@ export const enDirectory = {
   'directory.clears': 'Says it clears: {what}',
   'directory.clearsAt': 'Says it clears at: {where}',
   'directory.seenTitle': 'What we have seen on SeeBuyGet',
-  'directory.seenAppointed': 'Appointed to clear {appointed} imports; {cleared} of them got on the road.',
-  'directory.seenArranged': '{n} loads it posted were delivered.',
-  'directory.seenDelivered': '{n} loads delivered by its drivers.',
+  'directory.seenAppointed': 'Appointed to clear {appointed, plural, one {# import} other {# imports}}; {cleared} of them got on the road.',
+  'directory.seenArranged': '{n, plural, one {# load it posted was delivered} other {# loads it posted were delivered}}.',
+  'directory.seenDelivered': '{n, plural, one {# load delivered by its drivers} other {# loads delivered by its drivers}}.',
   'directory.seenNone': 'Nothing through SeeBuyGet yet. Most of a firm’s work never comes through us, so this is not a bad record.',
   'directory.checksTitle': 'Papers our staff checked',
   'directory.checked': 'checked {date}',
@@ -80,31 +79,4 @@ export const enDirectory = {
   'directory.address': 'Address',
   'directory.hours': 'Hours',
   'directory.noContact': 'It shows no way to reach it here. Its page on SeeBuyGet may say more.',
-  'directory.foot': 'Logistics directory',
-
-  /* The card in the Business and Fleet apps: whether the firm is shown, and in what words. */
-  'directory.app.title': 'In the logistics directory',
-  'directory.app.lede': 'SeeBuyGet’s public directory lists forwarders, clearing agents, container depots and hauliers whose papers our staff checked, by country — your own line beside what we have seen of your work here.',
-  'directory.app.shown': 'Shown as: {kinds}.',
-  'directory.app.whyChecked': 'Your business is shown once two of our staff have checked its papers.',
-  'directory.app.whyKinds': 'The directory lists forwarders, clearing agents, container depots and hauliers. Say under what you do that you do one of these.',
-  'directory.app.whyFleet': 'Your fleet is shown once our staff have checked its papers and it is active.',
-  'directory.app.whyOff': 'Not shown: you took it off the directory.',
-  'directory.app.line': 'Your line',
-  'directory.app.lineHint': 'What you do and where, in your own words — up to 240 letters. Shown as yours, never checked by us.',
-  'directory.app.lineNone': 'No line of your own yet.',
-  'directory.app.contactFromCard': 'The ways to reach you are your contact entry, on this screen.',
-  'directory.app.contactTitle': 'Ways to reach you, shown in the directory',
-  'directory.app.contactHint': 'Only what you fill in is shown; leave a box empty to show nothing there. A phone is shown as a Call button.',
-  'directory.app.phone': 'Phone',
-  'directory.app.email': 'Email',
-  'directory.app.website': 'Website',
-  'directory.app.edit': 'Change',
-  'directory.app.save': 'Save',
-  'directory.app.cancel': 'Cancel',
-  'directory.app.takeOff': 'Take us off the directory',
-  'directory.app.putBack': 'Show us in the directory',
-  'directory.app.saved': 'The directory says what you saved.',
-  'directory.app.view': 'See the directory',
-  'directory.app.ownerOnly': 'An owner of the business changes this.',
 };

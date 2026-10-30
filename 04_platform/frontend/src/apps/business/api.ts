@@ -2,6 +2,7 @@ import type { SystemMessage, SystemView } from './system';
 import type { NotPaidView, PaidAnswerView, PaidDirectView } from '../../shared/paidDirect';
 import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { Gs1DisputeView } from './gs1Dispute';
+import type { DirectoryListingView } from '../../shared/directoryListing';
 import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
 import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
@@ -387,6 +388,9 @@ export interface BusinessClient {
   contracts(): Promise<Result<{ items: CarriageContract[] }>>;
   linkContract(code: string): Promise<Result<CarriageContract>>;
   endContract(contractId: string, reason?: string): Promise<Result<CarriageContract>>;
+  /** Its place in the public logistics directory: shown or taken off, and its own line (owner only). */
+  directory(): Promise<Result<DirectoryListingView>>;
+  setDirectory(body: { listed?: boolean; words?: string }): Promise<Result<DirectoryListingView>>;
   /** The business's GS1 company prefix: set (owner only), or stop giving codes. */
   setGs1(companyPrefix: string, extensionDigit: number): Promise<Result<BusinessView>>;
   clearGs1(): Promise<Result<BusinessView>>;
@@ -466,6 +470,8 @@ export function createBusinessClient(): BusinessClient {
     contracts: () => call((c) => c.GET('/v1/sbg/business/me/contracts' as never, {} as never) as never),
     linkContract: (code) => call((c) => c.POST('/v1/sbg/business/me/contracts/link' as never, { body: { code } } as never) as never),
     endContract: (contractId, reason) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/end` as never, { body: reason ? { reason } : {} } as never) as never),
+    directory: () => call((c) => c.GET('/v1/sbg/business/me/directory' as never, {} as never) as never),
+    setDirectory: (body) => call((c) => c.POST('/v1/sbg/business/me/directory' as never, { body } as never) as never),
     setGs1: (companyPrefix, extensionDigit) => call((c) => c.POST('/v1/sbg/business/me/gs1' as never, { body: { companyPrefix, extensionDigit } } as never) as never),
     clearGs1: () => call((c) => c.DELETE('/v1/sbg/business/me/gs1' as never, {} as never) as never),
     gs1Disputes: () => call((c) => c.GET('/v1/sbg/business/me/gs1/disputes' as never, {} as never) as never),

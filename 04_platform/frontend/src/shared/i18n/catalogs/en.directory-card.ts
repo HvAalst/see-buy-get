@@ -1,0 +1,36 @@
+/**
+ * THE LOGISTICS DIRECTORY'S CARD in the Business and Fleet apps — whether the firm is shown, and in what words — and the
+ * names of what a firm does, which the public pages say too (en.directory.ts spreads this in). An app adds only this.
+ */
+export const enDirectoryCard = {
+  'directory.kind.forwarder': 'Freight forwarder',
+  'directory.kind.clearing_agent': 'Clearing agent',
+  'directory.kind.depot': 'Container depot',
+  'directory.kind.haulier': 'Haulier',
+  'directory.app.title': 'In the logistics directory',
+  'directory.app.lede': 'SeeBuyGet’s public directory lists forwarders, clearing agents, container depots and hauliers whose papers our staff checked, by country — your own line beside what we have seen of your work here.',
+  'directory.app.shown': 'Shown as: {kinds}.',
+  'directory.app.whyChecked': 'Your business is shown once two of our staff have checked its papers.',
+  'directory.app.whyKinds': 'The directory lists forwarders, clearing agents, container depots and hauliers. Say under what you do that you do one of these.',
+  'directory.app.whyFleet': 'Your fleet is shown once our staff have checked its papers and it is active.',
+  'directory.app.whyOff': 'Not shown: you took it off the directory.',
+  'directory.app.line': 'Your line',
+  'directory.app.lineHint': 'What you do and where, in your own words — up to 240 letters. Shown as yours, never checked by us.',
+  'directory.app.lineNone': 'No line of your own yet.',
+  'directory.app.contactFromCard': 'The ways to reach you are your contact entry, on this screen.',
+  'directory.app.contactTitle': 'Ways to reach you, shown in the directory',
+  'directory.app.contactHint': 'Only what you fill in is shown; leave a box empty to show nothing there. A phone is shown as a Call button.',
+  'directory.app.contactShown': 'Shown to reach you: {what}.',
+  'directory.app.contactNone': 'No way to reach you is shown yet.',
+  'directory.app.phone': 'Phone',
+  'directory.app.email': 'Email',
+  'directory.app.website': 'Website',
+  'directory.app.edit': 'Change',
+  'directory.app.save': 'Save',
+  'directory.app.cancel': 'Cancel',
+  'directory.app.takeOff': 'Take us off the directory',
+  'directory.app.putBack': 'Show us in the directory',
+  'directory.app.saved': 'The directory says what you saved.',
+  'directory.app.view': 'See the directory',
+  'directory.app.ownerOnly': 'An owner of the business changes this.',
+};

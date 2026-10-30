@@ -199,16 +199,18 @@ export class DirectoryService {
       ...(card && (card.phone || card.email || card.website) ? { contact: { ...(card.phone ? { phone: card.phone } : {}), ...(card.email ? { email: card.email } : {}), ...(card.website ? { website: card.website } : {}) } } : {}),
       ...(!verified ? { why: 'Your business is shown once two of our staff have checked its papers.' } : !kinds.length ? { why: 'The directory lists forwarders, clearing agents, container depots and hauliers: say under Business details that you do one of these.' } : listing?.hidden ? { why: 'You took your business off the directory.' } : {}),
       ...(this.handles.forId(e.entityId) ? { handle: this.handles.forId(e.entityId)!.handle } : {}),
+      ...(e.jurisdiction ? { country: e.jurisdiction } : {}),
     };
   }
 
   /** On or off, and its own line — an owner's to say. */
-  setCompanyListing(entityId: string, input: { listed: boolean; words?: string }, by: string, now = Date.now()): DirectoryListingView {
+  setCompanyListing(entityId: string, input: { listed?: boolean; words?: string }, by: string, now = Date.now()): DirectoryListingView {
     const e = this.entities.get(entityId);
     const before = this.listings.get(e.entityId);
     // Left out is kept; an empty line clears it.
     const words = (input.words === undefined ? before?.words : input.words.trim().replace(/\s+/g, ' '))?.slice(0, 240);
-    this.listings.set(e.entityId, { ...(input.listed ? {} : { hidden: true }), ...(words ? { words } : {}), by, at: new Date(now).toISOString() });
+    const hidden = input.listed === undefined ? before?.hidden === true : !input.listed;
+    this.listings.set(e.entityId, { ...(hidden ? { hidden: true } : {}), ...(words ? { words } : {}), by, at: new Date(now).toISOString() });
     return this.companyListing(e.entityId);
   }
 
@@ -225,11 +227,12 @@ export class DirectoryService {
       ...(listing?.contact && Object.keys(listing.contact).length ? { contact: { ...listing.contact } } : {}),
       ...(!eligible ? { why: 'Your fleet is shown once our staff have checked its papers and it is active.' } : listing?.hidden ? { why: 'You took your fleet off the directory.' } : {}),
       ...(this.handles.forId(m.did) ? { handle: this.handles.forId(m.did)!.handle } : {}),
+      ...(m.jurisdiction ? { country: m.jurisdiction } : {}),
     };
   }
 
   /** On or off, its line, and the contact it ticks to show — the fleet office's to say. */
-  setFleetListing(did: string, input: { listed: boolean; words?: string; phone?: string; email?: string; website?: string }, by: string, now = Date.now()): DirectoryListingView {
+  setFleetListing(did: string, input: { listed?: boolean; words?: string; phone?: string; email?: string; website?: string }, by: string, now = Date.now()): DirectoryListingView {
     const m = this.managers.get(did);
     const before = this.listings.get(m.did);
     // What a save leaves out is kept (taking the fleet off keeps its line and contact for when it comes back); an empty value clears it.
@@ -241,7 +244,8 @@ export class DirectoryService {
     const phone = kept(input.phone, before?.contact?.phone);
     if (website && !/^https?:\/\/[^\s]+\.[^\s]{2,}/.test(website)) throw new GlosError('VALIDATION_FAILED', 'A website starts with https://', { field: 'website' });
     const contact = { ...(phone ? { phone } : {}), ...(email ? { email } : {}), ...(website ? { website } : {}) };
-    this.listings.set(m.did, { ...(input.listed ? {} : { hidden: true }), ...(words ? { words } : {}), ...(Object.keys(contact).length ? { contact } : {}), by, at: new Date(now).toISOString() });
+    const hidden = input.listed === undefined ? before?.hidden === true : !input.listed;
+    this.listings.set(m.did, { ...(hidden ? { hidden: true } : {}), ...(words ? { words } : {}), ...(Object.keys(contact).length ? { contact } : {}), by, at: new Date(now).toISOString() });
     return this.fleetListing(m.did);
   }
 }

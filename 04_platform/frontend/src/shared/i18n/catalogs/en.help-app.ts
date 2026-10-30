@@ -584,6 +584,15 @@ export const enHelpApp = {
   'help.hub-hours.step2': 'Tick “Open on set days and hours” and give each day’s hours. Give a number to call — your desk or your gate, not the number you sign in with — and, if you like, a second number, who to ask for and where to come in. Then “Save”.',
   'help.hub-hours.step3': 'Your public page shows your hours either way. Your number and where to come in are on it only if you tick “Show my number and where to come in on my public page, for anyone”; drivers and stores working with your hub see them in their app either way.',
   'help.hub-hours.note1': 'Your number is never printed: it is shown as a button that calls you. Without hours, nobody is told when you are open; without a number, nobody can call you from the app.',
+  // logistics-directory
+  'help.logistics-directory.title': 'Be found in the logistics directory',
+  'help.logistics-directory.summary': 'SeeBuyGet’s public directory lists forwarders, clearing agents, container depots and hauliers whose papers our staff checked, by country. Say whether you are shown, write your own line, and choose how people reach you.',
+  'help.logistics-directory.step1': 'Business app: “Business details” › “In the logistics directory”. Fleet app: the “Fleet” screen, the card “In the logistics directory”. It says whether you are shown, and if not, why.',
+  'help.logistics-directory.step2': 'Tap “Change” and write your line: what you do and where, in your own words, up to 240 letters. “Save”. It is shown as your own words, beside what we have seen of your work on SeeBuyGet.',
+  'help.logistics-directory.step3': 'How people reach you: a business shows its contact entry, on the same screen; a fleet fills in the phone, email and website it wants shown under “Change” — leave a box empty to show nothing there. A phone is shown as a Call button.',
+  'help.logistics-directory.step4': '“Take us off the directory” takes you off at once; “Show us in the directory” puts you back, with your line kept. “See the directory” opens your country’s page.',
+  'help.logistics-directory.note1': 'The list is alphabetical and nobody pays to be on it or higher on it. What we have seen counts only work done through SeeBuyGet, and the page says that a short record is not a bad one.',
+  'help.logistics-directory.note2': 'A business is shown once two of our staff have checked its papers, and only if it forwards, clears goods or runs a container depot. Changing its name or registration number takes it off until it is checked again. A fleet is shown once it is active. In a business, only an owner changes this.',
   // hub-carriers
   'help.hub-carriers.title': 'Send pallets, cages and crates to other hubs',
   'help.hub-carriers.summary': 'Say what your hub moves bags on to other hubs, and send them with a driver — saying how they come back: with the driver, left there, or on a return job you post.',

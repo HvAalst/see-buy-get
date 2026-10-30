@@ -98,10 +98,13 @@ export class DirectoryListingView {
   /** Why it is not shown, in words, where it is not. */
   @ApiPropertyOptional() why?: string;
   @ApiPropertyOptional() handle?: string;
+  /** The country whose page it is on: /directory/<country>/. */
+  @ApiPropertyOptional() country?: string;
 }
 
 export class DirectoryListingDto {
-  @IsBoolean() listed!: boolean;
+  /** Shown, or taken off. Left out, it stays as it was — a firm saving only its line. */
+  @IsOptional() @IsBoolean() listed?: boolean;
   /** Its own line: what it does and where, in its words. */
   @IsOptional() @IsString() @MaxLength(240) words?: string;
 }

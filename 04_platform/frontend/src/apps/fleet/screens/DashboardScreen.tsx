@@ -6,6 +6,7 @@ import { formatDate, useT } from '../../../shared/i18n';
 import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient, SbgError } from '../../../lib/sbg';
 import { systemApi, systemSummary, type SystemView } from '../system';
+import { DirectoryCard } from './DirectoryCard';
 import { StandstillCard } from './StandstillCard';
 import { CAUSE_WORD, careApi, whereWords, type VehicleBreakdown } from '../../../shared/upkeep/care';
 import { ageWords, signalState, dashboardSummary, fleetMap, hazardWords, hoursLabel, paperDay, paperKindLabel, paperLine, paperLineClass, papersAloud, stopDetail, vehicleDetail } from '../logic';
@@ -93,6 +94,8 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
 
       {/* Round 11 — its own transport system, told of its work: whether it is set up, and whether messages are arriving. */}
       <SystemCard sbg={sbg ?? null} did={state.manager?.did} onOpen={() => actions.go('system')} />
+      {/* Its place in SeeBuyGet's public logistics directory as a haulier, its own line and the contact it shows (2026-10-30). */}
+      <DirectoryCard sbg={sbg ?? null} did={state.manager?.did} />
 
 {/* A REAL map, and one that renders whether or not anything is on it.
 

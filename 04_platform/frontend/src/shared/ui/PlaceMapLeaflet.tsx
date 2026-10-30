@@ -15,7 +15,7 @@ import { framedPoints, type PlaceMapProps } from './PlaceMap';
  */
 const NAIROBI: L.LatLngExpression = [-1.2864, 36.8172];
 
-export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label, nearest }: PlaceMapProps) {
+export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label, nearest, maxZoom }: PlaceMapProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -120,10 +120,10 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
       .join('|');
     if (sig !== fittedSigRef.current) {
       fittedSigRef.current = sig;
-      if (framed.length === 1) map.setView(framed[0], 15);
-      else if (framed.length > 1) map.fitBounds(L.latLngBounds(framed), { padding: [36, 36], maxZoom: 16 });
+      if (framed.length === 1) map.setView(framed[0], Math.min(15, maxZoom ?? 15));
+      else if (framed.length > 1) map.fitBounds(L.latLngBounds(framed), { padding: [36, 36], maxZoom: Math.min(16, maxZoom ?? 16) });
     }
-  }, [pins, lines, selectedId, reference, dropped, nearest]);
+  }, [pins, lines, selectedId, reference, dropped, nearest, maxZoom]);
 
   return <div ref={hostRef} class="pmap-leaflet" role={onDrop ? 'button' : 'img'} aria-label={label} />;
 }
