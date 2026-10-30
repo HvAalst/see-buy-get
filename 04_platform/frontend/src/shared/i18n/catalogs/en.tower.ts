@@ -1899,6 +1899,8 @@ export const enTowerQueues = {
     'The keys are set on the server as GLOS_VAPID_PUBLIC and GLOS_VAPID_PRIVATE; the private one is never shown, here or anywhere. Changing them ends every enrolment: each phone has to turn notifications on again.',
   'tower.conn.tag.noCodes': 'No code can be sent',
   'tower.conn.tag.reviewCode': 'Review code 000000',
+  'tower.conn.tag.ownerCodes': 'Stand-in codes',
+  'tower.conn.sms.ownerCodes': 'Stand-in codes are on until the end of {until} (UTC): {numbers, plural, one {# number} other {# numbers}} and {addresses, plural, one {# address} other {# addresses}} set in GLOS_STANDIN_CODES on the server take the codes set there, as if texted or mailed — nothing is sent, nothing shown. They stop when texts (or mail) leave, or on that day.',
   'tower.conn.tag.smsLimit': 'Asked to slow down',
   'tower.conn.tag.smsRejected': 'One number turned down',
   'tower.conn.sms.title': 'Text messages',

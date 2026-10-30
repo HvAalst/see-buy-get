@@ -434,3 +434,19 @@ describe('what this server is connected to', () => {
     expect(momentWords('soon')).toBe('soon');
   });
 });
+
+describe('the owner’s stand-in codes on the Connections screen (2026-10-30)', () => {
+  const plain = { sends: false, written: 0, failed: 0 } as never;
+  it('says they are on, how many and until when — never which — in amber, beside the review code too', () => {
+    const owner = { numbers: 1, addresses: 1, until: '2026-11-30' };
+    const s = smsSays(plain, false, '2026-10-30T08:00:00', t, null, owner);
+    expect(s.tone).toBe('warn');
+    expect(s.tag).toBe('Stand-in codes');
+    expect(s.line).toContain('until the end of 2026-11-30');
+    expect(s.line).toContain('1 number and 1 address');
+    expect(smsSays(plain, false, '2026-10-30T08:00:00', t, { until: '2026-11-30' }, owner).line).toContain('Stand-in codes are on');
+    // On a sandbox, and when off, nothing is said of them.
+    expect(smsSays(plain, true, '2026-10-30T08:00:00', t, null, owner).line).not.toContain('Stand-in');
+    expect(smsSays(plain, false, '2026-10-30T08:00:00', t, null, null).tag).not.toBe('Stand-in codes');
+  });
+});

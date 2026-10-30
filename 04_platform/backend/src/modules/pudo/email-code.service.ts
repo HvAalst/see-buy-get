@@ -61,11 +61,11 @@ export class EmailCodeService {
   ) {}
 
   /** Make a code for this address. The caller mails it — or, `review`, it is 000000 and mailed nowhere (the caller decides). */
-  request(email: string, now: number = Date.now(), opts: { review?: boolean } = {}): { code: string; minutes: number } {
+  request(email: string, now: number = Date.now(), opts: { review?: boolean; standIn?: string } = {}): { code: string; minutes: number } {
     const e = normalizeEmail(email);
     if (!isPlausibleEmail(e)) throw new GlosError('VALIDATION_FAILED', 'Enter a valid email address', { field: 'email' });
     this.assertWithinRate(e, now);
-    const code = opts.review ? REVIEW_CODE : String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const code = opts.standIn ?? (opts.review ? REVIEW_CODE : String(randomInt(0, 1_000_000)).padStart(6, '0'));
     this.codes.set(e, { code, expires: now + CODE_TTL_MS, attempts: 0, ...(opts.review ? { review: true } : {}) });
     return { code, minutes: CODE_TTL_MS / 60_000 };
   }

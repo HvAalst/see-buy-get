@@ -49,7 +49,7 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
   const adviser = view ? adviserSays(view.adviser, view.since, t) : null;
   const mail = view ? mailSays(view.mail, view.sandbox, view.since, t) : null;
   const push = view ? pushSays(view.push, view.sandbox, view.since, t) : null;
-  const sms = view ? smsSays(view.sms, view.sandbox, view.since, t, view.reviewCode) : null;
+  const sms = view ? smsSays(view.sms, view.sandbox, view.since, t, view.reviewCode, view.standInCodes) : null;
   const checked = check ? checkSays(check, t) : null;
 
   return (

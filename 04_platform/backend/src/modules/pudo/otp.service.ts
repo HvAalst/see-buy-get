@@ -86,11 +86,12 @@ export class OtpService {
    * Issue a 6-digit code for a phone (returned here; the door that asked texts it). `review`: the review code, 000000,
    * for a number with no account while codes cannot be texted (foundation/runtime/review-code.ts) — the door decides.
    */
-  request(phone: string, opts: { review?: boolean } = {}): { sent: boolean; code: string } {
+  request(phone: string, opts: { review?: boolean; standIn?: string } = {}): { sent: boolean; code: string } {
     const p = this.phoneFor(phone);
     this.assertWithinRate(p);
 
-    const code = opts.review ? REVIEW_CODE : String(randomInt(0, 1_000_000)).padStart(6, '0');
+    // The owner's stand-in code (foundation/runtime/standin-code.ts) is the number's own: it is no review code.
+    const code = opts.standIn ?? (opts.review ? REVIEW_CODE : String(randomInt(0, 1_000_000)).padStart(6, '0'));
     this.codes.set(p, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0, ...(opts.review ? { review: true } : {}) });
     return { sent: true, code };
   }

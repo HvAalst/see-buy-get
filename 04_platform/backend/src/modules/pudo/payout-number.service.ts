@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { standInCode } from '../../foundation/runtime/standin-code';
 import { randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import { actingTenant, auditActor } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -84,21 +85,22 @@ export class PayoutNumberService implements OnModuleInit {
     if (this.numbers.get(payee.payeeId)?.msisdn === msisdn) throw new GlosError('INVALID_STATE', 'That is already your payout number.');
     const to = `+${msisdn}`;
     const texts = this.sms?.sends() ?? false;
-    if (!texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be texted from this server yet, so a payout number cannot be confirmed.');
-    if (texts && !this.sms?.mayGoTo(to)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to numbers in that country.');
+    const standIn = standInCode(to, texts);
+    if (!standIn && !texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be texted from this server yet, so a payout number cannot be confirmed.');
+    if (!standIn && texts && !this.sms?.mayGoTo(to)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to numbers in that country.');
     this.assertWithinRate(payee.payeeId, now);
-    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
     const minutes = CODE_TTL_MS / 60_000;
     this.pending.set(payee.payeeId, { msisdn, code, expires: now + CODE_TTL_MS, attempts: 0 });
     try {
       // Handed to the sender whatever it is: a sandbox's keeps it, so what would have been texted can be read back.
-      await this.sms?.sendCode(to, code, minutes);
+      if (!standIn) await this.sms?.sendCode(to, code, minutes);
     } catch (err) {
       this.pending.delete(payee.payeeId);
       this.giveBack(payee.payeeId);
       throw new GlosError('SMS_NOT_SENT', notSentWords(err, 'The code could not be texted to that number. Try again in a minute.'));
     }
-    return { sent: texts, masked: maskMsisdn(msisdn), minutes, ...(isSandbox() ? { code } : {}) };
+    return { sent: texts || Boolean(standIn), masked: maskMsisdn(msisdn), minutes, ...(isSandbox() ? { code } : {}) };
   }
 
   /**

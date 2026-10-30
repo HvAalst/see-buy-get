@@ -4,6 +4,7 @@ import { json } from 'express';
 import { AppModule } from './app.module';
 import { isSandbox } from './foundation/runtime/sandbox';
 import { reviewCodeState } from './foundation/runtime/review-code';
+import { standInState } from './foundation/runtime/standin-code';
 import { applyEdge } from './edge';
 import { readProviderEventsRaw } from './foundation/mail/provider-events.raw';
 import { flushPersistentMaps } from './foundation/store/persistent-map';
@@ -35,6 +36,8 @@ async function bootstrap() {
   }
   // The review code is said at boot: a live server confirming new accounts with 000000 is not to be found out by accident.
   const review = reviewCodeState();
+  const standIn = standInState();
+  if (standIn) Logger.warn(`Stand-in codes are ON until the end of ${standIn.until} (UTC) for ${standIn.numbers} number(s) and ${standIn.addresses} address(es) named in GLOS_STANDIN_CODES: while no text (or mail) can leave, their codes are the ones set there. Remove GLOS_STANDIN_CODES to turn them off.`, 'Bootstrap');
   if (review) Logger.warn(`The review code is ON until the end of ${review.until} (UTC): where no text or mail can leave, a NEW account's phone code and recovery-email code are 000000. It never signs in to an account that exists. Remove GLOS_REVIEW_CODE_UNTIL to turn it off.`, 'Bootstrap');
   if (trustProxy) {
     (app.getHttpAdapter().getInstance() as { set: (k: string, v: unknown) => void }).set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === 'true' ? true : trustProxy);

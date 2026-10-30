@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
+import { standInCode } from '../../foundation/runtime/standin-code';
 import { GlosError } from '../../foundation/http/glos-error';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { EventBus } from '../../foundation/events/event-bus.service';
@@ -129,6 +130,9 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
    * the controller decides whether anybody but the inbox sees it.
    */
   sendConfirmCode(email: string): { code: string; review?: true } {
+    // The owner's stand-in code for an address named on the server, while no mail can leave: its own, mailed nowhere.
+    const standIn = standInCode(email, Boolean(this.mail?.connection().sends));
+    if (standIn) return { code: this.emailCodes.request(email, Date.now(), { standIn }).code };
     // The review code: mail cannot leave, the address belongs to nobody yet — 000000, mailed nowhere, shown by the caller.
     if (reviewCodeOn() && !this.mail?.connection().sends && !this.persons.findByEmail(email)) {
       return { code: this.emailCodes.request(email, Date.now(), { review: true }).code, review: true };
@@ -145,6 +149,8 @@ export class AccountRecoveryService implements OnModuleInit, OnModuleDestroy {
   sendAccountCode(email: string, why: 'recover' | 'undo'): { code?: string } {
     const person = this.persons.findByEmail(email);
     if (!person) return {};
+    const standIn = standInCode(email, Boolean(this.mail?.connection().sends));
+    if (standIn) return { code: this.emailCodes.request(email, Date.now(), { standIn }).code };
     const { code, minutes } = this.emailCodes.request(email);
     void this.mail?.send('email-code', { address: normalizeEmail(email) }, { code, minutes, why });
     return { code };

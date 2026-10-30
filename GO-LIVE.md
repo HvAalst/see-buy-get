@@ -213,6 +213,20 @@ The repository → Settings → Secrets and variables → Actions:
 
   Off: delete that line from `/opt/seebuyget/.env`, then `docker compose up -d`. The console's Connections page says
   whether it is on, and until when. Not for real people: anyone can sign up with any number while it is on.
+- [ ] *(Optional, before Twilio)* **Your own stand-in codes:** your own number (and address) take a code you choose, as
+  if Twilio (or the mail) had delivered it — for signing up, a new phone or browser, a forgotten PIN — and nothing is
+  sent or shown. Only for the numbers and addresses you name, only until the day you give, and it stops by itself the
+  moment texts (or mail) really go out. Kept in the server's `.env` only, never in the code. Add these two lines to
+  `/opt/seebuyget/.env` (your number in full with its country code, a six-digit code; more pairs with commas):
+
+  ```
+  GLOS_STANDIN_CODES=+31600000000:123456,you@example.com:123456
+  GLOS_STANDIN_CODES_UNTIL=2026-11-30
+  ```
+
+  then `cd /opt/seebuyget && docker compose up -d`. The console's Connections page says how many and until when (never
+  which). Off: delete both lines, then `docker compose up -d`. Keep the code to yourself: with it and your number,
+  somebody could confirm a new phone or replace your PIN.
 
 ## 10. Lock it down (recommended, about 10 minutes) ☐
 

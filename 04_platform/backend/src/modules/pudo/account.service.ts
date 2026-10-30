@@ -1,4 +1,5 @@
 import type { MailApp } from '../../foundation/mail/mail.templates';
+import { standInCode } from '../../foundation/runtime/standin-code';
 import { MailService } from '../../foundation/mail/mail.service';
 import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -375,13 +376,15 @@ export class AccountService implements OnApplicationBootstrap {
     let code = waiting?.[1].code;
     if (!challenge || !code) {
       const texts = this.sms?.sends() ?? false;
-      if (!texts && !isSandbox()) return new GlosError('SMS_NOT_SENT', `This phone or browser has to be confirmed by a code to the ${party}’s number, and codes cannot be texted from this server yet.`);
-      if (texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', `Codes are not texted to the ${party}’s number in that country.`);
+      // The owner's stand-in code: the number's own, as if texted (foundation/runtime/standin-code.ts).
+      const standIn = standInCode(phone, texts);
+      if (!standIn && !texts && !isSandbox()) return new GlosError('SMS_NOT_SENT', `This phone or browser has to be confirmed by a code to the ${party}’s number, and codes cannot be texted from this server yet.`);
+      if (!standIn && texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', `Codes are not texted to the ${party}’s number in that country.`);
       challenge = `dc_${randomBytes(12).toString('hex')}`;
-      code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+      code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
       this.deviceCodes.set(challenge, { email: account.email, code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
       try {
-        await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
+        if (!standIn) await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
       } catch (err) {
         this.deviceCodes.delete(challenge);
         return new GlosError('SMS_NOT_SENT', notSentWords(err, `The code to the ${party}’s number could not be texted. Try again in a minute.`));
@@ -405,11 +408,12 @@ export class AccountService implements OnApplicationBootstrap {
     if (!isPlausiblePhone(number)) throw new GlosError('VALIDATION_FAILED', 'A phone number, with its country code: +254 712 345678', { field: 'phone' });
     if (asked.code && now - asked.sentAt < DEVICE_CODE_COOLDOWN_MS) throw new GlosError('RATE_LIMITED', 'A code was sent a moment ago: wait a minute before asking again');
     const texts = this.sms?.sends() ?? false;
-    if (!texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be texted from this server yet.');
-    if (texts && !this.sms?.mayGoTo(number)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to numbers in that country.');
-    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const standIn = standInCode(number, texts);
+    if (!standIn && !texts && !isSandbox()) throw new GlosError('SMS_NOT_SENT', 'Codes cannot be texted from this server yet.');
+    if (!standIn && texts && !this.sms?.mayGoTo(number)) throw new GlosError('PHONE_NOT_SERVED', 'Codes are not texted to numbers in that country.');
+    const code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
     try {
-      await this.sms?.sendCode(number, code, DEVICE_CODE_TTL_MS / 60_000);
+      if (!standIn) await this.sms?.sendCode(number, code, DEVICE_CODE_TTL_MS / 60_000);
     } catch (err) {
       throw new GlosError('SMS_NOT_SENT', notSentWords(err, 'The code could not be texted. Try again in a minute.'));
     }

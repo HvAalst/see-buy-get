@@ -95,6 +95,12 @@ export class ReviewCodeState {
   until!: string;
 }
 
+export class StandInCodesState {
+  @ApiProperty() numbers: number;
+  @ApiProperty() addresses: number;
+  @ApiProperty() until: string;
+}
+
 export class ConnectionsView {
   @ApiProperty({ type: RouterConnection }) router: RouterConnection;
   @ApiProperty({ type: AdviserConnection }) adviser: AdviserConnection;
@@ -111,6 +117,11 @@ export class ConnectionsView {
    * is 000000 where no text or mail can leave. The day it ends; null when it is off.
    */
   @ApiPropertyOptional({ type: ReviewCodeState, nullable: true }) reviewCode: ReviewCodeState | null;
+  /**
+   * The owner's stand-in codes (GLOS_STANDIN_CODES): numbers and addresses whose codes are set on the server, while no text
+   * or mail can leave. How many, and the day they end — never which, never a code. Null when off.
+   */
+  @ApiPropertyOptional({ type: StandInCodesState, nullable: true }) standInCodes: StandInCodesState | null;
   /** When this server started. "Last asked" is since then: it is kept in memory, and a restart forgets it. */
   since: string;
 }

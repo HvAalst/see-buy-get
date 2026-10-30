@@ -1,5 +1,6 @@
 ﻿import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
+import { standInCode } from '../../foundation/runtime/standin-code';
 import { PapersWatchService } from './papers-watch.service';
 import { RailCheckDto, RailNoteDto, type RailNoteCheckView, type RailwayList } from './rail-note.types';
 import { railwayRows } from './rail-note';
@@ -392,6 +393,13 @@ export class SbgController {
   async phoneRequest(@Body() dto: PhoneRequestDto) {
     const to = this.otp.phoneFor(dto.phone);
     const texts = this.sms?.sends() ?? false;
+    // THE OWNER'S STAND-IN CODE: a number named on the server takes its own code while no text can leave — as if Twilio had
+    // delivered it. Nothing is sent, nothing shown: the answer is the one a delivered text gives.
+    const standIn = standInCode(to, texts);
+    if (standIn) {
+      this.otp.request(dto.phone, { standIn });
+      return { sent: true };
+    }
     if (!texts && !isSandbox()) {
       if (!reviewCodeOn()) throw new GlosError('SMS_NOT_SENT', CODE_NOT_SENT);
       /*

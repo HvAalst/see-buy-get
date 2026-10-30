@@ -77974,6 +77974,25 @@
           "until"
         ]
       },
+      "StandInCodesState": {
+        "type": "object",
+        "properties": {
+          "numbers": {
+            "type": "number"
+          },
+          "addresses": {
+            "type": "number"
+          },
+          "until": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "numbers",
+          "addresses",
+          "until"
+        ]
+      },
       "ConnectionsView": {
         "type": "object",
         "properties": {
@@ -77998,6 +78017,15 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ReviewCodeState"
+              }
+            ]
+          },
+          "standInCodes": {
+            "nullable": true,
+            "description": "The owner's stand-in codes (GLOS_STANDIN_CODES): numbers and addresses whose codes are set on the server, while no text\nor mail can leave. How many, and the day they end — never which, never a code. Null when off.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StandInCodesState"
               }
             ]
           },
