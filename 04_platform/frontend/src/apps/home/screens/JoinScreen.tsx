@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { AgreementBlock, AgreementCheck } from '../../../shared/documents/Agreement';
@@ -8,9 +8,10 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { duplicateField, isIdentityDocument, type DuplicateField } from '../../../shared/duplicate';
 import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
 import { recoveryApi } from '../../../shared/account/recovery';
-import { homeConfig, myAgreement } from '../api';
+import { geocode, homeConfig, myAgreement } from '../api';
+import { countryNameIn } from '../../../shared/documents/documents';
 
-import { ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
+import { ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -821,6 +822,25 @@ function AboutStep({ state, actions }: JoinScreenProps) {
 
 /* ------------------------------------------------------------------ where -- */
 
+/** The whole world, where nothing better is known — never one country's city for everybody. */
+const WORLD = { point: { lat: 15, lng: 15 }, zoom: 2 };
+
+/** Where the join map starts: the country's middle, looked up by its name once it is known; the world until then. */
+function useCountryStart(country: string): { point: { lat: number; lng: number }; zoom: number } {
+  const [start, setStart] = useState(WORLD);
+  useEffect(() => {
+    if (!country) return setStart(WORLD);
+    let live = true;
+    void geocode(countryNameIn(country, 'en'), [country]).then((r) => {
+      if (live) setStart(r.data?.location ? { point: r.data.location, zoom: 6 } : WORLD);
+    });
+    return () => {
+      live = false;
+    };
+  }, [country]);
+  return start;
+}
+
 function WhereStep({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
@@ -829,6 +849,9 @@ function WhereStep({ state, actions }: JoinScreenProps) {
   // Suggest the areas of the country being joined, not every area on the network — a Kenyan zone code is
   // no help to somebody opening in Addis, and offering it invites picking one.
   const zones = [...new Set(state.points.filter((p) => !f.country || !p.country || p.country === f.country).map((p) => p.zone).filter(Boolean))].sort();
+  // The map opens on the country being joined — the one chosen, else the phone's — and shows that country's shops only.
+  const country = joiningCountry(f);
+  const start = useCountryStart(country);
   const [openShop, setOpenShop] = useState<string | null>(null);
   const preview = openShop ? state.points.find((p) => p.did === openShop) ?? null : null;
 
@@ -839,11 +862,12 @@ function WhereStep({ state, actions }: JoinScreenProps) {
 
       <PlaceMap
         label={t('home.join.where.mapLabel')}
-        pins={state.points.filter((p) => p.location).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
+        pins={state.points.filter((p) => p.location && (!country || !p.country || p.country === country)).map((p) => ({ id: p.did, label: p.shopName, point: p.location! }))}
         selectedId={openShop}
         onPick={setOpenShop}
         onDrop={(location) => actions.setForm({ location })}
         dropped={f.location}
+        start={start}
       />
 
       {f.location ? (

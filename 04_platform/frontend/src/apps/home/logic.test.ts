@@ -5,6 +5,7 @@ import {
   ROLES,
   bodyWords,
   codeLooksValid,
+  joiningCountry,
   emptyRunPct,
   isThin,
   km,
@@ -547,5 +548,15 @@ describe('the vehicle a courier never tapped', () => {
   it('is sent as the class the step worked out, not as an empty one the server refuses', () => {
     const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: '', vehiclePlate: 'BK 2' }), 'm') as { profile: { vehicle: { vehicleClass: string } } };
     expect(body.profile.vehicle.vehicleClass).toBe('bike');
+  });
+});
+
+describe('the country somebody signs up in, for their map', () => {
+  it('is the one chosen, else the phone’s — a Dutch number is not shown Nairobi', () => {
+    expect(joiningCountry({ phone: '+31653000000' })).toBe('NL');
+    expect(joiningCountry({ phone: '+254712000000' })).toBe('KE');
+    expect(joiningCountry({ country: 'ug', phone: '+31653000000' })).toBe('UG');
+    expect(joiningCountry({ phone: '0712000000' })).toBe('');
+    expect(joiningCountry({})).toBe('');
   });
 });

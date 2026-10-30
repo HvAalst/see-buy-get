@@ -7,6 +7,7 @@
  */
 
 import type { IconName } from '../../shared/ui/Icon';
+import { countryOfNumber } from '../../shared/phone/dial';
 import type { Agreement, AgreementHere } from '../../shared/documents/documents';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { THIN_MARKET_LOADS } from '../../shared/market';
@@ -156,6 +157,14 @@ export function phoneLooksValid(phone: string): boolean {
 
 export function normalizePhone(phone: string): string {
   return phone.replace(/[\s()-]/g, '');
+}
+
+/**
+ * The country somebody signing up is joining in, for where their map starts and which shops it shows: the one chosen,
+ * else the one their phone number is from (2026-10-30: a Dutch number was shown Nairobi). Empty: not known yet.
+ */
+export function joiningCountry(form: { country?: string; phone?: string }): string {
+  return (form.country || countryOfNumber(form.phone ?? '') || '').toUpperCase();
 }
 
 /** The 6-digit code sent to the phone (shown on the screen in a sandbox). */

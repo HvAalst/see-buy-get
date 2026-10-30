@@ -566,8 +566,9 @@ export interface GeocodeView {
 }
 
 /** Resolve a typed place — the same public gazetteer the rest of the network geocodes against. */
-export function geocode(q: string): Promise<Result<GeocodeView>> {
-  return publicRequest<GeocodeView>(homeConfig(), `/v1/sbg/geocode?q=${encodeURIComponent(q)}`);
+export function geocode(q: string, countries: string[] = []): Promise<Result<GeocodeView>> {
+  const where = countries.length ? `&country=${encodeURIComponent(countries.join(','))}` : '';
+  return publicRequest<GeocodeView>(homeConfig(), `/v1/sbg/geocode?q=${encodeURIComponent(q)}${where}`);
 }
 
 /* ---------------------------------------------------------------- handoff -- */

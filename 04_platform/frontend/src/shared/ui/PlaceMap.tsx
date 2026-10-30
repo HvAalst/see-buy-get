@@ -71,6 +71,11 @@ export interface PlaceMapProps {
    * directory, 2026-10-30). Unset: a street's, as for a shop.
    */
   maxZoom?: number;
+  /**
+   * Where the map looks while it has nothing to frame — no pin, no marked place, nothing dropped (2026-10-30: a Dutch
+   * number signing up was shown Nairobi). A point and how close: a country's middle at 6.
+   */
+  start?: { point: GeoPoint; zoom: number };
 }
 
 /** How far a pin may be and still be framed with a marked place: past this, the place is shown alone, close up. */

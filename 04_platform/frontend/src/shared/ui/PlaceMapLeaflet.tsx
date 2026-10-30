@@ -15,7 +15,7 @@ import { framedPoints, type PlaceMapProps } from './PlaceMap';
  */
 const NAIROBI: L.LatLngExpression = [-1.2864, 36.8172];
 
-export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label, nearest, maxZoom }: PlaceMapProps) {
+export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, reference, onDrop, dropped, label, nearest, maxZoom, start }: PlaceMapProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -32,7 +32,7 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
   // Init the map once, tear it down on unmount.
   useEffect(() => {
     if (!hostRef.current || mapRef.current) return;
-    const map = L.map(hostRef.current, { zoomControl: true, attributionControl: true }).setView(NAIROBI, 11);
+    const map = L.map(hostRef.current, { zoomControl: true, attributionControl: true }).setView(start ? [start.point.lat, start.point.lng] : NAIROBI, start ? start.zoom : 11);
     // OpenStreetMap's own tiles, at the one address it asks for now (the a/b/c ones are retired), credited with the link
     // to its copyright page, as its tile policy asks — the addresses typed into the Send app are found in the same data.
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -114,16 +114,22 @@ export function PlaceMapLeaflet({ pins = [], lines = [], selectedId, onPick, ref
     // unrelated re-render — so the user's manual pan/zoom (and a tap-to-zoom) survives.
     // A picker of shops near a marked place frames that place and its nearest shops, not the whole network (`nearest`).
     const framed: Array<[number, number]> = reference && nearest ? framedPoints({ pins, reference, dropped, nearest }).map((p) => [p.lat, p.lng]) : (points as Array<[number, number]>);
-    const sig = framed
-      .map((p) => `${p[0]},${p[1]}`)
-      .sort()
-      .join('|');
+    // Nothing to frame: where it was told to start — and again when that changes (a country chosen), never after a pin.
+    const sig = framed.length
+      ? framed
+          .map((p) => `${p[0]},${p[1]}`)
+          .sort()
+          .join('|')
+      : start
+        ? `start:${start.point.lat},${start.point.lng},${start.zoom}`
+        : '';
     if (sig !== fittedSigRef.current) {
       fittedSigRef.current = sig;
       if (framed.length === 1) map.setView(framed[0], Math.min(15, maxZoom ?? 15));
       else if (framed.length > 1) map.fitBounds(L.latLngBounds(framed), { padding: [36, 36], maxZoom: Math.min(16, maxZoom ?? 16) });
+      else if (start) map.setView([start.point.lat, start.point.lng], start.zoom);
     }
-  }, [pins, lines, selectedId, reference, dropped, nearest, maxZoom]);
+  }, [pins, lines, selectedId, reference, dropped, nearest, maxZoom, start?.point.lat, start?.point.lng, start?.zoom]);
 
   return <div ref={hostRef} class="pmap-leaflet" role={onDrop ? 'button' : 'img'} aria-label={label} />;
 }
