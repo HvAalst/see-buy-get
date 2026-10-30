@@ -102,6 +102,8 @@ export function blockersFor(
     secured?: string;
     /** Air cargo not yet released at the airport (2026-10-29): the take's words. */
     release?: string;
+    /** Live animals, and a vehicle not made for them (2026-10-30): the take's words. */
+    animals?: string;
     indicativeCharge?: number;
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
@@ -150,6 +152,8 @@ export function blockersFor(
   if (ctx.rail) out.push({ kind: 'resolvable', code: 'RAIL_NOT_ARRIVED', message: ctx.rail });
   // Air cargo not yet released at the airport: a truck sent now waits at the shed (2026-10-29).
   if (ctx.release) out.push({ kind: 'resolvable', code: 'NOT_RELEASED', message: ctx.release });
+  // Live animals: a vehicle made for them (2026-10-30).
+  if (ctx.animals) out.push({ kind: 'physical', code: 'ANIMALS_VEHICLE', message: ctx.animals });
   // Secured air cargo: carried only by a driver whose ID was seen (2026-10-29).
   if (ctx.secured) out.push({ kind: 'resolvable', code: 'SECURED_CARGO', message: ctx.secured });
   if (ctx.overHours) {

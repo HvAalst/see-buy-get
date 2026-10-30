@@ -27,6 +27,15 @@ const LOAD_BULK: SafetyItem = { key: 'contained', label: 'Bulk fully contained �
 const LOAD_HAZMAT: SafetyItem = { key: 'hazmat_placard', label: 'Hazard placards shown; no leaks or damaged packaging' };
 const LOAD_FRAGILE: SafetyItem = { key: 'cushioned', label: 'Fragile items cushioned and kept upright' };
 const LOAD_COLD: SafetyItem = { key: 'reefer_set', label: 'Refrigeration running at the required temperature' };
+// Live animals (2026-10-30): the driver's own look before taking them over — WOAH Terrestrial Code 7.3.6–7.3.8.
+const LOAD_ANIMALS: SafetyItem[] = [
+  { key: 'animals_fit', label: 'No animal looks sick, injured or unable to stand' },
+  { key: 'animals_papers', label: 'The original veterinary papers are with me: health certificate and permits' },
+  { key: 'animals_cleaned', label: 'The vehicle was cleaned and disinfected before loading' },
+  { key: 'animals_air', label: 'Air moves through the load, also when the vehicle stands still' },
+];
+const LOAD_LIVESTOCK: SafetyItem = { key: 'animals_ramp', label: 'Loaded by a ramp with sides, on a floor that does not slip' };
+const LOAD_CRATED: SafetyItem = { key: 'animals_crates', label: 'Crates upright and secured, their air holes clear' };
 
 // The UNLOAD checklist a driver confirms before a freight is marked delivered.
 const UNLOAD_BASE: SafetyItem[] = [
@@ -41,6 +50,8 @@ export interface CargoSafetyContext {
   bulk: boolean;
   fragile: boolean;
   requiredCapabilities: VehicleCapability[];
+  /** Live animals on the load, and how they ride (2026-10-30). */
+  animalKind?: 'livestock' | 'crated';
 }
 
 /** The load-safety items THIS freight requires, in display order. */
@@ -50,6 +61,7 @@ export function loadSafetyItems(ctx: CargoSafetyContext): SafetyItem[] {
   if (ctx.requiredCapabilities.includes('hazmat')) items.push(LOAD_HAZMAT);
   if (ctx.fragile) items.push(LOAD_FRAGILE);
   if (ctx.requiredCapabilities.includes('coldChain')) items.push(LOAD_COLD);
+  if (ctx.animalKind) items.push(...LOAD_ANIMALS, ctx.animalKind === 'livestock' ? LOAD_LIVESTOCK : LOAD_CRATED);
   return items;
 }
 

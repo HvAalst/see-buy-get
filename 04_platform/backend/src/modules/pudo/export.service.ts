@@ -34,6 +34,7 @@ import type { FblDto, FblVerifiedDto } from './fbl-note.types';
 import type { RailNoteDto } from './rail-note.types';
 import { airlineOfPrefix, awbDigits, awbProblem, checkAirWaybill, formatAwb } from '../../foundation/carriage-law/air';
 import { AIR_INSPECTION_H, AIR_LAT_BUFFER_H } from './pudo.config';
+import { animalWords, chickWindow, liveAnimalsOf, originalsOf, UNFIT_WORDS, type LiveAnimalsDto } from './live-animals.types';
 import { AIR_ONLY_PAPERS, SEA_ONLY_PAPERS, type ExportAir, type ExportAirView } from './export.types';
 import type { TruckSubtype } from './fleet.config';
 
@@ -269,6 +270,7 @@ export class ExportService {
         security: { status: 'secured' | 'unsecured'; agentName?: string; agentNumber?: string; knownConsignor?: boolean };
         temp?: { minC: number; maxC: number; preCooled?: boolean };
         inspectionAtAirport?: boolean;
+        animals?: LiveAnimalsDto;
       };
     },
     by: string,
@@ -281,7 +283,9 @@ export class ExportService {
     const destCountry = country(input.destCountry, 'where it is going');
     const nature = input.natureCode?.trim().toUpperCase() || undefined;
     if (nature === 'HUM') throw new GlosError('FORBIDDEN', 'Medicines and vaccines are not carried to or from an airport on SeeBuyGet yet: who must hold a licence to carry them is with our lawyer (legal.html L29).', { field: 'natureCode', reason: 'medicines' });
-    if (nature === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Live animals and biological goods by air come after this first step: they are not carried to an airport on SeeBuyGet yet.', { field: 'natureCode', reason: 'biological' });
+    // Biological goods — samples, medical waste — are dangerous goods we do not carry to an airport yet; live animals are
+    // declared as live animals, with their papers (2026-10-30).
+    if (nature === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Biological goods — samples, medical waste — are not carried to an airport on SeeBuyGet yet. Live animals are declared as live animals, with their papers.', { field: 'natureCode', reason: 'biological' });
     const partyName = input.partyName?.trim();
     if (!partyName) throw new GlosError('FIELD_REQUIRED', 'Say who it is booked with: your forwarder, or the airline', { field: 'partyName' });
     const a = input.air ?? ({} as typeof input.air);
@@ -313,6 +317,8 @@ export class ExportService {
     const loadingPlace = placeOf(input.loadingSiteId, 'loading', 'where it is loaded');
     const terminal = placeOf(input.terminalSiteId, 'port', 'the cargo terminal');
     const hazardous = /^HAZ/.test(nature ?? '');
+    // Live animals: the declaration, its papers and the keeper's word, checked before anything is written.
+    const animals = a.animals ? liveAnimalsOf(a.animals, 'export', by, now) : undefined;
     const air: ExportAir = {
       awb: formatAwb(digits),
       waybillKind: a.waybillKind === 'house' ? 'house' : a.waybillKind === 'direct' ? 'direct' : 'master',
@@ -331,6 +337,7 @@ export class ExportService {
       security: { status: sec.status === 'secured' ? 'secured' : 'unsecured', ...(sec.agentName?.trim() ? { agentName: sec.agentName.trim().slice(0, 120) } : {}), ...(sec.agentNumber?.trim() ? { agentNumber: sec.agentNumber.trim().slice(0, 40) } : {}), ...(sec.knownConsignor ? { knownConsignor: true } : {}) },
       ...(a.temp ? { temp: { minC: a.temp.minC, maxC: a.temp.maxC, ...(a.temp.preCooled ? { preCooled: true } : {}) } } : {}),
       ...(a.inspectionAtAirport ? { inspectionAtAirport: true } : {}),
+      ...(animals ? { animals } : {}),
     };
     const consignment: ExportConsignment = {
       exportId: `exp_${randomBytes(8).toString('hex')}`,
@@ -352,7 +359,7 @@ export class ExportService {
       papers: EXPORT_PAPER_KEYS.filter(
         (key) =>
           !SEA_ONLY_PAPERS.includes(key) &&
-          (key === 'consignment_security_declaration' ? air.security.status === 'secured' : EXPORT_PAPER_GROUP[key] !== 'asked' || (key === 'dangerous_goods_declaration' && hazardous) || (key === 'phytosanitary_certificate' && Boolean(air.inspectionAtAirport))),
+          (key === 'consignment_security_declaration' ? air.security.status === 'secured' : EXPORT_PAPER_GROUP[key] !== 'asked' || (key === 'dangerous_goods_declaration' && hazardous) || (key === 'phytosanitary_certificate' && Boolean(air.inspectionAtAirport)) || (key === 'health_certificate' && Boolean(animals))),
       ).map((key) => ({ key, ...(EXPORT_PAPER_GROUP[key] === 'kept' ? { optional: true } : {}) })),
       createdAt: new Date(now).toISOString(),
       createdBy: by,
@@ -376,6 +383,11 @@ export class ExportService {
     else warnings.push('Not secured: the terminal screens it when it arrives, which takes time there.');
     if (a.temp) warnings.push(`Kept between ${a.temp.minC} and ${a.temp.maxC} °C: a reefer or insulated body, its set-point inside the range, and the temperature recorded on the way.`);
     if (a.inspectionAtAirport) warnings.push(`The plant-health inspection is at the airport: about ${AIR_INSPECTION_H} hours there, before the latest acceptance time.`);
+    if (a.animals) {
+      warnings.push(`Live animals: ${a.animals.count} ${a.animals.species}, on ${a.animals.kind === 'livestock' ? 'a livestock body' : 'a closed vehicle with air'}. ${a.animals.fitToTravel.by} gave their word that ${UNFIT_WORDS}. The driver looks them over at pickup, and the originals ride with them: ${originalsOf(a.animals).join(', ')}.`);
+      const window = chickWindow(a.animals.hatchedAt, Date.parse(a.latAt));
+      if (window?.over) warnings.push(`They hatched ${window.hoursOld} hours before the latest acceptance time: past the 72 hours their yolk carries day-old chicks (the breeder’s figure, not a law), and before they have even flown.`);
+    }
     return {
       check: {
         number: check.number,
@@ -768,6 +780,7 @@ export class ExportService {
         // Chilled goods are cold-chain goods on the road, kept in the shipper's own range.
         ...(a.temp ? { natureCode: 'FOP' as CargoNature, tempRange: { minC: a.temp.minC, maxC: a.temp.maxC } } : c.natureCode ? { natureCode: c.natureCode as CargoNature } : {}),
         ...(secured ? { excludedBodies: OPEN_BODIES, securedBy: a.security.agentName } : {}),
+        ...(a.animals ? { liveAnimals: { kind: a.animals.kind, species: a.animals.species, count: a.animals.count } } : {}),
         ...(dangerousGoods ? { dangerousGoods } : {}),
         pickupCountry: c.originCountry,
         destCountry: c.originCountry,
@@ -792,8 +805,9 @@ export class ExportService {
       a.bookingStatus === 'queued' ? 'The airline has not confirmed the booking: it may not fly on this flight.' : '',
       a.security.status === 'secured' ? `Secured cargo (${a.security.agentName}): keep it locked and sealed, with no stops on the way; the seal is checked at the terminal.` : '',
       a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
+      a.animals ? animalWords(a.animals) : '',
     ].filter(Boolean);
-    return { text: notes.join(' ').slice(0, 500), deliveryWindow: `At ${c.terminal.label} before ${utc(a.latAt)} — the airline’s latest acceptance time`.slice(0, 120) };
+    return { text: notes.join(' ').slice(0, 1500), deliveryWindow: `At ${c.terminal.label} before ${utc(a.latAt)} — the airline’s latest acceptance time`.slice(0, 120) };
   }
 
   /**

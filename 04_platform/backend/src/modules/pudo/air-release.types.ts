@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { LiveAnimals, LiveAnimalsDto } from './live-animals.types';
 
 /**
  * AN IMPORT BY AIR: FROM "LANDED" TO "A TRUCK MAY COLLECT" (research 2026-10-29, 05_engineering/research/air_ops_2026-10-29.md
@@ -18,6 +19,10 @@ export interface AirAgency {
   looksAt: string;
   /** Suggested for these cargo natures (the consignment's natureCode); never required by us. */
   suggestFor: string[];
+  /** The veterinary authority: it releases live animals, which do not leave the airport without its word (2026-10-30). */
+  vet?: true;
+  /** It works Monday to Friday only at the airport (office hours on InfoTradeKenya, read 2026-10-29). */
+  weekdaysOnly?: true;
 }
 
 /** Source: the release procedures read 2026-10-29 (InfoTradeKenya, ugandatrades.go.ug, rwandatrade.rw, the CTI chain for Tanzania, Ethiopia's EFDA). */
@@ -26,30 +31,92 @@ export const AIR_AGENCIES_SOURCE = 'Release procedures read 2026-10-29: InfoTrad
 export const AIR_AGENCIES: Record<string, AirAgency[]> = {
   KE: [
     { key: 'kephis', name: 'Kenya Plant Health Inspectorate Service (KEPHIS)', looksAt: 'Plants, flowers, seeds, fresh fruit and vegetables', suggestFor: ['FOP'] },
-    { key: 'dvs', name: 'Directorate of Veterinary Services (DVS)', looksAt: 'Animal products and live animals', suggestFor: ['HAZ-BIO'] },
+    { key: 'dvs', name: 'Directorate of Veterinary Services (DVS)', looksAt: 'Animal products and live animals', suggestFor: ['HAZ-BIO'], vet: true, weekdaysOnly: true },
     { key: 'port_health', name: 'Port Health', looksAt: 'Food and anything that may carry disease', suggestFor: ['FOP', 'FOD'] },
-    { key: 'kebs', name: 'Kenya Bureau of Standards (KEBS)', looksAt: 'Goods that must meet a Kenyan standard', suggestFor: [] },
-    { key: 'ppb', name: 'Pharmacy and Poisons Board (PPB)', looksAt: 'Medicines and health products', suggestFor: ['HUM'] },
+    { key: 'kebs', name: 'Kenya Bureau of Standards (KEBS)', looksAt: 'Goods that must meet a Kenyan standard', suggestFor: [], weekdaysOnly: true },
+    { key: 'ppb', name: 'Pharmacy and Poisons Board (PPB)', looksAt: 'Medicines and health products', suggestFor: ['HUM'], weekdaysOnly: true },
   ],
   UG: [
-    { key: 'maaif', name: 'Ministry of Agriculture, Animal Industry and Fisheries (MAAIF)', looksAt: 'Plants and animal products', suggestFor: ['FOP'] },
+    { key: 'maaif', name: 'Ministry of Agriculture, Animal Industry and Fisheries (MAAIF)', looksAt: 'Plants, animal products and live animals', suggestFor: ['FOP'], vet: true },
     { key: 'nda', name: 'National Drug Authority (NDA)', looksAt: 'Medicines', suggestFor: ['HUM'] },
     { key: 'unbs', name: 'Uganda National Bureau of Standards (UNBS)', looksAt: 'Goods that must meet a Ugandan standard', suggestFor: [] },
   ],
   RW: [
-    { key: 'rica', name: 'Rwanda Inspectorate, Competition and Consumer Protection Authority (RICA)', looksAt: 'Plant and animal health', suggestFor: ['FOP'] },
+    { key: 'rica', name: 'Rwanda Inspectorate, Competition and Consumer Protection Authority (RICA)', looksAt: 'Plant and animal health, live animals', suggestFor: ['FOP'], vet: true },
     { key: 'rwanda_fda', name: 'Rwanda Food and Drugs Authority', looksAt: 'Food and medicines', suggestFor: ['FOD', 'HUM'] },
   ],
   TZ: [
     { key: 'tmda', name: 'Tanzania Medicines and Medical Devices Authority (TMDA)', looksAt: 'Medicines and medical devices', suggestFor: ['HUM'] },
     { key: 'tbs', name: 'Tanzania Bureau of Standards (TBS)', looksAt: 'Food and goods that must meet a standard', suggestFor: ['FOD'] },
+    { key: 'tz_vet', name: 'Ministry of Livestock and Fisheries (veterinary services)', looksAt: 'Live animals and animal products', suggestFor: [], vet: true },
   ],
-  ET: [{ key: 'efda', name: 'Ethiopian Food and Drug Authority (EFDA)', looksAt: 'Food and medicines', suggestFor: ['FOD', 'HUM'] }],
+  ET: [
+    { key: 'efda', name: 'Ethiopian Food and Drug Authority (EFDA)', looksAt: 'Food and medicines', suggestFor: ['FOD', 'HUM'] },
+    // Proclamation 267/2002 asks an entrance permit and a health certificate for animals; the office's own name was not read.
+    { key: 'et_vet', name: 'The veterinary authority', looksAt: 'Live animals and animal products', suggestFor: [], vet: true },
+  ],
 };
 
 /** The agencies a country lists, or none we have read. */
 export function airAgenciesOf(country: string | undefined): AirAgency[] {
   return AIR_AGENCIES[(country ?? '').toUpperCase()] ?? [];
+}
+
+/** The country's veterinary authority, where we list one: live animals are not released without it. */
+export function vetAgencyOf(country: string | undefined): AirAgency | undefined {
+  return airAgenciesOf(country).find((a) => a.vet);
+}
+
+/**
+ * WHERE CUSTOMS ITSELF WORKS MONDAY TO FRIDAY at the airport — its verification, which every release waits on. Only what
+ * we read: Kenya (InfoTradeKenya office hours, read 2026-10-29). Elsewhere nothing is said, never guessed.
+ */
+export const CUSTOMS_WEEKDAYS_ONLY: Record<string, string> = { KE: 'customs verification (KRA)' };
+
+const WEEKDAY_WORD = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTH_WORD = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** A landing that may wait for Monday: the day, the offices that keep weekday hours, and what to do about it. */
+export class AirArrivalWarning {
+  @ApiProperty({ enum: ['saturday', 'sunday', 'friday_late', 'holiday'] }) kind: 'saturday' | 'sunday' | 'friday_late' | 'holiday';
+  @ApiProperty() landsOn: string;
+  @ApiProperty({ type: [String] }) offices: string[];
+  @ApiProperty() text: string;
+}
+
+/**
+ * THE WEEKEND TRAP (research 2026-10-29: "a Friday-evening arrival of medicines or animals waits until Monday unless
+ * officers attend on Form C.1"). Cargo landing on a Saturday, a Sunday, a day the country's own calendar marks closed, or
+ * a Friday afternoon, where an office its release waits on keeps weekday hours. Never that it WILL wait: that it may,
+ * and that the agent may ask for officers out of hours (EAC Customs Management Regulations 2010, regs 4–6).
+ */
+export function airArrivalWarning(input: { country: string; landsOn?: string; landsAt?: string; agencies: Array<{ key: string; name: string }>; closed?: { note?: string; company: string } }): AirArrivalWarning | undefined {
+  if (!input.landsOn || !/^\d{4}-\d{2}-\d{2}$/.test(input.landsOn)) return undefined;
+  const country = input.country.toUpperCase();
+  const listed = airAgenciesOf(country);
+  const offices = [
+    ...(CUSTOMS_WEEKDAYS_ONLY[country] ? [CUSTOMS_WEEKDAYS_ONLY[country]] : []),
+    ...input.agencies.filter((a) => listed.find((l) => l.key === a.key)?.weekdaysOnly).map((a) => a.name),
+  ];
+  if (!offices.length) return undefined;
+  const day = new Date(`${input.landsOn}T00:00:00.000Z`).getUTCDay();
+  const kind = input.closed ? 'holiday' : day === 6 ? 'saturday' : day === 0 ? 'sunday' : day === 5 && (input.landsAt ?? '') >= '12:00' ? 'friday_late' : undefined;
+  if (!kind) return undefined;
+  const d = new Date(`${input.landsOn}T00:00:00.000Z`);
+  const when = `${WEEKDAY_WORD[day]} ${d.getUTCDate()} ${MONTH_WORD[d.getUTCMonth()]}`;
+  const why =
+    kind === 'holiday'
+      ? `It lands on ${when}, which ${input.closed!.company}’s calendar marks closed${input.closed!.note ? ` (${input.closed!.note})` : ''}.`
+      : kind === 'friday_late'
+        ? `It lands on ${when} in the afternoon.`
+        : `It lands on ${when}.`;
+  const join = offices.length > 1 ? `${offices.slice(0, -1).join(', ')} and ${offices[offices.length - 1]}` : offices[0];
+  return {
+    kind,
+    landsOn: input.landsOn,
+    offices,
+    text: `${why} ${join.charAt(0).toUpperCase()}${join.slice(1)} ${offices.length > 1 ? 'work' : 'works'} Monday to Friday at the airport, so the release may wait for the next working day. Your agent may ask for officers to attend out of hours on Form C.1, at least 24 hours before — on a Sunday or a public holiday at a minimum charge of three hours (EAC Customs Management Regulations 2010, regs 4–6).`,
+  };
 }
 
 /** A step of the release, as recorded: its reference, when it happened, who said so. */
@@ -162,6 +229,8 @@ export class ImportAir {
   @ApiPropertyOptional() freeHours?: number;
   @ApiPropertyOptional() freeHoursSource?: string;
   @ApiPropertyOptional({ type: [String] }) warned?: string[];
+  /** Live animals (2026-10-30): the declaration, and the place the veterinary officer named — the only place they go. */
+  @ApiPropertyOptional({ type: LiveAnimals }) animals?: LiveAnimals;
   @ApiProperty() recordedAt: string;
   @ApiProperty() recordedBy: string;
 }
@@ -172,6 +241,10 @@ export class ImportAirView extends ImportAir {
   @ApiProperty({ type: AirStorageClock }) clock: AirStorageClock;
   /** The road leg's gate in the take's own words, while it is closed. */
   @ApiPropertyOptional() roadWaits?: string;
+  /** A landing that may wait for Monday (2026-10-30). */
+  @ApiPropertyOptional({ type: AirArrivalWarning }) arrival?: AirArrivalWarning;
+  /** What to watch for, in words: the landing day, the chicks' hours. */
+  @ApiProperty({ type: [String] }) warnings: string[];
   /** The waybill read against the law of its route, and the agencies the destination lists. */
   @ApiProperty() check: { number: string; problem?: string; airline?: string; regime: string; rules?: string; limits: string[]; claims: string[]; caveats: string[]; mismatches: string[] };
 }
@@ -180,7 +253,8 @@ export class ImportAirView extends ImportAir {
 
 export class ImportAirFlightDto {
   @Matches(/^\s*[A-Z0-9]{2}\s?\d{1,4}[A-Z]?\s*$/i, { message: 'A flight is the airline’s two-character code and its number, like KQ 101' }) flight!: string;
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'The day it flies, as YYYY-MM-DD' }) date!: string;
+  /** The day it lands — the release's offices count from it (2026-10-30). */
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'The day it lands, as YYYY-MM-DD' }) date!: string;
   @Matches(/^\s*[A-Za-z]{3}\s*$/, { message: 'An airport by its three-letter code, like AMS' }) from!: string;
   @Matches(/^\s*[A-Za-z]{3}\s*$/, { message: 'An airport by its three-letter code, like NBO' }) to!: string;
   @IsOptional() @Matches(/^\d{2}:\d{2}$/, { message: 'Its arrival as HH:MM, local time' }) arrivesLocal?: string;
@@ -202,6 +276,8 @@ export class ImportAirDto {
   @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) agencies!: string[];
   @IsOptional() @IsNumber() @Min(0) @Max(720) freeHours?: number;
   @IsOptional() @IsString() @MaxLength(160) freeHoursSource?: string;
+  /** Live animals (2026-10-30): the declaration, and on an import the place the veterinary officer named. */
+  @IsOptional() @ValidateNested() @Type(() => LiveAnimalsDto) animals?: LiveAnimalsDto;
 }
 
 /** One step of the release: the notice of arrival, customs, an agency (by its key) or the delivery order. */

@@ -10,6 +10,7 @@ import { ExportInvoice, ExportInvoiceView } from './export-invoice.types';
 import { HeldRailNote, RailNoteView } from './rail-note.types';
 import { ExportByRail, LEG_MODES, type LegMode } from './rail-leg.types';
 import { FblView, HeldFbl } from './fbl-note.types';
+import { LiveAnimals, LiveAnimalsDto } from './live-animals.types';
 
 /**
  * EXPORTS TO THE PORT (the user, 2026-10-27: "when goods move to a port, we need to have the documentation and foundation
@@ -301,6 +302,8 @@ export class ExportAir {
   @ApiPropertyOptional() inspectionAtAirport?: boolean;
   /** The booking as it stood before each change the exporter recorded (2026-10-29): kept, never overwritten. */
   @ApiPropertyOptional() formerBookings?: Array<{ bookingStatus: 'confirmed' | 'queued'; flights: ExportFlight[]; latAt: string; until: string; by: string }>;
+  /** Live animals (2026-10-30): as their keeper declared them, the papers by number; the originals ride with them. */
+  @ApiPropertyOptional({ type: LiveAnimals }) animals?: LiveAnimals;
 }
 
 export class ExportConsignment {
@@ -602,6 +605,8 @@ class ExportAirDto {
   @ValidateNested() @Type(() => ExportAirSecurityDto) security!: ExportAirSecurityDto;
   @IsOptional() @ValidateNested() @Type(() => ExportAirTempDto) temp?: ExportAirTempDto;
   @IsOptional() @IsBoolean() inspectionAtAirport?: boolean;
+  /** Live animals (2026-10-30): the declaration, checked before anything is written. */
+  @IsOptional() @ValidateNested() @Type(() => LiveAnimalsDto) animals?: LiveAnimalsDto;
 }
 
 /** AN EXPORT BY AIR: the goods, the countries, the two places and the booking with the airline. */

@@ -5,6 +5,7 @@
 import { ClientRef } from './business-client.types';
 import { FreightRailGate } from './rail-leg.types';
 import { FreightReleaseGate } from './air-release.types';
+import type { FreightLiveAnimals } from './live-animals.types';
 import { ContractRef } from './carriage-contract.types';
 import { PlannedOn } from './fleet-plan.types';
 import { OrderHandOn } from './fleet-partner.types';
@@ -763,6 +764,8 @@ export class Freight {
   @ApiPropertyOptional({ type: FreightRailGate }) waitsForRail?: FreightRailGate;
   /** Air cargo not yet released at the airport (2026-10-29): nobody takes this until it is, or the importer said to go anyway. */
   @ApiPropertyOptional({ type: FreightReleaseGate }) waitsForRelease?: FreightReleaseGate;
+  /** Live animals on the load (2026-10-30): a vehicle made for them, and the driver's own checks at pickup. */
+  @ApiPropertyOptional() liveAnimals?: FreightLiveAnimals;
   /** CMR Art. 6(2)(d) — the value of the goods, and a special interest in delivery, as the sender declared them. */
   @ApiPropertyOptional({ type: FreightAmount }) declaredValue?: FreightAmount;
   @ApiPropertyOptional({ type: FreightAmount }) specialInterest?: FreightAmount;

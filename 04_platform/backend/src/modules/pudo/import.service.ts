@@ -46,7 +46,9 @@ import {
   RequiredPaperView,
 } from './import.types';
 import { modeOf } from './import.types';
-import { airAgenciesOf, airReleaseGaps, airStorageClock, releaseRefusal, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
+import { airAgenciesOf, airArrivalWarning, airReleaseGaps, airStorageClock, releaseRefusal, vetAgencyOf, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
+import { animalWords, CHICK_WINDOW_H, liveAnimalsOf, type LiveAnimalsDto } from './live-animals.types';
+import { ContactCardService } from './contact-card.service';
 import { airlineOfPrefix, awbDigits, awbProblem, checkAirWaybill, formatAwb } from '../../foundation/carriage-law/air';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
 import { containerType, heightUnstated, outOfGauge } from './container-type';
@@ -112,6 +114,8 @@ export class ImportService {
     @Optional() private readonly quotes: QuoteService = new QuoteService(),
     // The rail terminal's free days are warned in the bell (2026-10-29). Optional: specs that build this by hand pass none.
     @Optional() private readonly notifications?: NotificationService,
+    // The country's own calendar of closed days, for a landing on a holiday (2026-10-30). Optional, as above.
+    @Optional() private readonly contacts?: ContactCardService,
   ) {}
 
   /* ------------------------------------------------------------ the container -- */
@@ -698,7 +702,7 @@ export class ImportService {
   setAir(
     importId: string,
     actorEntityId: string,
-    input: { awb: string; waybillKind: 'master' | 'house' | 'direct'; houseNumber?: string; airline?: string; flights: Array<{ flight: string; date: string; from: string; to: string; arrivesLocal?: string }>; handler: string; pieces: number; weightKg: number; minC?: number; maxC?: number; agencies: string[]; freeHours?: number; freeHoursSource?: string },
+    input: { awb: string; waybillKind: 'master' | 'house' | 'direct'; houseNumber?: string; airline?: string; flights: Array<{ flight: string; date: string; from: string; to: string; arrivesLocal?: string }>; handler: string; pieces: number; weightKg: number; minC?: number; maxC?: number; agencies: string[]; freeHours?: number; freeHoursSource?: string; animals?: LiveAnimalsDto; quarantine?: { label: string; location: GeoPoint } },
     by: string,
     now = Date.now(),
   ): ImportDetail {
@@ -708,7 +712,7 @@ export class ImportService {
     if (c.roadFreightId && this.dispatch.requireFreightPublic(c.roadFreightId).claimedBy) throw new GlosError('INVALID_STATE', `A driver has taken the road leg of ${c.code} already: what it collects cannot change now`);
     // Medicines wait for the lawyer (legal.html L29); live animals for the next step.
     if (c.natureCode === 'HUM') throw new GlosError('FORBIDDEN', 'Medicines and vaccines are not carried from an airport on SeeBuyGet yet: who must hold a licence to carry them is with our lawyer (legal.html L29).', { reason: 'medicines' });
-    if (c.natureCode === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Live animals and biological goods by air come after this first step: they are not carried from an airport on SeeBuyGet yet.', { reason: 'biological' });
+    if (c.natureCode === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Biological goods — samples, medical waste — are not carried from an airport on SeeBuyGet yet. Live animals are declared as live animals, with their papers.', { reason: 'biological' });
     const problem = awbProblem(input.awb);
     if (problem === 'format') throw new GlosError('VALIDATION_FAILED', 'An air waybill number is eleven digits: the airline’s three, and eight more — like 706-12345675', { field: 'awb' });
     if (problem === 'check_digit') throw new GlosError('VALIDATION_FAILED', 'That air waybill number’s last digit does not check: the first seven of its last eight, divided by 7, leave the last. Look at the number again.', { field: 'awb' });
@@ -730,6 +734,24 @@ export class ImportService {
     const unknown = keys.filter((k) => !listed.some((a) => a.key === k));
     if (unknown.length) throw new GlosError('VALIDATION_FAILED', `Not an agency we list for ${c.destCountry}: ${unknown.join(', ')}`, { field: 'agencies' });
     const before = c.air;
+    /*
+     * LIVE ANIMALS (2026-10-30): they do not leave the airport without the veterinary authority's word, so its release is
+     * on the list whatever was ticked; and they go to the place the veterinary officer named — the importer's to give,
+     * and fixed once a truck is posted for it.
+     */
+    let animals: ImportAir['animals'];
+    if (input.animals) {
+      if (input.quarantine && this.sideOf(c, actorEntityId) !== 'importer') throw new GlosError('FORBIDDEN', 'The place the veterinary officer named is the importer’s to give', { field: 'animals.quarantineSiteId' });
+      const kept = before?.animals?.destination;
+      const destination = input.quarantine ?? (kept ? { label: kept.label, location: kept.location } : undefined);
+      if (c.roadFreightId && kept && input.quarantine && (kept.label !== input.quarantine.label || kept.location.lat !== input.quarantine.location.lat || kept.location.lng !== input.quarantine.location.lng)) {
+        throw new GlosError('INVALID_STATE', `The road leg is posted to ${kept.label}, the place the veterinary officer named: it does not change`, { field: 'animals.quarantineSiteId' });
+      }
+      animals = liveAnimalsOf(input.animals, 'import', by, now, destination);
+      if (!input.quarantine && kept) animals = { ...animals, destination: kept };
+      const vet = vetAgencyOf(c.destCountry);
+      if (vet && !keys.includes(vet.key)) keys.push(vet.key);
+    }
     const air: ImportAir = {
       awb: formatAwb(digits),
       waybillKind: input.waybillKind === 'house' ? 'house' : input.waybillKind === 'direct' ? 'direct' : 'master',
@@ -750,6 +772,7 @@ export class ImportService {
       ...(input.freeHours != null ? { freeHours: input.freeHours } : {}),
       ...(input.freeHoursSource?.trim() ? { freeHoursSource: input.freeHoursSource.trim().slice(0, 160) } : {}),
       ...(before?.warned ? { warned: before.warned } : {}),
+      ...(animals ? { animals } : {}),
       recordedAt: new Date(now).toISOString(),
       recordedBy: by,
     };
@@ -819,8 +842,15 @@ export class ImportService {
     const leg = c.roadFreightId ? this.dispatch.requireFreightPublic(c.roadFreightId) : undefined;
     const roadWaits = releaseRefusal(leg);
     const check = checkAirWaybill({ number: a.awb, kind: a.waybillKind, ...(a.houseNumber ? { houseNumber: a.houseNumber } : {}), from: c.originCountry, to: c.destCountry, madeOutOn: a.flights[0]?.date, pieces: a.pieces, weightKg: a.weightKg }, {}, new Date(now).toISOString().slice(0, 10));
+    const arrival = this.arrivalOf(c);
+    const warnings = [
+      ...(arrival ? [arrival.text] : []),
+      ...(a.animals?.hatchedAt ? [`The chicks hatched ${a.animals.hatchedAt.slice(0, 16).replace('T', ' ')} UTC: their ${CHICK_WINDOW_H} hours — the breeder’s figure, not a law — run out at ${new Date(Date.parse(a.animals.hatchedAt) + CHICK_WINDOW_H * 3_600_000).toISOString().slice(0, 16).replace('T', ' ')} UTC. The truck must have them at ${a.animals.destination?.label ?? 'their place'} before then.`] : []),
+    ];
     return {
       ...a,
+      ...(arrival ? { arrival } : {}),
+      warnings,
       gaps: airReleaseGaps(a),
       clock: airStorageClock({ ...(a.notified ? { notifiedAt: a.notified.at } : {}), ...(a.freeHours != null ? { freeHours: a.freeHours } : {}), ...(leg?.pickedUpAt && leg.status !== 'cancelled' ? { leftAt: leg.pickedUpAt } : {}) }, now),
       ...(roadWaits ? { roadWaits } : {}),
@@ -833,7 +863,12 @@ export class ImportService {
     const a = c.air!;
     if (c.roadFreightId) throw new GlosError('CONFLICT', `${c.code} already has its road leg (${c.roadFreightCode}) — a second would send two trucks for one consignment`);
     if (c.natureCode === 'HUM' || c.natureCode === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Medicines, vaccines and live animals are not carried from an airport on SeeBuyGet yet (legal.html L29).');
-    if (!input.destLabel?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say where it is going');
+    const vetPlace = a.animals?.destination;
+    if (a.animals && !vetPlace) throw new GlosError('FIELD_REQUIRED', 'Name the place the veterinary officer named first: live animals go there and nowhere else');
+    if (vetPlace && input.destLabel?.trim() && input.destLabel.trim() !== vetPlace.label) throw new GlosError('FORBIDDEN', `Live animals go only to the place the veterinary officer named: ${vetPlace.label}`, { field: 'destSiteId' });
+    if (!vetPlace && !input.destLabel?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say where it is going');
+    const destLabel = vetPlace ? vetPlace.label : input.destLabel.trim();
+    const destLocation = vetPlace ? vetPlace.location : input.destLocation;
     const importer = this.entities.get(c.importerEntityId);
     const weightKg = input.weightKg > 0 ? input.weightKg : a.weightKg;
     const freight = this.dispatch.registerFreight(
@@ -841,16 +876,17 @@ export class ImportService {
         description: `${c.code} — ${c.goodsDescription} (${a.pieces} pieces, by air)`.slice(0, 200),
         pickupLocation: input.pickupLocation,
         pickupLabel: input.pickupLabel?.trim() || a.handler,
-        destLabel: input.destLabel.trim(),
-        destLocation: input.destLocation,
+        destLabel,
+        destLocation,
         weightKg,
         packages: a.pieces,
         packaging: 'piece',
         ...(a.temp ? { natureCode: 'FOP' as CargoNature, tempRange: { minC: a.temp.minC, maxC: a.temp.maxC } } : c.natureCode ? { natureCode: c.natureCode as CargoNature } : {}),
         ...(c.dangerous?.properShippingName?.trim() ? { dangerousGoods: { unNumber: c.dangerous.unNumber, properShippingName: c.dangerous.properShippingName.trim(), hazardClass: c.dangerous.imdgClass } } : {}),
+        ...(a.animals ? { liveAnimals: { kind: a.animals.kind, species: a.animals.species, count: a.animals.count } } : {}),
         pickupCountry: c.destCountry,
         destCountry: c.destCountry,
-        instructions: [`Import ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}. Collect it at ${a.handler} against this waybill and the delivery order.`, a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : ''].filter(Boolean).join(' ').slice(0, 500),
+        instructions: [`Import ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}. Collect it at ${a.handler} against this waybill and the delivery order.`, a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '', a.animals ? animalWords(a.animals) : ''].filter(Boolean).join(' ').slice(0, 1500),
         postedByDid: importer.did,
         externalOrderId: c.code,
       },
@@ -863,12 +899,57 @@ export class ImportService {
   }
 
   /**
+   * THE LANDING DAY, read against the offices its release waits on (2026-10-30): the last flight's day, its local time, and
+   * the country's own calendar of closed days — the company that answers for the country keeps it.
+   */
+  private arrivalOf(c: ImportConsignment): ReturnType<typeof airArrivalWarning> {
+    const a = c.air;
+    if (!a) return undefined;
+    const last = a.flights[a.flights.length - 1];
+    const sister = this.entities.forJurisdiction(c.destCountry);
+    const closed = sister ? this.contacts?.of(sister.entityId)?.closedDates?.find((d) => d.date === last?.date) : undefined;
+    return airArrivalWarning({ country: c.destCountry, ...(last ? { landsOn: last.date } : {}), ...(last?.arrivesLocal ? { landsAt: last.arrivesLocal } : {}), agencies: a.agencies, ...(closed && sister ? { closed: { company: sister.name, ...(closed.note ? { note: closed.note } : {}) } } : {}) });
+  }
+
+  /** Where live animals on an import must go: the place the veterinary officer named. */
+  animalsDestinationOf(importId: string): { label: string; location: GeoPoint } | undefined {
+    const d = this.imports.get(importId)?.air?.animals?.destination;
+    return d ? { label: d.label, location: d.location } : undefined;
+  }
+
+  /** A bell to the importer and its agent, once per key. */
+  private tellImport(c: ImportConsignment, title: string, body: string, key: string): void {
+    for (const entityId of [c.importerEntityId, c.agentEntityId].filter((x): x is string => Boolean(x))) {
+      let did: string | undefined;
+      try {
+        did = this.entities.get(entityId).did;
+      } catch {
+        did = undefined;
+      }
+      if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+    }
+  }
+
+  /**
    * THE HANDLER'S FREE STORAGE, warned in the bell — once in its last six hours, once when it ended with the cargo still in
    * the shed. Keyed by the end, so a corrected figure is warned afresh. Its importer and its agent are told. Hours, never money.
    */
   sweepAir(now = Date.now()): string[] {
     const told: string[] = [];
     for (const c of [...this.imports.values()]) {
+      // A landing that may wait for Monday (2026-10-30): told once, in the three days before, while the agent can still ask
+      // for officers out of hours — never once it has landed.
+      const arrival = c.air && !c.air.notified ? this.arrivalOf(c) : undefined;
+      if (arrival) {
+        const lands = Date.parse(`${arrival.landsOn}T23:59:59.000Z`);
+        const key = `arrival@${arrival.landsOn}`;
+        if (lands >= now && lands - now <= 72 * 3_600_000 && !(c.air!.warned ?? []).includes(key)) {
+          c.air = { ...c.air!, warned: [...(c.air!.warned ?? []), key] };
+          this.imports.set(c.importId, c);
+          this.tellImport(c, `${c.code}: the release may wait for the next working day`, arrival.text, key);
+          told.push(`${c.code}:air:arrival`);
+        }
+      }
       if (!c.air?.notified || c.air.freeHours == null) continue;
       const clock = this.airViewOf(c, now).clock;
       if (clock.state !== 'due_soon' && clock.state !== 'over') continue;

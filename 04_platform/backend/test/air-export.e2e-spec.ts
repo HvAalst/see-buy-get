@@ -111,7 +111,7 @@ describe('an export by air, over the wire', () => {
     expect(await said({ ...base, air: { ...base.air, latAt: undefined } })).toEqual([400, expect.anything()]);
     // Medicines wait for the lawyer (L29); live animals for the next step.
     expect(await said({ ...base, natureCode: 'HUM' })).toEqual([403, expect.stringMatching(/legal\.html L29/)]);
-    expect(await said({ ...base, natureCode: 'HAZ-BIO' })).toEqual([403, expect.stringMatching(/^Live animals/)]);
+    expect(await said({ ...base, natureCode: 'HAZ-BIO' })).toEqual([403, expect.stringMatching(/^Biological goods/)]);
     // The terminal is one of its port and airport places, and staff write nothing in its name.
     expect((await post({ ...base, terminalSiteId: g.packHouse })).status).toBe(400);
     expect((await post({ ...base, exporterEntityId: g.entityId }, operator)).status).toBe(403);

@@ -72,6 +72,7 @@ import { FINDING_WORDS, type TamperStage, type UnitHold } from './tamper.types';
 import { buildOfferResponse, type OfferResponse } from './offer-response';
 import { railRefusal, type FreightRailGate } from './rail-leg.types';
 import { releaseRefusal, type FreightReleaseGate } from './air-release.types';
+import { animalVehicleRefusal, type FreightLiveAnimals } from './live-animals.types';
 
 /**
  * FB0c — how a load may be taken, defaulted ON READ.
@@ -585,7 +586,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -730,6 +731,8 @@ export class DispatchService {
       // By air (2026-10-29): the shipper's own range, and who secured the cargo — it travels sealed.
       ...(input.tempRange && input.tempRange.minC < input.tempRange.maxC ? { tempRange: { minC: input.tempRange.minC, maxC: input.tempRange.maxC } } : {}),
       ...(input.securedBy?.trim() ? { securedBy: input.securedBy.trim().slice(0, 120) } : {}),
+      // Live animals (2026-10-30): what they are and how many, as the road needs them.
+      ...(input.liveAnimals ? { liveAnimals: { kind: input.liveAnimals.kind, species: input.liveAnimals.species, count: input.liveAnimals.count } } : {}),
       // BL1 — uncleared goods. The country defaults to the leg's own, because a bond is held where the
       // wheels turn; it is stated separately only so a caller cannot quietly mean a different one.
       ...(input.bonded ? { bonded: true, bondCountry: (input.bondCountry ?? input.pickupCountry ?? '').toUpperCase() } : {}),
@@ -1364,6 +1367,9 @@ export class DispatchService {
     // Secured air cargo (2026-10-29): only a driver whose ID was seen takes it — its security is kept by who holds it.
     const secured = this.securedRefusal(driverDid, f, vehicle);
     if (secured) throw new GlosError('FORBIDDEN', secured);
+    // Live animals (2026-10-30): only on a vehicle made for them.
+    const animals = animalVehicleRefusal(f.liveAnimals, vehicle);
+    if (animals) throw new GlosError('FORBIDDEN', animals);
     // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
     // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
     // given, which is the invisible exclusion the whole board exists to remove; enforcing it here, where the
@@ -1504,6 +1510,7 @@ export class DispatchService {
           rail: railRefusal(f),
           release: releaseRefusal(f),
           secured: input.driverDid ? this.securedRefusal(input.driverDid, f, vehicle) : undefined,
+          animals: animalVehicleRefusal(f.liveAnimals, vehicle),
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //
@@ -3140,7 +3147,7 @@ export class DispatchService {
     // requires (re-derived from the freight, so a client that under-reports can't bypass it) AND carry a
     // securement photo, before it leaves the pickup. The check happens BEFORE any mutation, so a failed gate
     // leaves the freight untouched (still 'claimed').
-    const required = requiredLoadKeys({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities });
+    const required = requiredLoadKeys({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) });
     const missing = missingKeys(required, check?.confirmed);
     if (missing.length) throw new GlosError('SAFETY_CHECK_INCOMPLETE', `Complete the load-safety checklist before pickup — ${missing.length} item(s) left`);
     const securementPhotoId = check?.securementPhotoId;
@@ -4581,7 +4588,7 @@ export class DispatchService {
     // Round 40 — before pickup: whether its container or closed body is to be inspected at seven points, and which.
     const askedFor = f.status === 'claimed' ? inspectionAsked(f, f.carriedBy) : undefined;
     const inspectionAsk = askedFor ? { kind: askedFor, points: [...INSPECTION_POINTS] } : undefined;
-    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}) };
+    return { ...(invoiceMissing ? { invoiceMissing: true } : {}), ...(invoiceToShow ? { invoiceToShow: true } : {}), ...(sealMissing ? { sealMissing } : {}), ...(inspectionAsk ? { inspection: inspectionAsk } : {}), ...(desks.length ? { desks } : {}), ...(heldByAuthority ? { heldByAuthority } : {}), ...(passage ? { passage } : {}), ...(sealsToFind ? { seals: sealsToFind } : {}), ...(f.held ? { held: f.held } : {}), ...(f.status === 'in_transit' && this.tamper?.reportedAt(f.freightId, 'delivery') ? { doorReported: true } : {}), ...(f.settlement === 'between_parties' ? { paidByShipper: true } : {}), ...this.shipperUnpaidOf(f, Date.now()), ...(f.paidDirect ? { paidDirect: f.paidDirect } : {}), kind: 'freight', ref: f.freightId, code: f.code, pickupLocation: f.pickupLocation, pickupLabel: f.pickupLabel, destLabel: f.destLabel, destLocation: f.destLocation, weightKg: f.weightKg, ...(f.packages ? { packages: f.packages } : {}), ...(f.packaging ? { packaging: f.packaging } : {}), fragile: f.fragile, bulk: f.bulk, status: f.status, scheduledPickupAt: f.scheduledPickupAt, requiredCapabilities: f.requiredCapabilities, requiredEquipment: f.requiredEquipment, lockedPrice: f.lockedPrice, priceBreakdown: f.priceBreakdown, maxSpend: f.maxSpend, cargoClass: f.cargoClass, natureCode: f.natureCode, loadChecklist: loadSafetyItems({ bulk: f.bulk, fragile: f.fragile, requiredCapabilities: f.requiredCapabilities, ...(f.liveAnimals ? { animalKind: f.liveAnimals.kind } : {}) }), unloadChecklist: unloadSafetyItems(), tempBand: bandOf(f) ?? undefined, lastTempC: f.tempReadings?.length ? f.tempReadings[f.tempReadings.length - 1].celsius : undefined, tempBreached: f.tempBreached, pickupCountry: f.pickupCountry, destCountry: f.destCountry, bonded: f.bonded, bondCountry: f.bondCountry, ...(f.assignedBy ? { assignedBy: { ...(f.assignedBy.name ? { name: f.assignedBy.name } : {}), at: f.assignedBy.at } } : {}), ...(instructionsViewOf(f) ? { instructions: instructionsViewOf(f) } : {}), ...(f.refusal && !f.refusal.decision ? { refusedUntil: f.refusal.decideBy } : {}), ...(f.refusal?.part && !f.refusal.decision ? { refusedPart: f.refusal.part.packages } : {}), ...(f.returnOf ? { returnOf: f.returnOf } : {}), ...(f.bringsBack ? { collectAtHub: { parcelId: f.bringsBack.parcelId, hubName: f.bringsBack.hubName, handed: Boolean(f.bringsBack.handedAt) } } : f.deliversParcel ? { collectAtHub: { parcelId: f.deliversParcel.parcelId, hubName: f.deliversParcel.shopName, handed: Boolean(f.deliversParcel.handedAt) } } : {}) };
   }
 
   /** CA6 — why the law does not let this vehicle carry this load (cabotage, a crossing's weight limit). Empty = it may. */
@@ -4625,7 +4632,10 @@ export class DispatchService {
   }
 
   private securedRefusalFor(driverDid: string, load: Claimable, vehicle?: Vehicle | null): string | undefined {
-    return load.kind === 'freight' ? this.securedRefusal(driverDid, this.freights.get(load.ref), vehicle) : undefined;
+    if (load.kind !== 'freight') return undefined;
+    const f = this.freights.get(load.ref);
+    // Secured air cargo, and live animals (2026-10-30): each only on a vehicle that suits it.
+    return this.securedRefusal(driverDid, f, vehicle) ?? animalVehicleRefusal(f?.liveAnimals, vehicle);
   }
 
   private railRefusalFor(load: Claimable): string | undefined {

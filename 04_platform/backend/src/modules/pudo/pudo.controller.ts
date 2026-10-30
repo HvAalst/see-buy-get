@@ -1479,7 +1479,10 @@ export class SbgController {
   @Post('imports/:importId/air')
   importAir(@Param('importId') importId: string, @Body() dto: ImportAirDto, @Actor() actor: IntrospectionResult): ImportDetail {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The air waybill is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
-    return this.imports.setAir(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+    const acting = this.actingCompany(actor);
+    // Live animals (2026-10-30): the place the veterinary officer named, from the acting company's own places.
+    const place = dto.animals?.quarantineSiteId ? this.sites.require(acting, dto.animals.quarantineSiteId) : undefined;
+    return this.imports.setAir(importId, acting, { ...dto, ...(place ? { quarantine: { label: place.address ?? place.name, location: place.location } } : {}) }, this.namedActor(actor));
   }
 
   /** One step of the release by air: the notice of arrival, customs, an agency, the delivery order — with its reference. */
@@ -2137,7 +2140,9 @@ export class SbgController {
     // Inland by rail (2026-10-29), the box is collected where the train brings it: no port to choose.
     const pickupLocation = from?.location ?? dto.pickupLocation ?? this.imports.railTerminalOf(importId)?.location;
     if (!pickupLocation) throw new GlosError('FIELD_REQUIRED', 'Say which port it is collected from');
-    const destLabel = to ? (to.address ?? to.name) : dto.destLabel;
+    // Live animals by air go to the place the veterinary officer named (2026-10-30): no destination to choose.
+    const vetPlace = this.imports.animalsDestinationOf(importId);
+    const destLabel = to ? (to.address ?? to.name) : (dto.destLabel ?? vetPlace?.label);
     if (!destLabel) throw new GlosError('FIELD_REQUIRED', 'Say where the container is going');
     return this.imports.mintRoadLeg(
       importId,
@@ -2146,7 +2151,7 @@ export class SbgController {
         pickupLocation,
         pickupLabel: from?.name ?? dto.pickupLabel,
         destLabel,
-        destLocation: to?.location ?? dto.destLocation,
+        destLocation: to?.location ?? dto.destLocation ?? vetPlace?.location,
         weightKg: dto.weightKg,
       },
       this.namedActor(actor, dto.by),
