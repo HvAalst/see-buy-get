@@ -93,7 +93,7 @@ export function Gs1Panel({ business, actions, client, owner }: { business: Busin
               hint={t('business.gs1.digitHint')}
             />
           </div>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           {taken && client ? (
             <ClaimPrefix
               client={client}
@@ -134,7 +134,7 @@ export function Gs1Panel({ business, actions, client, owner }: { business: Busin
           ) : (
             <p class="chint">{t('business.gs1.ownerOnly')}</p>
           )}
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         </>
       )}
       {disputes.map((d) => (
@@ -191,7 +191,7 @@ export function ClaimPrefix({ client, prefix, digit, onOpened, forClient }: { cl
         <span class="cfield__label">{t('business.gs1.noteLabel')}</span>
         <textarea id="gs1-note" class="cinput" rows={2} maxLength={500} value={note} onInput={(e) => setNote((e.target as HTMLTextAreaElement).value)} />
       </label>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--ghost" disabled={busy} onClick={() => setOpen(false)}>
           {t('business.gs1.cancel')}
@@ -230,7 +230,9 @@ function DisputeLine({ d, client, owner, onChanged }: { d: Gs1DisputeView; clien
   return (
     <div class="cnote" style="margin-top:10px">
       <span class={`ctag ctag--${line.tone === 'idle' ? 'quiet' : line.tone}`}>{d.forClient ? t('business.gs1.d.tagClient', { prefix: d.companyPrefix, name: d.forClient }) : t('business.gs1.d.tag', { prefix: d.companyPrefix })}</span>
-      <p class="crow__sub">{line.text}</p>
+      <p class="crow__sub">
+        <Abbreviated text={line.text} />
+      </p>
       {owner && client && maySendLicence(d) ? (
         <label class="cfield">
           <span class="cfield__label">{t(d.licenceSent ? 'business.gs1.answerAgain' : 'business.gs1.answer')}</span>
@@ -244,7 +246,7 @@ function DisputeLine({ d, client, owner, onChanged }: { d: Gs1DisputeView; clien
           </button>
         </div>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </div>
   );
 }

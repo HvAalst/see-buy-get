@@ -52,7 +52,7 @@ export function PilotScreen({ actions }: { actions: TowerActions }) {
             </button>
           </span>
         </div>
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         {!board || !tg ? (
           <p class="cons__empty">{t('tower.queues.loading')}</p>
         ) : (

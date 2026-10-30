@@ -24,16 +24,24 @@ export function Abbr({ term, text }: { term: Abbreviation; text?: string }) {
   const [hover, setHover] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [shift, setShift] = useState(0);
+  // Above the word where below it would run off the screen (the browser test, 2026-10-30).
+  const [up, setUp] = useState(false);
   const open = hover || pinned;
   const name = t(abbrName(term));
   const about = t(abbrAbout(term));
 
   // Kept inside the screen: a bubble that would run off its right edge is moved back by as much.
   useLayoutEffect(() => {
-    if (!open || !tip.current) return setShift(0);
+    if (!open || !tip.current) {
+      setUp(false);
+      return setShift(0);
+    }
     const r = tip.current.getBoundingClientRect();
     const room = (typeof window !== 'undefined' ? window.innerWidth : r.right) - 12;
     setShift((s) => Math.min(0, s + room - r.right));
+    const word = wrap.current?.getBoundingClientRect();
+    const height = typeof window !== 'undefined' ? window.innerHeight : r.bottom;
+    if (!up && word && r.bottom > height - 8 && word.top - r.height - 6 > 8) setUp(true);
   }, [open]);
 
   useEffect(() => {
@@ -71,7 +79,7 @@ export function Abbr({ term, text }: { term: Abbreviation; text?: string }) {
         {text ?? term}
       </button>
       {open ? (
-        <span id={id} ref={tip} class="abbr__tip" role="note" style={shift ? `transform:translateX(${shift}px)` : undefined}>
+        <span id={id} ref={tip} class={up ? 'abbr__tip abbr__tip--up' : 'abbr__tip'} role="note" style={shift ? `transform:translateX(${shift}px)` : undefined}>
           <b class="abbr__name">{name}</b>
           <span class="abbr__about">{about}</span>
           {pinned ? <ReadAloud text={() => `${text ?? term}: ${name}. ${about}`} label={t('abbr.hear')} /> : null}

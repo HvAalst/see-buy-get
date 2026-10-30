@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import type { BusinessClient, PostedLoad } from '../api';
@@ -70,7 +71,7 @@ export function LoadReservations({ row, client, act, onChanged }: { row: PostedL
           ) : null}
         </>
       )}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </section>
   );
 }

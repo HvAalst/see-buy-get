@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
@@ -125,7 +126,7 @@ function CaseDetail({ caseId, state, actions, onClose }: { caseId: string; state
   if (!row) {
     return (
       <ConsoleDetail openKey={caseId} title={t('tower.paperReport.title')} onClose={onClose}>
-        {error ? <p class="cerr">{error}</p> : <p class="cons__empty">{t('tower.imports.loading')}</p>}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : <p class="cons__empty">{t('tower.imports.loading')}</p>}
       </ConsoleDetail>
     );
   }
@@ -230,7 +231,7 @@ function CaseDetail({ caseId, state, actions, onClose }: { caseId: string; state
           ) : null}
           {/* The one who proposed it is told the approval is somebody else's — not invited to give it. */}
           {step === 'other' && row.proposal ? <p class="cons__caveat">{t('tower.paperReport.otherApproves', { reason: row.proposal.reason })}</p> : null}
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <label class="cfield" style="margin-top:12px">
             <span class="cfield__label">{t('tower.paperReport.dismissWhy')}</span>
             <input class="cinput" maxLength={1000} value={dismissWhy} onInput={(e) => setDismissWhy((e.target as HTMLInputElement).value)} />
@@ -258,7 +259,7 @@ function CaseDetail({ caseId, state, actions, onClose }: { caseId: string; state
             <Fact k={t('tower.paperReport.fact.decided')} v={t(row.decision.outcome === 'struck' ? 'tower.paperReport.decided.struck' : 'tower.paperReport.decided.dismissed', { who: row.decision.by ?? '', when: when(row.decision.at) })} hint={row.decision.reason} />
             {row.decision.effect ? <Fact k={t('tower.paperReport.fact.effect')} v={row.decision.effect} /> : null}
           </dl>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         </section>
       ) : null}
     </ConsoleDetail>

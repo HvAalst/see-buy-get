@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
 import { BrandMark } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -91,7 +92,7 @@ export function WelcomeScreen({ token, onDone, onLeave }: { token: string; onDon
               <input class="cinput" type="password" name="new-password-again" value={again} autocomplete="new-password" onInput={(e) => setAgain((e.target as HTMLInputElement).value)} />
             </label>
 
-            {error ? <p class="cerr">{error}</p> : null}
+            {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
             <button type="submit" class="cbtn cbtn--primary" disabled={busy} style="margin-top:8px">
               {t('tower.welcome.cta')}

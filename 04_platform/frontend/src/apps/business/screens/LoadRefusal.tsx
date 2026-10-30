@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { refusalSays, type RefusalChoice } from '../../../shared/refusal';
@@ -57,7 +58,7 @@ export function LoadRefusal({ row, client, business, act, onChanged }: { row: Po
       {!decide ? null : open === 'back' ? (
         <>
           <p class="cons__lede">{t('refusal.backBody')}</p>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void send('back')}>
               {t('refusal.backYes')}
@@ -81,7 +82,7 @@ export function LoadRefusal({ row, client, business, act, onChanged }: { row: Po
               <input class="cinput" maxLength={32} inputMode="tel" value={contact.phone} onInput={(e) => setContact((c) => ({ ...c, phone: (e.target as HTMLInputElement).value }))} />
             </label>
           </div>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy || !siteId} onClick={() => void send('elsewhere')}>
               {t('refusal.send')}
@@ -94,7 +95,7 @@ export function LoadRefusal({ row, client, business, act, onChanged }: { row: Po
       ) : open === 'give_up' ? (
         <>
           <p class="cons__lede">{t('refusal.giveUpBody')}</p>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void send('give_up')}>
               {t('refusal.giveUpYes')}

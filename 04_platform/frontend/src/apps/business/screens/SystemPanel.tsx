@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import type { BusinessClient } from '../api';
@@ -93,7 +94,7 @@ export function SystemPanel({ actions, client, owner, works }: { actions: Busine
             <input id="system-url" class="cinput" value={url} placeholder="https://erp.example.com/hooks/seebuyget" onInput={(e) => setUrl((e.target as HTMLInputElement).value)} autocapitalize="none" spellcheck={false} />
             <span class="chint">{t('business.system.addressHint')}</span>
           </label>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--ghost" disabled={busy !== null} onClick={() => setEditing(false)}>
               {t('business.system.cancel')}
@@ -134,7 +135,7 @@ export function SystemPanel({ actions, client, owner, works }: { actions: Busine
             ) : null}
           </div>
           {!owner ? <p class="chint">{t('business.system.ownerOnly')}</p> : null}
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         </>
       )}
 

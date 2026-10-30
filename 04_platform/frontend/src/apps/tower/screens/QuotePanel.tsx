@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { quoteFigure, type QuoteView } from '../../../shared/quote';
@@ -135,7 +136,7 @@ export function QuotePanel({ quote, api, canChange, onChanged }: { quote: QuoteV
         )
       ) : null}
       <p class="chint">{t('quote.ours')}</p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       <ConsoleFold title={t('quote.historyTitle')} hint={t('quote.historyCount', { n: quote.history.length })}>
         <ul class="twr-checklist">

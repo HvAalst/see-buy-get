@@ -34,6 +34,16 @@ export const ABBREVIATIONS = [
   'FIATA',
   // Live animals by air (2026-10-30): a listed species travels with its permit.
   'CITES',
+  // Carriage by air and rail, and who writes the rules — said on the waybill and rail checks (2026-10-30).
+  'MC99',
+  'EAC',
+  'SGR',
+  'NCTTA',
+  'TAZARA',
+  'COTIF',
+  'ICC',
+  'UNCTAD',
+  'Form C.1',
   'UCP',
   'UN number',
   'KYC',
@@ -47,6 +57,9 @@ export const ABBREVIATIONS = [
   'ERP',
   'TMS',
   'ISO 28000',
+  // The container's own standards: its number, and its seals (the gaps audit, 2026-10-30).
+  'ISO 6346',
+  'ISO 17712',
   'PUDO',
   'CSC',
   'URL',
@@ -73,6 +86,17 @@ export const ABBREVIATIONS = [
   'P6',
   // A word of the trade: the pallets, cages or sacks goods came on, once unloaded (WRITTEN: also as it falls inside a sentence).
   'Empties',
+  // Words of the trade a newcomer may not know, marked as they fall inside a sentence (2026-10-30).
+  'Cut-off',
+  'Free days',
+  'Demurrage',
+  'Detention',
+  'Air waybill',
+  'Bill of lading',
+  'Consignee',
+  'Verified gross mass',
+  'Latest acceptance time',
+  'Delivery order',
 ] as const;
 
 export type Abbreviation = (typeof ABBREVIATIONS)[number];
@@ -94,7 +118,19 @@ export const abbrAbout = (term: Abbreviation) => `abbr.${abbrSlug(term)}.about` 
  * A WORD OF THE GLOSSARY AS IT FALLS INSIDE A SENTENCE — the same term in small letters ("your empties"). Marked and explained
  * as the term, once a sentence whichever way it is written; shown as written.
  */
-const WRITTEN: Partial<Record<string, Abbreviation>> = { empties: 'Empties' };
+const WRITTEN: Partial<Record<string, Abbreviation>> = {
+  empties: 'Empties',
+  'cut-off': 'Cut-off',
+  'free days': 'Free days',
+  demurrage: 'Demurrage',
+  detention: 'Detention',
+  'air waybill': 'Air waybill',
+  'bill of lading': 'Bill of lading',
+  consignee: 'Consignee',
+  'verified gross mass': 'Verified gross mass',
+  'latest acceptance time': 'Latest acceptance time',
+  'delivery order': 'Delivery order',
+};
 
 const ESCAPED = [...ABBREVIATIONS, ...Object.keys(WRITTEN)].sort((a, b) => b.length - a.length).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
 const FIND = new RegExp(`(?<![A-Za-z0-9_])(${ESCAPED.join('|')})(?![A-Za-z0-9_])`, 'g');

@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Choice, ErrorNote, Info, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
@@ -175,7 +176,7 @@ function KeysCard({ state, actions }: { state: VendorState; actions: VendorActio
           </Button>
         }
       >
-        <p class="card__note">{t('vendor.keys.note')}</p>
+        <p class="card__note"><Abbreviated text={t('vendor.keys.note')} /></p>
         {state.storeState === 'ready' && live.length === 0 ? <p class="hint" style="margin-top:8px">{t('vendor.keys.none')}</p> : null}
         {live.map((k) => (
           <div key={k.keyId}>

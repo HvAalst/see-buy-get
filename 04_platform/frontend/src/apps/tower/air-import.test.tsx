@@ -3,6 +3,9 @@ import { renderToString } from 'preact-render-to-string';
 import { t } from '../../shared/i18n';
 import { ImportByAir, type ImportAirView } from './screens/ImportByAir';
 
+/** The page's words, its markup taken out: a sentence with a term of the trade in it is drawn in pieces (shared/ui/Abbr.tsx). */
+const textOf = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+
 /*
  * AN IMPORT BY AIR, ON THE SCREEN (2026-10-29). Each release step for whoever may record it, the gate in the board's own
  * words, the handler's free hours counted, the importer alone sending the truck anyway — and staff only reading.
@@ -34,7 +37,7 @@ const render = (a: ImportAirView | undefined, youAre: string) => renderToString(
 describe('an import by air', () => {
   it('while it is in the shed: every step for its importer, the gate in the board’s words, and the word to go anyway', () => {
     const html = render(air(), 'importer');
-    for (const shown of [t('tower.byAir.step.notified'), t('tower.byAir.step.customs'), 'Kenya Bureau of Standards', t('tower.byAir.step.deliveryOrder'), 'Not released yet at Swissport cargo shed, JKIA', t('tower.byAir.sendAnyway'), t('tower.byAir.clock.notStarted'), 'The Montreal Convention 1999']) expect(html).toContain(shown);
+    for (const shown of [t('tower.byAir.step.notified'), t('tower.byAir.step.customs'), 'Kenya Bureau of Standards', t('tower.byAir.step.deliveryOrder'), 'Not released yet at Swissport cargo shed, JKIA', t('tower.byAir.sendAnyway'), t('tower.byAir.clock.notStarted'), 'The Montreal Convention 1999']) expect(textOf(html)).toContain(shown);
   });
 
   it('its agent records the steps, but only the importer sends the truck anyway; staff only read', () => {

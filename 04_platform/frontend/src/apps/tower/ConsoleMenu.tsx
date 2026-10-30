@@ -77,7 +77,7 @@ export function ConsoleMenu({ name, under, warn, entries }: { name: string; unde
             {entries
               .filter((e) => !e.danger)
               .map((e) => (
-                <MenuRow key={e.key} entry={e} onDone={() => setOpen(false)} />
+                <MenuRow key={e.key} entry={e} onDone={() => { trigger.current?.focus(); setOpen(false); }} />
               ))}
           </div>
           {entries.some((e) => e.danger) ? (
@@ -85,7 +85,7 @@ export function ConsoleMenu({ name, under, warn, entries }: { name: string; unde
               {entries
                 .filter((e) => e.danger)
                 .map((e) => (
-                  <MenuRow key={e.key} entry={e} onDone={() => setOpen(false)} />
+                  <MenuRow key={e.key} entry={e} onDone={() => { trigger.current?.focus(); setOpen(false); }} />
                 ))}
             </div>
           ) : null}

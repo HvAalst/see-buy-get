@@ -80,7 +80,7 @@ export function ClientGs1({ row, client, owner, onRow }: { row: Client; client: 
               hint={t('business.clients.gs1.digitHint', { name: row.name })}
             />
           </div>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           {taken && client ? (
             <ClaimPrefix
               client={client}
@@ -122,7 +122,7 @@ export function ClientGs1({ row, client, owner, onRow }: { row: Client; client: 
             <p class="chint">{t('business.gs1.ownerOnly')}</p>
           )}
           {said ? <p class="chint">{said}</p> : null}
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         </>
       )}
     </section>

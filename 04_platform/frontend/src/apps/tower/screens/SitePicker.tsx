@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { PlaceMap, Sheet } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
@@ -146,7 +147,7 @@ export function SitePicker({
             </label>
           )}
 
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy || !name.trim() || (how === 'pin' ? !pin : !address.trim())} onClick={() => void save()}>
               {t('tower.sites.save')}

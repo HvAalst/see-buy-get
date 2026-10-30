@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { AgreementBlock } from '../../../shared/documents/Agreement';
 import { countryOfNumber } from '../../../shared/phone/dial';
@@ -140,7 +141,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
             </div>
           ) : null}
 
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
           <button type="submit" class="cbtn cbtn--primary" disabled={busy || !ready} style="margin-top:8px">
             {t(CTA[step])}

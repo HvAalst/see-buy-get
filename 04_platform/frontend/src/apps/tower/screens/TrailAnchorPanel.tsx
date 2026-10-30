@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
@@ -51,7 +52,7 @@ export function TrailAnchorPanel({ actions }: { actions: TowerActions }) {
         {off ? <span class="ctag ctag--warn">{t('tower.anchors.notMatching', { n: off })}</span> : null}
       </div>
       <p class="cons__lede">{t('tower.anchors.lede')}</p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {view === null ? (
         error ? null : <p class="cons__empty">{t('tower.queues.loading')}</p>
       ) : (
@@ -126,7 +127,7 @@ export function TrailAnchorPanel({ actions }: { actions: TowerActions }) {
 
           <h3 class="cons__panelt" style="margin-top:18px">{t('tower.anchors.days')}</h3>
           {view.heads.length === 0 ? (
-            <p class="cons__empty">{t('tower.anchors.noDays')}</p>
+            <p class="cons__empty"><Abbreviated text={t('tower.anchors.noDays')} /></p>
           ) : (
             <table class="ctbl ctbl--stack">
               <thead>

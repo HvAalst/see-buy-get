@@ -128,7 +128,7 @@ export function ExportPacking({ d, client, mine, signatory, onDetail }: { d: Exp
       </div>
       <p class="chint">{t(mine ? 'business.exports.packing.lede' : 'business.exports.packing.ledeRead')}</p>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {p ? (
         <>
@@ -248,7 +248,7 @@ export function ExportPacking({ d, client, mine, signatory, onDetail }: { d: Exp
 
       {mine && check ? (
         <div class="biz-packcheck">
-          {check.refusal ? <p class="cerr">{check.refusal}</p> : <p class="cons__lede">{t('business.exports.packing.read', { totals: totals(check.totals), row: check.headingRow })}</p>}
+          {check.refusal ? <p class="cerr"><Abbreviated text={check.refusal} /></p> : <p class="cons__lede">{t('business.exports.packing.read', { totals: totals(check.totals), row: check.headingRow })}</p>}
           {check.columns.length ? (
             <>
               <h3 class="cons__sub">{t('business.exports.packing.columns')}</h3>

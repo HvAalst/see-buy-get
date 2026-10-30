@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import type { BusinessClient, BusinessView, CarriageContract } from '../api';
@@ -67,7 +68,7 @@ export function ContractsScreen({ business, client }: { business: BusinessView; 
         <p class="cons__lede">{t('business.contracts.lede')}</p>
       </header>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {owner ? (
         <section class="cons__panel">

@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
@@ -148,7 +149,7 @@ function Detail({ disputeId, state, actions, onClose }: { disputeId: string; sta
   if (!row || !client) {
     return (
       <ConsoleDetail openKey={disputeId} title={t('tower.ids.title')} onClose={onClose}>
-        {error ? <p class="cerr">{error}</p> : <p class="cons__empty">{t('tower.imports.loading')}</p>}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : <p class="cons__empty">{t('tower.imports.loading')}</p>}
       </ConsoleDetail>
     );
   }
@@ -314,7 +315,7 @@ function Detail({ disputeId, state, actions, onClose }: { disputeId: string; sta
             </div>
           </>
         ) : null}
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       </section>
     </ConsoleDetail>
   );

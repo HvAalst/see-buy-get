@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -93,7 +94,7 @@ export function CasesScreen({ state, actions }: { state: TowerState; actions: To
             </button>
           </span>
         </div>
-        {state.caseError ? <p class="cerr">{state.caseError}</p> : null}
+        {state.caseError ? <p class="cerr"><Abbreviated text={state.caseError} /></p> : null}
         {rows && rows.length < total ? <p class="chint">{t(closed ? 'tower.cases.closedCut' : 'tower.cases.cut', { shown: rows.length })}</p> : null}
         {closed ? <p class="chint">{t('tower.cases.closedKept')}</p> : null}
         {rows === null ? (
@@ -324,7 +325,7 @@ function CaseDetail({ row, state, actions, onActed, onClose }: { row: FlagCaseRo
             onChange={(v) => setRecheck(Number(v))}
             options={RECHECK_CHOICES.map((h) => ({ value: String(h), label: t('tower.cases.recheckIn', { when: openFor(h, t) }) }))}
           />
-          {reason && blocker ? <p class="cerr">{blocker}</p> : null}
+          {reason && blocker ? <p class="cerr"><Abbreviated text={blocker} /></p> : null}
           <div class="twr-panelend">
             <button
               type="button"

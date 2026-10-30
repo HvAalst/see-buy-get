@@ -221,7 +221,7 @@ function DisputeLine({ d, api, onChanged }: { d: Gs1DisputeView; api: StoreGs1Ap
   return (
     <div style="margin-top:14px">
       <Pill tone={line.tone}>{t('vendor.gs1.d.tag', { prefix: d.companyPrefix })}</Pill>
-      {line.tone === 'idle' ? <p class="hint">{line.text}</p> : <Note tone={line.tone} title={line.text} />}
+      {line.tone === 'idle' ? <p class="hint"><Abbreviated text={line.text} /></p> : <Note tone={line.tone} title={line.text} />}
       {api && maySendLicence(d) ? (
         <div class="field" style="margin-top:8px">
           <label class="field__label" for={`gs1-answer-${d.disputeId}`}>

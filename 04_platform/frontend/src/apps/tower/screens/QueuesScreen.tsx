@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { DocumentStrip } from './DocumentStrip';
@@ -376,7 +377,7 @@ function ClaimForm({
         </div>
       </div>
 
-      {state.queueError ? <p class="cerr">{state.queueError}</p> : null}
+      {state.queueError ? <p class="cerr"><Abbreviated text={state.queueError} /></p> : null}
 
       <div class="twr-clear__act">
         <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => decide('upheld')}>
@@ -504,7 +505,7 @@ function DisposalForm({ row, state, actions }: { row: DisposalRow; state: TowerS
         <span class="chint">{t('tower.disposal.reasonHint')}</span>
       </label>
 
-      {state.queueError ? <p class="cerr">{state.queueError}</p> : null}
+      {state.queueError ? <p class="cerr"><Abbreviated text={state.queueError} /></p> : null}
 
       <div class="twr-clear__act">
         <button

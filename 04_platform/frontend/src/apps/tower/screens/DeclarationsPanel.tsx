@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import type { TowerActions } from '../useTowerApp';
@@ -58,7 +59,7 @@ export function DeclarationsPanel({ actions }: { actions: TowerActions }) {
         {counts ? <span class="ctbl__sub">{t('tower.declarations.counts', counts)}</span> : null}
       </div>
       <p class="cons__lede">{t('tower.declarations.lede')}</p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {rows === null ? (
         error ? null : <p class="cons__empty">{t('tower.queues.loading')}</p>
       ) : shown.length === 0 ? (

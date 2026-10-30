@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { Fragment } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
@@ -271,7 +272,7 @@ function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: T
         <p class={math.over ? 'cerr' : 'chint'}>
           {t(math.over ? 'tower.amounts.mathOver' : 'tower.amounts.math', { price: money(math.price), out: money(math.perParcel) })}
         </p>
-        {err ? <p class="cerr">{err}</p> : null}
+        {err ? <p class="cerr"><Abbreviated text={err} /></p> : null}
         <div class="twr-panelend">
           <button type="button" class="cbtn cbtn--primary" disabled={!pricing.editable || busy || !changed} onClick={save}>
             {t('tower.rates.save')}
@@ -344,7 +345,7 @@ function TopUpFee({ pricing, state, actions }: { pricing: EntityPricing; state: 
               hint={t('tower.topupfee.clearHint')}
               onInput={(v) => setForm({ ...form, freeAbove: v })}
             />
-            {err ? <p class="cerr">{err}</p> : null}
+            {err ? <p class="cerr"><Abbreviated text={err} /></p> : null}
             <button type="button" class="cbtn cbtn--primary" disabled={!pricing.editable || busy} onClick={save}>
               {t('tower.rates.save')}
             </button>
@@ -758,7 +759,7 @@ function LaneEditor({ row, pricing, state, actions }: { row: LanePricing; pricin
           <Pct label={t('tower.rates.costOfRisk')} value={rates.costOfRisk} placeholder={pctText(row.rates.costOfRiskPct)} onInput={(v) => setRates({ ...rates, costOfRisk: v })} />
           <Pct label={t('tower.rates.profitOnRisk')} value={rates.profitOnRisk} placeholder={pctText(row.rates.profitOnRiskPct)} onInput={(v) => setRates({ ...rates, profitOnRisk: v })} />
           <Pct label={t('tower.rates.margin')} value={rates.margin} placeholder={pctText(row.rates.marginPct)} onInput={(v) => setRates({ ...rates, margin: v })} />
-          {rateErr ? <p class="cerr">{rateErr}</p> : null}
+          {rateErr ? <p class="cerr"><Abbreviated text={rateErr} /></p> : null}
           <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => save('rates')}>
             {t('tower.rates.save')}
           </button>
@@ -770,7 +771,7 @@ function LaneEditor({ row, pricing, state, actions }: { row: LanePricing; pricin
           <Pct label={t('tower.tax.rate')} value={tax.rate} placeholder={pctText(row.tax.ratePct)} onInput={(v) => setTax({ ...tax, rate: v })} />
           <Text label={t('tower.tax.label')} value={tax.label} placeholder={row.tax.label} onInput={(v) => setTax({ ...tax, label: v })} />
           <Text label={t('tower.tax.registration')} value={tax.registration} hint={t('tower.tax.registrationHint')} onInput={(v) => setTax({ ...tax, registration: v })} />
-          {taxErr ? <p class="cerr">{taxErr}</p> : null}
+          {taxErr ? <p class="cerr"><Abbreviated text={taxErr} /></p> : null}
           <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => save('tax')}>
             {t('tower.rates.save')}
           </button>
@@ -786,7 +787,7 @@ function LaneEditor({ row, pricing, state, actions }: { row: LanePricing; pricin
             onInput={(v) => setCover({ ...cover, freeLimit: v })}
           />
           <Pct label={t('tower.cover.premium')} value={cover.premium} placeholder={pctText(row.insurance.premiumPct)} onInput={(v) => setCover({ ...cover, premium: v })} />
-          {coverErr ? <p class="cerr">{coverErr}</p> : null}
+          {coverErr ? <p class="cerr"><Abbreviated text={coverErr} /></p> : null}
           <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => save('cover')}>
             {t('tower.rates.save')}
           </button>

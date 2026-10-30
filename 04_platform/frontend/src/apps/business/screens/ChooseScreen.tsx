@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { BrandMark, Icon } from '../../../shared/ui';
 import { AgreementCheck } from '../../../shared/documents/Agreement';
@@ -64,7 +65,7 @@ export function ChooseScreen({ state, actions }: { state: BusinessState; actions
           <span class="cons__brandname">{t('business.appTitle')}</span>
         </div>
 
-        {error && !making ? <p class="cerr">{error}</p> : null}
+        {error && !making ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
         {invited.length ? (
           <section>
@@ -211,7 +212,7 @@ function NewBusinessForm({ state, actions, onCancel }: { state: BusinessState; a
       <AgreementCheck read={actions.readAgreement} country={form.country} value={agreement} onChange={setAgreement} />
 
       <p class="cnote">{t('business.new.checkNote')}</p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       <div class="twr-panelend">
         {onCancel ? (

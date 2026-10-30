@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
@@ -26,7 +27,7 @@ export function MessagesScreen({ state, actions }: { state: TowerState; actions:
         <h1 class="cons__title">{t('tower.messages.title')}</h1>
         <p class="cons__lede">{t('tower.messages.lede')}</p>
       </header>
-      {state.queueError ? <p class="cerr">{state.queueError}</p> : null}
+      {state.queueError ? <p class="cerr"><Abbreviated text={state.queueError} /></p> : null}
 
       <div class="twr-tabs" role="tablist" aria-label={t('tower.messages.statusLabel')}>
         {(['open', 'answered', 'closed'] as SupportStatus[]).map((s) => (

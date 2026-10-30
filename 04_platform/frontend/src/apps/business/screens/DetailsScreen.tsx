@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ContactCardPanel } from '../../tower/screens/ContactCardPanel';
@@ -136,7 +137,7 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
               ))}
             </fieldset>
             {identityChanges && checked ? <p class="cons__caveat">{t('business.details.recheck')}</p> : null}
-            {error ? <p class="cerr">{error}</p> : null}
+            {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
             <div class="twr-panelend">
               <button type="submit" class="cbtn cbtn--primary" disabled={busy || !dirty || !form.activities.length}>
                 {t('business.details.save')}
@@ -245,7 +246,7 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
                             );
                           })
                         : <span class="chint">{t('business.places.anyHour')}</span>}
-                      {placeError ? <p class="cerr">{placeError}</p> : null}
+                      {placeError ? <p class="cerr"><Abbreviated text={placeError} /></p> : null}
                       <div style="display:flex;gap:8px;margin-top:10px">
                         <button type="button" class="cbtn cbtn--primary" disabled={placeBusy} onClick={() => void saveLoading(s.siteId)}>
                           {t('business.places.save')}

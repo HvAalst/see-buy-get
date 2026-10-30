@@ -66,7 +66,8 @@ export function Sheet({ open, onClose, title, children, dismissible = true }: Sh
     document.body.style.overflow = 'hidden';
 
     const panel = panelRef.current;
-    const first = panel?.querySelector<HTMLElement>(FOCUSABLE);
+    // Its first control — not an underlined term in its sentences (shared/ui/Abbr.tsx), which a reader would hear first.
+    const first = Array.from(panel?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []).find((n) => !n.classList.contains('abbr__term'));
     (first ?? panel)?.focus();
 
     const onKey = (e: KeyboardEvent) => {

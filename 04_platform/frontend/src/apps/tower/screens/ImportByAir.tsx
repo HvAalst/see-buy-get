@@ -186,7 +186,7 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
   return (
     <ConsoleFold title={<>{code} · {t('tower.byAir.title')}</>} hint={hint} defaultOpen={Boolean(!air || !released || clock?.state === 'due_soon' || clock?.state === 'over')}>
       <p class="cons__lede">{t('tower.byAir.lede')}</p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {air && !editing ? (
         <>
           <p class="cons__lede">{t('tower.byAir.held', { awb: air.awb, airline: air.airline, flights: air.flights.map((f) => `${f.flight} ${f.date} ${f.from}→${f.to}`).join('; '), handler: air.handler, pieces: air.pieces, kg: air.weightKg })}</p>
@@ -287,7 +287,7 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
                 <label class="cfield--check" key={a.key}>
                   <input type="checkbox" checked={form.chosen.includes(a.key)} onChange={() => setForm({ ...form, chosen: form.chosen.includes(a.key) ? form.chosen.filter((k) => k !== a.key) : [...form.chosen, a.key] })} />
                   <span>
-                    <Abbreviated text={a.name} /> — {a.looksAt}
+                    {a.name} — {a.looksAt}
                   </span>
                 </label>
               ))}

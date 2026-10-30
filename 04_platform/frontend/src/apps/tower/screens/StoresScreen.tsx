@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
@@ -100,7 +101,7 @@ export function StoresScreen({ state, actions }: { state: TowerState; actions: T
             />
           ) : null}
         </div>
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         {rows === null ? (
           error ? null : (
             <p class="cons__empty">{t('tower.imports.loading')}</p>
@@ -200,7 +201,7 @@ function StoreDetail({ row, state, actions, onClose }: { row: StoreRow; state: T
           ) : null}
           {desk && troubles.length === 0 ? <span class="ctag ctag--ok">{t('tower.stores.nothingWrong')}</span> : null}
         </div>
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         {!desk && !error ? <p class="cons__empty">{t('tower.imports.loading')}</p> : null}
         {desk ? (
           <>

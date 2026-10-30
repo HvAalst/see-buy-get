@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { BusinessClient } from '../api';
@@ -99,7 +100,7 @@ export function LoadClaimPanel({ row, client, act, onChanged, side = 'sender' }:
             <span class="cfield__label">{t('business.claim.textLabel')}</span>
             <textarea class="cinput" rows={3} maxLength={1000} value={form.text} onInput={(e) => setForm((f) => ({ ...f, text: (e.target as HTMLTextAreaElement).value }))} />
           </label>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy || !claimReady(form)} onClick={() => void send()}>
               {t('business.claim.send')}

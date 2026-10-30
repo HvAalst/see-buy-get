@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { useT, type Translate } from '../../../shared/i18n';
 import { InstructionsBlock } from '../../../shared/InstructionsBlock';
@@ -89,7 +90,7 @@ export function LoadDoor({ row, client, act, onChanged }: { row: PostedLoad; cli
           )}
           {amend ? null : field('deliveryWindow', t('business.door.windowLabel'))}
           {field('text', t(amend ? 'business.door.noteLabel' : 'business.door.textLabel'), true)}
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void save()}>
               {t(amend ? 'business.door.send' : 'business.door.save')}

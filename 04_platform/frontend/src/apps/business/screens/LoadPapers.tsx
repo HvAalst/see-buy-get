@@ -82,7 +82,7 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
             <span class="crow__top">
               <span class="crow__name">{t('business.papers.labelsTitle')}</span>
             </span>
-            {labels ? <span class="crow__sub">{labelsLine(labels, Boolean(business.gs1), t)}</span> : null}
+            {labels ? <span class="crow__sub"><Abbreviated text={labelsLine(labels, Boolean(business.gs1), t)} /></span> : null}
             <span class="crow__sub">{t('business.papers.printHint')}</span>
           </span>
           <span class="crow__tail">
@@ -158,7 +158,7 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
           {said}
         </p>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </section>
   );
 }
@@ -304,7 +304,7 @@ function InvoiceEditor({ client, row, view, origin, onCancel, onSigned }: { clie
         <span>{t('business.invoice.declare')}</span>
       </label>
       {gap('declare')}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--ghost" disabled={busy} onClick={onCancel}>
           {t('business.invoice.cancel')}

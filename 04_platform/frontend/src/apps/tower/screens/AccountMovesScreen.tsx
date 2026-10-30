@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
@@ -115,7 +116,7 @@ function MoveDetail({ moveId, state, actions, onClose }: { moveId: string; state
   if (!row) {
     return (
       <ConsoleDetail openKey={moveId} title={t('tower.moves.title')} onClose={onClose}>
-        {error ? <p class="cerr">{error}</p> : <p class="cons__empty">{t('tower.imports.loading')}</p>}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : <p class="cons__empty">{t('tower.imports.loading')}</p>}
       </ConsoleDetail>
     );
   }
@@ -200,7 +201,7 @@ function MoveDetail({ moveId, state, actions, onClose }: { moveId: string; state
           ) : null}
           {/* The one who checked it is told the approval is somebody else's — not invited to give it. */}
           {step === 'other' ? <p class="cons__caveat">{t('tower.moves.otherApproves')}</p> : null}
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <label class="cfield" style="margin-top:12px">
             <span class="cfield__label">{t('tower.moves.refuseWhy')}</span>
             <input class="cinput" maxLength={500} value={reason} onInput={(e) => setReason((e.target as HTMLInputElement).value)} />
@@ -220,7 +221,7 @@ function MoveDetail({ moveId, state, actions, onClose }: { moveId: string; state
           </div>
         </section>
       ) : error ? (
-        <p class="cerr">{error}</p>
+        <p class="cerr"><Abbreviated text={error} /></p>
       ) : null}
     </ConsoleDetail>
   );

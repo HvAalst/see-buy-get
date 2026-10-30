@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { keyLine, keysInOrder, keyTitle, type CompanyKey } from '../../../shared/companyKeys';
@@ -58,7 +59,7 @@ export function KeysPanel({ client, owner }: { client: BusinessClient | null; ow
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('business.keys.title')}</span>
       </div>
-      <p class="cons__lede">{t('business.keys.lede')}</p>
+      <p class="cons__lede"><Abbreviated text={t('business.keys.lede')} /></p>
 
       {/* The key, the one time it is shown. */}
       {secret ? (
@@ -88,7 +89,7 @@ export function KeysPanel({ client, owner }: { client: BusinessClient | null; ow
       ) : (
         <p class="chint">{t('business.keys.ownerOnly')}</p>
       )}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {keys.length ? (
         <table class="ctbl ctbl--stack">

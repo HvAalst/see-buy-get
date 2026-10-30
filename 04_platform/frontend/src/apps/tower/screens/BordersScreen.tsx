@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -79,7 +80,7 @@ export function BordersScreen({ state, actions }: { state: TowerState; actions: 
           {done}
         </p>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       <section class="cons__panel">
         <div class="cons__panelhead">

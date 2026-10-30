@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { abbrName } from '../../../shared/abbr';
 import { DocumentButton } from '../../../shared/ui';
@@ -73,7 +74,7 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
       </div>
       <p class="chint">{t(mine ? 'business.exports.sli.lede' : 'business.exports.sli.ledeRead')}</p>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {sli.stale && last ? <p class="cerr">{t('business.exports.sli.stale', { n: last.version })}</p> : null}
 
       {sli.versions.length ? (
@@ -184,7 +185,7 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
           <h3 class="cons__sub">{t('business.exports.sli.goods')}</h3>
           {sli.fromPacking ? (
             <>
-              <p class="chint">{t('business.exports.sli.goodsFromPacking')}</p>
+              <p class="chint"><Abbreviated text={t('business.exports.sli.goodsFromPacking')} /></p>
               <div class="crows">
                 {(sli.goods ?? []).map((g, i) => (
                   <div class="crow" key={i}>
@@ -199,7 +200,7 @@ export function ExportSli({ d, client, mine, signatory, onDetail }: { d: ExportD
               </div>
             </>
           ) : null}
-          {sli.fromPacking ? null : <p class="chint">{t('business.exports.sli.goodsHint')}</p>}
+          {sli.fromPacking ? null : <p class="chint"><Abbreviated text={t('business.exports.sli.goodsHint')} /></p>}
           {sli.fromPacking ? null : form.lines.map((l, i) => (
             <div class="biz-sliline" key={i}>
               <div class="biz-two">

@@ -133,7 +133,7 @@ function Dispute({ row, state, actions, onChanged }: { row: Gs1DisputeRow; state
           )}
         </div>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </div>
   );
 }

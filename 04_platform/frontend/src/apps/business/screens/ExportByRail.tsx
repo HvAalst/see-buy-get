@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { SitePicker } from '../../tower/screens/SitePicker';
@@ -104,7 +105,7 @@ export function ExportByRail({ d, business, client, mine, onChanged }: { d: Expo
           </div>
         </>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </section>
   );
 }

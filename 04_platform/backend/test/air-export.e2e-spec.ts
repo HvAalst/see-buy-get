@@ -109,8 +109,8 @@ describe('an export by air, over the wire', () => {
     expect(await said({ ...base, air: { ...base.air, security: { status: 'secured' } } })).toEqual([400, expect.stringMatching(/which regulated agent or known consignor secured it/)]);
     // The latest acceptance time comes from the airline's confirmation: no table of ours stands in for it.
     expect(await said({ ...base, air: { ...base.air, latAt: undefined } })).toEqual([400, expect.anything()]);
-    // Medicines wait for the lawyer (L29); live animals for the next step.
-    expect(await said({ ...base, natureCode: 'HUM' })).toEqual([403, expect.stringMatching(/legal\.html L29/)]);
+    // Medicines wait for the lawyer (legal.html L29) — said to the business without our file's name.
+    expect(await said({ ...base, natureCode: 'HUM' })).toEqual([403, expect.stringMatching(/is still with our lawyer\.$/)]);
     expect(await said({ ...base, natureCode: 'HAZ-BIO' })).toEqual([403, expect.stringMatching(/^Biological goods/)]);
     // The terminal is one of its port and airport places, and staff write nothing in its name.
     expect((await post({ ...base, terminalSiteId: g.packHouse })).status).toBe(400);

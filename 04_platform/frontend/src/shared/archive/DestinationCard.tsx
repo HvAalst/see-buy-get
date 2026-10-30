@@ -1,3 +1,4 @@
+import { Abbreviated } from '../ui/Abbr';
 import { useState } from 'preact/hooks';
 import { Button, Card, Note, Sheet } from '../ui';
 import { useT, type Translate } from '../i18n';
@@ -52,7 +53,7 @@ export function DestinationCard({ api }: { api: DestinationApiState }) {
             </div>
 
             {d?.lastError ? <Note tone="warn" icon="warning" title={t('dest.notWorking')} detail={d.lastError} /> : null}
-            {api.secret ? <Note tone="info" icon="key" title={t('dest.secretTitle')} detail={`${api.secret} — ${t('dest.secretDetail')}`} /> : null}
+            {api.secret ? <Note tone="info" icon="key" title={t('dest.secretTitle')} detail={<Abbreviated text={`${api.secret} — ${t('dest.secretDetail')}`} />} /> : null}
             {api.tested ? (
               <Note
                 tone={api.tested.ok ? 'ok' : 'danger'}
@@ -151,7 +152,7 @@ function ConnectSheet({
         </select>
         {/* The brands go here rather than in the option: "S3-compatible" means nothing to somebody
             who simply wants their files to land in Nextcloud. */}
-        <p class="hint">{HELP[kind].who(t)}</p>
+        <p class="hint"><Abbreviated text={HELP[kind].who(t)} /></p>
       </div>
 
       <div class="field">

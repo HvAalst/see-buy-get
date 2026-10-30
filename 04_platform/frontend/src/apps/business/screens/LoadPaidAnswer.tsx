@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ownAnswerLine, shipperPaidLine } from '../../../shared/paidDirect';
@@ -43,7 +44,7 @@ export function LoadPaidAnswer({ row, client, act, onChanged }: { row: PostedLoa
             <input class="cinput" maxLength={80} value={reference} onInput={(e) => setReference((e.target as HTMLInputElement).value)} />
           </label>
           <p class="chint">{t('common.paidDirect.answerHint')}</p>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy || reference.trim().length < 3} onClick={() => void send()}>
               {t('common.paidDirect.answerSend')}

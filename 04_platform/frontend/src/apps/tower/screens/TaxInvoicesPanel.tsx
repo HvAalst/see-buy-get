@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -77,7 +78,7 @@ export function TaxInvoicesPanel({ state, actions }: { state: TowerState; action
       <p class={list.rail === 'not_set_up' ? 'chint cerr' : 'chint'}>
         {list.rail === 'kra' ? t(list.env === 'production' ? 'tower.money.tax.rail.kra' : 'tower.money.tax.rail.kraTest') : t(`tower.money.tax.rail.${list.rail}` as never)}
       </p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {list.items.length === 0 ? (
         <p class="cons__empty">{t('tower.money.tax.empty')}</p>
       ) : (

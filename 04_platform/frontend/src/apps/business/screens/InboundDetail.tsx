@@ -100,7 +100,7 @@ export function InboundDetail({ row, client, act, onClose, onChanged }: { row: I
           {row.noteId ? <NoteFile client={client} noteId={row.noteId} code={row.ref} /> : null}
         </div>
         <p class="chint">{t('business.inbound.noteCopy')}</p>
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       </section>
 
       <LoadClaimPanel row={{ freightId: row.freightId, code: row.ref, status: row.status, claim: row.claim, claimant: row.claimant, canClaim: row.canClaim, incoterm: row.incoterm }} client={client} act={act} onChanged={onChanged} side="receiver" />

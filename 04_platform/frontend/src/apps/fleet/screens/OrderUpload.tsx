@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useRef, useState } from 'preact/hooks';
 import { Button, ErrorNote, Note, PlacePicker, Sheet, type PlaceNote } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
@@ -103,7 +104,7 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
 
   return (
     <Sheet open onClose={onClose} title={t('fleet.upload.title', { shipper: contract.shipper.name })}>
-      <p class="hint">{t('fleet.upload.lede')}</p>
+      <p class="hint"><Abbreviated text={t('fleet.upload.lede')} /></p>
 
       <PlacePicker
         id="up-pickup"
@@ -143,7 +144,7 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
           accept=".xlsx,.xlsm,.csv,.tsv,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={(e) => void pick(e.currentTarget.files?.[0])}
         />
-        {refused ? <p class="hint upload__refused">{refused}</p> : null}
+        {refused ? <p class="hint upload__refused"><Abbreviated text={refused} /></p> : null}
       </div>
       <div class="field" style="margin-top:12px">
         <label class="field__label" for="up-text">

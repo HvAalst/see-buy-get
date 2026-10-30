@@ -186,7 +186,7 @@ export function PlanBoard({ day, api, accepted, newSince, hasPartners, onClose, 
             {clock ? (
               <>
                 <p class={'hint' + (clockLine(clock, t).tone === 'warn' ? ' plan__win--warn' : '')}>
-                  {clockLine(clock, t).text}
+                  <Abbreviated text={clockLine(clock, t).text} />
                   {mayChooseClock(clock) && clock.source !== 'none' && !choosing ? (
                     <>
                       {' '}

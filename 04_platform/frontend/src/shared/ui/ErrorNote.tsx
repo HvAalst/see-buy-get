@@ -1,3 +1,4 @@
+import { Abbreviated } from './Abbr';
 import type { ComponentChildren } from 'preact';
 import { presentationFor, type SbgError } from '../../lib/sbg';
 import { Button } from './Button';
@@ -168,7 +169,9 @@ export function RefusalNote({ error }: { error: SbgError }) {
     <div class={`note note--${p.tone}`} role="alert">
       <Icon name={p.icon} size={22} class="note__ic" />
       <div class="note__body">
-        <p class="note__t">{refusalSentence(error)}</p>
+        <p class="note__t">
+          <Abbreviated text={refusalSentence(error)} />
+        </p>
       </div>
     </div>
   );

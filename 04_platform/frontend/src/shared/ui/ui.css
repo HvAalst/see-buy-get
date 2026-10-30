@@ -2872,6 +2872,11 @@
   white-space: normal;
   box-shadow: 0 8px 24px rgba(16, 24, 64, 0.25);
 }
+/* Above the word where below it would run off the screen. */
+.abbr__tip--up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
 
 .abbr__name {
   font-weight: 700;

@@ -6,6 +6,9 @@ import { ExportSli } from './screens/ExportSli';
 import { packingTotalsLine, type ExportDetail } from './exports';
 import type { BusinessClient } from './api';
 
+/** The page's words, its markup taken out: a sentence with a term of the trade in it is drawn in pieces (shared/ui/Abbr.tsx). */
+const textOf = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+
 /*
  * THE PACKING LIST, FROM THE SHIPPER'S OWN FILE (the user, 2026-10-28: "a shipper doesn't want to import by hand"):
  * brought in by a file or pasted cells, never typed; signed by the exporter; read by its agent; and the letter's goods
@@ -76,8 +79,8 @@ describe('the letter’s goods from the packing list', () => {
   it('shows the goods worked out from the list, and no lines to type', () => {
     const goods = [{ marks: '1-800 – 801-1600', packages: 1600, packageKind: 'cartons', description: 'Fresh avocados, Hass', hsCode: '080440', grossKg: 7200 }];
     const html = renderToString(<ExportSli d={detail(view(), { fromPacking: true, goods, gaps: ['The port of discharge'] })} client={{} as BusinessClient} mine signatory="Wanjiku Mwangi" onDetail={() => undefined} />);
-    expect(html).toContain(t('business.exports.sli.goodsFromPacking'));
-    expect(html).toContain('1,600 cartons · 7,200 kg gross · marks 1-800 – 801-1600 · HS 080440');
+    expect(textOf(html)).toContain(t('business.exports.sli.goodsFromPacking'));
+    expect(html).toContain('1,600 cartons · 7,200 kg gross · marks 1-800 – 801-1600 · HS code 080440');
     expect(html).not.toContain(`<span class="cfield__label">${t('business.exports.sli.packages')}</span>`);
     expect(html).not.toContain(t('business.exports.sli.addLine'));
   });

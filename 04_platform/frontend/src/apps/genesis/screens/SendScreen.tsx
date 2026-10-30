@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, ErrorNote, Icon, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -115,7 +116,7 @@ function ParcelStep({ state, actions }: SendScreenProps) {
           tone="warn"
           icon="truck"
           title={t('send.parcel.dedicatedTitle')}
-          detail={t('send.parcel.dedicatedDetail')}
+          detail={<Abbreviated text={t('send.parcel.dedicatedDetail')} />}
         />
       ) : null}
 

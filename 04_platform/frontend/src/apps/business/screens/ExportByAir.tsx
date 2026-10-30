@@ -271,7 +271,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
       <h3 class="cons__sub">{t('business.exports.f.placesTitle')}</h3>
       <SitePicker kind="loading" entityId={business.entityId} api={api} value={sites.loading} onChange={(loading) => setSites({ ...sites, loading })} label={t('business.exports.air.loading')} addLabel={t('business.exports.f.addPlace')} />
       <SitePicker kind="port" entityId={business.entityId} api={api} value={sites.terminal} onChange={(terminal) => setSites({ ...sites, terminal })} label={t('business.exports.air.terminal')} addLabel={t('business.exports.f.addPlace')} />
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--primary" disabled={busy || !ready} onClick={() => void send()}>
           {t('business.exports.f.save')}
@@ -355,7 +355,7 @@ export function AirWaybillPanel({ d, client, mine, onDetail }: { d: ExportDetail
         {a.temp ? fact('business.exports.air.d.temp', t('business.exports.air.d.tempLine', { min: a.temp.minC, max: a.temp.maxC }) + (a.temp.preCooled ? t('business.exports.air.d.preCooled') : '')) : null}
       </dl>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {mine && client ? (
         <div class="twr-panelend">
           {a.bookingStatus === 'queued' ? (

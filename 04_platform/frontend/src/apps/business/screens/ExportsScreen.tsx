@@ -97,7 +97,7 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
         <p class="cons__lede">{t('business.exports.lede')}</p>
         {business.activities.includes('clearing_agent') ? <p class="chint">{t('business.exports.agentLede')}</p> : null}
       </header>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {works && sends && client && !forming ? (
         <div class="twr-panelend">
@@ -275,13 +275,13 @@ function RegisterExport({ business, client, onDone }: { business: BusinessView; 
         {field('docsCutoff', 'business.exports.f.docsCutoff', { type: 'datetime-local' })}
         {field('release', 'business.exports.f.release', { maxLength: '60' })}
       </div>
-      <p class="chint">{t('business.exports.f.utc')}</p>
+      <p class="chint"><Abbreviated text={t('business.exports.f.utc')} /></p>
       <h3 class="cons__sub">{t('business.exports.f.placesTitle')}</h3>
       <SitePicker kind="loading" entityId={business.entityId} api={api} value={sites.loading} onChange={(loading) => setSites({ ...sites, loading })} label={t('business.exports.f.loading')} addLabel={t('business.exports.f.addPlace')} />
       <SitePicker kind="port" entityId={business.entityId} api={api} value={sites.terminal} onChange={(terminal) => setSites({ ...sites, terminal })} label={t('business.exports.f.terminal')} addLabel={t('business.exports.f.addPlace')} />
       <SitePicker kind="port" entityId={business.entityId} api={api} value={sites.depot} onChange={(depot) => setSites({ ...sites, depot })} label={t('business.exports.f.depot')} addLabel={t('business.exports.f.addPlace')} />
       <p class="chint">{t('business.exports.f.depotHint')}</p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void send()}>
           {t('business.exports.f.save')}
@@ -358,7 +358,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
     await onChanged();
   };
 
-  if (!d) return error ? <p class="cerr">{error}</p> : <p class="cons__empty">{t('business.loading')}</p>;
+  if (!d) return error ? <p class="cerr"><Abbreviated text={error} /></p> : <p class="cons__empty">{t('business.loading')}</p>;
   const c = d.consignment;
   const tag = timingTag(d.timing, t);
   // The exporter writes; its appointed agent gives its word on the papers; staff read.
@@ -563,11 +563,13 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           </span>
           <span class={`ctag ctag--${tag.tone}`}>{tag.word}</span>
         </div>
-        <p class="cons__lede">{timingLine(d, t)}</p>
+        <p class="cons__lede">
+          <Abbreviated text={timingLine(d, t)} />
+        </p>
         {/* The journey, by its legs (2026-10-29): the truck, the train where it goes by rail, the ship. */}
         <JourneyStrip legs={exportJourney(d, t)} />
         {done ? <p class="cnote">{done}</p> : null}
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         <dl class="cons__facts">
           {d.you !== 'exporter' ? fact('business.exports.d.exporter', d.exporterName) : null}
           {fact(byAir ? 'business.exports.d.bookedWith' : 'business.exports.d.booking', byAir ? c.booking.partyName : `${c.booking.reference} — ${c.booking.partyName}`)}
@@ -1048,7 +1050,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
             ) : null}
             {needsDg ? (
               <>
-                <p class="chint">{t('business.exports.laden.dangerousHint')}</p>
+                <p class="chint"><Abbreviated text={t('business.exports.laden.dangerousHint')} /></p>
                 <div class="biz-two">
                   <label class="cfield"><span class="cfield__label">{t('business.exports.sli.unNumber')}</span><input class="cinput" maxLength={8} value={dg.un} onInput={(e) => setDg({ ...dg, un: (e.target as HTMLInputElement).value })} /></label>
                   <label class="cfield"><span class="cfield__label">{t('business.exports.sli.hazardClass')}</span><input class="cinput" maxLength={8} value={dg.cls} onInput={(e) => setDg({ ...dg, cls: (e.target as HTMLInputElement).value })} /></label>

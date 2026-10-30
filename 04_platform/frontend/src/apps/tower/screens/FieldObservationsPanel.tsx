@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { AuthImage, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -99,7 +100,7 @@ export function FieldObservationsPanel({ actions, isOperator, catalogue }: { act
       <p class="cons__lede">{t('tower.observations.lede')}</p>
       <p class="chint">{t('tower.observations.basis')}</p>
 
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {done ? <p class="chint">{done}</p> : null}
 
       {present.length > 1 ? (

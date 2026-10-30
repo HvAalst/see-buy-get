@@ -99,7 +99,7 @@ export function InboundScreen({ business, client }: { business: BusinessView; cl
         <p class="cons__lede">{t('business.inbound.lede')}</p>
       </header>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       <section class="cons__panel">
         <div class="cons__panelhead">

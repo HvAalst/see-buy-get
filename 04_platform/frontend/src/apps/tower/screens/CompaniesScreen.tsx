@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
@@ -52,7 +53,7 @@ export function CompaniesScreen({ state, actions }: { state: TowerState; actions
           {state.done}
         </p>
       ) : null}
-      {state.queueError ? <p class="cerr">{state.queueError}</p> : null}
+      {state.queueError ? <p class="cerr"><Abbreviated text={state.queueError} /></p> : null}
 
       <Expiring state={state} actions={actions} own={!isOperator} />
 

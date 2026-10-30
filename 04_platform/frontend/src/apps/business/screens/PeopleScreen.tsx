@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { PhoneField } from '../../../shared/ui';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -85,7 +86,7 @@ export function PeopleScreen({ business, actions, client }: { business: Business
         <p class="cons__lede">{t('business.people.lede')}</p>
       </header>
 
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       <section class="cons__panel">
         {rows === null ? (

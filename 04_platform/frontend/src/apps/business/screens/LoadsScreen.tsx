@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { PhoneField } from '../../../shared/ui';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -92,7 +93,7 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
         <p class="cons__lede">{t('business.loads.lede')}</p>
       </header>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {act ? (
         posting ? (
@@ -516,7 +517,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
         {dangerous ? (
           <>
             <h3 class="cons__sub">{t('business.exports.sli.dangerous')}</h3>
-            <p class="chint">{t('business.loads.f.dangerousHint')}</p>
+            <p class="chint"><Abbreviated text={t('business.loads.f.dangerousHint')} /></p>
             <div class="biz-two">
               <label class="cfield">
                 <span class="cfield__label">{t('business.exports.sli.unNumber')}</span>
@@ -556,7 +557,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
           <input class="cinput" maxLength={80} value={form.deliveryWindow} placeholder={t('business.loads.f.windowPlaceholder')} onInput={(e) => setForm((prev) => ({ ...prev, deliveryWindow: (e.target as HTMLInputElement).value }))} />
         </label>
         <p class="cnote">{t(contract ? 'business.loads.contractNote' : 'business.loads.settleNote')}</p>
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         <div class="twr-panelend">
           <button type="button" class="cbtn cbtn--ghost" onClick={onCancel}>
             {t('common.cancel')}
@@ -896,7 +897,7 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
           </div>
         </section>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </ConsoleDetail>
   );
 }

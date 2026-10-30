@@ -241,7 +241,7 @@ export class ExportService {
    * the cargo terminal at the airport, and the booking with the airline as the exporter copied it off its confirmation —
    * the air waybill, the flights, and the latest acceptance time our truck must beat. Refused before anything is written
    * where the waybill number cannot be one, where a fact the road needs is missing, or where the goods are ones we do not
-   * carry to an airport yet: medicines wait for the lawyer (legal.html L29), live animals for the next slice.
+   * carry to an airport yet: medicines wait for the lawyer (legal.html L29). Live animals are declared as live animals (2026-10-30).
    */
   registerAir(
     input: {
@@ -282,7 +282,7 @@ export class ExportService {
     const originCountry = country(input.originCountry, 'where it is sent from');
     const destCountry = country(input.destCountry, 'where it is going');
     const nature = input.natureCode?.trim().toUpperCase() || undefined;
-    if (nature === 'HUM') throw new GlosError('FORBIDDEN', 'Medicines and vaccines are not carried to or from an airport on SeeBuyGet yet: who must hold a licence to carry them is with our lawyer (legal.html L29).', { field: 'natureCode', reason: 'medicines' });
+    if (nature === 'HUM') throw new GlosError('FORBIDDEN', 'Medicines and vaccines are not carried to or from an airport on SeeBuyGet yet: who must hold a licence to carry them is still with our lawyer.', { field: 'natureCode', reason: 'medicines' });
     // Biological goods — samples, medical waste — are dangerous goods we do not carry to an airport yet; live animals are
     // declared as live animals, with their papers (2026-10-30).
     if (nature === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Biological goods — samples, medical waste — are not carried to an airport on SeeBuyGet yet. Live animals are declared as live animals, with their papers.', { field: 'natureCode', reason: 'biological' });

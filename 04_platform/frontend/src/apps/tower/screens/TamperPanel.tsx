@@ -102,7 +102,7 @@ export function TamperPanel({ subject, live, state, actions, onReleased }: { sub
             <span class="cfield__label">{t('tower.tamper.reasonLabel')}</span>
             <textarea class="cinput" rows={3} maxLength={500} value={reason} onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)} />
           </label>
-          {reason && blocker ? <p class="cerr">{blocker}</p> : null}
+          {reason && blocker ? <p class="cerr"><Abbreviated text={blocker} /></p> : null}
           <div class="twr-panelend">
             <button
               type="button"

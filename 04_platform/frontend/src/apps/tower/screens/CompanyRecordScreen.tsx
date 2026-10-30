@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
@@ -140,7 +141,7 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
           {done}
         </p>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {!entityId ? null : !view ? (
         <p class="cons__empty">{t('tower.company.loading')}</p>

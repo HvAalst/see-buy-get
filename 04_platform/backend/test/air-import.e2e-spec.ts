@@ -206,7 +206,7 @@ describe('an import by air, over the wire', () => {
     const meds = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Vaccines, 4 boxes', originCountry: 'IN', destCountry: 'KE', destPort: 'JKIA', mode: 'air' }).expect(201)).body;
     app.get(ImportService).declareCargo(meds.importId, imp.entityId, { natureCode: 'HUM' }, 'Wanjiku');
     const refused = await http().post(`/v1/sbg/imports/${meds.importId}/air`).set(bearer(imp.token)).send(phones());
-    expect([refused.status, String(refused.body.detail)]).toEqual([403, expect.stringMatching(/legal\.html L29/)]);
+    expect([refused.status, String(refused.body.detail)]).toEqual([403, expect.stringMatching(/is still with our lawyer\.$/)]);
     const sea = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Rice, 800 bags', originCountry: 'PK', destCountry: 'KE', destPort: 'Mombasa', mode: 'sea' }).expect(201)).body;
     expect(String((await http().post(`/v1/sbg/imports/${sea.importId}/air`).set(bearer(imp.token)).send(phones())).body.detail)).toBe(`${sea.code} came by sea: an air waybill is for goods that came by air`);
   });

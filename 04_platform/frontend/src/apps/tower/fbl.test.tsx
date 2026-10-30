@@ -4,6 +4,9 @@ import { t } from '../../shared/i18n';
 import { enTowerBusiness } from '../../shared/i18n/catalogs/en.tower-business';
 import { FblPanel, FiataDirectoryHint, FIATA_DIRECTORY, type FblView } from './screens/FblPanel';
 
+/** The page's words, its markup taken out: a sentence with a term of the trade in it is drawn in pieces (shared/ui/Abbr.tsx). */
+const textOf = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+
 /*
  * THE FORWARDER'S BILL, HELD AND EXPLAINED (the user, 2026-10-28/29). Read back: what the form asks and lacks, what agrees
  * with our papers — and that agreeing proves nothing; where to check it yourself; what the holder saw on FIATA's page, as
@@ -73,7 +76,7 @@ describe('the forwarder’s bill on an export or an import', () => {
 
   it('what the holder saw is shown as their record, never as a check by us', () => {
     const html = render(held({ verified: 'registered', verification: { registered: true, by: 'Wanjiku', byEntityId: 'ent_1', at: '2026-10-29T07:00:00Z', proofDocumentId: 'doc_1', proofTitle: 'FIATA result', fiataId: 'FBL-KE-000114' } as FblView['verification'] }));
-    expect(html).toContain(t('tower.fbl.checkedBy', { by: 'Wanjiku', day: '2026-10-29', proof: 'FIATA result' }));
+    expect(textOf(html)).toContain(t('tower.fbl.checkedBy', { by: 'Wanjiku', day: '2026-10-29', proof: 'FIATA result' }));
     expect(html).toContain('not a check by SeeBuyGet');
   });
 

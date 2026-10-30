@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { adviserSays, bounceListenWords, checkSays, countWords, mailAddressWords, mailSays, momentWords, pushSays, routerSays, smsCapWords, smsCountryWords, smsSays, waitingWords, type Connections, type RouterCheck } from '../connections';
@@ -57,7 +58,7 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
         <h1 class="cons__title">{t('tower.conn.title')}</h1>
         <p class="cons__lede">{t('tower.conn.lede')}</p>
       </header>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {view === null ? (
         error ? null : (
@@ -183,7 +184,7 @@ export function ConnectionsScreen({ actions }: { state: TowerState; actions: Tow
               </div>
             </dl>
             <p class="chint">
-              {t('tower.conn.mail.where')}
+              <Abbreviated text={t('tower.conn.mail.where')} />
               {view.sandbox && !view.mail.sends ? ` ${t('tower.conn.mail.whereKept')}` : ''}
             </p>
             <p class="chint">{t('tower.conn.mail.whereBounces')}</p>

@@ -169,9 +169,9 @@ export const enTowerBusiness = {
   'tower.imports.next': 'Next',
   'tower.imports.page': 'Page {page} of {pages} · showing {shown} of {total}',
   'tower.imports.count': '{n} on the way',
-  'tower.imports.none': 'No containers recorded yet.',
+  'tower.imports.none': 'Nothing recorded yet.',
   'tower.imports.waitingOnYou': '{n} waiting on you',
-  'tower.imports.col.code': 'Container',
+  'tower.imports.col.code': 'Import',
   'tower.imports.col.route': 'Route',
   'tower.imports.col.agent': 'Agent',
   'tower.imports.col.papers': 'Papers',
@@ -332,6 +332,9 @@ export const enTowerBusiness = {
   'tower.imports.needAmount': 'Give an amount above zero.',
 
   'tower.imports.roadTitle': 'The road leg from the port',
+  'tower.imports.roadTitleAir': 'The road leg from the airport',
+  'tower.imports.fold.noRoadAir': 'No leg from the airport yet',
+  'tower.imports.roadHintAir': 'Posted by a person from the handler’s shed: it is offered to no driver until the cargo is released, unless you send it anyway. It posts to the freight board like any other load, and the haulage is settled between you and whoever takes it.',
   'tower.imports.roadHint':
     'Minted by a person, because nothing here watches the sea: we model no vessel and no arrival, so only somebody who knows the box is on the quay can start the road journey. It posts to the freight board like any other load, and the haulage is settled between you and whoever takes it.',
   'tower.imports.f.weight': 'Weight (kg)',
@@ -471,6 +474,7 @@ export const enTowerBusiness = {
   'tower.imports.f.containerNo': 'Container number',
   'tower.imports.containerNoSub':
     'Four letters, six digits and a check digit. A mistyped number is refused.',
+  'tower.imports.cscHint': 'The CSC plate is the container’s safety approval: its date is carried as written. Whether the box is fit is a surveyor’s word, never ours.',
   'tower.imports.f.cscPlateDate': 'CSC plate date',
   'tower.imports.clockTitle': 'The box itself, and the clock on it',
   'tower.imports.clockNoBox':
@@ -693,7 +697,7 @@ export const enTowerBusiness = {
   'tower.byAir.cancel': 'Not now',
   'tower.byAir.noneYet': 'No air waybill recorded yet.',
   'tower.animals.title': 'Live animals',
-  'tower.animals.hint': 'Copy these from the permit and the veterinary health certificate. Their originals ride with the animals; SeeBuyGet keeps the numbers and signs nothing for anybody.',
+  'tower.animals.hint': 'Copy these from the permit and the veterinary health certificate. Their originals ride with the animals; a species listed under CITES rides with its permit too. SeeBuyGet keeps the numbers and signs nothing for anybody.',
   'tower.animals.f.with': 'Live animals',
   'tower.animals.f.kind': 'How they travel',
   'tower.animals.kind.livestock': 'Livestock, walking on (cattle, goats, sheep, pigs, horses)',

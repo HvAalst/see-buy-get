@@ -47,12 +47,20 @@ describe('the trade’s short forms, said in full', () => {
   });
 
   it('leaves no short form in the words unexplained without a reason', () => {
-    const glossaryWords = new Set(ABBREVIATIONS.flatMap((t) => t.split(' ')));
+    // A WHOLE TERM, NOT ITS WORDS (the jargon audit, 2026-10-30): the underline marks "ISO 6346" or "UN number" whole, so a
+    // short form passes only as a term of its own, or inside its whole term — "ISO" beside another number is unexplained.
+    const single = new Set<string>(ABBREVIATIONS.filter((t) => !t.includes(' ')));
+    const whole = new RegExp(`(?<![A-Za-z0-9_])(${[...ABBREVIATIONS].sort((a, b) => b.length - a.length).map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![A-Za-z0-9_])`, 'g');
+    const short = /(?<![A-Za-z0-9_])([A-Z][A-Z0-9]{1,6})(?![A-Za-z0-9_])/g;
     const seen = new Set<string>();
-    for (const value of Object.values(ALL)) for (const m of String(value).matchAll(/(?<![A-Za-z0-9_])([A-Z][A-Z0-9]{1,6})(?![A-Za-z0-9_])/g)) seen.add(m[1]);
+    const left = new Set<string>();
+    for (const value of Object.values(ALL)) {
+      for (const m of String(value).matchAll(short)) seen.add(m[1]);
+      for (const m of String(value).replace(whole, ' ').matchAll(short)) left.add(m[1]);
+    }
     // The guard read the words: the glossary's own terms are among what it found.
     expect(seen.has('SSCC') && seen.has('GS1') && seen.size > 30).toBe(true);
-    const unexplained = [...seen].filter((s) => !glossaryWords.has(s) && !PLAIN[s]).sort();
+    const unexplained = [...left].filter((s) => !single.has(s) && !PLAIN[s]).sort();
     expect(unexplained).toEqual([]);
   });
 });

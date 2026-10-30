@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
 import { CodeCard } from '../../../shared/ui/CodeCard';
@@ -103,7 +104,7 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
     return (
       <>
         <Head />
-        {error ? <p class="cerr">{error}</p> : <p class="cons__empty">{t('business.loading')}</p>}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : <p class="cons__empty">{t('business.loading')}</p>}
       </>
     );
   }
@@ -112,7 +113,7 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
     return (
       <>
         <Head />
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         <section class="cons__panel">
           <div class="cons__panelhead">
             <span class="cons__panelt">{t('business.parcels.openTitle')}</span>
@@ -145,7 +146,7 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
     <>
       <Head />
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       <div class="twr-kpis biz-kpis">
         <div class={`twr-kpi${(account.balance ?? 0) <= 0 ? ' twr-kpi--risk' : ''}`}>
@@ -327,7 +328,7 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
       <div class="cons__panelhead">
         <span class="cons__panelt">{t('business.parcels.collectTitle')}</span>
       </div>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {!collection ? (
         <>
           <p class="chint">{t('business.parcels.collectHint')}</p>
@@ -616,14 +617,14 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
           <span class="chint">{t('business.parcels.f.mostHint', { via: quote.door.via, suggested: money(quote.door.suggestedMax, quote.currency) })}</span>
         </label>
       ) : null}
-      {quoteError ? <p class="cerr">{quoteError}</p> : null}
+      {quoteError ? <p class="cerr"><Abbreviated text={quoteError} /></p> : null}
       {price != null ? (
         <p class="cnote">
           {t('business.parcels.price', { price: money(price, quote!.currency) })} {price > balance ? t('business.parcels.priceShort') : ''}
         </p>
       ) : null}
       {gaps.length ? <p class="chint">{t('business.parcels.stillNeeded', { list: gaps.join(', ') })}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--primary" disabled={busy || gaps.length > 0 || price == null} onClick={() => void send()}>
           {price != null ? t('business.parcels.sendFor', { price: money(price, quote!.currency) }) : t('business.parcels.send')}
@@ -776,7 +777,7 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
         </>
       ) : null}
 
-      {labelError ? <p class="cerr">{labelError}</p> : null}
+      {labelError ? <p class="cerr"><Abbreviated text={labelError} /></p> : null}
       <div class="twr-panelend">
         {row.paid && stage !== 'called_off' ? (
           <button type="button" class="cbtn cbtn--ghost" onClick={() => void print()}>

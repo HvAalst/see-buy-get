@@ -103,7 +103,9 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'business-bell', apps: ['business'], group: 'daily', steps: 3, notes: ['note', 'rare', 'note'] },
   // A business's parcels (the user, 2026-10-29: "Billed to the business"; "A prepaid balance").
   { id: 'business-parcels', apps: ['business'], group: 'daily', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note'] },
-  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note'] },
+  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note'] },
+  // Coming in (inbound, reading A): what suppliers send to the business's own places, never its price.
+  { id: 'business-coming-in', apps: ['business'], group: 'freight', steps: 5, notes: ['note', 'note', 'why'] },
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.
   { id: 'business-exports', apps: ['business'], group: 'freight', steps: 6, notes: ['note', 'why', 'note', 'note'] },
   // Where road meets rail (the user, 2026-10-29: "in help page an explanation as to why and what"): the truck timed to the
@@ -113,7 +115,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'road-meets-rail', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 5, notes: ['why', 'why', 'note', 'note'] },
   // An export by air (the user, 2026-10-29: "we move on to air"): the road to the cargo terminal, timed to the airline's
   // latest acceptance time; read by whoever posts it, carries it, or runs the office.
-  { id: 'air-export', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful'] },
+  { id: 'air-export', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful', 'note'] },
   // An import by air: the road leg from the handler's shed waits for every release (2026-10-29).
   { id: 'air-import', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful', 'why'] },
   { id: 'business-note', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'note', 'note', 'note', 'why', 'rare', 'rare'] },
@@ -121,7 +123,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'business-contracts', apps: ['business'], group: 'freight', steps: 3, notes: ['why', 'note', 'rare', 'note', 'note', 'why', 'note', 'note', 'rare'] },
   { id: 'business-clients', apps: ['business'], group: 'freight', steps: 4, notes: ['note'] },
   { id: 'quotations', apps: ['business', 'console'], group: 'freight', steps: 4, notes: ['why'] },
-  { id: 'shop-shelves', apps: ['agent'], group: 'start', steps: 5, notes: ['note', 'note', 'why', 'note', 'note'] },
+  { id: 'shop-shelves', apps: ['agent'], group: 'start', steps: 5, notes: ['note', 'note', 'why', 'note', 'note', 'note'] },
   { id: 'message-shop', apps: ['send', 'agent'], group: 'daily', steps: 3, notes: ['careful'] },
   { id: 'parcel-problem', apps: ['send', 'agent', 'vendor', 'console'], group: 'wrong', site: true, steps: 5, notes: ['why', 'why', 'why', 'note', 'note', 'note', 'why', 'note'] },
   { id: 'thermal-labels', apps: ['agent', 'vendor', 'business'], group: 'daily', steps: 4, notes: ['note', 'why'] },
@@ -132,11 +134,18 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'scan-a-parcel', apps: ['agent', 'mdp'], group: 'daily', steps: 4, notes: ['why'] },
   // Reading B (2026-10-26): a store's parcels handed in at a hub, in bulk — the hub's side and the store's.
   { id: 'hub-bulk', apps: ['mdp', 'vendor'], group: 'daily', steps: 7, notes: ['note', 'why'] },
+  // A hub's own cards on its home screen: when it is open and how to reach it; what it moves bags on, and how they come back.
+  { id: 'hub-hours', apps: ['mdp'], group: 'start', steps: 3, notes: ['note'] },
+  { id: 'hub-carriers', apps: ['mdp'], group: 'daily', steps: 4, notes: ['note'] },
+  // A store calls an order off (2026-10-27): its money back, or the goods back at a price.
+  { id: 'call-off-order', apps: ['vendor'], group: 'daily', steps: 4, notes: ['note'] },
+  // Goods coming back to a person, brought to their door instead of the shop (2026-10-27: "Mobile money first").
+  { id: 'goods-coming-back', apps: ['send'], group: 'wrong', steps: 4, notes: ['note'] },
   { id: 'gs1-codes', apps: ['vendor', 'business'], group: 'start', steps: 4, notes: ['why', 'note'] },
   { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 6, notes: ['careful', 'why'] },
   { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['why', 'careful', 'note', 'note', 'note', 'note', 'rare', 'note', 'note'] },
-  { id: 'freight-delivery', apps: ['agent', 'driver'], group: 'freight', steps: 5, notes: ['note', 'why', 'note'] },
-  { id: 'sender-instructions', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['note'] },
+  { id: 'freight-delivery', apps: ['agent', 'driver'], group: 'freight', steps: 5, notes: ['note', 'why', 'note', 'note'] },
+  { id: 'sender-instructions', apps: ['agent', 'driver', 'fleet', 'business'], group: 'freight', steps: 5, notes: ['note'] },
   { id: 'freight-tracking', apps: ['agent', 'send'], group: 'freight', steps: 3, notes: ['why', 'note', 'note'] },
   { id: 'manager-dispatch', apps: ['fleet', 'driver'], group: 'freight', steps: 3, notes: ['why'] },
   { id: 'fleet-orders', apps: ['fleet'], group: 'freight', steps: 4, notes: ['note', 'note'] },

@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks';
+import { createPortal } from 'preact/compat';
 import { Sheet } from '../ui';
 import { useHelpWords, useT, type MessageKey } from '../i18n';
 import { HELP_GROUPS, articlesFor, type GuideApp, type GuideArticle } from './articles';
@@ -43,6 +44,9 @@ export function HelpLink({
           {t('guide.link')}
         </button>
       )}
+      {/* Into the page, not where the link stands: a header that sticks keeps its own stack, and a bar fixed at the bottom
+          would paint over a sheet drawn inside it (the browser test, 2026-10-30). */}
+      {inPage(
       <Sheet open={open} onClose={() => setOpen(false)} title={t('guide.title')}>
         <p class="card__note">{t('guide.lede')}</p>
         {helpHere ? <GroupedArticles articles={articles ?? articlesFor(app)} /> : <p class="card__note" aria-busy="true">…</p>}
@@ -55,9 +59,15 @@ export function HelpLink({
             </a>
           </p>
         )}
-      </Sheet>
+      </Sheet>,
+      )}
     </>
   );
+}
+
+/** A sheet drawn into the page's body, where nothing around the link can stack over it. Plain where there is no page. */
+function inPage(sheet: preact.VNode): preact.VNode {
+  return typeof document === 'undefined' ? sheet : (createPortal(sheet, document.body) as unknown as preact.VNode);
 }
 
 /**

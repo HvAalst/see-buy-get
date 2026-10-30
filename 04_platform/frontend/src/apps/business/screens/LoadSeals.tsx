@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { SEAL_CLASSES, sealOver, sealStory, sealWhat, type SealClass } from '../../../shared/seals';
@@ -168,7 +169,7 @@ export function LoadSeals({ row, client, act }: { row: PostedLoad; client: Busin
           </div>
         </div>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </section>
   );
 }

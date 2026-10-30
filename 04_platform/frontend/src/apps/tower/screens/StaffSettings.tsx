@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -74,7 +75,7 @@ function TwoStepPanel({ state, actions }: { state: TowerState; actions: TowerAct
       ) : setup ? (
         <>
           <TwoStepSetupPanel setup={setup} code={code} onCode={setCode} disabled={busy} />
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend" style="margin-top:12px">
             <button type="button" class="cbtn cbtn--primary" disabled={busy || code.length !== 6} onClick={() => void confirm()}>
               {t('tower.twoStep.turnOn')}
@@ -87,7 +88,7 @@ function TwoStepPanel({ state, actions }: { state: TowerState; actions: TowerAct
       ) : (
         <>
           <p class="cons__lede">{t('tower.twoStep.offBody')}</p>
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <button type="button" class="cbtn cbtn--primary" style="margin-top:12px" disabled={busy} onClick={() => void start()}>
             {t('tower.twoStep.setUp')}
           </button>

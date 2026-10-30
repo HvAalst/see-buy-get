@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Info, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
@@ -151,7 +152,7 @@ function ParcelStep({ state, actions }: MintScreenProps) {
         {f.derivedSize ? <Pill tone="info">{t('vendor.mint.sizeTier', { size: f.derivedSize })}</Pill> : <p class="card__note">{t('vendor.mint.fillAll')}</p>}
         {f.dedicatedCargo ? (
           <div style="margin-top:12px">
-            <Note tone="warn" icon="truck" title={t('vendor.mint.tooBigTitle')} detail={t('vendor.mint.tooBigDetail')} />
+            <Note tone="warn" icon="truck" title={t('vendor.mint.tooBigTitle')} detail={<Abbreviated text={t('vendor.mint.tooBigDetail')} />} />
           </div>
         ) : null}
         <label class="checkline" style="margin-top:12px">

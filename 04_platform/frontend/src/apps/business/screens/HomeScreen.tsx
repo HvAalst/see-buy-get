@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -155,7 +156,7 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
           </div>
         ) : null}
 
-        {error ? <p class="cerr">{error}</p> : null}
+        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         {(step === 'ask' || step === 'refused') && owner ? (
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy !== null} onClick={() => void ask()}>

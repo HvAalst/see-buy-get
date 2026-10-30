@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { settleWords } from '../../../shared/settle';
@@ -55,7 +56,7 @@ export function RunsScreen({ business, client }: { business: BusinessView; actio
         <p class="cons__lede">{t('business.runs.lede')}</p>
       </header>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       <section class="cons__panel">
         <div class="cons__panelhead">
@@ -268,7 +269,7 @@ function BookPanel({ offer, business, client, act, onClose, onBooked }: { offer:
             </label>
           </div>
           {quote ? <p class="cnote">{t('business.runs.quoteLine', { price: `${quote.price.toLocaleString()} ${quote.currency}`, binds: t(quote.binds === 'space' ? 'business.runs.bindsSpace' : 'business.runs.bindsWeight') })}</p> : null}
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--ghost" disabled={busy || !ready} onClick={() => void price()}>
               {t('business.runs.priceCta')}
@@ -405,7 +406,7 @@ function BookingDetail({ row, client, act, onClose, onChanged }: { row: MyBookin
           ) : null}
         </section>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </ConsoleDetail>
   );
 }

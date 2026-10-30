@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import type { ComponentChildren } from 'preact';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsolePick } from '../ConsolePick';
@@ -68,7 +69,7 @@ export function LiveAnimalsFields({ value, onChange, side, placeSlot }: { value:
   return (
     <>
       <h3 class="cons__sub">{t('tower.animals.title')}</h3>
-      <p class="chint">{t('tower.animals.hint')}</p>
+      <p class="chint"><Abbreviated text={t('tower.animals.hint')} /></p>
       <div class="twr-knobs__row">
         <div class="twr-knob">
           <ConsolePick

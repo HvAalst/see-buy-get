@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { credentialAge } from '../../../shared/account/password';
 import { resetTwoStep, sendStaffLink, stopStaffRemoval, type StaffInvited, type StaffRow } from '../api';
 import { useState, useCallback, useEffect } from 'preact/hooks';
@@ -347,7 +348,7 @@ function RecordPanel({ actions }: { actions: TowerActions }) {
       hint={!view ? t('tower.queues.loading') : !l ? t('tower.record.noLedger') : l.whole ? t('tower.record.whole', { n: l.anchors }) : t('tower.record.broken', { block: l.brokenAt ?? 0 })}
       defaultOpen={Boolean(l && !l.whole)}
     >
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {view ? (
         <div class="crows">
           {l ? (
@@ -421,7 +422,7 @@ function FleetsPanel({ actions, rotates }: { actions: TowerActions; /** Round 38
       title={t('tower.network.fleetsTitle')}
       hint={rows === null ? t('tower.queues.loading') : t('tower.network.fold.fleets', { n: rows.length })}
     >
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {rows === null ? (
         <p class="cons__empty">{t('tower.queues.loading')}</p>
       ) : rows.length === 0 ? (
@@ -689,7 +690,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
         </div>
       )}
       <p class="cons__lede">{t(way === 'key' ? 'tower.staff.ledeKey' : 'tower.staff.lede')}</p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {asked ? (
         <p class="twr-done">
           <Icon name="check" size={16} />

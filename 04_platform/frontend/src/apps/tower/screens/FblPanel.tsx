@@ -157,14 +157,14 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, upload, def
           {fbl.verification ? (
             <p class="chint">
               <span class={`ctag ctag--${fbl.verification.registered ? 'ok' : 'warn'}`}>{t(fbl.verification.registered ? 'tower.fbl.registered' : 'tower.fbl.notRegistered')}</span>{' '}
-              {t('tower.fbl.checkedBy', { by: fbl.verification.by, day: fbl.verification.at.slice(0, 10), proof: fbl.verification.proofTitle })}
+              <Abbreviated text={t('tower.fbl.checkedBy', { by: fbl.verification.by, day: fbl.verification.at.slice(0, 10), proof: fbl.verification.proofTitle })} />
               {fbl.verification.fiataId ? ` ${t('tower.fbl.fiataId', { id: fbl.verification.fiataId })}` : ''}
               {fbl.verification.issuerShown ? ` ${t('tower.fbl.issuerShown', { issuer: fbl.verification.issuerShown })}` : ''}
             </p>
           ) : null}
           {fbl.electronic && canVerify && (papers.length || upload) ? (
             <div class="twr-knobs">
-              <p class="chint">{t('tower.fbl.recordHint')}</p>
+              <p class="chint"><Abbreviated text={t('tower.fbl.recordHint')} /></p>
               <label class="cfield cfield--check">
                 <input type="checkbox" checked={check.registered} onChange={(e) => setCheck({ ...check, registered: (e.target as HTMLInputElement).checked })} />
                 <span>{t('tower.fbl.f.registered')}</span>
@@ -327,7 +327,7 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, upload, def
           </div>
         </div>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </ConsoleFold>
   );
 }

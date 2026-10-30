@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsoleDetail } from '../ConsoleDetail';
@@ -298,7 +299,7 @@ function BusinessDetail({ row, state, actions, onClose }: { row: BusinessRow; st
           {/* The one who gave the first approval is told only that the second is somebody else's — not invited to give it. */}
           {block === 'same' ? null : <p class="cons__lede">{t(row.state === 'checking' ? 'tower.biz.decideSecond' : 'tower.biz.decideFirst')}</p>}
           {block ? <p class="cons__caveat">{t(BLOCK[block])}</p> : null}
-          {error ? <p class="cerr">{error}</p> : null}
+          {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           <div class="twr-panelend">
             <button type="button" class="cbtn cbtn--primary" disabled={busy !== null || block !== null} onClick={() => void act('approve', () => client!.api.approveBusiness(row.entityId, me) as never)}>
               {t(row.state === 'checking' ? 'tower.biz.approveSecond' : 'tower.biz.approveFirst')}
@@ -323,7 +324,7 @@ function BusinessDetail({ row, state, actions, onClose }: { row: BusinessRow; st
           </div>
         </section>
       ) : error ? (
-        <p class="cerr">{error}</p>
+        <p class="cerr"><Abbreviated text={error} /></p>
       ) : null}
     </ConsoleDetail>
   );

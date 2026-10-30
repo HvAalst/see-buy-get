@@ -1,5 +1,6 @@
 const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
 
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { Button, Card, CheckGate, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField } from '../../../shared/ui';
 import { agentConfig } from '../api';
@@ -225,7 +226,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             <Button onClick={() => void actions.submitBookFreight()} disabled={Boolean(freightBlock)} busy={state.busy === 'book-freight'}>
               {t('agent.accept.bookFreight')}
             </Button>
-            {freightBlock ? <p class="hint" style="margin-top:8px">{freightBlock}</p> : null}
+            {freightBlock ? <p class="hint" style="margin-top:8px"><Abbreviated text={freightBlock} /></p> : null}
           </div>
           <div class="scr__foot">
             <ReadAloud text={() => freightBlock ?? t('agent.accept.freightReady')} label={t('agent.accept.whatMissing')} />

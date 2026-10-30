@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { abbrName } from '../../../shared/abbr';
 import { DocumentButton } from '../../../shared/ui';
@@ -102,7 +103,7 @@ export function ExportInvoice({ d, client, mine, signatory, onDetail }: { d: Exp
       </div>
       <p class="chint">{t(mine ? 'business.exports.invoice.lede' : 'business.exports.invoice.ledeRead')}</p>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {inv.stale && last ? <p class="cerr">{t('business.exports.invoice.stale', { n: last.version })}</p> : null}
       {inv.totals.lines ? (
         <p class="cons__lede">{t('business.exports.invoice.totals', { lines: inv.totals.lines, goods: moneyWords(cur, inv.totals.goods), total: moneyWords(cur, inv.totals.total) })}</p>

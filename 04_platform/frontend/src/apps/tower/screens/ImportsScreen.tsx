@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
@@ -585,7 +586,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
           {done}
         </p>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {/* ---- the containers ---- */}
       <section class="cons__panel">
@@ -1169,10 +1170,10 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
           {/* ---- CL2b: the road leg, minted by a person from the port ---- */}
           {detail.youAre === 'importer' ? (
             <ConsoleFold
-              title={t(detail.byRail ? 'tower.imports.roadTitleRail' : 'tower.imports.roadTitle')}
-              hint={detail.roadFreightCode ? t('tower.imports.fold.road', { code: detail.roadFreightCode }) : t('tower.imports.fold.noRoad')}
+              title={t(detail.byRail ? 'tower.imports.roadTitleRail' : detail.air ? 'tower.imports.roadTitleAir' : 'tower.imports.roadTitle')}
+              hint={detail.roadFreightCode ? t('tower.imports.fold.road', { code: detail.roadFreightCode }) : t(detail.air ? 'tower.imports.fold.noRoadAir' : 'tower.imports.fold.noRoad')}
             >
-              <p class="cons__lede">{t('tower.imports.roadHint')}</p>
+              <p class="cons__lede">{t(detail.air ? 'tower.imports.roadHintAir' : 'tower.imports.roadHint')}</p>
               {/*
                 * THE JOURNEY, AND NOW BOTH OF ITS LEGS.
                 *
@@ -1320,7 +1321,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                 <Icon name="warning" size={16} />
                 <span>
                   {detail.cargoGaps.map((g, i) => (
-                    <div key={i}>{g}</div>
+                    <div key={i}>
+                      <Abbreviated text={g} />
+                    </div>
                   ))}
                 </span>
               </div>
@@ -1372,6 +1375,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                     <span class="cfield__label">{t('tower.imports.f.cscPlateDate')}</span>
                     <input class="cinput" type="date" value={cargoForm.cscPlateDate} onChange={(e) => setCargoForm({ ...cargoForm, cscPlateDate: (e.target as HTMLInputElement).value })} />
                   </label>
+                  <p class="twr-knob chint">
+                    <Abbreviated text={t('tower.imports.cscHint')} />
+                  </p>
                   {/* The catalogue is the COMMON codes; the standard builds thousands. So the sheet's
                       search doubles as an entry field, and anything of the right shape can be recorded. */}
                   <div class="twr-knob">
@@ -1486,7 +1492,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                     placards, the driver's certificate and which roads are closed to the load. */}
                 {cargoForm.natureCode.startsWith('HAZ') || (detail.cargoGaps.join(' ').includes('UN number')) ? (
                   <>
-                    <p class="cons__lede">{t('tower.imports.dgHint')}</p>
+                    <p class="cons__lede"><Abbreviated text={t('tower.imports.dgHint')} /></p>
                     <div class="twr-knobs__row">
                       <label class="twr-knob cfield">
                         <span class="cfield__label">{t('tower.imports.f.unNumber')}</span>

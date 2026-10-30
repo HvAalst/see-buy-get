@@ -702,7 +702,7 @@ export const enTower = {
   'tower.imports.need.date': 'An arrival must be written YYYY-MM-DD.',
   'tower.imports.need.unique': 'That paper is on the list twice.',
   'tower.imports.f.port': 'Cleared at',
-  'tower.imports.noneCompany': 'Nothing here yet. Record a container the moment it is onboarded — not when it arrives.',
+  'tower.imports.noneCompany': 'Nothing here yet. Record an import the moment it is on its way — not when it arrives.',
   'tower.imports.status.appointed': 'appointed',
   'tower.imports.needReason': 'Say why you are sending it back.',
   'tower.imports.needFile': 'Choose a file.',

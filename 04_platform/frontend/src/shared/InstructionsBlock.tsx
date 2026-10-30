@@ -1,3 +1,4 @@
+import { Abbreviated } from './ui/Abbr';
 import { formatDate, useT } from './i18n';
 import { hasInstructions, telHref, type InstructionsView } from './instructions';
 
@@ -19,7 +20,7 @@ export function InstructionsBlock({ view, compact }: { view: InstructionsView | 
           {view.contactPhone ? (
             <>
               {view.contactName ? ' · ' : ''}
-              {tel ? (
+              {tel && !compact ? (
                 <a href={tel} style="font-weight:600">
                   {t('common.instructions.call', { phone: view.contactPhone })}
                 </a>
@@ -30,7 +31,7 @@ export function InstructionsBlock({ view, compact }: { view: InstructionsView | 
           ) : null}
         </p>
       ) : null}
-      {view.text ? <p class={compact ? undefined : 'card__note'} style="margin:0 0 4px;white-space:pre-wrap">{view.text}</p> : null}
+      {view.text ? <p class={compact ? undefined : 'card__note'} style="margin:0 0 4px;white-space:pre-wrap">{compact ? view.text : <Abbreviated text={view.text} />}</p> : null}
       {(view.amendments ?? []).map((a) => (
         <p key={a.at} class={compact ? undefined : 'card__note'} style="margin:0 0 4px;white-space:pre-wrap">
           {t('common.instructions.amended', { when: formatDate(a.at, { dateStyle: 'medium', timeStyle: 'short' }), text: a.text })}

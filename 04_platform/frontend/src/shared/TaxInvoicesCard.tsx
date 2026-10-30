@@ -122,7 +122,7 @@ export function TaxInvoicesCard({ load, page, title, taxNumber }: { load: () => 
                 {t('fiscal.print')}
               </Button>
             ) : (
-              <span class="row__meta">{t('fiscal.notYet')}</span>
+              <span class="row__meta"><Abbreviated text={t('fiscal.notYet')} /></span>
             )}
           </span>
         </div>

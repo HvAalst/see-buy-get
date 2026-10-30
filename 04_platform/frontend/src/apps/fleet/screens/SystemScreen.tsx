@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import type { SbgClient } from '../../../lib/sbg';
 import { Button, Card, Chip, ErrorNote, Note } from '../../../shared/ui';
@@ -292,7 +293,7 @@ function KeysCard({ api }: { api: ReturnType<typeof systemApi> }) {
           {t('fleet.keys.label')}
         </label>
         <input id="key-label" class="input" value={label} maxLength={60} onInput={(e) => setLabel(e.currentTarget.value)} />
-        <p class="hint">{t('fleet.keys.labelHint')}</p>
+        <p class="hint"><Abbreviated text={t('fleet.keys.labelHint')} /></p>
       </div>
       <div class="btnrow">
         <Button full={false} busy={busy === 'live'} disabled={busy !== null} onClick={() => void make('live')}>

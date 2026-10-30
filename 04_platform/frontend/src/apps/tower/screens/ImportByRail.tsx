@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import type { components } from '../../../lib/sbg/schema';
 import { useT } from '../../../shared/i18n';
@@ -186,7 +187,7 @@ export function ImportByRail({ code, rail, youAre, entityId, api, calls, onChang
           </div>
         </div>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </ConsoleFold>
   );
 }

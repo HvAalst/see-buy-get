@@ -710,8 +710,8 @@ export class ImportService {
     if (this.sideOf(c, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
     if (c.mode && c.mode !== 'air') throw new GlosError('INVALID_STATE', `${c.code} came by ${c.mode}: an air waybill is for goods that came by air`);
     if (c.roadFreightId && this.dispatch.requireFreightPublic(c.roadFreightId).claimedBy) throw new GlosError('INVALID_STATE', `A driver has taken the road leg of ${c.code} already: what it collects cannot change now`);
-    // Medicines wait for the lawyer (legal.html L29); live animals for the next step.
-    if (c.natureCode === 'HUM') throw new GlosError('FORBIDDEN', 'Medicines and vaccines are not carried from an airport on SeeBuyGet yet: who must hold a licence to carry them is with our lawyer (legal.html L29).', { reason: 'medicines' });
+    // Medicines wait for the lawyer (legal.html L29); live animals are declared as live animals (2026-10-30).
+    if (c.natureCode === 'HUM') throw new GlosError('FORBIDDEN', 'Medicines and vaccines are not carried from an airport on SeeBuyGet yet: who must hold a licence to carry them is still with our lawyer.', { reason: 'medicines' });
     if (c.natureCode === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Biological goods — samples, medical waste — are not carried from an airport on SeeBuyGet yet. Live animals are declared as live animals, with their papers.', { reason: 'biological' });
     const problem = awbProblem(input.awb);
     if (problem === 'format') throw new GlosError('VALIDATION_FAILED', 'An air waybill number is eleven digits: the airline’s three, and eight more — like 706-12345675', { field: 'awb' });
@@ -862,7 +862,7 @@ export class ImportService {
   private mintAirRoadLeg(c: ImportConsignment, actorEntityId: string, input: { pickupLocation: GeoPoint; pickupLabel?: string; destLabel: string; destLocation?: GeoPoint; weightKg: number }, by: string, now: number): ImportDetail {
     const a = c.air!;
     if (c.roadFreightId) throw new GlosError('CONFLICT', `${c.code} already has its road leg (${c.roadFreightCode}) — a second would send two trucks for one consignment`);
-    if (c.natureCode === 'HUM' || c.natureCode === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Medicines, vaccines and live animals are not carried from an airport on SeeBuyGet yet (legal.html L29).');
+    if (c.natureCode === 'HUM' || c.natureCode === 'HAZ-BIO') throw new GlosError('FORBIDDEN', 'Medicines, vaccines and biological goods are not carried from an airport on SeeBuyGet yet: who must hold a licence to carry them is still with our lawyer. Live animals are declared as live animals, with their papers.');
     const vetPlace = a.animals?.destination;
     if (a.animals && !vetPlace) throw new GlosError('FIELD_REQUIRED', 'Name the place the veterinary officer named first: live animals go there and nowhere else');
     if (vetPlace && input.destLabel?.trim() && input.destLabel.trim() !== vetPlace.label) throw new GlosError('FORBIDDEN', `Live animals go only to the place the veterinary officer named: ${vetPlace.label}`, { field: 'destSiteId' });

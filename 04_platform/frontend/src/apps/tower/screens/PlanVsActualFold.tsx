@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ConsoleFold } from '../ConsoleFold';
@@ -33,7 +34,7 @@ export function PlanVsActualFold({ client }: { client: { api: unknown } | null }
   return (
     <ConsoleFold title={t('tower.plan.title')} hint={planFoldHint(lanes, t)}>
       <p class="cons__lede">{t('tower.plan.hint')}</p>
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {!lanes ? (
         <p class="cons__empty">{t('tower.plan.loading')}</p>
       ) : lanes.length === 0 ? (

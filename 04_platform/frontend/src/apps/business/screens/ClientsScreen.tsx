@@ -1,3 +1,4 @@
+import { Abbreviated } from '../../../shared/ui/Abbr';
 import { PhoneField } from '../../../shared/ui';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
@@ -72,7 +73,7 @@ export function ClientsScreen({ business, client }: { business: BusinessView; ac
         <p class="cons__lede">{t('business.clients.lede')}</p>
       </header>
       {done ? <p class="cnote">{done}</p> : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {act ? (
         adding ? (
@@ -315,7 +316,7 @@ function ClientDetail({ row, client, act, owner, onRow, onClose, onChanged }: { 
           </button>
         </div>
       ) : null}
-      {error ? <p class="cerr">{error}</p> : null}
+      {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </ConsoleDetail>
   );
 }
