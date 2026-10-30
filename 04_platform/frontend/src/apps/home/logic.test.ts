@@ -82,8 +82,9 @@ describe('phone + code', () => {
     expect(normalizePhone('+254 700-111 (222)')).toBe('+254700111222');
   });
 
-  it('the OTP is 4 to 6 digits', () => {
-    expect(codeLooksValid('1234')).toBe(true);
+  it('the OTP is 6 digits, as the server sends it', () => {
+    expect(codeLooksValid('1234')).toBe(false);
+    expect(codeLooksValid('12345')).toBe(false);
     expect(codeLooksValid(' 123456 ')).toBe(true);
     expect(codeLooksValid('12')).toBe(false);
     expect(codeLooksValid('12a4')).toBe(false);

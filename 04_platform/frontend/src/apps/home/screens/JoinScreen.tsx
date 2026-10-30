@@ -180,7 +180,8 @@ function CodeStep({ state, actions }: JoinScreenProps) {
           <CodeBoxes
             id="otp"
             label={t('home.join.code.boxLabel')}
-            length={state.form.code.length > 4 ? 6 : 4}
+            // Six, as every code to a phone is (2026-10-30: four boxes, widening only past four digits, let nobody type one).
+            length={6}
             value={state.form.code}
             onInput={(code) => actions.setForm({ code })}
           />

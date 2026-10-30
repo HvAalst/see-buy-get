@@ -158,9 +158,10 @@ export function normalizePhone(phone: string): string {
   return phone.replace(/[\s()-]/g, '');
 }
 
-/** The 4–6 digit code the sandbox echoes back (SMS in production). */
+/** The 6-digit code sent to the phone (shown on the screen in a sandbox). */
 export function codeLooksValid(code: string): boolean {
-  return /^\d{4,6}$/.test(code.trim());
+  // Six digits: every code the server sends a phone has six (otp.service.ts).
+  return /^\d{6}$/.test(code.trim());
 }
 
 /* -------------------------------------------------------------- join form -- */
