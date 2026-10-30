@@ -138,7 +138,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'hub-hours', apps: ['mdp'], group: 'start', steps: 3, notes: ['note'] },
   { id: 'hub-carriers', apps: ['mdp'], group: 'daily', steps: 4, notes: ['note'] },
   // The public logistics directory (2026-10-30): whether a firm is shown, its own line, and how to be reached.
-  { id: 'logistics-directory', apps: ['business', 'fleet'], group: 'start', steps: 4, notes: ['why', 'note', 'note', 'note', 'note'] },
+  { id: 'logistics-directory', apps: ['business', 'fleet'], group: 'start', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note'] },
   // A store calls an order off (2026-10-27): its money back, or the goods back at a price.
   { id: 'call-off-order', apps: ['vendor'], group: 'daily', steps: 4, notes: ['note'] },
   // Goods coming back to a person, brought to their door instead of the shop (2026-10-27: "Mobile money first").

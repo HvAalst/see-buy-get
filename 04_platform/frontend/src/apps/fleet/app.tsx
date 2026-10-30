@@ -1,4 +1,5 @@
 import { EarningsScreen } from './screens/EarningsScreen';
+import { recordContractFor } from './contractAsk';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { useState } from 'preact/hooks';
@@ -91,7 +92,20 @@ export function App() {
           <>
             {/* The office's inbox. Until this existed, everything the server addressed to a fleet — a load
                 handed back, and now space sold and claims to answer — landed in an inbox no screen opened. */}
-            <NotificationBell api={actions.notifications} />
+            <NotificationBell
+              api={actions.notifications}
+              act={(it) =>
+                it.kind === 'contract_asked' && typeof it.data?.entityId === 'string'
+                  ? {
+                      label: t('fleet.contracts.recordFor', { name: String(it.data.name ?? '') }),
+                      run: () => {
+                        recordContractFor({ entityId: String(it.data!.entityId), name: String(it.data!.name ?? '') });
+                        actions.go('orders');
+                      },
+                    }
+                  : null
+              }
+            />
             {needRefresh ? (
               <button
                 type="button"

@@ -20,6 +20,10 @@ export interface ParticipantRow {
   checked?: string;
   /** How to reach them, from their own entry: a Call button once chosen, never a printed number. */
   phone?: string;
+  /** What it says it does, as filters to pick from (a clearing agent: what it clears) — its claim, as `says` is. */
+  facets?: Array<{ key: string; label: string }>;
+  /** More words the search box reads beyond the name: where it works, its country, its own line. */
+  find?: string;
 }
 
 export interface ParticipantKind {
@@ -72,6 +76,8 @@ export function ParticipantPicker({
   const [basis, setBasis] = useState('');
   const [query, setQuery] = useState('');
   const [chosen, setChosen] = useState<string | null>(null);
+  // Narrowed to one thing they say they do — a button each, from what the rows say; never a select.
+  const [facet, setFacet] = useState<string | null>(null);
 
   const active = kinds.find((k) => k.key === kind) ?? kinds[0];
 
@@ -92,13 +98,43 @@ export function ParticipantPicker({
   // By NAME, here rather than on the server: the finder answers with everybody who claims the
   // specialism asked for, and a directory of a few hundred is a screenful to filter. When it is a few
   // thousand this moves, and the finder already takes the filters to move it with.
-  const q = query.trim().toLowerCase();
-  const found = (rows ?? []).filter((r) => !q || r.name.toLowerCase().includes(q) || (r.handle ?? '').includes(q));
+  // Every typed word somewhere on the row — its name, its page, where it works, its country, its own line.
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const q = words.join(' ');
+  const facets = [...new Map((rows ?? []).flatMap((r) => r.facets ?? []).map((f) => [f.key, f.label])).entries()]
+    .map(([key, label]) => ({ key, label, n: (rows ?? []).filter((r) => r.facets?.some((x) => x.key === key)).length }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const found = (rows ?? []).filter((r) => {
+    if (facet && !r.facets?.some((f) => f.key === facet)) return false;
+    const text = [r.name, r.handle ?? '', r.find ?? ''].join(' ').toLowerCase();
+    return words.every((w) => text.includes(w));
+  });
   const picked = found.find((r) => r.id === chosen) ?? null;
 
   return (
     <Sheet open onClose={onClose} title={title}>
-      <input class="cinput" value={query} onInput={(e) => setQuery((e.target as HTMLInputElement).value)} placeholder={t('tower.pick.byName')} aria-label={t('tower.pick.byName')} />
+      <input class="cinput" value={query} onInput={(e) => setQuery((e.target as HTMLInputElement).value)} placeholder={t('tower.pick.byWords')} aria-label={t('tower.pick.byWords')} />
+      {facets.length > 1 ? (
+        <div class="twr-panelend" role="group" aria-label={t('tower.pick.saysTheyDo')} style="justify-content:flex-start;flex-wrap:wrap">
+          <button type="button" class={`cbtn cbtn--ghost cbtn--sm${facet === null ? ' cbtn--on' : ''}`} aria-pressed={facet === null} onClick={() => setFacet(null)}>
+            {t('tower.pick.anything')}
+          </button>
+          {facets.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              class={`cbtn cbtn--ghost cbtn--sm${facet === f.key ? ' cbtn--on' : ''}`}
+              aria-pressed={facet === f.key}
+              onClick={() => {
+                setFacet(facet === f.key ? null : f.key);
+                setChosen(null);
+              }}
+            >
+              {t('tower.pick.facet', { label: f.label, n: f.n })}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {/* Only where the question has more than one kind of answer. */}
       {kinds.length > 1 ? (
@@ -123,7 +159,7 @@ export function ParticipantPicker({
       {rows === null ? (
         <p class="cons__empty">{t('tower.pick.reading')}</p>
       ) : found.length === 0 ? (
-        <p class="cons__empty">{q ? t('tower.pick.noMatch') : t('tower.pick.empty')}</p>
+        <p class="cons__empty">{q || facet ? t('tower.pick.noMatch') : t('tower.pick.empty')}</p>
       ) : (
         <div class="crows">
           {found.map((r) => (

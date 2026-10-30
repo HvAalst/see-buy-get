@@ -26,6 +26,13 @@ export class ContractShipper {
   @ApiPropertyOptional() linkedAt?: string;
   /** Which person in the business linked it. */
   @ApiPropertyOptional() linkedBy?: string;
+  /**
+   * The business that asked the fleet for a contract through the logistics directory (2026-10-30), to which this one is
+   * OFFERED: its owner accepts it in its app — no code, the ask already said who it is — or declines it.
+   */
+  @ApiPropertyOptional() offeredTo?: string;
+  /** It declined the offer, and when. */
+  @ApiPropertyOptional() declinedAt?: string;
 }
 
 export class ContractEnd {
@@ -95,6 +102,8 @@ export class ContractInviteIssued {
 
 export class CarriageContractList {
   @ApiProperty({ type: [CarriageContractView] }) items: CarriageContractView[];
+  /** For a business: the contracts hauliers it asked have offered it, waiting for an owner to accept or decline. */
+  @ApiPropertyOptional({ type: [CarriageContractView] }) offers?: CarriageContractView[];
 }
 
 /** What a contract order carries: a COPY, so renaming either side later never rewrites an order's papers. */

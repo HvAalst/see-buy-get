@@ -8,7 +8,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessService } from './business.service';
 import { DirectoryService } from './directory.service';
 import { FleetManagerService } from './fleet-manager.service';
-import { ContractAskView, DirectoryChoiceView, DirectoryChooseQueryDto, DirectoryCountryView, DirectoryIndex, DirectoryListingDto, DirectoryListingView, FleetDirectoryDto } from './directory.types';
+import { ContractAskView, DirectoryChoiceView, DirectoryChooseQueryDto, DirectorySearchQueryDto, DirectorySearchView, DirectoryCountryView, DirectoryIndex, DirectoryListingDto, DirectoryListingView, FleetDirectoryDto } from './directory.types';
 
 /**
  * THE DIRECTORY (the user, 2026-10-30): read by anybody, without an account — a directory nobody can read is no
@@ -28,6 +28,13 @@ export class DirectoryController {
   @Get('directory')
   index(): DirectoryIndex {
     return this.directory.index();
+  }
+
+  /** Across every country: firms whose entries carry every word, and do what is asked. Read by anybody. */
+  @Public()
+  @Get('directory/search')
+  search(@Query() q: DirectorySearchQueryDto): DirectorySearchView {
+    return this.directory.search(q.q, q.kind);
   }
 
   /**

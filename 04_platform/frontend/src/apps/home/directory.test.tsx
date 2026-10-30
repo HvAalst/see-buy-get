@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { t } from '../../shared/i18n';
 import { enDirectory } from '../../shared/i18n/catalogs/en.directory';
-import { DIRECTORY_KINDS, directoryCountryPath, directoryPageOf, matching, siteHost, telOf, type DirectoryBuilt, type DirectoryEntry } from './directory';
+import { DIRECTORY_KINDS, directoryCountryPath, directoryPageOf, matching, searchAsked, searchPath, siteHost, telOf, type DirectoryBuilt, type DirectoryEntry } from './directory';
 import { DirectoryScreen } from './screens/DirectoryScreen';
 
 /*
@@ -117,5 +117,22 @@ describe('the logistics directory', () => {
     expect(telOf('+254 (0) 700-111 222')).toBe('tel:+2540700111222');
     expect(telOf('0700 111 222')).toBe('tel:0700111222');
     expect(siteHost('https://acacia.example/')).toBe('acacia.example');
+  });
+
+  it('keeps a search across countries in the address, and reads only what it understands back', () => {
+    expect(searchPath('reefer  mombasa ', 'haulier')).toBe('/directory/?q=reefer++mombasa&kind=haulier');
+    expect(searchPath('', 'all')).toBe('/directory/');
+    expect(searchAsked('?q=reefer+mombasa&kind=haulier')).toEqual({ q: 'reefer mombasa', kind: 'haulier' });
+    expect(searchAsked('?kind=pilot')).toEqual({ q: '', kind: 'all' });
+    expect(searchAsked('?q=' + 'x'.repeat(200)).q).toHaveLength(80);
+  });
+
+  it('draws a search box on the countries page, and no results until something is asked', () => {
+    built({ index: { countries: [{ country: 'KE', name: 'Kenya', total: 1, forwarder: 1, clearing_agent: 0, depot: 0, haulier: 0 }] } }, '/directory/');
+    const html = renderToString(<DirectoryScreen page={{ kind: 'index' }} />);
+    expect(html).toContain(t('directory.searchTitle'));
+    expect(html).toContain('type="search"');
+    expect(html).toContain(t('directory.anyWork'));
+    expect(html).not.toContain(t('directory.foundNone'));
   });
 });

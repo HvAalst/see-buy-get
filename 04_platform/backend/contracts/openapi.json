@@ -4691,6 +4691,47 @@
         }
       }
     },
+    "/v1/sbg/directory/search": {
+      "get": {
+        "operationId": "Directory.search",
+        "summary": "",
+        "description": "Across every country: firms whose entries carry every word, and do what is asked. Read by anybody.",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Words that must each be found — in its name, its own line, what it says it clears and where, its country, its address.",
+            "schema": {
+              "maxLength": 80,
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "description": "What it does, one or more, with commas.",
+            "schema": {
+              "pattern": "/^[a-z_]+(,[a-z_]+)*$/",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectorySearchView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/directory/choose": {
       "get": {
         "operationId": "Directory.choose",
@@ -32742,6 +32783,64 @@
         }
       }
     },
+    "/v1/sbg/business/me/contracts/{contractId}/accept": {
+      "post": {
+        "operationId": "CarriageContract.accept",
+        "summary": "",
+        "description": "A contract a haulier offered after this business asked for it: accepted — an owner's act, as linking by code is.",
+        "parameters": [
+          {
+            "name": "contractId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriageContractView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/contracts/{contractId}/decline": {
+      "post": {
+        "operationId": "CarriageContract.decline",
+        "summary": "",
+        "description": "Or declined: the haulier keeps it, not linked.",
+        "parameters": [
+          {
+            "name": "contractId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarriageContractView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/business/me/contracts/link": {
       "post": {
         "operationId": "CarriageContract.link",
@@ -38817,6 +38916,93 @@
           }
         }
       },
+      "DirectoryEntry": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Its public page: seebuyget.com/@handle."
+          },
+          "name": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "forwarder",
+                "clearing_agent",
+                "haulier",
+                "depot"
+              ]
+            }
+          },
+          "country": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "description": "On SeeBuyGet since."
+          },
+          "words": {
+            "type": "string",
+            "description": "Its own line about itself — its words, not checked by us."
+          },
+          "says": {
+            "description": "A clearing agent's own list of what it clears and where — its claim, not checked by us.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DirectorySays"
+              }
+            ]
+          },
+          "seen": {
+            "$ref": "#/components/schemas/DirectorySeen"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryCheck"
+            }
+          },
+          "contact": {
+            "$ref": "#/components/schemas/DirectoryContact"
+          }
+        },
+        "required": [
+          "handle",
+          "name",
+          "kinds",
+          "country",
+          "since",
+          "seen",
+          "checks"
+        ]
+      },
+      "DirectorySearchView": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "description": "The firms found, alphabetical — at most a hundred; `total` says how many there were.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryEntry"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "entries",
+          "total",
+          "basis"
+        ]
+      },
       "DirectoryChoice": {
         "type": "object",
         "properties": {
@@ -38921,70 +39107,6 @@
         "required": [
           "fleetName",
           "askedAt"
-        ]
-      },
-      "DirectoryEntry": {
-        "type": "object",
-        "properties": {
-          "handle": {
-            "type": "string",
-            "description": "Its public page: seebuyget.com/@handle."
-          },
-          "name": {
-            "type": "string"
-          },
-          "kinds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": [
-                "forwarder",
-                "clearing_agent",
-                "haulier",
-                "depot"
-              ]
-            }
-          },
-          "country": {
-            "type": "string"
-          },
-          "since": {
-            "type": "string",
-            "description": "On SeeBuyGet since."
-          },
-          "words": {
-            "type": "string",
-            "description": "Its own line about itself — its words, not checked by us."
-          },
-          "says": {
-            "description": "A clearing agent's own list of what it clears and where — its claim, not checked by us.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DirectorySays"
-              }
-            ]
-          },
-          "seen": {
-            "$ref": "#/components/schemas/DirectorySeen"
-          },
-          "checks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DirectoryCheck"
-            }
-          },
-          "contact": {
-            "$ref": "#/components/schemas/DirectoryContact"
-          }
-        },
-        "required": [
-          "handle",
-          "name",
-          "kinds",
-          "country",
-          "since",
-          "seen",
-          "checks"
         ]
       },
       "DirectoryCountryView": {
@@ -74218,6 +74340,14 @@
             "type": "string",
             "description": "Which person in the business linked it."
           },
+          "offeredTo": {
+            "type": "string",
+            "description": "The business that asked the fleet for a contract through the logistics directory (2026-10-30), to which this one is\nOFFERED: its owner accepts it in its app — no code, the ask already said who it is — or declines it."
+          },
+          "declinedAt": {
+            "type": "string",
+            "description": "It declined the offer, and when."
+          },
           "name": {
             "type": "string",
             "description": "As the fleet named them — and, once linked, as the business is registered. Box 1 on every order's note."
@@ -74335,6 +74465,13 @@
             "items": {
               "$ref": "#/components/schemas/CarriageContractView"
             }
+          },
+          "offers": {
+            "description": "For a business: the contracts hauliers it asked have offered it, waiting for an owner to accept or decline.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CarriageContractView"
+            }
           }
         },
         "required": [
@@ -74361,6 +74498,11 @@
           "endsOn": {
             "type": "string",
             "pattern": "DAY"
+          },
+          "askedBy": {
+            "type": "string",
+            "description": "The business that asked for it through the logistics directory: the contract is offered to it, in its app.",
+            "maxLength": 80
           }
         },
         "required": [

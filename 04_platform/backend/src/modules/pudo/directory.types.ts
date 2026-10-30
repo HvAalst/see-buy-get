@@ -109,6 +109,21 @@ export class DirectoryChooseQueryDto {
   @IsString() @Matches(/^[a-z_]+(,[a-z_]+)*$/, { message: 'What the firm does: forwarder, clearing_agent, depot or haulier' }) kind!: string;
 }
 
+/** A search across every country: a few words, and what the firm does. */
+export class DirectorySearchQueryDto {
+  /** Words that must each be found — in its name, its own line, what it says it clears and where, its country, its address. */
+  @IsOptional() @IsString() @MaxLength(80) q?: string;
+  /** What it does, one or more, with commas. */
+  @IsOptional() @IsString() @Matches(/^[a-z_]+(,[a-z_]+)*$/, { message: 'What the firm does: forwarder, clearing_agent, depot or haulier' }) kind?: string;
+}
+
+export class DirectorySearchView {
+  /** The firms found, alphabetical — at most a hundred; `total` says how many there were. */
+  @ApiProperty({ type: [DirectoryEntry] }) entries: DirectoryEntry[];
+  @ApiProperty() total: number;
+  @ApiProperty() basis: string;
+}
+
 /** A business asked a haulier for a carriage contract: the haulier's bell says so. */
 export class ContractAskView {
   @ApiProperty() fleetName: string;

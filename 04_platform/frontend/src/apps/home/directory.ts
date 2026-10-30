@@ -63,6 +63,36 @@ export function fetchDirectoryCountry(country: string): Promise<Result<Directory
   return publicRequest<DirectoryCountryView>(homeConfig(), `/v1/sbg/directory/${encodeURIComponent(country.toUpperCase())}`);
 }
 
+export interface DirectorySearch {
+  entries: DirectoryEntry[];
+  /** How many were found; at most a hundred are sent. */
+  total: number;
+}
+
+/** Every country at once: firms whose entries carry every word, and do the work asked. */
+export function searchDirectory(q: string, kind: DirectoryKind | 'all'): Promise<Result<DirectorySearch>> {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set('q', q.trim());
+  if (kind !== 'all') params.set('kind', kind);
+  return publicRequest<DirectorySearch>(homeConfig(), `/v1/sbg/directory/search?${params.toString()}`);
+}
+
+/** What a search page's address asks for: `/directory/?q=reefer+mombasa&kind=haulier`. Read in a browser only. */
+export function searchAsked(search: string): { q: string; kind: DirectoryKind | 'all' } {
+  const p = new URLSearchParams(search);
+  const kind = p.get('kind');
+  return { q: (p.get('q') ?? '').slice(0, 80), kind: kind && (DIRECTORY_KINDS as readonly string[]).includes(kind) ? (kind as DirectoryKind) : 'all' };
+}
+
+/** The address a search is kept at, so it can be shared or come back to. */
+export function searchPath(q: string, kind: DirectoryKind | 'all'): string {
+  const params = new URLSearchParams();
+  if (q.trim()) params.set('q', q.trim());
+  if (kind !== 'all') params.set('kind', kind);
+  const s = params.toString();
+  return `${DIRECTORY_PATH}${s ? `?${s}` : ''}`;
+}
+
 /** What the build read for a directory page — the same data the page was built with, so the first frame matches it. */
 export interface DirectoryBuilt {
   index?: DirectoryIndex;

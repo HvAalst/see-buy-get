@@ -288,7 +288,7 @@ export interface CarriageContract {
   contractId: string;
   fleetDid: string;
   fleetName: string;
-  shipper: { name: string; entityId?: string; linkedAt?: string; linkedBy?: string };
+  shipper: { name: string; entityId?: string; linkedAt?: string; linkedBy?: string; offeredTo?: string; declinedAt?: string };
   reference?: string;
   startsOn?: string;
   endsOn?: string;
@@ -385,7 +385,10 @@ export interface BusinessClient {
   /** Round 20 — the client's own GS1 prefix (owner only): its loads' packages are coded under it. */
   setClientGs1(clientId: string, companyPrefix: string, extensionDigit: number): Promise<Result<Client>>;
   clearClientGs1(clientId: string): Promise<Result<Client>>;
-  contracts(): Promise<Result<{ items: CarriageContract[] }>>;
+  contracts(): Promise<Result<{ items: CarriageContract[]; offers?: CarriageContract[] }>>;
+  /** A contract a haulier offered after this business asked: accepted or declined (owner only). */
+  acceptContract(contractId: string): Promise<Result<CarriageContract>>;
+  declineContract(contractId: string): Promise<Result<CarriageContract>>;
   linkContract(code: string): Promise<Result<CarriageContract>>;
   endContract(contractId: string, reason?: string): Promise<Result<CarriageContract>>;
   /** Its place in the public logistics directory: shown or taken off, and its own line (owner only). */
@@ -470,6 +473,8 @@ export function createBusinessClient(): BusinessClient {
     setClientGs1: (clientId, companyPrefix, extensionDigit) => call((c) => c.POST(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/gs1` as never, { body: { companyPrefix, extensionDigit } } as never) as never),
     clearClientGs1: (clientId) => call((c) => c.DELETE(`/v1/sbg/business/me/clients/${encodeURIComponent(clientId)}/gs1` as never, {} as never) as never),
     contracts: () => call((c) => c.GET('/v1/sbg/business/me/contracts' as never, {} as never) as never),
+    acceptContract: (contractId) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/accept` as never, {} as never) as never),
+    declineContract: (contractId) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/decline` as never, {} as never) as never),
     linkContract: (code) => call((c) => c.POST('/v1/sbg/business/me/contracts/link' as never, { body: { code } } as never) as never),
     endContract: (contractId, reason) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/end` as never, { body: reason ? { reason } : {} } as never) as never),
     directory: () => call((c) => c.GET('/v1/sbg/business/me/directory' as never, {} as never) as never),

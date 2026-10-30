@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
+import { useContractAsk, type ContractAsk } from '../contractAsk';
 import type { SbgClient } from '../../../lib/sbg';
 import { Button, Card, CodeCard, ErrorNote, Explainer, Note, Pill, PlacePicker, ReadAloud, Sheet } from '../../../shared/ui';
 import type { GeoPoint } from '../../../shared/geo';
@@ -462,6 +463,16 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
   const t = useT();
   const [form, setForm] = useState({ shipperName: '', reference: '', startsOn: '', endsOn: '' });
   const [adding, setAdding] = useState(false);
+  // A business that asked through the directory, from the bell: the form filled in for it, and offered to it in its app.
+  const asked = useContractAsk();
+  const [askedBy, setAskedBy] = useState<ContractAsk | null>(null);
+  useEffect(() => {
+    if (!asked) return;
+    setAskedBy(asked);
+    setForm({ shipperName: asked.name, reference: '', startsOn: '', endsOn: '' });
+    setAdding(true);
+    globalThis.document?.getElementById('fleet-contracts')?.scrollIntoView({ block: 'start' });
+  }, [asked]);
   const [issued, setIssued] = useState<InviteIssued | null>(null);
   const [uploadFor, setUploadFor] = useState<Contract | null>(null);
   const [imported, setImported] = useState<number | null>(null);
@@ -480,6 +491,8 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
 
   return (
     <Card title={t('fleet.contracts.title')}>
+      {/* Where the bell's "Record a contract with …" brings the reader. */}
+      <span id="fleet-contracts" />
       <p class="hint">{t('fleet.contracts.lede')}</p>
       {contracts.length ? (
         <div class="rows" role="list">
@@ -495,7 +508,11 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
                     ? t(c.ended?.side === 'shipper' ? 'fleet.contracts.endedByShipper' : 'fleet.contracts.endedByYou', { when: (c.ended?.at ?? '').slice(0, 10) })
                     : c.shipper.entityId
                       ? t('fleet.contracts.linked', { when: (c.shipper.linkedAt ?? '').slice(0, 10) })
-                      : c.inviteExpiresAt
+                      : c.shipper.offeredTo
+                        ? t('fleet.contracts.offered', { name: c.shipper.name })
+                        : c.shipper.declinedAt
+                          ? t('fleet.contracts.declined', { when: c.shipper.declinedAt.slice(0, 10) })
+                          : c.inviteExpiresAt
                         ? t('fleet.contracts.codeOut', { until: c.inviteExpiresAt.slice(0, 10) })
                         : t('fleet.contracts.notLinked')}
                 </span>
@@ -504,7 +521,7 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
                     <Button variant="outline" chevron={false} disabled={busy} onClick={() => setUploadFor(c)}>
                       {t('fleet.upload.cta')}
                     </Button>
-                    {!c.shipper.entityId ? (
+                    {!c.shipper.entityId && !c.shipper.offeredTo ? (
                       <Button variant="outline" chevron={false} disabled={busy} onClick={() => void run(() => api!.invite(c.contractId), setIssued)}>
                         {t(c.inviteExpiresAt ? 'fleet.contracts.newCode' : 'fleet.contracts.sendCode')}
                       </Button>
@@ -565,6 +582,7 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
             <input id="c-to" class="input" type="date" value={form.endsOn} onInput={(e) => setForm((p) => ({ ...p, endsOn: e.currentTarget.value }))} />
           </div>
           <p class="hint">{t('fleet.contracts.f.termsHint')}</p>
+          {askedBy ? <p class="hint">{t('fleet.contracts.fromAsk', { name: askedBy.name })}</p> : null}
           <div style="margin-top:12px">
             <Button
               chevron={false}
@@ -578,9 +596,11 @@ function ContractsCard({ api, contracts, onChanged }: { api: ReturnType<typeof o
                       ...(form.reference.trim() ? { reference: form.reference.trim() } : {}),
                       ...(form.startsOn ? { startsOn: form.startsOn } : {}),
                       ...(form.endsOn ? { endsOn: form.endsOn } : {}),
+                      ...(askedBy ? { askedBy: askedBy.entityId } : {}),
                     }),
                   () => {
                     setForm({ shipperName: '', reference: '', startsOn: '', endsOn: '' });
+                    setAskedBy(null);
                     setAdding(false);
                   },
                 )

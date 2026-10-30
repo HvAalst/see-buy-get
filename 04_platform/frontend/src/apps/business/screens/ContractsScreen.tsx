@@ -18,6 +18,8 @@ export function ContractsScreen({ business, client }: { business: BusinessView; 
   const t = useT();
   const owner = business.you.role === 'owner';
   const [rows, setRows] = useState<CarriageContract[] | null>(null);
+  // Contracts hauliers it asked through the directory offered it: accepted or declined here, with no code.
+  const [offers, setOffers] = useState<CarriageContract[]>([]);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +32,7 @@ export function ContractsScreen({ business, client }: { business: BusinessView; 
     const r = await client.contracts();
     if (r.error) return setError(r.error.detail || r.error.title);
     setRows(r.data?.items ?? []);
+    setOffers(r.data?.offers ?? []);
   }, [client]);
 
   useEffect(() => {
@@ -46,6 +49,17 @@ export function ContractsScreen({ business, client }: { business: BusinessView; 
     if (r.error || !r.data) return setError(r.error?.detail || r.error?.title || null);
     setDone(t('business.contracts.linked', { fleet: r.data.fleetName }));
     setCode('');
+    await load();
+  };
+
+  const answer = async (c: CarriageContract, yes: boolean) => {
+    if (!client) return;
+    setBusy(true);
+    setError(null);
+    const r = yes ? await client.acceptContract(c.contractId) : await client.declineContract(c.contractId);
+    setBusy(false);
+    if (r.error || !r.data) return setError(r.error?.detail || r.error?.title || null);
+    setDone(t(yes ? 'business.contracts.acceptedNote' : 'business.contracts.declinedNote', { fleet: c.fleetName }));
     await load();
   };
 
@@ -70,6 +84,39 @@ export function ContractsScreen({ business, client }: { business: BusinessView; 
       </header>
       {done ? <p class="cnote">{done}</p> : null}
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
+
+      {offers.length ? (
+        <section class="cons__panel" id="offered">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('business.contracts.offersTitle')}</span>
+          </div>
+          <p class="cons__lede">{t('business.contracts.offersLede')}</p>
+          <div class="crows">
+            {offers.map((c) => (
+              <div class="crow" key={c.contractId}>
+                <span class="crow__body">
+                  <span class="crow__top">
+                    <span class="crow__name">{c.fleetName}</span>
+                    {c.reference ? <span class="ctag ctag--quiet">{c.reference}</span> : null}
+                  </span>
+                  <span class="crow__sub">{contractPeriod(c, t)}</span>
+                </span>
+                {owner ? (
+                  <span class="twr-panelend">
+                    <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void answer(c, true)}>
+                      {t('business.contracts.accept')}
+                    </button>
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void answer(c, false)}>
+                      {t('business.contracts.decline')}
+                    </button>
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+          {!owner ? <p class="chint">{t('business.contracts.offerOwner')}</p> : null}
+        </section>
+      ) : null}
 
       {owner ? (
         <section class="cons__panel">

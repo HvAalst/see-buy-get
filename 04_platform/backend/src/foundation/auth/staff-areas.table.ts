@@ -50,6 +50,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/business/me/inbound/:freightId/close': 'none',
   'POST sbg/business/me/directory': 'none',
   'POST sbg/business/me/directory/ask/:fleetDid': 'none',
+  'POST sbg/business/me/contracts/:contractId/accept': 'none',
+  'POST sbg/business/me/contracts/:contractId/decline': 'none',
   'POST sbg/fleet/managers/:did/directory': 'none',
   'GET sbg/business/me/receiving': 'none',
   'GET sbg/receiving/:code': 'none',

@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes, randomInt } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { CarriageContract, CarriageContractView, ContractInviteIssued, ContractRef } from './carriage-contract.types';
+import { NotificationService } from './notification.service';
 
 /** How long a link code stays good. Long enough for an email to be read on Monday; short enough not to linger. */
 export const CONTRACT_INVITE_DAYS = 14;
@@ -28,9 +29,11 @@ export class CarriageContractService {
   /** Wrong link codes per business, per hour. In memory: a restart forgives, which costs an attacker nothing useful. */
   private readonly misses = new Map<string, { since: number; count: number }>();
 
+  constructor(@Optional() private readonly notifications?: NotificationService) {}
+
   /* ------------------------------------------------------------- the fleet -- */
 
-  create(fleet: { did: string; name: string }, input: { shipperName?: string; reference?: string; startsOn?: string; endsOn?: string }, by: string, now = Date.now()): CarriageContract {
+  create(fleet: { did: string; name: string }, input: { shipperName?: string; reference?: string; startsOn?: string; endsOn?: string; offeredTo?: string }, by: string, now = Date.now()): CarriageContract {
     const shipperName = input.shipperName?.trim();
     if (!shipperName) throw new GlosError('FIELD_REQUIRED', 'Name who you carry for — it goes on every order’s consignment note as the sender', { field: 'shipperName' });
     const { startsOn, endsOn } = this.period(input.startsOn, input.endsOn);
@@ -38,7 +41,7 @@ export class CarriageContractService {
       contractId: `ctr_${randomBytes(8).toString('hex')}`,
       fleetDid: fleet.did,
       fleetName: fleet.name,
-      shipper: { name: shipperName.slice(0, 120) },
+      shipper: { name: shipperName.slice(0, 120), ...(input.offeredTo ? { offeredTo: input.offeredTo } : {}) },
       ...(input.reference?.trim() ? { reference: input.reference.trim().slice(0, 60) } : {}),
       ...(startsOn ? { startsOn } : {}),
       ...(endsOn ? { endsOn } : {}),
@@ -98,6 +101,66 @@ export class CarriageContractService {
     c.shipper = { name: entity.name.slice(0, 120), entityId: entity.entityId, linkedAt: new Date(now).toISOString(), linkedBy: by };
     this.contracts.set(c.contractId, c);
     return c;
+  }
+
+  /** The contracts offered to a business that asked for them, standing and not yet linked. */
+  offeredTo(entityId: string): CarriageContract[] {
+    return [...this.contracts.values()].filter((c) => c.status === 'active' && c.shipper.offeredTo === entityId && !c.shipper.entityId).sort(newestFirst);
+  }
+
+  /** A contract offered to this business — the same answer for another business's as for none. */
+  private requireOffered(entityId: string, contractId: string): CarriageContract {
+    const c = this.contracts.get(contractId);
+    if (!c || c.shipper.offeredTo !== entityId || c.shipper.entityId) throw new GlosError('NOT_FOUND', 'No such contract offered to you', { field: 'contractId' });
+    if (c.status !== 'active') throw new GlosError('INVALID_STATE', `${c.fleetName} ended this contract before you answered`);
+    return c;
+  }
+
+  /**
+   * ACCEPTED in the business's app: linked as a code would link it, and the business's registered name becomes the sender
+   * on its notes. The fleet is told in its bell.
+   */
+  async accept(entity: { entityId: string; name: string }, contractId: string, by: string, now = Date.now()): Promise<CarriageContract> {
+    const c = this.requireOffered(entity.entityId, contractId);
+    delete c.invite;
+    c.shipper = { name: entity.name.slice(0, 120), entityId: entity.entityId, linkedAt: new Date(now).toISOString(), linkedBy: by };
+    this.contracts.set(c.contractId, c);
+    await this.notifications?.notify(c.fleetDid, {
+      kind: 'contract_answered',
+      title: `${entity.name} accepted your contract`,
+      body: `${entity.name} accepted the carriage contract${c.reference ? ` ${c.reference}` : ''} you offered it. Its orders under it now come straight to you.`,
+      link: '/',
+      data: { contractId: c.contractId, entityId: entity.entityId },
+    });
+    return c;
+  }
+
+  /** DECLINED: the contract stays the fleet's, not linked — it may still send a code, or end it. The fleet is told. */
+  async decline(entity: { entityId: string; name: string }, contractId: string, now = Date.now()): Promise<CarriageContract> {
+    const c = this.requireOffered(entity.entityId, contractId);
+    const { offeredTo: _offeredTo, ...shipper } = c.shipper;
+    c.shipper = { ...shipper, declinedAt: new Date(now).toISOString() };
+    this.contracts.set(c.contractId, c);
+    await this.notifications?.notify(c.fleetDid, {
+      kind: 'contract_answered',
+      title: `${entity.name} declined your contract`,
+      body: `${entity.name} declined the carriage contract${c.reference ? ` ${c.reference}` : ''} you offered it. It stays on your list, not linked: you can still send it a link code, or end it.`,
+      link: '/',
+      data: { contractId: c.contractId, entityId: entity.entityId },
+    });
+    return c;
+  }
+
+  /** The business that asked is told the contract is offered to it — in its bell, where it answers. */
+  async tellOffered(business: { did: string; name: string }, c: CarriageContract): Promise<void> {
+    const period = c.startsOn || c.endsOn ? `, ${c.startsOn ? `from ${c.startsOn}` : ''}${c.startsOn && c.endsOn ? ' ' : ''}${c.endsOn ? `until ${c.endsOn}` : ''}` : '';
+    await this.notifications?.notify(business.did, {
+      kind: 'contract_offered',
+      title: `${c.fleetName} offers you a carriage contract`,
+      body: `You asked ${c.fleetName} for a contract through the logistics directory, and it recorded one with you${c.reference ? `, reference ${c.reference}` : ''}${period}. Accept it under Carriers to send it loads straight away, or decline it. Nothing is linked until an owner accepts.`,
+      link: '/',
+      data: { contractId: c.contractId, fleetDid: c.fleetDid },
+    });
   }
 
   forShipper(entityId: string): CarriageContract[] {

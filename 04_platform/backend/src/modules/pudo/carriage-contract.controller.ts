@@ -19,6 +19,7 @@ import { AdvisePlanDto, CreateContractDto, EndContractDto, SetFleetClockDto, Spl
 import { DispatchService } from './dispatch.service';
 import { FleetOrderList, OrderLoads } from './dispatch.types';
 import { FleetManagerService } from './fleet-manager.service';
+import { DirectoryService } from './directory.service';
 import { FleetClockView } from './fleet.types';
 
 /**
@@ -38,6 +39,7 @@ export class CarriageContractController {
     private readonly dispatch: DispatchService,
     private readonly businesses: BusinessService,
     private readonly imports: OrderImportService,
+    private readonly directory: DirectoryService,
     private readonly plans: FleetPlanService,
     private readonly adviser: PlanAdviserService,
   ) {}
@@ -53,9 +55,14 @@ export class CarriageContractController {
 
   @Roles('fleet_manager', 'operator')
   @Post('fleet/managers/:did/contracts')
-  create(@Param('did') did: string, @Body() dto: CreateContractDto, @Actor() actor: IntrospectionResult): CarriageContractView {
+  async create(@Param('did') did: string, @Body() dto: CreateContractDto, @Actor() actor: IntrospectionResult): Promise<CarriageContractView> {
     const fleet = this.assertFleet(did, actor);
-    return this.contracts.view(this.contracts.create({ did, name: fleet.companyName }, dto, this.fleetPerson(actor, fleet.companyName)));
+    // Recorded for a business that asked through the directory: offered to it in its app. Only one that DID ask.
+    const asker = dto.askedBy ? this.directory.askerOf(dto.askedBy, did) : undefined;
+    if (dto.askedBy && !asker) throw new GlosError('VALIDATION_FAILED', 'That business has not asked you for a contract through the directory', { field: 'askedBy' });
+    const c = this.contracts.create({ did, name: fleet.companyName }, { ...dto, ...(asker ? { offeredTo: asker.entityId } : {}) }, this.fleetPerson(actor, fleet.companyName));
+    if (asker) await this.contracts.tellOffered(asker, c);
+    return this.contracts.view(c);
   }
 
   /** A code for the shipper's business to link the contract with. Shown once; a new one replaces the last. */
@@ -221,7 +228,25 @@ export class CarriageContractController {
   @Get('business/me/contracts')
   shipperList(@Actor() actor: IntrospectionResult): CarriageContractList {
     const acting = this.businesses.requireMember(actor);
-    return { items: this.contracts.forShipper(acting.entity.entityId).map((c) => this.contracts.view(c)) };
+    return { items: this.contracts.forShipper(acting.entity.entityId).map((c) => this.contracts.view(c)), offers: this.contracts.offeredTo(acting.entity.entityId).map((c) => this.contracts.view(c)) };
+  }
+
+  /** A contract a haulier offered after this business asked for it: accepted — an owner's act, as linking by code is. */
+  @Roles('business')
+  @Post('business/me/contracts/:contractId/accept')
+  async accept(@Param('contractId') contractId: string, @Actor() actor: IntrospectionResult): Promise<CarriageContractView> {
+    const acting = this.businesses.requireMember(actor);
+    if (acting.member.role !== 'owner') throw new GlosError('FORBIDDEN', 'Only an owner of the business accepts a contract');
+    return this.contracts.view(await this.contracts.accept({ entityId: acting.entity.entityId, name: acting.entity.name }, contractId, acting.member.name));
+  }
+
+  /** Or declined: the haulier keeps it, not linked. */
+  @Roles('business')
+  @Post('business/me/contracts/:contractId/decline')
+  async decline(@Param('contractId') contractId: string, @Actor() actor: IntrospectionResult): Promise<CarriageContractView> {
+    const acting = this.businesses.requireMember(actor);
+    if (acting.member.role !== 'owner') throw new GlosError('FORBIDDEN', 'Only an owner of the business declines a contract');
+    return this.contracts.view(await this.contracts.decline({ entityId: acting.entity.entityId, name: acting.entity.name }, contractId));
   }
 
   /** Link a contract with the fleet's code. An owner's act: it commits the business to the fleet as its carrier. */

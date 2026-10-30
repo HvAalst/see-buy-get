@@ -11,6 +11,8 @@ export class CreateContractDto {
   @IsOptional() @IsString() @MaxLength(60) reference?: string;
   @IsOptional() @Matches(DAY, { message: 'A start date is a calendar day (YYYY-MM-DD)' }) startsOn?: string;
   @IsOptional() @Matches(DAY, { message: 'An end date is a calendar day (YYYY-MM-DD)' }) endsOn?: string;
+  /** The business that asked for it through the logistics directory: the contract is offered to it, in its app. */
+  @IsOptional() @IsString() @MaxLength(80) askedBy?: string;
 }
 
 /** The shipper's business links a contract with the code its fleet sent. */

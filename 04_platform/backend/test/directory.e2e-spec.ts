@@ -60,9 +60,9 @@ describe('the directory, over the wire', () => {
     return { token, phone };
   }
 
-  async function aBusiness(name: string, activities: string[]): Promise<{ token: string; entityId: string; name: string }> {
+  async function aBusiness(name: string, activities: string[], country = 'KE'): Promise<{ token: string; entityId: string; name: string }> {
     const person = (await aPerson()).token;
-    const made = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${tag}`, country: 'KE', registrationNo: `DIR-${digits()}`, activities, yourName: 'Wanjiku' }).expect(201)).body;
+    const made = (await http().post('/v1/sbg/business').set(bearer(person)).send({ name: `${name} ${tag}`, country, registrationNo: `DIR-${digits()}`, activities, yourName: 'Wanjiku' }).expect(201)).body;
     return { token: made.token.access_token, entityId: made.business.entityId, name: made.business.name };
   }
 
@@ -302,7 +302,7 @@ describe('the directory, over the wire', () => {
     expect(told?.body).toContain(`, in Kenya, found you in the logistics directory`);
     expect(told?.body).toContain(`@${askerHandle}`);
     expect(told?.body).toContain('Orders › Contracts');
-    expect(told?.body).toContain('Nothing is agreed until you do.');
+    expect(told?.body).toContain(`it is offered to ${asker.name} in its app, and an owner there accepts it — no code. Nothing is agreed until then.`);
     expect((await choose(asker.token, 'haulier')).items.find((i) => i.name === `Kudu Haulage ${tag}`)!.askedAt).toBe(asked.askedAt);
     // Once a week — refused before anything is written.
     const again = await http().post(`/v1/sbg/business/me/directory/ask/${kudu.did}`).set(bearer(asker.token));
@@ -335,5 +335,108 @@ describe('the directory, over the wire', () => {
     await http().post(`/v1/sbg/entities/${asker.entityId}/sites`).set(bearer(asker.token)).send({ kind: 'delivery', name: 'Thika Road warehouse', location: { lat: -1.22, lng: 36.89 } }).expect(201);
     expect((await http().get('/v1/sbg/business/me/directory').set(bearer(asker.token)).expect(200)).body.onMap).toBe(true);
     expect((await http().get(`/v1/sbg/fleet/managers/${kudu.did}/directory`).set(bearer(await fleetToken(kudu.did))).expect(200)).body.onMap).toBe(true);
+  }, 120_000);
+
+  it('a haulier asked records a contract offered to the business that asked: accepted or declined in its app, each side told', async () => {
+    const managers = app.get(FleetManagerService);
+    const m = managers.register({
+      companyName: `Eland Haulage ${tag}`, contactPhone: `+2548${digits()}1`.slice(0, 13), ownerFullName: 'O O', ownerNationalId: `MGR-OFF-${digits()}`, location: { lat: -1.28, lng: 36.82 },
+      requirements: { businessRegistrationNo: `BRN-OFF-${digits()}`, transportOperatorLicence: `TOL-OFF-${digits()}`, taxId: `TAX-OFF-${digits()}` },
+    });
+    managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+    managers.decideKyc(m.did, true);
+    managers.recordBond(m.did);
+    const office = (await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token as string;
+    const shipper = await aBusiness('Offered Shipper', ['shipper']);
+    await checked(shipper);
+    const stranger = await aBusiness('Stranger Shipper', ['shipper']);
+    await checked(stranger);
+    const contracts = `/v1/sbg/fleet/managers/${m.did}/contracts`;
+    const bellOf = async (token: string, kind: string) => (((await http().get('/v1/sbg/notifications/inbox').set(bearer(token)).expect(200)).body.items ?? []) as Array<{ kind: string; title: string; body: string }>).filter((n) => n.kind === kind);
+
+    // Offered only to a business that asked.
+    expect((await http().post(contracts).set(bearer(office)).send({ shipperName: shipper.name, askedBy: shipper.entityId })).status).toBe(400);
+    await http().post(`/v1/sbg/business/me/directory/ask/${m.did}`).set(bearer(shipper.token)).expect(201);
+    const offered = (await http().post(contracts).set(bearer(office)).send({ shipperName: shipper.name, reference: 'SEASON-26', startsOn: '2026-11-01', endsOn: '2027-03-31', askedBy: shipper.entityId }).expect(201)).body;
+    expect(offered.shipper).toMatchObject({ name: shipper.name, offeredTo: shipper.entityId });
+    expect(offered.shipper.entityId).toBeUndefined();
+    // The business is told in its bell, and sees it under Carriers — not yet one of its contracts.
+    const told = await bellOf(shipper.token, 'contract_offered');
+    expect(told[0]?.title).toBe(`Eland Haulage ${tag} offers you a carriage contract`);
+    expect(told[0]?.body).toBe(`You asked Eland Haulage ${tag} for a contract through the logistics directory, and it recorded one with you, reference SEASON-26, from 2026-11-01 until 2027-03-31. Accept it under Carriers to send it loads straight away, or decline it. Nothing is linked until an owner accepts.`);
+    const list = (await http().get('/v1/sbg/business/me/contracts').set(bearer(shipper.token)).expect(200)).body;
+    expect(list.offers.map((c: { contractId: string }) => c.contractId)).toEqual([offered.contractId]);
+    expect(list.items).toEqual([]);
+    // Nobody else answers it: another business, a booker, our staff.
+    expect((await http().post(`/v1/sbg/business/me/contracts/${offered.contractId}/accept`).set(bearer(stranger.token))).status).toBe(404);
+    expect((await http().get('/v1/sbg/business/me/contracts').set(bearer(stranger.token)).expect(200)).body.offers).toEqual([]);
+    const booker = await aPerson();
+    await http().post('/v1/sbg/business/me/members').set(bearer(shipper.token)).send({ phone: booker.phone, name: 'Ben Booker', role: 'booker' }).expect(201);
+    const invite = (await http().get('/v1/sbg/business/mine').set(bearer(booker.token)).expect(200)).body.items.find((i: { entityId: string }) => i.entityId === shipper.entityId);
+    await http().post(`/v1/sbg/business/invitations/${invite.memberId}/accept`).set(bearer(booker.token)).expect(201);
+    const bookerBiz = (await http().post(`/v1/sbg/business/${shipper.entityId}/session`).set(bearer(booker.token)).expect(201)).body.token.access_token as string;
+    expect((await http().post(`/v1/sbg/business/me/contracts/${offered.contractId}/accept`).set(bearer(bookerBiz))).status).toBe(403);
+    expect((await http().post(`/v1/sbg/business/me/contracts/${offered.contractId}/decline`).set(bearer(bookerBiz))).status).toBe(403);
+    expect((await http().post(`/v1/sbg/business/me/contracts/${offered.contractId}/accept`).set(bearer(setupKey))).status).toBe(403);
+
+    // Accepted by an owner: linked, no code; the fleet told.
+    const accepted = (await http().post(`/v1/sbg/business/me/contracts/${offered.contractId}/accept`).set(bearer(shipper.token)).expect(201)).body;
+    expect(accepted.shipper).toMatchObject({ name: shipper.name, entityId: shipper.entityId, linkedBy: 'Wanjiku' });
+    expect(accepted.shipper.offeredTo).toBeUndefined();
+    expect((await bellOf(office, 'contract_answered'))[0]).toMatchObject({ title: `${shipper.name} accepted your contract`, body: `${shipper.name} accepted the carriage contract SEASON-26 you offered it. Its orders under it now come straight to you.` });
+    const after = (await http().get('/v1/sbg/business/me/contracts').set(bearer(shipper.token)).expect(200)).body;
+    expect(after.items.map((c: { contractId: string }) => c.contractId)).toEqual([offered.contractId]);
+    expect(after.offers).toEqual([]);
+    expect((await http().post(`/v1/sbg/business/me/contracts/${offered.contractId}/accept`).set(bearer(shipper.token))).status).toBe(404);
+
+    // Another, declined: the fleet keeps it, unlinked, and is told.
+    const second = (await http().post(contracts).set(bearer(office)).send({ shipperName: shipper.name, askedBy: shipper.entityId }).expect(201)).body;
+    const declined = (await http().post(`/v1/sbg/business/me/contracts/${second.contractId}/decline`).set(bearer(shipper.token)).expect(201)).body;
+    expect(declined.shipper.offeredTo).toBeUndefined();
+    expect(declined.shipper.entityId).toBeUndefined();
+    expect(declined.shipper.declinedAt).toMatch(/^\d{4}-/);
+    expect((await bellOf(office, 'contract_answered')).map((n) => n.title)).toContain(`${shipper.name} declined your contract`);
+    expect((await http().post(`/v1/sbg/business/me/contracts/${second.contractId}/accept`).set(bearer(shipper.token))).status).toBe(404);
+    // One the fleet ended before it was answered cannot be accepted.
+    const third = (await http().post(contracts).set(bearer(office)).send({ shipperName: shipper.name, askedBy: shipper.entityId }).expect(201)).body;
+    await http().post(`${contracts}/${third.contractId}/end`).set(bearer(office)).send({}).expect(201);
+    expect((await http().get('/v1/sbg/business/me/contracts').set(bearer(shipper.token)).expect(200)).body.offers).toEqual([]);
+    const late = await http().post(`/v1/sbg/business/me/contracts/${third.contractId}/accept`).set(bearer(shipper.token));
+    expect(late.status).toBe(400);
+    expect(late.body.detail).toBe(`Eland Haulage ${tag} ended this contract before you answered`);
+  }, 120_000);
+
+  it('searches every country at once: every word found somewhere on the entry, accents and case aside, alphabetical', async () => {
+    const dar = await aBusiness('Kilwa Clearing', ['clearing_agent'], 'TZ');
+    await checked(dar);
+    app.get(ImportService).setOffer(dar.entityId, { specialisms: ['perishables'], places: ['Dar es Salaam'], words: 'Fish and fruit through the port, since 2011.' }, 'Neema');
+    const search = async (query: string) => (await http().get(`/v1/sbg/directory/search?${query}`).expect(200)).body as { entries: Array<{ name: string; country: string; kinds: string[] }>; total: number; basis: string };
+    const ours = (r: { entries: Array<{ name: string }> }) => r.entries.map((e) => e.name).filter((n) => n.endsWith(tag));
+
+    // Without signing in; by name across countries, alphabetical.
+    const all = await search(`q=${tag}`);
+    expect(ours(all)).toContain(dar.name);
+    expect(ours(all)).toEqual([...ours(all)].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
+    expect(new Set(all.entries.filter((e) => e.name.endsWith(tag)).map((e) => e.country))).toEqual(new Set(['KE', 'TZ']));
+    expect(all.basis).toMatch(/alphabetical order\. Not a ranking/);
+    // By what it says it clears, where, its own words, its country's name — every word must be found.
+    expect(ours(await search(`q=perishables+${tag}`))).toEqual([dar.name, `Offer Only Agents ${tag}`]);
+    expect(ours(await search(`q=SALAAM+${tag}`))).toEqual([dar.name]);
+    expect(ours(await search(`q=fish+fruit+${tag}`))).toEqual([dar.name]);
+    expect(ours(await search(`q=tanzania+${tag}`))).toEqual([dar.name]);
+    expect(ours(await search(`q=Tanzan%C3%ADa+${tag}`))).toEqual([dar.name]);
+    expect(ours(await search(`q=fish+mombasa+${tag}`))).toEqual([]);
+    // By what it does, alone or with words; a haulier is found by "haulier".
+    expect((await search('kind=haulier')).entries.every((e) => e.kinds.includes('haulier'))).toBe(true);
+    expect(ours(await search(`kind=clearing_agent&q=${tag}`))).toContain(dar.name);
+    expect(ours(await search(`kind=depot&q=kilwa+${tag}`))).toEqual([]);
+    expect(ours(await search(`q=haulier+baobab+${tag}`))).toEqual([`Baobab Haulage ${tag}`]);
+    // A firm that took itself off is not found.
+    await http().post('/v1/sbg/business/me/directory').set(bearer(dar.token)).send({ listed: false }).expect(201);
+    expect(ours(await search(`q=kilwa+${tag}`))).toEqual([]);
+    // Something to look for is asked; what a firm does is one of four.
+    expect((await http().get('/v1/sbg/directory/search')).status).toBe(400);
+    expect((await http().get('/v1/sbg/directory/search?q=%20%20')).status).toBe(400);
+    expect((await http().get('/v1/sbg/directory/search?kind=pilot')).status).toBe(400);
   }, 120_000);
 });

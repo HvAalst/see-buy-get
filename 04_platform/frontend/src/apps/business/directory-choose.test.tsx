@@ -75,3 +75,18 @@ describe('finding a haulier', () => {
     expect(render([{ ...kudu, seen: {} }])).toContain(t('business.contracts.findSeenNone'));
   });
 });
+
+describe('narrowing the clearing agents', () => {
+  it('offers what an agent says it clears as filters, and searches where it works, its country and its line', () => {
+    const row = agentRow(firm({ words: 'Thirty years at the port.', says: { clears: ['vehicles', 'perishables'], places: ['Mombasa', 'JKIA'] } }), t, { seen: 'tower.imports.agentSeen', fresh: 'tower.imports.agentNew' });
+    expect(row.facets).toEqual([
+      { key: 'vehicles', label: 'Vehicles and plant' },
+      { key: 'perishables', label: 'Perishables' },
+    ]);
+    expect(row.find).toContain('Mombasa');
+    expect(row.find).toContain('JKIA');
+    expect(row.find).toContain('KE');
+    expect(row.find).toContain('Thirty years at the port.');
+    expect(agentRow(firm(), t, { seen: 'tower.imports.agentSeen', fresh: 'tower.imports.agentNew' }).facets).toBeUndefined();
+  });
+});

@@ -25,6 +25,8 @@ export interface InboxItem {
   readAt?: string;
   /** Who read it — only in an inbox several people share (a business's). */
   readBy?: string;
+  /** What the notice is about, as the server put it — for an app that offers an act on it. */
+  data?: Record<string, unknown>;
 }
 
 /**

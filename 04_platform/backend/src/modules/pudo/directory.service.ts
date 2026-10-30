@@ -15,13 +15,18 @@ import { SiteService } from './site.service';
 import { HandleDirectory } from './handle-directory.service';
 import { NotificationService } from './notification.service';
 import type { FleetManager } from './fleet.types';
-import { DIRECTORY_KINDS, type ContractAskView, type DirectoryChoiceView, type DirectoryContact, type DirectoryCountry, type DirectoryCountryView, type DirectoryEntry, type DirectoryIndex, type DirectoryKind, type DirectoryListingView } from './directory.types';
+import { DIRECTORY_KINDS, type ContractAskView, type DirectoryChoiceView, type DirectorySearchView, type DirectoryContact, type DirectoryCountry, type DirectoryCountryView, type DirectoryEntry, type DirectoryIndex, type DirectoryKind, type DirectoryListingView } from './directory.types';
 
 /**
  * The papers that say who a COMPANY is — named among its checks. Never a container's import papers, which are company
  * documents too but belong to one consignment and are nobody else's business.
  */
 const COMPANY_PAPERS: ReadonlySet<string> = new Set(['certificate_of_incorporation', 'memorandum_and_articles', 'tax_registration_certificate', 'bank_confirmation', 'licence', 'insurance_policy', 'representative_id', 'beneficial_ownership', 'obligation_registration']);
+
+/** Lower case, without accents — "Mombasa", "MOMBASA" and "Mombása" are one word to a search. */
+function fold(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 
 /** A business asked a haulier for a carriage contract. */
 interface ContractAsk {
@@ -129,6 +134,39 @@ export class DirectoryService {
   }
 
   /**
+   * SEARCH ACROSS EVERY COUNTRY (the user, 2026-10-30: "search across countries is somehow mandatory"): every word must be
+   * found somewhere on the entry — its name, its own line, what it says it clears and where, its country (by its code or
+   * its name), what it does, its address — accents and case aside. Alphabetical, never ranked; at most a hundred shown.
+   */
+  search(q: string | undefined, kind: string | undefined): DirectorySearchView {
+    const words = fold(q ?? '').split(/[^a-z0-9]+/).filter(Boolean);
+    const kinds = (kind ?? '').split(',').map((k) => k.trim()).filter(Boolean);
+    const unknown = kinds.find((k) => !(DIRECTORY_KINDS as readonly string[]).includes(k));
+    if (unknown) throw new GlosError('VALIDATION_FAILED', `What the firm does: forwarder, clearing_agent, depot or haulier — not "${unknown}"`, { field: 'kind' });
+    if (!words.length && !kinds.length) throw new GlosError('VALIDATION_FAILED', 'Say what to look for: a few words, or what the firm does', { field: 'q' });
+    const found = this.entries().filter((e) => {
+      if (kinds.length && !e.kinds.some((k) => kinds.includes(k))) return false;
+      if (!words.length) return true;
+      const text = fold(
+        [e.name, e.words ?? '', ...(e.says?.clears ?? []), ...(e.says?.places ?? []), e.country, catalogueEntry(e.country)?.name ?? '', ...e.kinds, e.contact?.address ?? ''].join(' ').replace(/_/g, ' '),
+      );
+      return words.every((w) => text.includes(w));
+    });
+    return { entries: found.slice(0, 100), total: found.length, basis: DIRECTORY_BASIS };
+  }
+
+  /** The business that asked this haulier for a contract through the directory — or nobody, where it did not. */
+  askerOf(entityId: string, fleetDid: string): { entityId: string; did: string; name: string } | undefined {
+    if (!this.asks.get(`${entityId}:${fleetDid}`)) return undefined;
+    try {
+      const e = this.entities.get(entityId);
+      return { entityId: e.entityId, did: e.did, name: e.name };
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * A BUSINESS ASKS A HAULIER FOR A CARRIAGE CONTRACT — found in the directory, told in the fleet's bell with where to
    * read who is asking. Nothing is agreed by asking: the fleet records a contract and sends the code, as ever. Asked by a
    * business our staff checked (the fleet must be able to read who it is), of a haulier in the directory; the same
@@ -153,9 +191,9 @@ export class DirectoryService {
     await this.notifications?.notify(m.did, {
       kind: 'contract_asked',
       title: `${e.name} asks to carry under a contract with you`,
-      body: `${e.name}${where ? `, in ${where},` : ''} found you in the logistics directory and asks you to record a carriage contract with it, so its loads come straight to you rather than onto the open board.${handle ? ` Who it is, and how to reach it, are on its page: @${handle}.` : ''} To agree, record the contract in this app under Orders › Contracts and send it the link code. Nothing is agreed until you do.`,
+      body: `${e.name}${where ? `, in ${where},` : ''} found you in the logistics directory and asks you to record a carriage contract with it, so its loads come straight to you rather than onto the open board.${handle ? ` Who it is, and how to reach it, are on its page: @${handle}.` : ''} To agree, record the contract from this notice, or under Orders › Contracts: it is offered to ${e.name} in its app, and an owner there accepts it — no code. Nothing is agreed until then.`,
       link: '/',
-      data: { entityId: e.entityId, ...(handle ? { handle } : {}) },
+      data: { entityId: e.entityId, name: e.name, ...(handle ? { handle } : {}) },
     });
     return { fleetName: m.companyName, askedAt: at };
   }

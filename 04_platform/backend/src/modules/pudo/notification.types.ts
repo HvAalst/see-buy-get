@@ -61,6 +61,10 @@ export const NOTIFICATION_KINDS = [
   'papers_lapsed',
   /** A business found the fleet in the logistics directory and asks it for a carriage contract (2026-10-30). */
   'contract_asked',
+  /** The haulier recorded a contract with the business that asked: the business accepts or declines it in its app. */
+  'contract_offered',
+  /** The business accepted or declined the contract its haulier offered. */
+  'contract_answered',
   /** A renewed licence the driver sent was recorded, or refused with a reason they can act on. */
   'papers_checked',
   /** One of a fleet's drivers sent their renewed licence: the office is the one who has to read it. */

@@ -104,6 +104,12 @@ const KIND_ICON: Record<string, IconName> = {
   terms_updated: 'scale',
 };
 
+/**
+ * AN ACT ON A NOTICE (2026-10-30: a haulier asked for a contract records one from the notice itself): an app says, for a
+ * notice of a kind it knows, what can be done about it — shown once the notice is open; the bell closes when it is taken.
+ */
+export type NoticeAct = (item: InboxItem) => { label: string; run: () => void } | null;
+
 /** What moves the bell in an app that listens: its own name, and nothing else. */
 const BELL_ONLY = ['bell'] as const;
 
@@ -119,7 +125,7 @@ const READ_THERE = new Set(['terms_updated']);
  * Design contract: at most one solid-blue CTA per sheet — "Turn on notifications" when push is off;
  * none when it is on (the inbox is the focus; test/turn-off are links).
  */
-export function NotificationBell({ api, shared }: NotificationBellProps) {
+export function NotificationBell({ api, shared, act }: NotificationBellProps & { act?: NoticeAct }) {
   const canMark = shared?.canMark ?? true;
   const [open, setOpen] = useState(false);
   const push = usePush(api);
@@ -178,7 +184,13 @@ export function NotificationBell({ api, shared }: NotificationBellProps) {
           {push.items.length > 0 ? (
             <ul class="nlist__items">
               {push.items.map((it) => (
-                <NotificationRow key={it.id} item={it} onRead={canMark ? () => void push.markRead(it.id) : undefined} />
+                <NotificationRow
+                  key={it.id}
+                  item={it}
+                  onRead={canMark ? () => void push.markRead(it.id) : undefined}
+                  act={act}
+                  onActed={() => setOpen(false)}
+                />
               ))}
             </ul>
           ) : push.inboxState === 'loading' ? (
@@ -238,11 +250,12 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
  * in full — and marks it read, which pressing it always did (not for somebody who only reads a shared inbox). Five-line bodies meant one notification per
  * phone screen and the next one cut in half by the bottom of the sheet.
  */
-function NotificationRow({ item, onRead }: { item: InboxItem; onRead?: () => void }) {
+function NotificationRow({ item, onRead, act, onActed }: { item: InboxItem; onRead?: () => void; act?: NoticeAct; onActed?: () => void }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const unread = !item.readAt;
   const readThere = open && READ_THERE.has(item.kind) && item.link?.startsWith('/') ? item.link : null;
+  const action = open ? act?.(item) ?? null : null;
   return (
     <li>
       <button
@@ -268,6 +281,19 @@ function NotificationRow({ item, onRead }: { item: InboxItem; onRead?: () => voi
         <a class="nitem__more" href={readThere} target="_blank" rel="noopener noreferrer">
           {t('notify.readIt')}
         </a>
+      ) : null}
+      {/* The app's own act on this notice, once it is open — taken there, and the bell closes. */}
+      {action ? (
+        <button
+          type="button"
+          class="nitem__more"
+          onClick={() => {
+            action.run();
+            onActed?.();
+          }}
+        >
+          {action.label}
+        </button>
       ) : null}
     </li>
   );

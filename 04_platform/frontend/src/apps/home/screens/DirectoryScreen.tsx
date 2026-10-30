@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { PlaceMap } from '../../../shared/ui/PlaceMap';
 import { addEnglish, formatDate, useLocale, useT } from '../../../shared/i18n';
@@ -13,6 +13,9 @@ import {
   fetchDirectoryCountry,
   matching,
   prerenderedDirectory,
+  searchAsked,
+  searchDirectory,
+  searchPath,
   siteHost,
   telOf,
   type DirectoryCountry,
@@ -87,6 +90,8 @@ function Countries() {
 
       {failed && countries.length ? <p class="pg__asof">{t('directory.unreachable')}</p> : null}
 
+      {countries.length ? <SearchAll /> : null}
+
       <section class="land__sec">
         <h2 class="land__h2">{t('directory.countriesTitle')}</h2>
         {countries.length ? (
@@ -125,6 +130,95 @@ function Countries() {
 
       <HowItIsMade />
     </article>
+  );
+}
+
+/**
+ * FIND A FIRM, IN ANY COUNTRY (the user, 2026-10-30: "search across countries is somehow mandatory"): a few words and
+ * what it does, answered from every country at once, alphabetical. Kept in the address (`?q=…&kind=…`) so a search can
+ * be shared or come back to. Asked in the browser only: the built page carries the box, never results.
+ */
+function SearchAll() {
+  const t = useT();
+  const locale = useLocale();
+  const [q, setQ] = useState('');
+  const [kind, setKind] = useState<DirectoryKind | 'all'>('all');
+  const [result, setResult] = useState<{ entries: DirectoryEntry[]; total: number } | null>(null);
+  const [state, setState] = useState<'idle' | 'looking' | 'failed'>('idle');
+  const asked = useRef(0);
+
+  // What the address asks for, once the page runs in a browser.
+  useEffect(() => {
+    const was = searchAsked(globalThis.location?.search ?? '');
+    if (was.q || was.kind !== 'all') {
+      setQ(was.q);
+      setKind(was.kind);
+    }
+  }, []);
+
+  useEffect(() => {
+    const words = q.trim();
+    if (!words && kind === 'all') {
+      setResult(null);
+      setState('idle');
+      return;
+    }
+    const mine = ++asked.current;
+    setState('looking');
+    const timer = setTimeout(() => {
+      try {
+        globalThis.history?.replaceState(null, '', searchPath(words, kind));
+      } catch {
+        /* an address that cannot be changed: the search still answers */
+      }
+      void searchDirectory(words, kind).then((r) => {
+        if (mine !== asked.current) return;
+        if (r.error || !r.data) return setState('failed');
+        setResult(r.data);
+        setState('idle');
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [q, kind]);
+
+  const clear = !q.trim() && kind === 'all';
+  return (
+    <section class="land__sec dir__search">
+      <h2 class="land__h2">{t('directory.searchTitle')}</h2>
+      <label class="dir__find">
+        <span class="dir__findl">{t('directory.searchLabel')}</span>
+        <input class="dir__input" type="search" maxLength={80} value={q} onInput={(e) => setQ((e.target as HTMLInputElement).value)} />
+        <span class="pg__asof">{t('directory.searchHint')}</span>
+      </label>
+      <div class="dir__kinds" role="group" aria-label={t('directory.show')}>
+        <button type="button" class="dir__kind" aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
+          {t('directory.anyWork')}
+        </button>
+        {DIRECTORY_KINDS.map((k) => (
+          <button type="button" key={k} class="dir__kind" aria-pressed={kind === k} onClick={() => setKind(k)}>
+            {t(`directory.kinds.${k}`)}
+          </button>
+        ))}
+      </div>
+      {clear ? null : state === 'failed' ? (
+        <p class="land__p">{t('directory.searchFailed')}</p>
+      ) : state === 'looking' && !result ? (
+        <p class="pg__asof">{t('directory.searching')}</p>
+      ) : result ? (
+        <div aria-live="polite">
+          <p class="pg__asof">
+            {!result.total ? t('directory.foundNone') : result.total > result.entries.length ? t('directory.foundMany', { shown: result.entries.length, total: result.total }) : t('directory.found', { n: result.total })}
+          </p>
+          {result.entries.length ? (
+            <ul class="dir__firms">
+              {result.entries.map((e) => (
+                <Firm key={e.handle} e={e} country={countryNameIn(e.country, locale) || e.country} />
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -252,7 +346,8 @@ function CountryFirms({ country }: { country: string }) {
 /** A month and a year — "on SeeBuyGet since" needs no day. */
 const monthYear = (iso: string) => formatDate(iso, { month: 'long', year: 'numeric' });
 
-function Firm({ e }: { e: DirectoryEntry }) {
+/** One firm. Found by a search across countries, it names its country and links to that country's page. */
+function Firm({ e, country }: { e: DirectoryEntry; country?: string }) {
   const t = useT();
   const seen: string[] = [];
   if (e.seen.appointed !== undefined) seen.push(t('directory.seenAppointed', { appointed: e.seen.appointed, cleared: e.seen.cleared ?? 0 }));
@@ -281,6 +376,11 @@ function Firm({ e }: { e: DirectoryEntry }) {
           </span>
         ))}
         <span class="dir__since">{t('directory.since', { date: monthYear(e.since) })}</span>
+        {country ? (
+          <a class="dir__since" href={`${directoryCountryPath(e.country)}#${e.handle}`}>
+            {t('directory.inCountry', { country })}
+          </a>
+        ) : null}
       </p>
 
       {/* THEIR WORDS — marked as theirs every time: the one thing here we did not derive. */}
