@@ -493,10 +493,11 @@ export function feeQuoteBlocker(form: FeeQuoteForm): MessageKey | null {
  * That is the whole of the change: a place is named once and chosen afterwards, and neither end can be
  * half-answered the way a latitude without a longitude could be.
  */
-export function roadBlocker(form: RoadLegForm, byRail = false): MessageKey | null {
+export function roadBlocker(form: RoadLegForm, byRail = false, vetPlace = false): MessageKey | null {
   // By rail, the box is collected where the train brings it: no port to choose (2026-10-29).
   if (!form.pickupSiteId && !byRail) return 'tower.imports.needPort';
-  if (!form.destSiteId) return 'tower.imports.needDest';
+  // Live animals go to the place the veterinary officer named: no destination to choose (2026-10-30).
+  if (!form.destSiteId && !vetPlace) return 'tower.imports.needDest';
   if (!positive(form.weightKg)) return 'tower.imports.needAmount';
   return null;
 }

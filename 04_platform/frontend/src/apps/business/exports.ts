@@ -202,6 +202,8 @@ export interface ExportAir {
   security: { status: 'secured' | 'unsecured'; agentName?: string; agentNumber?: string; knownConsignor?: boolean };
   temp?: { minC: number; maxC: number; preCooled?: boolean };
   inspectionAtAirport?: boolean;
+  /** Live animals (2026-10-30): as their keeper declared them; the originals ride with them. */
+  animals?: { kind: 'livestock' | 'crated'; species: string; count: number; hatchedAt?: string; permit: string; healthCertificate: string; cites?: string; movementPermit?: string; attendant?: { name: string; phone?: string }; shipperCertifiedBy?: string; fitToTravel: { by: string; at: string } };
   /** The booking as it stood before each change recorded: kept, never overwritten. */
   formerBookings?: Array<{ bookingStatus: 'confirmed' | 'queued'; flights: ExportFlight[]; latAt: string; until: string; by: string }>;
 }
@@ -313,7 +315,7 @@ export interface RegisterAirExportInput {
   partyName: string;
   loadingSiteId: string;
   terminalSiteId: string;
-  air: Omit<ExportAir, 'airline' | 'fromAirport' | 'toAirport'> & { airline?: string };
+  air: Omit<ExportAir, 'airline' | 'fromAirport' | 'toAirport' | 'animals'> & { airline?: string; animals?: Record<string, unknown> };
 }
 
 export interface ExportsApi {

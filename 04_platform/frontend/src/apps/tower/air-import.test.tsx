@@ -65,3 +65,27 @@ describe('an import by air', () => {
     expect(html).toContain(t('tower.byAir.freeHint.KE'));
   });
 });
+
+describe('live animals and a landing that may wait, on the import', () => {
+  it('says the animals, the vet-named place and the keeper’s word — and a weekend landing, as a warning', () => {
+    const html = render(
+      air({
+        animals: { kind: 'livestock', species: 'Dairy heifers', count: 20, permit: 'VS03-2026-118', healthCertificate: 'NL-VC-55120', fitToTravel: { by: 'Wanjiku', at: '2026-10-30T08:00:00Z' }, destination: { label: 'Kabete quarantine station', location: { lat: -1.25, lng: 36.73 }, namedOn: 'Permit VS03-2026-118' } },
+        warnings: ['It lands on Saturday 31 October. Customs verification (KRA) works Monday to Friday at the airport, so the release may wait for the next working day. Your agent may ask for officers to attend out of hours on Form C.1.'],
+      } as never),
+      'importer',
+    );
+    expect(html).toContain(t('tower.animals.held', { count: 20, species: 'Dairy heifers', place: 'Kabete quarantine station', namedOn: 'Permit VS03-2026-118', by: 'Wanjiku' }));
+    expect(html).toContain('It lands on Saturday 31 October');
+    expect(html).toContain('Form C.1');
+    // Without the place yet: said that no truck is posted until the importer names it.
+    expect(render(air({ animals: { kind: 'crated', species: 'Day-old chicks', count: 4000, permit: 'P', healthCertificate: 'H', fitToTravel: { by: 'Juma', at: '2026-10-30T08:00:00Z' } }, warnings: [] } as never), 'agent')).toContain(t('tower.animals.heldNoPlace', { count: 4000, species: 'Day-old chicks', by: 'Juma', place: '', namedOn: '' }));
+  });
+
+  it('the road leg asks no destination where the veterinary officer named the place', async () => {
+    const { roadBlocker, EMPTY_ROAD_FORM } = await import('./imports');
+    const form = { ...EMPTY_ROAD_FORM, pickupSiteId: 'site_shed', weightKg: '9000' };
+    expect(roadBlocker(form)).toBe('tower.imports.needDest');
+    expect(roadBlocker(form, false, true)).toBeNull();
+  });
+});

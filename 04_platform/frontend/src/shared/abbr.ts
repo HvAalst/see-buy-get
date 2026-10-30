@@ -32,6 +32,8 @@ export const ABBREVIATIONS = [
   'FBL',
   'FWB',
   'FIATA',
+  // Live animals by air (2026-10-30): a listed species travels with its permit.
+  'CITES',
   'UCP',
   'UN number',
   'KYC',

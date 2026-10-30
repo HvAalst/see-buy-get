@@ -5,6 +5,8 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { awbState } from '../../../shared/awb';
 import { ConsoleFold } from '../ConsoleFold';
 import { ConsolePick } from '../ConsolePick';
+import { SitePicker } from './SitePicker';
+import { animalsBody, animalsReady, EMPTY_ANIMALS, LiveAnimalsFields, type AnimalsForm } from './LiveAnimalsFields';
 
 export type ImportAirView = components['schemas']['ImportAirView'];
 type Result = Promise<{ error?: { detail?: string; title?: string } | null }>;
@@ -35,8 +37,11 @@ const AWB_WORD: Record<'short' | 'ok' | 'wrong', MessageKey> = { short: 'tower.b
  * importer or its agent, with its reference; the road leg from the shed is offered to nobody until then, unless the importer
  * sends the truck anyway. The handler's free storage is counted in hours from its notice: hours, never money.
  */
-export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls, onChanged }: {
+export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls, onChanged, api, importerEntityId }: {
   code: string;
+  /** For the importer's own places: the one the veterinary officer named, for live animals (2026-10-30). */
+  api?: unknown;
+  importerEntityId?: string;
   air?: ImportAirView;
   youAre: 'importer' | 'agent' | 'onlooker' | string;
   natureCode?: string;
@@ -67,6 +72,15 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
     freeHours: air?.freeHours != null ? String(air.freeHours) : '',
     source: air?.freeHoursSource ?? '',
   }));
+  // Live animals (2026-10-30): the keeper's declaration, and on an import the place the veterinary officer named.
+  const [withAnimals, setWithAnimals] = useState(Boolean(air?.animals));
+  const [animals, setAnimals] = useState<AnimalsForm>(() => {
+    const a = air?.animals;
+    return a
+      ? { ...EMPTY_ANIMALS, kind: a.kind as AnimalsForm['kind'], species: a.species, count: String(a.count), permit: a.permit, healthCertificate: a.healthCertificate, citesListed: Boolean(a.cites), citesPermit: a.cites ?? '', movementPermit: a.movementPermit ?? '', attendantName: a.attendant?.name ?? '', attendantPhone: a.attendant?.phone ?? '', namedOn: a.destination?.namedOn ?? '' }
+      : { ...EMPTY_ANIMALS };
+  });
+  const [vetSite, setVetSite] = useState('');
   const [steps, setSteps] = useState<Record<string, { reference: string; at: string }>>({});
   const [reason, setReason] = useState('');
   const [mine, setMine] = useState(false);
@@ -100,7 +114,7 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
     </label>
   );
   const awb = awbState(form.awb);
-  const ready = awb === 'ok' && form.flight.trim() && form.date && form.from.trim().length === 3 && form.to.trim().length === 3 && form.handler.trim() && Number(form.pieces) > 0 && Number(form.kg) > 0 && (form.kind !== 'house' || form.house.trim());
+  const ready = (!withAnimals || animalsReady(animals, 'import')) && awb === 'ok' && form.flight.trim() && form.date && form.from.trim().length === 3 && form.to.trim().length === 3 && form.handler.trim() && Number(form.pieces) > 0 && Number(form.kg) > 0 && (form.kind !== 'house' || form.house.trim());
   const save = () =>
     act(
       () =>
@@ -117,6 +131,7 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
           agencies: form.chosen,
           ...(form.freeHours.trim() ? { freeHours: Number(form.freeHours) } : {}),
           ...(form.source.trim() ? { freeHoursSource: form.source.trim() } : {}),
+          ...(withAnimals ? { animals: animalsBody(animals, 'import', youAre === 'importer' && vetSite ? vetSite : undefined) } : {}),
         }),
       () => setEditing(false),
     );
@@ -176,6 +191,17 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
         <>
           <p class="cons__lede">{t('tower.byAir.held', { awb: air.awb, airline: air.airline, flights: air.flights.map((f) => `${f.flight} ${f.date} ${f.from}→${f.to}`).join('; '), handler: air.handler, pieces: air.pieces, kg: air.weightKg })}</p>
           {air.temp ? <p class="chint">{t('tower.byAir.temp', { min: air.temp.minC ?? '', max: air.temp.maxC ?? '' })}</p> : null}
+          {air.animals ? (
+            <p class="chint">
+              <span class="ctag ctag--warn">{t('tower.animals.tag')}</span>{' '}
+              {t(air.animals.destination ? 'tower.animals.held' : 'tower.animals.heldNoPlace', { count: air.animals.count, species: air.animals.species, place: air.animals.destination?.label ?? '', namedOn: air.animals.destination?.namedOn ?? '', by: air.animals.fitToTravel.by ?? '' })}
+            </p>
+          ) : null}
+          {(air.warnings ?? []).map((w, i) => (
+            <p class="cerr" key={`w${i}`}>
+              <Abbreviated text={w} />
+            </p>
+          ))}
           {air.roadWaits ? <p class="chint"><span class="ctag ctag--warn">{t('tower.byAir.waits')}</span> {air.roadWaits}</p> : released ? <p class="chint"><span class="ctag ctag--ok">{t('tower.byAir.releasedTag')}</span> {t('tower.byAir.releasedLine')}</p> : null}
           {air.collectAnyway ? <p class="chint">{t('tower.byAir.anywaySaid', { by: air.collectAnyway.by ?? '', when: utc(air.collectAnyway.at), reason: air.collectAnyway.reason ?? '' })}</p> : null}
           <p class={clock?.state === 'due_soon' || clock?.state === 'over' ? 'cerr' : 'chint'}>{clockLine}{air.freeHoursSource ? ` ${t('tower.byAir.clock.source', { source: air.freeHoursSource })}` : ''}</p>
@@ -270,6 +296,35 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
           ) : (
             <p class="chint">{t('tower.byAir.agenciesNone', { country: destCountry })}</p>
           )}
+          <label class="cfield--check">
+            <input type="checkbox" checked={withAnimals} onChange={() => setWithAnimals(!withAnimals)} />
+            <span>{t('tower.animals.f.with')}</span>
+          </label>
+          {withAnimals ? (
+            <LiveAnimalsFields
+              value={animals}
+              onChange={setAnimals}
+              side="import"
+              placeSlot={
+                youAre === 'importer' && importerEntityId ? (
+                  <>
+                    <div class="twr-knobs__row">
+                      <div class="twr-knob">
+                        <SitePicker kind="delivery" entityId={importerEntityId} api={api as never} value={vetSite} onChange={setVetSite} label={t('tower.animals.f.vetPlace')} addLabel={t('tower.sites.addDelivery')} />
+                      </div>
+                      <label class="twr-knob cfield">
+                        <span class="cfield__label">{t('tower.animals.f.namedOn')}</span>
+                        <input class="cinput" maxLength={120} value={animals.namedOn} onInput={(e) => setAnimals({ ...animals, namedOn: (e.target as HTMLInputElement).value })} />
+                      </label>
+                    </div>
+                    <p class="chint">{t(air?.animals?.destination ? 'tower.animals.vetPlaceKept' : 'tower.animals.vetPlaceHint', { place: air?.animals?.destination?.label ?? '' })}</p>
+                  </>
+                ) : (
+                  <p class="chint">{t('tower.animals.vetPlaceImporter')}</p>
+                )
+              }
+            />
+          ) : null}
           <div class="twr-knobs__row">
             {field('freeHours', 'tower.byAir.f.freeHours', { type: 'number', min: '0', max: '720' })}
             {field('source', 'tower.byAir.f.source', { maxLength: '160' })}

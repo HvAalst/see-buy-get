@@ -13,6 +13,7 @@ describe('live animals, as data', () => {
   const now = Date.parse('2026-10-30T08:00:00Z');
 
   it('asks for the permit, the health certificate, the keeper’s word that none is unfit — and on an export, the shipper’s certification', () => {
+    expect(() => liveAnimalsOf({ ...heifers, species: ' ' }, 'import', 'Wanjiku', now)).toThrow(/^Say what the animals are/);
     expect(() => liveAnimalsOf({ ...heifers, permit: '' }, 'import', 'Wanjiku', now)).toThrow(/^Give the import permit’s number: animals do not leave the airport until it is produced/);
     expect(() => liveAnimalsOf({ ...heifers, healthCertificate: ' ' }, 'import', 'Wanjiku', now)).toThrow(/health certificate/);
     expect(() => liveAnimalsOf({ ...heifers, fitToTravel: false }, 'import', 'Wanjiku', now)).toThrow(/in the last tenth of its pregnancy, has given birth in the last 48 hours/);

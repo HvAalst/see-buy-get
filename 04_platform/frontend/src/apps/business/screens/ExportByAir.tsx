@@ -6,6 +6,7 @@ import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
 import { fromUtcInput, utcWords, type ExportDetail, type ExportFlight } from '../exports';
 import { awbState } from '../../../shared/awb';
+import { animalsBody, animalsReady, EMPTY_ANIMALS, LiveAnimalsFields, type AnimalsForm } from '../../tower/screens/LiveAnimalsFields';
 
 type Problem = { detail?: string; title: string } | null | undefined;
 const sayProblem = (e: Problem) => (e ? e.detail || e.title : null);
@@ -31,7 +32,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
     goods: '',
     from: business.country ?? '',
     to: '',
-    nature: '' as '' | 'FOP',
+    nature: '' as '' | 'FOP' | 'animals',
     bookedWith: 'forwarder' as 'forwarder' | 'airline',
     party: '',
     awb: '',
@@ -53,6 +54,8 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
     inspection: false,
   });
   const [flights, setFlights] = useState([blankFlight()]);
+  // Live animals (2026-10-30): the keeper's declaration, with the shipper's certification.
+  const [animals, setAnimals] = useState<AnimalsForm>({ ...EMPTY_ANIMALS });
   const [sites, setSites] = useState({ loading: '', terminal: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +70,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
       goodsDescription: form.goods.trim(),
       originCountry: form.from.trim(),
       destCountry: form.to.trim(),
-      ...(form.nature ? { natureCode: form.nature } : {}),
+      ...(form.nature === 'FOP' ? { natureCode: 'FOP' } : {}),
       bookedWith: form.bookedWith,
       partyName: form.party.trim(),
       loadingSiteId: sites.loading,
@@ -87,6 +90,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
         security: form.security === 'secured' ? { status: 'secured', agentName: form.agentName.trim(), ...(form.agentNumber.trim() ? { agentNumber: form.agentNumber.trim() } : {}) } : { status: 'unsecured' },
         ...(form.nature === 'FOP' ? { temp: { minC: Number(form.minC), maxC: Number(form.maxC), ...(form.preCooled ? { preCooled: true } : {}) } } : {}),
         ...(form.inspection ? { inspectionAtAirport: true } : {}),
+        ...(form.nature === 'animals' ? { animals: animalsBody(animals, 'export') } : {}),
       },
     });
     setBusy(false);
@@ -102,7 +106,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
   );
   const setFlight = (i: number, patch: Partial<ExportFlight>) => setFlights(flights.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   const api = client.api as never;
-  const ready = form.goods.trim() && form.party.trim() && awb === 'ok' && flightsGiven.length && fromUtcInput(form.lat) && Number(form.pieces) > 0 && Number(form.kg) > 0 && sites.loading && sites.terminal && (form.kind !== 'house' || form.house.trim()) && (form.security !== 'secured' || form.agentName.trim()) && (form.nature !== 'FOP' || Number(form.minC) < Number(form.maxC));
+  const ready = (form.nature !== 'animals' || animalsReady(animals, 'export')) && form.goods.trim() && form.party.trim() && awb === 'ok' && flightsGiven.length && fromUtcInput(form.lat) && Number(form.pieces) > 0 && Number(form.kg) > 0 && sites.loading && sites.terminal && (form.kind !== 'house' || form.house.trim()) && (form.security !== 'secured' || form.agentName.trim()) && (form.nature !== 'FOP' || Number(form.minC) < Number(form.maxC));
 
   return (
     <section class="cons__panel">
@@ -121,8 +125,9 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
         options={[
           { value: '', label: t('business.exports.air.general') },
           { value: 'FOP', label: t('business.exports.air.perishable') },
+          { value: 'animals', label: t('business.exports.air.animals') },
         ]}
-        onChange={(v) => setForm({ ...form, nature: v as '' | 'FOP' })}
+        onChange={(v) => setForm({ ...form, nature: v as '' | 'FOP' | 'animals' })}
       />
       <p class="chint">{t('business.exports.air.notYet')}</p>
       {form.nature === 'FOP' ? (
@@ -137,6 +142,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
           </label>
         </>
       ) : null}
+      {form.nature === 'animals' ? <LiveAnimalsFields value={animals} onChange={setAnimals} side="export" /> : null}
 
       <h3 class="cons__sub">{t('business.exports.air.bookingTitle')}</h3>
       <p class="chint">{t('business.exports.air.bookingHint')}</p>
@@ -344,6 +350,7 @@ export function AirWaybillPanel({ d, client, mine, onDetail }: { d: ExportDetail
         {fact('business.exports.air.d.lat', utcWords(a.latAt))}
         {fact('business.exports.air.d.cargo', t('business.exports.air.d.cargoLine', { pieces: a.pieces, kg: a.weightKg.toLocaleString('en') }) + (a.volumeM3 ? `, ${a.volumeM3} m³` : ''))}
         {a.handler ? fact('business.exports.air.d.handler', a.handler) : null}
+        {a.animals ? fact('business.exports.air.d.animals', t('business.exports.air.d.animalsLine', { count: a.animals.count, species: a.animals.species, by: a.animals.shipperCertifiedBy ?? '' })) : null}
         {fact('business.exports.air.d.security', a.security.status === 'secured' ? t('business.exports.air.d.securedBy', { who: a.security.agentName ?? '', number: a.security.agentNumber ? ` (${a.security.agentNumber})` : '' }) : t('business.exports.air.d.notSecured'))}
         {a.temp ? fact('business.exports.air.d.temp', t('business.exports.air.d.tempLine', { min: a.temp.minC, max: a.temp.maxC }) + (a.temp.preCooled ? t('business.exports.air.d.preCooled') : '')) : null}
       </dl>

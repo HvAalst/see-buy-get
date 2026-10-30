@@ -32,6 +32,8 @@ export const enAbbr = {
   'abbr.sdr.about': 'The International Monetary Fund’s unit of account, made of several currencies. Transport conventions set their limits in it.',
   'abbr.rid.name': 'RID, the rules for dangerous goods by rail',
   'abbr.rid.about': 'The Regulations concerning the International Carriage of Dangerous Goods by Rail, under the same convention as the CIM.',
+  'abbr.cites.name': 'Convention on International Trade in Endangered Species of Wild Fauna and Flora',
+  'abbr.cites.about': 'The treaty that controls trade in endangered animals and plants. A listed species travels with its CITES permit, attached to the air waybill.',
   'abbr.fbl.name': 'FIATA Multimodal Transport Bill of Lading',
   'abbr.fbl.about': 'A freight forwarder’s bill of lading for a journey by more than one kind of transport, on FIATA’s form. It is title to the goods: they are handed over against an original.',
   'abbr.fwb.name': 'FIATA Multimodal Transport Waybill',

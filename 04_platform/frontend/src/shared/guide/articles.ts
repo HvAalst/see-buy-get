@@ -113,9 +113,9 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'road-meets-rail', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 5, notes: ['why', 'why', 'note', 'note'] },
   // An export by air (the user, 2026-10-29: "we move on to air"): the road to the cargo terminal, timed to the airline's
   // latest acceptance time; read by whoever posts it, carries it, or runs the office.
-  { id: 'air-export', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note'] },
+  { id: 'air-export', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful'] },
   // An import by air: the road leg from the handler's shed waits for every release (2026-10-29).
-  { id: 'air-import', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note'] },
+  { id: 'air-import', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful', 'why'] },
   { id: 'business-note', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'note', 'note', 'note', 'why', 'rare', 'rare'] },
   { id: 'business-runs', apps: ['business'], group: 'freight', steps: 4 },
   { id: 'business-contracts', apps: ['business'], group: 'freight', steps: 3, notes: ['why', 'note', 'rare', 'note', 'note', 'why', 'note', 'note', 'rare'] },

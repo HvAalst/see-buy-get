@@ -39986,6 +39986,119 @@
           "maxC"
         ]
       },
+      "LiveAnimalsDestination": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "location": {
+            "type": "object",
+            "properties": {
+              "lat": {
+                "required": true,
+                "type": "number"
+              },
+              "lng": {
+                "required": true,
+                "type": "number"
+              }
+            }
+          },
+          "namedOn": {
+            "type": "string",
+            "description": "Where it was named: the permit, or the officer."
+          }
+        },
+        "required": [
+          "label",
+          "location",
+          "namedOn"
+        ]
+      },
+      "LiveAnimals": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "livestock",
+              "crated"
+            ]
+          },
+          "species": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "hatchedAt": {
+            "type": "string",
+            "description": "Day-old chicks: when they hatched."
+          },
+          "permit": {
+            "type": "string",
+            "description": "The import permit (the destination country's; on an export, the consignee's)."
+          },
+          "healthCertificate": {
+            "type": "string"
+          },
+          "cites": {
+            "type": "string",
+            "description": "Present where the species is listed under CITES: the permit's number."
+          },
+          "movementPermit": {
+            "type": "string"
+          },
+          "attendant": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "required": true,
+                "type": "string"
+              },
+              "phone": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
+          "shipperCertifiedBy": {
+            "type": "string",
+            "description": "Export: who signed the shipper's certification for live animals — the shipper, never SeeBuyGet."
+          },
+          "fitToTravel": {
+            "type": "object",
+            "properties": {
+              "by": {
+                "required": true,
+                "type": "string"
+              },
+              "at": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "destination": {
+            "description": "Import: the place the veterinary officer named — the road leg goes there and nowhere else.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LiveAnimalsDestination"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "species",
+          "count",
+          "permit",
+          "healthCertificate",
+          "attendant",
+          "fitToTravel"
+        ]
+      },
       "ExportAir": {
         "type": "object",
         "properties": {
@@ -40070,6 +40183,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "animals": {
+            "description": "Live animals (2026-10-30): as their keeper declared them, the papers by number; the originals ride with them.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LiveAnimals"
+              }
+            ]
           }
         },
         "required": [
@@ -40425,6 +40546,82 @@
           "maxC"
         ]
       },
+      "LiveAnimalsDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "livestock",
+              "crated"
+            ]
+          },
+          "species": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "count": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "hatchedAt": {
+            "type": "string"
+          },
+          "permit": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "healthCertificate": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "citesListed": {
+            "type": "boolean"
+          },
+          "citesPermit": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "movementPermit": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "attendantName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "attendantPhone": {
+            "type": "string",
+            "maxLength": 24
+          },
+          "shipperCertifiedBy": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "fitToTravel": {
+            "type": "boolean",
+            "description": "None is sick or injured, in the last tenth of pregnancy, given birth in the last 48 hours, or newborn with an unhealed navel."
+          },
+          "quarantineSiteId": {
+            "type": "string",
+            "description": "Import: one of the importer's places — the place the veterinary officer named. Resolved by the route."
+          },
+          "namedOn": {
+            "type": "string",
+            "description": "Import: where the place was named — the permit, or the officer.",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "kind",
+          "species",
+          "count",
+          "permit",
+          "healthCertificate",
+          "fitToTravel"
+        ]
+      },
       "ExportAirDto": {
         "type": "object",
         "properties": {
@@ -40499,6 +40696,14 @@
           },
           "inspectionAtAirport": {
             "type": "boolean"
+          },
+          "animals": {
+            "description": "Live animals (2026-10-30): the declaration, checked before anything is written.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LiveAnimalsDto"
+              }
+            ]
           }
         },
         "required": [
@@ -48807,6 +49012,14 @@
               "type": "string"
             }
           },
+          "animals": {
+            "description": "Live animals (2026-10-30): the declaration, and the place the veterinary officer named — the only place they go.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LiveAnimals"
+              }
+            ]
+          },
           "recordedAt": {
             "type": "string"
           },
@@ -49917,6 +50130,38 @@
           "state"
         ]
       },
+      "AirArrivalWarning": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "saturday",
+              "sunday",
+              "friday_late",
+              "holiday"
+            ]
+          },
+          "landsOn": {
+            "type": "string"
+          },
+          "offices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "landsOn",
+          "offices",
+          "text"
+        ]
+      },
       "ImportAirView": {
         "type": "object",
         "properties": {
@@ -50019,6 +50264,14 @@
               "type": "string"
             }
           },
+          "animals": {
+            "description": "Live animals (2026-10-30): the declaration, and the place the veterinary officer named — the only place they go.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LiveAnimals"
+              }
+            ]
+          },
           "recordedAt": {
             "type": "string"
           },
@@ -50038,6 +50291,21 @@
           "roadWaits": {
             "type": "string",
             "description": "The road leg's gate in the take's own words, while it is closed."
+          },
+          "arrival": {
+            "description": "A landing that may wait for Monday (2026-10-30).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AirArrivalWarning"
+              }
+            ]
+          },
+          "warnings": {
+            "description": "What to watch for, in words: the landing day, the chicks' hours.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "check": {
             "type": "object",
@@ -50109,6 +50377,7 @@
           "recordedBy",
           "gaps",
           "clock",
+          "warnings",
           "check"
         ]
       },
@@ -50495,6 +50764,7 @@
           },
           "date": {
             "type": "string",
+            "description": "The day it lands — the release's offices count from it (2026-10-30).",
             "pattern": "/^\\d{4}-\\d{2}-\\d{2}$/"
           },
           "from": {
@@ -50585,6 +50855,14 @@
           "freeHoursSource": {
             "type": "string",
             "maxLength": 160
+          },
+          "animals": {
+            "description": "Live animals (2026-10-30): the declaration, and on an import the place the veterinary officer named.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LiveAnimalsDto"
+              }
+            ]
           }
         },
         "required": [
@@ -59151,6 +59429,10 @@
                 "$ref": "#/components/schemas/FreightReleaseGate"
               }
             ]
+          },
+          "liveAnimals": {
+            "type": "object",
+            "description": "Live animals on the load (2026-10-30): a vehicle made for them, and the driver's own checks at pickup."
           },
           "declaredValue": {
             "description": "CMR Art. 6(2)(d) — the value of the goods, and a special interest in delivery, as the sender declared them.",

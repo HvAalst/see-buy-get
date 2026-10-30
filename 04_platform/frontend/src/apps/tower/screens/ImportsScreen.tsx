@@ -896,6 +896,8 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
               youAre={isCompany ? detail.youAre : 'onlooker'}
               {...(detail.natureCode ? { natureCode: detail.natureCode } : {})}
               destCountry={detail.destCountry}
+              api={client.api}
+              importerEntityId={detail.importerEntityId}
               calls={{
                 agencies: async () => {
                   const r = await client.api.importAirAgencies(detail.destCountry);
@@ -1237,6 +1239,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                         />
                       </div>
                     )}
+                    {detail.air?.animals?.destination ? (
+                      <p class="twr-knob chint">{t('tower.animals.roadTo', { place: detail.air.animals.destination.label })}</p>
+                    ) : (
                     <div class="twr-knob">
                       <SitePicker
                         kind="delivery"
@@ -1248,24 +1253,25 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                         addLabel={t('tower.sites.addDelivery')}
                       />
                     </div>
+                    )}
                     <label class="twr-knob cfield">
                       <span class="cfield__label">{t('tower.imports.f.weight')}</span>
                       <input class="cinput" type="number" min={1} value={roadForm.weightKg} onChange={(e) => setRoadForm({ ...roadForm, weightKg: (e.target as HTMLInputElement).value })} />
                     </label>
                   </div>
                   <div class="twr-panelend">
-                    {roadBlocker(roadForm, Boolean(detail.byRail)) ? <span class="chint">{t(roadBlocker(roadForm, Boolean(detail.byRail))!)}</span> : null}
+                    {roadBlocker(roadForm, Boolean(detail.byRail), Boolean(detail.air?.animals?.destination)) ? <span class="chint">{t(roadBlocker(roadForm, Boolean(detail.byRail), Boolean(detail.air?.animals?.destination))!)}</span> : null}
                     <button
                       type="button"
                       class="cbtn cbtn--primary"
-                      disabled={Boolean(roadBlocker(roadForm, Boolean(detail.byRail))) || busy === 'road'}
+                      disabled={Boolean(roadBlocker(roadForm, Boolean(detail.byRail), Boolean(detail.air?.animals?.destination))) || busy === 'road'}
                       onClick={() =>
                         run(
                           'road',
                           () =>
                             client!.api.mintImportRoadLeg(detail.importId, {
                               ...(roadForm.pickupSiteId && !detail.byRail ? { pickupSiteId: roadForm.pickupSiteId } : {}),
-                              destSiteId: roadForm.destSiteId,
+                              ...(detail.air?.animals?.destination ? {} : { destSiteId: roadForm.destSiteId }),
                               weightKg: Number(roadForm.weightKg),
                               ...(who ? { by: who } : {}),
                             }),

@@ -89,6 +89,9 @@ describe('live animals by air, and a landing that may wait — over the wire', (
     expect(String((await air({ ...flight(lands), animals: { ...heifers, fitToTravel: false } })).body.detail)).toMatch(/an unfit animal is not loaded$/);
     expect(String((await air({ ...flight(lands), animals: { ...heifers, permit: '' } })).body.detail)).toMatch(/^Give the import permit’s number/);
     expect((await air({ ...flight(lands), animals: { ...heifers, quarantineSiteId: theirs } }, agent.token)).status).toBe(403);
+    // Its agent may record the animals; no truck is posted for them until the importer names the vet's place.
+    await air({ ...flight(lands), animals: heifers }, agent.token).expect(201);
+    expect(String((await http().post(`${path}/road-leg`).set(bearer(imp.token)).send({ pickupSiteId: shed, destSiteId: farm, weightKg: 9_000 })).body.detail)).toBe('Name the place the veterinary officer named first: live animals go there and nowhere else');
     const set = (await air({ ...flight(lands), animals: { ...heifers, quarantineSiteId: quarantine, namedOn: 'Permit VS03-2026-118, Dr Otieno (DVS)' } }).expect(201)).body;
     // The vet's release is asked whatever was ticked.
     expect(set.air.agencies).toEqual([expect.objectContaining({ key: 'dvs' })]);
@@ -96,7 +99,7 @@ describe('live animals by air, and a landing that may wait — over the wire', (
     expect(set.air.animals).toMatchObject({ kind: 'livestock', count: 20, destination: { label: 'Kabete quarantine station', namedOn: 'Permit VS03-2026-118, Dr Otieno (DVS)' }, attendant: { name: 'Kiprono' }, fitToTravel: { by: expect.any(String) } });
     // Recorded again by its agent, the place the importer named stays, and so does the vet's release on the list.
     const again = (await air({ ...flight(lands), agencies: ['kebs'], animals: heifers }, agent.token).expect(201)).body;
-    expect(again.air.animals.destination.label).toBe('Kabete quarantine station');
+    expect(again.air.animals.destination).toMatchObject({ label: 'Kabete quarantine station', namedOn: 'Permit VS03-2026-118, Dr Otieno (DVS)' });
     expect(again.air.agencies.map((a: { key: string }) => a.key)).toEqual(['kebs', 'dvs']);
 
     // The road leg goes to the vet-named place and nowhere else — chosen elsewhere, refused; chosen nowhere, it goes there.
