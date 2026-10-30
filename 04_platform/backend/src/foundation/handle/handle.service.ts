@@ -17,6 +17,12 @@ export interface HandleRecord {
   issuedAt: string;
 }
 
+/**
+ * Letters no decomposition turns into plain ones, written as a reader of the name would type them. Everything else
+ * accented is split by NFKD into its letter and its mark, and the mark is dropped.
+ */
+const PLAIN: Record<string, string> = { ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', ł: 'l', đ: 'd', ð: 'd', þ: 'th', ı: 'i' };
+
 /** Longest handle we will mint. Long enough for a real trading name, short enough to say down a phone. */
 const MAX = 30;
 
@@ -80,11 +86,19 @@ export class HandleService {
   /** Reverse index, so a page for a known DID does not scan the world. Rebuilt from the store on demand. */
   private byId?: Map<string, HandleRecord>;
 
-  /** The url-safe stem of a name: `FedEx Kenya Ltd` → `fedex-kenya-ltd`. Empty when nothing survives. */
+  /**
+   * The url-safe stem of a name: `FedEx Kenya Ltd` → `fedex-kenya-ltd`. Empty when nothing survives.
+   *
+   * An accent keeps its word whole: `Citroën Garage` → `citroen-garage`, `Straße` → `strasse`. Before 2026-10-30 the
+   * mark NFKD splits off was itself a non-letter and cut the word (`citroe-n-garage`); a handle already issued that way
+   * still resolves, because a plain handle stems to itself.
+   */
   static stem(name: string): string {
     return (name || '')
       .toLowerCase()
+      .replace(/[ßæœøłđðþı]/g, (c) => PLAIN[c] ?? c)
       .normalize('NFKD')
+      .replace(/\p{M}+/gu, '')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, MAX)

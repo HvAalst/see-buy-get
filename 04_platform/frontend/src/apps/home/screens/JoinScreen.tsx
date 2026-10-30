@@ -10,6 +10,7 @@ import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { geocode, homeConfig, myAgreement } from '../api';
 import { countryNameIn } from '../../../shared/documents/documents';
+import { pageNameFor } from '../../../shared/handle';
 
 import { ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
@@ -486,6 +487,7 @@ function FleetAboutStep({ state, actions }: JoinScreenProps) {
 
       <Card title={t('home.fleet.about.company')}>
         {field('fleet-name', t('home.fleet.about.companyName'), 'displayName', { placeholder: t('home.fleet.about.companyNamePh') })}
+        <PagePreview name={f.displayName} country={joiningCountry(f)} />
         {field('fleet-trading', t('home.fleet.about.tradingName'), 'tradingName')}
         {field('fleet-email', t('home.fleet.about.contactEmail'), 'contactEmail', { type: 'email', autocomplete: 'email', autocapitalize: 'none', spellcheck: false, placeholder: 'office@example.com' })}
         <p class="card__note">{t('home.fleet.about.contactEmailNote')}</p>
@@ -621,6 +623,8 @@ function AboutStep({ state, actions }: JoinScreenProps) {
             placeholder={role.id === 'pudo' ? t('home.join.about.phShop') : role.id === 'driver' ? t('home.join.about.phDriver') : role.id === 'mdp' ? t('home.join.about.phHub') : t('home.join.about.phStore')}
           />
         </div>
+        {/* A shop and a hub are given a page; a store is not, and a driver only when not driving for a fleet. */}
+        {role.id === 'pudo' || role.id === 'mdp' ? <PagePreview name={f.displayName} country={joiningCountry(f)} /> : null}
 
         {role.id === 'vendor' ? (
           <div class="field" style="margin-top:12px">
@@ -846,6 +850,19 @@ function useCountryStart(country: string): { point: { lat: number; lng: number }
     };
   }, [country]);
   return start;
+}
+
+/**
+ * THE PAGE THE NAME WILL GIVE, under the name as it is typed (the owner, 2026-10-30: "how is the public name chosen?").
+ * Nobody chooses it: it is made from the name, once staff have approved them, with the country's code added where the
+ * name is already taken. Nothing while the name gives nothing.
+ */
+function PagePreview({ name, country }: { name: string; country: string }) {
+  const t = useT();
+  const page = pageNameFor(name, country);
+  if (!page) return null;
+  const host = typeof location !== 'undefined' && location.host ? location.host : 'seebuyget.com';
+  return <p class="card__note">{t('home.join.about.page', { page: `${host}/@${page}` })}</p>;
 }
 
 function WhereStep({ state, actions }: JoinScreenProps) {

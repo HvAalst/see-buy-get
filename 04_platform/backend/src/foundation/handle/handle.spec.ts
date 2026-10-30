@@ -1,5 +1,5 @@
 import { HANDLE_KINDS, HandleService } from './handle.service';
-import { ownerDrivers } from '../../modules/pudo/handle-directory.service';
+import { FLEET_APPROVED, SHOP_APPROVED, ownerDrivers } from '../../modules/pudo/handle-directory.service';
 
 /**
  * Handles are an IMPERSONATION surface before they are a convenience, so these tests are written against
@@ -112,6 +112,31 @@ describe('handles — the directory, as a page per participant', () => {
       // Only the active owner-driver: an address for somebody still being vetted, or refused, would
       // publish a decision that is nobody's business but ours and theirs.
       expect(ownerDrivers(drivers).map((d) => d.did)).toEqual(['did:driver:amos']);
+    });
+
+    it('issues to a shop and a fleet only once staff approved it — never on signing up, never to one closed before that', () => {
+      // A handle is never taken back: one given at sign-up let anybody hold @dhl for good before a paper was looked at
+      // (the owner, 2026-10-30). Closing a shop LOCKS it and closing a fleet SUSPENDS it, so neither of those counts.
+      expect([...SHOP_APPROVED].sort()).toEqual(['ACTIVE', 'APPROVED_UNFUNDED']);
+      expect([...FLEET_APPROVED].sort()).toEqual(['ACTIVE', 'APPROVED']);
+    });
+
+    it('keeps an accented word whole — the mark dropped, never a hyphen in the middle of a name', () => {
+      const cases: Array<[string, string]> = [
+        ['Citroën Garage', 'citroen-garage'],
+        ['Société Générale', 'societe-generale'],
+        ['Ölçü Kargo', 'olcu-kargo'],
+        ['Café Mbeya', 'cafe-mbeya'],
+        ['Straße & Söhne', 'strasse-sohne'],
+        ['Ærø Færge', 'aero-faerge'],
+        ['Łódź Spedycja', 'lodz-spedycja'],
+        ['FedEx Kenya Ltd', 'fedex-kenya-ltd'],
+      ];
+      for (const [name, stem] of cases) expect([name, HandleService.stem(name)]).toEqual([name, stem]);
+      // One issued the old way still answers to its own address.
+      const svc = mk();
+      const old = svc.issue({ kind: 'shop', id: 'did:shop:old', name: 'citroe-n garage' });
+      expect(svc.resolve(`@${old.handle}`)?.id).toBe('did:shop:old');
     });
 
     it('gives an owner-driver a handle from the non-PII display name, like any other participant', () => {

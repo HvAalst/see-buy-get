@@ -6,6 +6,8 @@ import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { DriverService } from './driver.service';
+import type { AgentStatus } from './pudo.types';
+import type { FleetManagerStatus } from './fleet.types';
 
 /**
  * ISSUING THE HANDLES — every shop, hub, fleet and company gets its address.
@@ -27,11 +29,25 @@ import { DriverService } from './driver.service';
  * the other way round: where a person's display name collides with a trading name, the business keeps the
  * bare form, because that is the name a customer is typing.
  *
+ * EVERYBODY ONCE STAFF HAVE SAID YES — and not before (the owner, 2026-10-30: "yes, like that"). A handle is never taken
+ * back, so one issued at sign-up let anybody sign a shop up as "DHL" and hold @dhl for good before a single paper was
+ * looked at. A hub and a company already waited for staff; a shop and a fleet now wait too. Signing up early still
+ * counts: the first one approved takes the bare form.
+ *
  * WHICH DRIVERS. Independent ones, and only once they are ACTIVE. Independent because a handle goes to
  * whoever the network contracts with and a fleet-attached driver is contracted through their fleet (see
  * HandleService). Active because a page is an address a stranger may type, and an address for somebody
  * still being vetted — or refused — publishes a decision that is nobody's business but ours and theirs.
  */
+/**
+ * A SHOP STAFF HAVE APPROVED: approved and waiting for its float, or trading. Not LOCKED — closing an account locks it too,
+ * so a shop closed before anybody approved it would otherwise be given an address; one locked after it traded already
+ * holds its handle, and a handle is never taken back.
+ */
+export const SHOP_APPROVED: readonly AgentStatus[] = ['APPROVED_UNFUNDED', 'ACTIVE'];
+/** A FLEET STAFF HAVE APPROVED: approved and waiting for its bond, or working. Not SUSPENDED, for the same reason. */
+export const FLEET_APPROVED: readonly FleetManagerStatus[] = ['APPROVED', 'ACTIVE'];
+
 /**
  * WHICH DRIVERS HOLD AN ADDRESS: the ones the network contracts with, once we have actually said yes.
  *
@@ -67,9 +83,9 @@ export class HandleDirectory implements OnApplicationBootstrap {
     // then, and a handle is never taken back. Filtered BEFORE the count, so the check passing is itself the change
     // that makes the next sweep run.
     const companies = this.entities.list().filter(listedPublicly);
-    const shops = this.agents.list();
+    const shops = this.agents.list().filter((s) => SHOP_APPROVED.includes(s.status));
     const hubs = this.mdps.approvedList(); // as a company's: a handle is never taken back, so not before staff have seen the papers
-    const fleets = this.managers.list();
+    const fleets = this.managers.list().filter((f) => FLEET_APPROVED.includes(f.status));
     const owners = ownerDrivers(this.drivers.list());
     const total = companies.length + shops.length + hubs.length + fleets.length + owners.length;
     if (total === this.lastSweptCount) return;

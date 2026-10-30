@@ -485,6 +485,7 @@ export const enHome = {
   'home.join.about.nameShop': 'Choose your shop name',
   'home.join.about.nameHub': 'Choose your hub name',
   'home.join.about.nameStore': 'Choose your store name',
+  'home.join.about.page': 'Your page, once we have approved you: {page}. If that name is already taken, your country’s code is added to it.',
   'home.join.about.nameDriver': 'Your name as drivers see it',
   'home.join.about.phShop': 'Mama Sarah Shop',
   'home.join.about.phDriver': 'Amos K.',
