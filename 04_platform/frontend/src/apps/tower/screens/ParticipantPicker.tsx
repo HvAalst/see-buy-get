@@ -10,11 +10,15 @@ export interface ParticipantRow {
   /** Their public page, where the directory has issued one. */
   handle?: string;
   country?: string;
-  /** What they SAY they do, in their own words. Never checked by us. */
+  /** Their own line, in their words — shown in quotes. Never checked by us. */
+  words?: string;
+  /** What they SAY they do. Never checked by us. */
   says?: string;
   /** What we have actually SEEN. A pair of counts, never a score and never an ordering. */
   seen?: string;
-  /** How to reach them, from their own entry. */
+  /** The papers our staff checked, in a few words. */
+  checked?: string;
+  /** How to reach them, from their own entry: a Call button once chosen, never a printed number. */
   phone?: string;
 }
 
@@ -129,10 +133,11 @@ export function ParticipantPicker({
                   <span class="crow__name">{r.name}</span>
                   {r.country ? <span class="ctag ctag--quiet">{r.country}</span> : null}
                 </span>
-                {/* The claim and the record, on two lines, in that order: what they say, then what we saw. */}
+                {/* The claim and the record, in that order: what they say, then what we saw, then what our staff checked. */}
+                {r.words ? <span class="crow__sub">“{r.words}”</span> : null}
                 {r.says ? <span class="crow__sub">{r.says}</span> : null}
                 {r.seen ? <span class="chint">{r.seen}</span> : null}
-                {r.phone ? <span class="chint">{r.phone}</span> : null}
+                {r.checked ? <span class="chint">{r.checked}</span> : null}
               </span>
               <span class="crow__tail">{chosen === r.id ? <Icon name="check" size={16} /> : null}</span>
             </button>
@@ -149,6 +154,12 @@ export function ParticipantPicker({
         {picked?.handle && publicPageUrl(picked.handle) ? (
           <a class="cbtn cbtn--ghost cbtn--sm" href={publicPageUrl(picked.handle) ?? undefined} target="_blank" rel="noopener noreferrer">
             @{picked.handle}
+          </a>
+        ) : null}
+        {/* A number to ring before deciding — a button, never the number printed (the directory's rule, 2026-10-30). */}
+        {picked?.phone ? (
+          <a class="cbtn cbtn--ghost cbtn--sm" href={`tel:${picked.phone.trim().startsWith('+') ? '+' : ''}${picked.phone.replace(/\D/g, '')}`}>
+            {t('tower.pick.call')}
           </a>
         ) : null}
         <button type="button" class="cbtn cbtn--primary" disabled={!picked} onClick={() => picked && onPick(picked)}>

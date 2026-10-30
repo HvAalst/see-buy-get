@@ -17,6 +17,8 @@ export const enDirectoryCard = {
   'directory.app.line': 'Your line',
   'directory.app.lineHint': 'What you do and where, in your own words — up to 240 letters. Shown as yours, never checked by us.',
   'directory.app.lineNone': 'No line of your own yet.',
+  'directory.app.notOnMap': 'Your country is put on the directory’s map by its firms’ own places, and none of yours is there yet. Add one under “Your places” on this screen — a pin on the map, or an address we can find.',
+  'directory.app.notOnMapFleet': 'Your fleet has no place with a pin, so it does not put your country on the directory’s map.',
   'directory.app.contactFromCard': 'The ways to reach you are your contact entry, on this screen.',
   'directory.app.contactTitle': 'Ways to reach you, shown in the directory',
   'directory.app.contactHint': 'Only what you fill in is shown; leave a box empty to show nothing there. A phone is shown as a Call button.',

@@ -100,6 +100,7 @@ export function DirectoryCard({ sbg, did }: { sbg: SbgClient | null; did?: strin
           ) : (
             <p class="hint">{t('directory.app.contactNone')}</p>
           )}
+          {view.onMap === false ? <p class="hint">{t('directory.app.notOnMapFleet')}</p> : null}
           {error ? <ErrorNote error={error} /> : null}
           <Button
             variant="outline"

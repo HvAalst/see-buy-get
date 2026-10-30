@@ -530,6 +530,13 @@ export function createOperatorApi(sbg: SbgClient) {
      * and what we have actually seen them clear. Never a score, never an ordering — this network is the
      * party an importer appoints through.
      */
+    /**
+     * THE DIRECTORY INSIDE THE APPS (2026-10-30): the firms that do `kind` — `clearing_agent`, `haulier`, or several
+     * with commas — every country, alphabetical, each with the id an appointment or an ask names. A business is never
+     * offered itself, and sees which hauliers it asked for a contract.
+     */
+    chooseFromDirectory: (kind: string) => sbg.request((c) => c.GET('/v1/sbg/directory/choose', { params: { query: { kind } } })),
+
     findAgents: (q: { specialism?: string; place?: string; country?: string } = {}) =>
       sbg.request((c) =>
         c.GET('/v1/sbg/agents/find', {

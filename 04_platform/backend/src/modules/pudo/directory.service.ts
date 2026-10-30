@@ -13,14 +13,25 @@ import { FleetManagerService } from './fleet-manager.service';
 import { ImportService } from './import.service';
 import { SiteService } from './site.service';
 import { HandleDirectory } from './handle-directory.service';
+import { NotificationService } from './notification.service';
 import type { FleetManager } from './fleet.types';
-import { DIRECTORY_KINDS, type DirectoryContact, type DirectoryCountry, type DirectoryCountryView, type DirectoryEntry, type DirectoryIndex, type DirectoryKind, type DirectoryListingView } from './directory.types';
+import { DIRECTORY_KINDS, type ContractAskView, type DirectoryChoiceView, type DirectoryContact, type DirectoryCountry, type DirectoryCountryView, type DirectoryEntry, type DirectoryIndex, type DirectoryKind, type DirectoryListingView } from './directory.types';
 
 /**
  * The papers that say who a COMPANY is — named among its checks. Never a container's import papers, which are company
  * documents too but belong to one consignment and are nobody else's business.
  */
 const COMPANY_PAPERS: ReadonlySet<string> = new Set(['certificate_of_incorporation', 'memorandum_and_articles', 'tax_registration_certificate', 'bank_confirmation', 'licence', 'insurance_policy', 'representative_id', 'beneficial_ownership', 'obligation_registration']);
+
+/** A business asked a haulier for a carriage contract. */
+interface ContractAsk {
+  at: string;
+  by: string;
+}
+
+/** How long before a business may ask the same haulier again, and how many hauliers it may ask in a day. */
+const ASK_AGAIN_MS = 7 * 24 * 3_600_000;
+const ASKS_A_DAY = 10;
 
 /** A firm's own choices about the directory: off it, its line, and — for a fleet — the contact it shows. */
 interface Listing {
@@ -43,6 +54,8 @@ export const DIRECTORY_BASIS =
 @Injectable()
 export class DirectoryService {
   private readonly listings = new PersistentMap<string, Listing>('directory-listings');
+  /** `<entityId>:<fleetDid>` → when the business asked that haulier for a contract. */
+  private readonly asks = new PersistentMap<string, ContractAsk>('directory-contract-asks');
 
   constructor(
     private readonly entities: EntityService,
@@ -54,6 +67,7 @@ export class DirectoryService {
     private readonly contacts: ContactCardService,
     private readonly sites: SiteService,
     @Optional() private readonly handleDirectory?: HandleDirectory,
+    @Optional() private readonly notifications?: NotificationService,
   ) {}
 
   /** What a company does that the directory lists: its activities, and being appointed to clear. */
@@ -61,7 +75,8 @@ export class DirectoryService {
     const acts = e.business?.activities ?? [];
     const kinds: DirectoryKind[] = [];
     if (acts.includes('expeditor')) kinds.push('forwarder');
-    if (acts.includes('clearing_agent') || this.imports.isAgent(e.entityId)) kinds.push('clearing_agent');
+    // By its activity, by having been appointed, or by having said what it clears — the agent finder's own rule.
+    if (acts.includes('clearing_agent') || this.imports.isAgent(e.entityId) || this.imports.offerOf(e.entityId)) kinds.push('clearing_agent');
     if (acts.includes('depot')) kinds.push('depot');
     return kinds;
   }
@@ -73,21 +88,76 @@ export class DirectoryService {
 
   /** Every entry, alphabetical — the companies and the fleets that may be shown and did not take themselves off. */
   entries(): DirectoryEntry[] {
+    return this.rows().map((r) => r.entry);
+  }
+
+  /** Every entry with the id behind it, alphabetical. */
+  private rows(): Array<{ id: string; entry: DirectoryEntry }> {
     this.handleDirectory?.ensure();
-    const out: DirectoryEntry[] = [];
+    const out: Array<{ id: string; entry: DirectoryEntry }> = [];
     for (const e of this.entities.list()) {
       if (e.kind !== 'business' || !listedPublicly(e) || !e.jurisdiction) continue;
       const kinds = this.kindsOfCompany(e);
       if (!kinds.length || this.listings.get(e.entityId)?.hidden) continue;
       const entry = this.companyEntry(e, kinds);
-      if (entry) out.push(entry);
+      if (entry) out.push({ id: e.entityId, entry });
     }
     for (const m of this.managers.list()) {
       if (!this.fleetActive(m) || !m.jurisdiction || this.listings.get(m.did)?.hidden) continue;
       const entry = this.fleetEntry(m);
-      if (entry) out.push(entry);
+      if (entry) out.push({ id: m.did, entry });
     }
-    return out.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
+    return out.sort((a, b) => a.entry.name.localeCompare(b.entry.name, 'en', { sensitivity: 'base' }));
+  }
+
+  /**
+   * THE DIRECTORY INSIDE THE APPS — the firms that do one of `kinds`, every country, alphabetical, each with its id, for a
+   * business to appoint or to ask. The same entries as the public pages: a firm that took itself off is not offered. A
+   * business never sees itself, and sees which hauliers it asked for a contract.
+   */
+  choose(kind: string, forEntityId?: string): DirectoryChoiceView {
+    const kinds = (kind ?? '').split(',').map((k) => k.trim()).filter(Boolean);
+    const unknown = kinds.find((k) => !(DIRECTORY_KINDS as readonly string[]).includes(k));
+    if (!kinds.length || unknown) throw new GlosError('VALIDATION_FAILED', `What the firm does: forwarder, clearing_agent, depot or haulier${unknown ? ` — not "${unknown}"` : ''}`, { field: 'kind' });
+    const items = this.rows()
+      .filter((r) => r.id !== forEntityId && r.entry.kinds.some((k) => kinds.includes(k)))
+      .map((r) => {
+        const asked = forEntityId ? this.asks.get(`${forEntityId}:${r.id}`) : undefined;
+        return { ...r.entry, id: r.id, ...(asked ? { askedAt: asked.at } : {}) };
+      });
+    return { items, basis: DIRECTORY_BASIS };
+  }
+
+  /**
+   * A BUSINESS ASKS A HAULIER FOR A CARRIAGE CONTRACT — found in the directory, told in the fleet's bell with where to
+   * read who is asking. Nothing is agreed by asking: the fleet records a contract and sends the code, as ever. Asked by a
+   * business our staff checked (the fleet must be able to read who it is), of a haulier in the directory; the same
+   * haulier once a week, and at most ten a day — a bell is not a mailing list. Every refusal before anything is written.
+   */
+  async askContract(entityId: string, fleetDid: string, by: string, now = Date.now()): Promise<ContractAskView> {
+    const e = this.entities.get(entityId);
+    if (!listedPublicly(e)) throw new GlosError('INVALID_STATE', 'A haulier is asked by a business our staff have checked, so it can read who is asking. Yours is not checked yet.');
+    const m = this.managers.list().find((x) => x.did === fleetDid);
+    if (!m || !this.fleetActive(m) || this.listings.get(m.did)?.hidden) throw new GlosError('NOT_FOUND', 'No such haulier in the directory', { field: 'fleetDid' });
+    const key = `${e.entityId}:${m.did}`;
+    const before = this.asks.get(key);
+    if (before && now - Date.parse(before.at) < ASK_AGAIN_MS) {
+      throw new GlosError('INVALID_STATE', `You asked ${m.companyName} on ${before.at.slice(0, 10)}. You can ask again from ${new Date(Date.parse(before.at) + ASK_AGAIN_MS).toISOString().slice(0, 10)}.`);
+    }
+    const today = [...this.asks.entries()].filter(([k, a]) => k.startsWith(`${e.entityId}:`) && now - Date.parse(a.at) < 24 * 3_600_000).length;
+    if (today >= ASKS_A_DAY) throw new GlosError('RATE_LIMITED', `You asked ${ASKS_A_DAY} hauliers today. Ask more tomorrow.`);
+    const at = new Date(now).toISOString();
+    this.asks.set(key, { at, by });
+    const handle = this.handles.forId(e.entityId)?.handle;
+    const where = catalogueEntry(e.jurisdiction)?.name;
+    await this.notifications?.notify(m.did, {
+      kind: 'contract_asked',
+      title: `${e.name} asks to carry under a contract with you`,
+      body: `${e.name}${where ? `, in ${where},` : ''} found you in the logistics directory and asks you to record a carriage contract with it, so its loads come straight to you rather than onto the open board.${handle ? ` Who it is, and how to reach it, are on its page: @${handle}.` : ''} To agree, record the contract in this app under Orders › Contracts and send it the link code. Nothing is agreed until you do.`,
+      link: '/',
+      data: { entityId: e.entityId, ...(handle ? { handle } : {}) },
+    });
+    return { fleetName: m.companyName, askedAt: at };
   }
 
   private companyEntry(e: Entity, kinds: DirectoryKind[]): DirectoryEntry | undefined {
@@ -200,6 +270,7 @@ export class DirectoryService {
       ...(!verified ? { why: 'Your business is shown once two of our staff have checked its papers.' } : !kinds.length ? { why: 'The directory lists forwarders, clearing agents, container depots and hauliers: say under Business details that you do one of these.' } : listing?.hidden ? { why: 'You took your business off the directory.' } : {}),
       ...(this.handles.forId(e.entityId) ? { handle: this.handles.forId(e.entityId)!.handle } : {}),
       ...(e.jurisdiction ? { country: e.jurisdiction } : {}),
+      onMap: this.sites.list(e.entityId).some((s) => Boolean(s.location)),
     };
   }
 
@@ -228,6 +299,7 @@ export class DirectoryService {
       ...(!eligible ? { why: 'Your fleet is shown once our staff have checked its papers and it is active.' } : listing?.hidden ? { why: 'You took your fleet off the directory.' } : {}),
       ...(this.handles.forId(m.did) ? { handle: this.handles.forId(m.did)!.handle } : {}),
       ...(m.jurisdiction ? { country: m.jurisdiction } : {}),
+      onMap: Boolean(m.location),
     };
   }
 

@@ -593,6 +593,9 @@ export const enHelpApp = {
   'help.logistics-directory.step4': '“Take us off the directory” takes you off at once; “Show us in the directory” puts you back, with your line kept. “See the directory” opens your country’s page.',
   'help.logistics-directory.note1': 'The list is alphabetical and nobody pays to be on it or higher on it. What we have seen counts only work done through SeeBuyGet, and the page says that a short record is not a bad one.',
   'help.logistics-directory.note2': 'A business is shown once two of our staff have checked its papers, and only if it forwards, clears goods or runs a container depot. Changing its name or registration number takes it off until it is checked again. A fleet is shown once it is active. In a business, only an owner changes this.',
+  'help.logistics-directory.note3': 'Your country is on the directory’s map where its firms’ own places are. In the Business app, add one under “Business details” › “Your places” › “New place”: a pin on the map, or an address we can find.',
+  'help.logistics-directory.note4': 'Choosing a clearing agent for an import or an export, the list is the directory’s: every clearing agent our staff checked, its own words beside what we have seen, the papers checked — never one that took itself off the directory.',
+  'help.logistics-directory.note5': 'Looking for a carrier: Business app, “Your carriers” › “Find a haulier”. Call or write to one, or tap “Ask for a contract”: the haulier is told in its Fleet app, once a week at most. When it agrees, it records the contract under “Orders” › “Contracts” and sends you the code to paste under “Link a contract”. Nothing is agreed by asking.',
   // hub-carriers
   'help.hub-carriers.title': 'Send pallets, cages and crates to other hubs',
   'help.hub-carriers.summary': 'Say what your hub moves bags on to other hubs, and send them with a driver — saying how they come back: with the driver, left there, or on a return job you post.',

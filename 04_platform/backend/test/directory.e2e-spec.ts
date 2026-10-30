@@ -237,4 +237,103 @@ describe('the directory, over the wire', () => {
     expect(await entry()).toMatchObject({ words: 'Flatbeds and box trucks, Nairobi to Kampala.', contact: { website: 'https://rift.example' } });
     expect((await entry())!.contact!.phone).toBeUndefined();
   }, 60_000);
+
+  it('inside the apps: the firms to choose, each with its id; a business asks a haulier for a contract — once a week, ten a day', async () => {
+    const managers = app.get(FleetManagerService);
+    const aFleet = (name: string, active = true) => {
+      const m = managers.register({
+        companyName: `${name} ${tag}`, contactPhone: `+2548${digits()}1`.slice(0, 13), ownerFullName: 'O O', ownerNationalId: `MGR-ASK-${digits()}`, location: { lat: -1.28, lng: 36.82 },
+        requirements: { businessRegistrationNo: `BRN-ASK-${digits()}`, transportOperatorLicence: `TOL-ASK-${digits()}`, taxId: `TAX-ASK-${digits()}` },
+      });
+      if (active) {
+        managers.submitKyc(m.did, { businessRegCertRef: 'reg.pdf', operatorLicenceRef: 'lic.pdf', ownerIdRef: 'id.pdf', proofOfAddressRef: 'addr.pdf' });
+        managers.decideKyc(m.did, true);
+        managers.recordBond(m.did);
+      }
+      return m;
+    };
+    const fleetToken = async (did: string) => (await http().post('/v1/auth/token').send({ role: 'fleet_manager', did, tenant: did, type: 'client_credentials' }).expect(201)).body.access_token as string;
+
+    // A company that only SAID what it clears is a clearing agent too — as the agent finder always had it.
+    const offerOnly = await aBusiness('Offer Only Agents', ['shipper']);
+    await checked(offerOnly);
+    app.get(ImportService).setOffer(offerOnly.entityId, { specialisms: ['perishables'], places: ['JKIA'] }, 'Ruth');
+    const hiddenAgent = await aBusiness('Hidden Clearing', ['clearing_agent']);
+    await checked(hiddenAgent);
+    await http().post('/v1/sbg/business/me/directory').set(bearer(hiddenAgent.token)).send({ listed: false }).expect(201);
+    const asker = await aBusiness('Asking Importer', ['importer', 'clearing_agent']);
+    await checked(asker);
+
+    const choose = async (token: string, kind: string) => (await http().get(`/v1/sbg/directory/choose?kind=${kind}`).set(bearer(token)).expect(200)).body as { items: Array<{ id: string; name: string; kinds: string[]; askedAt?: string; handle: string }>; basis: string };
+    const named = (items: Array<{ name: string }>) => items.map((i) => i.name).filter((n) => n.endsWith(tag));
+    const agents = await choose(asker.token, 'clearing_agent');
+    // Never itself; never one that took itself off; every country; alphabetical; the basis said.
+    expect(named(agents.items)).toContain(offerOnly.name);
+    expect(named(agents.items)).not.toContain(hiddenAgent.name);
+    expect(named(agents.items)).not.toContain(asker.name);
+    expect(named(agents.items)).toEqual([...named(agents.items)].sort((a, b) => a.localeCompare(b, 'en', { sensitivity: 'base' })));
+    expect(agents.basis).toMatch(/alphabetical order\. Not a ranking/);
+    expect(agents.items.find((i) => i.name === offerOnly.name)).toMatchObject({ id: offerOnly.entityId, kinds: ['clearing_agent'], says: { clears: ['perishables'], places: ['JKIA'] } });
+    // Our staff see every firm, the asking one included; nobody signed out does.
+    expect(named((await choose(setupKey, 'clearing_agent')).items)).toContain(asker.name);
+    expect((await http().get('/v1/sbg/directory/choose?kind=clearing_agent')).status).toBe(401);
+    expect((await http().get('/v1/sbg/directory/choose?kind=pilot').set(bearer(asker.token))).status).toBe(400);
+    expect((await http().get('/v1/sbg/directory/choose').set(bearer(asker.token))).status).toBe(400);
+    // Several kinds at once.
+    const both = await choose(asker.token, 'forwarder,clearing_agent');
+    expect(named(both.items)).toEqual(expect.arrayContaining([offerOnly.name]));
+    expect(both.items.every((i) => i.kinds.includes('forwarder') || i.kinds.includes('clearing_agent'))).toBe(true);
+    // The id is what an appointment names.
+    const made = (await http().post('/v1/sbg/imports').set(bearer(asker.token)).send({ goodsDescription: 'Avocados, chilled', originCountry: 'TZ', destCountry: 'KE', destPort: 'Mombasa' }).expect(201)).body;
+    await http().post(`/v1/sbg/imports/${made.importId}/appoint`).set(bearer(asker.token)).send({ agentEntityId: agents.items.find((i) => i.name === offerOnly.name)!.id }).expect(201);
+
+    // A haulier, found and asked. Its bell says who asks, where to read who it is, and what to do — nothing is agreed.
+    const kudu = aFleet('Kudu Haulage');
+    const pending = aFleet('Pending Kudu', false);
+    const hauliers = await choose(asker.token, 'haulier');
+    expect(hauliers.items.find((i) => i.name === `Kudu Haulage ${tag}`)).toMatchObject({ id: kudu.did, kinds: ['haulier'] });
+    expect(hauliers.items.find((i) => i.name === `Kudu Haulage ${tag}`)!.askedAt).toBeUndefined();
+    const asked = (await http().post(`/v1/sbg/business/me/directory/ask/${kudu.did}`).set(bearer(asker.token)).expect(201)).body;
+    expect(asked).toMatchObject({ fleetName: `Kudu Haulage ${tag}`, askedAt: expect.stringMatching(/^\d{4}-/) });
+    const bell = (await http().get('/v1/sbg/notifications/inbox').set(bearer(await fleetToken(kudu.did))).expect(200)).body;
+    const told = ((bell.items ?? bell) as Array<{ kind: string; title: string; body: string }>).find((n) => n.kind === 'contract_asked');
+    const askerHandle = agents.items.length ? (await http().get('/v1/sbg/business/me/directory').set(bearer(asker.token)).expect(200)).body.handle : '';
+    expect(told?.title).toBe(`${asker.name} asks to carry under a contract with you`);
+    expect(told?.body).toContain(`, in Kenya, found you in the logistics directory`);
+    expect(told?.body).toContain(`@${askerHandle}`);
+    expect(told?.body).toContain('Orders › Contracts');
+    expect(told?.body).toContain('Nothing is agreed until you do.');
+    expect((await choose(asker.token, 'haulier')).items.find((i) => i.name === `Kudu Haulage ${tag}`)!.askedAt).toBe(asked.askedAt);
+    // Once a week — refused before anything is written.
+    const again = await http().post(`/v1/sbg/business/me/directory/ask/${kudu.did}`).set(bearer(asker.token));
+    expect(again.status).toBe(400);
+    expect(again.body.detail).toMatch(/^You asked Kudu Haulage .* on \d{4}-\d{2}-\d{2}\. You can ask again from \d{4}-\d{2}-\d{2}\.$/);
+    // Only a haulier in the directory; only an owner; only a business our staff checked.
+    expect((await http().post(`/v1/sbg/business/me/directory/ask/${pending.did}`).set(bearer(asker.token))).status).toBe(404);
+    expect((await http().post('/v1/sbg/business/me/directory/ask/did:glos:nobody').set(bearer(asker.token))).status).toBe(404);
+    const shy = aFleet('Shy Haulage');
+    await http().post(`/v1/sbg/fleet/managers/${shy.did}/directory`).set(bearer(await fleetToken(shy.did))).send({ listed: false }).expect(201);
+    expect((await http().post(`/v1/sbg/business/me/directory/ask/${shy.did}`).set(bearer(asker.token))).status).toBe(404);
+    const unchecked = await aBusiness('Unchecked Asker', ['shipper']);
+    expect((await http().post(`/v1/sbg/business/me/directory/ask/${kudu.did}`).set(bearer(unchecked.token))).status).toBe(400);
+    const booker = await aPerson();
+    await http().post('/v1/sbg/business/me/members').set(bearer(asker.token)).send({ phone: booker.phone, name: 'Bea Booker', role: 'booker' }).expect(201);
+    const invite = (await http().get('/v1/sbg/business/mine').set(bearer(booker.token)).expect(200)).body.items.find((i: { entityId: string }) => i.entityId === asker.entityId);
+    await http().post(`/v1/sbg/business/invitations/${invite.memberId}/accept`).set(bearer(booker.token)).expect(201);
+    const bookerBiz = (await http().post(`/v1/sbg/business/${asker.entityId}/session`).set(bearer(booker.token)).expect(201)).body.token.access_token as string;
+    const other = aFleet('Other Haulage');
+    expect((await http().post(`/v1/sbg/business/me/directory/ask/${other.did}`).set(bearer(bookerBiz))).status).toBe(403);
+    expect((await http().post(`/v1/sbg/business/me/directory/ask/${other.did}`).set(bearer(setupKey))).status).toBe(403);
+    // Ten hauliers a day.
+    for (let i = 0; i < 9; i += 1) await http().post(`/v1/sbg/business/me/directory/ask/${aFleet(`Day Haulage ${i}`).did}`).set(bearer(asker.token)).expect(201);
+    const eleventh = await http().post(`/v1/sbg/business/me/directory/ask/${other.did}`).set(bearer(asker.token));
+    expect(eleventh.status).toBe(429);
+    expect(eleventh.body.detail).toBe('You asked 10 hauliers today. Ask more tomorrow.');
+
+    // On the map once one of its own places has a pin.
+    expect((await http().get('/v1/sbg/business/me/directory').set(bearer(asker.token)).expect(200)).body.onMap).toBe(false);
+    await http().post(`/v1/sbg/entities/${asker.entityId}/sites`).set(bearer(asker.token)).send({ kind: 'delivery', name: 'Thika Road warehouse', location: { lat: -1.22, lng: 36.89 } }).expect(201);
+    expect((await http().get('/v1/sbg/business/me/directory').set(bearer(asker.token)).expect(200)).body.onMap).toBe(true);
+    expect((await http().get(`/v1/sbg/fleet/managers/${kudu.did}/directory`).set(bearer(await fleetToken(kudu.did))).expect(200)).body.onMap).toBe(true);
+  }, 120_000);
 });

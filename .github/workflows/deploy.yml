@@ -25,6 +25,13 @@ on:
           commit id: it is not tested or built again, its images are used as they were made.
         type: string
         required: false
+  # THE PUBLIC PAGES, KEPT FRESH (2026-10-30: "a nightly rebuild of the public pages"). The towns, the directory and the
+  # three documents are built into HTML at a release, for search engines and AI assistants. Every night the live pages
+  # are read against what the site says now (04_platform/frontend/scripts/pages-stale.mjs); where they differ, the
+  # release that is RUNNING is built again with fresh pages and put back on — the same code, not tested again because it
+  # was tested when it was released, and the API left running (deploy.sh: the same release put on again).
+  schedule:
+    - cron: '30 0 * * *' # 03:30 in Nairobi
 
 permissions:
   contents: read
@@ -32,14 +39,14 @@ permissions:
 jobs:
   test:
     name: Test
-    if: ${{ inputs.release == '' }}
+    if: ${{ inputs.release == '' && github.event_name != 'schedule' }}
     uses: ./.github/workflows/ci.yml
     with:
       skip-images: true
 
   not-set-up:
     name: Tested, not released
-    if: ${{ vars.DEPLOY_HOST == '' }}
+    if: ${{ vars.DEPLOY_HOST == '' && github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       - run: echo "::notice::Nothing was released - this repository has not been told where its server is (the variable DEPLOY_HOST). See 04_platform/DEPLOY.md."
@@ -112,11 +119,99 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
 
+  # ---- At night: are the public pages out of date, and if so, the running release's web image built again ----------
+  pages:
+    name: Are the public pages out of date
+    if: ${{ github.event_name == 'schedule' && vars.DEPLOY_HOST != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      stale: ${{ steps.check.outputs.stale }}
+      release: ${{ steps.running.outputs.release }}
+    env:
+      TARGET: deploy@${{ vars.DEPLOY_HOST }}
+      SBG_PUBLIC_URL: ${{ vars.SBG_PUBLIC_URL }}
+    steps:
+      # The check from main; the release it rebuilds is whichever the server runs (a rollback stays rolled back).
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: 04_platform/frontend/scripts
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: The key, and whose server it opens
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [ -n "$DEPLOY_SSH_KEY" ] || { echo "::error::The secret DEPLOY_SSH_KEY is not set (the private half of the deploy key)."; exit 1; }
+          [ -n "$DEPLOY_KNOWN_HOSTS" ] || { echo "::error::The variable DEPLOY_KNOWN_HOSTS is not set. setup-droplet.sh prints it."; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          printf '%s\n' 'Host *' '  IdentityFile ~/.ssh/id_deploy' '  IdentitiesOnly yes' '  StrictHostKeyChecking yes' '  BatchMode yes' '  ConnectTimeout 20' > ~/.ssh/config
+
+      - name: Which release the server runs
+        id: running
+        run: |
+          release="$(ssh "$TARGET" "sed -n 's/^current=//p' /opt/seebuyget/RELEASE")"
+          [[ "$release" =~ ^[0-9a-f]{7,40}$ ]] || { echo "::error::The server did not say which release it runs (/opt/seebuyget/RELEASE)."; exit 1; }
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Running: $release"
+
+      - name: The pages against the site
+        id: check
+        run: node 04_platform/frontend/scripts/pages-stale.mjs "$SBG_PUBLIC_URL"
+
+  publish-pages:
+    name: Build the public pages again
+    needs: pages
+    if: ${{ needs.pages.outputs.stale == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # The code of the release that runs, exactly: only its pages are new.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.pages.outputs.release }}
+      - name: Where the image goes
+        id: names
+        run: echo "repo=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # PAGES_AS_OF a run of its own: the build fetches the towns, the documents and the directory again, never from
+      # yesterday's cache. Same tag as the release: the server puts the same release on again, and only the web changes.
+      - name: Web image, its pages fresh
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: 04_platform/frontend/Dockerfile
+          build-args: |
+            SBG_PUBLIC_URL=${{ vars.SBG_PUBLIC_URL }}
+            PAGES_AS_OF=run-${{ github.run_id }}
+          push: true
+          tags: ${{ steps.names.outputs.repo }}/web:${{ needs.pages.outputs.release }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.pages.outputs.release }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
   deploy:
     name: Put it on the server
-    needs: publish
-    # After a build that succeeded — or with no build at all, when an earlier release was asked for by its id.
-    if: ${{ !cancelled() && vars.DEPLOY_HOST != '' && (needs.publish.result == 'success' || (inputs.release != '' && needs.publish.result == 'skipped')) }}
+    needs: [publish, pages, publish-pages]
+    # After a build that succeeded — or with no build at all, when an earlier release was asked for by its id — or, at
+    # night, after the running release's pages were built again.
+    if: ${{ !cancelled() && vars.DEPLOY_HOST != '' && (needs.publish.result == 'success' || (inputs.release != '' && needs.publish.result == 'skipped') || needs.publish-pages.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Give this environment required reviewers (Settings → Environments) and every release waits for a yes.
@@ -131,7 +226,7 @@ jobs:
       contents: read
       packages: read
     env:
-      RELEASE: ${{ inputs.release || github.sha }}
+      RELEASE: ${{ inputs.release || needs.pages.outputs.release || github.sha }}
       TARGET: deploy@${{ vars.DEPLOY_HOST }}
       SBG_PUBLIC_URL: ${{ vars.SBG_PUBLIC_URL }}
       SBG_CONSOLE_URL: ${{ vars.SBG_CONSOLE_URL }}
@@ -142,7 +237,7 @@ jobs:
       # template and the script (the files directly in 04_platform/ come with its scripts/ folder).
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release || github.sha }}
+          ref: ${{ inputs.release || needs.pages.outputs.release || github.sha }}
           sparse-checkout: 04_platform/scripts
 
       - name: The key, and whose server it opens
@@ -168,6 +263,15 @@ jobs:
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # At night, only the release that was running when its pages were rebuilt is put on again. A release that came
+          # in meanwhile is never taken back by it: that release brought pages of its own.
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            now="$(ssh "$TARGET" "sed -n 's/^current=//p' /opt/seebuyget/RELEASE")"
+            if [ "$now" != "$RELEASE" ]; then
+              echo "::notice::The server now runs ${now:-nothing it names}, not $RELEASE: a release came in while the pages were built. Nothing is put on."
+              exit 0
+            fi
+          fi
           # Signed in for the length of this job only: the token stops working when the job ends.
           printf '%s' "$GHCR_TOKEN" | ssh "$TARGET" "docker login ghcr.io --username $(printf '%q' "$GITHUB_ACTOR") --password-stdin" >/dev/null
           ssh "$TARGET" "$(printf 'cd /opt/seebuyget && chmod +x deploy.sh && IMAGE_REPO=%q SBG_PUBLIC_URL=%q SBG_CONSOLE_URL=%q SBG_REDIRECT_HOSTS=%q CONSOLE_ALLOW_IPS=%q ./deploy.sh %q' \

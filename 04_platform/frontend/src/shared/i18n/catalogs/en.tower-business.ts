@@ -423,6 +423,8 @@ export const enTowerBusiness = {
   'tower.pick.reading': 'Reading the directory…',
   'tower.pick.empty': 'Nobody listed here yet.',
   'tower.pick.agents': 'Clearing agents',
+  'tower.pick.checked': '{papers, plural, one {# paper} other {# papers}} checked by our staff, the last on {date}',
+  'tower.pick.call': 'Call',
   'tower.imports.grantPapers': '{n, plural, one {# paper} other {# papers}}',
   'tower.imports.grantNoPapers': 'nothing to read yet',
   'tower.pick.agentsBasis': '{n} listed, alphabetically. Not a ranking — advertising more moves nobody up. This container clears in {country}; each one says where it is registered, which is not the same as where it works.',

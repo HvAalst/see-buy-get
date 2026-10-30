@@ -58,12 +58,6 @@ export function SitePicker({
   const t = useT();
   const [sites, setSites] = useState<SiteView[]>([]);
   const [adding, setAdding] = useState(false);
-  const [how, setHow] = useState<'pin' | 'address'>('pin');
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [pin, setPin] = useState<GeoPoint | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!api || !entityId) return;
@@ -75,6 +69,68 @@ export function SitePicker({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const chosen = sites.find((s) => s.siteId === value);
+
+  return (
+    <div class="cfield">
+      <span class="cfield__label">{label}</span>
+      <div class="twr-panelend">
+        <ConsolePick bare label={label} value={value} onChange={onChange} placeholder={t('tower.sites.choose')} options={sites.map((s) => ({ value: s.siteId, label: s.name }))} />
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setAdding(true)}>
+          {addLabel}
+        </button>
+      </div>
+      {/* Which KIND of answer this place is. Said on the form as well as on the note, because somebody
+          choosing between two saved places is entitled to know which one was pointed at. */}
+      {chosen ? <span class="chint">{chosen.from === 'pin' ? t('tower.sites.fromPin') : t('tower.sites.fromAddress', { address: chosen.address ?? '' })}</span> : null}
+
+      {adding ? (
+        <NewPlace
+          kind={kind}
+          entityId={entityId}
+          api={api}
+          title={addLabel}
+          onClose={() => setAdding(false)}
+          onSaved={(made) => {
+            setSites((was) => [...was, made].sort((a, b) => a.name.localeCompare(b.name)));
+            // Chosen straight away: somebody who just saved a port meant to use it.
+            onChange(made.siteId);
+            setAdding(false);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * SAVING A PLACE — by a pin on the map or by an address, in a sheet of its own: inside a form's place picker, and on its
+ * own under the business's places (2026-10-30: a place with a pin is also what puts a firm's country on the directory's
+ * map, and there was no way to add one outside a form).
+ */
+export function NewPlace({
+  kind,
+  entityId,
+  api,
+  title,
+  onClose,
+  onSaved,
+}: {
+  kind: 'port' | 'clearance' | 'delivery' | 'loading';
+  entityId: string;
+  api: Api | null;
+  title: string;
+  onClose: () => void;
+  onSaved: (made: SiteView) => void;
+}) {
+  const t = useT();
+  const [how, setHow] = useState<'pin' | 'address'>('pin');
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [pin, setPin] = useState<GeoPoint | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
     if (!api) return;
@@ -93,33 +149,11 @@ export function SitePicker({
       setError(r.error?.detail || r.error?.title || t('tower.sites.failed'));
       return;
     }
-    const made = r.data as SiteView;
-    setSites((was) => [...was, made].sort((a, b) => a.name.localeCompare(b.name)));
-    // Chosen straight away: somebody who just saved a port meant to use it.
-    onChange(made.siteId);
-    setAdding(false);
-    setName('');
-    setAddress('');
-    setPin(null);
+    onSaved(r.data as SiteView);
   };
 
-  const chosen = sites.find((s) => s.siteId === value);
-
   return (
-    <div class="cfield">
-      <span class="cfield__label">{label}</span>
-      <div class="twr-panelend">
-        <ConsolePick bare label={label} value={value} onChange={onChange} placeholder={t('tower.sites.choose')} options={sites.map((s) => ({ value: s.siteId, label: s.name }))} />
-        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setAdding(true)}>
-          {addLabel}
-        </button>
-      </div>
-      {/* Which KIND of answer this place is. Said on the form as well as on the note, because somebody
-          choosing between two saved places is entitled to know which one was pointed at. */}
-      {chosen ? <span class="chint">{chosen.from === 'pin' ? t('tower.sites.fromPin') : t('tower.sites.fromAddress', { address: chosen.address ?? '' })}</span> : null}
-
-      {adding ? (
-        <Sheet open onClose={() => setAdding(false)} title={addLabel}>
+        <Sheet open onClose={onClose} title={title}>
           <label class="cfield">
             <span class="cfield__label">{t('tower.sites.name')}</span>
             <input class="cinput" value={name} onChange={(e) => setName((e.target as HTMLInputElement).value)} placeholder={t(kind === 'port' ? 'tower.sites.namePortPh' : kind === 'loading' ? 'tower.sites.nameLoadingPh' : 'tower.sites.nameDeliveryPh')} />
@@ -154,7 +188,5 @@ export function SitePicker({
             </button>
           </div>
         </Sheet>
-      ) : null}
-    </div>
   );
 }

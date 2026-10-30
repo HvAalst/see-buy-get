@@ -278,19 +278,6 @@ export interface ExportRow {
   agentName?: string;
 }
 
-/** One clearing agent from the public directory: what it claims, and what we have seen. Alphabetical, never ranked. */
-export interface ExportAgentCard {
-  entityId: string;
-  name: string;
-  handle?: string;
-  country?: string;
-  offer?: { specialisms?: string[] };
-  appointed: number;
-  cleared: number;
-  thin: boolean;
-  contact?: { phone?: string };
-}
-
 export interface RegisterExportInput {
   goodsDescription: string;
   originCountry: string;
@@ -355,8 +342,6 @@ export interface ExportsApi {
   refusePaper(exportId: string, key: ExportPaperKey, reason: string): Promise<Result<ExportDetail>>;
   /** The paper attached on a line, as its bytes — for the exporter, its appointed agent, staff. */
   paperFile(exportId: string, key: ExportPaperKey): Promise<Result<Blob>>;
-  /** The clearing agents' directory, alphabetical. */
-  findAgents(): Promise<Result<{ items: ExportAgentCard[] }>>;
   ownBox(exportId: string, own: boolean): Promise<Result<ExportDetail>>;
   quoteFee(exportId: string, body: { amount: number; currency?: string; note?: string; reference?: string }): Promise<Result<ExportDetail>>;
   acceptFee(exportId: string): Promise<Result<ExportDetail>>;
@@ -408,7 +393,6 @@ export function exportsApi(sbg: SbgClient): ExportsApi {
     acceptPaper: (exportId, key) => post(`/v1/sbg/exports/${id(exportId)}/papers/${key}/accept`),
     refusePaper: (exportId, key, reason) => post(`/v1/sbg/exports/${id(exportId)}/papers/${key}/refuse`, { reason }),
     paperFile: (exportId, key) => call((c) => c.GET(`/v1/sbg/exports/${id(exportId)}/papers/${key}/file` as never, { parseAs: 'blob' } as never) as never),
-    findAgents: () => call((c) => c.GET('/v1/sbg/agents/find' as never, {} as never) as never),
     ownBox: (exportId, own) => post(`/v1/sbg/exports/${id(exportId)}/own-box`, { own }),
     quoteFee: (exportId, body) => post(`/v1/sbg/exports/${id(exportId)}/fee`, body),
     acceptFee: (exportId) => post(`/v1/sbg/exports/${id(exportId)}/fee/accept`),

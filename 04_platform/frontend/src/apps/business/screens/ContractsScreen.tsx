@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import type { BusinessClient, BusinessView, CarriageContract } from '../api';
 import { contractPeriod } from '../logic';
 import type { BusinessActions } from '../useBusinessApp';
+import { FindHaulier } from './FindHaulier';
 
 /**
  * P1 — THE CARRIERS THIS BUSINESS HAS A CONTRACT WITH.
@@ -147,6 +148,9 @@ export function ContractsScreen({ business, client }: { business: BusinessView; 
         )}
         <p class="chint">{t('business.contracts.howTo')}</p>
       </section>
+
+      {/* A carrier to ask, from the logistics directory (2026-10-30): reached by a button, asked in its own app. */}
+      <FindHaulier client={client} owner={owner} onAsked={(fleet) => setDone(t('business.contracts.askedNote', { fleet }))} />
     </>
   );
 }

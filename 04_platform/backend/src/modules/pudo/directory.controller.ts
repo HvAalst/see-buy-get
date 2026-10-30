@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { Roles } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -8,7 +8,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessService } from './business.service';
 import { DirectoryService } from './directory.service';
 import { FleetManagerService } from './fleet-manager.service';
-import { DirectoryCountryView, DirectoryIndex, DirectoryListingDto, DirectoryListingView, FleetDirectoryDto } from './directory.types';
+import { ContractAskView, DirectoryChoiceView, DirectoryChooseQueryDto, DirectoryCountryView, DirectoryIndex, DirectoryListingDto, DirectoryListingView, FleetDirectoryDto } from './directory.types';
 
 /**
  * THE DIRECTORY (the user, 2026-10-30): read by anybody, without an account — a directory nobody can read is no
@@ -28,6 +28,26 @@ export class DirectoryController {
   @Get('directory')
   index(): DirectoryIndex {
     return this.directory.index();
+  }
+
+  /**
+   * The firms to choose from inside the apps — appointing a clearing agent, finding a haulier — every country, each with
+   * its id. Signed in: a business (never offered itself) or our staff.
+   */
+  @Roles('business', 'operator')
+  @Get('directory/choose')
+  choose(@Query() q: DirectoryChooseQueryDto, @Actor() actor: IntrospectionResult): DirectoryChoiceView {
+    const own = actor?.role === 'business' ? this.businesses.requireMember(actor).entity.entityId : undefined;
+    return this.directory.choose(q.kind, own);
+  }
+
+  /** A business asks a haulier it found for a carriage contract — the haulier's bell says so. An owner's to ask. */
+  @Roles('business')
+  @Post('business/me/directory/ask/:fleetDid')
+  ask(@Param('fleetDid') fleetDid: string, @Actor() actor: IntrospectionResult): Promise<ContractAskView> {
+    const acting = this.businesses.requireMember(actor);
+    if (acting.member.role !== 'owner') throw new GlosError('FORBIDDEN', 'Only an owner asks a carrier for a contract');
+    return this.directory.askContract(acting.entity.entityId, fleetDid, acting.member.name ?? auditActor(actor));
   }
 
   /** One country's firms, alphabetical. */

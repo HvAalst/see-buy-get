@@ -5,6 +5,7 @@ import { tabAtTheTap } from '../../../shared/openPage';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
+import { agentRow, type DirectoryChoice } from '../../tower/directoryChoice';
 import { ExportSli } from './ExportSli';
 import { ExportPacking } from './ExportPacking';
 import { ExportInvoice } from './ExportInvoice';
@@ -837,22 +838,13 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
                 {
                   key: 'agents',
                   labelKey: 'business.exports.agent.kind',
+                  // From the logistics directory (2026-10-30): the clearing agents our staff checked; never itself.
                   load: async () => {
-                    const r = await client.exports.findAgents();
-                    const items = r.data?.items ?? [];
+                    const r = await client.api.chooseFromDirectory('clearing_agent');
+                    const items = ((r.data as { items?: DirectoryChoice[] } | null | undefined)?.items ?? []).filter((a) => a.id !== business.entityId);
                     return {
                       basis: t('business.exports.agent.basis', { n: items.length }),
-                      rows: items
-                        .filter((a) => a.entityId !== business.entityId)
-                        .map((a) => ({
-                          id: a.entityId,
-                          name: a.name,
-                          ...(a.handle ? { handle: a.handle } : {}),
-                          ...(a.country ? { country: a.country } : {}),
-                          ...(a.offer?.specialisms?.length ? { says: a.offer.specialisms.map((sp) => t(`home.agents.spec.${sp}` as never)).join(', ') } : {}),
-                          seen: a.thin ? t('business.exports.agent.new') : t('business.exports.agent.seen', { appointed: a.appointed, cleared: a.cleared }),
-                          ...(a.contact?.phone ? { phone: a.contact.phone } : {}),
-                        })),
+                      rows: items.map((a) => agentRow(a, t, { seen: 'business.exports.agent.seen', fresh: 'business.exports.agent.new' })),
                     };
                   },
                 },

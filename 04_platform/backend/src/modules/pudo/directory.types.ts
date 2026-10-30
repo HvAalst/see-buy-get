@@ -87,6 +87,34 @@ export class DirectoryCountryView {
   @ApiProperty() basis: string;
 }
 
+/**
+ * A FIRM TO CHOOSE, inside the apps (the user, 2026-10-30: "when a business appoints a clearing agent or looks for a
+ * carrier, let it pick from the directory"): its entry as the public page shows it, with the id an appointment or an ask
+ * names.
+ */
+export class DirectoryChoice extends DirectoryEntry {
+  /** The company's id, or the fleet's. */
+  @ApiProperty() id: string;
+  /** A haulier this business asked for a contract: when. */
+  @ApiPropertyOptional() askedAt?: string;
+}
+
+export class DirectoryChoiceView {
+  @ApiProperty({ type: [DirectoryChoice] }) items: DirectoryChoice[];
+  @ApiProperty() basis: string;
+}
+
+export class DirectoryChooseQueryDto {
+  /** What the firm does, one or more: `clearing_agent`, or `forwarder,clearing_agent`. */
+  @IsString() @Matches(/^[a-z_]+(,[a-z_]+)*$/, { message: 'What the firm does: forwarder, clearing_agent, depot or haulier' }) kind!: string;
+}
+
+/** A business asked a haulier for a carriage contract: the haulier's bell says so. */
+export class ContractAskView {
+  @ApiProperty() fleetName: string;
+  @ApiProperty() askedAt: string;
+}
+
 /** A firm's own place in the directory, as it sees it: whether it is listed, its line, and why it may not be. */
 export class DirectoryListingView {
   @ApiProperty() listed: boolean;
@@ -100,6 +128,8 @@ export class DirectoryListingView {
   @ApiPropertyOptional() handle?: string;
   /** The country whose page it is on: /directory/<country>/. */
   @ApiPropertyOptional() country?: string;
+  /** One of its own places is on SeeBuyGet with a pin — what puts its country on the directory's map. */
+  @ApiProperty() onMap: boolean;
 }
 
 export class DirectoryListingDto {

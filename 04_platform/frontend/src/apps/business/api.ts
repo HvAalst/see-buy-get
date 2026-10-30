@@ -391,6 +391,8 @@ export interface BusinessClient {
   /** Its place in the public logistics directory: shown or taken off, and its own line (owner only). */
   directory(): Promise<Result<DirectoryListingView>>;
   setDirectory(body: { listed?: boolean; words?: string }): Promise<Result<DirectoryListingView>>;
+  /** Ask a haulier found in the directory for a carriage contract (owner only): its bell says so. */
+  askContract(fleetDid: string): Promise<Result<{ fleetName: string; askedAt: string }>>;
   /** The business's GS1 company prefix: set (owner only), or stop giving codes. */
   setGs1(companyPrefix: string, extensionDigit: number): Promise<Result<BusinessView>>;
   clearGs1(): Promise<Result<BusinessView>>;
@@ -472,6 +474,7 @@ export function createBusinessClient(): BusinessClient {
     endContract: (contractId, reason) => call((c) => c.POST(`/v1/sbg/business/me/contracts/${encodeURIComponent(contractId)}/end` as never, { body: reason ? { reason } : {} } as never) as never),
     directory: () => call((c) => c.GET('/v1/sbg/business/me/directory' as never, {} as never) as never),
     setDirectory: (body) => call((c) => c.POST('/v1/sbg/business/me/directory' as never, { body } as never) as never),
+    askContract: (fleetDid) => call((c) => c.POST(`/v1/sbg/business/me/directory/ask/${encodeURIComponent(fleetDid)}` as never, {} as never) as never),
     setGs1: (companyPrefix, extensionDigit) => call((c) => c.POST('/v1/sbg/business/me/gs1' as never, { body: { companyPrefix, extensionDigit } } as never) as never),
     clearGs1: () => call((c) => c.DELETE('/v1/sbg/business/me/gs1' as never, {} as never) as never),
     gs1Disputes: () => call((c) => c.GET('/v1/sbg/business/me/gs1/disputes' as never, {} as never) as never),

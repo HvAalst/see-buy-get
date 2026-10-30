@@ -15,6 +15,8 @@ export interface DirectoryListingView {
   contact?: { phone?: string; email?: string; website?: string };
   handle?: string;
   country?: string;
+  /** One of its own places has a pin — what puts its country on the directory's map. */
+  onMap?: boolean;
 }
 
 export type ListingState = 'shown' | 'off' | 'notChecked' | 'noKinds';

@@ -2,7 +2,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { ContactCardPanel } from '../../tower/screens/ContactCardPanel';
-import type { SiteView } from '../../tower/screens/SitePicker';
+import { NewPlace, type SiteView } from '../../tower/screens/SitePicker';
 import type { BusinessActivity, BusinessClient, BusinessView } from '../api';
 import { ACTIVITIES, mayAct, mayManage } from '../logic';
 import { baysOf, DAY_NAME, loadsLine, WEEK, weekForm, type SiteWeek, type WeekForm } from '../../fleet/sites';
@@ -34,6 +34,9 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
   const [week, setWeek] = useState<WeekForm>(weekForm(undefined));
   const [placeBusy, setPlaceBusy] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
+  // A new place, outside a form; and a count the directory panel reads again on.
+  const [addingPlace, setAddingPlace] = useState(false);
+  const [placesRev, setPlacesRev] = useState(0);
   const works = mayAct(business.you.role);
 
   useEffect(() => {
@@ -177,7 +180,7 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
       <ContactCardPanel entityId={business.entityId} who={business.you.name} client={client as never} />
 
       {/* Its place in SeeBuyGet's public logistics directory, and its own line there (2026-10-30): an owner's to say. */}
-      <DirectoryPanel client={client} owner={owner} actions={actions} />
+      <DirectoryPanel client={client} owner={owner} actions={actions} placesRev={placesRev} />
 
       {/* The global barcode on its packages, beside ours: a GS1 company prefix is the business's own to give. */}
       <Gs1Panel business={business} actions={actions} client={client} owner={owner} />
@@ -194,6 +197,28 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
           {sites ? <span class="chint">{t('tower.settings.placesCount', { n: sites.length })}</span> : null}
         </div>
         <p class="cons__lede">{t('business.details.placesLede')}</p>
+        {works ? (
+          <div class="twr-panelend">
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setAddingPlace(true)}>
+              {t('business.places.add')}
+            </button>
+          </div>
+        ) : null}
+        {addingPlace ? (
+          <NewPlace
+            kind="delivery"
+            entityId={business.entityId}
+            api={(client?.api ?? null) as never}
+            title={t('business.places.addTitle')}
+            onClose={() => setAddingPlace(false)}
+            onSaved={() => {
+              setAddingPlace(false);
+              setPlacesRev((n) => n + 1);
+              actions.say(t('business.places.added'));
+              void loadSites();
+            }}
+          />
+        ) : null}
         {sites === null ? (
           <p class="cons__empty">{t('business.loading')}</p>
         ) : sites.length === 0 ? (

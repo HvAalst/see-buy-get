@@ -14,6 +14,7 @@ import { CurrencySelect } from './CurrencySelect';
 import { ConsignmentNoteCard } from './ConsignmentNoteCard';
 import { publicPageUrl } from '../../../lib/sbg/config';
 import { ParticipantPicker } from './ParticipantPicker';
+import { agentRow, type DirectoryChoice } from '../directoryChoice';
 import { SitePicker } from './SitePicker';
 import { CountryPicker } from './CountryPicker';
 import { useCountryAtlas } from './CountrySelect';
@@ -37,7 +38,6 @@ import {
   type CustomsHoldKind,
   type ClearanceRecordView,
   CLEARANCE_SPECIALISMS,
-  type AgentCardView,
   CARGO_NATURES,
   liveGrants,
   outstanding,
@@ -2162,9 +2162,14 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                            * country instead, so an importer can see who is where and decide; a
                            * registered address is not the same thing as where somebody works.
                            */
+                          /*
+                           * FROM THE LOGISTICS DIRECTORY (2026-10-30): every clearing agent our staff checked — by its
+                           * activity, its appointments or what it says it clears — with its own line and the papers
+                           * checked, never one that took itself off. The id is what the appointment names.
+                           */
                           load: async () => {
-                            const r = await (client!.api as never as { findAgents: (q: { country?: string }) => Promise<{ data?: unknown }> }).findAgents({});
-                            const got = (r.data ?? { items: [], basis: '' }) as { items: AgentCardView[]; basis: string };
+                            const r = await (client!.api as never as { chooseFromDirectory: (kind: string) => Promise<{ data?: unknown }> }).chooseFromDirectory('clearing_agent');
+                            const got = { items: ((r.data as { items?: DirectoryChoice[] } | null | undefined)?.items ?? []) };
                             return {
                               /*
                                * THE SENTENCE, NOT THE TOKEN. This route answers `basis:
@@ -2177,15 +2182,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                                * no screen can show the figures without it.
                                */
                               basis: t('tower.pick.agentsBasis', { n: got.items.length, country: detail.destCountry }),
-                              rows: got.items.map((a) => ({
-                                id: a.entityId,
-                                name: a.name,
-                                ...(a.handle ? { handle: a.handle } : {}),
-                                ...(a.country ? { country: a.country } : {}),
-                                ...(a.offer?.specialisms?.length ? { says: a.offer.specialisms.map((s: string) => t(`home.agents.spec.${s}` as never)).join(', ') } : {}),
-                                seen: a.thin ? t('tower.imports.agentNew') : t('tower.imports.agentSeen', { appointed: a.appointed, cleared: a.cleared }),
-                                ...(a.contact?.phone ? { phone: a.contact.phone } : {}),
-                              })),
+                              rows: got.items.map((a) => agentRow(a, t, { seen: 'tower.imports.agentSeen', fresh: 'tower.imports.agentNew' })),
                             };
                           },
                         },

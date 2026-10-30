@@ -10,7 +10,7 @@ import type { BusinessActions } from '../useBusinessApp';
  * its own line there. An owner's to say; everybody in the business reads it; staff never write it. The ways to reach the
  * business there are its contact entry, on this same screen.
  */
-export function DirectoryPanel({ client, owner, actions }: { client: BusinessClient | null; owner: boolean; actions: BusinessActions }) {
+export function DirectoryPanel({ client, owner, actions, placesRev = 0 }: { client: BusinessClient | null; owner: boolean; actions: BusinessActions; placesRev?: number }) {
   const t = useT();
   const [view, setView] = useState<DirectoryListingView | null>(null);
   const [editing, setEditing] = useState(false);
@@ -23,9 +23,10 @@ export function DirectoryPanel({ client, owner, actions }: { client: BusinessCli
     const r = await client.directory();
     if (r.data) setView(r.data);
   }, [client]);
+  // Read again when a place is added on this screen: it may be what puts the business on the map.
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, placesRev]);
 
   const save = async (body: { listed?: boolean; words?: string }) => {
     if (!client) return;
@@ -85,6 +86,7 @@ export function DirectoryPanel({ client, owner, actions }: { client: BusinessCli
             </div>
           </dl>
           <p class="chint">{t('directory.app.contactFromCard')}</p>
+          {view.onMap === false ? <p class="chint">{t('directory.app.notOnMap')}</p> : null}
           {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
           {owner ? (
             <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">

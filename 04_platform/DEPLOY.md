@@ -345,9 +345,14 @@ copy yourself (step 7).
   directly. Caddy's certificate is a real Let's Encrypt one, so the site works the same either way (the firewall in
   step 3 must let you through for that).
 - **Logs** rotate at 10 MB × 5 per container. `docker compose logs --since 1h web` for requests.
-- **The town pages** search engines read are made when the web image is built, from the towns the live API has then:
-  the first release has none. Released from GitHub, they are fetched again at the first release of each day; to
-  refresh them now, run the Deploy workflow by hand with the release left empty.
+- **The public pages** search engines read — the towns, the logistics directory and its country pages, the terms, data
+  notice and cookie statement — are made when the web image is built, from what the live API says then: the first
+  release has none, and a release's own new pages are built while the release before it still answers. **Every night
+  at 03:30 Nairobi time** the Deploy workflow reads the live pages against the live API
+  (`frontend/scripts/pages-stale.mjs`); where they differ, it builds the web image of the release the server RUNS again
+  with fresh pages and puts that release on again — the API is not stopped, nothing is tested again, and a release that
+  came in meanwhile is never taken back. Run `node frontend/scripts/pages-stale.mjs https://<the site>` to see what it
+  would find; to refresh the pages now, run the Deploy workflow by hand with the release left empty.
 - **Nothing watches the site.** DigitalOcean's monitoring can alert on the Droplet; an uptime check on `/v1/health`
   is the first thing to add.
 - **One API server per database, always.** Each server holds the wallets and the books in memory and writes them

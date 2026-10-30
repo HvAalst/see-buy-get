@@ -4691,6 +4691,66 @@
         }
       }
     },
+    "/v1/sbg/directory/choose": {
+      "get": {
+        "operationId": "Directory.choose",
+        "summary": "",
+        "description": "The firms to choose from inside the apps — appointing a clearing agent, finding a haulier — every country, each with\nits id. Signed in: a business (never offered itself) or our staff.",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "query",
+            "description": "What the firm does, one or more: `clearing_agent`, or `forwarder,clearing_agent`.",
+            "schema": {
+              "pattern": "/^[a-z_]+(,[a-z_]+)*$/",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectoryChoiceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/business/me/directory/ask/{fleetDid}": {
+      "post": {
+        "operationId": "Directory.ask",
+        "summary": "",
+        "description": "A business asks a haulier it found for a carriage contract — the haulier's bell says so. An owner's to ask.",
+        "parameters": [
+          {
+            "name": "fleetDid",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractAskView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/directory/{country}": {
       "get": {
         "operationId": "Directory.country",
@@ -38757,6 +38817,112 @@
           }
         }
       },
+      "DirectoryChoice": {
+        "type": "object",
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "Its public page: seebuyget.com/@handle."
+          },
+          "name": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "forwarder",
+                "clearing_agent",
+                "haulier",
+                "depot"
+              ]
+            }
+          },
+          "country": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "description": "On SeeBuyGet since."
+          },
+          "words": {
+            "type": "string",
+            "description": "Its own line about itself — its words, not checked by us."
+          },
+          "says": {
+            "description": "A clearing agent's own list of what it clears and where — its claim, not checked by us.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DirectorySays"
+              }
+            ]
+          },
+          "seen": {
+            "$ref": "#/components/schemas/DirectorySeen"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryCheck"
+            }
+          },
+          "contact": {
+            "$ref": "#/components/schemas/DirectoryContact"
+          },
+          "id": {
+            "type": "string",
+            "description": "The company's id, or the fleet's."
+          },
+          "askedAt": {
+            "type": "string",
+            "description": "A haulier this business asked for a contract: when."
+          }
+        },
+        "required": [
+          "handle",
+          "name",
+          "kinds",
+          "country",
+          "since",
+          "seen",
+          "checks",
+          "id"
+        ]
+      },
+      "DirectoryChoiceView": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryChoice"
+            }
+          },
+          "basis": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "basis"
+        ]
+      },
+      "ContractAskView": {
+        "type": "object",
+        "properties": {
+          "fleetName": {
+            "type": "string"
+          },
+          "askedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fleetName",
+          "askedAt"
+        ]
+      },
       "DirectoryEntry": {
         "type": "object",
         "properties": {
@@ -38885,12 +39051,17 @@
           "country": {
             "type": "string",
             "description": "The country whose page it is on: /directory/<country>/."
+          },
+          "onMap": {
+            "type": "boolean",
+            "description": "One of its own places is on SeeBuyGet with a pin — what puts its country on the directory's map."
           }
         },
         "required": [
           "listed",
           "eligible",
-          "kinds"
+          "kinds",
+          "onMap"
         ]
       },
       "DirectoryListingDto": {
