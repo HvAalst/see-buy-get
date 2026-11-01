@@ -627,7 +627,8 @@ describe('a driver changing fleet', () => {
    * THE USER, 2026-10-12: "they should become courier at once if a bike or motorcycle."
    *
    * A driver who is in no fleet had one way back onto the road: another fleet's offer. Now the record they already
-   * have becomes a courier's — at once on a bicycle or a motorcycle, exactly as a stranger signing up on one is.
+   * have becomes a courier's — at once on a bicycle, exactly as a stranger signing up on one is (a motorcycle has been
+   * checked first, like a van, since 2026-10-30: the owner, "Motorcycle and up").
    */
   describe('a driver who is in no fleet rides for themselves', () => {
     /** A rider a fleet added itself: light registry, so cleared the moment they were registered. */
@@ -640,7 +641,7 @@ describe('a driver changing fleet', () => {
     }
     const ownedBy = (did: string) => vehicles.list().filter((v) => (v as { ownerDriverDid?: string }).ownerDriverDid === did);
 
-    it('on a motorcycle they are a courier at once: the same record, a country, a company, and a vehicle of their own to start on', () => {
+    it('on a bicycle they are a courier at once: the same record, a country, a company, and a vehicle of their own to start on', () => {
       const kilima = aFleet('Kilima Logistics');
       const r = aRider(kilima.did);
       const before = drivers.get(r.driver.did);
@@ -701,7 +702,7 @@ describe('a driver changing fleet', () => {
       return { fleetCo, did: t.driver.did };
     };
 
-    it('anything heavier than a motorcycle is an ASK: offered, the check said, their own photographs — and nothing about them changes while it waits', () => {
+    it('a motorcycle or anything heavier is an ASK: offered, the check said, their own photographs — and nothing about them changes while it waits', () => {
       const { did } = aTruckerOutOf('Kilima Logistics');
       expect(moves.rideAloneTerms(did)).toMatchObject({ offered: true, check: true, classes: ['truck'], bodies: expect.arrayContaining([{ id: 'flatbed', label: 'Flatbed (open)' }]) });
       const owned = ownedBy(did).length;
@@ -812,7 +813,7 @@ describe('a driver changing fleet', () => {
       expect(() => moves.decideRideAlone(did, { approve: true, criminalRecordClear: true })).toThrow(/has not asked/);
     });
 
-    it('one licence that covers a van as well as a motorcycle is checked as the van it covers', () => {
+    it('one licence that covers a van as well as a bicycle is checked as the van it covers', () => {
       const kilima = aFleet('Kilima Logistics');
       const both = aDriver(kilima.did);
       drivers.get(both.driver.did).licence.classes = ['truck', 'bike'];
@@ -861,7 +862,7 @@ describe('a driver changing fleet', () => {
       expect(ownedBy(r.driver.did)).toHaveLength(1);
     });
 
-    it('a courier who came this way can be offered a place by a fleet like any other — and the motorcycle stays theirs', () => {
+    it('a courier who came this way can be offered a place by a fleet like any other — and the bicycle stays theirs', () => {
       const kilima = aFleet('Kilima Logistics');
       const pwani = aFleet('Pwani Haulage');
       const r = aRider(kilima.did);
@@ -873,7 +874,7 @@ describe('a driver changing fleet', () => {
       // A fleet's driver carries neither a residence nor a company of ours: the fleet is who we contract.
       expect(now.jurisdiction).toBeUndefined();
       expect(now.entityId).toBeUndefined();
-      // The motorcycle is still theirs: joining a fleet does not hand it over.
+      // The bicycle is still theirs: joining a fleet does not hand it over.
       expect(vehicles.get(vehicle!.vehicleId)).toMatchObject({ ownerDriverDid: r.driver.did });
       expect(vehicles.get(vehicle!.vehicleId).managerDid).toBeUndefined();
     });

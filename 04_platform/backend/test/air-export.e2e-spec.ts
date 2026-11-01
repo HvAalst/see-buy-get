@@ -297,7 +297,7 @@ describe('an export by air, over the wire', () => {
     const from = load.pickupLocation;
     const blocker = () => dispatch.board({ driverDid: rider.did, from }).find((r) => r.freightId === load.freightId)?.blockers.find((b) => b.code === 'SECURED_CARGO')?.message;
     expect(blocker()).toBe('Secured air cargo goes only with a driver whose ID has been seen: send a photo of your ID from the Driver app, and take it once it has been looked at.');
-    // On a motorcycle: nothing to lock or seal — said on the board, withheld from the offers.
+    // On a bicycle: nothing to lock or seal — said on the board, withheld from the offers.
     const bike = app.get(VehicleService).register({ plate: `KMB ${digits().slice(0, 3)}A`, vehicleClass: 'bike', ownerName: 'Kamau' } as never);
     app.get(FleetService).couple(rider.did, bike.vehicleId);
     expect(blocker()).toBe('Secured air cargo goes in a closed vehicle that locks and takes a seal — a car, a van or a closed truck: never on a bike, a motorcycle or a tuk-tuk.');
@@ -308,7 +308,7 @@ describe('an export by air, over the wire', () => {
     const first1 = offerOf();
     expect(first1).toBeDefined();
     Object.assign(dispatch.requireFreightPublic(plain.freightId), { securedBy: 'Swissport Kenya RA' });
-    // Secured, it is no longer offered to a motorcycle.
+    // Secured, it is no longer offered to a bicycle.
     expect(offerOf()).toBeUndefined();
     const take = (offerId: string) => {
       try {

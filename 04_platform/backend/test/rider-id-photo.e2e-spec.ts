@@ -5,7 +5,7 @@ import { AppModule } from '../src/app.module';
 
 /**
  * ROUND 39 — A LIGHT COURIER RIDES AT ONCE, UNDER A SMALLER CAP UNTIL THEIR ID HAS BEEN SEEN (the user: "Ride at once,
- * smaller cap"). A bicycle or motorcycle rider in no fleet rides the moment they register; until a member of staff has
+ * smaller cap"). A bicycle rider in no fleet rides the moment they register (a motorcycle is checked first since 2026-10-30); until a member of staff has
  * seen a photo of their ID, their custody cap stays at the country's starting number. They send the photo themselves;
  * vetting sees it, or sends it back with the reason they are shown; from then their cap grows as anybody's does.
  */
@@ -47,7 +47,7 @@ describe('a light courier’s ID, seen — over the wire', () => {
 
   it('rides at once at the starting number; sends a photo of the ID; refused with a reason, then seen — and the cap grows', async () => {
     await http().post('/v1/sbg/entities/sbg-ke/custody-caps').set(staff).send({ rider: { start: 2, liftedAfter: 50 }, by: 'Grace' }).expect(201);
-    const rider = await aRider(['motorcycle']);
+    const rider = await aRider(['bike']);
     const cap = async () => (await http().get('/v1/sbg/custody-cap').set(rider.token).expect(200)).body;
     // Riding already — and held at the start, the screen told why.
     expect(await cap()).toMatchObject({ capped: true, kind: 'rider', cap: 2, idUnseen: true });
