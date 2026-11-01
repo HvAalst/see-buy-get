@@ -162,6 +162,11 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   { method: 'POST', test: /^\/v1\/sbg\/fleet\/drivers\/[^/]+\/breakdown$/, label: 'Breakdown reported' },
   { method: 'POST', test: /^\/v1\/sbg\/route-constraints$/, label: 'Road hazard reported' },
   { method: 'POST', test: /^\/v1\/sbg\/route-constraints\/[^/]+\/(confirm|refute)$/, label: 'Road hazard answered' },
+  // A CHAT MESSAGE (2026-11-01): written where the signal is worst, and it asks nothing of the server but to be passed on.
+  // It carries when it was written (`writtenAt`), so the other side reads "written 10:02 with no signal" rather than a late
+  // "On my way" dated as new; the same message sent again is the one already sent, by its key. A price, an agreement and a
+  // voice message stay online: the first two are decisions, and a recording is too big to keep here.
+  { method: 'POST', test: /^\/v1\/sbg\/conversations\/[^/]+\/messages$/, label: 'Message written' },
 ];
 
 /**

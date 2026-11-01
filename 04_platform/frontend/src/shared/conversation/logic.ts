@@ -6,6 +6,8 @@
  * the polls and the sends interleave.
  */
 
+import type { OutboxItem } from '../outbox';
+
 /** Mirrored from backend conversation.types.ts — keep the two lists identical. */
 export const QUICK_REPLIES = ['on_my_way', 'loaded', 'arrived', 'delivered', 'paid', 'running_late', 'coming_today', 'coming_tomorrow', 'cannot_make_it', 'still_here', 'closing_soon'] as const;
 export type QuickReply = (typeof QUICK_REPLIES)[number];
@@ -86,6 +88,51 @@ export interface ChatMessage {
   /** CV4 — a voice message, fetched separately when somebody presses play. */
   voice?: { voiceId: string; durationSec: number };
   at: string;
+  /** Written with no signal and sent when it came back (2026-11-01): when it was written. */
+  writtenAt?: string;
+}
+
+/**
+ * A MESSAGE WAITING ON THIS PHONE FOR A SIGNAL (2026-11-01). Sent with none, it waits in the outbox and goes by itself when
+ * the signal comes back. Read from the outbox rather than kept twice, so it is still shown when the thread is closed and
+ * opened again, and leaves the list the moment it is sent.
+ */
+export interface WaitingMessage {
+  id: string;
+  body?: string;
+  quick?: QuickReply;
+  writtenAt: string;
+  /** Refused when it arrived — the thread closed, or a block — in the server's own words. It will not go by itself. */
+  refused?: string;
+}
+
+/** Whether a queued write is a message in this thread. */
+export function isMessageIn(path: string, conversationId: string): boolean {
+  return path === `/v1/sbg/conversations/${conversationId}/messages` || path === `/v1/sbg/conversations/${encodeURIComponent(conversationId)}/messages`;
+}
+
+/** The messages of this thread still on this phone, in the order they were written. */
+export function waitingIn(items: ReadonlyArray<Pick<OutboxItem, 'id' | 'method' | 'path' | 'body' | 'at' | 'state' | 'error'>>, conversationId: string): WaitingMessage[] {
+  const out: WaitingMessage[] = [];
+  for (const item of items) {
+    if (item.method.toUpperCase() !== 'POST' || !isMessageIn(item.path, conversationId)) continue;
+    const body = (item.body ?? {}) as { body?: unknown; quick?: unknown; writtenAt?: unknown };
+    const quick = typeof body.quick === 'string' && (QUICK_REPLIES as readonly string[]).includes(body.quick) ? (body.quick as QuickReply) : undefined;
+    const text = typeof body.body === 'string' && body.body.trim() ? body.body : undefined;
+    if (!quick && !text) continue;
+    out.push({
+      id: item.id,
+      ...(quick ? { quick } : { body: text }),
+      writtenAt: typeof body.writtenAt === 'string' ? body.writtenAt : item.at,
+      ...(item.state === 'blocked' ? { refused: item.error || 'Refused' } : {}),
+    });
+  }
+  return out;
+}
+
+/** The answer a write gets when it was kept on the phone for a signal (outbox.ts answers 202 `{ queued: true }`). */
+export function wasQueued(data: unknown): boolean {
+  return Boolean(data && typeof data === 'object' && (data as { queued?: unknown }).queued === true);
 }
 
 export interface ChatThread {

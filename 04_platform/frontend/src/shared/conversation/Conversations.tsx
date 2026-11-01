@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type ConversationsApi } from '../../lib/sbg';
 import { formatDate, formatMoney, useT } from '../i18n';
+import { discard, onOutboxChange, onOutboxSent, outboxItems } from '../outbox';
 import { Button, Card, Chip, ErrorNote, Icon, Note, Pill, Sheet } from '../ui';
 import {
   MAX_MESSAGE_CHARS,
@@ -21,6 +22,10 @@ import {
   mergeMessages,
   parseAmount,
   toggleSeq,
+  isMessageIn,
+  waitingIn,
+  wasQueued,
+  type WaitingMessage,
   type ChatMessage,
   type ChatThread,
   type ReportReason,
@@ -76,6 +81,8 @@ export function ConversationSheet({
 }) {
   const t = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Messages written with no signal, waiting on this phone (2026-11-01) — read from the outbox.
+  const [waiting, setWaiting] = useState<WaitingMessage[]>([]);
   const [current, setCurrent] = useState<ChatThread | null>(thread);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -172,8 +179,28 @@ export function ConversationSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // The messages of this thread waiting on the phone, kept in step with the outbox; and the thread read again the moment
+  // one of them reaches the server, so it takes its numbered place.
+  useEffect(() => {
+    if (!id) {
+      setWaiting([]);
+      return undefined;
+    }
+    const look = () => setWaiting(waitingIn(outboxItems(), id));
+    look();
+    const offChange = onOutboxChange(look);
+    const offSent = onOutboxSent((item) => {
+      if (isMessageIn(item.path, id)) void catchUp();
+    });
+    return () => {
+      offChange();
+      offSent();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   /** Run one action against the thread, then re-read the whole thread: a decision changes an EARLIER card. */
-  const act = async (key: string, run: () => Promise<{ error: { detail?: string; title?: string } | null }>, after?: () => void) => {
+  const act = async (key: string, run: () => Promise<{ data?: unknown; error: { detail?: string; title?: string } | null }>, after?: () => void) => {
     setBusy(key);
     const r = await run();
     setBusy(null);
@@ -183,13 +210,16 @@ export function ConversationSheet({
     }
     setFailed(null);
     after?.();
+    // Kept on the phone for a signal: it shows as waiting, and the thread cannot be read now either.
+    if (wasQueued(r.data)) return;
     await catchUp(true);
     onChanged?.();
   };
 
   const send = (message: { body?: string; quick?: string }) => {
     if (!api || !id) return;
-    void act('send', () => api.send(id, message), () => {
+    // When Send was pressed, by this phone: said beside the message if it has to wait for a signal.
+    void act('send', () => api.send(id, { ...message, writtenAt: new Date().toISOString() }), () => {
       if (message.body !== undefined) setText('');
     });
   };
@@ -410,7 +440,7 @@ export function ConversationSheet({
           {selecting ? <p class="hint" style="margin-top:10px">{t('common.chat.dispute.lede')}</p> : null}
 
           <div class="rows" role="log" aria-live="polite" style="margin-top:12px; gap:8px">
-            {messages.length === 0 ? <p class="hint">{t('common.chat.empty')}</p> : null}
+            {messages.length === 0 && waiting.length === 0 ? <p class="hint">{t('common.chat.empty')}</p> : null}
             {messages.map((m) => (
               <div
                 key={m.seq}
@@ -463,7 +493,7 @@ export function ConversationSheet({
                 ) : null}
 
                 <div class="hint" style="margin-top:2px; font-size:12px">
-                  {authorOf(m)} · {whenSent(m.at)}
+                  {authorOf(m)} · {m.writtenAt ? t('common.chat.writtenOffline', { written: whenSent(m.writtenAt), arrived: whenSent(m.at) }) : whenSent(m.at)}
                   {!readOnly && !selecting && !m.mine && !reported.includes(m.seq) ? (
                     <>
                       {' · '}
@@ -481,6 +511,30 @@ export function ConversationSheet({
                     ))}
                   </div>
                 ) : null}
+              </div>
+            ))}
+            {/* Written with no signal: waiting on this phone, and going by itself when the signal comes back (2026-11-01). */}
+            {waiting.map((w) => (
+              <div
+                key={w.id}
+                style="align-self:flex-end; max-width:85%; padding:8px 12px; border-radius:14px; background:var(--brand-50, #eef0ff); border:1px dashed var(--line, #dcdce4)"
+              >
+                <div class="t-body" style="white-space:pre-wrap; overflow-wrap:anywhere">
+                  {w.quick ? <b>{t(`common.chat.quick.${w.quick}` as 'common.chat.quick.loaded')}</b> : w.body}
+                </div>
+                <div class="hint" style="margin-top:2px; font-size:12px">
+                  {w.refused ? (
+                    <>
+                      {t('common.chat.unsent', { why: w.refused })}
+                      {' · '}
+                      <button type="button" class="linkbtn" onClick={() => discard(w.id)}>
+                        {t('common.chat.unsentRemove')}
+                      </button>
+                    </>
+                  ) : (
+                    t('common.chat.waiting', { time: whenSent(w.writtenAt) })
+                  )}
+                </div>
               </div>
             ))}
           </div>

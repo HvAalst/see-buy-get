@@ -199,10 +199,11 @@ export class ConversationService {
     return { thread: this.viewFor(thread, did), items };
   }
 
-  send(conversationId: string, fromDid: string, input: { body?: string; quick?: string }, now = Date.now()): MessageView {
+  send(conversationId: string, fromDid: string, input: { body?: string; quick?: string; writtenAt?: string }, now = Date.now()): MessageView {
     const thread = this.requireParty(conversationId, fromDid);
     this.requireOpen(thread, fromDid);
-    return this.append(thread, fromDid, composed(input), now, 'New message about');
+    const written = writtenEarlier(input.writtenAt, now);
+    return this.append(thread, fromDid, { ...composed(input), ...(written ? { writtenAt: written } : {}) }, now, 'New message about');
   }
 
   /**
@@ -570,6 +571,7 @@ export class ConversationService {
     if (m.refSeq !== undefined) view.refSeq = m.refSeq;
     if (m.kind === 'report_shared' && m.seqCount !== undefined) view.seqCount = m.seqCount;
     if (m.kind === 'voice' && m.voiceId) view.voice = { voiceId: m.voiceId, durationSec: m.durationSec ?? 0 };
+    if (m.writtenAt) view.writtenAt = m.writtenAt;
     return view;
   }
 
@@ -704,6 +706,26 @@ function boundedNote(note?: string): string | undefined {
 }
 
 /** Exactly one of a quick reply or some text — and text within bounds. */
+/** Less than this between writing and arriving is a message that went as it was written: nothing to say. */
+const WENT_AT_ONCE_MS = 60 * 1000;
+/** A phone's clock is believed back this far — a phone that says a message waited longer has its clock wrong. */
+const WAITED_AT_MOST_MS = 14 * DAY_MS;
+
+/**
+ * WHEN A MESSAGE WAS WRITTEN, when that is not when it arrived (2026-11-01): a message written with no signal waits on
+ * the phone and is sent when the signal comes back. Kept only when it is clearly earlier than the arrival and not further
+ * back than a phone plausibly waits; a time in the future, or a clock years out, is not believed — the message is then
+ * dated by its arrival alone, as before.
+ */
+export function writtenEarlier(writtenAt: string | undefined, now: number): string | undefined {
+  if (!writtenAt) return undefined;
+  const t = Date.parse(writtenAt);
+  if (!Number.isFinite(t)) return undefined;
+  const waited = now - t;
+  if (waited < WENT_AT_ONCE_MS || waited > WAITED_AT_MOST_MS) return undefined;
+  return new Date(t).toISOString();
+}
+
 function composed(input: { body?: string; quick?: string }): Pick<ConversationMessage, 'kind' | 'body' | 'quick'> {
   if (input.quick !== undefined && input.quick !== null && input.quick !== '') {
     if (!QUICK_REPLIES.includes(input.quick as QuickReply)) throw new GlosError('INVALID_INPUT', `Unknown quick reply: ${input.quick}`);

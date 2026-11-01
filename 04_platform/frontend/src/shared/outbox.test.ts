@@ -61,6 +61,13 @@ describe('the outbox', () => {
       // An operator clearing one is a decision, and the office's breakdown typed from a phone call is a desk's: neither waits.
       expect(queueableLabel('POST', '/v1/sbg/route-constraints/rc_1/clear')).toBeNull();
       expect(queueableLabel('POST', '/v1/sbg/vehicles/veh_1/breakdowns')).toBeNull();
+      // A chat message waits for a signal (2026-11-01); a price, its answer, an agreement and a voice message do not —
+      // the first three are decisions, and a recording is too big to keep on the phone's queue.
+      expect(queueableLabel('POST', '/v1/sbg/conversations/cv_1/messages')).toBe('Message written');
+      expect(queueableLabel('POST', '/v1/sbg/conversations/cv_1/proposals')).toBeNull();
+      expect(queueableLabel('POST', '/v1/sbg/conversations/cv_1/proposals/pr_1/accept')).toBeNull();
+      expect(queueableLabel('POST', '/v1/sbg/conversations/cv_1/messages/4/agree')).toBeNull();
+      expect(queueableLabel('POST', '/v1/sbg/conversations/cv_1/voice')).toBeNull();
     });
 
     it('refuses everything whose answer the person is WAITING to read', () => {

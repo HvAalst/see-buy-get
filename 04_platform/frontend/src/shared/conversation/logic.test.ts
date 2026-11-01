@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { canAgree, canDecide, canPropose, canShare, composeBlocker, formatDuration, lastSeqOf, mergeMessages, parseAmount, pickAudioMime, threadsFor, toggleSeq, totalUnread, type ChatMessage, type ChatThread } from './logic';
+import { canAgree, canDecide, canPropose, canShare, composeBlocker, formatDuration, isMessageIn, lastSeqOf, mergeMessages, parseAmount, pickAudioMime, threadsFor, toggleSeq, totalUnread, waitingIn, wasQueued, type ChatMessage, type ChatThread } from './logic';
+import type { OutboxItem } from '../outbox';
 
 const msg = (seq: number, over: Partial<ChatMessage> = {}): ChatMessage => ({ seq, mine: false, kind: 'text', body: `m${seq}`, at: '2026-09-13T08:00:00Z', ...over });
 const thread = (over: Partial<ChatThread> = {}): ChatThread => ({
@@ -79,6 +80,29 @@ describe('CV1 — a conversation, client side', () => {
     expect(formatDuration(7)).toBe('0:07');
     expect(formatDuration(65)).toBe('1:05');
     expect(formatDuration(-3)).toBe('0:00');
+  });
+
+  it('shows the messages of THIS thread still waiting on the phone for a signal — and a refused one with the server’s words', () => {
+    const item = (over: Partial<OutboxItem>): OutboxItem => ({ id: 'ob_1', key: 'k', method: 'POST', path: '/v1/sbg/conversations/cv_1/messages', label: 'Message written', at: '2026-11-01T10:02:05Z', attempts: 0, state: 'pending', ...over });
+    const items = [
+      item({ id: 'ob_1', body: { quick: 'on_my_way', writtenAt: '2026-11-01T10:02:00Z' } }),
+      item({ id: 'ob_2', path: '/v1/sbg/conversations/cv_2/messages', body: { body: 'another thread' } }),
+      item({ id: 'ob_3', path: '/v1/sbg/parcels/PUD-1/shelve', body: {} }),
+      item({ id: 'ob_4', body: { body: 'Gate is closed, round the back' }, state: 'blocked', error: 'This conversation is closed' }),
+      item({ id: 'ob_5', body: { body: '   ' } }),
+      item({ id: 'ob_6', body: { body: 'no time on it' } }),
+    ];
+    expect(waitingIn(items, 'cv_1')).toEqual([
+      { id: 'ob_1', quick: 'on_my_way', writtenAt: '2026-11-01T10:02:00Z' },
+      { id: 'ob_4', body: 'Gate is closed, round the back', writtenAt: '2026-11-01T10:02:05Z', refused: 'This conversation is closed' },
+      { id: 'ob_6', body: 'no time on it', writtenAt: '2026-11-01T10:02:05Z' },
+    ]);
+    expect(isMessageIn('/v1/sbg/conversations/cv_1/messages', 'cv_1')).toBe(true);
+    expect(isMessageIn('/v1/sbg/conversations/cv_1/messages/3/agree', 'cv_1')).toBe(false);
+    // the answer the outbox gives a write it kept, and a real answer
+    expect(wasQueued({ queued: true, id: 'ob_1', label: 'Message written' })).toBe(true);
+    expect(wasQueued({ seq: 4, kind: 'text' })).toBe(false);
+    expect(wasQueued(undefined)).toBe(false);
   });
 
   it('adds up the badge and finds the threads about one load', () => {

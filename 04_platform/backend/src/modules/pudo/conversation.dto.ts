@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { QUICK_REPLIES, REPORT_REASONS, SETTLE_METHODS, SETTLE_WHEN } from './conversation.types';
 
 /** Where the driver is when naming a price. Declared here: pudo.dto's own GeoDto is not exported. */
@@ -18,6 +18,11 @@ export class OpenConversationDto {
 export class SendMessageDto {
   @IsOptional() @IsString() body?: string;
   @IsOptional() @IsIn([...QUICK_REPLIES]) quick?: string;
+  /**
+   * When the person pressed Send, by the phone's clock. A message written with no signal waits on the phone and goes when
+   * the signal comes back (2026-11-01); "On my way" read forty minutes late must say when it was said.
+   */
+  @IsOptional() @IsISO8601() writtenAt?: string;
 }
 
 /** Move the caller's read marker up to this sequence number. */

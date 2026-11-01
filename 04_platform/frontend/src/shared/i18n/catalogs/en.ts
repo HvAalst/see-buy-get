@@ -232,6 +232,11 @@ export const en = {
   'common.chat.empty': 'No messages yet. Ask what you need to know before you agree.',
   'common.chat.placeholder': 'Write a message…',
   'common.chat.send': 'Send',
+  // A message written with no signal (2026-11-01): it waits on the phone and goes by itself.
+  'common.chat.waiting': 'Waiting for a signal · written {time} · it goes by itself',
+  'common.chat.unsent': 'Not sent: {why}',
+  'common.chat.unsentRemove': 'Remove',
+  'common.chat.writtenOffline': 'written {written} with no signal · arrived {arrived}',
   'common.chat.quickTitle': 'Quick replies',
   'common.chat.quick.on_my_way': 'On my way',
   'common.chat.quick.loaded': 'Loaded',

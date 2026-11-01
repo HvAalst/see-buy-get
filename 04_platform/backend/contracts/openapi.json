@@ -69496,6 +69496,10 @@
               "still_here",
               "closing_soon"
             ]
+          },
+          "writtenAt": {
+            "type": "string",
+            "description": "When the person pressed Send, by the phone's clock. A message written with no signal waits on the phone and goes when\nthe signal comes back (2026-11-01); \"On my way\" read forty minutes late must say when it was said."
           }
         }
       },

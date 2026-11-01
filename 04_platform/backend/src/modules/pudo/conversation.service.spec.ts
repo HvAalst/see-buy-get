@@ -1,4 +1,4 @@
-import { ConversationService, MESSAGES_PER_HOUR, NEW_THREADS_PER_DAY } from './conversation.service';
+import { ConversationService, MESSAGES_PER_HOUR, NEW_THREADS_PER_DAY, writtenEarlier } from './conversation.service';
 
 /**
  * Conversations — two people, about one load.
@@ -94,6 +94,23 @@ describe('conversations about a load', () => {
     expect(all.map((m) => m.seq)).toEqual([1, 2, 3]);
     expect(all.map((m) => m.mine)).toEqual([false, true, false]);
     expect(service.messagesFor(conversationId, 'did:shop', 2).items).toEqual([expect.objectContaining({ seq: 3, kind: 'quick', quick: 'on_my_way' })]);
+  });
+
+  it('keeps when a message was WRITTEN when it waited on the phone for a signal — and believes no clock in the future or years out', () => {
+    const now = Date.parse('2026-11-01T10:40:00Z');
+    const { conversationId } = service.open('fr_1', 'did:drv:amos');
+    // written at 10:02 with no signal, sent when the signal came back at 10:40
+    const late = service.send(conversationId, 'did:drv:amos', { quick: 'on_my_way', writtenAt: '2026-11-01T10:02:00Z' }, now);
+    expect(late).toEqual(expect.objectContaining({ at: '2026-11-01T10:40:00.000Z', writtenAt: '2026-11-01T10:02:00.000Z' }));
+    // the other side reads both times
+    expect(service.messagesFor(conversationId, 'did:shop').items[0]).toEqual(expect.objectContaining({ writtenAt: '2026-11-01T10:02:00.000Z' }));
+    // sent as it was written: nothing to say
+    expect(service.send(conversationId, 'did:drv:amos', { body: 'here', writtenAt: '2026-11-01T10:39:30Z' }, now).writtenAt).toBeUndefined();
+    // a phone clock in the future, years back, or not a time: dated by arrival alone
+    expect(writtenEarlier('2026-11-01T11:00:00Z', now)).toBeUndefined();
+    expect(writtenEarlier('2020-01-01T00:00:00Z', now)).toBeUndefined();
+    expect(writtenEarlier('not a time', now)).toBeUndefined();
+    expect(writtenEarlier('2026-10-25T10:40:00Z', now)).toBe('2026-10-25T10:40:00.000Z');
   });
 
   it('counts what each party has not read, and never moves a read marker backward or past the end', () => {

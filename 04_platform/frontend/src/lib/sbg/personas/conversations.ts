@@ -23,7 +23,7 @@ export function createConversationsApi(sbg: SbgClient) {
       sbg.request((c) => c.GET('/v1/sbg/conversations/{id}/messages', { params: { path: { id }, query: { after: String(after) } as never } })),
 
     /** Send text, or a quick reply by its key. */
-    send: (id: string, message: { body?: string; quick?: string }) =>
+    send: (id: string, message: { body?: string; quick?: string; writtenAt?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/messages', { params: { path: { id } }, body: message as never })),
 
     /** Move this person's read marker up to `seq`. */

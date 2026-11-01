@@ -154,6 +154,8 @@ export interface ConversationMessage {
   voiceId?: string;
   durationSec?: number;
   at: string;
+  /** Written on the phone before it had a signal, and sent when it did (2026-11-01): when it was written, by the phone. */
+  writtenAt?: string;
 }
 
 /** A message reported by the party who received it — kept with a copy of what was reported. */
@@ -188,6 +190,8 @@ export interface MessageView {
   /** CV4 — a voice message: fetched separately, by those who may read the thread. */
   voice?: { voiceId: string; durationSec: number };
   at: string;
+  /** Written with no signal and sent later: when it was written. Absent when it went as it was written. */
+  writtenAt?: string;
 }
 
 /** A thread as one party sees it. Carries no DID and no contact detail of the other party. */
