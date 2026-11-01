@@ -895,7 +895,9 @@ function DocumentRow({
       </td>
       <td class="ctbl__num">
         <span class="twr-panelend">
-          {opens ? (
+          {d.fileDeletedAt ? (
+            <span class="chint">{t('tower.company.doc.deleted', { date: d.fileDeletedAt.slice(0, 10) })}</span>
+          ) : opens ? (
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void onOpen(d)}>
               {t('tower.company.doc.open')}
             </button>

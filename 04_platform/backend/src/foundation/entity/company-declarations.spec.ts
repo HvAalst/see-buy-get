@@ -242,6 +242,23 @@ describe('a company that is switched on keeps its own record', () => {
     expect(documents.upload({ entityId: KE, kind: 'certificate_of_incorporation', title: 'Certificate', dataUrl: pdf('cert'), by: 'Amina Otieno' }).status).toBe('awaiting_verification');
   });
 
+  it('deletes a photo of a person’s ID the moment staff decide on it — and says so, never “tampered”; a company paper keeps its file', () => {
+    // The owner, 2026-11-01: "People's ID photos only" — a business representative's ID too.
+    const rep = documents.upload({ entityId: KE, kind: 'representative_id', title: 'Director ID', dataUrl: pdf('id'), by: 'Brian K.' });
+    const cert = documents.upload({ entityId: KE, kind: 'certificate_of_incorporation', title: 'Certificate', dataUrl: pdf('cert'), by: 'Brian K.' });
+    expect(documents.file(KE, rep.documentId).intact).toBe(true); // waiting: staff can open it
+    documents.verify(KE, rep.documentId, 'Amina Otieno', NOW);
+    documents.verify(KE, cert.documentId, 'Amina Otieno', NOW);
+    expect(documents.get(KE, rep.documentId)).toMatchObject({ status: 'verified', verifiedBy: 'Amina Otieno', fileDeletedAt: new Date(NOW).toISOString() });
+    expect(() => documents.file(KE, rep.documentId)).toThrow(/a photo of a person's ID. It was deleted when it was checked, on 2026-10-09; the check is kept/);
+    expect(documents.file(KE, cert.documentId)).toMatchObject({ intact: true });
+    expect(documents.get(KE, cert.documentId).fileDeletedAt).toBeUndefined();
+    // Refused, it goes too.
+    const again = documents.upload({ entityId: KE, kind: 'representative_id', title: 'Director ID, again', dataUrl: pdf('id2'), by: 'Brian K.' });
+    documents.reject(KE, again.documentId, 'Amina Otieno', 'The photo is blurred', NOW);
+    expect(() => documents.file(KE, again.documentId)).toThrow(/deleted when it was checked/);
+  });
+
   /* ------------------------------------------------------------------ who is told -- */
 
   it('THE PEOPLE WHO WOULD KNOW ARE TOLD: every other administrator of the company, and of the company above it — not the one who did it, and nobody else', async () => {

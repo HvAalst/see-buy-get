@@ -1246,6 +1246,8 @@ export const enTowerCompanies = {
   'tower.company.doc.reject': 'Reject',
   'tower.company.doc.rejectReason': 'Why not?',
   'tower.company.doc.open': 'Open',
+  // A photo of a person's ID, deleted when staff decided on it (2026-11-01): the check is kept, the photo is not.
+  'tower.company.doc.deleted': 'A photo of a person’s ID — deleted when it was checked, on {date}',
   'tower.company.doc.ownUpload': 'You put this on record — a different person must verify it.',
   'tower.company.doc.needName': 'Sign in with your name to verify.',
   'tower.company.doc.notAwaiting': 'Not waiting for verification.',

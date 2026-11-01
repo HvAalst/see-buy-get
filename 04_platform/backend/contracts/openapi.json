@@ -49490,6 +49490,9 @@
           "strikeReason": {
             "type": "string"
           },
+          "fileDeletedAt": {
+            "type": "string"
+          },
           "mine": {
             "type": "boolean"
           }

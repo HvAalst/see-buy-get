@@ -80,9 +80,17 @@ export class CompanyDocument {
   @ApiPropertyOptional() struckBy?: string;
   @ApiPropertyOptional() struckAt?: string;
   @ApiPropertyOptional() strikeReason?: string;
+  /**
+   * A PHOTO OF A PERSON'S ID, DELETED WHEN STAFF DECIDED ON IT (the owner, 2026-11-01: "People's ID photos only") — the
+   * record of the check is kept, its file is not. Said as what it is, so a missing file here is never read as tampering.
+   */
+  @ApiPropertyOptional() fileDeletedAt?: string;
   /** On a company's record, for whoever reads it: THEY put this one on record, so they are not the one to verify it. Never stored. */
   @ApiPropertyOptional() mine?: boolean;
 }
+
+/** The papers that are a photo of a person's ID, deleted at staff's decision either way (2026-11-01). */
+export const PERSONAL_ID_PAPERS: ReadonlySet<string> = new Set(['representative_id']);
 
 @Injectable()
 export class CompanyDocumentService {
@@ -157,6 +165,7 @@ export class CompanyDocumentService {
     if (this.uploadedByReader(document, { name: who, key: byKey })) throw new GlosError('FORBIDDEN', 'You uploaded this document — a different person must verify it');
     if (!this.intact(document)) throw new GlosError('INVALID_STATE', 'The stored file no longer matches its fingerprint — it cannot be verified');
     Object.assign(document, { status: 'verified', verifiedBy: who, verifiedAt: new Date(now).toISOString() });
+    this.dropPersonalId(document, now);
     this.documents.set(document.documentId, document);
     return document;
   }
@@ -176,6 +185,7 @@ export class CompanyDocumentService {
     if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who is rejecting this');
     if (!reason?.trim()) throw new GlosError('FIELD_REQUIRED', 'Say why — a rejected document is kept with its reason');
     Object.assign(document, { status: 'rejected', rejectedBy: who, rejectedAt: new Date(now).toISOString(), rejectionReason: reason.trim() });
+    this.dropPersonalId(document, now);
     this.documents.set(document.documentId, document);
     return document;
   }
@@ -253,8 +263,16 @@ export class CompanyDocumentService {
   /** The bytes, with whether they still match the fingerprint they were kept under. */
   file(entityId: string, documentId: string): { contentType: string; bytes: Buffer; fingerprint: string; intact: boolean; title: string } {
     const document = this.require(entityId, documentId);
+    if (document.fileDeletedAt) throw new GlosError('NOT_FOUND', `This was a photo of a person's ID. It was deleted when it was checked, on ${document.fileDeletedAt.slice(0, 10)}; the check is kept.`);
     const bytes = Buffer.from(this.files.get(document.documentId) ?? '', 'base64');
     return { contentType: document.contentType, bytes, fingerprint: document.fingerprint, intact: this.intact(document), title: document.title };
+  }
+
+  /** A person's ID paper: its file goes with the decision, and when is kept (the owner, 2026-11-01). */
+  private dropPersonalId(document: CompanyDocument, now: number): void {
+    if (!PERSONAL_ID_PAPERS.has(document.kind) || document.fileDeletedAt) return;
+    this.files.delete(document.documentId);
+    document.fileDeletedAt = new Date(now).toISOString();
   }
 
   private intact(document: CompanyDocument): boolean {

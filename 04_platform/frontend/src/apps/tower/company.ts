@@ -70,6 +70,8 @@ export interface ReadinessItem {
 }
 
 export interface CompanyDocument {
+  /** A photo of a person's ID, deleted when staff decided on it (2026-11-01): when. */
+  fileDeletedAt?: string;
   documentId: string;
   entityId: string;
   kind: DocumentKind;

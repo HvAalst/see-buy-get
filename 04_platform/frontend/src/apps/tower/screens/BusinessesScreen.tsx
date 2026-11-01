@@ -245,9 +245,14 @@ function BusinessDetail({ row, state, actions, onClose }: { row: BusinessRow; st
                   </span>
                   {doc ? (
                     <span class="cdoc__acts">
-                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void openFile(doc)}>
-                        {t('tower.imports.paper.open')}
-                      </button>
+                      {/* A photo of a person's ID is deleted when it is checked (2026-11-01): said, not offered. */}
+                      {doc.fileDeletedAt ? (
+                        <span class="chint">{t('tower.company.doc.deleted', { date: doc.fileDeletedAt.slice(0, 10) })}</span>
+                      ) : (
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void openFile(doc)}>
+                          {t('tower.imports.paper.open')}
+                        </button>
+                      )}
                       {doc.status === 'awaiting_verification' ? (
                         <>
                           <button
