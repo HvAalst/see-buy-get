@@ -274,6 +274,16 @@ describe('PUDO Light', () => {
   /** The release code the SENDER/RECEIVER hold. Minted with the parcel now, never handed out at arrival. */
   const releaseCodeOf = (parcelId: string) => parcels.get(parcelId).otp!;
 
+  /**
+   * A MOTORCYCLE RIDER CLEARED TO RIDE: since 2026-10-30 a motorcycle's licence is checked before it rides, as a van's is
+   * (the owner: "Motorcycle and up"). Registered with a licence, their papers sent and approved by a member of staff.
+   */
+  function clearedRider(input: Record<string, unknown>) {
+    const d = drivers.register({ licenceNumber: `DL-${String(input.nationalId)}`, licenceExpiresAt: '2031-12-31', criminalRecordClear: true, ...input } as never);
+    drivers.submitKyc(d.did, { idCopyRef: `med_id_${d.did.slice(-8)}`, licenceCopyRef: `med_lic_${d.did.slice(-8)}` });
+    return drivers.decideKyc(d.did, true, 'Vetting');
+  }
+
   function onboardAgent(shopName: string, zone: string, topUp = 0) {
     agentSeq += 1;
     const a = agents.register({ shopName, zone, location: { lat: -1.2, lng: 36.8 }, landmark: 'next to the market', openingHours: uniformHours(), shelf: defaultShelf, fullName: `${shopName} owner`, nationalId: `ID-${agentSeq}`, mobile: `+25470${agentSeq}`, deviceImei: `IMEI-${agentSeq}`, requirements: eligibleReqs() });
@@ -1088,7 +1098,7 @@ describe('PUDO Light', () => {
     const origin = onboardAgent('Birth Shop', 'NorthTown', 50);
     const dest = onboardAgent('Birth Dest', 'SouthTown', 50);
     const corridor = corridors.addCorridor({ name: 'birth', originZone: 'NorthTown', destZone: 'SouthTown' });
-    const driver = drivers.register({ displayName: 'Bea', fullName: 'Bea B', nationalId: 'ID-birth', mobile: '+254birth', licenceClasses: ['motorcycle'] });
+    const driver = clearedRider({ displayName: 'Bea', fullName: 'Bea B', nationalId: 'ID-birth', mobile: '+254birth', licenceClasses: ['motorcycle'] });
     const bike = vehicles.register({ plate: 'BR-1', vehicleClass: 'motorcycle', ownerName: 'Bea' });
     fleet.couple(driver.did, bike.vehicleId);
     fleet.assignCorridor(driver.did, corridor.corridorId);
@@ -4816,7 +4826,7 @@ describe('PUDO Light', () => {
     activate(a.did); activate(b.did);
 
     const vA = vehicles.register({ plate: 'AV-1', vehicleClass: 'motorcycle', ownerName: 'OA', managerDid: a.did });
-    const dA = drivers.register({ displayName: 'DA', fullName: 'Da', nationalId: 'DRV-MA', mobile: '+254ma', licenceClasses: ['motorcycle'], managerDid: a.did });
+    const dA = clearedRider({ displayName: 'DA', fullName: 'Da', nationalId: 'DRV-MA', mobile: '+254ma', licenceClasses: ['motorcycle'], managerDid: a.did });
     vehicles.register({ plate: 'BV-1', vehicleClass: 'van', ownerName: 'OB', managerDid: b.did });
     fleet.startSession(dA.did, vA.qr);
 
@@ -4844,7 +4854,7 @@ describe('PUDO Light', () => {
   it('rolls up the fleet dashboard: sessions + working hours + live positions + active cargo', () => {
     const origin = onboardAgent('Dash Feeder', 'NorthTown', 50);
     const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
-    const d = drivers.register({ displayName: 'Dora', fullName: 'Do', nationalId: 'FD-1', mobile: '+254fd1', licenceClasses: ['motorcycle'] });
+    const d = clearedRider({ displayName: 'Dora', fullName: 'Do', nationalId: 'FD-1', mobile: '+254fd1', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'FD-1', vehicleClass: 'motorcycle', ownerName: 'Do' });
     fleet.startSession(d.did, moto.qr);
     fleet.reportLocation(d.did, { lat: -1.2, lng: 36.8 });
@@ -4885,7 +4895,7 @@ describe('PUDO Light', () => {
   it('counts a bag handed straight to a driver as cargo, and against the vehicle it is on', () => {
     const origin = onboardAgent('Counter Feeder', 'NorthTown', 50);
     const mdp = mdps.register({ name: 'Counter Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
-    const d = drivers.register({ displayName: 'Hana', fullName: 'Ha', nationalId: 'FD-2', mobile: '+254fd2', licenceClasses: ['motorcycle'] });
+    const d = clearedRider({ displayName: 'Hana', fullName: 'Ha', nationalId: 'FD-2', mobile: '+254fd2', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'FD-2', vehicleClass: 'motorcycle', ownerName: 'Ha' });
     fleet.startSession(d.did, moto.qr);
     const badge = drivers.get(d.did).badgeId!;
@@ -4913,7 +4923,7 @@ describe('PUDO Light', () => {
   });
 
   it('names a load’s next stop for the office’s map: where it is collected while claimed, where it goes once aboard', () => {
-    const d = drivers.register({ displayName: 'Stops', fullName: 'St', nationalId: 'STOP-1', mobile: '+254stop1', licenceClasses: ['motorcycle'] });
+    const d = clearedRider({ displayName: 'Stops', fullName: 'St', nationalId: 'STOP-1', mobile: '+254stop1', licenceClasses: ['motorcycle'] });
     const pickup = { lat: -1.2, lng: 36.8 };
     const drop = { lat: -1.3, lng: 36.9 };
     const f = dispatch.registerFreight({ description: 'Crates', pickupLocation: pickup, pickupLabel: 'Gikomba depot', destLabel: 'Kitengela site', destLocation: drop, weightKg: 20, packaging: 'piece' });
@@ -4929,7 +4939,7 @@ describe('PUDO Light', () => {
   });
 
   it('flexibly couples a driver to a vehicle and re-assigns to another (separate IDs, not bound)', () => {
-    const d = drivers.register({ displayName: 'Multi', fullName: 'Mary', nationalId: 'DRV-ID-3', mobile: '+254900003', licenceClasses: ['bike', 'motorcycle'] });
+    const d = clearedRider({ displayName: 'Multi', fullName: 'Mary', nationalId: 'DRV-ID-3', mobile: '+254900003', licenceClasses: ['bike', 'motorcycle'] });
     const bike = vehicles.register({ plate: 'BK-9', vehicleClass: 'bike', ownerName: 'Mary' });
     const moto = vehicles.register({ plate: 'MT-9', vehicleClass: 'motorcycle', ownerName: 'Mary' });
     const a1 = fleet.couple(d.did, bike.vehicleId);
@@ -4949,7 +4959,7 @@ describe('PUDO Light', () => {
   });
 
   it('runs a driver shift session: scan the vehicle QR to start (couple), close to end (decouple)', () => {
-    const d = drivers.register({ displayName: 'Shift', fullName: 'Sh', nationalId: 'SES-1', mobile: '+254ses1', licenceClasses: ['motorcycle'] });
+    const d = clearedRider({ displayName: 'Shift', fullName: 'Sh', nationalId: 'SES-1', mobile: '+254ses1', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'SS-1', vehicleClass: 'motorcycle', ownerName: 'Sh' });
     expect(moto.qr).toMatch(/^VEH-/);
     expect(fleet.sessionFor(d.did).active).toBe(false);
@@ -4988,8 +4998,8 @@ describe('PUDO Light', () => {
   it('a new independent rider carries no more than the custody cap: the rest stay at the counter, said why (round 38)', () => {
     const origin = onboardAgent('Cap Origin', 'NorthTown', 50);
     const corridor = corridors.addCorridor({ name: 'cap-feeder', originZone: 'NorthTown', destZone: 'SouthTown' });
-    const d = drivers.register({ displayName: 'Cap', fullName: 'Cap Rider', nationalId: 'DRV-CAP-1', mobile: '+254900071', licenceClasses: ['motorcycle'] });
-    const moto = vehicles.register({ plate: 'CP-1', vehicleClass: 'motorcycle', ownerName: 'Cap Rider' });
+    const d = drivers.register({ displayName: 'Cap', fullName: 'Cap Rider', nationalId: 'DRV-CAP-1', mobile: '+254900071', licenceClasses: ['bike'] });
+    const moto = vehicles.register({ plate: 'CP-1', vehicleClass: 'bike', ownerName: 'Cap Rider' });
     fleet.couple(d.did, moto.vehicleId, corridor.corridorId);
     const entity = entities.forJurisdiction(drivers.get(d.did).jurisdiction)!;
     entities.setCustodyCaps(entity.entityId, { rider: { start: 2, liftedAfter: 10 } }, 'test');
@@ -5000,7 +5010,7 @@ describe('PUDO Light', () => {
     expect(r.handed).toEqual(['CAP-1', 'CAP-2']);
     expect(r.rejected).toEqual([{ parcelId: 'CAP-3', reason: 'custody_cap' }]);
     expect(parcels.riderStanding(d.did)).toMatchObject({ holds: 2, cap: 2 });
-    // Round 39 — a motorcycle rider whose ID nobody has seen: told how to have it seen, and held at the start.
+    // Round 39 — a bicycle rider whose ID nobody has seen: told how to have it seen, and held at the start.
     expect(() => parcels.assertRiderWithinCap(d.did)).toThrow(/This rider carries 2 parcels?; a rider whose ID has not been seen yet carries at most 2 here\. Send a photo of your ID card/);
     Object.assign(parcels.get('CAP-1'), { status: 'Ready_For_Pickup' });
     parcels.get('CAP-1').scans.push({ at: new Date().toISOString(), status: 'Ready_For_Pickup', by: 'did:shop:far', note: 'arrived' } as never);
@@ -5073,8 +5083,8 @@ describe('PUDO Light', () => {
   it('a bag counts every parcel in it against a new rider’s custody cap (round 38)', () => {
     const shop = onboardAgent('Cap Bag Shop', 'NorthTown', 50);
     const corridor = corridors.addCorridor({ name: 'cap-bag', originZone: 'NorthTown', destZone: 'SouthTown' });
-    const d = drivers.register({ displayName: 'Bag Cap', fullName: 'Bag Cap Rider', nationalId: 'DRV-CAP-2', mobile: '+254900072', licenceClasses: ['motorcycle'] });
-    const moto = vehicles.register({ plate: 'CP-2', vehicleClass: 'motorcycle', ownerName: 'Bag Cap Rider' });
+    const d = drivers.register({ displayName: 'Bag Cap', fullName: 'Bag Cap Rider', nationalId: 'DRV-CAP-2', mobile: '+254900072', licenceClasses: ['bike'] });
+    const moto = vehicles.register({ plate: 'CP-2', vehicleClass: 'bike', ownerName: 'Bag Cap Rider' });
     fleet.couple(d.did, moto.vehicleId, corridor.corridorId);
     for (const id of ['CB-1', 'CB-2']) parcels.accept({ agentDid: shop.did, parcelId: id, size: 'S', destZone: 'SouthTown', senderMobile: '+1', receiverMobile: '+2', dropoffPhotoRef: photoBy(shop.did) });
     const bag = totes.register(shop.did);
@@ -5084,7 +5094,7 @@ describe('PUDO Light', () => {
     closeForTest(bag.code);
     const entity = entities.forJurisdiction(drivers.get(d.did).jurisdiction)!;
     entities.setCustodyCaps(entity.entityId, { rider: { start: 1, liftedAfter: 10 } }, 'test');
-    // A motorcycle rider whose ID nobody has seen yet (round 39): held at the start, and told how to have it seen.
+    // A bicycle rider whose ID nobody has seen yet (round 39): held at the start, and told how to have it seen.
     expect(() => mdps.loadBag(bag.code, drivers.get(d.did).badgeId!)).toThrow(/This rider carries 0 parcels?; a rider whose ID has not been seen yet carries at most 1/);
     expect(parcels.get('CB-1').status).toBe('At_PUDO'); // nothing moved
     entities.setCustodyCaps(entity.entityId, { rider: { start: 2, liftedAfter: 10 } }, 'test');
@@ -5643,7 +5653,7 @@ describe('PUDO Light', () => {
   it('suggests on-route loads sized to remaining capacity; a claim reserves it against the vehicle total', () => {
     const origin = onboardAgent('Feeder PUDO', 'NorthTown', 50);
     const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
-    const d = drivers.register({ displayName: 'Moto', fullName: 'Mo', nationalId: 'DSP-1', mobile: '+254dsp1', licenceClasses: ['motorcycle'] });
+    const d = clearedRider({ displayName: 'Moto', fullName: 'Mo', nationalId: 'DSP-1', mobile: '+254dsp1', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'MT-1', vehicleClass: 'motorcycle', ownerName: 'Mo' }); // 50 kg total
     fleet.couple(d.did, moto.vehicleId);
 
@@ -5670,7 +5680,7 @@ describe('PUDO Light', () => {
   it('auto-ignores an unanswered offer when it lapses, and blocks a late claim', () => {
     const origin = onboardAgent('Lapse PUDO', 'NorthTown', 50);
     const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
-    const d = drivers.register({ displayName: 'Moto', fullName: 'Mo', nationalId: 'DSP-2', mobile: '+254dsp2', licenceClasses: ['motorcycle'] });
+    const d = clearedRider({ displayName: 'Moto', fullName: 'Mo', nationalId: 'DSP-2', mobile: '+254dsp2', licenceClasses: ['motorcycle'] });
     const moto = vehicles.register({ plate: 'MT-2', vehicleClass: 'motorcycle', ownerName: 'Mo' });
     fleet.couple(d.did, moto.vehicleId);
     const bag = totes.register(origin.did);
@@ -5688,8 +5698,8 @@ describe('PUDO Light', () => {
   it('reserves a claimed bag for its driver — another driver cannot load it away', () => {
     const origin = onboardAgent('Reserve PUDO', 'NorthTown', 50);
     const mdp = mdps.register({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }, { approvedBy: 'staff' });
-    const a = drivers.register({ displayName: 'A', fullName: 'Amos', nationalId: 'DSP-A', mobile: '+254dspa', licenceClasses: ['motorcycle'] });
-    const b = drivers.register({ displayName: 'B', fullName: 'Ben', nationalId: 'DSP-B', mobile: '+254dspb', licenceClasses: ['motorcycle'] });
+    const a = clearedRider({ displayName: 'A', fullName: 'Amos', nationalId: 'DSP-A', mobile: '+254dspa', licenceClasses: ['motorcycle'] });
+    const b = clearedRider({ displayName: 'B', fullName: 'Ben', nationalId: 'DSP-B', mobile: '+254dspb', licenceClasses: ['motorcycle'] });
     fleet.couple(a.did, vehicles.register({ plate: 'MA-1', vehicleClass: 'motorcycle', ownerName: 'Amos' }).vehicleId);
     fleet.couple(b.did, vehicles.register({ plate: 'MB-1', vehicleClass: 'motorcycle', ownerName: 'Ben' }).vehicleId);
     const bag = totes.register(origin.did);
@@ -5760,7 +5770,7 @@ describe('PUDO Light', () => {
 
   it('signs up a self-employed driver (own vehicle); a fleet takes one on by offering a place, never by its code', () => {
     const ph1 = '+254700601'; otp.verify(ph1, otp.request(ph1).code);
-    const self = accounts.signup({ role: 'driver', email: 'boda@d.test', password: 'mkate-na-chai-1', phone: ph1, profile: { driver: { displayName: 'Boda', fullName: 'B', nationalId: 'ID-D1', mobile: ph1, licenceClasses: ['bike', 'motorcycle'] }, vehicle: { plate: 'BD-1', vehicleClass: 'motorcycle', ownerName: 'B' } } });
+    const self = accounts.signup({ role: 'driver', email: 'boda@d.test', password: 'mkate-na-chai-1', phone: ph1, profile: { driver: { displayName: 'Boda', fullName: 'B', nationalId: 'ID-D1', mobile: ph1, licenceClasses: ['bike'] }, vehicle: { plate: 'BD-1', vehicleClass: 'bike', ownerName: 'B' } } });
     expect(self.role).toBe('driver');
     expect(drivers.get(self.did).status).toBe('ACTIVE'); // light registry
     expect(vehicles.list().find((v) => v.plate === 'BD-1')).toMatchObject({ ownerDriverDid: self.did }); // own vehicle registered — theirs, and nobody else's to start on
@@ -5884,7 +5894,7 @@ describe('PUDO Light', () => {
   it('S20 — one person, many roles: a driver who signs up can enroll as a consumer and send, under one account', () => {
     // A driver signs up through the existing PUDO account flow — which now links them to a person by phone.
     const phone = '+254700711'; otp.verify(phone, otp.request(phone).code);
-    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['motorcycle'] }, vehicle: { plate: 'MU-1', vehicleClass: 'motorcycle' } } });
+    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['bike'] }, vehicle: { plate: 'MU-1', vehicleClass: 'bike' } } });
 
     const linked = persons.findByPhone(phone);
     expect(linked).toBeDefined();
@@ -7045,7 +7055,7 @@ describe('PUDO Light', () => {
     // the shop only found out when it pressed Accept. The same checks acceptance makes are now asked first.
     const tag = 'MOTO';
     // A light-registry courier activates on registration — no KYC step to run.
-    const d = drivers.register({ displayName: tag, fullName: tag, nationalId: `ID-${tag}`, mobile: `+2547709${tag}`, licenceClasses: ['motorcycle'], licenceNumber: `L-${tag}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    const d = clearedRider({ displayName: tag, fullName: tag, nationalId: `ID-${tag}`, mobile: `+2547709${tag}`, licenceClasses: ['motorcycle'], licenceNumber: `L-${tag}`, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
     const moto = vehicles.register({ plate: `${tag}-1`, vehicleClass: 'motorcycle', capacityKg: 30, ownerName: 'X', baseFee: 1, pricePerKm: 0.2 });
     fleet.couple(d.did, moto.vehicleId);
     const f = negotiable(); // 400 kg, palletised
@@ -8853,7 +8863,7 @@ describe('PUDO Light', () => {
 
   it('FP4: a courier without a fleet sends the renewed card; staff record the date FROM it, or refuse it with a reason', () => {
     const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-    const c = drivers.register({ displayName: 'Card C.', fullName: 'Card Courier', nationalId: 'ID-CARD-1', mobile: '+254700111222', licenceClasses: ['motorcycle'], licenceNumber: 'L-CARD-1', licenceExpiresAt: '2026-02-01', criminalRecordClear: true });
+    const c = drivers.register({ displayName: 'Card C.', fullName: 'Card Courier', nationalId: 'ID-CARD-1', mobile: '+254700111222', licenceClasses: ['bike'], licenceNumber: 'L-CARD-1', licenceExpiresAt: '2026-02-01', criminalRecordClear: true });
     expect(drivers.canOperate(c.did)).toBe(false);
     const heard: unknown[] = [];
     events.subscribe(GlosEvent.Pudo.DriverLicenceChecked, (e) => {
@@ -8872,7 +8882,7 @@ describe('PUDO Light', () => {
     drivers.sendLicenceRenewal(c.did, { copyRef: first.mediaId, expiresAt: '2030-05-31', number: 'L-CARD-2' });
     expect(drivers.canOperate(c.did)).toBe(false);
     expect(media.get(first.mediaId)).toMatchObject({ kind: 'kyc_licence', link: { type: 'driver', id: c.did } });
-    expect(rowOf()).toMatchObject({ classes: ['motorcycle'], renewal: { copyRef: first.mediaId, expiresAt: '2030-05-31', number: 'L-CARD-2' } });
+    expect(rowOf()).toMatchObject({ classes: ['bike'], renewal: { copyRef: first.mediaId, expiresAt: '2030-05-31', number: 'L-CARD-2' } });
     // …and it goes to the top of the list, because that courier is now waiting on us.
     expect(report.networkReport().couriers[0].did).toBe(c.did);
 
@@ -9011,7 +9021,7 @@ describe('PUDO Light', () => {
 
   it('FP4: only the driver sends their own card; staff refuse a courier’s, and no fleet’s office does', () => {
     const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-    const c = drivers.register({ displayName: 'Own O.', fullName: 'Own Courier', nationalId: 'ID-OWN-1', mobile: '+254700111333', licenceClasses: ['motorcycle'], criminalRecordClear: true });
+    const c = drivers.register({ displayName: 'Own O.', fullName: 'Own Courier', nationalId: 'ID-OWN-1', mobile: '+254700111333', licenceClasses: ['bike'], criminalRecordClear: true });
     const card = media.upload({ ownerDid: c.did, kind: 'kyc_licence', dataUrl: PNG });
     const dto = { copyRef: card.mediaId, expiresAt: '2030-05-31' } as never;
     // Staff cannot send one "on their behalf": the checker would be supplying the thing checked.
@@ -10344,7 +10354,7 @@ describe('PUDO Light', () => {
     return m;
   };
   const mkManagedDriver = (mgrDid: string, tag: string) =>
-    drivers.register({ displayName: tag, fullName: tag, nationalId: `ND-${tag}`, mobile: `+2547${tag}`, licenceClasses: ['motorcycle'], criminalRecordClear: true, managerDid: mgrDid } as never);
+    clearedRider({ displayName: tag, fullName: tag, nationalId: `ND-${tag}`, mobile: `+2547${tag}`, licenceClasses: ['motorcycle'], criminalRecordClear: true, managerDid: mgrDid } as never);
 
   it('REP3: a FLEET inherits the count-weighted aggregate of its drivers ratings', () => {
     const mgr = activateManager('Speedy Freight', 'R3');
@@ -11022,7 +11032,7 @@ describe('PUDO Light', () => {
         // Not handed over before a driver has taken it.
         expect(() => withLoads.handToDriver(hub.mdpId, id, 'NOBODY', 'Floor')).toThrow(/No driver has taken load/);
         // A rider on a motorbike takes it, at their price — at most what the store allows.
-        const rider = drivers.register({ displayName: 'CPL Rider', fullName: 'CPL R', nationalId: 'ID-CPL-R', mobile: '+254700998877', licenceClasses: ['motorcycle'] });
+        const rider = clearedRider({ displayName: 'CPL Rider', fullName: 'CPL R', nationalId: 'ID-CPL-R', mobile: '+254700998877', licenceClasses: ['motorcycle'] });
         const bike = vehicles.register({ plate: 'CPL-M', vehicleClass: 'motorcycle', ownerName: 'R' });
         fleet.couple(rider.did, bike.vehicleId);
         const before = vendors.balanceOf(vendor.vendorId);
@@ -11111,7 +11121,7 @@ describe('PUDO Light', () => {
         const other = noShop('CPZ', { dock: true });
         const most2 = other.withLoads.preview(other.vendor.vendorId, other.id, 'door').suggestedMax!;
         const load2 = dispatch.requireFreightPublic(other.withLoads.callOff(other.vendor.vendorId, other.id, 'CPZ Store', undefined, Date.now(), { backTo: 'door', maxSpend: most2 }).returnLoadId!);
-        const rider = drivers.register({ displayName: 'CPZ Rider', fullName: 'CPZ R', nationalId: 'ID-CPZ-R', mobile: '+254700998866', licenceClasses: ['motorcycle'] });
+        const rider = clearedRider({ displayName: 'CPZ Rider', fullName: 'CPZ R', nationalId: 'ID-CPZ-R', mobile: '+254700998866', licenceClasses: ['motorcycle'] });
         fleet.couple(rider.did, vehicles.register({ plate: 'CPZ-M', vehicleClass: 'motorcycle', ownerName: 'R' }).vehicleId);
         claimFreight(rider.did, load2.pickupLocation, load2.freightId);
         expect(reminding.remindDoorLoads(Date.parse(load2.createdAt) + 25 * 3_600_000)).not.toContain(load2.freightId);

@@ -92,7 +92,7 @@ describe('the yearly security declaration — over the wire', () => {
 
   it('a rider in no fleet signs their own; a fleet’s driver signs nothing, and their fleet answers for them', async () => {
     const u = digits();
-    const rider = (await http().post('/v1/sbg/drivers/onboard').set(staff).send({ displayName: `Rider ${u.slice(-3)}`, fullName: `Rider ${u}`, nationalId: `ID-DR-${u}`, mobile: `+2547${u}7`, licenceClasses: ['motorcycle'], licenceNumber: `L-${u}`, licenceExpiresAt: '2031-01-01', jurisdiction: 'KE' }).expect(201)).body;
+    const rider = (await http().post('/v1/sbg/drivers/onboard').set(staff).send({ displayName: `Rider ${u.slice(-3)}`, fullName: `Rider ${u}`, nationalId: `ID-DR-${u}`, mobile: `+2547${u}7`, licenceClasses: ['bike'], licenceNumber: `L-${u}`, licenceExpiresAt: '2031-01-01', jurisdiction: 'KE' }).expect(201)).body;
     const riderToken = bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: rider.did, type: 'client_credentials' }).expect(201)).body.access_token);
     const own = (await http().get('/v1/sbg/declarations/mine').set(riderToken).expect(200)).body;
     expect(own).toMatchObject({ required: true, kind: 'driver', state: 'missing' });
@@ -100,8 +100,8 @@ describe('the yearly security declaration — over the wire', () => {
     const before = (await http().get('/v1/sbg/declarations').set(staff).expect(200)).body.items as Array<{ did: string; state: string }>;
     expect(before.find((r) => r.did === rider.did)).toMatchObject({ state: 'missing' });
     expect(before.findIndex((r) => r.state === 'signed')).toBeGreaterThan(before.findIndex((r) => r.did === rider.did));
-    // Out on a motorcycle, a hub loads a bag onto them: refused, in words for the hub, before anything is moved.
-    const moto = (await http().post('/v1/sbg/vehicles').set(staff).send({ plate: `DM-${u}`, vehicleClass: 'motorcycle', ownerName: 'Rider' }).expect(201)).body;
+    // Out on a bicycle, a hub loads a bag onto them: refused, in words for the hub, before anything is moved.
+    const moto = (await http().post('/v1/sbg/vehicles').set(staff).send({ plate: `DM-${u}`, vehicleClass: 'bike', ownerName: 'Rider' }).expect(201)).body;
     await http().post(`/v1/sbg/fleet/drivers/${rider.did}/start-session`).set(staff).send({ vehicleId: moto.vehicleId }).expect(201);
     const mdps = app.get(MdpService);
     const hub = mdps.register({ name: `Decl Sort ${u}`, zones: [`DS${u}`], country: 'KE', location: { lat: -1.29, lng: 36.82 } }, { approvedBy: 'Test' });
@@ -158,7 +158,7 @@ describe('the yearly security declaration — over the wire', () => {
     await http().post('/v1/sbg/declarations/mine/sign').set(office).send({ version: theirs.version }).expect(201);
     const fleet = { did: m.did, companyName: m.companyName };
     // A fleet's driver: covered by the fleet, and nothing of their own to sign.
-    const fleetDriver = (await http().post('/v1/sbg/drivers/onboard').set(staff).send({ displayName: `Fleet ${v.slice(-3)}`, fullName: `Fleet Driver ${v}`, nationalId: `ID-FD-${v}`, mobile: `+2547${v}6`, licenceClasses: ['motorcycle'], licenceNumber: `L-${v}`, licenceExpiresAt: '2031-01-01', managerDid: fleet.did }).expect(201)).body;
+    const fleetDriver = (await http().post('/v1/sbg/drivers/onboard').set(staff).send({ displayName: `Fleet ${v.slice(-3)}`, fullName: `Fleet Driver ${v}`, nationalId: `ID-FD-${v}`, mobile: `+2547${v}6`, licenceClasses: ['bike'], licenceNumber: `L-${v}`, licenceExpiresAt: '2031-01-01', managerDid: fleet.did }).expect(201)).body;
     const fleetToken = bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: fleetDriver.did, type: 'client_credentials' }).expect(201)).body.access_token);
     expect((await http().get('/v1/sbg/declarations/mine').set(fleetToken).expect(200)).body).toEqual({ required: false, coveredBy: fleet.companyName });
     expect((await http().post('/v1/sbg/declarations/mine/sign').set(fleetToken).send({ version: own.version }).expect(400)).body.detail).toMatch(/signs the security declaration for its drivers/);

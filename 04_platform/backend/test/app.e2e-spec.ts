@@ -983,9 +983,9 @@ describe('GLOS backend (e2e)', () => {
     await fund(`/v1/sbg/agents/${origin}/top-up`, 50, auth);
     const hub = await request(http).post('/v1/sbg/mdps').set(auth).send({ name: 'Hub', zones: ['SouthTown'], location: { lat: -1.25, lng: 36.85 } }).expect(201);
 
-    // A motorcycle courier (light → ACTIVE) coupled to a motorcycle.
-    const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Moto', fullName: 'Mo', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['motorcycle'] }).expect(201);
-    const moto = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MT-${u}`, vehicleClass: 'motorcycle', ownerName: 'Mo' }).expect(201);
+    // A bicycle courier (light → ACTIVE) coupled to a bicycle.
+    const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Moto', fullName: 'Mo', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['bike'] }).expect(201);
+    const moto = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MT-${u}`, vehicleClass: 'bike', ownerName: 'Mo' }).expect(201);
     await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleId: moto.body.vehicleId }).expect(201);
 
     // Agent bags two parcels in an outbound tote bound for the hub, then releases it for claim.
@@ -1003,7 +1003,7 @@ describe('GLOS backend (e2e)', () => {
 
     // The driver declares a route past the PUDO → gets a sized suggestion.
     const sug = await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/suggest-work`).set(auth).send({ from: loc, to: { lat: -1.3, lng: 36.95 } }).expect(201);
-    expect(sug.body.remainingCapacityKg).toBe(50);
+    expect(sug.body.remainingCapacityKg).toBe(20); // a bicycle carries 20 kg
     expect(sug.body.offers).toHaveLength(1);
     expect(sug.body.offers[0].weightKg).toBe(10);
 
@@ -1013,7 +1013,7 @@ describe('GLOS backend (e2e)', () => {
     // Claim it → reserves 10 kg; then load the bag (claimer only).
     await request(http).post(`/v1/sbg/dispatch/offers/${sug.body.offers[0].offerId}/claim`).set(auth).expect(201);
     const claims = await request(http).get(`/v1/sbg/fleet/drivers/${driver.body.did}/claims`).set(auth).expect(200);
-    expect(claims.body.remainingCapacityKg).toBe(40);
+    expect(claims.body.remainingCapacityKg).toBe(10);
     // Loaded by the driver, onto their own badge: nothing to show anybody.
     const asMoto = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'driver', did: driver.body.did, type: 'client_credentials' }).expect(201)).body.access_token}` };
     // Round 36 — the shop closes it for the road before the driver takes it: photographed closed.
@@ -1047,9 +1047,9 @@ describe('GLOS backend (e2e)', () => {
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const u = Math.random().toString(16).slice(2, 10);
 
-    const veh = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `SS-${u}`, vehicleClass: 'motorcycle', ownerName: 'Sh' }).expect(201);
+    const veh = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `SS-${u}`, vehicleClass: 'bike', ownerName: 'Sh' }).expect(201);
     expect(veh.body.qr).toMatch(/^VEH-/);
-    const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Shift', fullName: 'Sh', nationalId: `SES-${u}`, mobile: `+254s${u}`, licenceClasses: ['motorcycle'] }).expect(201);
+    const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Shift', fullName: 'Sh', nationalId: `SES-${u}`, mobile: `+254s${u}`, licenceClasses: ['bike'] }).expect(201);
 
     await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleQr: 'VEH-NOPE' }).expect(404);
     await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleQr: veh.body.qr }).expect(201);
@@ -1122,7 +1122,7 @@ describe('GLOS backend (e2e)', () => {
 
     // Actor tokens: manager A (fleet_manager, tenant=mA) and a driver under A (field role).
     const aToken = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'fleet_manager', did: mA, tenant: mA, type: 'client_credentials' }).expect(201)).body.access_token}` };
-    const driver = (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Boda', fullName: 'Boda Rider', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['motorcycle'], managerDid: mA }).expect(201)).body;
+    const driver = (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Boda', fullName: 'Boda Rider', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['bike'], managerDid: mA }).expect(201)).body;
     const dToken = { Authorization: `Bearer ${(await request(http).post('/v1/auth/token').send({ role: 'driver', did: driver.did, tenant: mA, type: 'client_credentials' }).expect(201)).body.access_token}` };
 
     // 1) A driver (field) token is FORBIDDEN from operator actions — the core S3 hole, now closed.
@@ -1161,7 +1161,7 @@ describe('GLOS backend (e2e)', () => {
     const rival = await as({ role: 'fleet_manager', did: mB, tenant: mB });
     // A phone number is compared by its digits, so the two differ in a digit and not in a name.
     const onboardDriver = async (tag: string) =>
-      (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: tag, fullName: `${tag} Rider`, nationalId: `CARD-${u}-${tag}`, mobile: `+25471${u}${tag.length}`, licenceClasses: ['motorcycle'], managerDid: mA }).expect(201)).body as { did: string };
+      (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: tag, fullName: `${tag} Rider`, nationalId: `CARD-${u}-${tag}`, mobile: `+25471${u}${tag.length}`, licenceClasses: ['bike'], managerDid: mA }).expect(201)).body as { did: string };
     const amos = await onboardDriver('Amos');
     const colleague = await onboardDriver('Baraka');
     // Exactly what a fleet driver's sign-in carries: the fleet rides in the token as its tenant.
@@ -1244,10 +1244,10 @@ describe('GLOS backend (e2e)', () => {
       return m.did as string;
     })());
     const office = await as({ role: 'fleet_manager', did: fleetDid, tenant: fleetDid });
-    const rider = (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Wanjiru', fullName: 'Wanjiru Rider', nationalId: `ALONE-${u}`, mobile: `+25474${u}3`, licenceClasses: ['motorcycle'], managerDid: fleetDid }).expect(201)).body as { did: string };
+    const rider = (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Wanjiru', fullName: 'Wanjiru Rider', nationalId: `ALONE-${u}`, mobile: `+25474${u}3`, licenceClasses: ['bike'], managerDid: fleetDid }).expect(201)).body as { did: string };
     const inFleet = await as({ role: 'driver', did: rider.did, tenant: fleetDid });
     const terms = `/v1/sbg/drivers/${rider.did}/ride-alone`;
-    const body = { country: 'KE', vehicleClass: 'motorcycle', plate: `kmal ${u}` };
+    const body = { country: 'KE', vehicleClass: 'bike', plate: `kmal ${u}` };
 
     // IN A FLEET it is not offered, and says what comes first. Asking changes nothing.
     expect((await request(http).get(terms).set(inFleet).expect(200)).body).toMatchObject({ offered: false, why: 'You drive for AloneCo. Leave that fleet first: “Your fleet”, under your name', classes: [], countries: [] });
@@ -1257,7 +1257,7 @@ describe('GLOS backend (e2e)', () => {
     const left = (await request(http).post(`/v1/sbg/drivers/${rider.did}/leave-fleet`).set(inFleet).expect(201)).body;
     const asRider = { Authorization: `Bearer ${left.token.access_token}` };
     const offered = (await request(http).get(terms).set(asRider).expect(200)).body;
-    expect(offered).toMatchObject({ offered: true, classes: ['motorcycle'] });
+    expect(offered).toMatchObject({ offered: true, classes: ['bike'] });
     const kenya = (offered.countries as Array<{ jurisdiction: string; companyName?: string }>).find((c) => c.jurisdiction === 'KE')!;
     expect(kenya.companyName).toEqual(expect.any(String));
 
@@ -1272,9 +1272,9 @@ describe('GLOS backend (e2e)', () => {
     expect((await request(http).post(terms).set(asRider).send({ ...body, vehicleClass: 'truck' })).body.code).toBe('CANNOT_COUPLE');
     expect((await request(http).get(`/v1/sbg/fleet/drivers/${rider.did}`).set(asRider).expect(200)).body.removedFrom).toBeDefined();
 
-    // AT ONCE: a courier, in Kenya, for Kenya's company, with a motorcycle of their own.
+    // AT ONCE: a courier, in Kenya, for Kenya's company, with a bicycle of their own.
     const done = (await request(http).post(terms).set(asRider).send(body).expect(201)).body;
-    expect(done).toMatchObject({ did: rider.did, jurisdiction: 'KE', companyName: kenya.companyName, vehicle: { plate: `KMAL ${u}`, vehicleClass: 'motorcycle' } });
+    expect(done).toMatchObject({ did: rider.did, jurisdiction: 'KE', companyName: kenya.companyName, vehicle: { plate: `KMAL ${u}`, vehicleClass: 'bike' } });
     const me = (await request(http).get(`/v1/sbg/fleet/drivers/${rider.did}`).set(asRider).expect(200)).body;
     expect(me).toMatchObject({ did: rider.did, jurisdiction: 'KE', status: 'ACTIVE', offRoad: [] });
     expect(me.managerDid).toBeUndefined();
