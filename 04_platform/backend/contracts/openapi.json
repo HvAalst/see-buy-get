@@ -61363,11 +61363,19 @@
           },
           "submittedAt": {
             "type": "string"
+          },
+          "checkedAt": {
+            "type": "string",
+            "description": "Who of staff looked, and when: the papers were approved."
+          },
+          "checkedBy": {
+            "type": "string"
+          },
+          "photosDeletedAt": {
+            "type": "string"
           }
         },
         "required": [
-          "idCopyRef",
-          "licenceCopyRef",
           "submittedAt"
         ]
       },
@@ -61439,7 +61447,7 @@
             "type": "object",
             "properties": {
               "photoRef": {
-                "required": true,
+                "required": false,
                 "type": "string"
               },
               "sentAt": {
@@ -61451,6 +61459,10 @@
                 "type": "string"
               },
               "seenBy": {
+                "required": false,
+                "type": "string"
+              },
+              "photoDeletedAt": {
                 "required": false,
                 "type": "string"
               }
