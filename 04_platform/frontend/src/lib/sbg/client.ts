@@ -4,6 +4,7 @@ import type { SbgConfig } from './config';
 import type { Session } from './session';
 import { type SbgError, clientError, toSbgError } from './errors';
 import { offlineFetch, startOutbox } from '../../shared/outbox';
+import { PICKED_COUNTRY_HEADER, pickedCountry } from './pickedCountry';
 import { CACHED_AT_HEADER, cachedFetch } from '../../shared/readcache';
 import { isBrowserOffline } from '../../shared/connectivity';
 
@@ -92,6 +93,9 @@ export function createSbgClient(opts: SbgClientOptions): SbgClient {
       request.headers.set('Authorization', `Bearer ${token}`);
       request.headers.set('X-SBG-Client', config.clientId);
       request.headers.set('X-SBG-Trace-Id', genTrace());
+      // The console's picked country, narrowing a member of staff's lists to one of their countries (pickedCountry.ts).
+      const country = pickedCountry();
+      if (country) request.headers.set(PICKED_COUNTRY_HEADER, country);
       return request;
     },
   };

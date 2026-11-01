@@ -101,6 +101,8 @@ export interface StaffRow {
   twoStep?: boolean;
   /** Round 38 — the roles they hold: support, vetting, money, admin. */
   roles?: string[];
+  /** 2026-11-01 — the countries they work in, or `*` for every country. */
+  countries?: string[];
   /** A reset of their two-step sign-in, asked for by this member of staff, waiting for a second. */
   twoStepResetAskedBy?: string;
   /** They have not chosen a password yet: until when the link in their email works (it may be past). */

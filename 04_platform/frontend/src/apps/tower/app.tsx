@@ -3,6 +3,10 @@ import { consoleArticles } from '../../shared/guide/staff-articles';
 import { useState } from 'preact/hooks';
 import { BrandMark } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
+import { countryNameOf } from './presence';
+import { ConsolePick } from './ConsolePick';
+import { holdsEvery, pickable } from './staffCountries';
+import type { TowerActions, TowerState } from './useTowerApp';
 import { CompaniesScreen } from './screens/CompaniesScreen';
 import { CompanyRecordScreen } from './screens/CompanyRecordScreen';
 import { BordersScreen } from './screens/BordersScreen';
@@ -268,6 +272,8 @@ export function App() {
           * warning: a name typed beside a shared setup key proves nothing, and every decision taken
           * here is attributed to it. A warning behind a click is a warning nobody reads.
           */}
+        {/* 2026-11-01 — the country a member of staff reads their lists in, among their own (staff separated by country). */}
+        {state.who?.named ? <CountryPick state={state} actions={actions} /> : null}
         <ConsoleMenu
           name={state.who?.name ?? ''}
           under={state.who?.entityId ? companyName(state) : undefined}
@@ -379,4 +385,31 @@ export function App() {
 function companyName(state: { who?: { entityId?: string } | null; entities?: { entityId: string; name: string }[] | null }): string {
   const id = state.who?.entityId ?? '';
   return state.entities?.find((e) => e.entityId === id)?.name ?? id;
+}
+
+/**
+ * 2026-11-01 — THE COUNTRY PICKER: read the lists in one of your countries, or in all of them. Offered only with more than
+ * one to pick from; somebody who works in a single country is already in it, and sees its name.
+ */
+function CountryPick({ state, actions }: { state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const mine = state.who?.countries;
+  const nameOf = (code: string) => countryNameOf(code, state.catalogue);
+  const choices = pickable(mine, [...(state.entities ?? []).map((e) => e.jurisdiction), ...(state.presence ?? []).map((p) => p.jurisdiction)]);
+  if (!choices.length) {
+    return mine && !holdsEvery(mine) && mine.length === 1 ? <span class="ctag ctag--quiet" title={t('tower.countries.onlyHint')}>{nameOf(mine[0])}</span> : null;
+  }
+  return (
+    <span class="cons__countrypick" title={t('tower.countries.pickerHint')}>
+      <ConsolePick
+        bare
+        small
+        label={t('tower.countries.picker')}
+        hint={t('tower.countries.pickerHint')}
+        value={state.picked ?? ''}
+        onChange={(v) => void actions.pickCountry(v || null)}
+        options={[{ value: '', label: t(holdsEvery(mine) ? 'tower.countries.allCountries' : 'tower.countries.allMine') }, ...choices.map((c) => ({ value: c, label: nameOf(c), tag: c }))]}
+      />
+    </span>
+  );
 }

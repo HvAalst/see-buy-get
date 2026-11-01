@@ -1174,3 +1174,10 @@
   gap: 8px;
   margin: 0 0 12px;
 }
+
+/* 2026-11-01 — the country a member of staff reads their lists in, beside their name in the header. */
+.cons__countrypick {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-end: 8px;
+}

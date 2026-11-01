@@ -28,6 +28,8 @@ import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type InterestCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
 import type { ExpiringItem } from './company';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
+import { setPickedCountry } from '../../lib/sbg/pickedCountry';
+import { keepPick, restoredPick } from './staffCountries';
 import { runSummary, type FundingAction, type FundingRow, type HeldRow, type MorningRun, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
 import type { HelpOption } from './pictures';
 import { approvedSays } from './connections';
@@ -45,7 +47,9 @@ export interface TowerState {
   creds: TowerCreds | null;
   /** WHO the network says this is, once a token exists. Drives the rail: an operator sees the whole
    *  network, a company administrator sees their own company and whatever sits under it. */
-  who: { mode: 'operator' | 'company'; name: string; entityId?: string; /** The name came from an account, not from a field beside the shared key. */ named?: boolean; /** The setup key, on a server where it only sets staff up: the console shows that one screen. */ setupOnly?: boolean; /** Round 38 — the roles a named member of staff holds. Absent for the setup key and a company, which are not held to roles. */ roles?: StaffRole[] } | null;
+  who: { mode: 'operator' | 'company'; name: string; entityId?: string; /** The name came from an account, not from a field beside the shared key. */ named?: boolean; /** The setup key, on a server where it only sets staff up: the console shows that one screen. */ setupOnly?: boolean; /** Round 38 — the roles a named member of staff holds. Absent for the setup key and a company, which are not held to roles. */ roles?: StaffRole[]; /** 2026-11-01 — the countries they work in (`*` every country). */ countries?: string[] } | null;
+  /** 2026-11-01 — the country the reader picked to read their lists in; null for all of theirs. */
+  picked: string | null;
   /** The disputed queue, longest wait first — the server's order, kept as it arrives. */
   hazards: ConstraintView[] | null;
   /** The automatic flags as cases, the most pressing first; how many nobody has taken. Null while unread. */
@@ -359,6 +363,8 @@ export interface TowerActions {
   /** CV4 — the bytes of a voice message a party put in a shared report, or null. */
   disputeVoice(reportId: string, voiceId: string): Promise<Blob | null>;
   refresh(): Promise<void>;
+  /** 2026-11-01 — read the lists in one of the reader's countries, or (null) in all of them. */
+  pickCountry(code: string | null): Promise<void>;
   /** Take the file of one damage claim report. */
   downloadDamageReport(parcelId: string): Promise<void>;
   open(rowId: string | null): void;
@@ -471,6 +477,7 @@ const INITIAL: TowerState = {
   readAt: null,
   live: null,
   entities: null,
+  picked: null,
   entityId: null,
   pricing: null,
   rateImpact: null,
@@ -1014,7 +1021,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       void myStaffAccount(client).then(({ data, error }) => {
         if (error || !data) return ended();
         const roles = rolesOf(data.roles);
-        setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true, roles }, staffTwoStep: Boolean(data.twoStep) }));
+        const picked = restorePick(data.countries);
+        setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true, roles, countries: data.countries }, picked, staffTwoStep: Boolean(data.twoStep) }));
         void loadStart(client, roles);
       });
       return;
@@ -1134,7 +1142,9 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       clientRef.current = client;
       saveCreds(creds);
       const roles = rolesOf(data.roles);
-      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true, roles }, screen: 'network', signInError: null, signInNote: null, staffStep: null, staffTwoStep: data.twoStep, loading: false }));
+      const countries = (data as { countries?: string[] }).countries;
+      const picked = restorePick(countries);
+      setState((s) => ({ ...s, phase: 'ready', creds, who: { mode: 'operator', name: data.name, named: true, roles, countries }, picked, screen: 'network', signInError: null, signInNote: null, staffStep: null, staffTwoStep: data.twoStep, loading: false }));
       await loadStart(client, roles);
     },
     [loadStart],
@@ -1142,6 +1152,8 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
 
   const signOut = useCallback(() => {
     clearCreds();
+    // The picked country goes with the person: the next one signed in reads in their own.
+    setPickedCountry(null);
     clientRef.current = null;
     setState({ ...INITIAL, phase: 'signin' });
   }, []);
@@ -1183,6 +1195,16 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
     const r = await client.api.damageReportFile(parcelId);
     if (r.error || !r.data) return setState((s) => ({ ...s, error: r.error ?? null }));
     triggerDownloadBlob(`damage-claim-report-${parcelId.replace(/[^A-Za-z0-9._-]+/g, '-')}.zip`, r.data);
+  }, []);
+
+  /** 2026-11-01 — read the lists in one of the reader's countries: kept on this computer, sent with each request, everything read again. */
+  const pickCountry = useCallback(async (code: string | null) => {
+    setPickedCountry(code);
+    keepPick(code);
+    setState((s) => ({ ...s, picked: code }));
+    const client = clientRef.current;
+    if (client) await loadStart(client, stateRef.current.who?.roles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const refresh = useCallback(async () => {
@@ -1353,6 +1375,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (screen === 'messages' && client) void loadSupport(client);
       },
       refresh,
+      pickCountry,
       caseAct: async (caseId, act, body) => {
         const client = clientRef.current;
         if (!client) return null;
@@ -2245,4 +2268,14 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         ),
     },
   };
+}
+
+/**
+ * 2026-11-01 — the country picked before, on this computer, when it is still one the reader may pick (one of theirs; any
+ * country for somebody who works in every country — the server narrows only to a country the reader holds anyway).
+ */
+function restorePick(countries: string[] | undefined): string | null {
+  const picked = restoredPick(countries);
+  setPickedCountry(picked);
+  return picked;
 }

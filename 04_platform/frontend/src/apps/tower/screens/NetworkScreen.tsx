@@ -4,6 +4,7 @@ import { resetTwoStep, sendStaffLink, stopStaffRemoval, type StaffInvited, type 
 import { useState, useCallback, useEffect } from 'preact/hooks';
 import { Icon, PlaceMap } from '../../../shared/ui';
 import { ConsoleFold } from '../ConsoleFold';
+import { ConsolePick } from '../ConsolePick';
 import { PlanVsActualFold } from './PlanVsActualFold';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import {
@@ -25,6 +26,8 @@ import { amount, floatsLine } from '../queues';
 import { fleetSystemWords, type FleetSystemCounts } from '../fleets';
 import { askedLine, linkWords, opensItself, staffAddWay, staffFoldHint, staffListOf, waitingActions, waitingLine, waitingRoles, type StaffWaiting } from '../staff';
 import { holds, ROLE_WORDS, rolesOf, STAFF_ROLES, type StaffRole } from '../staffRoles';
+import { countriesWords, givable, holdsEvery, waitingCountries, EVERY_COUNTRY } from '../staffCountries';
+import { countryNameOf, type CatalogueCountry } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
 
 /**
@@ -245,7 +248,7 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
 
       {state.who?.mode === 'operator' ? <FleetsPanel actions={actions} rotates={holds(state.who.roles, 'vetting')} /> : null}
       {/* Round 38 — who is on staff, and what they hold, is administration's. */}
-      {state.who?.mode === 'operator' && holds(state.who.roles, 'admin') ? <StaffPanel actions={actions} named={Boolean(state.who.named)} /> : null}
+      {state.who?.mode === 'operator' && holds(state.who.roles, 'admin') ? <StaffPanel actions={actions} named={Boolean(state.who.named)} mine={state.who.countries} catalogue={state.catalogue} /> : null}
 
       <ConsoleFold
         title={t('tower.network.hubsTitle')}
@@ -547,7 +550,80 @@ function RolePicker({ value, onChange, hint }: { value: StaffRole[]; onChange: (
  * email went. Only the setup key (`named` is false) makes an account at once, with a password shown once — its own
  * first account on a new installation.
  */
-function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActions; named: boolean; /** The only thing on the screen: it arrives open. */ startOpen?: boolean }) {
+/**
+ * 2026-11-01 — THE COUNTRIES SOMEBODY IS TO WORK IN (staff separated by country). Only countries the reader works in are
+ * offered — and every country only to somebody who works in every country; at least one is chosen, or the button beside
+ * it stays off. The server refuses anything else; this only asks.
+ */
+function CountryPicker({
+  value,
+  onChange,
+  mine,
+  catalogue,
+  hint,
+}: {
+  value: string[];
+  onChange: (countries: string[]) => void;
+  mine: string[] | undefined;
+  catalogue: CatalogueCountry[] | null;
+  hint: MessageKey;
+}) {
+  const t = useT();
+  const offer = givable(mine, catalogue);
+  const nameOf = (code: string) => countryNameOf(code, catalogue);
+  const every = value.includes(EVERY_COUNTRY);
+  const rest = offer.codes.filter((c) => !value.includes(c));
+  return (
+    <div class="cfield">
+      <span class="cfield__label">{t('tower.countries.pick')}</span>
+      {offer.every ? (
+        <label class="cfield cfield--check">
+          <input type="checkbox" checked={every} onChange={(e) => onChange((e.target as HTMLInputElement).checked ? [EVERY_COUNTRY] : [])} />
+          <span>{t('tower.countries.everyOption')}</span>
+        </label>
+      ) : null}
+      {every ? null : (
+        <>
+          {value.length ? (
+            <span class="twr-caps">
+              {value.map((c) => (
+                <button type="button" class="ctag ctag--quiet" key={c} aria-label={t('tower.countries.remove', { name: nameOf(c) })} onClick={() => onChange(value.filter((x) => x !== c))}>
+                  {nameOf(c)} ×
+                </button>
+              ))}
+            </span>
+          ) : null}
+          {rest.length ? (
+            <ConsolePick
+              bare
+              small
+              label={t('tower.countries.add')}
+              placeholder={t('tower.countries.add')}
+              value=""
+              onChange={(code) => code && onChange([...value, code].sort())}
+              options={rest.map((c) => ({ value: c, label: nameOf(c), tag: c }))}
+            />
+          ) : null}
+        </>
+      )}
+      <span class="chint">{t(hint)}</span>
+    </div>
+  );
+}
+
+function StaffPanel({
+  actions,
+  named,
+  startOpen = false,
+  mine,
+  catalogue = null,
+}: {
+  actions: TowerActions;
+  named: boolean;
+  /** The only thing on the screen: it arrives open. */ startOpen?: boolean;
+  /** 2026-11-01 — the countries the reader works in: all they can give. */ mine?: string[];
+  catalogue?: CatalogueCountry[] | null;
+}) {
   const t = useT();
   const client = actions.client();
   const [rows, setRows] = useState<StaffRow[] | null>(null);
@@ -574,6 +650,12 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
   const [changing, setChanging] = useState<{ operatorId: string; roles: StaffRole[] } | null>(null);
   // Round 38 — a change of roles asked for, or approved: said until the next thing is done here.
   const [said, setSaid] = useState<string | null>(null);
+  // 2026-11-01 — the countries a new colleague is asked for in: the reader's one country, or none chosen yet.
+  const onlyMine = mine && !holdsEvery(mine) && mine.length === 1 ? [...mine] : [];
+  const [placePick, setPlacePick] = useState<string[]>(onlyMine);
+  // …and whose countries are being changed here, and to what.
+  const [moving, setMoving] = useState<{ operatorId: string; countries: string[] } | null>(null);
+  const nameOf = (code: string) => countryNameOf(code, catalogue);
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -600,7 +682,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
     setSaid(null);
     const body = { email: email.trim(), name: name.trim() };
     if (way === 'ask') {
-      const r = await client.api.askStaff({ ...body, roles: pick });
+      const r = await client.api.askStaff({ ...body, roles: pick, countries: placePick });
       setBusy(null);
       if (r.error) return setError(r.error.detail || r.error.title);
       setAsked(body);
@@ -613,6 +695,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
     setName('');
     setEmail('');
     setPick([]);
+    setPlacePick(onlyMine);
     setOpen(false);
     await load();
   };
@@ -631,6 +714,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
     if (r.error) setError(r.error.detail || r.error.title);
     // A change of roles sends no email: the person was signed out, and their next sign-in carries the new roles.
     else if (yes && p.kind === 'roles') setSaid(t('tower.roles.approved', { name: p.name }));
+    else if (yes && p.kind === 'countries') setSaid(t('tower.countries.approved', { name: p.name }));
     else if (yes) setInvited(r.data as unknown as StaffInvited);
     await load();
   };
@@ -647,6 +731,21 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
     if (r.error) return setError(r.error.detail || r.error.title);
     setChanging(null);
     setSaid(t('tower.roles.asked', { name: a.name }));
+    await load();
+  };
+
+  /** 2026-11-01 — ask that somebody work in other countries. Nothing changes until a second member of staff approves. */
+  const askCountries = async (a: StaffRow, countries: string[]) => {
+    if (!client) return;
+    setBusy(`countries:${a.operatorId}`);
+    setError(null);
+    setAsked(null);
+    setSaid(null);
+    const r = await client.api.proposeStaffCountries(a.operatorId, countries);
+    setBusy(null);
+    if (r.error) return setError(r.error.detail || r.error.title);
+    setMoving(null);
+    setSaid(t('tower.countries.asked', { name: a.name }));
     await load();
   };
 
@@ -754,7 +853,14 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
               {/* Round 38 — what they will hold is said when they are asked for, and approved with them. The setup key's
                   own first account holds every role: it is the one setting the network up. */}
               {way === 'ask' ? <RolePicker value={pick} onChange={setPick} hint="tower.roles.pickHint" /> : <p class="chint">{t('tower.roles.keyMakesAll')}</p>}
-              <button type="button" class="cbtn cbtn--primary" disabled={busy === 'create' || !email.trim() || !name.trim() || (way === 'ask' && !pick.length)} onClick={() => void add()}>
+              {/* 2026-11-01 — and where: the countries they work in, said when they are asked for. */}
+              {way === 'ask' ? <CountryPicker value={placePick} onChange={setPlacePick} mine={mine} catalogue={catalogue} hint="tower.countries.pickHint" /> : null}
+              <button
+                type="button"
+                class="cbtn cbtn--primary"
+                disabled={busy === 'create' || !email.trim() || !name.trim() || (way === 'ask' && (!pick.length || !placePick.length))}
+                onClick={() => void add()}
+              >
                 {t(way === 'ask' ? 'tower.staff.ask' : 'tower.staff.create')}
               </button>
             </div>
@@ -775,6 +881,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
               {waiting.map((p) => {
                 const may = waitingActions(p, named);
                 const roles = waitingRoles(p, t);
+                const places = waitingCountries(p, nameOf, t);
                 return (
                   <tr key={p.proposalId}>
                     <td>
@@ -783,6 +890,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
                     </td>
                     <td class="ctbl__sub">
                       {roles ? <div>{roles}</div> : null}
+                      {places ? <div>{places}</div> : null}
                       {waitingLine(p, named, t, day)}
                     </td>
                     <td>
@@ -849,6 +957,7 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
               <th>{t('tower.staff.col.who')}</th>
               <th>{t('tower.staff.col.email')}</th>
               <th>{t('tower.roles.col')}</th>
+              <th>{t('tower.countries.col')}</th>
               <th>{t('tower.staff.col.lastSeen')}</th>
               <th>{t('tower.staff.col.password')}</th>
               <th>{t('tower.staff.col.twoStep')}</th>
@@ -908,6 +1017,35 @@ function StaffPanel({ actions, named, startOpen = false }: { actions: TowerActio
                   ) : (
                     <button type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-top:6px;display:block" onClick={() => setChanging({ operatorId: a.operatorId, roles: rolesOf(a.roles) })}>
                       {t('tower.roles.change')}
+                    </button>
+                  )}
+                </td>
+                {/* 2026-11-01 — where they work, and the way to ask that they work somewhere else: one change waiting at a time. */}
+                <td>
+                  <span class="ctbl__lbl">{t('tower.countries.col')}</span>
+                  <span>{countriesWords(a.countries, nameOf, t)}</span>
+                  {waiting.some((p) => p.kind === 'countries' && p.operatorId === a.operatorId) ? (
+                    <div class="chint">{t('tower.countries.changeWaiting')}</div>
+                  ) : !named ? null : moving?.operatorId === a.operatorId ? (
+                    <>
+                      <CountryPicker value={moving.countries} onChange={(countries) => setMoving({ operatorId: a.operatorId, countries })} mine={mine} catalogue={catalogue} hint="tower.countries.changeHint" />
+                      <span class="twr-panelend">
+                        <button
+                          type="button"
+                          class="cbtn cbtn--primary cbtn--sm"
+                          disabled={busy === `countries:${a.operatorId}` || !moving.countries.length || moving.countries.join() === (a.countries ?? [EVERY_COUNTRY]).join()}
+                          onClick={() => void askCountries(a, moving.countries)}
+                        >
+                          {t('tower.countries.askChange')}
+                        </button>
+                        <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setMoving(null)}>
+                          {t('tower.presence.cancel')}
+                        </button>
+                      </span>
+                    </>
+                  ) : (
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" style="margin-top:6px;display:block" onClick={() => setMoving({ operatorId: a.operatorId, countries: [...(a.countries ?? [EVERY_COUNTRY])] })}>
+                      {t('tower.countries.change')}
                     </button>
                   )}
                 </td>

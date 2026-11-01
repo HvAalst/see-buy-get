@@ -37,7 +37,10 @@ export interface StaffWaiting {
   /** Round 38 — the roles asked for. */
   roles?: string[];
   /** Round 38 — `roles`: a change of an existing member of staff's roles, not a new account. */
-  kind?: 'roles';
+  kind?: 'roles' | 'countries';
+  /** 2026-11-01 — the countries asked for; for a change, the ones held now. */
+  countries?: string[];
+  countriesNow?: string[];
   /** Round 38 — for a change of roles: the roles they hold now. */
   rolesNow?: string[];
   /** Round 38 — for a change of roles: whose. */
