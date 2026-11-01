@@ -318,6 +318,12 @@ export const enBusiness = {
   'business.reservations.disputedDone': 'Your dispute is on the consignment note beside the driver’s reservations.',
   'business.loads.f.cover': 'The carrier must have insurance cover',
   'business.loads.f.noTranshipment': 'No transhipment',
+  // 2026-11-01 — a truck run as a flight.
+  'business.loads.f.truckFlight': 'Moved for an airline under its air waybill (a trucked flight)',
+  'business.loads.f.truckFlightHint': 'It is carried as an ordinary road load under the law of the road: the air waybill and the flight are a reference only, on the consignment note and told to the driver. Whether the air convention applies instead is not settled; nobody on SeeBuyGet acts for the airline.',
+  'business.loads.f.flightAwb': 'Air waybill number',
+  'business.loads.f.flightNo': 'Flight number',
+  'business.loads.f.flightAirline': 'Airline, if its prefix is not known',
   'business.loads.f.noTranshipmentHint': 'The goods stay on the vehicle that took them over. On the consignment note; a reload after a breakdown is written there against it.',
   'business.loads.f.declaredValue': 'Declared value of the goods (optional)',
   'business.loads.f.specialInterest': 'Special interest in delivery (optional)',

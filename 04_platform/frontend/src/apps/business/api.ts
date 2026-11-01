@@ -334,6 +334,8 @@ export interface NewLoad {
   specialInterest?: { amount: number; currency: string };
   /** CMR Art. 6(2)(a): the goods stay on the vehicle that took them over. */
   noTranshipment?: boolean;
+  /** 2026-11-01 — moved for an airline under its air waybill and a flight number: carried as a road load, the waybill a reference only. */
+  truckFlight?: { awb: string; flight: string; airline?: string };
   /** How many packages: each gets a label, and an SSCC under the business's GS1 prefix. */
   packages?: number;
   natureCode?: string;

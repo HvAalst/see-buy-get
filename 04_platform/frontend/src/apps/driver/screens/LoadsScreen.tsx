@@ -503,6 +503,8 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               : t('driver.loads.gateBodyDeliver', { ref: claim.code ?? claim.ref, kg: claim.weightKg, dest: claim.destLabel })}
           </p>
           {isPickup && claim.invoiceMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.invoiceMissingTitle')} detail={t('driver.loads.invoiceMissingDetail')} /> : null}
+          {/* 2026-11-01 — a truck run as a flight: said where the goods change hands. */}
+          {claim.truckFlight ? <Note tone="info" icon="info" title={t('driver.air.truckFlightTitle')} detail={claim.truckFlight} /> : null}
           {isPickup && claim.collectAtHub && !claim.collectAtHub.handed ? <Note tone="warn" icon="warning" title={t('driver.loads.collectFirstTitle')} detail={t('driver.loads.collectFirstDetail', { parcel: claim.collectAtHub.parcelId, hub: claim.collectAtHub.hubName })} /> : null}
           {isPickup && claim.sealMissing ? <Note tone="warn" icon="warning" title={t('driver.loads.sealMissingTitle')} detail={t('driver.loads.sealMissingDetail', { why: claim.sealMissing })} /> : null}
           {/* Round 35 — held under the tamper protocol: it changes hands with nobody until operations releases it. */}

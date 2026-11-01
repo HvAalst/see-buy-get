@@ -1,3 +1,4 @@
+import { TruckFlightDto } from './air-terminal.types';
 import { ParcelInvoiceDto } from './parcel-invoice.types';
 import { AddressPartsDto } from './address-parts.dto';
 import { BagClosureDto, BagReceiptDto } from './bag-closure.types';
@@ -2685,6 +2686,11 @@ export class RegisterFreightDto {
   @IsOptional() @ValidateNested() @Type(() => FreightAmountDto) specialInterest?: FreightAmountDto;
   /** CMR Art. 6(2)(a) — the goods are not to be moved onto another vehicle on the way. */
   @IsOptional() @IsBoolean() noTranshipment?: boolean;
+  /**
+   * 2026-11-01 — moved for an airline under its air waybill and a flight number (a road feeder service): carried as a road
+   * load under road law, the waybill a reference only (legal.html L38).
+   */
+  @IsOptional() @ValidateNested() @Type(() => TruckFlightDto) truckFlight?: TruckFlightDto;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

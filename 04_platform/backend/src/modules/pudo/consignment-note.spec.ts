@@ -228,6 +228,9 @@ describe('the consignment note', () => {
       'Agreed time-limit: delivered on or before 2026-10-30, under contract KL-07 with Kilima Logistics',
     ]);
     expect(n.instructions).toContain('Transhipment is not allowed: the goods stay on the vehicle that took them over');
+    // 2026-11-01 — a truck run as a flight: on the note where the carrier reads its instructions.
+    const flown = service.build(base({ truckFlight: { awb: '706-12345675', flight: 'KQ 9301', airline: 'Kenya Airways' } } as never));
+    expect(flown.instructions).toContain('Moved for Kenya Airways under air waybill 706-12345675, flight KQ 9301: carried as a road load under the law of the road. The air waybill is a reference only, and nobody on SeeBuyGet acts for the airline.');
     expect(n.reservations.find((r) => r.startsWith('Reloaded'))).toMatch(/although the sender had said transhipment is not allowed$/);
     const html = service.htmlFor(n);
     expect(html).toContain('Value of the goods declared by the sender: 12,500 USD');

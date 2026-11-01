@@ -50,8 +50,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
-type Form = LoadForm & { declaredValue: string; specialInterest: string; valueCurrency: string; noTranshipment: boolean; coverRequired: boolean; consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
-const EMPTY: Form = { declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
+type Form = LoadForm & { truckFlight: boolean; flightAwb: string; flightNo: string; flightAirline: string; declaredValue: string; specialInterest: string; valueCurrency: string; noTranshipment: boolean; coverRequired: boolean; consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
+const EMPTY: Form = { truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -274,6 +274,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(Number(form.declaredValue) > 0 && form.valueCurrency ? { declaredValue: { amount: Number(form.declaredValue), currency: form.valueCurrency } } : {}),
       ...(Number(form.specialInterest) > 0 && form.valueCurrency ? { specialInterest: { amount: Number(form.specialInterest), currency: form.valueCurrency } } : {}),
       ...(form.noTranshipment ? { noTranshipment: true } : {}),
+      ...(form.truckFlight && form.flightAwb.trim() && form.flightNo.trim() ? { truckFlight: { awb: form.flightAwb.trim(), flight: form.flightNo.trim(), ...(form.flightAirline.trim() ? { airline: form.flightAirline.trim() } : {}) } } : {}),
       commitMode: form.commitMode,
       ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
       ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}),
@@ -458,6 +459,30 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
             <span class="chint">{t('business.loads.f.coverHint')}</span>
           </span>
         </label>
+        {/* 2026-11-01 — a truck run as a flight: carried as a road load under road law, the waybill and flight a reference only. */}
+        <label class="cfield--check">
+          <input type="checkbox" checked={form.truckFlight} onChange={() => setForm((prev) => ({ ...prev, truckFlight: !prev.truckFlight }))} />
+          <span>
+            {t('business.loads.f.truckFlight')}
+            <span class="chint">{t('business.loads.f.truckFlightHint')}</span>
+          </span>
+        </label>
+        {form.truckFlight ? (
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.loads.f.flightAwb')}</span>
+              <input class="cinput" maxLength={20} value={form.flightAwb} onInput={(e) => setForm((prev) => ({ ...prev, flightAwb: (e.target as HTMLInputElement).value }))} />
+            </label>
+            <label class="cfield">
+              <span class="cfield__label">{t('business.loads.f.flightNo')}</span>
+              <input class="cinput" maxLength={10} value={form.flightNo} onInput={(e) => setForm((prev) => ({ ...prev, flightNo: (e.target as HTMLInputElement).value }))} />
+            </label>
+            <label class="cfield">
+              <span class="cfield__label">{t('business.loads.f.flightAirline')}</span>
+              <input class="cinput" maxLength={80} value={form.flightAirline} onInput={(e) => setForm((prev) => ({ ...prev, flightAirline: (e.target as HTMLInputElement).value }))} />
+            </label>
+          </div>
+        ) : null}
         {/* CMR Art. 6(2)(a) and (d): no transhipment, a declared value, a special interest in delivery — each the sender's own. */}
         <label class="cfield--check">
           <input type="checkbox" checked={form.noTranshipment} onChange={() => setForm((prev) => ({ ...prev, noTranshipment: !prev.noTranshipment }))} />

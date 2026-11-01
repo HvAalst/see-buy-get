@@ -1,3 +1,4 @@
+import { truckFlightWords } from './air-terminal.types';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { Injectable, OnModuleInit, Optional } from '@nestjs/common';
 import { catalogueEntry } from '../../foundation/countries/catalogue';
@@ -188,6 +189,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     if (f.coverRequired) instructions.push('Insurance: the sender requires a carrier whose insurance cover SeeBuyGet has checked');
     // CMR Art. 6(2)(a): said where the carrier reads its instructions, and held against any reload below.
     if (f.noTranshipment) instructions.push('Transhipment is not allowed: the goods stay on the vehicle that took them over');
+    // 2026-11-01 — a truck run as a flight: carried under road law, the waybill a reference only (legal.html L38).
+    if (f.truckFlight) instructions.push(truckFlightWords(f.truckFlight));
     if (f.bonded) instructions.push(`Uncleared goods, carried in bond: the carrier needs a transit licence${f.bondCountry ? ` of ${countryName(f.bondCountry)}` : ''}`);
     if (band) instructions.push(`Keep between ${band.minC} °C and ${band.maxC} °C`);
     if (f.fragile) instructions.push('Fragile — handle with care');

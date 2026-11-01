@@ -256,6 +256,8 @@ export interface Claimable {
   invoiceMissing?: boolean;
   /** 2026-11-01 — handed in at (acceptance) or collected from (collection) an airline's cargo terminal, under this waybill. */
   airTerminal?: { side: 'acceptance' | 'collection'; awb: string; airline: string; handler: string; pieces: number };
+  /** 2026-11-01 — a truck run as a flight, in words: carried under road law, the waybill a reference only. */
+  truckFlight?: string;
   /** Round 38 — the commercial invoice is this driver's to show at the border: across one, from pickup on. */
   invoiceToShow?: boolean;
   /** Round 38 — a seal its pickup country's company requires, not written yet: why, in words. Not to be taken over yet. */

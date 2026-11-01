@@ -59650,6 +59650,25 @@
           "pieces"
         ]
       },
+      "FreightTruckFlight": {
+        "type": "object",
+        "properties": {
+          "awb": {
+            "type": "string"
+          },
+          "flight": {
+            "type": "string"
+          },
+          "airline": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "awb",
+          "flight",
+          "airline"
+        ]
+      },
       "FreightClaim": {
         "type": "object",
         "properties": {
@@ -60772,6 +60791,14 @@
           "airPallets": {
             "type": "number",
             "description": "2026-11-01 — BUILT UP ON AIRLINE PALLETS OR CONTAINERS (ULDs): how many. They ride only on a truck with a roller floor\n(equipment ROL), which rolls them on at the forwarder's shed and off at the terminal's dock — never broken down."
+          },
+          "truckFlight": {
+            "description": "2026-11-01 — a truck run as a flight: carried as a road load under road law, the waybill and flight a reference only.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightTruckFlight"
+              }
+            ]
           },
           "countedAtPickup": {
             "type": "number",
@@ -64121,6 +64148,28 @@
           "currency"
         ]
       },
+      "TruckFlightDto": {
+        "type": "object",
+        "properties": {
+          "awb": {
+            "type": "string",
+            "maxLength": 20
+          },
+          "flight": {
+            "type": "string",
+            "pattern": "/^\\s*[A-Z0-9]{2}\\s?\\d{1,4}[A-Z]?\\s*$/i"
+          },
+          "airline": {
+            "type": "string",
+            "description": "The airline's name, where its prefix is not one we hold.",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "awb",
+          "flight"
+        ]
+      },
       "RegisterFreightDto": {
         "type": "object",
         "properties": {
@@ -64406,6 +64455,14 @@
           "noTranshipment": {
             "type": "boolean",
             "description": "CMR Art. 6(2)(a) — the goods are not to be moved onto another vehicle on the way."
+          },
+          "truckFlight": {
+            "description": "2026-11-01 — moved for an airline under its air waybill and a flight number (a road feeder service): carried as a road\nload under road law, the waybill a reference only (legal.html L38).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TruckFlightDto"
+              }
+            ]
           }
         },
         "required": [

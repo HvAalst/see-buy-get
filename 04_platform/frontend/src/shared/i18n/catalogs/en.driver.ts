@@ -401,6 +401,7 @@ export const enDriver = {
   'driver.loads.reservationsHint': 'A torn sack, a short count, a wet pallet — it goes on the consignment note as your reservation, before the goods are yours to answer for.',
   'driver.loads.receiverLabel': 'Who received the goods?',
   // 2026-11-01 — where road meets air.
+  'driver.air.truckFlightTitle': 'A trucked flight — carried as a road load',
   'driver.air.countLabel': 'Pieces you counted',
   'driver.air.countHint': 'Count what {handler} hands you before you leave the shed: air waybill {awb} says {pieces}.',
   'driver.air.countDiffers': 'You counted {counted}, the waybill says {pieces}',

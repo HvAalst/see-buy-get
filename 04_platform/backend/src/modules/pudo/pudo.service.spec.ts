@@ -8726,6 +8726,16 @@ describe('PUDO Light', () => {
     expect(dispatch.board({ driverDid: d.did, from: pickup }).find((r) => r.freightId === f.freightId)?.blockers.map((b) => b.code) ?? []).not.toContain('PALLETS_VEHICLE');
   });
 
+  it('road meets air (2026-11-01): a truck run as a flight is posted with its waybill checked, carried as a road load, and the driver told so', () => {
+    const pickup = { lat: -1.32, lng: 36.92 };
+    expect(() => dispatch.registerFreight({ description: 'Air cargo by road', pickupLocation: pickup, pickupLabel: 'JKIA', destLabel: 'Entebbe', destLocation: pickup, weightKg: 800, packaging: 'loose', truckFlight: { awb: '706-12345676', flight: 'KQ 9301' } })).toThrow(/last digit does not check/);
+    const f = dispatch.registerFreight({ description: 'Air cargo by road', pickupLocation: pickup, pickupLabel: 'JKIA', destLabel: 'Entebbe', destLocation: pickup, weightKg: 800, packaging: 'loose', truckFlight: { awb: '706-12345675', flight: 'kq 9301' } });
+    expect(f.truckFlight).toEqual({ awb: '706-12345675', flight: 'KQ 9301', airline: 'Kenya Airways' });
+    const d = coupleTipper('RFS', { min: 0.8, max: 1.5 });
+    claimFreight(d.did, pickup, f.freightId);
+    expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)?.truckFlight).toMatch(/^Moved for Kenya Airways under air waybill 706-12345675, flight KQ 9301: carried as a road load under the law of the road/);
+  });
+
   it('D9: what the receiver found at the handover — counted against the note, a damaged line with its photo, refused whole before anything is written — lands beside their name and reaches the sender', () => {
     const pickup = { lat: -1.86, lng: 36.36 };
     const d = coupleFlatbedWithForklift('RSV', { min: 0.8, max: 1.5 }); // bagged: a flatbed with its own forklift

@@ -2,6 +2,7 @@
 // A→B; the platform offers full/aged totes (and bulk freight) that sit near that route, sized to the
 // remaining capacity of the driver's coupled vehicle. The driver claims, ignores, or lets it lapse.
 
+import { FreightTruckFlight } from './air-terminal.types';
 import { ClientRef } from './business-client.types';
 import { FreightRailGate } from './rail-leg.types';
 import { FreightReleaseGate } from './air-release.types';
@@ -731,6 +732,8 @@ export class Freight {
    * (equipment ROL), which rolls them on at the forwarder's shed and off at the terminal's dock — never broken down.
    */
   @ApiPropertyOptional() airPallets?: number;
+  /** 2026-11-01 — a truck run as a flight: carried as a road load under road law, the waybill and flight a reference only. */
+  @ApiPropertyOptional({ type: () => FreightTruckFlight }) truckFlight?: FreightTruckFlight;
   /** 2026-11-01 — at collection from a cargo terminal: the pieces the driver counted, against the waybill's. */
   @ApiPropertyOptional() countedAtPickup?: number;
   /** 2026-11-01 — at acceptance at a cargo terminal: the handler's receipt for the goods, as it gave it. */
@@ -1749,6 +1752,8 @@ export class Claimable {
   inspection?: { kind: 'container' | 'closed'; points: string[] };
   /** 2026-11-01 — handed in at, or collected from, an airline's cargo terminal: what the gate asks for there. */
   airTerminal?: { side: 'acceptance' | 'collection'; awb: string; airline: string; handler: string; pieces: number };
+  /** 2026-11-01 — a truck run as a flight, in words: carried under road law, the waybill a reference only. */
+  truckFlight?: string;
   /** Round 39 — the operations desks a driver held at a checkpoint rings: the pickup country's company's, and the destination's when it is another. */
   @ApiPropertyOptional({ type: [DeskNumber] }) desks?: DeskNumber[];
   /** Round 14 — a load on the road: what the driver needs to say it is at a border, has cleared it, or is at a hub. */
