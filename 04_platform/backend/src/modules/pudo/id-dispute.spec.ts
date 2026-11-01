@@ -642,8 +642,9 @@ describe('two people say one national ID is theirs', () => {
       const late = T0 + DISPUTE_ANSWER_DAYS * DAY + 1000;
       disputes.readCard(o.disputeId, AMINA, 'claimant', s.nationalId, late);
       disputes.check(o.disputeId, AMINA, { to: 'claimant', what: 'w', reason: 'r' }, late);
-      // A shop sent a copy of its keeper's ID when it registered: the one thing on record, shown beside what they send now.
-      expect(disputes.one(o.disputeId, AMINA, late).holder).toMatchObject({ who: expect.stringMatching(/^Shop: Duka \d+$/), onRecord: ['med_idcopy'] });
+      // The copy of its keeper's ID the shop sent when it registered was deleted when staff approved it (the owner,
+      // 2026-11-01): nothing is on record, and staff compare the fresh photographs both of them send.
+      expect(disputes.one(o.disputeId, AMINA, late).holder).toMatchObject({ who: expect.stringMatching(/^Shop: Duka \d+$/), onRecord: [] });
       expect(disputes.list(AMINA, late).items[0].holder.onRecord).toBeUndefined();
       expect(() => agents.assertMayTakeIn(s.did)).not.toThrow();
       // The counter's own doors, asked BEFORE and AFTER: a walk-up, and a parcel booked to be handed in here.

@@ -118,7 +118,11 @@ describe('a hub is vetted before it works, over the wire', () => {
     // Sent again and approved: it works, it is shown, and bags may be addressed to it.
     const again = { idCopyRef: await photo(hub, 'kyc_id', `${u}b`), licenceRef: await photo(hub, 'kyc_licence', `${u}b`), photoRefs: [await photo(hub, 'shop', `${u}b`)] };
     await send(hub, again).expect(201);
-    expect((await decide({ approve: true }).expect(201)).body.vetting).toMatchObject({ state: 'approved', approvedBy: expect.any(String), papers: again });
+    // Approved: the licence and the photo of the premises are kept; the responsible person's ID photo is deleted now
+    // (the owner, 2026-11-01: people's ID photos go at the decision).
+    const approved = (await decide({ approve: true }).expect(201)).body.vetting;
+    expect(approved).toMatchObject({ state: 'approved', approvedBy: expect.any(String), papers: { licenceRef: again.licenceRef, photoRefs: again.photoRefs, idPhotoDeletedAt: expect.any(String) } });
+    expect(approved.papers.idCopyRef).toBeUndefined();
     // Approved, it signs its security declaration from its own sign-in, as a hub does before it opens a bag (round 39).
     const declaration = (await http().get('/v1/sbg/declarations/mine').set(hub).expect(200)).body;
     await http().post('/v1/sbg/declarations/mine/sign').set(hub).send({ version: declaration.version }).expect(201);

@@ -47703,7 +47703,12 @@
         "type": "object",
         "properties": {
           "idCopyRef": {
-            "type": "string"
+            "type": "string",
+            "description": "The owner's ID photo while it waits for staff; deleted at their decision (the owner, 2026-11-01: \"People's ID photos only\" — as a driver's since 2026-10-30)."
+          },
+          "idPhotoDeletedAt": {
+            "type": "string",
+            "description": "When the ID photo was deleted, the papers having been checked."
           },
           "tradingLicenceRef": {
             "type": "string"
@@ -47719,7 +47724,6 @@
           }
         },
         "required": [
-          "idCopyRef",
           "tradingLicenceRef",
           "shopPhotoRefs",
           "submittedAt"
@@ -57160,7 +57164,12 @@
         "type": "object",
         "properties": {
           "idCopyRef": {
-            "type": "string"
+            "type": "string",
+            "description": "The responsible person's ID photo while it waits for staff; deleted at their decision (the owner, 2026-11-01: \"People's ID photos only\" — as a driver's since 2026-10-30)."
+          },
+          "idPhotoDeletedAt": {
+            "type": "string",
+            "description": "When the ID photo was deleted, the papers having been checked."
           },
           "licenceRef": {
             "type": "string"
@@ -57176,7 +57185,6 @@
           }
         },
         "required": [
-          "idCopyRef",
           "licenceRef",
           "photoRefs",
           "submittedAt"
@@ -58538,7 +58546,12 @@
             "type": "string"
           },
           "ownerIdRef": {
-            "type": "string"
+            "type": "string",
+            "description": "The owner's ID photo while it waits for staff; deleted at their decision (the owner, 2026-11-01: \"People's ID photos only\" — as a driver's since 2026-10-30)."
+          },
+          "ownerIdDeletedAt": {
+            "type": "string",
+            "description": "When the owner's ID photo was deleted, the papers having been checked."
           },
           "proofOfAddressRef": {
             "type": "string"
@@ -58554,7 +58567,6 @@
         "required": [
           "businessRegCertRef",
           "operatorLicenceRef",
-          "ownerIdRef",
           "proofOfAddressRef",
           "submittedAt"
         ]

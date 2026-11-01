@@ -65,7 +65,10 @@ export class ShelfSlot {
 
 /** KYC documents collected to move DRAFT → KYC_PENDING (Compendium 18.5). */
 export class KycDocuments {
-  idCopyRef: string;
+  /** The owner's ID photo while it waits for staff; deleted at their decision (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30). */
+  idCopyRef?: string;
+  /** When the ID photo was deleted, the papers having been checked. */
+  idPhotoDeletedAt?: string;
   tradingLicenceRef: string;
   shopPhotoRefs: string[]; // at least one
   submittedAt: string;
@@ -415,7 +418,10 @@ export class CustodyCapView {
 
 /** A hub's papers, as a shop's: a copy of the responsible person's ID, the trading licence, a photograph of the premises. */
 export class HubPapers {
-  idCopyRef: string;
+  /** The responsible person's ID photo while it waits for staff; deleted at their decision (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30). */
+  idCopyRef?: string;
+  /** When the ID photo was deleted, the papers having been checked. */
+  idPhotoDeletedAt?: string;
   licenceRef: string;
   photoRefs: string[];
   submittedAt: string;

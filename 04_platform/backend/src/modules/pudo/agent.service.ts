@@ -299,6 +299,8 @@ export class AgentService {
       const why = reason?.trim();
       if (!why) throw new GlosError('REASON_REQUIRED', 'A rejection must say why: the applicant is shown it');
       agent.kycRejection = { reason: why, at: new Date().toISOString(), ...(by ? { by } : {}) };
+      // The owner's ID photo goes with the decision (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30); they send their papers again.
+      this.media.dropCheckedPaper(agent.kyc?.idCopyRef);
       agent.kyc = undefined;
       const rejected = this.transition(agent, 'DRAFT');
       void this.events
@@ -318,6 +320,11 @@ export class AgentService {
     this.wallet.provision(did, { jurisdiction: 'US' });
     this.core.upsert({ did, vaultRef: agent.vaultRef, tier: 2, status: 'active', capabilities: ['pudo-agent'], metadata: { zone: agent.zone, by } });
     this.transition(agent, 'APPROVED_UNFUNDED');
+    // Approved: the owner's ID photo is deleted now (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30); the trading licence and the shop's photos are the shop's
+    // record and are kept.
+    this.media.dropCheckedPaper(agent.kyc.idCopyRef);
+    agent.kyc = { ...agent.kyc, idCopyRef: undefined, idPhotoDeletedAt: new Date(now).toISOString() };
+    this.agents.set(did, agent);
     // A shop we hold no money for has no float to fund, so "unfunded" is not a step it can ever leave —
     // found by driving it: a shop in a matching-only country was approved and then stuck forever. Only
     // that shop is re-derived here; a shop with a float still waits for its first top-up, as before.

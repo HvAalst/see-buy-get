@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { MediaService } from './media.service';
 import { currencyForJurisdiction } from '../../foundation/money/currency';
 import { SecurityDeclarationService } from './security-declaration.service';
 import { RiskRegisterService } from './risk-register.service';
@@ -67,6 +68,8 @@ export class MdpService {
     // Round 39 — the risk register: a hub or corridor rated high asks for a coded seal, and no night running.
     @Optional() private readonly risk?: RiskRegisterService,
     @Optional() private readonly corridors?: CorridorService,
+    // The papers' ID photo is deleted at staff's decision (2026-11-01). Optional for the specs that build this by hand.
+    @Optional() private readonly media?: MediaService,
   ) {}
 
   /** The kilos left on a driver's vehicle, everything they hold counted (DispatchService.remainingCapacity). */
@@ -233,8 +236,12 @@ export class MdpService {
     const mdp = this.require(mdpId);
     if (mdp.vetting?.state !== 'pending') throw new GlosError('INVALID_STATE', `${mdp.name} has no papers waiting for a decision`);
     const at = now.toISOString();
+    // The responsible person's ID photo goes with the decision, either way (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30); the licence and the photos of
+    // the premises are the hub's record and are kept.
+    this.media?.dropCheckedPaper(mdp.vetting.papers?.idCopyRef);
     if (approve) {
-      mdp.vetting = { state: 'approved', papers: mdp.vetting.papers, approvedAt: at, approvedBy: by };
+      const papers = mdp.vetting.papers ? { ...mdp.vetting.papers, idCopyRef: undefined, idPhotoDeletedAt: at } : undefined;
+      mdp.vetting = { state: 'approved', ...(papers ? { papers } : {}), approvedAt: at, approvedBy: by };
       this.core.upsert({ did: mdp.did, tier: 2, status: 'active', capabilities: ['pudo-mdp'], metadata: { zones: mdp.zones, by } });
     } else {
       const why = reason?.trim();

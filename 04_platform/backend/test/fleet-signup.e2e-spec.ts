@@ -128,11 +128,13 @@ describe('a fleet signs itself up, and staff check it, over the wire', () => {
     expect(refusedMail?.text).toContain('The operator’s licence in the photo ran out in March');
     expect(refusedMail?.text).toContain('?join=fleet');
 
-    // Only its own person sends them again — and only the paper that was wrong needs taking again: the other three are
-    // this fleet's already. Somebody else's photograph is still not one of them.
+    // Only its own person sends them again — the paper that was wrong, and the owner's ID, which was deleted with the
+    // refusal (the owner, 2026-11-01: people's ID photos go at the decision); the other two are this fleet's already.
+    // Somebody else's photograph is still not one of them, and the ID sent the first time is gone.
     await sendAgain(stranger.auth, await fourPapers(stranger.auth)).expect(404);
     expect((await sendAgain(owner.auth, { ...papers, operatorLicenceRef: await photo(stranger.auth, 'kyc_licence') })).body.code).toBe('PHOTO_REQUIRED');
-    const second = { ...papers, operatorLicenceRef: await photo(owner.auth, 'kyc_licence') };
+    expect((await sendAgain(owner.auth, { ...papers, operatorLicenceRef: await photo(owner.auth, 'kyc_licence') })).body.code).toBe('PHOTO_REQUIRED');
+    const second = { ...papers, operatorLicenceRef: await photo(owner.auth, 'kyc_licence'), ownerIdRef: await photo(owner.auth, 'kyc_id') };
     expect((await sendAgain(owner.auth, second).expect(201)).body).toMatchObject({ status: 'KYC_PENDING', papersSentAt: expect.any(String) });
     expect((await row()).papers).toMatchObject(second);
     expect((await mine(owner.auth))[0].refused).toBeUndefined();

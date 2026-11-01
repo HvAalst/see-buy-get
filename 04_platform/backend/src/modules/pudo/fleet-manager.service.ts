@@ -194,6 +194,8 @@ export class FleetManagerService {
     if (!approve) {
       const why = reason?.trim();
       if (why) m.kycRejection = { reason: why, at: new Date().toISOString(), ...(by ? { by } : {}) };
+      // The owner's ID photo goes with the decision (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30).
+      this.media?.dropCheckedPaper(m.kyc?.ownerIdRef);
       m.kyc = undefined;
       this.enteredKeys.delete(did);
       return this.transition(m, 'DRAFT');
@@ -203,6 +205,9 @@ export class FleetManagerService {
     const unmet = this.unmetRequirements(m);
     if (unmet.length) throw new GlosError('APPROVAL_BLOCKED', `Cannot approve: ${unmet.join('; ')}`);
     this.core.upsert({ did, vaultRef: m.vaultRef, tier: 2, status: 'active', capabilities: ['fleet-manager'], metadata: { by } });
+    // Approved: the owner's ID photo is deleted now (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30); the company's papers are kept.
+    this.media?.dropCheckedPaper(m.kyc.ownerIdRef);
+    m.kyc = { ...m.kyc, ownerIdRef: undefined, ownerIdDeletedAt: new Date().toISOString() };
     return this.transition(m, 'APPROVED');
   }
 

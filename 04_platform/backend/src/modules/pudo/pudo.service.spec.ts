@@ -8816,6 +8816,49 @@ describe('PUDO Light', () => {
     fleet.uncouple(lapsed.did);
   });
 
+  it('deletes a shop owner’s, a hub’s and a fleet owner’s ID photo at the decision — and keeps the company’s papers', () => {
+    // The owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30.
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const up = (owner: string, kind: 'kyc_id' | 'kyc_licence' | 'shop' | 'kyc_registration' | 'kyc_address') => media.upload({ ownerDid: owner, kind, dataUrl: PNG }).mediaId;
+
+    // A shop: refused, the ID goes; approved, the ID goes and the licence and the shop's photo stay.
+    agentSeq += 1;
+    const shop = agents.register({ shopName: 'Duka Papers', zone: 'PapersZone', location: { lat: -1.2, lng: 36.8 }, landmark: 'by the well', openingHours: uniformHours(), shelf: defaultShelf, fullName: 'Duka Owner', nationalId: `ID-PAP-${agentSeq}`, mobile: `+25471${agentSeq}9`, deviceImei: `IMEI-PAP-${agentSeq}`, requirements: eligibleReqs() });
+    const firstId = up(shop.did, 'kyc_id');
+    agents.submitKyc(shop.did, { idCopyRef: firstId, tradingLicenceRef: up(shop.did, 'kyc_licence'), shopPhotoRefs: [up(shop.did, 'shop')] });
+    agents.decideKyc(shop.did, false, 'Vetting', 'The ID is cut off.');
+    expect(media.get(firstId)).toBeUndefined();
+    const shopId = up(shop.did, 'kyc_id');
+    const shopLicence = up(shop.did, 'kyc_licence');
+    const shopPhoto = up(shop.did, 'shop');
+    agents.submitKyc(shop.did, { idCopyRef: shopId, tradingLicenceRef: shopLicence, shopPhotoRefs: [shopPhoto] });
+    agents.decideKyc(shop.did, true, 'Vetting', undefined, '2099-12-31');
+    expect(media.get(shopId)).toBeUndefined();
+    expect([media.get(shopLicence), media.get(shopPhoto)].every(Boolean)).toBe(true);
+    expect(agents.get(shop.did).kyc).toMatchObject({ tradingLicenceRef: shopLicence, idPhotoDeletedAt: expect.any(String) });
+    expect(agents.get(shop.did).kyc?.idCopyRef).toBeUndefined();
+
+    // A hub: approved, the responsible person's ID goes; its licence and the photo of the premises stay.
+    const hub = mdps.register({ name: 'Papers Hub', zones: ['PapersHubZone'], location: { lat: -1.25, lng: 36.85 } }, 'joining');
+    const hubId = up(hub.did, 'kyc_id');
+    const hubLicence = up(hub.did, 'kyc_licence');
+    mdps.submitPapers(hub.mdpId, { idCopyRef: hubId, licenceRef: hubLicence, photoRefs: [up(hub.did, 'shop')] });
+    mdps.decidePapers(hub.mdpId, true, 'Vetting');
+    expect(media.get(hubId)).toBeUndefined();
+    expect(media.get(hubLicence)).toBeDefined();
+    expect(mdps.require(hub.mdpId).vetting?.papers).toMatchObject({ licenceRef: hubLicence, idPhotoDeletedAt: expect.any(String) });
+
+    // A fleet: approved, the owner's ID goes; the registration, licence and proof of address stay.
+    const fleetCo = managers.register({ companyName: 'Papers Haulage', contactPhone: '+254800977', ownerFullName: 'P P', ownerNationalId: 'MGR-PAP', location: { lat: -1.2, lng: 36.8 }, requirements: { businessRegistrationNo: 'BRN-PAP', transportOperatorLicence: 'TOL-PAP', taxId: 'TAX-PAP' } });
+    const ownerId = up(fleetCo.did, 'kyc_id');
+    const reg = up(fleetCo.did, 'kyc_registration');
+    managers.submitKyc(fleetCo.did, { businessRegCertRef: reg, operatorLicenceRef: up(fleetCo.did, 'kyc_licence'), ownerIdRef: ownerId, proofOfAddressRef: up(fleetCo.did, 'kyc_address') });
+    managers.decideKyc(fleetCo.did, true);
+    expect(media.get(ownerId)).toBeUndefined();
+    expect(media.get(reg)).toBeDefined();
+    expect(managers.get(fleetCo.did).kyc).toMatchObject({ businessRegCertRef: reg, ownerIdDeletedAt: expect.any(String) });
+  });
+
   it('checks a motorcycle rider’s licence before they ride, as a van driver’s; a bicycle rider rides at once', () => {
     // The owner, 2026-10-30: "Motorcycle and up" — a motorcycle is driven on a licence almost everywhere.
     expect(drivers.registryFor(['motorcycle'])).toBe('heavy');

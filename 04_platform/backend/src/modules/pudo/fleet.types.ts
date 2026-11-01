@@ -88,7 +88,10 @@ export class CarrierPaperRefusal {
 export class FleetManagerKyc {
   businessRegCertRef: string;
   operatorLicenceRef: string;
-  ownerIdRef: string;
+  /** The owner's ID photo while it waits for staff; deleted at their decision (the owner, 2026-11-01: "People's ID photos only" — as a driver's since 2026-10-30). */
+  ownerIdRef?: string;
+  /** When the owner's ID photo was deleted, the papers having been checked. */
+  ownerIdDeletedAt?: string;
   proofOfAddressRef: string;
   submittedAt: string;
   /** The member of staff who put them on record, by name. Somebody ELSE approves them. */
