@@ -1,3 +1,4 @@
+import { TerminalSlot, TerminalSlotChangeDto, TerminalSlotDto } from './terminal-slot.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
@@ -304,8 +305,9 @@ export class ExportAir {
   @ApiPropertyOptional() formerBookings?: Array<{ bookingStatus: 'confirmed' | 'queued'; flights: ExportFlight[]; latAt: string; until: string; by: string }>;
   /** Live animals (2026-10-30): as their keeper declared them, the papers by number; the originals ride with them. */
   @ApiPropertyOptional({ type: LiveAnimals }) animals?: LiveAnimals;
+  /** 2026-11-01 — the truck's slot at the cargo terminal, as the shed gave it: the truck is timed to its end. */
+  @ApiPropertyOptional({ type: TerminalSlot }) slot?: TerminalSlot;
 }
-
 export class ExportConsignment {
   @ApiProperty() exportId: string;
   /** EXP-001. */
@@ -612,6 +614,8 @@ class ExportAirDto {
   @IsOptional() @IsBoolean() inspectionAtAirport?: boolean;
   /** Live animals (2026-10-30): the declaration, checked before anything is written. */
   @IsOptional() @ValidateNested() @Type(() => LiveAnimalsDto) animals?: LiveAnimalsDto;
+  /** 2026-11-01 — the truck's slot at the cargo terminal, where the shed gives one. */
+  @IsOptional() @ValidateNested() @Type(() => TerminalSlotDto) slot?: TerminalSlotDto;
 }
 
 /** AN EXPORT BY AIR: the goods, the countries, the two places and the booking with the airline. */
@@ -639,6 +643,8 @@ export class AirBookingChangeDto {
   @IsOptional() @IsIn(['confirmed', 'queued']) bookingStatus?: 'confirmed' | 'queued';
   @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(6) @ValidateNested({ each: true }) @Type(() => ExportFlightDto) flights?: ExportFlightDto[];
   @IsOptional() @IsString() latAt?: string;
+  /** 2026-11-01 — the truck's slot at the cargo terminal: a new one, or (clear) none any more. */
+  @IsOptional() @ValidateNested() @Type(() => TerminalSlotChangeDto) slot?: TerminalSlotChangeDto;
 }
 
 export class ExportContainerDto {

@@ -242,6 +242,32 @@ describe('an export by air, over the wire', () => {
     expect(svc.sweep(next + 1)).toContain(`${made.code}:gate`);
   });
 
+  it('a truck’s slot at the cargo terminal (2026-11-01): the truck is timed to its end, it may not end after the latest acceptance time, and the driver is told it', async () => {
+    const g = await aGrower();
+    const lat = Date.now() + 30 * H;
+    const slotTo = lat - 2 * H;
+    const body = roses(g, lat);
+    const late = { ...body, air: { ...body.air, slot: { from: new Date(lat - H).toISOString(), to: new Date(lat + H).toISOString() } } };
+    expect(String((await http().post('/v1/sbg/exports/air').set(bearer(g.token)).send(late)).body.detail)).toMatch(/^The slot ends after the latest acceptance time/);
+    const withSlot = { ...body, air: { ...body.air, slot: { from: new Date(slotTo - H).toISOString(), to: new Date(slotTo).toISOString(), reference: 'SWP-T-44' } } };
+    const made = (await http().post('/v1/sbg/exports/air').set(bearer(g.token)).send(withSlot).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const detail = (await http().get(path).set(bearer(g.token)).expect(200)).body;
+    expect(detail.consignment.air.slot).toEqual({ from: new Date(slotTo - H).toISOString(), to: new Date(slotTo).toISOString(), reference: 'SWP-T-44' });
+    expect(detail.timing.handover.cutoffAt).toBe(new Date(slotTo).toISOString());
+    const svc = app.get(ExportService);
+    const leg = app.get(DispatchService).requireFreightPublic(svc.mintLadenLeg(made.exportId, g.entityId, {}, 'test').ladenLeg!.freightId);
+    expect(leg.instructions?.text).toMatch(/Your slot at the terminal: \d{2}:\d{2}–\d{2}:\d{2} UTC on \d{4}-\d{2}-\d{2} \(slot SWP-T-44\)\. Arrive inside it/);
+    expect(leg.instructions?.deliveryWindow).toMatch(/in the slot .*\(slot SWP-T-44\)/);
+    // An earlier latest acceptance time cannot leave the slot after it; clearing the slot times the truck to the latest acceptance time again.
+    const change = (b: object) => http().post(`${path}/air/booking`).set(bearer(g.token)).send(b);
+    expect(String((await change({ latAt: new Date(slotTo - 3 * H).toISOString() })).body.detail)).toMatch(/^The truck’s slot at the terminal ends after the new latest acceptance time/);
+    const cleared = (await change({ slot: { from: '', to: '', clear: true } }).expect(201)).body;
+    expect(cleared.consignment.air.slot).toBeUndefined();
+    expect(cleared.timing.handover.cutoffAt).toBe(new Date(lat).toISOString());
+    expect(app.get(DispatchService).requireFreightPublic(leg.freightId).instructions?.text).toMatch(/There is no slot at the terminal any more|Hand it in at/);
+  });
+
   it('secured cargo, an unconfirmed booking: warned, sealed, in a closed vehicle, by a driver whose ID was seen', async () => {
     const g = await aGrower();
     const lat = Date.now() + 30 * H;

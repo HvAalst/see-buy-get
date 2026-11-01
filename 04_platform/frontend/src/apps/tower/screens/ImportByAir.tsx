@@ -22,6 +22,8 @@ export interface ImportByAirCalls {
   set(body: Record<string, unknown>): Result;
   step(body: { step: string; reference?: string; at?: string }): Result;
   anyway(body: { reason: string; waitingIsMine: boolean }): Result;
+  /** 2026-11-01 — the truck's slot at the shed, or (clear) none. */
+  slot?(body: { from: string; to: string; reference?: string; clear?: boolean }): Result;
 }
 
 const utcIn = (v: string): string | undefined => {
@@ -83,6 +85,8 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
   const [vetSite, setVetSite] = useState('');
   const [steps, setSteps] = useState<Record<string, { reference: string; at: string }>>({});
   const [reason, setReason] = useState('');
+  // 2026-11-01 — the truck's slot at the shed, being recorded.
+  const [slotDraft, setSlotDraft] = useState({ from: '', to: '', reference: '' });
   const [mine, setMine] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,6 +226,29 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
             </p>
           ) : null}
           <p class="chint">{t('tower.byAir.notifiedNote')}</p>
+          {/* 2026-11-01 — the truck's slot at the shed, as the shed gave it: told to the driver. */}
+          <h3 class="cons__sub">{t('tower.byAir.slotTitle')}</h3>
+          <p class="chint">{air.slot ? t('tower.byAir.slotLine', { from: utc(air.slot.from), to: utc(air.slot.to), reference: air.slot.reference ? ` (${air.slot.reference})` : '' }) : t('tower.byAir.slotNone')}</p>
+          {canAct && calls.slot && !air.collected ? (
+            <span class="twr-knobs__row">
+              <input class="cinput" type="datetime-local" aria-label={t('tower.byAir.slotFrom')} value={slotDraft.from} onInput={(e) => setSlotDraft({ ...slotDraft, from: (e.target as HTMLInputElement).value })} />
+              <input class="cinput" type="datetime-local" aria-label={t('tower.byAir.slotTo')} value={slotDraft.to} onInput={(e) => setSlotDraft({ ...slotDraft, to: (e.target as HTMLInputElement).value })} />
+              <input class="cinput" maxLength={40} placeholder={t('tower.byAir.slotRef')} aria-label={t('tower.byAir.slotRef')} value={slotDraft.reference} onInput={(e) => setSlotDraft({ ...slotDraft, reference: (e.target as HTMLInputElement).value })} />
+              <button
+                type="button"
+                class="cbtn cbtn--ghost cbtn--sm"
+                disabled={busy || !utcIn(slotDraft.from) || !utcIn(slotDraft.to)}
+                onClick={() => void act(() => calls.slot!({ from: utcIn(slotDraft.from)!, to: utcIn(slotDraft.to)!, ...(slotDraft.reference.trim() ? { reference: slotDraft.reference.trim() } : {}) }), () => setSlotDraft({ from: '', to: '', reference: '' }))}
+              >
+                {t('tower.byAir.slotSave')}
+              </button>
+              {air.slot ? (
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void act(() => calls.slot!({ from: '', to: '', clear: true }), () => undefined)}>
+                  {t('tower.byAir.slotClear')}
+                </button>
+              ) : null}
+            </span>
+          ) : null}
           {youAre === 'importer' && air.gaps.length && !air.collectAnyway ? (
             <>
               <h3 class="cons__sub">{t('tower.byAir.anywayTitle')}</h3>

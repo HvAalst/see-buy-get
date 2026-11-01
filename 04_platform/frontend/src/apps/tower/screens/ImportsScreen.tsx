@@ -907,6 +907,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                 set: (body) => client.api.importAir(detail.importId, body),
                 step: (body) => client.api.importAirRelease(detail.importId, body),
                 anyway: (body) => client.api.importAirCollectAnyway(detail.importId, body),
+                slot: (body) => client.api.importAirSlot(detail.importId, body),
               }}
               onChanged={() => openOne(detail.importId, false)}
             />

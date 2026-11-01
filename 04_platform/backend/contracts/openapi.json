@@ -10032,6 +10032,45 @@
         }
       }
     },
+    "/v1/sbg/imports/{importId}/air/slot": {
+      "post": {
+        "operationId": "Sbg.importAirSlot",
+        "summary": "",
+        "description": "2026-11-01 — the truck's slot at the shed, as the shed gave it to the importer or its agent; told to the driver.",
+        "parameters": [
+          {
+            "name": "importId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TerminalSlotChangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/imports/{importId}/air/collect-anyway": {
       "post": {
         "operationId": "Sbg.importAirCollectAnyway",
@@ -41152,6 +41191,24 @@
           "fitToTravel"
         ]
       },
+      "TerminalSlot": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
       "ExportAir": {
         "type": "object",
         "properties": {
@@ -41242,6 +41299,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/LiveAnimals"
+              }
+            ]
+          },
+          "slot": {
+            "description": "2026-11-01 — the truck's slot at the cargo terminal, as the shed gave it: the truck is timed to its end.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TerminalSlot"
               }
             ]
           }
@@ -41675,6 +41740,25 @@
           "fitToTravel"
         ]
       },
+      "TerminalSlotDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
       "ExportAirDto": {
         "type": "object",
         "properties": {
@@ -41755,6 +41839,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/LiveAnimalsDto"
+              }
+            ]
+          },
+          "slot": {
+            "description": "2026-11-01 — the truck's slot at the cargo terminal, where the shed gives one.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TerminalSlotDto"
               }
             ]
           }
@@ -43610,6 +43702,28 @@
           "containerNo"
         ]
       },
+      "TerminalSlotChangeDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "clear": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      },
       "AirBookingChangeDto": {
         "type": "object",
         "properties": {
@@ -43628,6 +43742,14 @@
           },
           "latAt": {
             "type": "string"
+          },
+          "slot": {
+            "description": "2026-11-01 — the truck's slot at the cargo terminal: a new one, or (clear) none any more.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TerminalSlotChangeDto"
+              }
+            ]
           }
         }
       },
@@ -50085,6 +50207,14 @@
               }
             }
           },
+          "slot": {
+            "description": "2026-11-01 — the truck's slot at the shed to collect it, as the shed gave it: told to the driver.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TerminalSlot"
+              }
+            ]
+          },
           "collectAnyway": {
             "type": "object",
             "properties": {
@@ -51366,6 +51496,14 @@
                 "type": "string"
               }
             }
+          },
+          "slot": {
+            "description": "2026-11-01 — the truck's slot at the shed to collect it, as the shed gave it: told to the driver.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TerminalSlot"
+              }
+            ]
           },
           "collectAnyway": {
             "type": "object",

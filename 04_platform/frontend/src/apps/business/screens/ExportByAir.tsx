@@ -52,6 +52,10 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
     maxC: '8',
     preCooled: false,
     inspection: false,
+    // 2026-11-01 — the truck's slot at the cargo terminal, where the shed gives one.
+    slotFrom: '',
+    slotTo: '',
+    slotRef: '',
   });
   const [flights, setFlights] = useState([blankFlight()]);
   // Live animals (2026-10-30): the keeper's declaration, with the shipper's certification.
@@ -90,6 +94,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
         security: form.security === 'secured' ? { status: 'secured', agentName: form.agentName.trim(), ...(form.agentNumber.trim() ? { agentNumber: form.agentNumber.trim() } : {}) } : { status: 'unsecured' },
         ...(form.nature === 'FOP' ? { temp: { minC: Number(form.minC), maxC: Number(form.maxC), ...(form.preCooled ? { preCooled: true } : {}) } } : {}),
         ...(form.inspection ? { inspectionAtAirport: true } : {}),
+        ...(fromUtcInput(form.slotFrom) && fromUtcInput(form.slotTo) ? { slot: { from: fromUtcInput(form.slotFrom)!, to: fromUtcInput(form.slotTo)!, ...(form.slotRef.trim() ? { reference: form.slotRef.trim() } : {}) } } : {}),
         ...(form.nature === 'animals' ? { animals: animalsBody(animals, 'export') } : {}),
       },
     });
@@ -236,6 +241,13 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
         {field('handler', 'business.exports.air.handler', { maxLength: '80' })}
       </div>
       <p class="chint"><Abbreviated text={t('business.exports.air.latHint')} /></p>
+      {/* 2026-11-01 — the truck's slot at the terminal, where the shed gives one: the truck is timed to its end. */}
+      <div class="biz-two">
+        {field('slotFrom', 'business.exports.air.slotFrom', { type: 'datetime-local' })}
+        {field('slotTo', 'business.exports.air.slotTo', { type: 'datetime-local' })}
+      </div>
+      {field('slotRef', 'business.exports.air.slotRef', { maxLength: '40' })}
+      <p class="chint">{t('business.exports.air.slotHint')}</p>
 
       <h3 class="cons__sub">{t('business.exports.air.cargoTitle')}</h3>
       <div class="biz-two">
@@ -299,6 +311,9 @@ export function AirWaybillPanel({ d, client, mine, onDetail }: { d: ExportDetail
   const a = d.consignment.air;
   const view = d.air;
   const [moving, setMoving] = useState(false);
+  // 2026-11-01 — the truck's slot at the terminal, being recorded or changed.
+  const [slotting, setSlotting] = useState(false);
+  const [slot, setSlot] = useState({ from: '', to: '', reference: '' });
   const [next, setNext] = useState({ flight: '', date: '', from: '', to: '', lat: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -350,6 +365,7 @@ export function AirWaybillPanel({ d, client, mine, onDetail }: { d: ExportDetail
         {fact('business.exports.air.d.lat', utcWords(a.latAt))}
         {fact('business.exports.air.d.cargo', t('business.exports.air.d.cargoLine', { pieces: a.pieces, kg: a.weightKg.toLocaleString('en') }) + (a.volumeM3 ? `, ${a.volumeM3} m³` : ''))}
         {a.handler ? fact('business.exports.air.d.handler', a.handler) : null}
+        {a.slot ? fact('business.exports.air.d.slot', `${utcWords(a.slot.from)} – ${utcWords(a.slot.to)}${a.slot.reference ? ` (${a.slot.reference})` : ''}`) : null}
         {a.animals ? fact('business.exports.air.d.animals', t('business.exports.air.d.animalsLine', { count: a.animals.count, species: a.animals.species, by: a.animals.shipperCertifiedBy ?? '' })) : null}
         {fact('business.exports.air.d.security', a.security.status === 'secured' ? t('business.exports.air.d.securedBy', { who: a.security.agentName ?? '', number: a.security.agentNumber ? ` (${a.security.agentNumber})` : '' }) : t('business.exports.air.d.notSecured'))}
         {a.temp ? fact('business.exports.air.d.temp', t('business.exports.air.d.tempLine', { min: a.temp.minC, max: a.temp.maxC }) + (a.temp.preCooled ? t('business.exports.air.d.preCooled') : '')) : null}
@@ -359,6 +375,54 @@ export function AirWaybillPanel({ d, client, mine, onDetail }: { d: ExportDetail
       {d.ladenLeg?.foundAtTerminal?.length ? <p class="cerr">{t('business.exports.air.foundAtTerminal', { found: d.ladenLeg.foundAtTerminal.join(', '), pieces: a.pieces })}</p> : null}
       {done ? <p class="cnote">{done}</p> : null}
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
+      {/* 2026-11-01 — the truck's slot at the terminal: recorded, changed or cleared by the exporter; the driver is told. */}
+      {mine && client && !slotting ? (
+        <div class="twr-panelend">
+          <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => setSlotting(true)}>
+            {t(a.slot ? 'business.exports.air.slotChange' : 'business.exports.air.slotRecord')}
+          </button>
+          {a.slot ? (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void change({ slot: { from: '', to: '', clear: true } }, t('business.exports.air.slotCleared'))}>
+              {t('business.exports.air.slotClear')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {mine && client && slotting ? (
+        <div class="twr-knobs">
+          <div class="biz-two">
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.air.slotFrom')}</span>
+              <input class="cinput" type="datetime-local" value={slot.from} onInput={(e) => setSlot({ ...slot, from: (e.target as HTMLInputElement).value })} />
+            </label>
+            <label class="cfield">
+              <span class="cfield__label">{t('business.exports.air.slotTo')}</span>
+              <input class="cinput" type="datetime-local" value={slot.to} onInput={(e) => setSlot({ ...slot, to: (e.target as HTMLInputElement).value })} />
+            </label>
+          </div>
+          <label class="cfield">
+            <span class="cfield__label">{t('business.exports.air.slotRef')}</span>
+            <input class="cinput" maxLength={40} value={slot.reference} onInput={(e) => setSlot({ ...slot, reference: (e.target as HTMLInputElement).value })} />
+          </label>
+          <p class="chint">{t('business.exports.air.slotHint')}</p>
+          <div class="twr-panelend">
+            <button
+              type="button"
+              class="cbtn cbtn--primary cbtn--sm"
+              disabled={busy || !fromUtcInput(slot.from) || !fromUtcInput(slot.to)}
+              onClick={async () => {
+                await change({ slot: { from: fromUtcInput(slot.from)!, to: fromUtcInput(slot.to)!, ...(slot.reference.trim() ? { reference: slot.reference.trim() } : {}) } }, t('business.exports.air.slotSaved'));
+                setSlotting(false);
+              }}
+            >
+              {t('business.exports.air.slotSave')}
+            </button>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setSlotting(false)}>
+              {t('common.cancel')}
+            </button>
+          </div>
+        </div>
+      ) : null}
       {mine && client ? (
         <div class="twr-panelend">
           {a.bookingStatus === 'queued' ? (

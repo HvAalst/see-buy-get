@@ -1,3 +1,4 @@
+import { slotOf, slotWords } from './terminal-slot.types';
 import { Injectable, Optional } from '@nestjs/common';
 import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { QuoteService } from './quote.service';
@@ -865,11 +866,38 @@ export class ImportService {
     }
   }
 
+  /**
+   * 2026-11-01 — THE TRUCK'S SLOT AT THE SHED, as the shed gave it to the importer or its agent: kept with the import and
+   * told to the driver while the leg has not left the shed. A new one replaces it; clear, there is none.
+   */
+  setAirSlot(importId: string, actorEntityId: string, input: { from?: string; to?: string; reference?: string; clear?: boolean }, by: string, now = Date.now()): ImportDetail {
+    const c = this.imports.get(importId);
+    if (!c) throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (this.sideOf(c, actorEntityId) === 'onlooker') throw new GlosError('NOT_FOUND', 'No such consignment');
+    if (!c.air) throw new GlosError('INVALID_STATE', `${c.code} has no air waybill recorded: say what it came under first`);
+    const leg = c.roadFreightId ? this.dispatch.requireFreightPublic(c.roadFreightId) : undefined;
+    if (leg?.pickedUpAt) throw new GlosError('INVALID_STATE', `${c.code} has left the shed already: a slot there no longer matters`);
+    const slot = input.clear ? undefined : slotOf(input, now);
+    c.air = { ...c.air, ...(slot ? { slot } : { slot: undefined }) };
+    if (!slot) delete c.air.slot;
+    this.imports.set(c.importId, c);
+    if (c.roadFreightId) {
+      try {
+        this.dispatch.setInstructions(c.roadFreightId, this.entities.get(c.importerEntityId).did, { text: this.airRoadWords(c) }, now);
+      } catch {
+        /* a leg the importer may no longer change keeps its words */
+      }
+    }
+    void by;
+    return this.detail(c.importId, actorEntityId);
+  }
+
   /** What the driver collecting from the shed is told: the waybill, the delivery order and the handler's receipt by number, the cargo's needs. */
   private airRoadWords(c: ImportConsignment): string {
     const a = c.air!;
     return [
       `Import ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}. Collect it at ${a.handler} against this waybill and the delivery order${a.deliveryOrder?.reference ? ` ${a.deliveryOrder.reference}` : ''}${a.handlerCharges?.reference ? `; the handler’s charges are paid, receipt ${a.handlerCharges.reference}` : ''}. Count the pieces before you leave the shed: the waybill says ${a.pieces}.`,
+      a.slot ? `Your slot at the shed: ${slotWords(a.slot)}. Come inside it — a truck outside its slot waits, or is turned away.` : '',
       a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
       a.animals ? animalWords(a.animals) : '',
     ]

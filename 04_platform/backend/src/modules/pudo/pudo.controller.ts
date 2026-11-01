@@ -1,4 +1,5 @@
-﻿import { CarriageContractService } from './carriage-contract.service';
+﻿import { TerminalSlotChangeDto } from './terminal-slot.types';
+import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { standInCode } from '../../foundation/runtime/standin-code';
 import { PapersWatchService } from './papers-watch.service';
@@ -1499,6 +1500,14 @@ export class SbgController {
   importAirRelease(@Param('importId') importId: string, @Body() dto: ImportAirStepDto, @Actor() actor: IntrospectionResult): ImportDetail {
     if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The release is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
     return this.imports.recordAirStep(importId, this.actingCompany(actor), dto, this.namedActor(actor));
+  }
+
+  /** 2026-11-01 — the truck's slot at the shed, as the shed gave it to the importer or its agent; told to the driver. */
+  @Roles('entity_admin', 'business')
+  @Post('imports/:importId/air/slot')
+  importAirSlot(@Param('importId') importId: string, @Body() dto: TerminalSlotChangeDto, @Actor() actor: IntrospectionResult): ImportDetail {
+    if (actor?.role === 'operator') throw new GlosError('FORBIDDEN', 'The slot is the importer’s or its agent’s to record: staff read it, and write nothing in their name');
+    return this.imports.setAirSlot(importId, this.actingCompany(actor), dto, this.namedActor(actor));
   }
 
   /** The importer's word to send the truck before the release — with why, and that the waiting is its own. */

@@ -867,6 +867,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/imports/:importId/air': 'none',
   'POST sbg/imports/:importId/air/release': 'none',
   'POST sbg/imports/:importId/air/collect-anyway': 'none',
+  'POST sbg/imports/:importId/air/slot': 'none',
   'GET sbg/rail/railways': 'any',
   'POST sbg/rail/check': 'any',
   'POST sbg/imports/:importId/supply': 'support',

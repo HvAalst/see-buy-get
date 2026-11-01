@@ -206,6 +206,8 @@ export interface ExportAir {
   security: { status: 'secured' | 'unsecured'; agentName?: string; agentNumber?: string; knownConsignor?: boolean };
   temp?: { minC: number; maxC: number; preCooled?: boolean };
   inspectionAtAirport?: boolean;
+  /** 2026-11-01 — the truck's slot at the cargo terminal, as the shed gave it: the truck is timed to its end. */
+  slot?: { from: string; to: string; reference?: string };
   /** Live animals (2026-10-30): as their keeper declared them; the originals ride with them. */
   animals?: { kind: 'livestock' | 'crated'; species: string; count: number; hatchedAt?: string; permit: string; healthCertificate: string; cites?: string; movementPermit?: string; attendant?: { name: string; phone?: string }; shipperCertifiedBy?: string; fitToTravel: { by: string; at: string } };
   /** The booking as it stood before each change recorded: kept, never overwritten. */
@@ -316,7 +318,7 @@ export interface ExportsApi {
   /** An export by air: the waybill checked before anything is written. */
   registerAir(input: RegisterAirExportInput): Promise<Result<{ exportId: string; code: string }>>;
   /** By air: the airline confirmed the booking, or moved it to another flight and time. */
-  airBooking(exportId: string, body: { bookingStatus?: 'confirmed' | 'queued'; flights?: ExportFlight[]; latAt?: string }): Promise<Result<ExportDetail>>;
+  airBooking(exportId: string, body: { bookingStatus?: 'confirmed' | 'queued'; flights?: ExportFlight[]; latAt?: string; slot?: { from: string; to: string; reference?: string; clear?: boolean } }): Promise<Result<ExportDetail>>;
   container(exportId: string, containerNo: string): Promise<Result<ExportDetail>>;
   emptyLeg(exportId: string): Promise<Result<ExportDetail>>;
   ladenLeg(exportId: string, weightKg?: number, dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }): Promise<Result<ExportDetail>>;

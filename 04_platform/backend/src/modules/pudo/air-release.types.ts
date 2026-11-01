@@ -1,3 +1,4 @@
+import { TerminalSlot } from './terminal-slot.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
@@ -232,6 +233,8 @@ export class ImportAir {
    * where anything was — the day by which the airline must have the importer's written complaint.
    */
   @ApiPropertyOptional() collected?: { at: string; counted: number; reservations?: string; complainBy?: string };
+  /** 2026-11-01 — the truck's slot at the shed to collect it, as the shed gave it: told to the driver. */
+  @ApiPropertyOptional({ type: TerminalSlot }) slot?: TerminalSlot;
   /** The importer's word to send the truck before it is released — with why; its truck's waiting is its own. */
   @ApiPropertyOptional() collectAnyway?: { by: string; at: string; reason: string };
   /** The handler's free storage, in hours, as on its notice or tariff — and where that figure came from. */

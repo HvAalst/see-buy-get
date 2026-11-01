@@ -1,3 +1,4 @@
+import { slotOf, slotWords } from './terminal-slot.types';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
@@ -277,6 +278,7 @@ export class ExportService {
         temp?: { minC: number; maxC: number; preCooled?: boolean };
         inspectionAtAirport?: boolean;
         animals?: LiveAnimalsDto;
+        slot?: { from: string; to: string; reference?: string };
       };
     },
     by: string,
@@ -343,6 +345,8 @@ export class ExportService {
       security: { status: sec.status === 'secured' ? 'secured' : 'unsecured', ...(sec.agentName?.trim() ? { agentName: sec.agentName.trim().slice(0, 120) } : {}), ...(sec.agentNumber?.trim() ? { agentNumber: sec.agentNumber.trim().slice(0, 40) } : {}), ...(sec.knownConsignor ? { knownConsignor: true } : {}) },
       ...(a.temp ? { temp: { minC: a.temp.minC, maxC: a.temp.maxC, ...(a.temp.preCooled ? { preCooled: true } : {}) } } : {}),
       ...(a.inspectionAtAirport ? { inspectionAtAirport: true } : {}),
+      // A truck's slot at the shed, where it gives one: checked to end before the latest acceptance time.
+      ...(a.slot ? { slot: slotOf(a.slot, now, { at: latAt, what: 'the latest acceptance time' }) } : {}),
       ...(animals ? { animals } : {}),
     };
     const consignment: ExportConsignment = {
@@ -592,7 +596,11 @@ export class ExportService {
    * the rail terminal before the train's (2026-10-29). Everything that times the road reads it from here.
    */
   private handoverOf(c: ExportConsignment): { place: ExportPlace; cutoffAt: string; byRail: boolean } {
-    return c.byRail ? { place: c.byRail.terminal, cutoffAt: c.byRail.cutoffAt, byRail: true } : { place: c.terminal, cutoffAt: c.booking.gateCutoffAt, byRail: false };
+    if (c.byRail) return { place: c.byRail.terminal, cutoffAt: c.byRail.cutoffAt, byRail: true };
+    // By air with a slot at the shed (2026-11-01): the truck is due by the slot's end, which comes before the latest acceptance time.
+    const slotEnd = c.air?.slot?.to;
+    const cutoffAt = slotEnd && Date.parse(slotEnd) < Date.parse(c.booking.gateCutoffAt) ? slotEnd : c.booking.gateCutoffAt;
+    return { place: c.terminal, cutoffAt, byRail: false };
   }
 
   /**
@@ -811,11 +819,13 @@ export class ExportService {
     const notes = [
       `Export ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}, ${flights}. Hand it in at ${a.handler ?? c.terminal.label} against this waybill, before the latest acceptance time, and ask for its receipt: you give its number when you deliver.`,
       a.bookingStatus === 'queued' ? 'The airline has not confirmed the booking: it may not fly on this flight.' : '',
+      a.slot ? `Your slot at the terminal: ${slotWords(a.slot)}. Arrive inside it — a truck outside its slot waits, or is turned away.` : '',
       a.security.status === 'secured' ? `Secured cargo (${a.security.agentName}): keep it locked and sealed, with no stops on the way; the seal is checked at the terminal.` : '',
       a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
       a.animals ? animalWords(a.animals) : '',
     ].filter(Boolean);
-    return { text: notes.join(' ').slice(0, 1500), deliveryWindow: `At ${c.terminal.label} before ${utc(a.latAt)} — the airline’s latest acceptance time`.slice(0, 120) };
+    const deliveryWindow = a.slot ? `At ${c.terminal.label} in the slot ${slotWords(a.slot)}` : `At ${c.terminal.label} before ${utc(a.latAt)} — the airline’s latest acceptance time`;
+    return { text: notes.join(' ').slice(0, 1500), deliveryWindow: deliveryWindow.slice(0, 120) };
   }
 
   /**
@@ -824,7 +834,7 @@ export class ExportService {
    * clock and its warnings follow the new time, and the load to the cargo terminal — while it is not yet delivered — tells
    * its driver what changed.
    */
-  changeAirBooking(exportId: string, actorEntityId: string, input: { bookingStatus?: 'confirmed' | 'queued'; flights?: Array<{ flight: string; date: string; from: string; to: string; departsLocal?: string }>; latAt?: string }, by: string, now = Date.now()): ExportDetail {
+  changeAirBooking(exportId: string, actorEntityId: string, input: { bookingStatus?: 'confirmed' | 'queued'; flights?: Array<{ flight: string; date: string; from: string; to: string; departsLocal?: string }>; latAt?: string; slot?: { from?: string; to?: string; reference?: string; clear?: boolean } }, by: string, now = Date.now()): ExportDetail {
     const c = this.requireOwn(exportId, actorEntityId);
     if (c.mode !== 'air' || !c.air) throw new GlosError('INVALID_STATE', `${c.code} goes by sea: its booking is your forwarder’s or the line’s`);
     const a = c.air;
@@ -834,13 +844,21 @@ export class ExportService {
     if (latAt && Date.parse(latAt) <= now) throw new GlosError('VALIDATION_FAILED', 'That latest acceptance time has passed already: give the one for the flight it is booked on now', { field: 'latAt' });
     const status = input.bookingStatus ?? a.bookingStatus;
     const sameFlights = !flights || JSON.stringify(flights) === JSON.stringify(a.flights);
-    if (status === a.bookingStatus && sameFlights && (!latAt || latAt === a.latAt)) throw new GlosError('FIELD_REQUIRED', 'Say what changed: the airline confirmed it, another flight, or a new latest acceptance time', { field: 'bookingStatus' });
-    const timeMoved = Boolean(latAt && latAt !== a.latAt);
+    // 2026-11-01 — the truck's slot at the shed: a new one, checked against the latest acceptance time as it will be, or none.
+    const latThen = latAt ?? a.latAt;
+    const slot = input.slot?.clear ? null : input.slot ? slotOf(input.slot, now, { at: latThen, what: 'the latest acceptance time' }) : undefined;
+    const slotMoved = slot !== undefined && JSON.stringify(slot) !== JSON.stringify(a.slot ?? null);
+    if (slot === undefined && a.slot && latAt && Date.parse(a.slot.to) > Date.parse(latAt)) {
+      throw new GlosError('VALIDATION_FAILED', 'The truck’s slot at the terminal ends after the new latest acceptance time: give the new slot too, or clear it', { field: 'slot' });
+    }
+    if (status === a.bookingStatus && sameFlights && (!latAt || latAt === a.latAt) && !slotMoved) throw new GlosError('FIELD_REQUIRED', 'Say what changed: the airline confirmed it, another flight, a new latest acceptance time, or the truck’s slot', { field: 'bookingStatus' });
+    const timeMoved = Boolean(latAt && latAt !== a.latAt) || slotMoved;
     c.air = {
       ...a,
       bookingStatus: status,
       ...(flights ? { flights, fromAirport: flights[0].from, toAirport: flights[flights.length - 1].to } : {}),
       ...(latAt ? { latAt } : {}),
+      ...(slot === null ? { slot: undefined } : slot ? { slot } : {}),
       formerBookings: [...(a.formerBookings ?? []), { bookingStatus: a.bookingStatus, flights: a.flights, latAt: a.latAt, until: new Date(now).toISOString(), by }].slice(-20),
     };
     c.booking = { ...c.booking, gateCutoffAt: c.air.latAt };
@@ -857,7 +875,7 @@ export class ExportService {
     if (leg && ['scheduled', 'available', 'ordered', 'claimed', 'in_transit'].includes(leg.status)) {
       const exporter = this.entities.get(c.exporterEntityId);
       const words = this.airLegWords(c);
-      const change = [status !== a.bookingStatus ? (status === 'confirmed' ? 'The airline has confirmed the booking.' : 'The airline has not confirmed the booking: it may not fly on this flight.') : '', !sameFlights ? `Now on ${c.air.flights.map((f) => `${f.flight} on ${f.date}`).join(', ')}.` : '', timeMoved ? `Latest acceptance time now ${utc(c.air.latAt)}.` : ''].filter(Boolean).join(' ');
+      const change = [status !== a.bookingStatus ? (status === 'confirmed' ? 'The airline has confirmed the booking.' : 'The airline has not confirmed the booking: it may not fly on this flight.') : '', !sameFlights ? `Now on ${c.air.flights.map((f) => `${f.flight} on ${f.date}`).join(', ')}.` : '', timeMoved ? `Latest acceptance time now ${utc(c.air.latAt)}.` : '', slotMoved ? (c.air.slot ? `Your slot at the terminal is now ${slotWords(c.air.slot)}.` : 'There is no slot at the terminal any more: arrive before the latest acceptance time.') : ''].filter(Boolean).join(' ');
       this.dispatch.setInstructions(c.ladenFreightId!, exporter.did, leg.status === 'in_transit' ? { text: `The booking changed: ${change}` } : { text: words.text, deliveryWindow: words.deliveryWindow }, now);
     }
     return this.detail(c.exportId, actorEntityId, {}, now);

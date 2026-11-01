@@ -151,6 +151,16 @@ describe('an import by air, over the wire', () => {
     expect(freight().instructions?.text).toMatch(/delivery order DO-55120; the handler’s charges are paid, receipt SWP-RC-901\./);
     expect(released.air).toMatchObject({ gaps: [], customs: { reference: '2026NBOIM448120' }, deliveryOrder: { reference: 'DO-55120' }, handlerCharges: { reference: 'SWP-RC-901' }, agencies: [{ key: 'kebs', released: { reference: 'KEBS-CoC-7781' } }] });
     expect(released.air.roadWaits).toBeUndefined();
+    // 2026-11-01 — the truck's slot at the shed, as the shed gave it: told to the driver; staff write none; cleared, gone.
+    const slotFrom = new Date(Date.now() + 5 * H);
+    const slotTo = new Date(Date.now() + 6 * H);
+    const slotted = (await http().post(`${path}/air/slot`).set(bearer(agent.token)).send({ from: slotFrom.toISOString(), to: slotTo.toISOString(), reference: 'SWP-C-7' }).expect(201)).body;
+    expect(slotted.air.slot).toEqual({ from: slotFrom.toISOString(), to: slotTo.toISOString(), reference: 'SWP-C-7' });
+    expect(freight().instructions?.text).toMatch(/Your slot at the shed: \d{2}:\d{2}–.* \(slot SWP-C-7\)\. Come inside it/);
+    expect((await http().post(`${path}/air/slot`).set(bearer(operator)).send({ from: slotFrom.toISOString(), to: slotTo.toISOString() })).status).toBe(403);
+    expect(String((await http().post(`${path}/air/slot`).set(bearer(agent.token)).send({ from: slotTo.toISOString(), to: slotFrom.toISOString() })).body.detail)).toBe('The slot must end after it starts');
+    expect((await http().post(`${path}/air/slot`).set(bearer(imp.token)).send({ from: '', to: '', clear: true }).expect(201)).body.air.slot).toBeUndefined();
+    expect(freight().instructions?.text).not.toMatch(/Your slot at the shed/);
     // Recorded again with another agency: the releases already given are kept, and the new one is waited for.
     const again = (await air({ ...phones(), agencies: ['kebs', 'port_health'] }, agent.token).expect(201)).body;
     expect(again.air).toMatchObject({ customs: { reference: '2026NBOIM448120' }, deliveryOrder: { reference: 'DO-55120' }, handlerCharges: { reference: 'SWP-RC-901' }, agencies: [{ key: 'kebs', released: { reference: 'KEBS-CoC-7781' } }, { key: 'port_health' }] });

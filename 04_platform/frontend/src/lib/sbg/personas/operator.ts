@@ -483,6 +483,8 @@ export function createOperatorApi(sbg: SbgClient) {
     importAir: (importId: string, body: Record<string, unknown>) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/air', { params: { path: { importId } }, body: body as never })),
     importAirRelease: (importId: string, body: { step: string; reference?: string; at?: string }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/air/release', { params: { path: { importId } }, body: body as never })),
     importAirCollectAnyway: (importId: string, body: { reason: string; waitingIsMine: boolean }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/air/collect-anyway', { params: { path: { importId } }, body: body as never })),
+    /** 2026-11-01 — the truck's slot at the shed, as the shed gave it; told to the driver. */
+    importAirSlot: (importId: string, body: { from: string; to: string; reference?: string; clear?: boolean }) => sbg.request((c) => c.POST('/v1/sbg/imports/{importId}/air/slot', { params: { path: { importId } }, body: body as never })),
 
     /**
      * BL1 — the appointed agent records that customs released the container.
