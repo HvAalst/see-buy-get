@@ -105,7 +105,7 @@ export const DRIVER_CLASSES = ['bike', 'motorcycle', 'tuktuk', 'car', 'van', 'bu
  * by `drivers.register` — and the only conclusion available to the person refused was that they had to
  * come in through a fleet.
  */
-export const HEAVY_CLASSES = ['tuktuk', 'car', 'van', 'bus', 'truck'] as const;
+export const HEAVY_CLASSES = ['motorcycle', 'tuktuk', 'car', 'van', 'bus', 'truck'] as const; // a motorcycle since 2026-10-30 ("Motorcycle and up")
 
 /**
  * A truck is not registrable without a sub-type, and the list is READ FROM THE SERVER, never restated.
@@ -244,6 +244,8 @@ export interface JoinForm {
   taxId: string;
   /** Each a photograph's id, uploaded while signed in as the person: '' until taken. */
   papers: Record<FleetPaper, string>;
+  /** A driver on a motorcycle or larger: the photographs of their ID card and their driving licence (2026-10-30). */
+  driverPapers: { idCopyRef: string; licenceCopyRef: string };
   /** The versions of the terms of use, the data notice and the cookie statement agreed to, as on screen (2026-10-25). */
   agreement: Agreement | null;
   /**
@@ -306,6 +308,7 @@ export const EMPTY_JOIN: JoinForm = {
   operatorLicence: '',
   taxId: '',
   papers: { businessRegCertRef: '', operatorLicenceRef: '', ownerIdRef: '', proofOfAddressRef: '' },
+  driverPapers: { idCopyRef: '', licenceCopyRef: '' },
   agreement: null,
   agreementHere: null,
 };
@@ -316,25 +319,35 @@ export const EMPTY_JOIN: JoinForm = {
  */
 export type JoinStep = 'phone' | 'code' | 'pin' | 'about' | 'where' | 'papers' | 'login' | 'done';
 
-export function stepsFor(kind: JoinKind): JoinStep[] {
+/**
+ * WHETHER A DRIVER SENDS PAPERS WHILE SIGNING UP: on a motorcycle or anything larger, which is driven on a licence (the
+ * owner, 2026-10-30: "I didn't see the picture upload of a drivers licence during sign up, now we can't confirm" —
+ * "Motorcycle and up"). A bicycle rider sends none and rides at once.
+ */
+export function driverSendsPapers(kind: JoinKind, form: Pick<JoinForm, 'licenceClasses'>): boolean {
+  return kind === 'driver' && needsLicence(form.licenceClasses);
+}
+
+export function stepsFor(kind: JoinKind, papers = false): JoinStep[] {
   // Round 40 — a store's sign-in works only on its own phones and browsers, each confirmed by a code to its number:
   // the number is checked first, as a shop's and a hub's are. It has no 'where' (its country is asked in 'about').
   if (kind === 'vendor') return ['phone', 'code', 'about', 'login', 'done'];
   // A fleet signs in as its person straight after the code — its papers are uploaded under that sign-in — and has no
   // 'login' step: the PIN chosen here is how the Fleet app opens.
   if (kind === 'fleet') return ['phone', 'code', 'pin', 'about', 'where', 'papers', 'done'];
-  // A driver says how they sign in last, as everybody else does — with the PIN the Driver app opens with.
-  if (kind === 'driver') return ['phone', 'code', 'about', 'where', 'pin', 'done'];
+  // A driver says how they sign in last, as everybody else does — with the PIN the Driver app opens with — and one who
+  // drives on a licence photographs their ID and licence after it, under that sign-in, before the sign-up is sent.
+  if (kind === 'driver') return papers ? ['phone', 'code', 'about', 'where', 'pin', 'papers', 'done'] : ['phone', 'code', 'about', 'where', 'pin', 'done'];
   return ['phone', 'code', 'about', 'where', 'login', 'done'];
 }
 
-export function nextStep(kind: JoinKind, step: JoinStep): JoinStep {
-  const steps = stepsFor(kind);
+export function nextStep(kind: JoinKind, step: JoinStep, papers = false): JoinStep {
+  const steps = stepsFor(kind, papers);
   return steps[Math.min(steps.indexOf(step) + 1, steps.length - 1)];
 }
 
-export function prevStep(kind: JoinKind, step: JoinStep): JoinStep {
-  const steps = stepsFor(kind);
+export function prevStep(kind: JoinKind, step: JoinStep, papers = false): JoinStep {
+  const steps = stepsFor(kind, papers);
   return steps[Math.max(steps.indexOf(step) - 1, 0)];
 }
 
@@ -359,6 +372,7 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       // The PIN is where a person's account is made: every sign-up agrees first (2026-10-25).
       return f.agreement ? null : t('agreement.needed');
     case 'papers':
+      if (role.kind === 'driver') return f.driverPapers.idCopyRef && f.driverPapers.licenceCopyRef ? null : t('home.block.driverPapers');
       return FLEET_PAPERS.every(([key]) => f.papers[key]) ? null : t('home.block.papers');
     case 'about':
       // A store never reaches the 'where' step, so its country is asked for here instead.
@@ -474,6 +488,10 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
     return {
       ...base,
       profile: {
+        // Their ID card and licence, photographed under their own sign-in: staff check them before the first load (2026-10-30).
+        ...(needsLicence(f.licenceClasses) && f.driverPapers.idCopyRef && f.driverPapers.licenceCopyRef
+          ? { kyc: { idCopyRef: f.driverPapers.idCopyRef, licenceCopyRef: f.driverPapers.licenceCopyRef } }
+          : {}),
         driver: {
           displayName: f.displayName.trim(),
           fullName: f.fullName.trim(),
@@ -564,7 +582,7 @@ export function joinSpoken(role: RoleSpec, step: JoinStep, t: Translate): string
     case 'pin':
       return t('home.join.spoken.pin');
     case 'papers':
-      return t('home.join.spoken.papers');
+      return role.id === 'driver' ? t('home.join.spoken.driverPapers') : t('home.join.spoken.papers');
     case 'about':
       return role.id === 'driver' ? t('home.join.spoken.aboutDriver') : t('home.join.spoken.aboutPlace');
     case 'where':

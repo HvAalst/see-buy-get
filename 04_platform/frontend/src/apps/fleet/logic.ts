@@ -28,7 +28,7 @@ import {
 
 /* --------------------------------------------------------------- registry -- */
 
-/** Any class beyond bike/motorcycle puts the driver in the heavy registry. */
+/** Any class beyond a bicycle puts the driver in the heavy registry: a motorcycle's licence is checked too (2026-10-30). */
 export function isHeavySelection(classes: Iterable<string>): boolean {
   return [...classes].some((c) => (HEAVY_CLASSES as readonly string[]).includes(c));
 }

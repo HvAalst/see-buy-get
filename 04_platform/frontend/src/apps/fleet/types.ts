@@ -9,7 +9,7 @@ export const VEHICLE_CLASSES = ['bike', 'motorcycle', 'tuktuk', 'car', 'van', 'b
 export type VehicleClass = (typeof VEHICLE_CLASSES)[number];
 
 /** Classes that put a driver in the HEAVY registry (licence + KYC + vetting). */
-export const HEAVY_CLASSES: readonly VehicleClass[] = ['tuktuk', 'car', 'van', 'bus', 'truck'];
+export const HEAVY_CLASSES: readonly VehicleClass[] = ['motorcycle', 'tuktuk', 'car', 'van', 'bus', 'truck']; // a motorcycle since 2026-10-30
 
 export type DriverStatus = 'DRAFT' | 'KYC_PENDING' | 'ACTIVE' | 'SUSPENDED';
 

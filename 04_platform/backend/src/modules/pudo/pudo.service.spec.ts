@@ -8816,6 +8816,17 @@ describe('PUDO Light', () => {
     fleet.uncouple(lapsed.did);
   });
 
+  it('checks a motorcycle rider’s licence before they ride, as a van driver’s; a bicycle rider rides at once', () => {
+    // The owner, 2026-10-30: "Motorcycle and up" — a motorcycle is driven on a licence almost everywhere.
+    expect(drivers.registryFor(['motorcycle'])).toBe('heavy');
+    expect(drivers.registryFor(['bike'])).toBe('light');
+    expect(() => drivers.register({ displayName: 'Moto', fullName: 'Moto NoLicence', nationalId: 'DRV-MOTO-NL', mobile: '+254700939393', licenceClasses: ['motorcycle'] })).toThrow(/driving licence number is required/);
+    const m = drivers.register({ displayName: 'Moto', fullName: 'Moto Licensed', nationalId: 'DRV-MOTO-L', mobile: '+254700939394', licenceClasses: ['motorcycle'], licenceNumber: 'DL-MOTO-1', licenceExpiresAt: '2031-06-30' });
+    expect(m.status).toBe('DRAFT'); // waits for its papers and a member of staff
+    const b = drivers.register({ displayName: 'Bici', fullName: 'Bici Rider', nationalId: 'DRV-BICI-1', mobile: '+254700939395', licenceClasses: ['bike'] });
+    expect(b.status).toBe('ACTIVE');
+  });
+
   it('deletes a driver’s ID and licence photographs the moment staff decide — refused or approved — and keeps what was checked', () => {
     // The owner, 2026-10-30: "upload a picture, check by one staff member and delete the image after it has been checked
     // and confirmed or a refusal message and notification to the driver".

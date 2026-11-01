@@ -63,9 +63,10 @@ const assignment = (over: Partial<AssignmentRow> = {}): AssignmentRow => ({
 });
 
 describe('registry', () => {
-  it('bike/motorcycle stay light; anything heavier is the heavy registry', () => {
+  it('a bicycle stays light; a motorcycle or anything heavier is the heavy registry (its licence checked, 2026-10-30)', () => {
     expect(isHeavySelection(['bike'])).toBe(false);
-    expect(isHeavySelection(['bike', 'motorcycle'])).toBe(false);
+    expect(isHeavySelection(['motorcycle'])).toBe(true);
+    expect(isHeavySelection(['bike', 'motorcycle'])).toBe(true);
     expect(isHeavySelection(['bike', 'van'])).toBe(true);
     expect(isHeavySelection([])).toBe(false);
   });

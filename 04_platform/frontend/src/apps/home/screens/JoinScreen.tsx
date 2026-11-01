@@ -12,7 +12,7 @@ import { geocode, homeConfig, myAgreement } from '../api';
 import { countryNameIn } from '../../../shared/documents/documents';
 import { pageNameFor } from '../../../shared/handle';
 
-import { ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
+import { driverSendsPapers, ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -32,7 +32,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
   const role = state.role;
   if (!role) return null;
 
-  const steps = stepsFor(role.kind);
+  const steps = stepsFor(role.kind, driverSendsPapers(role.kind, state.form));
   const fleet = role.kind === 'fleet';
   // Somebody coming back to a fleet they signed up is shown it, not an empty form for a second one.
   const showSignups = fleet && state.step === 'about' && Boolean(state.fleetSignups?.length) && !state.fleetAnother;
@@ -56,7 +56,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
       {state.step === 'pin' ? <PinStep state={state} actions={actions} /> : null}
       {state.step === 'about' ? showSignups ? <FleetSignups state={state} actions={actions} /> : fleet ? <FleetAboutStep state={state} actions={actions} /> : <AboutStep state={state} actions={actions} /> : null}
       {state.step === 'where' ? <WhereStep state={state} actions={actions} /> : null}
-      {state.step === 'papers' ? <PapersStep state={state} actions={actions} /> : null}
+      {state.step === 'papers' ? fleet ? <PapersStep state={state} actions={actions} /> : <DriverPapersStep state={state} actions={actions} /> : null}
       {state.step === 'login' ? <LoginStep state={state} actions={actions} /> : null}
       {state.step === 'done' ? fleet ? <FleetDone state={state} actions={actions} /> : <DoneStep state={state} actions={actions} /> : null}
 
@@ -560,6 +560,41 @@ function PapersStep({ state, actions }: JoinScreenProps) {
       <div class="scr__cta">
         <Button onClick={() => void actions.submitFleet()} disabled={Boolean(blocker)} busy={state.busy === 'submit'}>
           {t(again ? 'home.fleet.papers.sendAgain' : 'home.fleet.papers.send')}
+        </Button>
+        {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
+      </div>
+    </>
+  );
+}
+
+/* ---------------------------------------------------------- driver: papers -- */
+
+/**
+ * A DRIVER ON A MOTORCYCLE OR LARGER PHOTOGRAPHS THEIR ID AND LICENCE, signed in by now, and the sign-up goes with them
+ * (the owner, 2026-10-30: "I didn't see the picture upload of a drivers licence during sign up, now we can't confirm").
+ * One member of staff looks at them before the first load; the photos are deleted once they have decided.
+ */
+function DriverPapersStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
+  const role = state.role!;
+  const f = state.form;
+  const blocker = stepBlocker(role, 'papers', f, t);
+  const set = (key: 'idCopyRef' | 'licenceCopyRef', mediaId: string) => actions.setForm({ driverPapers: { ...state.form.driverPapers, [key]: mediaId } });
+  return (
+    <>
+      <h1 class="scr__title">{t('home.join.driverPapers.title')}</h1>
+      <p class="scr__lede">{t('home.join.driverPapers.lede')}</p>
+      <Card label={t('home.join.driverPapers.id')}>
+        <p class="t-label">{t('home.join.driverPapers.id')}</p>
+        <PhotoField id="driver-id" value={f.driverPapers.idCopyRef} label={t('home.fleet.papers.take')} upload={(file) => actions.uploadFleetPaper('kyc_id', file)} onCapture={(mediaId) => set('idCopyRef', mediaId)} />
+      </Card>
+      <Card label={t('home.join.driverPapers.licence')}>
+        <p class="t-label">{t('home.join.driverPapers.licence')}</p>
+        <PhotoField id="driver-licence" value={f.driverPapers.licenceCopyRef} label={t('home.fleet.papers.take')} upload={(file) => actions.uploadFleetPaper('kyc_licence', file)} onCapture={(mediaId) => set('licenceCopyRef', mediaId)} />
+      </Card>
+      <div class="scr__cta">
+        <Button onClick={() => void actions.sendDriverPapers()} disabled={Boolean(blocker)} busy={state.busy === 'submit'}>
+          {t('home.join.driverPapers.send')}
         </Button>
         {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
       </div>

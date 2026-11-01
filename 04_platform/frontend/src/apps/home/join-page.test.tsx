@@ -32,6 +32,18 @@ describe('signing up: the page the name will give', () => {
     expect(render('fleet', { displayName: 'Kilima Logistics Ltd' })).toContain('/@kilima-logistics-ltd');
   });
 
+  it('asks a driver on a motorcycle for their ID and their licence, after the PIN, before the sign-up is sent', () => {
+    const state = { role: role('driver'), step: 'papers', form: { ...EMPTY_JOIN, country: 'NL', licenceClasses: ['motorcycle'] }, busy: null, countries: [], countriesState: 'idle', issuedCode: null, points: [], person: { token: 't' } } as never;
+    const html = renderToString(<JoinScreen state={state} actions={{ setForm: () => undefined } as never} />);
+    expect(html).toContain('Your ID and your driving licence');
+    expect(html).toContain('The photos are deleted once staff have decided');
+    expect(html).toContain('id="driver-id');
+    expect(html).toContain('id="driver-licence');
+    expect(html).toContain('Sign up and send them');
+    // Six steps before the end: the papers step counts.
+    expect((html.match(/<span class="dots__dot/g) ?? []).length).toBe(6);
+  });
+
   it('shows nothing while the name gives nothing, and nothing to a store or a driver', () => {
     expect(render('mdp', { displayName: '' })).not.toContain('/@');
     expect(render('vendor', { displayName: 'Nairobi Threads' })).not.toContain('/@');

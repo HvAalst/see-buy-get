@@ -261,7 +261,8 @@ export class AccountService implements OnApplicationBootstrap {
     }
     // The two photographs a driver who needs a licence check took while signing up: refused before anything is made.
     const sent = profile.kyc as { idCopyRef?: string; licenceCopyRef?: string } | undefined;
-    const classes = Array.isArray(profile.licenceClasses) ? (profile.licenceClasses as string[]) : [];
+    const said = (profile.driver ?? {}) as { licenceClasses?: unknown };
+    const classes = Array.isArray(said.licenceClasses) ? (said.licenceClasses as string[]) : [];
     const papers = sent && this.drivers.registryFor(classes as never) === 'heavy' ? this.drivers.assertSignupPapers(personDid, sent) : undefined;
     let provisioned: { did: string; entityStatus?: string };
     try {

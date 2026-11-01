@@ -401,6 +401,14 @@ export const enHome = {
   'home.block.taxId': 'Type the company’s tax number.',
   'home.block.contactEmail': 'Type an email address for the company: we write to it when your papers have been checked.',
   'home.block.papers': 'Take a photograph of each of the four papers.',
+  'home.block.driverPapers': 'Take a photo of your ID card and one of your driving licence.',
+  // A driver on a motorcycle or larger, signed in by now: their ID and licence, sent with the sign-up (2026-10-30).
+  'home.join.driverPapers.title': 'Your ID and your driving licence',
+  'home.join.driverPapers.lede': 'You drive on a licence, so a member of our staff checks your ID card and your driving licence before your first load. Photograph both, flat and in good light, with all four corners in view. The photos are deleted once staff have decided.',
+  'home.join.driverPapers.id': 'Your ID card',
+  'home.join.driverPapers.licence': 'Your driving licence',
+  'home.join.driverPapers.send': 'Sign up and send them',
+  'home.join.spoken.driverPapers': 'Photograph your ID card and your driving licence. A member of our staff checks them before your first load, and the photos are deleted once they have decided.',
 
   // Join wizard — step: phone.
   'home.join.phone.lede': 'Your phone number is your key to the network. We send a code to check it works.',

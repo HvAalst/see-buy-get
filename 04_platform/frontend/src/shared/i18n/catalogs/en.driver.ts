@@ -202,9 +202,9 @@ export const enDriver = {
   /* GETTING CLEARED WITHOUT A FLEET. Anything above a motorcycle starts at DRAFT and needs an ID and a
      licence read by staff. A fleet's office sends those; an independent courier had nobody to ask. */
   'driver.clearance.needTitle': 'Two documents before your first load',
-  'driver.clearance.needBody': 'A van or anything larger needs your ID and your driving licence checked. Send photos of both and staff will look at them.',
+  'driver.clearance.needBody': 'A motorcycle or anything larger needs your ID and your driving licence checked. Send photos of both and staff will look at them.',
   'driver.clearance.send': 'Send my documents',
-  'driver.clearance.sheetBody': 'Photograph both, flat and in good light. Staff read them by hand — nothing is checked automatically, and nothing on your account changes until they have.',
+  'driver.clearance.sheetBody': 'Photograph both, flat and in good light. Staff read them by hand — nothing is checked automatically, and nothing on your account changes until they have. The photos are deleted once they have decided.',
   'driver.clearance.idPhoto': 'Your ID',
   'driver.clearance.licencePhoto': 'Your driving licence',
   'driver.clearance.submit': 'Send them',
@@ -1065,15 +1065,15 @@ export const enDriver = {
   'driver.fleet.removedEnded': 'They say they ended your contract.',
   'driver.fleet.removedNote': 'Their reason: “{note}”',
   'driver.fleet.removedNext': 'Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place.',
-  // Said only to somebody who has both ways back: a rider on a bicycle or a motorcycle.
+  // Said only to somebody who has both ways back: a rider on a bicycle (a motorcycle is checked first, since 2026-10-30).
   'driver.fleet.removedNextAlone': 'Your trips, papers and rating stay yours. You cannot start a shift until a fleet offers you a place, or you choose to ride for yourself: “Your fleet”, under your name.',
-  'driver.fleet.leaveDetailLight': 'You stop driving for {company} now, and their office is told. You need nobody’s permission. Your licence, your trips and your rating stay yours. You cannot start a shift again until a fleet offers you a place, or you choose to ride for yourself, which on a bicycle or a motorcycle you can do at once from this screen. If you are on one of their runs that has not left yet, you come off it.',
+  'driver.fleet.leaveDetailLight': 'You stop driving for {company} now, and their office is told. You need nobody’s permission. Your licence, your trips and your rating stay yours. You cannot start a shift again until a fleet offers you a place, or you choose to ride for yourself, which on a bicycle you can do at once from this screen. If you are on one of their runs that has not left yet, you come off it.',
   /*
    * RIDE FOR YOURSELF — a driver who is in no fleet becomes a courier, at once on a bicycle or a motorcycle.
    * What it changes is said before the button: who contracts them, and who is paid.
    */
   'driver.alone.title': 'Ride for yourself',
-  'driver.alone.lede': 'On a bicycle or a motorcycle you can ride for yourself from now, with no fleet. The network then works with you directly and pays you for what you carry. Your licence, your trips and your rating stay as they are.',
+  'driver.alone.lede': 'On a bicycle you can ride for yourself from now, with no fleet. The network then works with you directly and pays you for what you carry. Your licence, your trips and your rating stay as they are.',
   'driver.alone.country': 'The country you live in',
   'driver.alone.choose': 'Choose',
   'driver.alone.company': 'You would ride for {company}',
@@ -1091,10 +1091,10 @@ export const enDriver = {
   'driver.alone.doneDetail': 'Your vehicle is on your start screen. Start a shift when you are ready.',
   'driver.alone.doneDetailCompany': 'You ride for {company}. Your vehicle is on your start screen: start a shift when you are ready.',
   'driver.alone.notOfferedTitle': 'Riding for yourself',
-  'driver.alone.ledeCheck': 'You can ride for yourself, with no fleet. On a van, a truck or anything heavier than a motorcycle the network first reads your ID and your licence and checks your record, as for anybody signing up on one. You are told here when it decides; until then nothing changes.',
+  'driver.alone.ledeCheck': 'You can ride for yourself, with no fleet. On a motorcycle, a van, a truck or anything larger the network first reads your ID and your licence and checks your record, as for anybody signing up on one. You are told here when it decides; until then nothing changes.',
   'driver.alone.body': 'Its body',
   'driver.alone.checkTitle': 'Network staff read these before you ride',
-  'driver.alone.checkDetail': 'A clear photograph of each, with all four corners in view. Only network staff see them.',
+  'driver.alone.checkDetail': 'A clear photograph of each, with all four corners in view. Only network staff see them, and they are deleted once staff have decided.',
   'driver.alone.idPhoto': 'Your ID card',
   'driver.alone.licencePhoto': 'Your driving licence',
   'driver.alone.ctaAsk': 'Ask to ride for myself',

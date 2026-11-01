@@ -55,6 +55,36 @@ describe('a driver signs up with their PIN, over the wire', () => {
     vehicle: { plate: `BK ${u}`, vehicleClass: 'bike' },
   });
 
+  it('a motorcycle rider sends their ID and licence with the sign-up — their own photographs, or nothing is made', async () => {
+    // The owner, 2026-10-30: "I didn't see the picture upload of a drivers licence during sign up, now we can't confirm" —
+    // and "Motorcycle and up". Photographed under their own sign-in on the front page, and checked by staff before a load.
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const photo = async (auth: Record<string, string>, kind: string) => (await http().post('/v1/sbg/media').set(auth).send({ kind, dataUrl: PNG }).expect(201)).body.mediaId as string;
+    const juma = await aPerson();
+    const stranger = await aPerson();
+    const u = digits();
+    const moto = (kyc?: Record<string, string>) => ({
+      ...(kyc ? { kyc } : {}),
+      driver: { displayName: `Juma ${u}`, fullName: 'Juma Boda', nationalId: `DRV-M-${u}`, mobile: juma.phone, licenceClasses: ['motorcycle'], licenceNumber: `DL-${u}`, licenceExpiresAt: '2031-06-30', jurisdiction: 'KE', homeZone: 'Z-A' },
+      vehicle: { plate: `KMC ${u}`, vehicleClass: 'motorcycle' },
+    });
+    const signUp = (body: Record<string, unknown>) => http().post('/v1/sbg/drivers/signups').set(juma.auth).send({ phone: juma.phone, profile: body });
+
+    // Somebody else's photograph is refused, and nothing is made.
+    const theirs = await photo(stranger.auth, 'kyc_id');
+    const mine = await photo(juma.auth, 'kyc_licence');
+    expect((await signUp(moto({ idCopyRef: theirs, licenceCopyRef: mine })).expect(400)).body.code).toBe('PHOTO_REQUIRED');
+    // One picture for both is not two papers.
+    expect((await signUp(moto({ idCopyRef: mine, licenceCopyRef: mine })).expect(400)).body.code).toBe('KYC_INCOMPLETE');
+
+    // Their own two: made, and waiting for staff with them.
+    const id = await photo(juma.auth, 'kyc_id');
+    const made = (await signUp(moto({ idCopyRef: id, licenceCopyRef: mine })).expect(201)).body;
+    expect(made.entityStatus).toBe('KYC_PENDING');
+    const queue = (await http().get('/v1/sbg/fleet/drivers/kyc-queue').set(operator).expect(200)).body as Array<{ did: string; kyc?: { idCopyRef?: string; licenceCopyRef?: string } }>;
+    expect(queue.find((d) => d.did === made.did)?.kyc).toMatchObject({ idCopyRef: id, licenceCopyRef: mine });
+  });
+
   it('makes the driver under the person’s own sign-in, and the same phone and PIN open the Driver app', async () => {
     const amos = await aPerson();
     const other = await aPerson();

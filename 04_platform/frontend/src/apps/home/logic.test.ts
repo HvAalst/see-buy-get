@@ -29,6 +29,7 @@ import {
   stepBlocker,
   vehicleClassFor,
   stepsFor,
+  driverSendsPapers,
   fleetSignupBody,
   fleetSignupWords,
   type JoinForm,
@@ -154,11 +155,34 @@ describe('stepBlocker', () => {
    * it, so `drivers.register` answered LICENCE_REQUIRED and the only conclusion available to the person
    * refused was that they had to come in through a fleet — which is exactly what the user reported.
    */
-  it('lets a bike or motorcycle courier through with no licence paperwork at all', () => {
+  it('lets a bicycle courier through with no licence paperwork at all; a motorcycle is driven on a licence (2026-10-30)', () => {
     const rider = { ...filled(), licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'BCY-1' };
     expect(needsLicence(['bike'])).toBe(false);
-    expect(needsLicence(['motorcycle'])).toBe(false);
+    expect(needsLicence(['motorcycle'])).toBe(true);
     expect(stepBlocker(role('driver'), 'about', rider, t)).toBeNull();
+  });
+
+  it('has a driver on a motorcycle or larger photograph their ID and licence after the PIN, and sends them with the sign-up', () => {
+    // The owner, 2026-10-30: "I didn't see the picture upload of a drivers licence during sign up, now we can't confirm".
+    expect(driverSendsPapers('driver', { licenceClasses: ['motorcycle'] })).toBe(true);
+    expect(driverSendsPapers('driver', { licenceClasses: ['bike', 'van'] })).toBe(true);
+    expect(driverSendsPapers('driver', { licenceClasses: ['bike'] })).toBe(false);
+    expect(driverSendsPapers('fleet', { licenceClasses: ['van'] })).toBe(false);
+    expect(stepsFor('driver', true)).toEqual(['phone', 'code', 'about', 'where', 'pin', 'papers', 'done']);
+    expect(stepsFor('driver')).toEqual(['phone', 'code', 'about', 'where', 'pin', 'done']);
+    expect([nextStep('driver', 'pin', true), prevStep('driver', 'papers', true)]).toEqual(['papers', 'pin']);
+
+    const moto = filled({ licenceClasses: ['motorcycle'], vehicleClass: 'motorcycle', vehiclePlate: 'KMC 1', licenceNumber: 'DL-1', licenceExpiresAt: '2031-01-31' });
+    expect(stepBlocker(role('driver'), 'papers', moto, t)).toBe(t('home.block.driverPapers'));
+    expect(stepBlocker(role('driver'), 'papers', { ...moto, driverPapers: { idCopyRef: 'med_id', licenceCopyRef: '' } }, t)).toBe(t('home.block.driverPapers'));
+    const sent = { ...moto, driverPapers: { idCopyRef: 'med_id', licenceCopyRef: 'med_lic' } };
+    expect(stepBlocker(role('driver'), 'papers', sent, t)).toBeNull();
+    const kycOf = (form: JoinForm) => (signupBody(role('driver'), form, 'x') as { profile: { kyc?: unknown } }).profile.kyc;
+    expect(kycOf(sent)).toEqual({ idCopyRef: 'med_id', licenceCopyRef: 'med_lic' });
+    // A bicycle rider sends none, whatever the form still holds; and none is sent before both are taken.
+    expect(kycOf({ ...sent, licenceClasses: ['bike'], vehicleClass: 'bike' })).toBeUndefined();
+    expect(kycOf(moto)).toBeUndefined();
+    expect(joinSpoken(role('driver'), 'papers', t)).toBe(t('home.join.spoken.driverPapers'));
   });
 
   it('asks a van or truck courier for the licence the network will demand anyway', () => {

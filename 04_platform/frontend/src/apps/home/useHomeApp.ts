@@ -34,7 +34,7 @@ import { infoPageOf, type InfoPage } from './pages';
 import { directoryPageOf, type DirectoryPage } from './directory';
 import { readLinkKey } from '../../shared/archive/documentLink';
 import { readReportKey } from '../../shared/damage/damageReport';
-import { EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
+import { driverSendsPapers, EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 import { isPinReset } from '../../shared/account/recovery';
 import { enrollPerson, mySignups, sendPapersAgain, signUpDriver, signUpFleet, uploadPaper, type FleetSignupView, type PersonSession } from './api';
@@ -459,7 +459,7 @@ export function useHomeApp() {
         if (s.resendFor) return { ...s, resendFor: null, step: 'about', error: null };
         if (s.step === 'about') return s.fleetAnother && s.fleetSignups?.length ? { ...s, fleetAnother: false, error: null } : { ...s, screen: 'roles', error: null };
       }
-      return { ...s, step: prevStep(s.role.kind, s.step), error: null };
+      return { ...s, step: prevStep(s.role.kind, s.step, driverSendsPapers(s.role.kind, s.form)), error: null };
     });
   }, []);
 
@@ -542,7 +542,9 @@ export function useHomeApp() {
       // A driver whose details were refused (already registered) puts them right and comes back here signed in: the
       // code is spent, so the driver is made again under the sign-in they already have.
       if (role.kind === 'driver' && signedIn) {
-        await makeDriver(signedIn);
+        // On a motorcycle or larger the photographs come first; the driver is made with them.
+        if (driverSendsPapers(role.kind, form)) setState((s) => ({ ...s, step: 'papers', error: null }));
+        else await makeDriver(signedIn);
         return;
       }
       const phone = normalizePhone(form.phone);
@@ -561,6 +563,12 @@ export function useHomeApp() {
       }
       const person = r.data;
       if (role.kind === 'driver') {
+        // On a motorcycle or larger: signed in now, so the ID and licence are photographed under this sign-in, and the
+        // driver is made with them on the next step (the owner, 2026-10-30). A bicycle rider is made at once.
+        if (driverSendsPapers(role.kind, form)) {
+          setState((s) => ({ ...s, person, pinEmail: null, step: 'papers', error: null }));
+          return;
+        }
         setState((s) => ({ ...s, person, pinEmail: null, error: null }));
         await makeDriver(person);
         return;
@@ -570,11 +578,20 @@ export function useHomeApp() {
     });
   }, [run, makeDriver]);
 
-  /** One of the four papers, photographed and uploaded as the person. */
+  /** A paper photographed and uploaded as the person: one of a fleet's four, or a driver's ID card or licence. */
   const uploadFleetPaper = useCallback(async (kind: string, file: File): Promise<string | null> => {
     const person = stateRef.current.person;
     return person ? uploadPaper(person, kind, file) : null;
   }, []);
+
+  /** A driver on a motorcycle or larger: the sign-up, with the photographs of their ID and licence taken on the papers step. */
+  const sendDriverPapers = useCallback(async () => {
+    const { role, form, person } = stateRef.current;
+    if (!role || !person || stepBlocker(role, 'papers', form, t)) return;
+    await run('submit', async () => {
+      await makeDriver(person);
+    });
+  }, [run, makeDriver]);
 
   /** Sign up another fleet, from the list of the ones already signed up. */
   const signUpAnother = useCallback(() => setState((s) => ({ ...s, fleetAnother: true, resendFor: null, error: null })), []);
@@ -606,7 +623,7 @@ export function useHomeApp() {
       if (!s.role) return s;
       const blocker = stepBlocker(s.role, s.step, s.form, t);
       if (blocker) return s;
-      return { ...s, step: nextStep(s.role.kind, s.step), error: null };
+      return { ...s, step: nextStep(s.role.kind, s.step, driverSendsPapers(s.role.kind, s.form)), error: null };
     });
   }, []);
 
@@ -746,7 +763,7 @@ export function useHomeApp() {
 
   return {
     state,
-    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries, choosePin, uploadFleetPaper, signUpAnother, resendPapers, submitFleet },
+    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries, choosePin, uploadFleetPaper, sendDriverPapers, signUpAnother, resendPapers, submitFleet },
   };
 }
 
