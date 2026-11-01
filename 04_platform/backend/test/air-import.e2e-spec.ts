@@ -7,6 +7,8 @@ import { DispatchService } from '../src/modules/pudo/dispatch.service';
 import { DriverService } from '../src/modules/pudo/driver.service';
 import { FleetService } from '../src/modules/pudo/fleet.service';
 import { ImportService } from '../src/modules/pudo/import.service';
+import { EventBus } from '../src/foundation/events/event-bus.service';
+import { GlosEvent } from '../src/foundation/events/glos-events';
 import { NotificationService } from '../src/modules/pudo/notification.service';
 import { VehicleService } from '../src/modules/pudo/vehicle.service';
 import { AGREED } from './agreed';
@@ -104,7 +106,7 @@ describe('an import by air, over the wire', () => {
     const set = (await air(phones(), agent.token).expect(201)).body;
     expect(set.modes).toEqual(['air', 'road']);
     expect(set.air).toMatchObject({ awb: '074-12345675', airline: 'KLM / Martinair', arrivalAirport: 'NBO', flights: [{ flight: 'KL 565' }], handler: 'Swissport cargo shed, JKIA', agencies: [{ key: 'kebs', name: 'Kenya Bureau of Standards (KEBS)' }], clock: { state: 'not_started', freeHours: 48 } });
-    expect(set.air.gaps).toEqual(['the customs release', 'the release by Kenya Bureau of Standards (KEBS)', 'the handler’s delivery order']);
+    expect(set.air.gaps).toEqual(['the customs release', 'the release by Kenya Bureau of Standards (KEBS)', 'the handler’s delivery order', 'the handler’s charges paid']);
     expect(set.air.check).toMatchObject({ regime: 'mc99', airline: 'KLM / Martinair' });
 
     // The road leg from the shed is posted, and nobody may take it yet.
@@ -118,7 +120,7 @@ describe('an import by air, over the wire', () => {
     const offered = () => dispatch.suggest(driver, { from, to: from }).some((o) => o.ref === leg.roadFreightId);
     const marked = () => dispatch.board({ driverDid: driver, from }).find((r) => r.freightId === leg.roadFreightId)?.blockers.find((b) => b.code === 'NOT_RELEASED')?.message;
     expect(offered()).toBe(false);
-    expect(marked()).toBe(`Not released yet at Swissport cargo shed, JKIA: still waiting for the customs release, the release by Kenya Bureau of Standards (KEBS), the handler’s delivery order. This load opens as soon as it is released on ${made.code}.`);
+    expect(marked()).toBe(`Not released yet at Swissport cargo shed, JKIA: still waiting for the customs release, the release by Kenya Bureau of Standards (KEBS), the handler’s delivery order, the handler’s charges paid. This load opens as soon as it is released on ${made.code}.`);
     expect(() => dispatch.assign(leg.roadFreightId, driver, { managerDid: 'did:office:x' })).toThrow(/^Not released yet at Swissport cargo shed, JKIA/);
     expect((await http().get(path).set(bearer(imp.token)).expect(200)).body.air.roadWaits).toMatch(/^Not released yet/);
 
@@ -136,17 +138,22 @@ describe('an import by air, over the wire', () => {
     await step({ step: 'customs', reference: '2026NBOIM448120' }).expect(201);
     await step({ step: 'kebs', reference: 'KEBS-CoC-7781' }).expect(201);
     const one = (await http().get(path).set(bearer(imp.token)).expect(200)).body;
-    expect(one.air.gaps).toEqual(['the handler’s delivery order']);
-    expect(marked()).toMatch(/still waiting for the handler’s delivery order\./);
-    expect(freight().waitsForRelease?.missing).toEqual(['the handler’s delivery order']);
+    expect(one.air.gaps).toEqual(['the handler’s delivery order', 'the handler’s charges paid']);
+    expect(marked()).toMatch(/still waiting for the handler’s delivery order, the handler’s charges paid\./);
+    expect(freight().waitsForRelease?.missing).toEqual(['the handler’s delivery order', 'the handler’s charges paid']);
 
-    // The delivery order: released — the gate opens, the offer comes.
-    const released = (await step({ step: 'delivery_order', reference: 'DO-55120' }).expect(201)).body;
-    expect(released.air).toMatchObject({ gaps: [], customs: { reference: '2026NBOIM448120' }, deliveryOrder: { reference: 'DO-55120' }, agencies: [{ key: 'kebs', released: { reference: 'KEBS-CoC-7781' } }] });
+    // The delivery order — and its number told to the driver, who is asked for it at the shed's counter.
+    await step({ step: 'delivery_order', reference: 'DO-55120' }).expect(201);
+    expect(freight().waitsForRelease?.missing).toEqual(['the handler’s charges paid']);
+    expect(freight().instructions?.text).toMatch(/against this waybill and the delivery order DO-55120\. Count the pieces before you leave the shed: the waybill says 12\./);
+    // 2026-11-01 — the shed's own charges paid: released — the gate opens, the offer comes, the receipt told to the driver.
+    const released = (await step({ step: 'handler_charges', reference: 'SWP-RC-901' }).expect(201)).body;
+    expect(freight().instructions?.text).toMatch(/delivery order DO-55120; the handler’s charges are paid, receipt SWP-RC-901\./);
+    expect(released.air).toMatchObject({ gaps: [], customs: { reference: '2026NBOIM448120' }, deliveryOrder: { reference: 'DO-55120' }, handlerCharges: { reference: 'SWP-RC-901' }, agencies: [{ key: 'kebs', released: { reference: 'KEBS-CoC-7781' } }] });
     expect(released.air.roadWaits).toBeUndefined();
     // Recorded again with another agency: the releases already given are kept, and the new one is waited for.
     const again = (await air({ ...phones(), agencies: ['kebs', 'port_health'] }, agent.token).expect(201)).body;
-    expect(again.air).toMatchObject({ customs: { reference: '2026NBOIM448120' }, deliveryOrder: { reference: 'DO-55120' }, agencies: [{ key: 'kebs', released: { reference: 'KEBS-CoC-7781' } }, { key: 'port_health' }] });
+    expect(again.air).toMatchObject({ customs: { reference: '2026NBOIM448120' }, deliveryOrder: { reference: 'DO-55120' }, handlerCharges: { reference: 'SWP-RC-901' }, agencies: [{ key: 'kebs', released: { reference: 'KEBS-CoC-7781' } }, { key: 'port_health' }] });
     expect(again.air.gaps).toEqual(['the release by Port Health']);
     expect(marked()).toMatch(/still waiting for the release by Port Health\./);
     await step({ step: 'port_health', reference: 'PH-2210' }).expect(201);
@@ -173,6 +180,14 @@ describe('an import by air, over the wire', () => {
     const picked = new Date(notifiedAt + 50 * H).toISOString();
     Object.assign(dispatch.requireFreightPublic(leg.roadFreightId), { status: 'in_transit', pickedUpAt: picked });
     expect((await http().get(path).set(bearer(imp.token)).expect(200)).body.air.clock).toMatchObject({ state: 'stopped', leftAt: picked });
+
+    // 2026-11-01 — what our truck took out of the shed: counted short and noted, so the importer is told its airline's deadline.
+    Object.assign(dispatch.requireFreightPublic(leg.roadFreightId), { countedAtPickup: 11, reservations: { note: 'Counted 11 pieces at Swissport cargo shed, JKIA; air waybill 074-12345675 says 12.', at: picked } });
+    await app.get(EventBus).publish(GlosEvent.Pudo.FreightPickedUp, { freightId: leg.roadFreightId });
+    const collected = (await http().get(path).set(bearer(imp.token)).expect(200)).body.air.collected;
+    expect(collected).toMatchObject({ counted: 11, reservations: 'Counted 11 pieces at Swissport cargo shed, JKIA; air waybill 074-12345675 says 12.', complainBy: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+    const told = bell(imp.entityId).find((n) => n.title === `${made.code}: something was noted when it was collected at Swissport cargo shed, JKIA`);
+    expect(told?.body).toBe(`Counted 11 pieces at Swissport cargo shed, JKIA; air waybill 074-12345675 says 12. Complain to KLM / Martinair in writing by ${collected.complainBy} — the law gives 14 days from receipt for damage, quoting air waybill 074-12345675.`);
   });
 
   it('the importer alone may send the truck before the release — with why, and its waiting its own; medicines and other modes refused', async () => {
@@ -187,7 +202,7 @@ describe('an import by air, over the wire', () => {
     const fresh = { ...phones('KQ Cargo Centre, JKIA'), awb: '706-12345675', agencies: ['kephis', 'port_health'] };
     expect(String((await http().post(`${path}/air`).set(bearer(imp.token)).send(fresh)).body.detail)).toMatch(/temperature range/);
     const set = (await http().post(`${path}/air`).set(bearer(imp.token)).send({ ...fresh, minC: 1, maxC: 4 }).expect(201)).body;
-    expect(set.air.gaps).toHaveLength(4);
+    expect(set.air.gaps).toHaveLength(5);
     const leg = (await http().post(`${path}/road-leg`).set(bearer(imp.token)).send({ pickupSiteId: shed, destLabel: 'Ruiru cold store', weightKg: 240 }).expect(201)).body;
     expect(app.get(DispatchService).requireFreightPublic(leg.roadFreightId)).toMatchObject({ natureCode: 'FOP', tempRange: { minC: 1, maxC: 4 } });
 
@@ -199,7 +214,7 @@ describe('an import by air, over the wire', () => {
     expect(after.air).toMatchObject({ collectAnyway: { reason: 'The agent says it is out within the hour' } });
     expect(after.air.roadWaits).toBeUndefined();
     // Still said what is missing: the importer's word opens the road, it releases nothing.
-    expect(after.air.gaps).toHaveLength(4);
+    expect(after.air.gaps).toHaveLength(5);
     expect(app.get(DispatchService).requireFreightPublic(leg.roadFreightId).waitsForRelease?.collectAnyway?.reason).toBe('The agent says it is out within the hour');
 
     // Medicines wait for the lawyer; a box by sea has no air waybill.

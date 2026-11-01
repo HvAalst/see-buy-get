@@ -49,7 +49,9 @@ import { modeOf } from './import.types';
 import { airAgenciesOf, airArrivalWarning, airReleaseGaps, airStorageClock, releaseRefusal, vetAgencyOf, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
 import { animalWords, CHICK_WINDOW_H, liveAnimalsOf, type LiveAnimalsDto } from './live-animals.types';
 import { ContactCardService } from './contact-card.service';
-import { airlineOfPrefix, awbDigits, awbProblem, checkAirWaybill, formatAwb } from '../../foundation/carriage-law/air';
+import { airlineOfPrefix, airRegimeOf, awbDigits, awbProblem, checkAirWaybill, damageNoticeDays, formatAwb } from '../../foundation/carriage-law/air';
+import { EventBus } from '../../foundation/events/event-bus.service';
+import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
 import { containerType, heightUnstated, outOfGauge } from './container-type';
 import { CARGO_NATURES, DANGEROUS_GOODS_NATURES, type CargoNature } from './cargo.types';
@@ -122,7 +124,12 @@ export class ImportService {
     @Optional() private readonly notifications?: NotificationService,
     // The country's own calendar of closed days, for a landing on a holiday (2026-10-30). Optional, as above.
     @Optional() private readonly contacts?: ContactCardService,
-  ) {}
+    // Told when our truck takes air cargo out of the shed (2026-11-01). Optional, as above.
+    @Optional() private readonly events?: EventBus,
+  ) {
+    // 2026-11-01 — collected from the airline's shed: what was counted and noted, and the importer told its airline's deadline.
+    this.events?.subscribe<{ freightId: string }>(GlosEvent.Pudo.FreightPickedUp, (e) => this.airCollected(e.payload.freightId, Date.now()));
+  }
 
   /* ------------------------------------------------------------ the container -- */
 
@@ -774,6 +781,7 @@ export class ImportService {
       // An agency already released keeps its release; one taken off the list goes; one added waits for its own.
       agencies: keys.map((key) => before?.agencies.find((a) => a.key === key) ?? { key, name: listed.find((a) => a.key === key)!.name }),
       ...(before?.deliveryOrder ? { deliveryOrder: before.deliveryOrder } : {}),
+      ...(before?.handlerCharges ? { handlerCharges: before.handlerCharges } : {}),
       ...(before?.collectAnyway ? { collectAnyway: before.collectAnyway } : {}),
       ...(input.freeHours != null ? { freeHours: input.freeHours } : {}),
       ...(input.freeHoursSource?.trim() ? { freeHoursSource: input.freeHoursSource.trim().slice(0, 160) } : {}),
@@ -802,7 +810,9 @@ export class ImportService {
     if (Number.isNaN(at) || at > now + 5 * 60_000) throw new GlosError('VALIDATION_FAILED', 'Say when it happened — a moment that has come', { field: 'at' });
     const reference = input.reference?.trim().slice(0, 60);
     const agency = c.air.agencies.find((a) => a.key === input.step);
-    if (!['notified', 'customs', 'delivery_order'].includes(input.step) && !agency) throw new GlosError('VALIDATION_FAILED', 'Which step: the notice of arrival, customs, one of the agencies on this import, or the delivery order', { field: 'step' });
+    if (!['notified', 'customs', 'delivery_order', 'handler_charges'].includes(input.step) && !agency) {
+      throw new GlosError('VALIDATION_FAILED', 'Which step: the notice of arrival, customs, one of the agencies on this import, the delivery order, or the handler’s charges paid', { field: 'step' });
+    }
     // A release is a paper with a number: customs' release order and the handler's delivery order are given by theirs.
     if ((input.step === 'customs' || input.step === 'delivery_order') && !(reference && reference.length >= 3)) {
       throw new GlosError('FIELD_REQUIRED', input.step === 'customs' ? 'Give the customs release’s reference — the release order or entry number' : 'Give the delivery order’s number, or the gate pass’s', { field: 'reference' });
@@ -811,6 +821,7 @@ export class ImportService {
     if (input.step === 'notified') c.air = { ...c.air, notified: step };
     else if (input.step === 'customs') c.air = { ...c.air, customs: step };
     else if (input.step === 'delivery_order') c.air = { ...c.air, deliveryOrder: step };
+    else if (input.step === 'handler_charges') c.air = { ...c.air, handlerCharges: step };
     else c.air = { ...c.air, agencies: c.air.agencies.map((a) => (a.key === input.step ? { ...a, released: step } : a)) };
     this.imports.set(c.importId, c);
     this.gateAirLeg(c);
@@ -841,6 +852,52 @@ export class ImportService {
   private gateAirLeg(c: ImportConsignment): void {
     if (!c.air || !c.roadFreightId) return;
     this.dispatch.setReleaseGate(c.roadFreightId, { importId: c.importId, importCode: c.code, place: c.air.handler, missing: airReleaseGaps(c.air), ...(c.air.collectAnyway ? { collectAnyway: c.air.collectAnyway } : {}) });
+    // 2026-11-01 — the delivery order's number, and the handler's receipt, told to the driver as soon as they exist: the
+    // shed asks for them at its counter. Only while the leg has not left the shed.
+    const leg = this.dispatch.requireFreightPublic(c.roadFreightId);
+    if ((leg.status === 'available' || leg.status === 'scheduled' || leg.status === 'claimed') && (c.air.deliveryOrder?.reference || c.air.handlerCharges?.reference)) {
+      try {
+        const importer = this.entities.get(c.importerEntityId);
+        this.dispatch.setInstructions(c.roadFreightId, importer.did, { text: this.airRoadWords(c) });
+      } catch {
+        /* the words are a convenience: a leg the importer may no longer change keeps its own */
+      }
+    }
+  }
+
+  /** What the driver collecting from the shed is told: the waybill, the delivery order and the handler's receipt by number, the cargo's needs. */
+  private airRoadWords(c: ImportConsignment): string {
+    const a = c.air!;
+    return [
+      `Import ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}. Collect it at ${a.handler} against this waybill and the delivery order${a.deliveryOrder?.reference ? ` ${a.deliveryOrder.reference}` : ''}${a.handlerCharges?.reference ? `; the handler’s charges are paid, receipt ${a.handlerCharges.reference}` : ''}. Count the pieces before you leave the shed: the waybill says ${a.pieces}.`,
+      a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
+      a.animals ? animalWords(a.animals) : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .slice(0, 1500);
+  }
+
+  /**
+   * 2026-11-01 — OUR TRUCK TOOK IT OUT OF THE SHED: what it counted, what the driver noted, and — where anything was — the
+   * importer told the day by which the airline must have its written complaint. Once the goods leave the shed on a clean
+   * receipt, damage found later looks like the road's; the airline is answerable only for what is complained of in time.
+   */
+  private airCollected(freightId: string, now: number): void {
+    const c = [...this.imports.values()].find((x) => x.mode === 'air' && x.air && x.roadFreightId === freightId);
+    if (!c?.air || c.air.collected) return;
+    const leg = this.dispatch.requireFreightPublic(freightId);
+    const counted = leg.countedAtPickup ?? c.air.pieces;
+    const reservations = leg.reservations?.note;
+    const days = reservations ? damageNoticeDays(airRegimeOf(c.originCountry, c.destCountry, c.air.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) : undefined;
+    const complainBy = days ? new Date(now + days * 86_400_000).toISOString().slice(0, 10) : undefined;
+    c.air = { ...c.air, collected: { at: leg.pickedUpAt ?? new Date(now).toISOString(), counted, ...(reservations ? { reservations } : {}), ...(complainBy ? { complainBy } : {}) } };
+    this.imports.set(c.importId, c);
+    if (!reservations) return;
+    const did = this.entities.find(c.importerEntityId)?.did;
+    const title = `${c.code}: something was noted when it was collected at ${c.air.handler}`;
+    const body = `${reservations} Complain to ${c.air.airline} in writing${complainBy ? ` by ${complainBy} — the law gives ${days} days from receipt for damage` : ' at once — no convention sets the days here, the airline’s conditions do'}, quoting air waybill ${c.air.awb}.`;
+    if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:air:collected`, data: { importId: c.importId } }).catch(() => undefined);
   }
 
   private airViewOf(c: ImportConsignment, now: number): ImportAirView {
@@ -892,7 +949,9 @@ export class ImportService {
         ...(a.animals ? { liveAnimals: { kind: a.animals.kind, species: a.animals.species, count: a.animals.count } } : {}),
         pickupCountry: c.destCountry,
         destCountry: c.destCountry,
-        instructions: [`Import ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}. Collect it at ${a.handler} against this waybill and the delivery order.`, a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '', a.animals ? animalWords(a.animals) : ''].filter(Boolean).join(' ').slice(0, 1500),
+        instructions: this.airRoadWords(c),
+        // Collected from the airline's shed under this waybill: the pieces are counted there before the goods leave it.
+        airTerminal: { side: 'collection', awb: a.awb, airline: a.airline, handler: a.handler, pieces: a.pieces, ...(damageNoticeDays(airRegimeOf(c.originCountry, c.destCountry, a.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) ? { complainDays: damageNoticeDays(airRegimeOf(c.originCountry, c.destCountry, a.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) } : {}) },
         postedByDid: importer.did,
         externalOrderId: c.code,
       },

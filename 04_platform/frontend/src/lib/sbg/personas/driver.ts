@@ -363,13 +363,13 @@ export function createDriverApi(sbg: SbgClient) {
     /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit). Sends the driver's own DID
      *  (only the claimer may advance a job) plus the S33 load-safety gate: the confirmed checklist keys + the
      *  securement photo mediaId. */
-    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; inspection?: Array<{ point: string; photoRef: string }> }) =>
+    pickupFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; securementPhotoId?: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; inspection?: Array<{ point: string; photoRef: string }>; countedPieces?: number }) =>
       // Round 22 — dated NOW, when the driver taps: a pickup kept on the phone with no signal keeps the moment it was done.
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/pickup', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 
     /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered; capacity released),
      *  with the confirmed unload-checklist keys. */
-    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note" }) =>
+    deliverFreight: (freightId: string, driverDid: string, check?: { confirmed?: string[]; receiverName?: string; podPhotoId?: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note"; terminalReceipt?: string }) =>
       // Round 22 — dated when the goods were handed over, not when a signal was found.
       sbg.request((c) => c.POST('/v1/sbg/dispatch/freight/{id}/deliver', { params: { path: { id: freightId } }, body: { driverDid, ...check, observedAt: new Date().toISOString() } })),
 

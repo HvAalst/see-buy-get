@@ -8680,6 +8680,33 @@ describe('PUDO Light', () => {
     expect(dispatch.postedBy(d.did)).toEqual([]); // the driver posted nothing — the row below is the poster's
   });
 
+  it('road meets air (2026-11-01): collected from a cargo shed, the pieces are counted against the waybill and a short count goes on the note; handed in at one, the handler’s receipt is asked', () => {
+    const pickup = { lat: -1.32, lng: 36.92 };
+    const d = coupleTipper('AIR', { min: 0.8, max: 1.5 });
+    const shed = dispatch.registerFreight({ description: 'Air import', pickupLocation: pickup, pickupLabel: 'Swissport shed', destLabel: 'Store', destLocation: pickup, weightKg: 200, packaging: 'loose', packages: 12, airTerminal: { side: 'collection', awb: '074-12345675', airline: 'KLM', handler: 'Swissport shed', pieces: 12 } });
+    claimFreight(d.did, pickup, shed.freightId);
+    // The driver's card says it, so the count is asked before the gate refuses.
+    expect(dispatch.claimsFor(d.did).find((c) => c.ref === shed.freightId)?.airTerminal).toEqual({ side: 'collection', awb: '074-12345675', airline: 'KLM', handler: 'Swissport shed', pieces: 12 });
+    const base = { confirmed: requiredLoadKeys(shed), securementPhotoId: photoBy(d.did) };
+    expect(() => dispatch.pickupFreight(shed.freightId, d.did, base)).toThrow(/Count the pieces Swissport shed hands you before you leave the shed: air waybill 074-12345675 says 12/);
+    expect(dispatch.listFreight({ status: 'claimed' }).some((x) => x.freightId === shed.freightId)).toBe(true);
+    const taken = dispatch.pickupFreight(shed.freightId, d.did, { ...base, countedPieces: 11, reservations: 'One carton crushed' });
+    expect(taken.countedAtPickup).toBe(11);
+    expect(taken.reservations?.note).toBe('Counted 11 pieces at Swissport shed; air waybill 074-12345675 says 12. One carton crushed');
+    // A load to a cargo terminal: the handler's receipt, or it is only the driver's word.
+    const d2 = coupleTipper('AIR2', { min: 0.8, max: 1.5 });
+    const terminal = dispatch.registerFreight({ description: 'Air export', pickupLocation: pickup, pickupLabel: 'Farm', destLabel: 'KQ cargo', destLocation: pickup, weightKg: 200, packaging: 'loose', packages: 8, airTerminal: { side: 'acceptance', awb: '706-12345675', airline: 'Kenya Airways', handler: 'KQ cargo', pieces: 8 } });
+    claimFreight(d2.did, pickup, terminal.freightId);
+    dispatch.pickupFreight(terminal.freightId, d2.did, { confirmed: requiredLoadKeys(terminal), securementPhotoId: photoBy(d2.did) });
+    const deliver = (terminalReceipt?: string) => dispatch.deliverFreight(terminal.freightId, d2.did, { confirmed: requiredUnloadKeys(), receiverName: 'KQ cargo acceptance', podPhotoId: photoBy(d2.did), ...(terminalReceipt !== undefined ? { terminalReceipt } : {}) });
+    expect(() => deliver()).toThrow(/Give the receipt KQ cargo gave for air waybill 706-12345675/);
+    expect(() => deliver(' R ')).toThrow(/Give the receipt/);
+    const done = deliver(' ACC-77120 ');
+    expect(done).toMatchObject({ status: 'delivered', terminalReceipt: 'ACC-77120' });
+    // An ordinary load is asked neither.
+    expect(shed.airTerminal?.side).toBe('collection');
+  });
+
   it('D9: what the receiver found at the handover — counted against the note, a damaged line with its photo, refused whole before anything is written — lands beside their name and reaches the sender', () => {
     const pickup = { lat: -1.86, lng: 36.36 };
     const d = coupleFlatbedWithForklift('RSV', { min: 0.8, max: 1.5 }); // bagged: a flatbed with its own forklift

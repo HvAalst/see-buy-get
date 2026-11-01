@@ -119,6 +119,7 @@ describe('live animals by air, and a landing that may wait — over the wire', (
     await step({ step: 'dvs', reference: 'DVS-REL-88' });
     await step({ step: 'kebs', reference: 'KEBS-1' });
     await step({ step: 'delivery_order', reference: 'DO-9' });
+    await step({ step: 'handler_charges', reference: 'SWP-9' });
     const from = load().pickupLocation;
     const flatbed = aTruck('flatbed');
     const blocked = dispatch.board({ driverDid: flatbed, from }).find((r) => r.freightId === leg.roadFreightId)?.blockers.find((b) => b.code === 'ANIMALS_VEHICLE')?.message;

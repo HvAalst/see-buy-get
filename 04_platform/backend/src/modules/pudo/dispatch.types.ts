@@ -567,6 +567,17 @@ export class PaidDirectAnswer {
   @ApiPropertyOptional() byName?: string;
 }
 
+/** 2026-11-01 — a load's end at an airline's cargo terminal: which side, the waybill, the airline, the handler, the pieces. */
+export class FreightAirTerminal {
+  @ApiProperty({ enum: ['acceptance', 'collection'] }) side: 'acceptance' | 'collection';
+  @ApiProperty() awb: string;
+  @ApiProperty() airline: string;
+  @ApiProperty() handler: string;
+  @ApiProperty() pieces: number;
+  /** Collection: the days the law gives to complain to the airline about damage, where a convention sets them. */
+  @ApiPropertyOptional() complainDays?: number;
+}
+
 export class Freight {
   freightId: string;
   code: string; // human-readable reference
@@ -709,6 +720,16 @@ export class Freight {
   @ApiPropertyOptional() tempRange?: { minC: number; maxC: number };
   /** Secured air cargo (2026-10-29): who secured it — the regulated agent or known consignor. It travels sealed. */
   @ApiPropertyOptional() securedBy?: string;
+  /**
+   * 2026-11-01 — WHERE ROAD MEETS AIR: this load hands goods in at an airline's cargo terminal (`acceptance`, an export)
+   * or collects them there (`collection`, an import), under this air waybill. Acceptance asks the handler's receipt;
+   * collection asks the pieces counted against the waybill — what the shed hands over is what the road answers for.
+   */
+  @ApiPropertyOptional({ type: () => FreightAirTerminal }) airTerminal?: FreightAirTerminal;
+  /** 2026-11-01 — at collection from a cargo terminal: the pieces the driver counted, against the waybill's. */
+  @ApiPropertyOptional() countedAtPickup?: number;
+  /** 2026-11-01 — at acceptance at a cargo terminal: the handler's receipt for the goods, as it gave it. */
+  @ApiPropertyOptional() terminalReceipt?: string;
   /** FP3b — the sender's claim against the delivered goods, and how it ended. One per load. */
   @ApiPropertyOptional({ type: FreightClaim }) claim?: FreightClaim;
   // S34c — the shipper's budget: the most they will pay (the all-in shipperCharge = earning + platform fee) for
@@ -1721,6 +1742,8 @@ export class Claimable {
   sealMissing?: string;
   /** Round 40 — this load's container or closed body is inspected at seven points, each photographed, before it is taken over. */
   inspection?: { kind: 'container' | 'closed'; points: string[] };
+  /** 2026-11-01 — handed in at, or collected from, an airline's cargo terminal: what the gate asks for there. */
+  airTerminal?: { side: 'acceptance' | 'collection'; awb: string; airline: string; handler: string; pieces: number };
   /** Round 39 — the operations desks a driver held at a checkpoint rings: the pickup country's company's, and the destination's when it is another. */
   @ApiPropertyOptional({ type: [DeskNumber] }) desks?: DeskNumber[];
   /** Round 14 — a load on the road: what the driver needs to say it is at a border, has cleared it, or is at a hub. */

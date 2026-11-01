@@ -353,7 +353,10 @@ export function AirWaybillPanel({ d, client, mine, onDetail }: { d: ExportDetail
         {a.animals ? fact('business.exports.air.d.animals', t('business.exports.air.d.animalsLine', { count: a.animals.count, species: a.animals.species, by: a.animals.shipperCertifiedBy ?? '' })) : null}
         {fact('business.exports.air.d.security', a.security.status === 'secured' ? t('business.exports.air.d.securedBy', { who: a.security.agentName ?? '', number: a.security.agentNumber ? ` (${a.security.agentNumber})` : '' }) : t('business.exports.air.d.notSecured'))}
         {a.temp ? fact('business.exports.air.d.temp', t('business.exports.air.d.tempLine', { min: a.temp.minC, max: a.temp.maxC }) + (a.temp.preCooled ? t('business.exports.air.d.preCooled') : '')) : null}
+        {/* 2026-11-01 — handed in at the cargo terminal: when, to whom, and the handler's receipt by its number. */}
+        {d.ladenLeg?.terminalReceipt ? fact('business.exports.air.d.accepted', t('business.exports.air.d.acceptedLine', { when: d.ladenLeg.deliveredAt ? utcWords(d.ladenLeg.deliveredAt) : '', by: d.ladenLeg.acceptedBy ?? a.handler ?? '', receipt: d.ladenLeg.terminalReceipt })) : null}
       </dl>
+      {d.ladenLeg?.foundAtTerminal?.length ? <p class="cerr">{t('business.exports.air.foundAtTerminal', { found: d.ladenLeg.foundAtTerminal.join(', '), pieces: a.pieces })}</p> : null}
       {done ? <p class="cnote">{done}</p> : null}
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
       {mine && client ? (

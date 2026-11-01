@@ -675,6 +675,10 @@ export const enBusiness = {
   'business.exports.sli.flight': 'The flight and the terms',
   'business.exports.sli.destAirport': 'Airport of destination',
   'business.exports.air.title': 'Record an export by air',
+  // 2026-11-01 — where road meets air.
+  'business.exports.air.d.accepted': 'Handed in at the terminal',
+  'business.exports.air.d.acceptedLine': '{when}, to {by} — receipt {receipt}',
+  'business.exports.air.foundAtTerminal': 'Found when it was handed in: {found} (the booking says {pieces} pieces). Tell your forwarder or the airline now: what was not accepted may not fly on this flight.',
   'business.exports.air.hint': 'Copy these from the airline’s booking confirmation. SeeBuyGet carries the road to the cargo terminal; the flight and its air waybill are the airline’s and your forwarder’s.',
   'business.exports.air.nature': 'The goods',
   'business.exports.air.general': 'General cargo',

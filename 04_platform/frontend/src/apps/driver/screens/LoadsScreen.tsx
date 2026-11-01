@@ -448,7 +448,12 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   const [sealsAtDoor, setSealsAtDoor] = useState<SealsAtDelivery | null>(null);
   // Round 40 — the 7-point inspection at pickup: each point ticked, with its photograph.
   const [looks, setLooks] = useState<Record<string, InspectionLook>>({});
+  // 2026-11-01 — where road meets air: the pieces counted at the cargo shed, the handler's receipt at the cargo terminal.
+  const [counted, setCounted] = useState('');
+  const [receipt, setReceipt] = useState('');
   useEffect(() => {
+    setCounted('');
+    setReceipt('');
     setSealReads({});
     setLooks({});
     setSealsAtDoor(null);
@@ -479,6 +484,11 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
   const doorOk = sealsAtDoor !== 'not_as_on_the_note' || Boolean(claim?.doorReported);
   const sealsOk = !claim ? true : isPickup ? pickupSealsReady(claim, sealReads) : !claim.seals?.length || (sealsAtDoor !== null && doorOk);
   const inspectionOk = !isPickup || inspectionReady(claim, looks);
+  // 2026-11-01 — a count before the goods leave the shed; a receipt before they are called handed in. The server asks the same.
+  const shed = claim?.airTerminal;
+  const countedN = counted.trim() === '' ? null : Number(counted);
+  const countOk = !isPickup || shed?.side !== 'collection' || (countedN !== null && Number.isInteger(countedN) && countedN >= 0);
+  const receiptOk = isPickup || shed?.side !== 'acceptance' || receipt.trim().length >= 3;
   const foundWrong = !isPickup && foundOpen ? foundProblem(found, claim?.packages) : null;
   const held = claim?.held;
   const busy = claim ? state.busy === `freight:${claim.ref}` : false;
@@ -521,6 +531,18 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               </div>
               <InspectionSection claim={claim} looks={looks} setLooks={setLooks} actions={actions} busy={busy} onReport={() => onTamper({ claim, finding: 'inspection_failed' })} />
               <PickupSeals claim={claim} actions={actions} busy={busy} reads={sealReads} setReads={setSealReads} onReport={(s, numberRead) => onTamper({ claim, finding: 'seal_not_as_written', seal: { sealId: s.sealId, no: s.no, numberRead } })} />
+              {/* 2026-11-01 — collected from an airline's cargo shed: the pieces counted before the goods leave it. A count that
+                  differs goes on the note as the driver's reservation — and the importer is told its airline's deadline. */}
+              {shed?.side === 'collection' ? (
+                <div class="field" style="margin-top:14px">
+                  <label class="field__label" for={`cnt-${claim.ref}`}>
+                    {t('driver.air.countLabel')}
+                  </label>
+                  <input id={`cnt-${claim.ref}`} class="input" type="number" inputMode="numeric" min="0" step="1" value={counted} onInput={(e) => setCounted(e.currentTarget.value)} disabled={busy} />
+                  <p class="hint">{t('driver.air.countHint', { awb: shed.awb, pieces: shed.pieces, handler: shed.handler })}</p>
+                  {countedN !== null && countOk && countedN !== shed.pieces ? <Note tone="warn" icon="warning" title={t('driver.air.countDiffers', { counted: countedN, pieces: shed.pieces })} detail={t('driver.air.countDiffersDetail')} /> : null}
+                </div>
+              ) : null}
               {/* FP3 — the carrier's reservations (CMR box 18). Optional, and the driver's protection: a sack torn
                   BEFORE taking over is on the note as such, not as damage in transit. */}
               <div class="field" style="margin-top:14px">
@@ -553,6 +575,16 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
                   disabled={busy}
                 />
               </div>
+              {/* 2026-11-01 — handed in at an airline's cargo terminal: the handler's receipt, by its number. */}
+              {shed?.side === 'acceptance' ? (
+                <div class="field" style="margin-top:14px">
+                  <label class="field__label" for={`rct-${claim.ref}`}>
+                    {t('driver.air.receiptLabel')}
+                  </label>
+                  <input id={`rct-${claim.ref}`} class="input" type="text" autocomplete="off" maxLength={60} value={receipt} onInput={(e) => setReceipt(e.currentTarget.value)} disabled={busy} />
+                  <p class="hint">{t('driver.air.receiptHint', { awb: shed.awb, handler: shed.handler })}</p>
+                </div>
+              ) : null}
               <FoundSection claim={claim} open={foundOpen} setOpen={setFoundOpen} form={found} setForm={setFound} actions={actions} busy={busy} />
               <DeliverySeals claim={claim} value={sealsAtDoor} onChange={setSealsAtDoor} busy={busy} onReport={() => onTamper({ claim, finding: 'seal_not_as_on_the_note' })} />
               <div class="field" style="margin-top:14px">
@@ -568,17 +600,17 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
             <Button
               chevron={false}
               busy={busy}
-              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk || foundWrong !== null}
+              disabled={Boolean(held) || !allChecked || !photoOk || !receiverOk || !podOk || !sealsOk || !inspectionOk || !countOk || !receiptOk || foundWrong !== null}
               onClick={() => {
                 const ref = claim.ref;
                 if (isPickup) {
                   // Each seal as read off the door: only at pickup — at the door the receiver looks, nothing is read again.
                   const seals = (claim.seals ?? []).filter((s) => s.state === 'on').map((s) => ({ sealId: s.sealId, number: sealReads[s.sealId]?.number.trim() ?? '', photoRef: sealReads[s.sealId]?.photoRef ?? '' }));
                   const inspection = inspectionBody(claim, looks);
-                  void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}), ...(inspection ? { inspection } : {}) });
+                  void actions.pickupFreight(ref, { confirmed: checked, securementPhotoId: photoId, ...(reservations.trim() ? { reservations: reservations.trim() } : {}), ...(seals.length ? { seals } : {}), ...(inspection ? { inspection } : {}), ...(shed?.side === 'collection' && countedN !== null ? { countedPieces: countedN } : {}) });
                 } else {
                   const exceptions = foundOpen ? foundBody(found) : undefined;
-                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}) });
+                  void actions.deliverFreight(ref, { confirmed: checked.filter((k) => items.some((i) => i.key === k)), receiverName: receiver.trim(), podPhotoId: podId, ...(remarks.trim() ? { remarks: remarks.trim() } : {}), ...(exceptions ? { exceptions } : {}), ...(sealsAtDoor ? { sealsAtDelivery: sealsAtDoor } : {}), ...(shed?.side === 'acceptance' ? { terminalReceipt: receipt.trim() } : {}) });
                 }
                 onClose();
               }}
@@ -597,6 +629,10 @@ function FreightGate({ claim, state, actions, onClose, onTamper }: { claim: Clai
               <p class="hint" style="margin-top:8px">{t('driver.loads.addPodPhoto')}</p>
             ) : !sealsOk ? (
               <p class="hint" style="margin-top:8px">{t(isPickup ? 'driver.seal.readAll' : doorOk ? 'driver.seal.doorAsk' : 'driver.tamper.doorFirst')}</p>
+            ) : !countOk ? (
+              <p class="hint" style="margin-top:8px">{t('driver.air.countFirst')}</p>
+            ) : !receiptOk ? (
+              <p class="hint" style="margin-top:8px">{t('driver.air.receiptFirst')}</p>
             ) : !inspectionOk ? (
               <p class="hint" style="margin-top:8px">{t('driver.inspection.doAll')}</p>
             ) : foundWrong ? (

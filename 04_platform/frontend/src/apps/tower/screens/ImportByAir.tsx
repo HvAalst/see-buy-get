@@ -211,7 +211,16 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
             {stepRow('customs', t('tower.byAir.step.customs'), air.customs, true)}
             {air.agencies.map((a) => stepRow(a.key, a.name, a.released, false))}
             {stepRow('delivery_order', t('tower.byAir.step.deliveryOrder'), air.deliveryOrder, true)}
+            {/* 2026-11-01 — the shed releases nothing until its own storage and handling are paid. */}
+            {stepRow('handler_charges', t('tower.byAir.step.handlerCharges'), air.handlerCharges, false)}
           </div>
+          {/* 2026-11-01 — what our truck took out of the shed, and — where anything was noted — the airline's deadline. */}
+          {air.collected ? (
+            <p class={air.collected.reservations ? 'cerr' : 'chint'}>
+              {t('tower.byAir.collected', { when: utc(air.collected.at), counted: air.collected.counted ?? air.pieces, pieces: air.pieces })}
+              {air.collected.reservations ? ` ${air.collected.reservations} ${air.collected.complainBy ? t('tower.byAir.complainBy', { airline: air.airline, by: air.collected.complainBy, awb: air.awb }) : t('tower.byAir.complainNow', { airline: air.airline, awb: air.awb })}` : ''}
+            </p>
+          ) : null}
           <p class="chint">{t('tower.byAir.notifiedNote')}</p>
           {youAre === 'importer' && air.gaps.length && !air.collectAnyway ? (
             <>

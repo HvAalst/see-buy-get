@@ -1800,7 +1800,7 @@ export function useDriverApp() {
   /** S32b/S33 — pick up a claimed dedicated-freight job (claimed → in_transit), through the load-safety gate:
    *  the confirmed checklist keys + the securement photo mediaId. */
   const pickupFreight = useCallback(
-    async (ref: string, check: { confirmed: string[]; securementPhotoId: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; inspection?: Array<{ point: string; photoRef: string }> }) => {
+    async (ref: string, check: { confirmed: string[]; securementPhotoId: string; reservations?: string; seals?: Array<{ sealId: string; number: string; photoRef: string }>; inspection?: Array<{ point: string; photoRef: string }>; countedPieces?: number }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {
@@ -1823,7 +1823,7 @@ export function useDriverApp() {
   /** S32b/S33 — deliver an in-transit dedicated-freight job (in_transit → delivered), with the confirmed
    *  unload-checklist keys. */
   const deliverFreight = useCallback(
-    async (ref: string, check: { confirmed: string[]; receiverName: string; podPhotoId: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note" }) => {
+    async (ref: string, check: { confirmed: string[]; receiverName: string; podPhotoId: string; remarks?: string; exceptions?: Array<{ kind: 'short' | 'over' | 'damaged' | 'wrong' | 'refused'; count: number; photoRefs?: string[] }>; sealsAtDelivery?: "as_on_the_note" | "not_as_on_the_note"; terminalReceipt?: string }) => {
       const did = stateRef.current.driver?.did;
       if (!client || !did) return;
       await run(`freight:${ref}`, async () => {

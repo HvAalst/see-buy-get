@@ -138,6 +138,10 @@ export interface ExportLeg {
   status: string;
   pickedUpAt?: string;
   deliveredAt?: string;
+  /** 2026-11-01 — handed in at an airline's cargo terminal: who accepted it, the receipt, what was found not as booked. */
+  acceptedBy?: string;
+  terminalReceipt?: string;
+  foundAtTerminal?: string[];
 }
 
 export interface ExportConsignment {

@@ -656,6 +656,11 @@ export const enTowerBusiness = {
   'tower.byAir.step.notified': 'The handler’s notice of arrival',
   'tower.byAir.step.customs': 'Customs release (the release order or entry)',
   'tower.byAir.step.deliveryOrder': 'The handler’s delivery order or gate pass',
+  // 2026-11-01 — where road meets air.
+  'tower.byAir.step.handlerCharges': 'The handler’s charges paid (storage and handling)',
+  'tower.byAir.collected': 'Collected from the shed {when}: {counted} pieces counted, against the waybill’s {pieces}.',
+  'tower.byAir.complainBy': 'Complain to {airline} in writing by {by}, quoting air waybill {awb}: the law gives that long from receipt for damage.',
+  'tower.byAir.complainNow': 'Complain to {airline} in writing at once, quoting air waybill {awb}: no convention sets the days here, the airline’s conditions do.',
   'tower.byAir.done': 'Recorded',
   'tower.byAir.notYet': 'Not yet',
   'tower.byAir.doneLine': '{when}, by {by} — reference {reference}',

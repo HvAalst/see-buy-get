@@ -413,6 +413,11 @@ export class ExportLegView {
   @ApiProperty() status: string;
   @ApiPropertyOptional() pickedUpAt?: string;
   @ApiPropertyOptional() deliveredAt?: string;
+  /** 2026-11-01 — handed in at an airline's cargo terminal: who took it there, and the receipt they gave. */
+  @ApiPropertyOptional() acceptedBy?: string;
+  @ApiPropertyOptional() terminalReceipt?: string;
+  /** …and what was found not as booked when it was handed in (short, damaged…), in the receiver's words. */
+  @ApiPropertyOptional({ type: [String] }) foundAtTerminal?: string[];
 }
 
 export class ExportSealView {

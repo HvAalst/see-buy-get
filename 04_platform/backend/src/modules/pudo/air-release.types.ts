@@ -135,11 +135,13 @@ export class AirAgencyRelease {
 }
 
 /** What still keeps air cargo in the shed, in words — empty once it may be collected. */
-export function airReleaseGaps(r: { customs?: AirReleaseStep; agencies: AirAgencyRelease[]; deliveryOrder?: AirReleaseStep }): string[] {
+export function airReleaseGaps(r: { customs?: AirReleaseStep; agencies: AirAgencyRelease[]; deliveryOrder?: AirReleaseStep; handlerCharges?: AirReleaseStep }): string[] {
   const out: string[] = [];
   if (!r.customs) out.push('the customs release');
   for (const a of r.agencies) if (!a.released) out.push(`the release by ${a.name}`);
   if (!r.deliveryOrder) out.push('the handler’s delivery order');
+  // 2026-11-01 — the shed releases nothing until its own storage and handling are paid, whoever else has said yes.
+  if (!r.handlerCharges) out.push('the handler’s charges paid');
   return out;
 }
 
@@ -223,6 +225,13 @@ export class ImportAir {
   @ApiPropertyOptional({ type: AirReleaseStep }) customs?: AirReleaseStep;
   @ApiProperty({ type: [AirAgencyRelease] }) agencies: AirAgencyRelease[];
   @ApiPropertyOptional({ type: AirReleaseStep }) deliveryOrder?: AirReleaseStep;
+  /** 2026-11-01 — the handler's own storage and handling charges paid: the shed's release, beside the others. */
+  @ApiPropertyOptional({ type: AirReleaseStep }) handlerCharges?: AirReleaseStep;
+  /**
+   * 2026-11-01 — WHAT OUR TRUCK TOOK OUT OF THE SHED: the pieces counted against the waybill, what the driver noted, and —
+   * where anything was — the day by which the airline must have the importer's written complaint.
+   */
+  @ApiPropertyOptional() collected?: { at: string; counted: number; reservations?: string; complainBy?: string };
   /** The importer's word to send the truck before it is released — with why; its truck's waiting is its own. */
   @ApiPropertyOptional() collectAnyway?: { by: string; at: string; reason: string };
   /** The handler's free storage, in hours, as on its notice or tariff — and where that figure came from. */
@@ -280,7 +289,7 @@ export class ImportAirDto {
   @IsOptional() @ValidateNested() @Type(() => LiveAnimalsDto) animals?: LiveAnimalsDto;
 }
 
-/** One step of the release: the notice of arrival, customs, an agency (by its key) or the delivery order. */
+/** One step of the release: the notice of arrival, customs, an agency (by its key), the delivery order or the handler's charges. */
 export class ImportAirStepDto {
   @IsString() @MaxLength(40) step!: string;
   @IsOptional() @IsString() @MaxLength(60) reference?: string;

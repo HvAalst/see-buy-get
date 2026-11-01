@@ -788,6 +788,8 @@ export class ExportService {
         ...(secured ? { excludedBodies: OPEN_BODIES, securedBy: a.security.agentName } : {}),
         ...(a.animals ? { liveAnimals: { kind: a.animals.kind, species: a.animals.species, count: a.animals.count } } : {}),
         ...(dangerousGoods ? { dangerousGoods } : {}),
+        // Handed in at the airline's cargo terminal against this waybill: the handler's receipt is asked at delivery.
+        airTerminal: { side: 'acceptance', awb: a.awb, airline: a.airline, handler: a.handler ?? c.terminal.label, pieces: a.pieces },
         pickupCountry: c.originCountry,
         destCountry: c.originCountry,
         deliveryWindow: words.deliveryWindow,
@@ -807,7 +809,7 @@ export class ExportService {
     const a = c.air!;
     const flights = a.flights.map((f) => `${f.flight} on ${f.date}`).join(', ');
     const notes = [
-      `Export ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}, ${flights}. Hand it in at ${a.handler ?? c.terminal.label} against this waybill, before the latest acceptance time.`,
+      `Export ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}, ${flights}. Hand it in at ${a.handler ?? c.terminal.label} against this waybill, before the latest acceptance time, and ask for its receipt: you give its number when you deliver.`,
       a.bookingStatus === 'queued' ? 'The airline has not confirmed the booking: it may not fly on this flight.' : '',
       a.security.status === 'secured' ? `Secured cargo (${a.security.agentName}): keep it locked and sealed, with no stops on the way; the seal is checked at the terminal.` : '',
       a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
@@ -1796,7 +1798,17 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
 
   private legOf(freightId: string): ExportLegView {
     const f = this.dispatch.requireFreightPublic(freightId);
-    return { freightId: f.freightId, code: f.code, status: f.status, ...(f.pickedUpAt ? { pickedUpAt: f.pickedUpAt } : {}), ...(f.deliveredAt ? { deliveredAt: f.deliveredAt } : {}) };
+    // 2026-11-01 — at an airline's cargo terminal: who accepted it, the receipt, and anything found not as booked.
+    const found = f.airTerminal?.side === 'acceptance' ? (f.proofOfDelivery?.exceptions ?? []).map((e) => `${e.count} ${e.kind}`) : [];
+    return {
+      freightId: f.freightId,
+      code: f.code,
+      status: f.status,
+      ...(f.pickedUpAt ? { pickedUpAt: f.pickedUpAt } : {}),
+      ...(f.deliveredAt ? { deliveredAt: f.deliveredAt } : {}),
+      ...(f.terminalReceipt ? { terminalReceipt: f.terminalReceipt, ...(f.proofOfDelivery?.receiverName ? { acceptedBy: f.proofOfDelivery.receiverName } : {}) } : {}),
+      ...(found.length ? { foundAtTerminal: found } : {}),
+    };
   }
 
   private requireExport(exportId: string): ExportConsignment {

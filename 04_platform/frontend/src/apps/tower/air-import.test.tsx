@@ -26,7 +26,7 @@ const air = (over: Partial<ImportAirView> = {}): ImportAirView =>
     freeHoursSource: 'Swissport’s notice of arrival',
     recordedAt: '2026-10-29T06:00:00Z',
     recordedBy: 'Juma',
-    gaps: ['the customs release', 'the release by Kenya Bureau of Standards (KEBS)', 'the handler’s delivery order'],
+    gaps: ['the customs release', 'the release by Kenya Bureau of Standards (KEBS)', 'the handler’s delivery order', 'the handler’s charges paid'],
     clock: { state: 'not_started', freeHours: 48 },
     roadWaits: 'Not released yet at Swissport cargo shed, JKIA: still waiting for the customs release.',
     check: { number: '074-12345675', regime: 'mc99', rules: 'The Montreal Convention 1999', limits: ['At most 26 SDR a kilogram.'], claims: [], caveats: [], mismatches: [] },
@@ -38,6 +38,16 @@ describe('an import by air', () => {
   it('while it is in the shed: every step for its importer, the gate in the board’s words, and the word to go anyway', () => {
     const html = render(air(), 'importer');
     for (const shown of [t('tower.byAir.step.notified'), t('tower.byAir.step.customs'), 'Kenya Bureau of Standards', t('tower.byAir.step.deliveryOrder'), 'Not released yet at Swissport cargo shed, JKIA', t('tower.byAir.sendAnyway'), t('tower.byAir.clock.notStarted'), 'The Montreal Convention 1999']) expect(textOf(html)).toContain(shown);
+  });
+
+  it('asks the handler’s charges among the steps, and says what our truck took out of the shed — with the airline’s deadline when something was noted (2026-11-01)', () => {
+    expect(textOf(render(air(), 'importer'))).toContain(t('tower.byAir.step.handlerCharges'));
+    const clean = textOf(render(air({ collected: { at: '2026-10-30T09:00:00Z', counted: 12 } }), 'importer'));
+    expect(clean).toContain(t('tower.byAir.collected', { when: '2026-10-30 09:00 UTC', counted: 12, pieces: 12 }));
+    expect(clean).not.toContain('Complain to');
+    const noted = textOf(render(air({ collected: { at: '2026-10-30T09:00:00Z', counted: 11, reservations: 'Counted 11 pieces at Swissport cargo shed, JKIA; air waybill 074-12345675 says 12.', complainBy: '2026-11-13' } }), 'importer'));
+    expect(noted).toContain('Counted 11 pieces at Swissport cargo shed, JKIA');
+    expect(noted).toContain(t('tower.byAir.complainBy', { airline: 'KLM / Martinair', by: '2026-11-13', awb: '074-12345675' }));
   });
 
   it('its agent records the steps, but only the importer sends the truck anyway; staff only read', () => {

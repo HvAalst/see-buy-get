@@ -136,6 +136,17 @@ export function airLimits(regime: AirRegime, onDay: string): string[] {
   }
 }
 
+/**
+ * 2026-11-01 — THE DAYS TO COMPLAIN TO THE AIRLINE ABOUT DAMAGE, from receipt of the goods: 14 under Montreal and the
+ * amended Warsaw (MC99 Art. 31(2), Hague Art. 26(2)), 7 under Warsaw 1929. Undefined where no convention sets one —
+ * then the airline's own conditions do, and the only safe answer is "in writing, at once".
+ */
+export function damageNoticeDays(regime: AirRegime): number | undefined {
+  if (regime === 'mc99' || regime === 'warsaw_hague_map4' || regime === 'warsaw_hague') return 14;
+  if (regime === 'warsaw_1929') return 7;
+  return undefined;
+}
+
 /** When a claim must be made — in calendar days (MC99 Art. 52), from the documents the law names. */
 export function airClaims(regime: AirRegime): string[] {
   if (regime === 'mc99' || regime === 'warsaw_hague_map4' || regime === 'warsaw_hague') {

@@ -41940,6 +41940,20 @@
           },
           "deliveredAt": {
             "type": "string"
+          },
+          "acceptedBy": {
+            "type": "string",
+            "description": "2026-11-01 — handed in at an airline's cargo terminal: who took it there, and the receipt they gave."
+          },
+          "terminalReceipt": {
+            "type": "string"
+          },
+          "foundAtTerminal": {
+            "description": "…and what was found not as booked when it was handed in (short, damaged…), in the receiver's words.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -50042,6 +50056,35 @@
           "deliveryOrder": {
             "$ref": "#/components/schemas/AirReleaseStep"
           },
+          "handlerCharges": {
+            "description": "2026-11-01 — the handler's own storage and handling charges paid: the shed's release, beside the others.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AirReleaseStep"
+              }
+            ]
+          },
+          "collected": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "counted": {
+                "required": true,
+                "type": "number"
+              },
+              "reservations": {
+                "required": false,
+                "type": "string"
+              },
+              "complainBy": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "collectAnyway": {
             "type": "object",
             "properties": {
@@ -50098,6 +50141,7 @@
           "weightKg",
           "temp",
           "agencies",
+          "collected",
           "collectAnyway",
           "recordedAt",
           "recordedBy"
@@ -51294,6 +51338,35 @@
           "deliveryOrder": {
             "$ref": "#/components/schemas/AirReleaseStep"
           },
+          "handlerCharges": {
+            "description": "2026-11-01 — the handler's own storage and handling charges paid: the shed's release, beside the others.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AirReleaseStep"
+              }
+            ]
+          },
+          "collected": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "counted": {
+                "required": true,
+                "type": "number"
+              },
+              "reservations": {
+                "required": false,
+                "type": "string"
+              },
+              "complainBy": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "collectAnyway": {
             "type": "object",
             "properties": {
@@ -51432,6 +51505,7 @@
           "weightKg",
           "temp",
           "agencies",
+          "collected",
           "collectAnyway",
           "recordedAt",
           "recordedBy",
@@ -59392,6 +59466,41 @@
           "shopName"
         ]
       },
+      "FreightAirTerminal": {
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "acceptance",
+              "collection"
+            ]
+          },
+          "awb": {
+            "type": "string"
+          },
+          "airline": {
+            "type": "string"
+          },
+          "handler": {
+            "type": "string"
+          },
+          "pieces": {
+            "type": "number"
+          },
+          "complainDays": {
+            "type": "number",
+            "description": "Collection: the days the law gives to complain to the airline about damage, where a convention sets them."
+          }
+        },
+        "required": [
+          "side",
+          "awb",
+          "airline",
+          "handler",
+          "pieces"
+        ]
+      },
       "FreightClaim": {
         "type": "object",
         "properties": {
@@ -60502,6 +60611,22 @@
           "securedBy": {
             "type": "string",
             "description": "Secured air cargo (2026-10-29): who secured it — the regulated agent or known consignor. It travels sealed."
+          },
+          "airTerminal": {
+            "description": "2026-11-01 — WHERE ROAD MEETS AIR: this load hands goods in at an airline's cargo terminal (`acceptance`, an export)\nor collects them there (`collection`, an import), under this air waybill. Acceptance asks the handler's receipt;\ncollection asks the pieces counted against the waybill — what the shed hands over is what the road answers for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightAirTerminal"
+              }
+            ]
+          },
+          "countedAtPickup": {
+            "type": "number",
+            "description": "2026-11-01 — at collection from a cargo terminal: the pieces the driver counted, against the waybill's."
+          },
+          "terminalReceipt": {
+            "type": "string",
+            "description": "2026-11-01 — at acceptance at a cargo terminal: the handler's receipt for the goods, as it gave it."
           },
           "claim": {
             "description": "FP3b — the sender's claim against the delivered goods, and how it ended. One per load.",
@@ -66052,6 +66177,17 @@
             "type": "string",
             "description": "FP3 — at pickup: the carrier's reservations about the goods as handed over (box 18).",
             "maxLength": 500
+          },
+          "countedPieces": {
+            "type": "number",
+            "description": "2026-11-01 — at collection from an airline's cargo terminal: the pieces counted, against the air waybill's.",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "terminalReceipt": {
+            "type": "string",
+            "description": "2026-11-01 — at acceptance at an airline's cargo terminal: the handler's acceptance or warehouse receipt number.",
+            "maxLength": 60
           },
           "receiverName": {
             "type": "string",
