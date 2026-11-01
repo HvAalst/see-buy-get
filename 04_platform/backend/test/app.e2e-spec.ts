@@ -1217,9 +1217,11 @@ describe('GLOS backend (e2e)', () => {
     await request(http).post(send).set(asAmos).send({ copyRef: second, expiresAt: '2031-03-31' }).expect(201);
     await request(http).post(`/v1/sbg/fleet/drivers/${amos.did}/licence`).set(rival).send({ expiresAt: '2031-03-30' }).expect(403);
     const recorded = await request(http).post(`/v1/sbg/fleet/drivers/${amos.did}/licence`).set(office).send({ expiresAt: '2031-03-30' }).expect(201);
-    expect(recorded.body.licence).toMatchObject({ expiresAt: '2031-03-30', copyRef: second });
+    expect(recorded.body.licence).toMatchObject({ expiresAt: '2031-03-30' });
+    expect(recorded.body.licence.copyRef).toBeUndefined();
     expect(recorded.body.licenceRenewal).toBeUndefined();
-    await request(http).get(cardAt(second)).set(office).expect(200); // the card the date was read from, still theirs to open
+    // The card the date was read from is deleted then (the owner, 2026-10-30): the number and the date are what is kept.
+    await request(http).get(cardAt(second)).set(office).expect(404);
     const told = (await request(http).get('/v1/sbg/notifications/inbox').set(asAmos).expect(200)).body.items as Array<{ kind: string; title: string }>;
     expect(told.filter((n) => n.kind === 'papers_checked').map((n) => n.title).sort()).toEqual(['Your licence is recorded', 'Your licence photo was not accepted']);
 
