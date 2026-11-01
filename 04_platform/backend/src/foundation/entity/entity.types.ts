@@ -344,6 +344,11 @@ export interface OperatorAccount {
   totpReset?: { by: string; byId: string; at: string };
   /** Round 38 — the roles this person holds (staff-roles.ts). Absent on an account from before roles: all four. */
   roles?: string[];
+  /**
+   * 2026-11-01 — the countries this person works in (staff-countries.ts): catalogued codes, or `*` for every country.
+   * Absent on an account from before countries: every country.
+   */
+  countries?: string[];
 }
 
 /** A staff account as the console reads it — no salt, no hash, ever. */
@@ -356,6 +361,8 @@ export class OperatorAccountView {
   twoStep: boolean;
   /** Round 38 — the roles this person holds: support, vetting, money, admin. */
   @ApiProperty({ type: [String], enum: ['support', 'vetting', 'money', 'admin'] }) roles: string[];
+  /** 2026-11-01 — the countries they work in: country codes, or `*` for every country. */
+  @ApiProperty({ type: [String] }) countries: string[];
   @ApiPropertyOptional()
   lastSeenAt?: string;
   @ApiPropertyOptional()
@@ -405,8 +412,10 @@ export interface StaffProposal {
   operatorId?: string;
   /** Round 38 — the roles asked for: the new account's, or the ones an existing account is to hold instead. */
   roles?: string[];
-  /** Round 38 — `roles`: a change of an existing account's roles, not a new account. */
-  kind?: 'roles';
+  /** Round 38 — `roles`: a change of an existing account's roles, not a new account; 2026-11-01 — `countries`: of its countries. */
+  kind?: 'roles' | 'countries';
+  /** 2026-11-01 — the countries asked for: the new account's, or the ones an existing account is to work in instead. */
+  countries?: string[];
 }
 
 /** A staff account that was asked for and waits for a second member of staff, as the console reads it. */
@@ -424,8 +433,12 @@ export class StaffProposalView {
   forSetupKey: boolean;
   /** Round 38 — the roles asked for. */
   @ApiProperty({ type: [String], enum: ['support', 'vetting', 'money', 'admin'] }) roles: string[];
-  /** Round 38 — 'roles': a change of an existing member of staff's roles, not a new account. */
-  @ApiPropertyOptional({ enum: ['roles'] }) kind?: 'roles';
+  /** Round 38 — 'roles': a change of an existing member of staff's roles, not a new account; 'countries': of their countries. */
+  @ApiPropertyOptional({ enum: ['roles', 'countries'] }) kind?: 'roles' | 'countries';
+  /** 2026-11-01 — the countries asked for (a new account's, or a change of countries'), `*` for every country. */
+  @ApiProperty({ type: [String] }) countries: string[];
+  /** 2026-11-01 — a change of countries: theirs now, to read beside the ones asked for. */
+  @ApiPropertyOptional({ type: [String] }) countriesNow?: string[];
   /** Round 38 — a change of an existing member of staff's roles; their roles now, to read beside the ones asked for. */
   @ApiPropertyOptional({ type: [String], enum: ['support', 'vetting', 'money', 'admin'] }) rolesNow?: string[];
   /** Round 38 — a change of roles: whose. */

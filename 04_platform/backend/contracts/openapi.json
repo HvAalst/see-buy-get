@@ -12153,6 +12153,45 @@
         }
       }
     },
+    "/v1/sbg/operators/{operatorId}/countries": {
+      "post": {
+        "operationId": "Sbg.proposeOperatorCountries",
+        "summary": "",
+        "description": "2026-11-01 — ASK that a member of staff work in other countries (the owner: staff \"separated by country\"). Nothing\nchanges until a second member of staff approves it; the person is then signed out, and signs in to the new.",
+        "parameters": [
+          {
+            "name": "operatorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffCountriesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffProposalView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/operators/{operatorId}/roles": {
       "post": {
         "operationId": "Sbg.proposeOperatorRoles",
@@ -54093,6 +54132,13 @@
               ]
             }
           },
+          "countries": {
+            "description": "2026-11-01 — the countries they work in: country codes, or `*` for every country.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "lastSeenAt": {
             "type": "string"
           },
@@ -54133,6 +54179,7 @@
         },
         "required": [
           "roles",
+          "countries",
           "operatorId",
           "email",
           "name",
@@ -54158,10 +54205,25 @@
           },
           "kind": {
             "type": "string",
-            "description": "Round 38 — 'roles': a change of an existing member of staff's roles, not a new account.",
+            "description": "Round 38 — 'roles': a change of an existing member of staff's roles, not a new account; 'countries': of their countries.",
             "enum": [
-              "roles"
+              "roles",
+              "countries"
             ]
+          },
+          "countries": {
+            "description": "2026-11-01 — the countries asked for (a new account's, or a change of countries'), `*` for every country.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "countriesNow": {
+            "description": "2026-11-01 — a change of countries: theirs now, to read beside the ones asked for.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "rolesNow": {
             "type": "array",
@@ -54214,6 +54276,7 @@
         },
         "required": [
           "roles",
+          "countries",
           "proposalId",
           "email",
           "name",
@@ -54264,6 +54327,13 @@
               ]
             }
           },
+          "countries": {
+            "description": "2026-11-01 — the countries they work in (country codes, or `*` for every country); absent, the asker's own.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "email": {
             "type": "string"
           },
@@ -54275,6 +54345,20 @@
           "roles",
           "email",
           "name"
+        ]
+      },
+      "StaffCountriesDto": {
+        "type": "object",
+        "properties": {
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "countries"
         ]
       },
       "StaffRolesDto": {
@@ -54311,6 +54395,13 @@
                 "money",
                 "admin"
               ]
+            }
+          },
+          "countries": {
+            "description": "2026-11-01 — the countries they work in: country codes, or `*` for every country.",
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "lastSeenAt": {
@@ -54361,6 +54452,7 @@
         },
         "required": [
           "roles",
+          "countries",
           "sent",
           "operatorId",
           "email",

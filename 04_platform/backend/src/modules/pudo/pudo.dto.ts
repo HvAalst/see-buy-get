@@ -1713,6 +1713,17 @@ export class StaffRolesDto {
 export class StaffProposalDto extends StaffRolesDto {
   @IsString() email!: string;
   @IsString() name!: string;
+  /** 2026-11-01 — the countries they work in (country codes, or `*` for every country); absent, the asker's own. */
+  @IsOptional() @IsArray() @ArrayMinSize(1) @IsString({ each: true })
+  @ApiPropertyOptional({ type: [String] })
+  countries?: string[];
+}
+
+/** 2026-11-01 — the countries a member of staff is to work in instead: country codes, or `*` for every country. */
+export class StaffCountriesDto {
+  @IsArray() @ArrayMinSize(1) @IsString({ each: true })
+  @ApiProperty({ type: [String] })
+  countries!: string[];
 }
 
 /** Round 38 — one kind of partner's custody cap: what a new one holds or carries at once, and after how many hand-overs it lifts. */

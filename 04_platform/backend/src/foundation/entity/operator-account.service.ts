@@ -11,6 +11,7 @@ import { passwordProblem } from '../auth/password-rules';
 import { AccessToken } from '../auth/auth.types';
 import { newTotpSecret, otpauthUri, verifyTotp } from '../auth/totp';
 import { rolesOf, STAFF_ROLES, type StaffRole } from '../auth/staff-roles';
+import { EVERY_COUNTRY, countriesLine, countriesOf, holdsEvery, mayGrant, onlyNarrows } from '../auth/staff-countries';
 import { FieldEncryption } from '../data-firewall/field-encryption.service';
 import { isSandbox } from '../runtime/sandbox';
 import { OperatorAccount, OperatorAccountView, StaffInvited, StaffProposal, StaffProposalView } from './entity.types';
@@ -136,7 +137,7 @@ export class OperatorAccountService {
     }
     const staff = this.active();
     const password = randomBytes(9).toString('base64url');
-    const account = this.make(asked, createdBy, now, undefined, password, [...STAFF_ROLES]);
+    const account = this.make(asked, createdBy, now, undefined, password, [...STAFF_ROLES], [EVERY_COUNTRY]);
     void this.mail?.send('staff-account-added', { address: account.email, name: account.name }, { name: account.name, email: account.email, addedBy: createdBy });
     this.tell(
       staff,
@@ -152,11 +153,14 @@ export class OperatorAccountService {
    * Every other member of staff is told at once — it is work for one of them, and it is the alarm when nobody they
    * know asked. Somebody who is the only one able to sign in may ask too: the setup key is their second.
    */
-  propose(input: { email: string; name: string; roles?: readonly string[] }, by: { operatorId: string }, now: number = Date.now()): StaffProposalView {
+  propose(input: { email: string; name: string; roles?: readonly string[]; countries?: readonly string[] }, by: { operatorId: string }, now: number = Date.now()): StaffProposalView {
     const asker = this.byId(by.operatorId);
     const asked = this.checked(input, now);
     // Round 38 — the roles they are to hold, said when they are asked for: at least one.
     const roles = this.someRoles(input.roles);
+    // 2026-11-01 — the countries they work in: said, or the asker's own; never more than the asker holds.
+    const countries = input.countries === undefined ? heldCountries(asker) : this.someCountries(input.countries);
+    this.assertMayGrant(asker, countries);
     this.assertLinkCanTravel();
     const proposal: StaffProposal = {
       proposalId: `spr_${randomBytes(8).toString('hex')}`,
@@ -166,11 +170,12 @@ export class OperatorAccountService {
       askedAt: new Date(now).toISOString(),
       state: 'asked',
       roles,
+      countries,
     };
     this.proposals.set(proposal.proposalId, proposal);
     this.tell(
       this.signers().filter((a) => a.operatorId !== asker.operatorId),
-      `${asker.name} asked for a network staff account for ${asked.name} (${asked.email}), to hold ${rolesLine(roles)}.`,
+      `${asker.name} asked for a network staff account for ${asked.name} (${asked.email}), to hold ${rolesLine(roles)}, in ${countriesLine(countries)}.`,
       `Nothing was made, and nobody can sign in with it until a second member of staff approves it: Overview, then Network staff. Approve it only if you know this person and this is their address. If ${asker.name} did not ask for it, decline it and take their sign-in away: it may be in somebody else's hands.`,
       now,
     );
@@ -187,9 +192,20 @@ export class OperatorAccountService {
   async approve(proposalId: string, by: StaffOrKey, now: number = Date.now()): Promise<StaffInvited> {
     const proposal = this.pending(proposalId, now);
     if (proposal.kind === 'roles') return this.approveRoles(proposal, by, now);
+    if (proposal.kind === 'countries') return this.approveCountries(proposal, by, now);
     const approvedBy = 'operatorId' in by ? this.secondFor(proposal, by.operatorId) : this.keyFor(proposal);
+    // The second person, too, gives only countries they hold (the setup key, as the second for the only one on staff, follows the asker).
+    if ('operatorId' in by) this.assertMayGrant(this.byId(by.operatorId), proposal.countries ? countriesOf(proposal.countries) : [EVERY_COUNTRY]);
     this.assertLinkCanTravel();
-    const account = this.make({ email: proposal.email, name: proposal.name }, proposal.askedBy, now, approvedBy, undefined, proposal.roles ? rolesOf(proposal.roles) : [...STAFF_ROLES]);
+    const account = this.make(
+      { email: proposal.email, name: proposal.name },
+      proposal.askedBy,
+      now,
+      approvedBy,
+      undefined,
+      proposal.roles ? rolesOf(proposal.roles) : [...STAFF_ROLES],
+      proposal.countries ? countriesOf(proposal.countries) : [EVERY_COUNTRY],
+    );
     Object.assign(proposal, { state: 'approved', decidedBy: approvedBy, decidedAt: new Date(now).toISOString(), operatorId: account.operatorId });
     this.proposals.set(proposal.proposalId, proposal);
     const welcome = await this.welcome(account, now);
@@ -212,14 +228,18 @@ export class OperatorAccountService {
     const own = proposal.askedById === who.operatorId;
     // Round 38 — a change of somebody's roles is decided by others: they may not wave through their own, nor stop it.
     if (!own && proposal.kind === 'roles' && proposal.operatorId === who.operatorId) throw new GlosError('FORBIDDEN', OWN_ROLES);
+    // 2026-11-01 — nor stop a change of their own countries.
+    if (!own && proposal.kind === 'countries' && proposal.operatorId === who.operatorId) throw new GlosError('FORBIDDEN', OWN_COUNTRIES);
     const why = reason?.trim();
     if (!own && !why) throw new GlosError('FIELD_REQUIRED', 'Say why — the member of staff who asked is told', { field: 'reason' });
     this.close(proposal, who.name, why, now);
     if (!own) {
-      const roles = proposal.kind === 'roles';
+      const roles = proposal.kind === 'roles' || proposal.kind === 'countries';
       this.tell(
         this.active().filter((a) => a.operatorId === proposal.askedById),
-        roles ? `${who.name} declined the change of ${proposal.name}'s roles you asked for.` : `${who.name} declined the network staff account you asked for, for ${proposal.name} (${proposal.email}).`,
+        roles
+          ? `${who.name} declined the change of ${proposal.name}'s ${proposal.kind === 'countries' ? 'countries' : 'roles'} you asked for.`
+          : `${who.name} declined the network staff account you asked for, for ${proposal.name} (${proposal.email}).`,
         `Their reason: “${(why as string).replace(/[.\s]+$/, '')}”. ${roles ? 'Nothing changed' : 'Nothing was made'}. You can ask again.`,
         now,
       );
@@ -296,7 +316,10 @@ export class OperatorAccountService {
 
     account.lastSeenAt = new Date(now).toISOString();
     this.accounts.set(account.email, account);
-    return { ...viewOf(account), token: this.auth.mintOperatorSession({ name: account.name, revocationKey: operatorKey(account.operatorId), staffRoles: heldRoles(account) }) };
+    return {
+      ...viewOf(account),
+      token: this.auth.mintOperatorSession({ name: account.name, revocationKey: operatorKey(account.operatorId), staffRoles: heldRoles(account), staffCountries: heldCountries(account) }),
+    };
   }
 
   /** Signed in already, and setting up two-step sign-in from Settings (a sandbox, where it is not forced at sign-in). */
@@ -533,10 +556,12 @@ export class OperatorAccountService {
       askedAt: p.askedAt,
       until: new Date(Date.parse(p.askedAt) + PROPOSAL_WAIT_MS).toISOString(),
       mine: p.askedById === readerId,
-      forSetupKey: p.kind === 'roles' ? false : this.aloneOnStaff(p.askedById),
+      forSetupKey: p.kind === 'roles' || p.kind === 'countries' ? false : this.aloneOnStaff(p.askedById),
       roles: p.roles ? rolesOf(p.roles) : [...STAFF_ROLES],
-      ...(p.kind === 'roles' ? { kind: 'roles' as const } : {}),
+      countries: p.countries ? countriesOf(p.countries) : [EVERY_COUNTRY],
+      ...(p.kind ? { kind: p.kind } : {}),
       ...(p.kind === 'roles' && p.operatorId ? { operatorId: p.operatorId, rolesNow: this.rolesNow(p.operatorId), aboutYou: p.operatorId === readerId } : {}),
+      ...(p.kind === 'countries' && p.operatorId ? { operatorId: p.operatorId, countriesNow: this.countriesNow(p.operatorId), aboutYou: p.operatorId === readerId } : {}),
     };
   }
 
@@ -597,6 +622,94 @@ export class OperatorAccountService {
     return { ...viewOf(target, now), sent: true };
   }
 
+  /**
+   * 2026-11-01 — ASK THAT A MEMBER OF STAFF WORK IN OTHER COUNTRIES (the owner: "those assigned to a country can not login
+   * to any other country without the right credentials"). Nothing changes until a second member of staff approves; both
+   * give only countries they hold themselves, and every country only from every country. Everybody on staff is told.
+   */
+  proposeCountries(operatorId: string, countries: readonly string[], by: { operatorId: string }, now: number = Date.now()): StaffProposalView {
+    const asker = this.byId(by.operatorId);
+    const target = this.byId(operatorId);
+    if (target.revokedAt) throw new GlosError('INVALID_STATE', `${target.name}'s sign-in was taken away: there are no countries to change`);
+    const next = this.someCountries(countries);
+    this.assertMayGrant(asker, next);
+    if (next.join() === heldCountries(target).join()) throw new GlosError('VALIDATION_FAILED', `${target.name} works in ${countriesLine(next)} already`);
+    const waiting = this.waiting(now).find((p) => p.kind === 'countries' && p.operatorId === target.operatorId);
+    if (waiting) throw new GlosError('CONFLICT', `${waiting.askedBy} already asked to change ${target.name}'s countries. A second person approves or declines that one first`);
+    const proposal: StaffProposal = {
+      proposalId: `spr_${randomBytes(8).toString('hex')}`,
+      email: target.email,
+      name: target.name,
+      askedBy: asker.name,
+      askedById: asker.operatorId,
+      askedAt: new Date(now).toISOString(),
+      state: 'asked',
+      kind: 'countries',
+      operatorId: target.operatorId,
+      roles: heldRoles(target),
+      countries: next,
+    };
+    this.proposals.set(proposal.proposalId, proposal);
+    this.tell(
+      this.signers().filter((a) => a.operatorId !== asker.operatorId),
+      `${asker.name} asked that ${target.name} work in ${countriesLine(next)}, in place of ${countriesLine(heldCountries(target))}.`,
+      `Nothing changes until a second member of staff approves it: Overview, then Network staff. If ${asker.name} did not ask for it, decline it.`,
+      now,
+    );
+    return this.proposalView(proposal, asker.operatorId);
+  }
+
+  /**
+   * The second person approves a change of countries — never the one who asked, and never the setup key. The person
+   * themselves may be the second ONLY to a change that takes countries away (a narrower reach is never a way in, and with
+   * two on staff there is nobody else); one that adds a country is somebody else's to approve. They are signed out.
+   */
+  private approveCountries(proposal: StaffProposal, by: StaffOrKey, now: number): StaffInvited {
+    if (!('operatorId' in by)) throw new GlosError('FORBIDDEN', 'A change of countries is approved by a second member of staff, never by the setup key');
+    const target = this.byId(proposal.operatorId!);
+    const before = heldCountries(target);
+    const next = countriesOf(proposal.countries);
+    if (by.operatorId === target.operatorId && !onlyNarrows(before, next)) throw new GlosError('FORBIDDEN', OWN_COUNTRIES);
+    const approvedBy = this.secondFor(proposal, by.operatorId);
+    this.assertMayGrant(this.byId(by.operatorId), next);
+    target.countries = next;
+    this.accounts.set(target.email, target);
+    Object.assign(proposal, { state: 'approved', decidedBy: approvedBy, decidedAt: new Date(now).toISOString() });
+    this.proposals.set(proposal.proposalId, proposal);
+    // Signed out: the token they hold says the countries they had. Their next sign-in carries the new ones.
+    this.auth.revokeAll(operatorKey(target.operatorId));
+    this.tell(
+      this.active().filter((a) => a.operatorId === target.operatorId || a.operatorId === proposal.askedById),
+      `${target.name} now works in ${countriesLine(next)}, in place of ${countriesLine(before)} — asked by ${proposal.askedBy}, approved by ${approvedBy}.`,
+      `${target.name} was signed out and signs in again to work in the new countries.`,
+      now,
+    );
+    return { ...viewOf(target, now), sent: true };
+  }
+
+  /** The countries a person works in now, for a change of countries to be read beside. */
+  private countriesNow(operatorId: string): string[] {
+    try {
+      return heldCountries(this.byId(operatorId));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Countries as asked: catalogued codes, or every country — at least one. */
+  private someCountries(raw: readonly unknown[] | undefined): string[] {
+    const countries = countriesOf(raw);
+    if (!countries.length) throw new GlosError('VALIDATION_FAILED', 'Say which countries they work in — at least one', { field: 'countries' });
+    return countries;
+  }
+
+  /** Nobody gives a country they do not hold — and every country only somebody who holds every country. */
+  private assertMayGrant(giver: OperatorAccount, countries: readonly string[]): void {
+    if (!mayGrant(heldCountries(giver), countries)) {
+      throw new GlosError('FORBIDDEN', `${giver.name} works in ${countriesLine(heldCountries(giver))}, and gives only countries they work in themselves — every country only somebody who holds every country`);
+    }
+  }
+
   /** The roles a person holds now, for a change of roles to be read beside. */
   private rolesNow(operatorId: string): StaffRole[] {
     try {
@@ -631,7 +744,7 @@ export class OperatorAccountService {
    * THE ACT: a staff account. With `password` it can sign in at once (the setup key's own first account); without, it
    * cannot until its holder has chosen one by the link emailed to them.
    */
-  private make(asked: { email: string; name: string }, createdBy: string, now: number, approvedBy?: string, password?: string, roles: StaffRole[] = []): OperatorAccount {
+  private make(asked: { email: string; name: string }, createdBy: string, now: number, approvedBy?: string, password?: string, roles: StaffRole[] = [], countries: string[] = [EVERY_COUNTRY]): OperatorAccount {
     // The record of a sign-in that was taken away is KEPT — its decisions still need its name — beside the address it
     // gives up, never under it.
     const old = this.accounts.get(asked.email);
@@ -650,6 +763,7 @@ export class OperatorAccountService {
       createdBy,
       ...(approvedBy ? { approvedBy } : {}),
       roles,
+      countries,
     };
     this.accounts.set(account.email, account);
     return account;
@@ -763,6 +877,7 @@ function viewOf(a: OperatorAccount, now: number = Date.now()): OperatorAccountVi
     createdAt: a.createdAt,
     twoStep: Boolean(a.totpSecret),
     roles: heldRoles(a),
+    countries: heldCountries(a),
     ...(a.lastSeenAt ? { lastSeenAt: a.lastSeenAt } : {}),
     ...(a.passwordChangedAt ? { passwordChangedAt: a.passwordChangedAt } : {}),
     ...(a.revokedAt ? { revokedAt: a.revokedAt } : {}),
@@ -774,6 +889,14 @@ function viewOf(a: OperatorAccount, now: number = Date.now()): OperatorAccountVi
 
 /** Round 38 — said to somebody at a change of their own roles: two OTHER people decide it, the one who asked and a second. */
 const OWN_ROLES = 'A change of your own roles is decided by somebody else: whoever asked for it, and a second member of staff';
+
+/** 2026-11-01 — said to somebody at a change of their own countries: others decide one that adds; they may only agree to fewer. */
+const OWN_COUNTRIES = 'A change of your own countries is decided by somebody else: whoever asked for it, and a second member of staff. You may approve one yourself only when it takes countries away';
+
+/** 2026-11-01 — the countries a person works in: theirs, or every country on an account from before countries. */
+export function heldCountries(a: Pick<OperatorAccount, 'countries'>): string[] {
+  return holdsEvery(a.countries) ? [EVERY_COUNTRY] : countriesOf(a.countries);
+}
 
 /** Round 38 — the roles a person holds: theirs, or all four on an account from before roles (a sandbox's; production starts empty). */
 export function heldRoles(a: Pick<OperatorAccount, 'roles'>): StaffRole[] {

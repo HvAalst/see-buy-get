@@ -888,6 +888,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/operators': 'admin',
   'POST sbg/operators/:operatorId/removal/stop': 'admin',
   'POST sbg/operators/:operatorId/roles': 'admin',
+  'POST sbg/operators/:operatorId/countries': 'admin',
   'POST sbg/operators/:operatorId/two-step/reset': 'admin',
   'POST sbg/operators/:operatorId/welcome-link': 'admin',
   'POST sbg/operators/me/two-step': 'any',

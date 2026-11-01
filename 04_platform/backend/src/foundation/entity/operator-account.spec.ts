@@ -138,7 +138,7 @@ describe('network staff accounts', () => {
       const { amina, brian } = two();
       const chloe = email('chloe');
       const asked = staff.propose({ email: ` ${chloe.toUpperCase()} `, name: ' Chloe Wanjiru ', roles: ALL_ROLES }, amina, t0);
-      expect(asked).toEqual({ proposalId: expect.stringMatching(/^spr_[0-9a-f]{16}$/), email: chloe, name: 'Chloe Wanjiru', askedBy: 'Amina Otieno', askedAt: iso(t0), until: iso(t0 + STAFF_PROPOSAL_DAYS * DAY), mine: true, forSetupKey: false, roles: ALL_ROLES });
+      expect(asked).toEqual({ proposalId: expect.stringMatching(/^spr_[0-9a-f]{16}$/), email: chloe, name: 'Chloe Wanjiru', askedBy: 'Amina Otieno', askedAt: iso(t0), until: iso(t0 + STAFF_PROPOSAL_DAYS * DAY), mine: true, forSetupKey: false, roles: ALL_ROLES, countries: ['*'] });
       // Asked for is not made: no account, and nothing to sign in with.
       expect(staff.list(t0).map((a) => a.email)).toEqual([amina.email, brian.email]);
       expect(() => staff.login(chloe, 'anything-at-all', undefined, t0)).toThrow('Wrong email or password');
@@ -241,7 +241,7 @@ describe('network staff accounts', () => {
       await settled();
       for (const other of [brian, dan]) {
         const said = news(other.email)[0];
-        expect(said.text).toContain(`Amina Otieno asked for a network staff account for Chloe Wanjiru (${chloe}), to hold support, vetting, money and administration.`);
+        expect(said.text).toContain(`Amina Otieno asked for a network staff account for Chloe Wanjiru (${chloe}), to hold support, vetting, money and administration, in every country.`);
         expect(said.text).toContain('Approve it only if you know this person and this is their address');
       }
       expect([news(brian.email).length, news(dan.email).length]).toEqual([before.brian + 1, before.dan + 1]);
@@ -381,6 +381,67 @@ describe('network staff accounts', () => {
     });
 
     /* ------------------------------------------------- outside a sandbox: the setup key -- */
+
+    /* 2026-11-01 — staff separated by country (the owner): the countries an account works in, in its token. */
+    describe('the countries a member of staff works in', () => {
+      it('carries them in the token; the setup key’s own first account works in every country, and a new one where it was asked for', async () => {
+        const { amina, brian } = two();
+        expect(amina.countries).toEqual(['*']);
+        expect(auth.introspect(tokenOf(staff.login(amina.email, amina.temporaryPassword, undefined, t0)).access_token).staffCountries).toEqual(['*']);
+        const asked = staff.propose({ email: email('dan'), name: 'Dan', roles: ALL_ROLES, countries: ['nl', 'KE', 'KE', 'ZZ'] }, amina, t0);
+        // known countries only, each once, in order — and said to everybody else on staff
+        expect(asked.countries).toEqual(['KE', 'NL']);
+        await settled();
+        expect(news(brian.email).at(-1)?.text).toContain('in Kenya and Netherlands');
+        const made = await staff.approve(asked.proposalId, brian, t0);
+        staff.choosePassword(tokenIn(made.link), 'Dan-chose-this-one', t0);
+        expect(made.countries).toEqual(['KE', 'NL']);
+        expect(auth.introspect(tokenOf(staff.login(made.email, 'Dan-chose-this-one', undefined, t0)).access_token).staffCountries).toEqual(['KE', 'NL']);
+        // none said: the asker's own
+        expect(staff.propose({ email: email('eve'), name: 'Eve', roles: ALL_ROLES }, amina, t0).countries).toEqual(['*']);
+        expect(() => staff.propose({ email: email('fay'), name: 'Fay', roles: ALL_ROLES, countries: ['ZZ'] }, amina, t0)).toThrow(/which countries they work in/);
+      });
+
+      it('gives only countries the giver holds — every country only from every country — asking and approving alike', async () => {
+        const { amina, brian } = two();
+        const kenya = await staff.approve(staff.propose({ email: email('ken'), name: 'Ken', roles: ALL_ROLES, countries: ['KE'] }, amina, t0).proposalId, brian, t0);
+        staff.choosePassword(tokenIn(kenya.link), 'Ken-chose-this-one', t0);
+        expect(() => staff.propose({ email: email('nina'), name: 'Nina', roles: ALL_ROLES, countries: ['NL'] }, kenya, t0)).toThrow(/gives only countries they work in themselves/);
+        expect(() => staff.propose({ email: email('nina'), name: 'Nina', roles: ALL_ROLES, countries: ['*'] }, kenya, t0)).toThrow(/every country only somebody who holds every country/);
+        // a Kenya colleague asked for by somebody with every country: Ken may approve it; a Netherlands one he may not
+        const ke = staff.propose({ email: email('kim'), name: 'Kim', roles: ALL_ROLES, countries: ['KE'] }, amina, t0);
+        await expect(staff.approve(ke.proposalId, kenya, t0)).resolves.toMatchObject({ countries: ['KE'] });
+        const nl = staff.propose({ email: email('noor'), name: 'Noor', roles: ALL_ROLES, countries: ['NL'] }, amina, t0);
+        await expect(staff.approve(nl.proposalId, kenya, t0)).rejects.toThrow(/gives only countries they work in themselves/);
+      });
+
+      it('changes them only when a second person approves — and signs the person out, so the next sign-in carries the new', async () => {
+        const { amina, brian } = two();
+        const chloe = await joined('Chloe', amina, brian, t0);
+        const session = tokenOf(staff.login(chloe.email, 'Chloe-chose-this-one', undefined, t0)).access_token;
+        const asked = staff.proposeCountries(chloe.operatorId, ['KE'], amina, t0);
+        expect(asked).toMatchObject({ kind: 'countries', countries: ['KE'], countriesNow: ['*'], operatorId: chloe.operatorId });
+        expect(() => staff.proposeCountries(chloe.operatorId, ['NL'], brian, t0)).toThrow(/already asked to change Chloe's countries/);
+        await expect(staff.approve(asked.proposalId, amina, t0)).rejects.toThrow('not the one who asked');
+        await staff.approve(asked.proposalId, brian, t0);
+        expect(staff.view(chloe.operatorId).countries).toEqual(['KE']);
+        expect(auth.introspect(session)).toMatchObject({ active: false, reason: 'revoked' });
+        expect(auth.introspect(tokenOf(staff.login(chloe.email, 'Chloe-chose-this-one', undefined, t0)).access_token).staffCountries).toEqual(['KE']);
+        expect(() => staff.proposeCountries(chloe.operatorId, ['KE'], amina, t0)).toThrow(/works in Kenya already/);
+      });
+
+      it('lets the person approve a change that only takes countries away — with two on staff there is nobody else — never one that adds', async () => {
+        const { amina, brian } = two();
+        // Brian narrowed to Kenya by Amina, approved by Brian himself: fewer countries is never a way in
+        const narrower = staff.proposeCountries(brian.operatorId, ['KE'], amina, t0);
+        await expect(staff.approve(narrower.proposalId, brian, t0)).resolves.toMatchObject({ countries: ['KE'] });
+        // …but widening his own back is somebody else's to approve
+        const wider = staff.proposeCountries(brian.operatorId, ['KE', 'NL'], amina, t0);
+        await expect(staff.approve(wider.proposalId, brian, t0)).rejects.toThrow(/approve one yourself only when it takes countries away/);
+        // and he may not stop a change of his own countries he did not ask for
+        expect(() => staff.decline(wider.proposalId, brian, 'no', t0)).toThrow(/decided by somebody else/);
+      });
+    });
 
     describe('outside a sandbox', () => {
       // Real addresses: one on a domain kept for tests is never handed to a sender that sends.

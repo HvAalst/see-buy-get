@@ -49,6 +49,8 @@ export interface IssueTokenInput {
   actorName?: string;
   /** Round 38 — a member of staff's roles, as they were at sign-in (staff-roles.ts). */
   staffRoles?: string[];
+  /** 2026-11-01 — the countries a member of staff works in, as they were at sign-in (staff-countries.ts); `*` is every country. */
+  staffCountries?: string[];
   /** Assurance level; gates which scopes may be granted (@MinTier). */
   tier?: Tier;
   /**
@@ -104,6 +106,8 @@ export interface IntrospectionResult {
   actorName?: string;
   /** Round 38 — a named member of staff's roles: the doors of theirs (staff-roles.ts). */
   staffRoles?: string[];
+  /** 2026-11-01 — the countries they work in (staff-countries.ts). Absent on a token from before countries: every country. */
+  staffCountries?: string[];
   tier?: Tier;
   /** The person who signed in, when a person did. See IssueTokenInput.personDid. */
   personDid?: string;
@@ -125,6 +129,7 @@ export interface TokenClaims {
   tenant?: string;
   actorName?: string;
   staffRoles?: string[];
+  staffCountries?: string[];
   tier?: Tier;
   /** The person who signed in. See IssueTokenInput.personDid. */
   personDid?: string;
