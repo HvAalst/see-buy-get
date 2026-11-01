@@ -9,7 +9,7 @@ import { isSandbox } from '../../foundation/runtime/sandbox';
 import { EmailCodeService } from './email-code.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { Public } from '../../foundation/auth/public.decorator';
-import { Roles, Scopes } from '../../foundation/auth/scopes.decorator';
+import { Roles, Scopes, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
@@ -504,20 +504,30 @@ export class IdentityController {
     return this.parcels.buyerDispute(id, person, person.personDid, dto.reason, dto.photoRef);
   }
 
-  /** Create (or return) an invite for a contact → a token the app turns into a shareable /send/ link (S24). */
-  @Roles('consumer')
+  /**
+   * Create (or return) an invite for a contact → a token the app turns into a shareable link (S24). 2026-11-01: from EVERY
+   * app (the owner: "invite a contact" in every app's settings) — an invite is a PERSON's, so it is the person behind the
+   * sign-in who invites: a shopkeeper, a hub's keeper, a driver, a fleet's office alike.
+   */
+  @SignedIn()
   @Post('invites')
   createInvite(@Body() dto: CreateInviteDto, @Actor() actor: IntrospectionResult) {
-    const person = this.persons.requireByDid(actor.did!);
+    const person = this.inviter(actor);
     return toInviteView(this.invites.create(person.personDid, dto.channels));
   }
 
   /** The inviter's sent invites + how many turned into joins (the growth credit) — PII-free. */
-  @Roles('consumer')
+  @SignedIn()
   @Get('invites')
   myInvites(@Actor() actor: IntrospectionResult) {
-    const person = this.persons.requireByDid(actor.did!);
-    return this.invites.forInviter(person.personDid);
+    return this.invites.forInviter(this.inviter(actor).personDid);
+  }
+
+  /** The person who invites: the one behind the sign-in — a consumer's own DID, any other app's signed-in person. */
+  private inviter(actor: IntrospectionResult) {
+    const did = actor?.personDid ?? (actor?.role === 'consumer' ? actor.did : undefined);
+    if (!did) throw new GlosError('FORBIDDEN', 'An invite is a person’s, and this sign-in has no person behind it: sign in with your phone and PIN to invite somebody');
+    return this.persons.requireByDid(did);
   }
 
   /** The invite landing check — validates the token without exposing the inviter or the invitee. */

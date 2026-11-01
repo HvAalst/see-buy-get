@@ -98,6 +98,9 @@ export interface AccountApi {
   changePin: (currentPin: string, newPin: string) => Promise<boolean>;
   /** Upload an image as this person's avatar and apply it. Returns the media id, or null. */
   saveAvatar: (dataUrl: string) => Promise<string | null>;
+  /** 2026-11-01 — share SeeBuyGet: this person's invites (and how many joined), and a new invite link. */
+  myInvites: () => Promise<Result<unknown>>;
+  createInvite: (channels: string[]) => Promise<Result<unknown>>;
   /** Fetch owner-gated bytes for an <AuthImage>, whose `load` prop takes exactly this Result shape. */
   loadMedia: (mediaId: string) => Promise<{ data: Blob | null; error: unknown }>;
   /**
@@ -154,6 +157,8 @@ const IDLE: AccountApi = {
   countries: async () => NO_CLIENT,
   changePin: async () => false,
   saveAvatar: async () => null,
+  myInvites: async () => NO_CLIENT,
+  createInvite: async () => NO_CLIENT,
   loadMedia: async () => ({ data: null, error: null }),
   sendEmailCode: async () => NO_CLIENT,
   setEmail: async () => NO_CLIENT,
@@ -374,6 +379,12 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
     [client],
   );
 
+  const myInvites = useCallback(
+    async (): Promise<Result<unknown>> => (client ? client.request((raw) => raw.GET('/v1/sbg/identity/invites' as never, {} as never) as never) : NO_CLIENT),
+    [client],
+  );
+  const createInvite = useCallback((channels: string[]) => post<unknown>('/v1/sbg/identity/invites', { channels }), [post]);
+
   const closing = useCallback(async (): Promise<Result<ClosingStanding>> => {
     if (!client) return NO_CLIENT;
     return client.request((raw) => raw.GET('/v1/sbg/account/closing' as never, {} as never) as never) as Promise<Result<ClosingStanding>>;
@@ -395,5 +406,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, payout, sendPayoutCode, savePayoutNumber };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, payout, sendPayoutCode, savePayoutNumber };
 }

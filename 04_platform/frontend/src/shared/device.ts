@@ -80,7 +80,27 @@ export function canShare(): boolean {
 }
 
 /** The channels the invite sheet offers. `copy`/`system` are handled locally; the rest are deep links. */
-export type ShareChannel = 'whatsapp' | 'telegram' | 'sms' | 'email' | 'copy' | 'system';
+export type ShareChannel = 'whatsapp' | 'telegram' | 'wechat' | 'vk' | 'viber' | 'sms' | 'email' | 'copy' | 'system';
+
+/**
+ * 2026-11-01 — THE APPS PEOPLE SHARE IN, in the order they use them where the reader is (the owner: "the popular apps used
+ * in BRICS countries"): WhatsApp across most of them (Brazil, India, South Africa, Egypt, the Gulf, Indonesia, East Africa),
+ * Telegram first in Ethiopia, Iran and Russia, where VK and Viber follow, and WeChat in China, where the others do not
+ * reach. Whatever is not listed is behind "Share", the phone's own sheet, which holds every app on the phone.
+ */
+export function channelsFor(country?: string): ShareChannel[] {
+  const c = (country ?? '').trim().toUpperCase();
+  if (c === 'CN') return ['wechat', 'sms', 'email', 'copy'];
+  if (c === 'RU' || c === 'BY') return ['telegram', 'whatsapp', 'vk', 'viber', 'sms', 'email', 'copy'];
+  if (c === 'ET' || c === 'IR' || c === 'UZ') return ['telegram', 'whatsapp', 'sms', 'email', 'copy'];
+  return ['whatsapp', 'telegram', 'sms', 'email', 'copy'];
+}
+
+/** The country a phone's language names, where it names one: 'en-KE' → KE, 'zh-Hans-CN' → CN; 'en' → undefined. */
+export function countryOfLocale(lang?: string): string | undefined {
+  const part = (lang ?? '').split(/[-_]/).slice(1).find((p) => /^[A-Za-z]{2}$/.test(p));
+  return part ? part.toUpperCase() : undefined;
+}
 
 export interface ShareTarget {
   text: string;
@@ -103,6 +123,11 @@ export function channelUrl(channel: ShareChannel, t: ShareTarget): string | null
       return t.tel ? `https://wa.me/${digits(t.tel)}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
     case 'telegram':
       return `https://t.me/share/url?url=${encodeURIComponent(t.url)}&text=${encodeURIComponent(t.text)}`;
+    // 2026-11-01 — VK's share page (it reads the link's card), and Viber's forward, which opens its chat picker.
+    case 'vk':
+      return `https://vk.com/share.php?url=${encodeURIComponent(t.url)}&title=${encodeURIComponent(t.text)}`;
+    case 'viber':
+      return `viber://forward?text=${encodeURIComponent(msg)}`;
     case 'sms':
       return `sms:${digits(t.tel ?? '')}?body=${encodeURIComponent(msg)}`;
     case 'email':
@@ -118,6 +143,16 @@ export function channelUrl(channel: ShareChannel, t: ShareTarget): string | null
  */
 export async function openChannel(channel: ShareChannel, t: ShareTarget): Promise<'opened' | 'copied' | 'shared' | 'failed'> {
   if (channel === 'copy') {
+    try {
+      await navigator.clipboard?.writeText(`${t.text} ${t.url}`);
+      return 'copied';
+    } catch {
+      return 'failed';
+    }
+  }
+  // 2026-11-01 — WeChat takes no link from outside a page it hosts: the message is copied, to paste in a WeChat chat
+  // (opening WeChat by its app address would leave a blank page on a phone without it). "Share" lists WeChat too.
+  if (channel === 'wechat') {
     try {
       await navigator.clipboard?.writeText(`${t.text} ${t.url}`);
       return 'copied';

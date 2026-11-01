@@ -132,6 +132,16 @@ export async function prerender(data: { url: string }): Promise<{
 const meta = (props: Record<string, string>): HeadElement => ({ type: 'meta', props });
 const ldScript = (ld: unknown): HeadElement => ({ type: 'script', props: { type: 'application/ld+json', children: JSON.stringify(ld) } });
 
+/**
+ * THE PICTURE A SHARED LINK SHOWS (the owner, 2026-11-01: a link to SeeBuyGet sent in WhatsApp, Telegram, WeChat, VK or
+ * Viber should open as a card with a big picture, the title and a line). 1200 × 630, the shape every one of them shows
+ * whole, and under WhatsApp's 300 KB, above which it shows no picture at all: the logo, the front page's promise in
+ * letters big enough to read in a chat, and the counter from the front page's own drawing. Made once from the brand's
+ * files (public/img/share-card.png); its size is said with it, so a messenger can lay the card out before it has the
+ * picture. Only with the site's own address: a messenger fetches the picture by its full address, never a path.
+ */
+export const SHARE_IMAGE = { path: '/img/share-card.png', width: 1200, height: 630, type: 'image/png' } as const;
+
 /** What every page says about itself, plus the absolute addresses when the site's own address is known. */
 function common(title: string, description: string, path: string): HeadElement[] {
   return [
@@ -140,12 +150,19 @@ function common(title: string, description: string, path: string): HeadElement[]
     meta({ property: 'og:site_name', content: 'SeeBuyGet' }),
     meta({ property: 'og:title', content: title }),
     meta({ property: 'og:description', content: description }),
-    meta({ name: 'twitter:card', content: 'summary' }),
+    // The pages are written in British English; Open Graph names a language with its country.
+    meta({ property: 'og:locale', content: 'en_GB' }),
+    // A large picture only where there is one to show; without the site's address there is none.
+    meta({ name: 'twitter:card', content: SITE ? 'summary_large_image' : 'summary' }),
     ...(SITE
       ? [
           { type: 'link', props: { rel: 'canonical', href: `${SITE}${path}` } },
           meta({ property: 'og:url', content: `${SITE}${path}` }),
-          meta({ property: 'og:image', content: `${SITE}/icons/icon-512.png` }),
+          meta({ property: 'og:image', content: `${SITE}${SHARE_IMAGE.path}` }),
+          meta({ property: 'og:image:type', content: SHARE_IMAGE.type }),
+          meta({ property: 'og:image:width', content: String(SHARE_IMAGE.width) }),
+          meta({ property: 'og:image:height', content: String(SHARE_IMAGE.height) }),
+          meta({ property: 'og:image:alt', content: t('home.landing.shareImageAlt') }),
         ]
       : []),
   ];

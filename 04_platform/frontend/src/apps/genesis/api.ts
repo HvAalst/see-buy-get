@@ -1,3 +1,4 @@
+import { dropInvite, heldInvite } from '../../shared/invite';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import type { Agreement } from '../../shared/documents/documents';
 import {
@@ -96,7 +97,9 @@ export function verifyOtp(phone: string, code: string): Promise<Result<{ verifie
 /** Create (or refresh) the consumer for an OTP-verified phone; optionally set the PIN + credit an invite. */
 export async function enroll(phone: string, pin?: string, inviteToken?: string, recovery?: { email: string; code: string }, agreement?: Agreement | null): Promise<Result<AuthResult>> {
   // A first PIN needs a confirmed recovery email behind it; somebody replacing a forgotten PIN already has one.
-  const r = await publicRequest<AuthResult & { device?: string }>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) } });
+  // 2026-11-01 — the token of this landing, else one kept from a shared link opened on the front page.
+  const r = await publicRequest<AuthResult & { device?: string }>(sendConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, inviteToken: inviteToken ?? heldInvite(), device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) } });
+  if (r.data) dropInvite();
   // The code was typed on this device: the server hands it the key the PIN is asked with from now on.
   saveDeviceKey(phone, r.data?.device);
   return r;

@@ -6,6 +6,7 @@ import { useT, type MessageKey } from '../../shared/i18n';
 import type { IconName } from '../../shared/ui/Icon';
 import { useWideScreen } from '../../shared/useWideScreen';
 import { SettingsSheet } from '../../shared/account/SettingsSheet';
+import { ShareSheet } from '../../shared/account/ShareSheet';
 import { useAccount } from '../../shared/account/useAccount';
 import { ConsoleMenu } from '../tower/ConsoleMenu';
 import { ImportsScreen } from '../tower/screens/ImportsScreen';
@@ -59,6 +60,8 @@ export function App() {
   const { state, actions } = useBusinessApp();
   const wide = useWideScreen();
   const [settings, setSettings] = useState(false);
+  // 2026-11-01 — share SeeBuyGet, as every app's settings offer it.
+  const [sharing, setSharing] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [more, setMore] = useState(false);
   const client = actions.businessClient();
@@ -110,6 +113,7 @@ export function App() {
             entries={[
               // ONE Settings entry for how this person signs in (the user: these actions live in Settings).
               { key: 'settings', icon: 'settings', label: t('business.menu.settings'), onGo: () => setSettings(true) },
+              { key: 'share', icon: 'send', label: t('account.share.title'), onGo: () => setSharing(true) },
               { key: 'switch', icon: 'repeat', label: t('business.menu.switch'), onGo: () => void actions.backToList() },
               { key: 'help', icon: 'info', label: t('guide.link'), onGo: () => setHelpOpen(true) },
               { key: 'out', icon: 'lock', label: t('business.signOut'), danger: true, onGo: actions.signOut },
@@ -202,6 +206,7 @@ export function App() {
       )}
 
       <SettingsSheet open={settings} onClose={() => setSettings(false)} api={account} onSignOut={actions.signOut} />
+      <ShareSheet open={sharing} onClose={() => setSharing(false)} api={account} />
       {/* What they agreed to, asked again when a version since asks it (2026-10-25). */}
       <AgreementGate sbg={client?.client.sbg ?? null} onSignOut={actions.signOut} />
     </div>

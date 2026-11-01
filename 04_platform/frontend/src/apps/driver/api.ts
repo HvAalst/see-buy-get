@@ -1,3 +1,4 @@
+import { dropInvite, inviteBody } from '../../shared/invite';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import {
   createConversationsApi,
@@ -114,7 +115,9 @@ export function verifyPhoneCode(phone: string, code: string): Promise<Result<{ v
 /** Choose (or replace) the PIN for a phone that has just been verified by code. */
 export async function choosePin(phone: string, pin: string, recovery?: { email: string; code: string }): Promise<Result<unknown>> {
   // A first PIN needs a confirmed recovery email behind it; somebody replacing a forgotten PIN already has one.
-  const r = await publicRequest<{ device?: string }>(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  // 2026-11-01 — with the invite a shared link carried (only a first sign-up is counted to its sharer).
+  const r = await publicRequest<{ device?: string }>(driverConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...inviteBody(), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}) } });
+  if (r.data) dropInvite();
   // The code was typed on this phone: it is handed the key the PIN is asked with from now on.
   saveDeviceKey(phone, r.data?.device);
   return r;

@@ -1,3 +1,4 @@
+import { dropInvite, inviteBody } from '../../shared/invite';
 import type { SystemMessage, SystemView } from './system';
 import type { NotPaidView, PaidAnswerView, PaidDirectView } from '../../shared/paidDirect';
 import type { Agreement, MyAgreement } from '../../shared/documents/documents';
@@ -57,7 +58,9 @@ export interface PersonAuth {
 
 /** A verified phone, a new PIN, and — the first time — a confirmed recovery email behind it. */
 export async function enroll(phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: Agreement | null): Promise<Result<PersonAuth>> {
-  const r = await publicRequest<PersonAuth & { device?: string }>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) } });
+  // 2026-11-01 — with the invite a shared link carried (only a first sign-up is counted to its sharer).
+  const r = await publicRequest<PersonAuth & { device?: string }>(businessConfig(), '/v1/sbg/identity/enroll', { body: { phone, pin, device: readDeviceKey(phone), ...inviteBody(), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) } });
+  if (r.data) dropInvite();
   // The code was typed on this device: it is handed the key the PIN is asked with from now on.
   saveDeviceKey(phone, r.data?.device);
   return r;

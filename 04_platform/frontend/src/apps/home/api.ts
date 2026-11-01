@@ -7,6 +7,7 @@ import type { HubOpenNow, HubWeek } from '../../shared/hubReach';
 import type { VisitPlace } from '../../shared/visitHours';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { downscaleImage } from '../../shared/media';
+import { dropInvite, inviteBody } from '../../shared/invite';
 import type { FleetSignupStatus } from './logic';
 
 const APP_VERSION = '1.0.0';
@@ -112,9 +113,11 @@ export interface PersonSession {
  */
 export async function enrollPerson(phone: string, pin: string, recovery?: { email: string; code: string }, agreement?: Agreement | null): Promise<Result<PersonSession>> {
   const r = await publicRequest<{ token: { access_token: string }; device?: string }>(homeConfig(), '/v1/sbg/identity/enroll', {
-    body: { phone, pin, device: readDeviceKey(phone), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) },
+    // 2026-11-01 — the invite a shared link carried, so whoever shared it is counted (only a first sign-up is).
+    body: { phone, pin, device: readDeviceKey(phone), ...inviteBody(), ...(recovery ? { email: recovery.email, emailCode: recovery.code } : {}), ...(agreement ? { agreement } : {}) },
   });
   if (r.error || !r.data) return { data: null, error: r.error, status: r.status };
+  dropInvite();
   saveDeviceKey(phone, r.data.device);
   return { data: { token: r.data.token.access_token }, error: null, status: r.status };
 }

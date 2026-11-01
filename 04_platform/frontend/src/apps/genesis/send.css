@@ -325,47 +325,7 @@
   border-radius: 50%;
   object-fit: cover;
 }
-.avatar__initial {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--blue-dark);
-  line-height: 1;
-}
 
-.avatarpick {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-.avatarpick__pic {
-  flex: none;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--blue-light);
-  color: var(--blue-dark);
-}
-.avatarpick__pic .authimg,
-.avatarpick__pic img {
-  width: 64px;
-  height: 64px;
-  min-height: 0;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.avatarpick__pic .avatar__initial {
-  font-size: 26px;
-}
-.avatarpick__act {
-  flex: 1;
-  min-width: 0;
-}
 
 /* ------------------------------------------------------------- invite chips (S28) --
    The "send with" channel selector: pill chips, the chosen one outlined in blue. */

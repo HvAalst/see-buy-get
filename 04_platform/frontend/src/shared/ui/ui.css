@@ -2585,6 +2585,110 @@
   border-radius: 50%;
   object-fit: cover;
 }
+/* 2026-11-01 — the person's initial in their circle, and the photo picker of the account menu's profile sheet: shared by every
+   app (they lived in the consumer app's stylesheet only, so a hub's picker showed its icon loose, out of its circle). */
+.avatar__initial {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--blue-dark);
+  line-height: 1;
+}
+.avatarpick {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.avatarpick__pic {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--blue-light);
+  color: var(--blue-dark);
+}
+.avatarpick__pic .authimg,
+.avatarpick__pic img {
+  width: 64px;
+  height: 64px;
+  min-height: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.avatarpick__pic .avatar__initial {
+  font-size: 26px;
+}
+.avatarpick__act {
+  flex: 1;
+  min-width: 0;
+}
+/* 2026-11-01 — Share SeeBuyGet: the sheet every app's menu opens (shared/account/ShareSheet.tsx), styled here so it
+   looks the same in the shop, hub, driver, fleet, store and business apps, none of which carry the Send app's rows. */
+.share__lede {
+  margin: 0 0 14px;
+  color: var(--tx2);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.share__acts {
+  display: grid;
+  gap: 8px;
+}
+.share__people {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.share__person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bd);
+}
+.share__who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  overflow-wrap: anywhere;
+}
+.share__who b {
+  font-weight: 700;
+  color: var(--tx);
+}
+.share__who small {
+  color: var(--tx3);
+  font-size: 13px;
+}
+.share__label {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+.share__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.share__link,
+.share__said {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--tx3);
+  overflow-wrap: anywhere;
+}
+.share__said {
+  color: var(--tx2);
+  font-weight: 700;
+}
 .acct__caret {
   flex: none;
   opacity: 0.7;

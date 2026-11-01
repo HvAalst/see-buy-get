@@ -38,6 +38,7 @@ import { readReportKey } from '../../shared/damage/damageReport';
 import { driverSendsPapers, EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 import { isPinReset } from '../../shared/account/recovery';
+import { captureInvite } from '../../shared/invite';
 import { enrollPerson, mySignups, sendPapersAgain, signUpDriver, signUpFleet, uploadPaper, type FleetSignupView, type PersonSession } from './api';
 
 export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help' | 'info' | 'directory';
@@ -203,6 +204,10 @@ export function useHomeApp() {
   useEffect(() => {
     stateRef.current = state;
   });
+  // 2026-11-01 — a shared link (/?invite=…): keep its token, for whichever app the newcomer signs up in.
+  useEffect(() => {
+    captureInvite();
+  }, []);
 
   const loadPoints = useCallback(async () => {
     setState((s) => ({ ...s, pointsState: 'loading' }));

@@ -1,3 +1,4 @@
+import { captureInvite } from '../../shared/invite';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Agreement } from '../../shared/documents/documents';
 import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
@@ -259,7 +260,7 @@ export function useSendApp() {
   // newcomer straight into the enrol flow. A TRANSIENT preview failure keeps the token (enrol accept is
   // best-effort anyway); only a definitive "invalid" drops it.
   useEffect(() => {
-    const token = new URLSearchParams(globalThis.location?.search ?? '').get('invite');
+    const token = captureInvite();
     if (!token || readDid()) return;
     setState((s) => ({ ...s, inviteToken: token }));
     void previewInvite(token).then((r) => {

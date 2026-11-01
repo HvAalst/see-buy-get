@@ -21,6 +21,8 @@ const PLAIN: Record<string, string> = {
   ADD: 'stress', AND: 'stress', COPY: 'stamp', COUNT: 'stress', FROM: 'stress', HERE: 'stress', HIGH: 'stress', MEANS: 'stress', NO: 'stress', NOT: 'stress', NOTHING: 'stress', ONE: 'stress', OWN: 'stress', PER: 'stress', RAISES: 'stress', RED: 'stress', SERVICE: 'stress', SHORTER: 'stress', SKIPPED: 'stress', TO: 'stress', WORDING: 'stress', YOU: 'stress', YOUR: 'stress', SANDBOX: 'stamp', WEBHOOK: 'stress', UP: 'stress', BILLED: 'stress', COVER: 'stress', DOES: 'stress', IS: 'stress', NEW: 'stress', PAYMENT: 'stress',
   // Names, and codes as they are printed: a brand, an example code, a prefix of our own codes.
   GLOS: 'name', SBG: 'name', TWILIO: 'name', QNAP: 'name', B2: 'name', R2: 'name', GIT: 'example', FRT: 'code', KLM: 'example', FM: 'code', PX9M: 'example', COL: 'code', FLT: 'code', DID: 'code', SID: 'code', POST: 'code', OSRM: 'name', SHA256: 'name', VAPID: 'name',
+  // 2026-11-01 — the messaging app's own name (Share SeeBuyGet), as it is written on the phone.
+  VK: 'name',
 };
 
 describe('the trade’s short forms, said in full', () => {

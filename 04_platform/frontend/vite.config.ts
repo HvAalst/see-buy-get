@@ -193,9 +193,10 @@ const SIBLING_DIRS = Object.values(APPS)
 /**
  * The front door's files a first visit does NOT download into its offline store: every page but the front page (its own
  * HTML, kept when it is first opened), the help's words and screen, the fonts only the app screens use, and the build's
- * own pre-rendering code. See `runtimeCaching` below.
+ * own pre-rendering code. See `runtimeCaching` below. And the picture a shared link shows (img/share-card.png): only a
+ * messenger fetches it, never a page.
  */
-const ROOT_ON_DEMAND = ['help/**', 'towns/**', 'directory/**', 'assets/DirectoryScreen-*', 'for/**', 'about/**', 'terms/**', 'privacy/**', 'cookies/**', 'help.html', 'assets/en.help-*', 'assets/HelpScreen-*', 'assets/prerenderEntry-*', 'assets/inter-*', 'assets/bricolage-grotesque-latin-wdth-*'];
+const ROOT_ON_DEMAND = ['help/**', 'towns/**', 'directory/**', 'assets/DirectoryScreen-*', 'for/**', 'about/**', 'terms/**', 'privacy/**', 'cookies/**', 'help.html', 'assets/en.help-*', 'assets/HelpScreen-*', 'assets/prerenderEntry-*', 'assets/inter-*', 'assets/bricolage-grotesque-latin-wdth-*', 'img/share-card.png'];
 const APP_DIR = resolve(ROOT, 'src/apps', APP_ID);
 
 /**

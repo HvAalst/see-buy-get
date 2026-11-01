@@ -24985,7 +24985,7 @@
       "post": {
         "operationId": "Identity.createInvite",
         "summary": "",
-        "description": "Create (or return) an invite for a contact → a token the app turns into a shareable /send/ link (S24).",
+        "description": "Create (or return) an invite for a contact → a token the app turns into a shareable link (S24). 2026-11-01: from EVERY\napp (the owner: \"invite a contact\" in every app's settings) — an invite is a PERSON's, so it is the person behind the\nsign-in who invites: a shopkeeper, a hub's keeper, a driver, a fleet's office alike.",
         "parameters": [],
         "requestBody": {
           "required": true,

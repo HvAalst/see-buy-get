@@ -21,6 +21,8 @@ declare module 'node:fs' {
   }
   export function readdirSync(path: string, options: { withFileTypes: true }): Dirent[];
   export function readFileSync(path: string, encoding: 'utf8'): string;
+  /** The bytes, for a file that is not text (a picture whose size a guard reads from its header). */
+  export function readFileSync(path: string): Uint8Array;
 }
 
 declare module 'node:path' {

@@ -210,6 +210,7 @@ export const enHome = {
   'home.welcome.haveAccountSub': 'Open your shop, driver, hub, store or fleet app',
   'home.landing.metaTitle': 'SeeBuyGet — send and collect parcels at a shop near you, no address needed',
   'home.landing.metaDescription': 'Send a parcel to a neighbourhood shop, collect it from a shop with a code, and pay at the counter. See the price first, no account needed. Shops, drivers, sort hubs and online stores earn with the network.',
+  'home.landing.shareImageAlt': 'The SeeBuyGet logo and the words “Send and collect parcels at a shop near you. No address needed. See the price first, pay at the counter”, beside a drawing of a customer handing a parcel over a shop counter',
   'home.landing.serviceName': 'Shop-to-shop parcel delivery',
   'home.landing.serviceType': 'Parcel delivery and collection through neighbourhood shops',
   'home.landing.send': 'Send a parcel',
