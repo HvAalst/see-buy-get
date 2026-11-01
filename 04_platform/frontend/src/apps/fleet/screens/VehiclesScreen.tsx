@@ -221,6 +221,14 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
             <input id="v-deck" class="input" type="number" inputMode="decimal" min="0.1" max="3" step="0.05" placeholder={t('fleet.vehicles.deckPh')} value={f.deckM} onInput={(e) => actions.setVForm({ deckM: e.currentTarget.value })} />
             <p class="card__note">{t('fleet.vehicles.deckHint')}</p>
           </div>
+          {/* 2026-11-01 — the load space, as the fleet measured it: absent, the board says it is not on record. */}
+          <div class="field">
+            <label class="field__label" for="v-volume">
+              {t('fleet.vehicles.volume')}
+            </label>
+            <input id="v-volume" class="input" type="number" inputMode="decimal" min="0.1" max="150" step="0.1" placeholder={t('fleet.vehicles.volumePh')} value={f.volumeM3} onInput={(e) => actions.setVForm({ volumeM3: e.currentTarget.value })} />
+            <p class="hint">{t('fleet.vehicles.volumeHint')}</p>
+          </div>
         </div>
         <div class="grid2" style="margin-top:12px">
           <div class="field">

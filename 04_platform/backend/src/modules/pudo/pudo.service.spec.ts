@@ -8736,6 +8736,36 @@ describe('PUDO Light', () => {
     expect(dispatch.claimsFor(d.did).find((c) => c.ref === f.freightId)?.truckFlight).toMatch(/^Moved for Kenya Airways under air waybill 706-12345675, flight KQ 9301: carried as a road load under the law of the road/);
   });
 
+  it('road meets air (2026-11-01): a load bigger than a vehicle’s declared load space is not offered to it, and an unmeasured vehicle is told to check — never guessed', () => {
+    const pickup = { lat: -1.32, lng: 36.92 };
+    const f = dispatch.registerFreight({ description: 'Roses, 120 cartons', pickupLocation: pickup, pickupLabel: 'Pack house', destLabel: 'KQ cargo', destLocation: pickup, weightKg: 1500, packaging: 'palletised', packages: 6, volumeM3: 24 });
+    expect(f.volumeM3).toBe(24);
+    const register = (tag: string, volumeM3?: number) => {
+      const d = drivers.register({ displayName: tag, fullName: tag, nationalId: 'ID-' + tag, mobile: '+2547' + tag, licenceClasses: ['truck'], licenceNumber: 'L-' + tag, licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+      drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+      drivers.decideKyc(d.did, true);
+      const v = vehicles.register({ plate: 'VL-' + tag, vehicleClass: 'truck', truckSubtype: 'box', capacityKg: 10_000, ownerName: 'X', equipment: ['FLT', 'STR'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5, ...(volumeM3 ? { volumeM3 } : {}) });
+      fleet.couple(d.did, v.vehicleId);
+      return d.did;
+    };
+    // Strong enough for 1,500 kg, but 18 m³ of space: not offered, and the board says why; the take refuses it too.
+    const small = register('VOLS', 18);
+    const row = dispatch.board({ driverDid: small, from: pickup }).find((r) => r.freightId === f.freightId);
+    expect(row?.blockers.find((b) => b.code === 'OVER_VEHICLE_VOLUME')?.message).toBe('The load takes 24 m³ — 6 m³ more than your vehicle’s load space of 18 m³');
+    expect(dispatch.suggest(small, { from: pickup, to: pickup }).some((o) => o.ref === f.freightId)).toBe(false);
+    expect(() => dispatch.assign(f.freightId, small, { managerDid: 'did:office:x' })).toThrow(/24 m³ — 6 m³ more/);
+    // 32 m³: it fits.
+    const big = register('VOLB', 32);
+    expect(dispatch.board({ driverDid: big, from: pickup }).find((r) => r.freightId === f.freightId)?.blockers.map((b) => b.code) ?? []).not.toContain('OVER_VEHICLE_VOLUME');
+    // …and is offered to it: so the smaller truck missing out is the space, nothing else.
+    expect(dispatch.suggest(big, { from: pickup, to: pickup }).some((o) => o.ref === f.freightId)).toBe(true);
+    // Never measured: not refused — the board says the load's volume and that the space is not on record.
+    const unknown = register('VOLU');
+    const said = dispatch.board({ driverDid: unknown, from: pickup }).find((r) => r.freightId === f.freightId)?.blockers.find((b) => b.code === 'VOLUME_UNKNOWN');
+    expect(said).toMatchObject({ kind: 'unknown' });
+    expect(said?.message).toMatch(/^The load takes 24 m³, and your vehicle’s load space is not on record/);
+  });
+
   it('D9: what the receiver found at the handover — counted against the note, a damaged line with its photo, refused whole before anything is written — lands beside their name and reaches the sender', () => {
     const pickup = { lat: -1.86, lng: 36.36 };
     const d = coupleFlatbedWithForklift('RSV', { min: 0.8, max: 1.5 }); // bagged: a flatbed with its own forklift

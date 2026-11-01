@@ -256,6 +256,12 @@ export class Vehicle {
    */
   deckM?: number;
   /**
+   * 2026-11-01 — THE LOAD SPACE, in cubic metres: declared by the fleet, which measured it. Light, bulky cargo (flowers to an
+   * airport) fills a body before it weighs it down. ABSENT MEANS UNKNOWN AND STAYS UNKNOWN, as the deck does: the board then
+   * says the load's volume and that the space is not on record — it never guesses one from the class.
+   */
+  volumeM3?: number;
+  /**
    * How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so
    * by weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this
    * existed: read it through DispatchService.toteCapacityOf, never off the field.

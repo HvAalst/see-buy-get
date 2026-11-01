@@ -26,6 +26,8 @@ interface RegisterVehicleInput {
   /** How high the loading deck stands, in metres. Declared: only the fleet can measure it, and a guess
    *  would clear a load under a bridge on arithmetic about other people's trucks. */
   deckM?: number;
+  /** 2026-11-01 — the load space, in cubic metres, as the fleet measured it. */
+  volumeM3?: number;
   ownerType?: VehicleOwnerType;
   ownerName: string;
   /** The courier whose own vehicle this is — set by signup, never by a form; only they may start a shift on it. */
@@ -140,6 +142,8 @@ export class VehicleService {
       // not be one, because a guessed deck would clear a load under a bridge on arithmetic about other
       // people's trucks. Absent leaves the hazard map answering HEIGHT_UNKNOWN, which is the truth.
       ...(input.deckM != null && input.deckM > 0 && input.deckM < 3 ? { deckM: Math.round(input.deckM * 100) / 100 } : {}),
+      // THE LOAD SPACE, only as measured — no class default, for the deck's reason.
+      ...(input.volumeM3 != null && input.volumeM3 > 0 && input.volumeM3 <= 150 ? { volumeM3: Math.round(input.volumeM3 * 10) / 10 } : {}),
       // The owner's own rate where they name one; else the country's company's, which they can overrule any time (setPrice).
       pricePerKm: input.pricePerKm != null ? Math.round(input.pricePerKm * 1000) / 1000 : Math.round(starting.perKm * 1000) / 1000,
       // S34 — the pricing profile. Defaults are class-scaled (a bike's flag-down is a fraction of a truck's) with a

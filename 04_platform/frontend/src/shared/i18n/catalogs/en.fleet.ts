@@ -1104,6 +1104,9 @@ export const enFleet = {
      guessed: a class average would clear a load under a bridge on arithmetic about another truck. */
   'fleet.vehicles.deck': 'Deck height, in metres',
   'fleet.vehicles.deckPh': 'e.g. 1.30',
+  'fleet.vehicles.volume': 'Load space (m³)',
+  'fleet.vehicles.volumePh': 'e.g. 32',
+  'fleet.vehicles.volumeHint': 'Measured inside the body: length × width × height. Light, bulky loads — flowers to an airport — fill a truck before they weigh it down; with this, a load that does not fit is not offered to it.',
   'fleet.vehicles.deckHint':
     'How high the loading deck stands off the road, empty. We need it to answer low bridges: what matters under one is the load plus the deck it sits on, so a 2.90 m high-cube on a 1.30 m chassis is 4.20 m of vehicle. Leave it blank if you have not measured it — we will say we do not know rather than guess, and a guess is what puts a roof through a bridge.',
   'fleet.vehicles.pricePerKm': 'Price per km (public)',

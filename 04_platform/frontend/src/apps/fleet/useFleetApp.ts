@@ -759,6 +759,7 @@ export function useFleetApp() {
         ...(f.capacityKg ? { capacityKg: Number(f.capacityKg) } : {}),
         // Sent only when measured. There is no class default and there must not be one — see fleet.types.
         ...(f.deckM ? { deckM: Number(f.deckM) } : {}),
+        ...(f.volumeM3 ? { volumeM3: Number(f.volumeM3) } : {}),
         ...(f.pricePerKm ? { pricePerKm: Number(f.pricePerKm) } : {}),
         // S34 — the pricing profile; each field defaults per class when left blank.
         ...(f.baseFee ? { baseFee: Number(f.baseFee) } : {}),

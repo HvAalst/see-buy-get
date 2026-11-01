@@ -50,8 +50,8 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
 
 const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
-type Form = LoadForm & { truckFlight: boolean; flightAwb: string; flightNo: string; flightAirline: string; declaredValue: string; specialInterest: string; valueCurrency: string; noTranshipment: boolean; coverRequired: boolean; consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
-const EMPTY: Form = { truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
+type Form = LoadForm & { volumeM3: string; truckFlight: boolean; flightAwb: string; flightNo: string; flightAirline: string; declaredValue: string; specialInterest: string; valueCurrency: string; noTranshipment: boolean; coverRequired: boolean; consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
+const EMPTY: Form = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -274,6 +274,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
       ...(Number(form.declaredValue) > 0 && form.valueCurrency ? { declaredValue: { amount: Number(form.declaredValue), currency: form.valueCurrency } } : {}),
       ...(Number(form.specialInterest) > 0 && form.valueCurrency ? { specialInterest: { amount: Number(form.specialInterest), currency: form.valueCurrency } } : {}),
       ...(form.noTranshipment ? { noTranshipment: true } : {}),
+      ...(Number(form.volumeM3) > 0 ? { volumeM3: Number(form.volumeM3) } : {}),
       ...(form.truckFlight && form.flightAwb.trim() && form.flightNo.trim() ? { truckFlight: { awb: form.flightAwb.trim(), flight: form.flightNo.trim(), ...(form.flightAirline.trim() ? { airline: form.flightAirline.trim() } : {}) } } : {}),
       commitMode: form.commitMode,
       ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
@@ -458,6 +459,12 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
             {t('business.loads.f.cover')}
             <span class="chint">{t('business.loads.f.coverHint')}</span>
           </span>
+        </label>
+        {/* 2026-11-01 — the space the load takes: light, bulky goods fill a truck before they weigh it down. */}
+        <label class="cfield">
+          <span class="cfield__label">{t('business.loads.f.volume')}</span>
+          <input class="cinput" type="number" inputMode="decimal" min="0.01" max="150" step="0.1" value={form.volumeM3} onInput={(e) => setForm((prev) => ({ ...prev, volumeM3: (e.target as HTMLInputElement).value }))} />
+          <span class="chint">{t('business.loads.f.volumeHint')}</span>
         </label>
         {/* 2026-11-01 — a truck run as a flight: carried as a road load under road law, the waybill and flight a reference only. */}
         <label class="cfield--check">

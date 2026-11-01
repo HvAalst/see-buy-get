@@ -1,4 +1,4 @@
-import { SLOT_MAX_H, palletVehicleRefusal, slotOf, slotWords, truckFlightOf, truckFlightWords } from './air-terminal.types';
+import { SLOT_MAX_H, palletVehicleRefusal, slotOf, slotWords, truckFlightOf, truckFlightWords, volumeRefusal } from './air-terminal.types';
 
 /** 2026-11-01 — a truck's slot at an airline's cargo terminal: a window the shed gives, checked, and said. */
 describe('a truck’s slot at the cargo terminal', () => {
@@ -38,5 +38,12 @@ describe('a truck’s slot at the cargo terminal', () => {
     expect(palletVehicleRefusal(2, { vehicleClass: 'truck', equipment: ['ROL', 'TLT'] })).toBeUndefined();
     expect(palletVehicleRefusal(2, { vehicleClass: 'van', equipment: ['ROL'] })).toMatch(/^2 built-up airline pallets ride on a truck with a roller floor/);
     expect(palletVehicleRefusal(1, { vehicleClass: 'truck', equipment: ['FLT'] })).toBe('1 built-up airline pallet rides on a truck with a roller floor, which rolls it on and off at the terminal’s dock without breaking it down.');
+  });
+
+  it('refuses a load bigger than a declared load space — and says nothing where either figure is unknown (2026-11-01)', () => {
+    expect(volumeRefusal(24, { volumeM3: 18 })).toBe('The load takes 24 m³ — 6 m³ more than your vehicle’s load space of 18 m³');
+    expect(volumeRefusal(18, { volumeM3: 18 })).toBeUndefined();
+    expect(volumeRefusal(24, {})).toBeUndefined();
+    expect(volumeRefusal(undefined, { volumeM3: 10 })).toBeUndefined();
   });
 });

@@ -57917,6 +57917,10 @@
           "deckM": {
             "type": "number"
           },
+          "volumeM3": {
+            "type": "number",
+            "description": "2026-11-01 — THE LOAD SPACE, in cubic metres: declared by the fleet, which measured it. Light, bulky cargo (flowers to an\nairport) fills a body before it weighs it down. ABSENT MEANS UNKNOWN AND STAYS UNKNOWN, as the deck does: the board then\nsays the load's volume and that the space is not on record — it never guesses one from the class."
+          },
           "toteCapacity": {
             "type": "number",
             "description": "How many BAGS the hold takes — the constraint kilos cannot express (a tote of letters weighs nothing, so\nby weight a bus fits a hundred while its boot holds a dozen). Absent on vehicles registered before this\nexisted: read it through DispatchService.toteCapacityOf, never off the field."
@@ -60818,6 +60822,10 @@
             "type": "number",
             "description": "2026-11-01 — BUILT UP ON AIRLINE PALLETS OR CONTAINERS (ULDs): how many. They ride only on a truck with a roller floor\n(equipment ROL), which rolls them on at the forwarder's shed and off at the terminal's dock — never broken down."
           },
+          "volumeM3": {
+            "type": "number",
+            "description": "2026-11-01 — the space the load takes, in cubic metres: held against a vehicle's load space where the fleet declared one."
+          },
           "truckFlight": {
             "description": "2026-11-01 — a truck run as a flight: carried as a road load under road law, the waybill and flight a reference only.",
             "allOf": [
@@ -61630,6 +61638,12 @@
             "description": "How high the loading deck stands, in metres — the other half of a bridge check.\n\nDeclared, because only the fleet can measure it and a class average would clear a load under a bridge\non arithmetic about somebody else's truck. Absent leaves the hazard map answering HEIGHT_UNKNOWN,\nwhich is the truth.",
             "minimum": 0.1,
             "maximum": 3
+          },
+          "volumeM3": {
+            "type": "number",
+            "description": "2026-11-01 — the load space, in cubic metres, as the fleet measured it. Absent: unknown, and said so.",
+            "minimum": 0.1,
+            "maximum": 150
           },
           "ownerType": {
             "type": "string",
@@ -64489,6 +64503,12 @@
                 "$ref": "#/components/schemas/TruckFlightDto"
               }
             ]
+          },
+          "volumeM3": {
+            "type": "number",
+            "description": "2026-11-01 — how much space the load takes, in cubic metres: light, bulky cargo fills a body before it weighs it down.",
+            "minimum": 0.01,
+            "maximum": 150
           }
         },
         "required": [

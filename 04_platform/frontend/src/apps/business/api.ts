@@ -336,6 +336,8 @@ export interface NewLoad {
   noTranshipment?: boolean;
   /** 2026-11-01 — moved for an airline under its air waybill and a flight number: carried as a road load, the waybill a reference only. */
   truckFlight?: { awb: string; flight: string; airline?: string };
+  /** 2026-11-01 — the space the load takes, in cubic metres. */
+  volumeM3?: number;
   /** How many packages: each gets a label, and an SSCC under the business's GS1 prefix. */
   packages?: number;
   natureCode?: string;

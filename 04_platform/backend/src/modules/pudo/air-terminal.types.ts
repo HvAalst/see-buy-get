@@ -73,6 +73,16 @@ export function palletVehicleRefusal(units: number | undefined, vehicle: { vehic
   return `${units} built-up airline ${units === 1 ? 'pallet rides' : 'pallets ride'} on a truck with a roller floor, which rolls ${units === 1 ? 'it' : 'them'} on and off at the terminal’s dock without breaking ${units === 1 ? 'it' : 'them'} down.`;
 }
 
+/**
+ * 2026-11-01 — A LOAD BIGGER THAN THE LOAD SPACE THE FLEET DECLARED does not fit, whatever it weighs: light, bulky cargo fills
+ * a body before it weighs it down. Undefined: it fits, or one of the two figures is not known (said apart, never guessed).
+ */
+export function volumeRefusal(loadM3: number | undefined, vehicle: { volumeM3?: number } | null | undefined): string | undefined {
+  if (!loadM3 || !vehicle?.volumeM3 || loadM3 <= vehicle.volumeM3) return undefined;
+  const over = Math.round((loadM3 - vehicle.volumeM3) * 10) / 10;
+  return `The load takes ${loadM3} m³ — ${over} m³ more than your vehicle’s load space of ${vehicle.volumeM3} m³`;
+}
+
 /** A slot is a window of at most this long. */
 export const SLOT_MAX_H = 12;
 

@@ -46,6 +46,8 @@ export interface VehicleForm {
    *  and unknown stays unknown: a guessed deck would clear a load under a bridge on somebody else's
    *  arithmetic. */
   deckM: string;
+  /** 2026-11-01 — the load space, in cubic metres. */
+  volumeM3: string;
   pricePerKm: string;
   // S34 — the dynamic-pricing profile. All optional: left blank, each falls back to a sensible class default.
   // baseFee is the flag-down/loading fee; the two multipliers are the corridor the market may flex the rate in.
@@ -99,6 +101,7 @@ export const EMPTY_VEHICLE: VehicleForm = {
   ownerName: '',
   capacityKg: '',
   deckM: '',
+  volumeM3: '',
   pricePerKm: '',
   baseFee: '',
   minMultiplier: '',

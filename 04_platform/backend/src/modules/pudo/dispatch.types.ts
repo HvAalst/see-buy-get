@@ -732,6 +732,8 @@ export class Freight {
    * (equipment ROL), which rolls them on at the forwarder's shed and off at the terminal's dock — never broken down.
    */
   @ApiPropertyOptional() airPallets?: number;
+  /** 2026-11-01 — the space the load takes, in cubic metres: held against a vehicle's load space where the fleet declared one. */
+  @ApiPropertyOptional() volumeM3?: number;
   /** 2026-11-01 — a truck run as a flight: carried as a road load under road law, the waybill and flight a reference only. */
   @ApiPropertyOptional({ type: () => FreightTruckFlight }) truckFlight?: FreightTruckFlight;
   /** 2026-11-01 — at collection from a cargo terminal: the pieces the driver counted, against the waybill's. */
@@ -1754,6 +1756,8 @@ export class Claimable {
   airTerminal?: { side: 'acceptance' | 'collection'; awb: string; airline: string; handler: string; pieces: number };
   /** 2026-11-01 — a truck run as a flight, in words: carried under road law, the waybill a reference only. */
   truckFlight?: string;
+  /** 2026-11-01 — the space the load takes, in cubic metres. */
+  volumeM3?: number;
   /** Round 39 — the operations desks a driver held at a checkpoint rings: the pickup country's company's, and the destination's when it is another. */
   @ApiPropertyOptional({ type: [DeskNumber] }) desks?: DeskNumber[];
   /** Round 14 — a load on the road: what the driver needs to say it is at a border, has cleared it, or is at a hub. */

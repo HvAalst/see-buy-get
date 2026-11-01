@@ -810,6 +810,8 @@ export class ExportService {
         // Handed in at the airline's cargo terminal against this waybill: the handler's receipt is asked at delivery.
         airTerminal: { side: 'acceptance', awb: a.awb, airline: a.airline, handler: a.handler ?? c.terminal.label, pieces: a.pieces },
         ...(a.builtUp ? { airPallets: a.builtUp } : {}),
+        // The space it takes, as booked: flowers fill a truck before they weigh it down.
+        ...(a.volumeM3 ? { volumeM3: a.volumeM3 } : {}),
         pickupCountry: c.originCountry,
         // To an airport in another country: across the border, in bond through it to the terminal.
         destCountry: a.departsFrom ?? c.originCountry,

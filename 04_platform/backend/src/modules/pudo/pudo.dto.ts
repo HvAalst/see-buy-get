@@ -2334,6 +2334,8 @@ export class RegisterVehicleDto {
    * which is the truth.
    */
   @IsOptional() @IsNumber() @Min(0.1) @Max(3) deckM?: number;
+  /** 2026-11-01 — the load space, in cubic metres, as the fleet measured it. Absent: unknown, and said so. */
+  @IsOptional() @IsNumber() @Min(0.1) @Max(150) volumeM3?: number;
   @IsOptional() @IsIn(['driver_owned', 'fleet_owned', 'third_party']) ownerType?: string;
   @IsString() ownerName!: string;
   @IsOptional() @ValidateNested() @Type(() => VehicleDocumentsDto) documents?: VehicleDocumentsDto;
@@ -2691,6 +2693,8 @@ export class RegisterFreightDto {
    * load under road law, the waybill a reference only (legal.html L38).
    */
   @IsOptional() @ValidateNested() @Type(() => TruckFlightDto) truckFlight?: TruckFlightDto;
+  /** 2026-11-01 — how much space the load takes, in cubic metres: light, bulky cargo fills a body before it weighs it down. */
+  @IsOptional() @IsNumber() @Min(0.01) @Max(150) volumeM3?: number;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

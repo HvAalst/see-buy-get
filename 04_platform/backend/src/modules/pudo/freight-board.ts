@@ -107,6 +107,9 @@ export function blockersFor(
     animals?: string;
     /** 2026-11-01 — built-up airline pallets, on a vehicle without a roller floor. */
     pallets?: string;
+    /** 2026-11-01 — a load bigger than the vehicle's declared load space; and the space not on record at all. */
+    volume?: string;
+    volumeUnknown?: string;
     indicativeCharge?: number;
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
@@ -158,6 +161,8 @@ export function blockersFor(
   // Live animals: a vehicle made for them (2026-10-30).
   if (ctx.animals) out.push({ kind: 'physical', code: 'ANIMALS_VEHICLE', message: ctx.animals });
   if (ctx.pallets) out.push({ kind: 'physical', code: 'PALLETS_VEHICLE', message: ctx.pallets });
+  if (ctx.volume) out.push({ kind: 'physical', code: 'OVER_VEHICLE_VOLUME', message: ctx.volume });
+  if (ctx.volumeUnknown) out.push({ kind: 'unknown', code: 'VOLUME_UNKNOWN', message: ctx.volumeUnknown });
   // Secured air cargo: carried only by a driver whose ID was seen (2026-10-29).
   if (ctx.secured) out.push({ kind: 'resolvable', code: 'SECURED_CARGO', message: ctx.secured });
   if (ctx.overHours) {
