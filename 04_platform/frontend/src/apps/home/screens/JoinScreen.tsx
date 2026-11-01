@@ -98,8 +98,6 @@ function AlreadyRegistered({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
   const field = duplicateField(state.error)!;
-  // Every role has an app to open: "sign in with that account" with no way there was a dead end for a hub and a store.
-  const signsIn = true;
   // The ID is theirs and somebody else holds it: the dispute is opened here, where they were refused, with what they typed.
   const [disputing, setDisputing] = useState(false);
   const disputable = field === 'nationalId' && (role.id === 'driver' || role.id === 'pudo');
@@ -107,11 +105,10 @@ function AlreadyRegistered({ state, actions }: JoinScreenProps) {
     <div class="dup">
       <Note tone="warn" icon="lock" title={t(DUP_TITLE[field])} detail={t(dupDetail(role.id, field))} />
       <div class="crow" style="margin-top:10px">
-        {signsIn ? (
-          <Button full={false} chevron={false} onClick={() => window.location.assign(role.app)}>
-            {t('home.join.done.openApp', { name: roleMeta(role, t).appNoun })}
-          </Button>
-        ) : null}
+        {/* Every role has an app to open: "sign in with that account" with no way there was a dead end for a hub and a store. */}
+        <Button full={false} chevron={false} onClick={() => window.location.assign(role.app)}>
+          {t('home.join.done.openApp', { name: roleMeta(role, t).appNoun })}
+        </Button>
         {isIdentityDocument(field) || field === 'email' ? (
           <Button variant="link" full={false} onClick={() => actions.revisit(field === 'email' ? 'login' : 'about')}>
             {t('home.dup.checkTyped')}

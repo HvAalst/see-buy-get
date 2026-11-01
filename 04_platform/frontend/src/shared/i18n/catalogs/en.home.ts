@@ -751,8 +751,6 @@ export const enHome = {
   'home.dup.shop.device': 'Each shop registers from its own phone. If this is your shop, sign in to the shop app; a second shop needs a phone of its own.',
   'home.dup.email': 'Use another email address, or sign in with the account that already has this one.',
   'home.dup.other': 'These details already belong to an account. Sign in with that account rather than making a second one.',
-  'home.dup.openDriver': 'Open the driver app',
-  'home.dup.openShop': 'Open the shop app',
   'home.dup.checkTyped': 'Check what I typed',
   'home.dup.dispute': 'It is my ID: dispute it',
   'home.dup.disputeTitle': 'Somebody else registered with my ID',

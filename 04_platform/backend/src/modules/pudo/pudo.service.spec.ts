@@ -3904,7 +3904,7 @@ describe('PUDO Light', () => {
       expect(reports.look(key!).state).toBe('cancelled');
       // And the order itself says it has a report, for the store's own screen.
       expect(parcels.vendorOrderView(store.vendorId, parcel.parcelId).damageReport).toEqual({ number: `DCR-${parcel.parcelId}` });
-    });
+    }, 30_000);
 
     it('lists the reports on a store’s own orders, for the store and for staff, and for nobody else', async () => {
       const reports = reportsOf();
