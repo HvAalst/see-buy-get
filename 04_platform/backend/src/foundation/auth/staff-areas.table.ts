@@ -111,6 +111,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/account/unmute': 'none',
   // …and closes it, once it can be closed: theirs alone.
   'GET sbg/account/closing': 'none',
+  'GET sbg/account/address-format/:country': 'none',
   'POST sbg/account/close': 'none',
   // A company administrator's own sign-in, asked by the console when a tab comes back — not a staff door.
   'GET sbg/entities/admins/me': 'none',

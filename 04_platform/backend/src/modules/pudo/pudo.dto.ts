@@ -2200,10 +2200,28 @@ export class ProfileDto {
  * `address` allows the empty string on purpose: it is how somebody takes theirs back. A field that can
  * only ever be filled in is a field nobody should fill in.
  */
+/** An address in the parts its country writes (2026-10-30): which are asked, and checked, is the country's to say. */
+export class AddressPartsDto {
+  @IsString() @Matches(/^[A-Za-z]{2}$/) country!: string;
+  @IsOptional() @IsString() @MaxLength(120) building?: string;
+  @IsOptional() @IsString() @MaxLength(120) street?: string;
+  @IsOptional() @IsString() @MaxLength(120) number?: string;
+  @IsOptional() @IsString() @MaxLength(120) addition?: string;
+  @IsOptional() @IsString() @MaxLength(120) line?: string;
+  @IsOptional() @IsString() @MaxLength(120) area?: string;
+  @IsOptional() @IsString() @MaxLength(120) poBox?: string;
+  @IsOptional() @IsString() @MaxLength(120) postcode?: string;
+  @IsOptional() @IsString() @MaxLength(120) town?: string;
+  @IsOptional() @IsString() @MaxLength(120) region?: string;
+}
+
 export class AccountProfileDto {
   @IsOptional() @IsString() @MaxLength(80) displayName?: string;
   @IsOptional() @IsString() avatarMediaId?: string;
+  /** One line, as before; an empty one clears the address. */
   @IsOptional() @IsString() @MaxLength(240) address?: string;
+  /** The address in its country's parts: checked, and kept with the one line every paper prints. */
+  @IsOptional() @ValidateNested() @Type(() => AddressPartsDto) addressParts?: AddressPartsDto;
 }
 
 /** Ask for a code at an email address — to confirm it as a recovery address. */

@@ -101,6 +101,29 @@ describe('the account, reached from a role app', () => {
       });
   });
 
+  it('takes an address in its country\'s parts — asked by the country, checked by the field — and keeps the line papers print', async () => {
+    // The owner, 2026-10-30: "the address field is poor, especially for countries that do have formal physical addresses".
+    const as = { authorization: `Bearer ${driverToken}` };
+    const format = (await http().get('/v1/sbg/account/address-format/nl').set(as).expect(200)).body;
+    expect(format).toMatchObject({ country: 'NL', postcodeExample: '1015 CJ' });
+    expect(format.fields.map((x: { key: string }) => x.key)).toEqual(['street', 'number', 'addition', 'postcode', 'town']);
+    await http().get('/v1/sbg/account/address-format/nl').expect(401);
+
+    const bad = await http().patch('/v1/sbg/account/profile').set(as).send({ addressParts: { country: 'NL', street: 'Keizersgracht', number: '123', postcode: '10155', town: 'Amsterdam' } }).expect(400);
+    expect(bad.body).toMatchObject({ code: 'VALIDATION_FAILED', params: { field: 'postcode' } });
+
+    await http().patch('/v1/sbg/account/profile').set(as).send({ addressParts: { country: 'NL', street: 'Keizersgracht', number: '123', postcode: '1015cj', town: 'Amsterdam' } }).expect(200);
+    const me = (await http().get('/v1/sbg/account/me').set(as).expect(200)).body;
+    expect(me.address).toBe('Keizersgracht 123, 1015 CJ Amsterdam');
+    expect(me.addressParts).toEqual({ country: 'NL', street: 'Keizersgracht', number: '123', postcode: '1015 CJ', town: 'Amsterdam' });
+
+    // One line typed, as before: the parts are gone, so a form never shows parts of an older address.
+    await http().patch('/v1/sbg/account/profile').set(as).send({ address: '12 Ngong Road, Nairobi' }).expect(200);
+    const after = (await http().get('/v1/sbg/account/me').set(as).expect(200)).body;
+    expect(after.address).toBe('12 Ngong Road, Nairobi');
+    expect(after.addressParts).toBeUndefined();
+  });
+
   it('lets somebody take their address back, because a field that only fills is one nobody should fill', async () => {
     await http().patch('/v1/sbg/account/profile').set('authorization', `Bearer ${driverToken}`).send({ address: '' }).expect(200);
     await http()

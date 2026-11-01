@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingPerson } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
+import { addressFormatFor } from '../../foundation/countries/address-format';
+import { AddressFormatView } from './pudo.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
 import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto } from './pudo.dto';
@@ -118,6 +120,17 @@ export class AccountController {
   @Post('close')
   close(@Body() dto: AccountCloseDto, @Actor() actor: IntrospectionResult) {
     return this.closing.close(actingPerson(actor), dto.pin);
+  }
+
+  /**
+   * The fields an address in this country has, in the order a form asks them, which are required, and what its postcode
+   * looks like (2026-10-30). Only the shape of an address: nothing about anybody's.
+   */
+  @SignedIn()
+  @Get('address-format/:country')
+  addressFormat(@Param('country') country: string): AddressFormatView {
+    if (!/^[A-Za-z]{2}$/.test(country ?? '')) throw new GlosError('VALIDATION_FAILED', 'A country is two letters', { field: 'country' });
+    return addressFormatFor(country);
   }
 
   /** Set the person's own name, photo or address. Each field independent; an empty address clears it. */

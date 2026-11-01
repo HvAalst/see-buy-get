@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { checkAddress, formatAddress, type AddressParts } from '../../foundation/countries/address-format';
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -216,7 +217,7 @@ export class PersonService {
    * purge the previous avatar's bytes so a person keeps exactly one. Both fields are optional and
    * independent (a caller may set just the name, just the avatar, or both).
    */
-  setProfile(personDid: string, input: { displayName?: string; avatarMediaId?: string; address?: string }): Person {
+  setProfile(personDid: string, input: { displayName?: string; avatarMediaId?: string; address?: string; addressParts?: AddressParts }): Person {
     const person = this.requireByDid(personDid);
 
     /*
@@ -238,6 +239,10 @@ export class PersonService {
      * better of it must be able to take it back, and a field that can only ever be set is one nobody
      * should fill in. A display name is not clearable, because it is what other people see you as.
      */
+    // THE ADDRESS IN ITS COUNTRY'S PARTS (2026-10-30): checked by the field before anything is written, and kept with the
+    // one line every paper prints — that line is what invoices, notes and receipts read, so none of them changes.
+    const parts = input.addressParts ? checkAddress(input.addressParts) : undefined;
+    if (parts) input = { ...input, address: formatAddress(parts) };
     if (input.displayName !== undefined || input.address !== undefined) {
       const name = input.displayName?.trim();
       if (input.displayName !== undefined) {
@@ -245,7 +250,8 @@ export class PersonService {
         if (name.length > 80) throw new GlosError('INVALID_INPUT', 'That name is too long');
       }
       const address = input.address?.trim();
-      if (address !== undefined && address.length > 240) throw new GlosError('INVALID_INPUT', 'That address is too long');
+      // One line typed: 240 at most. One made from a country's parts may be longer, each part being held to 120 already.
+      if (address !== undefined && address.length > (parts ? 1200 : 240)) throw new GlosError('INVALID_INPUT', 'That address is too long');
 
       // The vault store is in-memory while person.vaultRef is persisted, so after a restart a stale ref
       // must re-seed rather than throw NotFoundException out of update() — see profile() for the read side.
@@ -254,7 +260,7 @@ export class PersonService {
       const next = {
         ...(held ?? {}),
         fullName: name ?? held?.fullName ?? '',
-        ...(input.address !== undefined ? { address: address || undefined } : {}),
+        ...(input.address !== undefined ? { address: address || undefined, addressParts: parts && address ? parts : undefined } : {}),
       };
       if (live) this.vault.update(person.vaultRef as string, next);
       else person.vaultRef = this.vault.store(next, { region: 'local' }).vaultRef;
@@ -291,13 +297,14 @@ export class PersonService {
    * so a person enrolled before that holds a ref to nothing, and it must degrade to "no name" rather than
    * throw and 404 the whole authenticated surface (this method is on the hot path of me/enroll/login/setProfile).
    */
-  profile(person: Person): { displayName?: string; avatarMediaId?: string; address?: string } {
+  profile(person: Person): { displayName?: string; avatarMediaId?: string; address?: string; addressParts?: AddressParts } {
     const held = person.vaultRef && this.vault.exists(person.vaultRef)
       ? this.vault.reveal(person.vaultRef, { purpose: 'self-profile', requesterDid: person.personDid })
       : undefined;
     // One reveal for both fields rather than two: each call writes a consent receipt, and a log that says
     // this person's record was opened twice to draw one screen makes the audit trail harder to read, not safer.
-    return { displayName: held?.fullName || undefined, avatarMediaId: person.avatarMediaId, ...(held?.address ? { address: held.address } : {}) };
+    const parts = held?.address && held.addressParts && typeof held.addressParts === 'object' ? (held.addressParts as AddressParts) : undefined;
+    return { displayName: held?.fullName || undefined, avatarMediaId: person.avatarMediaId, ...(held?.address ? { address: held.address } : {}), ...(parts ? { addressParts: parts } : {}) };
   }
 
   /** The full self-view: the PII-free projection plus the revealed profile. For the acting person ONLY. */

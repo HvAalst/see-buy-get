@@ -1376,3 +1376,10 @@ export class Driver {
   vehicleType: 'bus' | 'truck';
   capacityKg: number;
 }
+
+/** The fields an address in a country has, for the form that asks them (2026-10-30): never anybody's address. */
+export class AddressFormatView {
+  country: string;
+  fields: Array<{ key: string; required: boolean }>;
+  postcodeExample?: string;
+}
