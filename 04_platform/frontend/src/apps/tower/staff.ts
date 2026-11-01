@@ -66,11 +66,22 @@ export function staffAddWay(named: boolean): StaffAddWay {
  * their own. The setup key is the second person only where there is no colleague to be it — and it only says yes:
  * saying no is the asker's own to do, by taking it back.
  */
-export function waitingActions(p: Pick<StaffWaiting, 'mine' | 'forSetupKey' | 'aboutYou'>, named: boolean): Array<'approve' | 'decline' | 'takeBack'> {
+export function waitingActions(p: Pick<StaffWaiting, 'mine' | 'forSetupKey' | 'aboutYou' | 'kind' | 'countries' | 'countriesNow'>, named: boolean): Array<'approve' | 'decline' | 'takeBack'> {
   if (!named) return p.forSetupKey ? ['approve'] : [];
   if (p.mine) return ['takeBack'];
+  // 2026-11-01 — a change that only takes countries away from you, you may agree to yourself (with two on staff there is
+  // nobody else); never one that adds, and you may not stop one.
+  if (p.aboutYou && p.kind === 'countries') return onlyNarrows(p.countriesNow ?? [], p.countries ?? []) ? ['approve'] : [];
   // Round 38 — a change of your own roles is decided by others: you may neither wave it through nor stop it.
   return p.aboutYou ? [] : ['approve', 'decline'];
+}
+
+/** 2026-11-01 — does a change of countries only take countries away (never add one, never every country)? */
+export function onlyNarrows(now: readonly string[], next: readonly string[]): boolean {
+  const every = (c: readonly string[]) => c.includes('*');
+  if (every(next)) return every(now);
+  if (every(now)) return true;
+  return next.every((c) => now.includes(c));
 }
 
 /** Round 38 — what a waiting request asks for, in roles: a new account's, or a change from the roles held now. */
@@ -95,6 +106,11 @@ export function waitingLine(p: StaffWaiting, named: boolean, t: Translate, day: 
   if (p.mine) return t(p.forSetupKey ? 'tower.staff.waiting.mineKey' : 'tower.staff.waiting.mine', said);
   // Round 38 — a change of roles: about the person reading it, or a question of whether they should hold them.
   if (p.kind === 'roles') return t(p.aboutYou ? 'tower.roles.waitingAboutYou' : 'tower.roles.waitingTheirs', said);
+  // 2026-11-01 — a change of countries: yours (fewer you may agree to; more somebody else decides), or a colleague's.
+  if (p.kind === 'countries') {
+    if (!p.aboutYou) return t('tower.countries.waitingTheirs', said);
+    return t(onlyNarrows(p.countriesNow ?? [], p.countries ?? []) ? 'tower.countries.waitingFewer' : 'tower.countries.waitingAboutYou', said);
+  }
   return t('tower.staff.waiting.theirs', said);
 }
 

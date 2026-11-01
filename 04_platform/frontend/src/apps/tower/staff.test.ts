@@ -17,6 +17,15 @@ describe('adding a member of staff takes two people', () => {
     expect(waitingActions({ mine: false }, true)).toEqual(['approve', 'decline']);
   });
 
+  it('lets a person agree to fewer countries of their own — never to more, and never stop either', () => {
+    expect(waitingActions({ mine: false, aboutYou: true, kind: 'countries', countries: ['KE'], countriesNow: ['*'] }, true)).toEqual(['approve']);
+    expect(waitingActions({ mine: false, aboutYou: true, kind: 'countries', countries: ['KE'], countriesNow: ['KE', 'NL'] }, true)).toEqual(['approve']);
+    expect(waitingActions({ mine: false, aboutYou: true, kind: 'countries', countries: ['KE', 'NL'], countriesNow: ['KE'] }, true)).toEqual([]);
+    expect(waitingActions({ mine: false, aboutYou: true, kind: 'countries', countries: ['*'], countriesNow: ['KE'] }, true)).toEqual([]);
+    expect(waitingActions({ mine: false, aboutYou: true, kind: 'roles' }, true)).toEqual([]);
+    expect(waitingActions({ mine: false, kind: 'countries', countries: ['KE'], countriesNow: ['*'] }, true)).toEqual(['approve', 'decline']);
+  });
+
   it('offers the setup key an approval only where there is no colleague to give it — and nothing else, ever', () => {
     expect(waitingActions({ mine: false, forSetupKey: true }, false)).toEqual(['approve']);
     expect(waitingActions({ mine: false, forSetupKey: false }, false)).toEqual([]);
