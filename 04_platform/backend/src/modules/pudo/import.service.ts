@@ -1,6 +1,6 @@
 import { slotOf, slotWords } from './air-terminal.types';
 import { Injectable, Optional } from '@nestjs/common';
-import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
+import { catalogueEntry, isCatalogued, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { QuoteService } from './quote.service';
 import { holdRailNote, railNoteView } from './rail-note';
 import { journeyModes, railRefusal, railTerminalClock, type ImportByRailView } from './rail-leg.types';
@@ -50,7 +50,7 @@ import { modeOf } from './import.types';
 import { airAgenciesOf, airArrivalWarning, airReleaseGaps, airStorageClock, releaseRefusal, vetAgencyOf, type AirReleaseStep, type ImportAir, type ImportAirView } from './air-release.types';
 import { animalWords, CHICK_WINDOW_H, liveAnimalsOf, type LiveAnimalsDto } from './live-animals.types';
 import { ContactCardService } from './contact-card.service';
-import { airlineOfPrefix, airRegimeOf, awbDigits, awbProblem, checkAirWaybill, damageNoticeDays, formatAwb } from '../../foundation/carriage-law/air';
+import { airlineOfPrefix, airportCountry, airRegimeOf, awbDigits, awbProblem, checkAirWaybill, damageNoticeDays, formatAwb } from '../../foundation/carriage-law/air';
 import { EventBus } from '../../foundation/events/event-bus.service';
 import { GlosEvent } from '../../foundation/events/glos-events';
 import { AgentRecord, agentRecordOf, isClearingAgent } from './agent-record';
@@ -716,7 +716,7 @@ export class ImportService {
   setAir(
     importId: string,
     actorEntityId: string,
-    input: { awb: string; waybillKind: 'master' | 'house' | 'direct'; houseNumber?: string; airline?: string; flights: Array<{ flight: string; date: string; from: string; to: string; arrivesLocal?: string }>; handler: string; pieces: number; weightKg: number; minC?: number; maxC?: number; agencies: string[]; freeHours?: number; freeHoursSource?: string; animals?: LiveAnimalsDto; quarantine?: { label: string; location: GeoPoint } },
+    input: { awb: string; waybillKind: 'master' | 'house' | 'direct'; houseNumber?: string; airline?: string; flights: Array<{ flight: string; date: string; from: string; to: string; arrivesLocal?: string }>; handler: string; landedIn?: string; pieces: number; weightKg: number; minC?: number; maxC?: number; agencies: string[]; freeHours?: number; freeHoursSource?: string; animals?: LiveAnimalsDto; quarantine?: { label: string; location: GeoPoint } },
     by: string,
     now = Date.now(),
   ): ImportDetail {
@@ -747,6 +747,9 @@ export class ImportService {
     const keys = [...new Set(input.agencies ?? [])];
     const unknown = keys.filter((k) => !listed.some((a) => a.key === k));
     if (unknown.length) throw new GlosError('VALIDATION_FAILED', `Not an agency we list for ${c.destCountry}: ${unknown.join(', ')}`, { field: 'agencies' });
+    // 2026-11-01 — where it landed: said, or read off the airport; another country than the importer's is a run under bond.
+    const landed = input.landedIn?.trim().toUpperCase() || airportCountry(flights[flights.length - 1].to) || c.destCountry;
+    if (!/^[A-Z]{2}$/.test(landed) || !isCatalogued(landed)) throw new GlosError('VALIDATION_FAILED', 'Say the country it landed in by its two-letter code, like KE', { field: 'landedIn' });
     const before = c.air;
     /*
      * LIVE ANIMALS (2026-10-30): they do not leave the airport without the veterinary authority's word, so its release is
@@ -773,6 +776,7 @@ export class ImportService {
       airline: airline.slice(0, 80),
       flights,
       arrivalAirport: flights[flights.length - 1].to,
+      ...(landed !== c.destCountry ? { landedIn: landed } : {}),
       handler: handler.slice(0, 80),
       pieces: Math.round(input.pieces),
       weightKg: Math.round(input.weightKg * 10) / 10,
@@ -898,6 +902,7 @@ export class ImportService {
     return [
       `Import ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}. Collect it at ${a.handler} against this waybill and the delivery order${a.deliveryOrder?.reference ? ` ${a.deliveryOrder.reference}` : ''}${a.handlerCharges?.reference ? `; the handler’s charges are paid, receipt ${a.handlerCharges.reference}` : ''}. Count the pieces before you leave the shed: the waybill says ${a.pieces}.`,
       a.slot ? `Your slot at the shed: ${slotWords(a.slot)}. Come inside it — a truck outside its slot waits, or is turned away.` : '',
+      a.landedIn ? `In transit: it landed in ${catalogueEntry(a.landedIn)?.name ?? a.landedIn} and goes on under bond to ${catalogueEntry(c.destCountry)?.name ?? c.destCountry}, to be cleared there — keep the seal and the transit papers with it, and stop at no place on the way but the border.` : '',
       a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
       a.animals ? animalWords(a.animals) : '',
     ]
@@ -917,7 +922,7 @@ export class ImportService {
     const leg = this.dispatch.requireFreightPublic(freightId);
     const counted = leg.countedAtPickup ?? c.air.pieces;
     const reservations = leg.reservations?.note;
-    const days = reservations ? damageNoticeDays(airRegimeOf(c.originCountry, c.destCountry, c.air.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) : undefined;
+    const days = reservations ? damageNoticeDays(airRegimeOf(c.originCountry, c.air.landedIn ?? c.destCountry, c.air.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) : undefined;
     const complainBy = days ? new Date(now + days * 86_400_000).toISOString().slice(0, 10) : undefined;
     c.air = { ...c.air, collected: { at: leg.pickedUpAt ?? new Date(now).toISOString(), counted, ...(reservations ? { reservations } : {}), ...(complainBy ? { complainBy } : {}) } };
     this.imports.set(c.importId, c);
@@ -932,7 +937,7 @@ export class ImportService {
     const a = c.air!;
     const leg = c.roadFreightId ? this.dispatch.requireFreightPublic(c.roadFreightId) : undefined;
     const roadWaits = releaseRefusal(leg);
-    const check = checkAirWaybill({ number: a.awb, kind: a.waybillKind, ...(a.houseNumber ? { houseNumber: a.houseNumber } : {}), from: c.originCountry, to: c.destCountry, madeOutOn: a.flights[0]?.date, pieces: a.pieces, weightKg: a.weightKg }, {}, new Date(now).toISOString().slice(0, 10));
+    const check = checkAirWaybill({ number: a.awb, kind: a.waybillKind, ...(a.houseNumber ? { houseNumber: a.houseNumber } : {}), from: c.originCountry, to: a.landedIn ?? c.destCountry, madeOutOn: a.flights[0]?.date, pieces: a.pieces, weightKg: a.weightKg }, {}, new Date(now).toISOString().slice(0, 10));
     const arrival = this.arrivalOf(c);
     const warnings = [
       ...(arrival ? [arrival.text] : []),
@@ -975,11 +980,13 @@ export class ImportService {
         ...(a.temp ? { natureCode: 'FOP' as CargoNature, tempRange: { minC: a.temp.minC, maxC: a.temp.maxC } } : c.natureCode ? { natureCode: c.natureCode as CargoNature } : {}),
         ...(c.dangerous?.properShippingName?.trim() ? { dangerousGoods: { unNumber: c.dangerous.unNumber, properShippingName: c.dangerous.properShippingName.trim(), hazardClass: c.dangerous.imdgClass } } : {}),
         ...(a.animals ? { liveAnimals: { kind: a.animals.kind, species: a.animals.species, count: a.animals.count } } : {}),
-        pickupCountry: c.destCountry,
+        // Landed in another country: across the border under bond, in transit through the country it landed in.
+        pickupCountry: a.landedIn ?? c.destCountry,
         destCountry: c.destCountry,
+        ...(a.landedIn ? { bonded: true, bondCountry: a.landedIn } : {}),
         instructions: this.airRoadWords(c),
         // Collected from the airline's shed under this waybill: the pieces are counted there before the goods leave it.
-        airTerminal: { side: 'collection', awb: a.awb, airline: a.airline, handler: a.handler, pieces: a.pieces, ...(damageNoticeDays(airRegimeOf(c.originCountry, c.destCountry, a.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) ? { complainDays: damageNoticeDays(airRegimeOf(c.originCountry, c.destCountry, a.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) } : {}) },
+        airTerminal: { side: 'collection', awb: a.awb, airline: a.airline, handler: a.handler, pieces: a.pieces, ...(damageNoticeDays(airRegimeOf(c.originCountry, a.landedIn ?? c.destCountry, a.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) ? { complainDays: damageNoticeDays(airRegimeOf(c.originCountry, a.landedIn ?? c.destCountry, a.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) } : {}) },
         postedByDid: importer.did,
         externalOrderId: c.code,
       },
@@ -999,9 +1006,11 @@ export class ImportService {
     const a = c.air;
     if (!a) return undefined;
     const last = a.flights[a.flights.length - 1];
-    const sister = this.entities.forJurisdiction(c.destCountry);
+    // Read against the offices of the country it LANDED in — in transit, only its customs are at the airport.
+    const country = a.landedIn ?? c.destCountry;
+    const sister = this.entities.forJurisdiction(country);
     const closed = sister ? this.contacts?.of(sister.entityId)?.closedDates?.find((d) => d.date === last?.date) : undefined;
-    return airArrivalWarning({ country: c.destCountry, ...(last ? { landsOn: last.date } : {}), ...(last?.arrivesLocal ? { landsAt: last.arrivesLocal } : {}), agencies: a.agencies, ...(closed && sister ? { closed: { company: sister.name, ...(closed.note ? { note: closed.note } : {}) } } : {}) });
+    return airArrivalWarning({ country, ...(last ? { landsOn: last.date } : {}), ...(last?.arrivesLocal ? { landsAt: last.arrivesLocal } : {}), agencies: a.landedIn ? [] : a.agencies, ...(closed && sister ? { closed: { company: sister.name, ...(closed.note ? { note: closed.note } : {}) } } : {}) });
   }
 
   /** Where live animals on an import must go: the place the veterinary officer named. */

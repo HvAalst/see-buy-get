@@ -1,4 +1,4 @@
-import { airClaims, airlineOfPrefix, airLimits, airRegimeOf, awbProblem, checkAirWaybill, formatAwb, isAirParty, mc99LimitOn } from './air';
+import { airportCountry, airClaims, airlineOfPrefix, airLimits, airRegimeOf, awbProblem, checkAirWaybill, formatAwb, isAirParty, mc99LimitOn } from './air';
 
 /**
  * CARRIAGE BY AIR AS DATA (research 2026-10-29). The convention of a route from the ICAO lists, by the waybill's places and
@@ -75,5 +75,13 @@ describe('carriage by air, as data', () => {
     expect(house.ask).toContain('The forwarder’s house waybill number, and the master waybill it travels under.');
     expect(house.caveats.join(' ')).toMatch(/MC99 Art\. 42/);
     expect(house.caveats.join(' ')).toMatch(/airlines may fly without any part of the cargo/);
+  });
+
+  it('says which country an airport is in, for a run across a border (2026-11-01)', () => {
+    expect(airportCountry('nbo')).toBe('KE');
+    expect(airportCountry('EBB')).toBe('UG');
+    expect(airportCountry('AMS')).toBe('NL');
+    expect(airportCountry('XYZ')).toBeUndefined();
+    expect(airportCountry(undefined)).toBeUndefined();
   });
 });

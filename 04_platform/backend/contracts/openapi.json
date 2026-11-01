@@ -41313,6 +41313,10 @@
           "builtUp": {
             "type": "number",
             "description": "2026-11-01 — built up on airline pallets or containers (ULDs) at the forwarder's shed: how many. A truck with a roller floor takes them."
+          },
+          "departsFrom": {
+            "type": "string",
+            "description": "2026-11-01 — THE COUNTRY OF THE AIRPORT IT LEAVES FROM, when it is not the exporter's (a Rwandan exporter flying out of\nNairobi): the truck crosses the border under bond, exported at home and in transit to the cargo terminal. Absent: home."
           }
         },
         "required": [
@@ -41859,6 +41863,11 @@
             "description": "2026-11-01 — built up on airline pallets or containers (ULDs): how many.",
             "minimum": 1,
             "maximum": 40
+          },
+          "departsFrom": {
+            "type": "string",
+            "description": "2026-11-01 — the country of the airport it leaves from, where its airport is not one we know; otherwise read off it.",
+            "maxLength": 2
           }
         },
         "required": [
@@ -41966,6 +41975,10 @@
           },
           "inspectionHours": {
             "type": "number"
+          },
+          "borderHours": {
+            "type": "number",
+            "description": "2026-11-01 — the border on the way to a foreign airport, planned at our figure."
           }
         },
         "required": [
@@ -50146,6 +50159,10 @@
           "arrivalAirport": {
             "type": "string"
           },
+          "landedIn": {
+            "type": "string",
+            "description": "2026-11-01 — THE COUNTRY IT LANDED IN, when it is not the importer's (Nairobi, for a Ugandan importer): the goods go on by\nroad across the border under bond, released for transit at the airport and cleared at destination. Absent: it landed home."
+          },
           "handler": {
             "type": "string",
             "description": "The handler's shed it waits in and is collected from."
@@ -51436,6 +51453,10 @@
           "arrivalAirport": {
             "type": "string"
           },
+          "landedIn": {
+            "type": "string",
+            "description": "2026-11-01 — THE COUNTRY IT LANDED IN, when it is not the importer's (Nairobi, for a Ugandan importer): the goods go on by\nroad across the border under bond, released for transit at the airport and cleared at destination. Absent: it landed home."
+          },
           "handler": {
             "type": "string",
             "description": "The handler's shed it waits in and is collected from."
@@ -52102,6 +52123,11 @@
           "handler": {
             "type": "string",
             "maxLength": 80
+          },
+          "landedIn": {
+            "type": "string",
+            "description": "2026-11-01 — the country it landed in, where its airport is not one we know; otherwise read off the airport.",
+            "maxLength": 2
           },
           "pieces": {
             "type": "number",

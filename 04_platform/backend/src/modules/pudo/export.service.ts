@@ -15,7 +15,7 @@ import { EXPORT_PAPER_GROUP, EXPORT_PAPER_KEYS, type ExportPaperGroup, type Know
 import { LoadSealService } from './load-seal.service';
 import { NotificationService } from './notification.service';
 import { EXPORT_GATE_BUFFER_H, VEHICLE_SPEED_KMH } from './pudo.config';
-import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
+import { catalogueEntry, isCatalogued, isKnownCurrency } from '../../foundation/countries/catalogue';
 import type { FeeState } from './import.types';
 import { QuoteService } from './quote.service';
 import type { Quote } from './quote.types';
@@ -33,8 +33,8 @@ import { journeyModes, type ExportByRailDto } from './rail-leg.types';
 import { fblView, holdFbl, verifyFbl } from './fbl-note';
 import type { FblDto, FblVerifiedDto } from './fbl-note.types';
 import type { RailNoteDto } from './rail-note.types';
-import { airlineOfPrefix, awbDigits, awbProblem, checkAirWaybill, formatAwb } from '../../foundation/carriage-law/air';
-import { AIR_INSPECTION_H, AIR_LAT_BUFFER_H } from './pudo.config';
+import { airlineOfPrefix, airportCountry, awbDigits, awbProblem, checkAirWaybill, formatAwb } from '../../foundation/carriage-law/air';
+import { AIR_BORDER_H, AIR_INSPECTION_H, AIR_LAT_BUFFER_H } from './pudo.config';
 import { animalWords, chickWindow, liveAnimalsOf, originalsOf, UNFIT_WORDS, type LiveAnimalsDto } from './live-animals.types';
 import { AIR_ONLY_PAPERS, SEA_ONLY_PAPERS, type ExportAir, type ExportAirView } from './export.types';
 import type { TruckSubtype } from './fleet.config';
@@ -280,6 +280,7 @@ export class ExportService {
         animals?: LiveAnimalsDto;
         slot?: { from: string; to: string; reference?: string };
         builtUp?: number;
+        departsFrom?: string;
       };
     },
     by: string,
@@ -311,6 +312,9 @@ export class ExportService {
     if (!flights.length) throw new GlosError('FIELD_REQUIRED', 'Give the flight it is booked on', { field: 'air.flights' });
     const latAt = moment(a.latAt, 'The latest acceptance time');
     if (!latAt) throw new GlosError('FIELD_REQUIRED', 'Give the latest acceptance time from the airline’s booking confirmation: the cargo must be accepted at the terminal before it', { field: 'air.latAt' });
+    // 2026-11-01 — the country of the airport it leaves from: said, or read off the first flight's airport.
+    const departs = a.departsFrom?.trim().toUpperCase() || airportCountry(flights[0].from) || originCountry;
+    if (!/^[A-Z]{2}$/.test(departs) || !isCatalogued(departs)) throw new GlosError('VALIDATION_FAILED', 'Say the country of the airport it leaves from by its two-letter code, like KE', { field: 'air.departsFrom' });
     if (!(a.pieces > 0) || !(a.weightKg > 0)) throw new GlosError('FIELD_REQUIRED', 'Say how many pieces and what they weigh, as on the booking', { field: 'air.pieces' });
     const sec = a.security ?? ({ status: 'unsecured' } as typeof a.security);
     if (sec.status === 'secured' && !sec.agentName?.trim()) throw new GlosError('FIELD_REQUIRED', 'Secured cargo: say which regulated agent or known consignor secured it — only it can give a security status', { field: 'air.security.agentName' });
@@ -350,6 +354,8 @@ export class ExportService {
       ...(a.slot ? { slot: slotOf(a.slot, now, { at: latAt, what: 'the latest acceptance time' }) } : {}),
       // Built up on airline pallets or containers: a truck with a roller floor takes them, never broken down.
       ...(a.builtUp && a.builtUp > 0 ? { builtUp: Math.round(a.builtUp) } : {}),
+      // Leaving from an airport in another country: a run under bond across the border to its terminal.
+      ...(departs !== originCountry ? { departsFrom: departs } : {}),
       ...(animals ? { animals } : {}),
     };
     const consignment: ExportConsignment = {
@@ -584,14 +590,16 @@ export class ExportService {
     const driveHours = Math.round((roadKm / VEHICLE_SPEED_KMH.truck) * 10) / 10;
     const bufferHours = byAir ? AIR_LAT_BUFFER_H : EXPORT_GATE_BUFFER_H;
     const inspectionHours = byAir && c.air?.inspectionAtAirport ? AIR_INSPECTION_H : 0;
-    const plannedHours = Math.round((roadKm / VEHICLE_SPEED_KMH.truck + bufferHours + inspectionHours) * 10) / 10;
+    // 2026-11-01 — to an airport across a border: the border's hours, planned in.
+    const borderHours = byAir && c.air?.departsFrom ? AIR_BORDER_H : 0;
+    const plannedHours = Math.round((roadKm / VEHICLE_SPEED_KMH.truck + bufferHours + inspectionHours + borderHours) * 10) / 10;
     const cutoff = Date.parse(h.cutoffAt);
     const leaveByAt = new Date(cutoff - plannedHours * H).toISOString();
     const laden = c.ladenFreightId ? this.legOf(c.ladenFreightId) : undefined;
     const collectedAt = laden?.pickedUpAt;
     const gatedInAt = laden?.status === 'delivered' ? laden.deliveredAt : undefined;
     const state = gatedInAt ? 'gated_in' : now > cutoff ? 'missed' : !collectedAt && now > Date.parse(leaveByAt) ? 'at_risk' : 'on_time';
-    return { handover: { place: h.place.label, cutoffAt: h.cutoffAt, byRail: h.byRail, ...(byAir ? { byAir: true } : {}) }, state, leaveByAt, roadKm, plannedHours, ...(gatedInAt ? { gatedInAt } : {}), ...(collectedAt ? { collectedAt } : {}), ...(byAir ? { air: { driveHours, bufferHours, inspectionHours } } : {}) };
+    return { handover: { place: h.place.label, cutoffAt: h.cutoffAt, byRail: h.byRail, ...(byAir ? { byAir: true } : {}) }, state, leaveByAt, roadKm, plannedHours, ...(gatedInAt ? { gatedInAt } : {}), ...(collectedAt ? { collectedAt } : {}), ...(byAir ? { air: { driveHours, bufferHours, inspectionHours, ...(borderHours ? { borderHours } : {}) } } : {}) };
   }
 
   /**
@@ -803,7 +811,9 @@ export class ExportService {
         airTerminal: { side: 'acceptance', awb: a.awb, airline: a.airline, handler: a.handler ?? c.terminal.label, pieces: a.pieces },
         ...(a.builtUp ? { airPallets: a.builtUp } : {}),
         pickupCountry: c.originCountry,
-        destCountry: c.originCountry,
+        // To an airport in another country: across the border, in bond through it to the terminal.
+        destCountry: a.departsFrom ?? c.originCountry,
+        ...(a.departsFrom ? { bonded: true, bondCountry: a.departsFrom } : {}),
         deliveryWindow: words.deliveryWindow,
         instructions: words.text,
         postedByDid: exporter.did,
@@ -825,6 +835,7 @@ export class ExportService {
       a.bookingStatus === 'queued' ? 'The airline has not confirmed the booking: it may not fly on this flight.' : '',
       a.slot ? `Your slot at the terminal: ${slotWords(a.slot)}. Arrive inside it — a truck outside its slot waits, or is turned away.` : '',
       a.builtUp ? `${a.builtUp} built-up airline ${a.builtUp === 1 ? 'pallet' : 'pallets'}: roll them on and off — never break them down; the terminal checks them as built.` : '',
+      a.departsFrom ? `Across the border to the airport in ${catalogueEntry(a.departsFrom)?.name ?? a.departsFrom}: exported from ${catalogueEntry(c.originCountry)?.name ?? c.originCountry} and carried in bond to the cargo terminal — keep the seal and the export and transit papers with it, and stop at no place on the way but the border.` : '',
       a.security.status === 'secured' ? `Secured cargo (${a.security.agentName}): keep it locked and sealed, with no stops on the way; the seal is checked at the terminal.` : '',
       a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
       a.animals ? animalWords(a.animals) : '',

@@ -384,4 +384,25 @@ describe('an export by air, over the wire', () => {
     expect(dispatch.requireFreightPublic(leg.freightId).instructionAmendments?.at(-1)?.text).toMatch(/^The booking changed: Latest acceptance time now /);
     expect((await read()).consignment.air.formerBookings).toHaveLength(2);
   });
+
+  it('to an airport in another country (2026-11-01): the truck crosses the border under bond, timed with the border in it', async () => {
+    const g = await aGrower();
+    const lat = Date.now() + 40 * H;
+    const body = roses(g, lat);
+    // A Rwandan grower flying out of Nairobi: the first flight leaves NBO.
+    const made = (await http().post('/v1/sbg/exports/air').set(bearer(g.token)).send({ ...body, originCountry: 'RW' }).expect(201)).body;
+    const path = `/v1/sbg/exports/${made.exportId}`;
+    const detail = (await http().get(path).set(bearer(g.token)).expect(200)).body;
+    expect(detail.consignment.air.departsFrom).toBe('KE');
+    expect(detail.timing.air.borderHours).toBe(4);
+    const svc = app.get(ExportService);
+    const leg = app.get(DispatchService).requireFreightPublic(svc.mintLadenLeg(made.exportId, g.entityId, {}, 'test').ladenLeg!.freightId);
+    expect(leg).toMatchObject({ pickupCountry: 'RW', destCountry: 'KE', bonded: true, bondCountry: 'KE' });
+    expect(leg.instructions?.text).toMatch(/Across the border to the airport in Kenya: exported from Rwanda and carried in bond to the cargo terminal/);
+    // From home, no border: the same booking for a Kenyan grower plans none.
+    const homeMade = (await http().post('/v1/sbg/exports/air').set(bearer(g.token)).send(body).expect(201)).body;
+    const home = (await http().get(`/v1/sbg/exports/${homeMade.exportId}`).set(bearer(g.token)).expect(200)).body;
+    expect(home.consignment.air.departsFrom).toBeUndefined();
+    expect(home.timing.air.borderHours).toBeUndefined();
+  });
 });

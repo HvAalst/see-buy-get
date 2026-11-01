@@ -163,6 +163,39 @@ export function airClaims(regime: AirRegime): string[] {
 /* ------------------------------------------------------------------ the waybill number -- */
 
 /**
+ * 2026-11-01 — WHICH COUNTRY AN AIRPORT IS IN, for the airports cargo of ours lands at or leaves from: so goods that land in
+ * another country than their importer's (Nairobi, for a Ugandan importer) go on by road across the border under bond, and an
+ * exporter trucking to a foreign airport crosses one. A code not here is asked: the business says the country.
+ */
+export const AIRPORT_COUNTRY: Readonly<Record<string, string>> = {
+  NBO: 'KE', MBA: 'KE', KIS: 'KE', EDL: 'KE', WIL: 'KE',
+  EBB: 'UG',
+  DAR: 'TZ', JRO: 'TZ', ZNZ: 'TZ', MWZ: 'TZ',
+  KGL: 'RW',
+  BJM: 'BI',
+  ADD: 'ET', DIR: 'ET',
+  JUB: 'SS',
+  FIH: 'CD', GOM: 'CD', FBM: 'CD',
+  JIB: 'DJ',
+  MGQ: 'SO', HGA: 'SO',
+  LUN: 'ZM', NLA: 'ZM',
+  LLW: 'MW', BLZ: 'MW',
+  HRE: 'ZW',
+  MPM: 'MZ',
+  JNB: 'ZA', CPT: 'ZA', DUR: 'ZA',
+  LOS: 'NG', ABV: 'NG',
+  ACC: 'GH',
+  CAI: 'EG',
+  AMS: 'NL', LGG: 'BE', BRU: 'BE', FRA: 'DE', CGN: 'DE', LEJ: 'DE', CDG: 'FR', LHR: 'GB', STN: 'GB', MAD: 'ES', MXP: 'IT', LUX: 'LU',
+  DXB: 'AE', DWC: 'AE', SHJ: 'AE', DOH: 'QA', IST: 'TR', BOM: 'IN', DEL: 'IN', HKG: 'HK', CAN: 'CN', PVG: 'CN',
+};
+
+/** The country of an airport by its three-letter code, where we hold it. */
+export function airportCountry(code: string | undefined): string | undefined {
+  return code ? AIRPORT_COUNTRY[code.trim().toUpperCase()] : undefined;
+}
+
+/**
  * The airline prefixes we hold — the first three digits of an air waybill number — agreed in two handlers' tables we read.
  * Not IATA's own list, which we neither copy nor hold (legal.html L35): a prefix not here is one we have not checked.
  */

@@ -309,6 +309,11 @@ export class ExportAir {
   @ApiPropertyOptional({ type: TerminalSlot }) slot?: TerminalSlot;
   /** 2026-11-01 — built up on airline pallets or containers (ULDs) at the forwarder's shed: how many. A truck with a roller floor takes them. */
   @ApiPropertyOptional() builtUp?: number;
+  /**
+   * 2026-11-01 — THE COUNTRY OF THE AIRPORT IT LEAVES FROM, when it is not the exporter's (a Rwandan exporter flying out of
+   * Nairobi): the truck crosses the border under bond, exported at home and in transit to the cargo terminal. Absent: home.
+   */
+  @ApiPropertyOptional() departsFrom?: string;
 }
 export class ExportConsignment {
   @ApiProperty() exportId: string;
@@ -392,6 +397,8 @@ export class ExportAirWorking {
   @ApiProperty() driveHours: number;
   @ApiProperty() bufferHours: number;
   @ApiProperty() inspectionHours: number;
+  /** 2026-11-01 — the border on the way to a foreign airport, planned at our figure. */
+  @ApiPropertyOptional() borderHours?: number;
 }
 
 export class ExportTiming {
@@ -620,6 +627,8 @@ class ExportAirDto {
   @IsOptional() @ValidateNested() @Type(() => TerminalSlotDto) slot?: TerminalSlotDto;
   /** 2026-11-01 — built up on airline pallets or containers (ULDs): how many. */
   @IsOptional() @IsInt() @Min(1) @Max(40) builtUp?: number;
+  /** 2026-11-01 — the country of the airport it leaves from, where its airport is not one we know; otherwise read off it. */
+  @IsOptional() @IsString() @MaxLength(2) departsFrom?: string;
 }
 
 /** AN EXPORT BY AIR: the goods, the countries, the two places and the booking with the airline. */

@@ -235,4 +235,27 @@ describe('an import by air, over the wire', () => {
     const sea = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Rice, 800 bags', originCountry: 'PK', destCountry: 'KE', destPort: 'Mombasa', mode: 'sea' }).expect(201)).body;
     expect(String((await http().post(`/v1/sbg/imports/${sea.importId}/air`).set(bearer(imp.token)).send(phones())).body.detail)).toBe(`${sea.code} came by sea: an air waybill is for goods that came by air`);
   });
+
+  it('landed in another country than the importer’s (2026-11-01): released for transit at the airport, the destination’s agencies at destination, and the road leg runs under bond across the border', async () => {
+    const imp = await aBusiness(['importer'], 'Kampala Phones');
+    const shed = await imp.site('port', 'Swissport cargo shed, JKIA', { lat: -1.33, lng: 36.93 });
+    const store = await imp.site('delivery', 'Kampala Road store', { lat: 0.313, lng: 32.581 });
+    const made = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Mobile phones, 12 cartons', originCountry: 'NL', destCountry: 'UG', destPort: 'Entebbe', mode: 'air' }).expect(201)).body;
+    const path = `/v1/sbg/imports/${made.importId}`;
+    // Landed at Nairobi: read off the airport. Uganda's standards body is the destination's, and waits for the goods there.
+    const set = (await http().post(`${path}/air`).set(bearer(imp.token)).send({ ...phones(), agencies: ['unbs'] }).expect(201)).body;
+    expect(set.air.landedIn).toBe('KE');
+    expect(set.air.gaps).toEqual(['the transit release at customs in Kenya', 'the handler’s delivery order', 'the handler’s charges paid']);
+    // A country said by its code is taken; one that is not a country is refused.
+    expect(String((await http().post(`${path}/air`).set(bearer(imp.token)).send({ ...phones(), agencies: ['unbs'], landedIn: 'ZZ' })).body.detail)).toMatch(/two-letter code/);
+    const leg = (await http().post(`${path}/road-leg`).set(bearer(imp.token)).send({ pickupSiteId: shed, destSiteId: store, weightKg: 240 }).expect(201)).body;
+    const freight = app.get(DispatchService).requireFreightPublic(leg.roadFreightId);
+    expect(freight).toMatchObject({ pickupCountry: 'KE', destCountry: 'UG', bonded: true, bondCountry: 'KE' });
+    expect(freight.instructions?.text).toMatch(/In transit: it landed in Kenya and goes on under bond to Uganda, to be cleared there/);
+    // Landing at home is no transit: nothing changes for an importer whose plane lands in its own country.
+    const home = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Phones by air', originCountry: 'NL', destCountry: 'KE', destPort: 'JKIA', mode: 'air' }).expect(201)).body;
+    const homeSet = (await http().post(`/v1/sbg/imports/${home.importId}/air`).set(bearer(imp.token)).send(phones()).expect(201)).body;
+    expect(homeSet.air.landedIn).toBeUndefined();
+    expect(homeSet.air.gaps[0]).toBe('the customs release');
+  });
 });

@@ -659,6 +659,9 @@ export const enTowerBusiness = {
   // 2026-11-01 — where road meets air.
   'tower.byAir.step.handlerCharges': 'The handler’s charges paid (storage and handling)',
   'tower.byAir.slotTitle': 'The truck’s slot at the shed',
+  'tower.byAir.f.landedIn': 'Country it landed in (two letters), if its airport is not one we know',
+  'tower.byAir.transitTag': 'In transit',
+  'tower.byAir.transitLine': 'It landed in {landed}, not in {dest}: customs at the airport release it for transit, and the road leg runs under bond across the border. The agencies of {dest} look at it there, where it is cleared.',
   'tower.byAir.slotNone': 'No slot recorded. Where the shed gives trucks a slot, record it: the driver is told to come inside it.',
   'tower.byAir.slotLine': '{from} – {to}{reference}. Told to the driver.',
   'tower.byAir.slotFrom': 'From',

@@ -683,6 +683,9 @@ export const enBusiness = {
   'business.exports.air.title': 'Record an export by air',
   // 2026-11-01 — where road meets air.
   'business.exports.air.d.accepted': 'Handed in at the terminal',
+  'business.exports.air.departsFrom': 'Country of the airport it leaves from (two letters), if its airport is not one we know',
+  'business.exports.air.d.departsFrom': 'Across a border',
+  'business.exports.air.d.departsFromLine': 'To the airport in {country}: exported at home and carried in bond across the border — {hours} hours for the border planned in',
   'business.exports.air.builtUp': 'Built up on airline pallets or containers — how many',
   'business.exports.air.builtUpHint': 'Only where your forwarder builds the cargo up on airline pallets or containers before it leaves. They then go on a truck with a roller floor, which rolls them on and off whole. Leave it empty for loose pieces.',
   'business.exports.air.d.builtUp': 'Built up',

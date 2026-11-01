@@ -105,6 +105,8 @@ export const EXPORT_GATE_BUFFER_H = 4;
  */
 export const AIR_LAT_BUFFER_H = 1;
 export const AIR_INSPECTION_H = 3;
+/** 2026-11-01 — a border on the way to a foreign airport: the hours a truck in bond is planned to spend at it. Our figure, said. */
+export const AIR_BORDER_H = 4;
 
 /** A load settled between the parties, delivered this long ago and not said paid: its carrier is asked, once, whether it was (2026-10-27). */
 export const PAID_DIRECT_ASK_H = 72;

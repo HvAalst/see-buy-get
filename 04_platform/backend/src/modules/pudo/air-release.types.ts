@@ -1,3 +1,4 @@
+import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { TerminalSlot } from './air-terminal.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -136,10 +137,12 @@ export class AirAgencyRelease {
 }
 
 /** What still keeps air cargo in the shed, in words — empty once it may be collected. */
-export function airReleaseGaps(r: { customs?: AirReleaseStep; agencies: AirAgencyRelease[]; deliveryOrder?: AirReleaseStep; handlerCharges?: AirReleaseStep }): string[] {
+export function airReleaseGaps(r: { customs?: AirReleaseStep; agencies: AirAgencyRelease[]; deliveryOrder?: AirReleaseStep; handlerCharges?: AirReleaseStep; landedIn?: string }): string[] {
   const out: string[] = [];
-  if (!r.customs) out.push('the customs release');
-  for (const a of r.agencies) if (!a.released) out.push(`the release by ${a.name}`);
+  // 2026-11-01 — landed in another country than the importer's: the airport's customs release it for TRANSIT, and the
+  // destination's agencies look at it at destination — not in the shed of a country it is only crossing.
+  if (!r.customs) out.push(r.landedIn ? `the transit release at customs in ${catalogueEntry(r.landedIn)?.name ?? r.landedIn}` : 'the customs release');
+  if (!r.landedIn) for (const a of r.agencies) if (!a.released) out.push(`the release by ${a.name}`);
   if (!r.deliveryOrder) out.push('the handler’s delivery order');
   // 2026-11-01 — the shed releases nothing until its own storage and handling are paid, whoever else has said yes.
   if (!r.handlerCharges) out.push('the handler’s charges paid');
@@ -216,6 +219,11 @@ export class ImportAir {
   @ApiProperty() airline: string;
   @ApiProperty({ type: [ImportAirFlight] }) flights: ImportAirFlight[];
   @ApiProperty() arrivalAirport: string;
+  /**
+   * 2026-11-01 — THE COUNTRY IT LANDED IN, when it is not the importer's (Nairobi, for a Ugandan importer): the goods go on by
+   * road across the border under bond, released for transit at the airport and cleared at destination. Absent: it landed home.
+   */
+  @ApiPropertyOptional() landedIn?: string;
   /** The handler's shed it waits in and is collected from. */
   @ApiProperty() handler: string;
   @ApiProperty() pieces: number;
@@ -280,6 +288,8 @@ export class ImportAirDto {
   @IsOptional() @IsString() @MaxLength(80) airline?: string;
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(6) @ValidateNested({ each: true }) @Type(() => ImportAirFlightDto) flights!: ImportAirFlightDto[];
   @IsString() @MaxLength(80) handler!: string;
+  /** 2026-11-01 — the country it landed in, where its airport is not one we know; otherwise read off the airport. */
+  @IsOptional() @IsString() @MaxLength(2) landedIn?: string;
   @IsNumber() @Min(1) @Max(10_000) pieces!: number;
   @IsNumber() @Min(0.1) @Max(200_000) weightKg!: number;
   @IsOptional() @IsNumber() @Min(-30) @Max(30) minC?: number;

@@ -56,7 +56,7 @@ export interface ExportTiming {
   /** Where our truck hands the box over, and by when: the port gate, or by rail the rail terminal (2026-10-29). */
   handover?: { place: string; cutoffAt: string; byRail: boolean; byAir?: boolean };
   /** By air: the leave-by's working — the drive, the hour before the acceptance time, the inspection's hours at the airport. */
-  air?: { driveHours: number; bufferHours: number; inspectionHours: number };
+  air?: { driveHours: number; bufferHours: number; inspectionHours: number; borderHours?: number };
 }
 
 export interface ExportBooking {
@@ -210,6 +210,8 @@ export interface ExportAir {
   slot?: { from: string; to: string; reference?: string };
   /** 2026-11-01 — built up on airline pallets or containers: how many; a truck with a roller floor takes them. */
   builtUp?: number;
+  /** 2026-11-01 — the country of the airport it leaves from, when it is not the exporter's: a run under bond across the border. */
+  departsFrom?: string;
   /** Live animals (2026-10-30): as their keeper declared them; the originals ride with them. */
   animals?: { kind: 'livestock' | 'crated'; species: string; count: number; hatchedAt?: string; permit: string; healthCertificate: string; cites?: string; movementPermit?: string; attendant?: { name: string; phone?: string }; shipperCertifiedBy?: string; fitToTravel: { by: string; at: string } };
   /** The booking as it stood before each change recorded: kept, never overwritten. */

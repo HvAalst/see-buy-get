@@ -50,6 +50,12 @@ describe('an import by air', () => {
     expect(noted).toContain(t('tower.byAir.complainBy', { airline: 'KLM / Martinair', by: '2026-11-13', awb: '074-12345675' }));
   });
 
+  it('says when it landed in another country than the importer’s: in transit, on by road under bond (2026-11-01)', () => {
+    expect(textOf(render(air(), 'importer'))).not.toContain(t('tower.byAir.transitTag'));
+    const transit = textOf(render(air({ landedIn: 'TZ' }), 'importer'));
+    expect(transit).toContain(t('tower.byAir.transitLine', { landed: 'TZ', dest: 'KE' }));
+  });
+
   it('says the truck’s slot at the shed, or that none is recorded (2026-11-01)', () => {
     expect(textOf(render(air(), 'importer'))).toContain(t('tower.byAir.slotNone'));
     const slotted = textOf(render(air({ slot: { from: '2026-10-30T09:00:00.000Z', to: '2026-10-30T10:00:00.000Z', reference: 'SWP-C-7' } }), 'importer'));
