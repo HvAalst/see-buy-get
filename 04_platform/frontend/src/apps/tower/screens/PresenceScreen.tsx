@@ -2,6 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
+import { ConsoleFold } from '../ConsoleFold';
+import { decidedHint, newCountryFold } from '../folds';
 import { useT } from '../../../shared/i18n';
 import {
   CAPABILITY_LABEL,
@@ -214,11 +216,10 @@ export function PresenceScreen({ state, actions }: { state: TowerState; actions:
 
       <RecordCountry state={state} actions={actions} />
 
+      {/* What was decided is a history, not work: folded into its latest. The changes waiting for a second person,
+          and who is waiting for a country, stay open above — folding work hides it. */}
       {decided.length ? (
-        <section class="cons__panel">
-          <div class="cons__panelhead">
-            <span class="cons__panelt">{t('tower.presence.decidedTitle')}</span>
-          </div>
+        <ConsoleFold title={t('tower.presence.decidedTitle')} hint={decidedHint(decided, state.catalogue, t)}>
           <table class="ctbl">
             <tbody>
               {decided.map((p) => (
@@ -239,7 +240,7 @@ export function PresenceScreen({ state, actions }: { state: TowerState; actions:
               ))}
             </tbody>
           </table>
-        </section>
+        </ConsoleFold>
       ) : null}
     </>
   );
@@ -344,13 +345,12 @@ function RecordCountry({ state, actions }: { state: TowerState; actions: TowerAc
   const chosen = catalogue.find((c) => c.code === form.jurisdiction);
   const listedRow = rows.find((r) => r.jurisdiction === form.jurisdiction);
   const secondPerson = chosen && form.level !== 'observed' && (!listedRow || needsSecondPerson(listedRow, form.level));
+  // Shut, saying how many countries are not on the list yet — open while a country is chosen in it, since the form
+  // is kept for the whole console and a half-filled one should not be hidden behind its headline.
+  const fold = newCountryFold(form, rows, catalogue, t);
 
   return (
-    <section class="cons__panel twr-corridornew">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.presence.newTitle')}</span>
-      </div>
-
+    <ConsoleFold title={t('tower.presence.newTitle')} hint={fold.hint} defaultOpen={fold.open}>
       <div class="twr-corridorform">
         <ConsolePick
           label={t('tower.presence.f.country')}
@@ -386,7 +386,7 @@ function RecordCountry({ state, actions }: { state: TowerState; actions: TowerAc
         {/* Choosing a country already on the map is an EDIT, and saying so is cheaper than undoing one. */}
         {!blocker && !secondPerson && listed ? <span class="chint">{t('tower.presence.wouldChange')}</span> : null}
       </div>
-    </section>
+    </ConsoleFold>
   );
 }
 

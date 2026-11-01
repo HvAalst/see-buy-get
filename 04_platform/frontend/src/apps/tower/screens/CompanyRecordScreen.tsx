@@ -1,7 +1,9 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
+import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
+import { ConsoleFold } from '../ConsoleFold';
 import { useT } from '../../../shared/i18n';
 import { tabAtTheTap } from '../../../shared/openPage';
 import {
@@ -46,6 +48,7 @@ import {
 import { CAPABILITY_LABEL, type PresenceCapability } from '../presence';
 import type { TowerActions, TowerState } from '../useTowerApp';
 import { holds } from '../staffRoles';
+import { addressesHint, changesHint, documentsFold, lapsesFold, legalHint, listHint, obligationsHint, partsStillToDo, readinessFold, runningOutFold, type RecordPart } from '../folds';
 import { LapsingPapers } from './LapsingPapers';
 import { CATEGORY_LABEL, REPORT_CATEGORIES, lastDecidedOf, mayReport, openCaseOf, reportBlocker, type PaperCase, type ReportCategory } from '../paperReports';
 
@@ -115,6 +118,10 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
     client && entityId ? run(key, () => client.api.saveCompanyRecord(entityId, { ...patch, ...(who ? { by: who } : {}) }), t('tower.company.saved')) : Promise.resolve(false);
 
   const companies = (state.entities ?? []).filter((e) => e.kind !== 'group');
+  // Which sections open themselves: those with an item of the switch-on checklist still to do. One clock for the screen.
+  const today = new Date().toISOString().slice(0, 10);
+  const toDo: Set<RecordPart> = view ? partsStillToDo(view, today) : new Set();
+  const locked = !hands.mine;
 
   return (
     <>
@@ -151,29 +158,41 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
         <>
           <Readiness view={view} />
           <RunningOut view={view} hint={runningOutHint(hands, reader)} />
-          {/* Disabled as one for whoever does not keep it: every field inside reads, and tower.css takes the buttons away. */}
-          <fieldset class="twr-locked" disabled={!hands.mine}>
-            <LegalSection view={view} busy={busy === 'legal'} onSave={(patch) => saveRecord('legal', patch)} />
-            <AddressSection view={view} busy={busy === 'addresses'} onSave={(patch) => saveRecord('addresses', patch)} />
-            {(['representatives', 'beneficialOwners', 'taxRegistrations', ...(view.entity.kind === 'sister' ? (['bankAccounts'] as ListSection[]) : []), 'licences', 'insurance'] as ListSection[]).map((section) =>
-              // In the company's own hands, the parts that switch something have no list to save: each item changes
-              // by itself, with its paper.
-              hands.keeper === 'company' && hands.mine && isPaperBound(section) ? (
-                <PaperBoundEditor
-                  key={section}
-                  section={section}
-                  view={view}
-                  busy={busy === section}
-                  onDeclare={(body) => (client && entityId ? run(section, () => client.api.declareCompanyChange(entityId, body), t(body.item ? 'tower.company.declare.done' : 'tower.company.declare.takenOff')) : Promise.resolve(false))}
-                />
-              ) : (
-                <ListEditor key={section} section={section} view={view} busy={busy === section} onSave={(rows) => saveRecord(section, { [section]: rows })} />
-              ),
-            )}
-            <ObligationsSection view={view} busy={busy === 'obligations'} onSave={(rows) => saveRecord('obligations', { obligations: rows })} />
-          </fieldset>
+          {/* Each section disabled for whoever does not keep it — every field inside reads, and tower.css takes the
+              buttons away. Inside each fold, not around them all: a disabled fieldset disables every button in it,
+              and the fold's own headline is the button that opens it. */}
+          <LegalSection view={view} locked={locked} open={toDo.has('legal')} busy={busy === 'legal'} onSave={(patch) => saveRecord('legal', patch)} />
+          <AddressSection view={view} locked={locked} open={toDo.has('addresses')} busy={busy === 'addresses'} onSave={(patch) => saveRecord('addresses', patch)} />
+          {(['representatives', 'beneficialOwners', 'taxRegistrations', ...(view.entity.kind === 'sister' ? (['bankAccounts'] as ListSection[]) : []), 'licences', 'insurance'] as ListSection[]).map((section) =>
+            // In the company's own hands, the parts that switch something have no list to save: each item changes
+            // by itself, with its paper.
+            hands.keeper === 'company' && hands.mine && isPaperBound(section) ? (
+              <PaperBoundEditor
+                key={section}
+                section={section}
+                view={view}
+                hint={listHint(section, view.record, today, t)}
+                open={toDo.has(section)}
+                busy={busy === section}
+                onDeclare={(body) => (client && entityId ? run(section, () => client.api.declareCompanyChange(entityId, body), t(body.item ? 'tower.company.declare.done' : 'tower.company.declare.takenOff')) : Promise.resolve(false))}
+              />
+            ) : (
+              <ListEditor
+                key={section}
+                section={section}
+                view={view}
+                locked={locked}
+                hint={listHint(section, view.record, today, t)}
+                open={toDo.has(section)}
+                busy={busy === section}
+                onSave={(rows) => saveRecord(section, { [section]: rows })}
+              />
+            ),
+          )}
+          <ObligationsSection view={view} locked={locked} open={toDo.has('obligations')} busy={busy === 'obligations'} onSave={(rows) => saveRecord('obligations', { obligations: rows })} />
           <Documents
             view={view}
+            toDo={toDo}
             who={who}
             named={Boolean(state.who?.named)}
             canVerify={reader === 'operator' && papers}
@@ -216,14 +235,13 @@ function RunningOut({ view, hint }: { view: CompanyRecordView; hint: Parameters<
   const t = useT();
   const items = view.expiring ?? [];
   if (!items.length) return null;
+  // Open of itself once a paper has lapsed or has two weeks left — the ones shown loudly.
+  const fold = runningOutFold(items, t);
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.company.s.runningOut')}</span>
-      </div>
+    <ConsoleFold title={t('tower.company.s.runningOut')} hint={fold.hint} defaultOpen={fold.open}>
       <p class="chint">{t(hint)}</p>
       <LapsingPapers items={items} />
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -232,18 +250,22 @@ function Readiness({ view }: { view: CompanyRecordView }) {
   const readiness = view.readiness;
   const { met, total } = readinessCounts(readiness);
   const level = view.entity.kind === 'partner' ? t('tower.company.level.partnered') : t('tower.company.level.established');
+  const fold = readinessFold(view, t);
 
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t(view.keeper === 'company' ? 'tower.company.readyTitleOn' : 'tower.company.readyTitle')}</span>
-        <span class="twr-panelend">
+    <ConsoleFold
+      title={t(view.keeper === 'company' ? 'tower.company.readyTitleOn' : 'tower.company.readyTitle')}
+      hint={fold.hint}
+      defaultOpen={fold.open}
+      aside={
+        <>
           <span class={`ctag ${view.entity.status === 'draft' ? 'ctag--warn' : 'ctag--ok'}`}>{t(view.entity.status === 'draft' ? 'tower.company.status.draft' : 'tower.company.status.active')}</span>
           <span class="ctag ctag--quiet">
             {t(view.entity.kind === 'partner' ? 'tower.company.kind.partner' : 'tower.company.kind.sister')} · {view.entity.jurisdiction} · {view.entity.currency}
           </span>
-        </span>
-      </div>
+        </>
+      }
+    >
       {view.keeper === 'company' ? (
         // The checklist is how a company is switched ON. Shown to one that is on, it would ask for "its paper verified
         // by a second person" against a paper that now counts without one.
@@ -266,11 +288,20 @@ function Readiness({ view }: { view: CompanyRecordView }) {
           </ul>
         </div>
       )}
-    </section>
+    </ConsoleFold>
   );
 }
 
-function LegalSection({ view, busy, onSave }: { view: CompanyRecordView; busy: boolean; onSave: (patch: Record<string, unknown>) => Promise<boolean> }) {
+/** The record's fields, read-only for whoever does not keep it: the fieldset disables them, tower.css hides the buttons. */
+function Locked({ locked, children }: { locked: boolean; children: ComponentChildren }) {
+  return (
+    <fieldset class="twr-locked" disabled={locked}>
+      {children}
+    </fieldset>
+  );
+}
+
+function LegalSection({ view, locked, open, busy, onSave }: { view: CompanyRecordView; locked: boolean; open: boolean; busy: boolean; onSave: (patch: Record<string, unknown>) => Promise<boolean> }) {
   const t = useT();
   const r = view.record;
   const [form, setForm] = useState({
@@ -284,35 +315,34 @@ function LegalSection({ view, busy, onSave }: { view: CompanyRecordView; busy: b
   const patch = Object.fromEntries(Object.entries(form).filter(([, v]) => v.trim()));
 
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.company.s.legal')}</span>
-      </div>
-      <div class="twr-corridorform">
-        <Text label={t('tower.company.f.legalName')} value={form.legalName} onInput={(v) => set({ legalName: v })} />
-        <Text label={t('tower.company.f.tradingName')} value={form.tradingName} onInput={(v) => set({ tradingName: v })} />
-        <ConsolePick
-          label={t('tower.company.f.legalForm')}
-          value={form.legalForm}
-          onChange={(v) => set({ legalForm: v })}
-          placeholder={t('tower.company.f.choose')}
-          options={LEGAL_FORMS.map((f) => ({ value: f, label: t(LEGAL_FORM_LABEL[f]) }))}
-        />
-        <Text label={t('tower.company.f.registrationNumber')} value={form.registrationNumber} onInput={(v) => set({ registrationNumber: v })} />
-        <Text label={t('tower.company.f.registrationDate')} value={form.registrationDate} type="date" onInput={(v) => set({ registrationDate: v })} />
-      </div>
-      <div class="twr-corridorsave">
-        <button type="button" class="cbtn cbtn--primary" disabled={busy || Object.keys(patch).length === 0} onClick={() => void onSave(patch)}>
-          {t('tower.company.save')}
-        </button>
-      </div>
-    </section>
+    <ConsoleFold title={t('tower.company.s.legal')} hint={legalHint(r, t)} defaultOpen={open}>
+      <Locked locked={locked}>
+        <div class="twr-corridorform">
+          <Text label={t('tower.company.f.legalName')} value={form.legalName} onInput={(v) => set({ legalName: v })} />
+          <Text label={t('tower.company.f.tradingName')} value={form.tradingName} onInput={(v) => set({ tradingName: v })} />
+          <ConsolePick
+            label={t('tower.company.f.legalForm')}
+            value={form.legalForm}
+            onChange={(v) => set({ legalForm: v })}
+            placeholder={t('tower.company.f.choose')}
+            options={LEGAL_FORMS.map((f) => ({ value: f, label: t(LEGAL_FORM_LABEL[f]) }))}
+          />
+          <Text label={t('tower.company.f.registrationNumber')} value={form.registrationNumber} onInput={(v) => set({ registrationNumber: v })} />
+          <Text label={t('tower.company.f.registrationDate')} value={form.registrationDate} type="date" onInput={(v) => set({ registrationDate: v })} />
+        </div>
+        <div class="twr-corridorsave">
+          <button type="button" class="cbtn cbtn--primary" disabled={busy || Object.keys(patch).length === 0} onClick={() => void onSave(patch)}>
+            {t('tower.company.save')}
+          </button>
+        </div>
+      </Locked>
+    </ConsoleFold>
   );
 }
 
 const ADDRESS_KEYS = ['line1', 'line2', 'city', 'region', 'postalCode', 'country'] as const;
 
-function AddressSection({ view, busy, onSave }: { view: CompanyRecordView; busy: boolean; onSave: (patch: Record<string, unknown>) => Promise<boolean> }) {
+function AddressSection({ view, locked, open, busy, onSave }: { view: CompanyRecordView; locked: boolean; open: boolean; busy: boolean; onSave: (patch: Record<string, unknown>) => Promise<boolean> }) {
   const t = useT();
   const fromRecord = (a?: CompanyAddress) => Object.fromEntries(ADDRESS_KEYS.map((k) => [k, (a?.[k] as string | undefined) ?? (k === 'country' ? (view.entity.jurisdiction ?? '') : '')])) as Record<(typeof ADDRESS_KEYS)[number], string>;
   const [registered, setRegistered] = useState(fromRecord(view.record.registeredAddress));
@@ -330,36 +360,51 @@ function AddressSection({ view, busy, onSave }: { view: CompanyRecordView; busy:
   };
 
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.company.s.addresses')}</span>
-      </div>
-      {(
-        [
-          ['tower.company.f.registeredAddress', registered, setRegistered],
-          ['tower.company.f.operatingAddress', operating, setOperating],
-        ] as const
-      ).map(([title, value, setValue]) => (
-        <div key={title} style="margin:8px 0">
-          <p class="cfield__label">{t(title)}</p>
-          <div class="twr-corridorform">
-            {ADDRESS_KEYS.map((k) => (
-              <Text key={k} label={labels[k]} value={value[k]} onInput={(v) => setValue({ ...value, [k]: k === 'country' ? v.toUpperCase().slice(0, 2) : v })} />
-            ))}
+    <ConsoleFold title={t('tower.company.s.addresses')} hint={addressesHint(view.record, t)} defaultOpen={open}>
+      <Locked locked={locked}>
+        {(
+          [
+            ['tower.company.f.registeredAddress', registered, setRegistered],
+            ['tower.company.f.operatingAddress', operating, setOperating],
+          ] as const
+        ).map(([title, value, setValue]) => (
+          <div key={title} style="margin:8px 0">
+            <p class="cfield__label">{t(title)}</p>
+            <div class="twr-corridorform">
+              {ADDRESS_KEYS.map((k) => (
+                <Text key={k} label={labels[k]} value={value[k]} onInput={(v) => setValue({ ...value, [k]: k === 'country' ? v.toUpperCase().slice(0, 2) : v })} />
+              ))}
+            </div>
           </div>
+        ))}
+        <div class="twr-corridorsave">
+          <button type="button" class="cbtn cbtn--primary" disabled={busy || Object.keys(patch).length === 0} onClick={() => void onSave(patch)}>
+            {t('tower.company.save')}
+          </button>
         </div>
-      ))}
-      <div class="twr-corridorsave">
-        <button type="button" class="cbtn cbtn--primary" disabled={busy || Object.keys(patch).length === 0} onClick={() => void onSave(patch)}>
-          {t('tower.company.save')}
-        </button>
-      </div>
-    </section>
+      </Locked>
+    </ConsoleFold>
   );
 }
 
 /** One list section — representatives, owners, tax numbers, bank accounts, licences, insurance — edited as rows. */
-function ListEditor({ section, view, busy, onSave }: { section: ListSection; view: CompanyRecordView; busy: boolean; onSave: (rows: Array<Record<string, unknown>>) => Promise<boolean> }) {
+function ListEditor({
+  section,
+  view,
+  locked,
+  hint,
+  open,
+  busy,
+  onSave,
+}: {
+  section: ListSection;
+  view: CompanyRecordView;
+  locked: boolean;
+  hint: string;
+  open: boolean;
+  busy: boolean;
+  onSave: (rows: Array<Record<string, unknown>>) => Promise<boolean>;
+}) {
   const t = useT();
   const fields = SECTION_FIELDS[section];
   const [rows, setRows] = useState<EditRow[]>(() => toEditRows(section, view.record));
@@ -367,77 +412,76 @@ function ListEditor({ section, view, busy, onSave }: { section: ListSection; vie
   const update = (i: number, key: string, value: string | PresenceCapability[]) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [key]: value } : r)));
 
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t(SECTION_TITLE[section])}</span>
-      </div>
-      {rows.length === 0 ? <p class="cons__empty">{t('tower.company.none')}</p> : null}
-      {rows.map((row, i) => (
-        <div key={i} class="twr-corridorform" style="border-bottom:1px solid var(--line, #eee);padding-bottom:8px">
-          {fields.map((f) =>
-            f.type === 'select' ? (
-              <ConsolePick
-                key={f.key}
-                label={t(f.labelKey)}
-                value={row[f.key] as string}
-                onChange={(v) => update(i, f.key, v)}
-                options={(f.options ?? []).map((o) => ({ value: o.value, label: t(o.labelKey) }))}
-              />
-            ) : f.type === 'caps' ? (
-              <fieldset key={f.key} class="cfield">
-                <legend class="cfield__label">{t(f.labelKey)}</legend>
-                <span class="twr-caps">
-                  {PRESENCE_CAPABILITIES.filter((c) => c !== 'takeIn').map((c) => {
-                    const on = (row[f.key] as PresenceCapability[]).includes(c);
-                    return (
-                      <label key={c} class="checkline">
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          onChange={() => {
-                            const current = row[f.key] as PresenceCapability[];
-                            update(i, f.key, on ? current.filter((x) => x !== c) : [...current, c]);
-                            setTouched((ts) => ts.map((v, j) => (j === i ? true : v)));
-                          }}
-                        />
-                        <span>{t(CAPABILITY_LABEL[c])}</span>
-                      </label>
-                    );
-                  })}
-                </span>
-              </fieldset>
-            ) : (
-              <Text key={f.key} label={t(f.labelKey)} value={row[f.key] as string} type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'} onInput={(v) => update(i, f.key, v)} />
-            ),
-          )}
+    <ConsoleFold title={t(SECTION_TITLE[section])} hint={hint} defaultOpen={open}>
+      <Locked locked={locked}>
+        {rows.length === 0 ? <p class="cons__empty">{t('tower.company.none')}</p> : null}
+        {rows.map((row, i) => (
+          <div key={i} class="twr-corridorform" style="border-bottom:1px solid var(--line, #eee);padding-bottom:8px">
+            {fields.map((f) =>
+              f.type === 'select' ? (
+                <ConsolePick
+                  key={f.key}
+                  label={t(f.labelKey)}
+                  value={row[f.key] as string}
+                  onChange={(v) => update(i, f.key, v)}
+                  options={(f.options ?? []).map((o) => ({ value: o.value, label: t(o.labelKey) }))}
+                />
+              ) : f.type === 'caps' ? (
+                <fieldset key={f.key} class="cfield">
+                  <legend class="cfield__label">{t(f.labelKey)}</legend>
+                  <span class="twr-caps">
+                    {PRESENCE_CAPABILITIES.filter((c) => c !== 'takeIn').map((c) => {
+                      const on = (row[f.key] as PresenceCapability[]).includes(c);
+                      return (
+                        <label key={c} class="checkline">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() => {
+                              const current = row[f.key] as PresenceCapability[];
+                              update(i, f.key, on ? current.filter((x) => x !== c) : [...current, c]);
+                              setTouched((ts) => ts.map((v, j) => (j === i ? true : v)));
+                            }}
+                          />
+                          <span>{t(CAPABILITY_LABEL[c])}</span>
+                        </label>
+                      );
+                    })}
+                  </span>
+                </fieldset>
+              ) : (
+                <Text key={f.key} label={t(f.labelKey)} value={row[f.key] as string} type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'} onInput={(v) => update(i, f.key, v)} />
+              ),
+            )}
+            <button
+              type="button"
+              class="cbtn cbtn--ghost cbtn--sm"
+              onClick={() => {
+                setRows((rs) => rs.filter((_, j) => j !== i));
+                setTouched((ts) => ts.filter((_, j) => j !== i));
+              }}
+            >
+              {t('tower.company.remove')}
+            </button>
+          </div>
+        ))}
+        <div class="twr-corridorsave">
           <button
             type="button"
-            class="cbtn cbtn--ghost cbtn--sm"
+            class="cbtn cbtn--ghost"
             onClick={() => {
-              setRows((rs) => rs.filter((_, j) => j !== i));
-              setTouched((ts) => ts.filter((_, j) => j !== i));
+              setRows((rs) => [...rs, emptyRow(fields)]);
+              setTouched((ts) => [...ts, false]);
             }}
           >
-            {t('tower.company.remove')}
+            {t('tower.company.add')}
+          </button>
+          <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void onSave(fromEditRows(section, rows, touched))}>
+            {t('tower.company.save')}
           </button>
         </div>
-      ))}
-      <div class="twr-corridorsave">
-        <button
-          type="button"
-          class="cbtn cbtn--ghost"
-          onClick={() => {
-            setRows((rs) => [...rs, emptyRow(fields)]);
-            setTouched((ts) => [...ts, false]);
-          }}
-        >
-          {t('tower.company.add')}
-        </button>
-        <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void onSave(fromEditRows(section, rows, touched))}>
-          {t('tower.company.save')}
-        </button>
-      </div>
-    </section>
+      </Locked>
+    </ConsoleFold>
   );
 }
 
@@ -446,7 +490,21 @@ function ListEditor({ section, view, busy, onSave }: { section: ListSection; vie
  * PAPER BEHIND IT. There is no Save for the list: that is the shape in which a date could move with no paper. What a
  * licence or policy permits is not among the fields, and one that permits something has no "take off".
  */
-function PaperBoundEditor({ section, view, busy, onDeclare }: { section: PaperBoundSection; view: CompanyRecordView; busy: boolean; onDeclare: (body: Record<string, unknown>) => Promise<boolean> }) {
+function PaperBoundEditor({
+  section,
+  view,
+  hint,
+  open,
+  busy,
+  onDeclare,
+}: {
+  section: PaperBoundSection;
+  view: CompanyRecordView;
+  hint: string;
+  open: boolean;
+  busy: boolean;
+  onDeclare: (body: Record<string, unknown>) => Promise<boolean>;
+}) {
   const t = useT();
   const items = view.record[section] as unknown as Array<Record<string, unknown>>;
   const reference = (item: Record<string, unknown>) => String(item[REFERENCE_FIELD[section]] ?? '');
@@ -464,10 +522,7 @@ function PaperBoundEditor({ section, view, busy, onDeclare }: { section: PaperBo
   const set = (key: string, value: string) => setForm((f) => (f ? { ...f, row: { ...f.row, [key]: value } } : f));
 
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t(SECTION_TITLE[section])}</span>
-      </div>
+    <ConsoleFold title={t(SECTION_TITLE[section])} hint={hint} defaultOpen={open}>
       <p class="chint">{t('tower.company.declare.hint')}</p>
       {items.length === 0 ? (
         <p class="cons__empty">{t('tower.company.none')}</p>
@@ -600,12 +655,12 @@ function PaperBoundEditor({ section, view, busy, onDeclare }: { section: PaperBo
           </button>
         </div>
       )}
-    </section>
+    </ConsoleFold>
   );
 }
 
 /** CA8 — what the company's country requires of it, one row per obligation in the catalogue. */
-function ObligationsSection({ view, busy, onSave }: { view: CompanyRecordView; busy: boolean; onSave: (rows: Array<Record<string, unknown>>) => Promise<boolean> }) {
+function ObligationsSection({ view, locked, open, busy, onSave }: { view: CompanyRecordView; locked: boolean; open: boolean; busy: boolean; onSave: (rows: Array<Record<string, unknown>>) => Promise<boolean> }) {
   const t = useT();
   const [values, setValues] = useState<Record<string, { reference: string; registeredAt: string }>>(() =>
     Object.fromEntries(
@@ -620,34 +675,38 @@ function ObligationsSection({ view, busy, onSave }: { view: CompanyRecordView; b
     .map((o) => ({ key: o.key, reference: values[o.key].reference.trim(), ...(values[o.key].registeredAt ? { registeredAt: values[o.key].registeredAt } : {}) }));
 
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.company.s.obligations', { country: view.entity.jurisdiction ?? '' })}</span>
-      </div>
-      {view.obligations.map((o) => (
-        <div key={o.key} style="margin:8px 0">
-          <p class="cfield__label">
-            {o.name}
-            {o.authority ? ` — ${o.authority}` : ''}
-          </p>
-          <div class="twr-corridorform">
-            <Text label={t('tower.company.f.reference')} value={values[o.key]?.reference ?? ''} onInput={(v) => setValues((s) => ({ ...s, [o.key]: { ...s[o.key], reference: v } }))} />
-            <Text label={t('tower.company.f.registeredAt')} type="date" value={values[o.key]?.registeredAt ?? ''} onInput={(v) => setValues((s) => ({ ...s, [o.key]: { ...s[o.key], registeredAt: v } }))} />
+    <ConsoleFold title={t('tower.company.s.obligations', { country: view.entity.jurisdiction ?? '' })} hint={obligationsHint(view, t)} defaultOpen={open}>
+      <Locked locked={locked}>
+        {view.obligations.map((o) => (
+          <div key={o.key} style="margin:8px 0">
+            <p class="cfield__label">
+              {o.name}
+              {o.authority ? ` — ${o.authority}` : ''}
+            </p>
+            <div class="twr-corridorform">
+              <Text label={t('tower.company.f.reference')} value={values[o.key]?.reference ?? ''} onInput={(v) => setValues((s) => ({ ...s, [o.key]: { ...s[o.key], reference: v } }))} />
+              <Text label={t('tower.company.f.registeredAt')} type="date" value={values[o.key]?.registeredAt ?? ''} onInput={(v) => setValues((s) => ({ ...s, [o.key]: { ...s[o.key], registeredAt: v } }))} />
+            </div>
           </div>
+        ))}
+        <div class="twr-corridorsave">
+          <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void onSave(rows)}>
+            {t('tower.company.save')}
+          </button>
         </div>
-      ))}
-      <div class="twr-corridorsave">
-        <button type="button" class="cbtn cbtn--primary" disabled={busy} onClick={() => void onSave(rows)}>
-          {t('tower.company.save')}
-        </button>
-      </div>
-    </section>
+      </Locked>
+    </ConsoleFold>
   );
 }
 
-/** CA4 — the papers: put on record, fingerprinted, verified by somebody else, every version kept. */
+/**
+ * CA4 — the papers: put on record, fingerprinted, verified by somebody else, every version kept. The one part of the
+ * record that holds WORK — a paper waiting for a second person, a paper reported — so its fold opens for whoever that
+ * work waits on, and never hides it from them.
+ */
 function Documents({
   view,
+  toDo,
   who,
   named,
   canVerify,
@@ -663,6 +722,8 @@ function Documents({
   onAnswer,
 }: {
   view: CompanyRecordView;
+  /** The parts with an item of the switch-on checklist still to do: a paper still needed opens this fold. */
+  toDo: Set<RecordPart>;
   who: string | undefined;
   /** Signed in with an account of their own: the server says which papers are theirs, whatever anybody is called. */
   named: boolean;
@@ -684,13 +745,10 @@ function Documents({
   onOpen: (document: CompanyDocument) => Promise<void>;
 }) {
   const t = useT();
+  const fold = documentsFold(view, { company: reader === 'company', canVerify, who, named }, toDo, t);
 
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.company.s.documents')}</span>
-      </div>
-
+    <ConsoleFold title={t('tower.company.s.documents')} hint={fold.hint} defaultOpen={fold.open}>
       {view.documents.length === 0 ? (
         <p class="cons__empty">{t('tower.company.none')}</p>
       ) : (
@@ -721,7 +779,7 @@ function Documents({
       )}
 
       {canUpload ? <PutOnRecord view={view} busy={busy} onUpload={onUpload} /> : null}
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -1032,11 +1090,9 @@ function Lapses({ view }: { view: CompanyRecordView }) {
   if (!view.lapses.length) return null;
   const kindLabel = (source: string, kind: string) =>
     source === 'licence' ? t(LICENCE_LABEL[kind as keyof typeof LICENCE_LABEL] ?? 'tower.company.licence.other') : t(INSURANCE_LABEL[kind as keyof typeof INSURANCE_LABEL] ?? 'tower.company.insurance.other');
+  const fold = lapsesFold(view, t);
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.company.s.lapses')}</span>
-      </div>
+    <ConsoleFold title={t('tower.company.s.lapses')} hint={fold.hint} defaultOpen={fold.open}>
       <ul class="twr-checklist" style="margin:12px 0">
         {view.lapses.map((l, i) => (
           <li key={i} class="is-missing">
@@ -1044,7 +1100,7 @@ function Lapses({ view }: { view: CompanyRecordView }) {
           </li>
         ))}
       </ul>
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -1052,10 +1108,7 @@ function Changes({ view }: { view: CompanyRecordView }) {
   const t = useT();
   if (!view.changes.length) return null;
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.company.s.changes')}</span>
-      </div>
+    <ConsoleFold title={t('tower.company.s.changes')} hint={changesHint(view.changes, when, t)}>
       <table class="ctbl">
         <tbody>
           {view.changes.map((c, i) => (
@@ -1066,7 +1119,7 @@ function Changes({ view }: { view: CompanyRecordView }) {
           ))}
         </tbody>
       </table>
-    </section>
+    </ConsoleFold>
   );
 }
 

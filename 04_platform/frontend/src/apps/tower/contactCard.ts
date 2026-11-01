@@ -60,3 +60,14 @@ export function visitorsPerHourOf(typed: string): number {
   const n = Number(typed.trim());
   return Number.isInteger(n) && n > 0 ? n : 0;
 }
+
+/**
+ * HOW TO REACH THEM, FOLDED INTO ITS HEADLINE (where a screen folds it — a yard's, beside its register). The line under
+ * the title is what a haulier would ring or write to, and the hours; with neither a telephone nor an email on record the
+ * entry is no way to reach anybody, which is waiting on the company — so the fold opens itself.
+ */
+export function contactFold(card: { phone?: string; email?: string; hours?: string } | null, noneWords: string): { hint: string; open: boolean } {
+  const reach = card?.phone?.trim() || card?.email?.trim() || '';
+  if (!reach) return { hint: noneWords, open: true };
+  return { hint: [reach, card?.hours?.trim()].filter(Boolean).join(' · '), open: false };
+}

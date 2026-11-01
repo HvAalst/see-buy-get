@@ -5,6 +5,8 @@ import { ConsolePick } from '../ConsolePick';
 import { useT } from '../../../shared/i18n';
 import { laneLabel, pctLabel } from '../money';
 import { companyCreateBlocker } from '../company';
+import { ConsoleFold } from '../ConsoleFold';
+import { createCompanyHint, runningOutFold } from '../folds';
 import { LapsingPapers } from './LapsingPapers';
 import type { CompanyRow, TowerActions, TowerState } from '../useTowerApp';
 
@@ -82,19 +84,18 @@ function Expiring({ state, actions, own }: { state: TowerState; actions: TowerAc
   const t = useT();
   const items = state.expiring;
   if (items === null) return null;
+  // Shut while everything is weeks away; open of itself once a paper has lapsed or has two weeks left.
+  const fold = runningOutFold(items, t);
 
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t(own ? 'tower.companies.expiringTitleOwn' : 'tower.companies.expiringTitle')}</span>
-      </div>
+    <ConsoleFold title={t(own ? 'tower.companies.expiringTitleOwn' : 'tower.companies.expiringTitle')} hint={fold.hint} defaultOpen={fold.open}>
       {own && items.length > 0 ? <p class="chint">{t('tower.companies.expiringWhatToDo')}</p> : null}
       {items.length === 0 ? (
         <p class="cons__empty">{t('tower.companies.expiringNone')}</p>
       ) : (
         <LapsingPapers items={items} onOpen={actions.openCompany} />
       )}
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -106,10 +107,9 @@ function CreateCompany({ state, actions }: { state: TowerState; actions: TowerAc
   const blocker = companyCreateBlocker(form, catalogue, state.entities ?? []);
 
   return (
-    <section class="cons__panel twr-corridornew">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.companies.createTitle')}</span>
-      </div>
+    // Shut: creating a company is rare, and the cards above are what this screen is read for. What is typed is kept
+    // while the headline is shut, since the form's state lives here rather than inside the fold.
+    <ConsoleFold title={t('tower.companies.createTitle')} hint={createCompanyHint(state.entities ?? [], t)}>
       <p class="chint" style="margin:8px 0">
         {t('tower.companies.createLede')}
       </p>
@@ -149,7 +149,7 @@ function CreateCompany({ state, actions }: { state: TowerState; actions: TowerAc
         </button>
         {blocker ? <span class="chint">{t(blocker)}</span> : null}
       </div>
-    </section>
+    </ConsoleFold>
   );
 }
 

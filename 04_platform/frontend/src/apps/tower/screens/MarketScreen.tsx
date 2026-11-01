@@ -21,6 +21,8 @@ import {
   type MarketSeriesView,
 } from '../market';
 import { LaneSheet } from './LaneSheet';
+import { ConsoleFold } from '../ConsoleFold';
+import { daysHint, priceHint, waitFold } from '../folds';
 import type { TowerActions } from '../useTowerApp';
 
 const RANGES = [30, 90, 365] as const;
@@ -109,6 +111,9 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
   const wait = series?.timeToClaim;
   const price = series?.priceVsStack;
   const priceOver = priceClaim(price);
+  // The verdict panel above stays open — its range decides every figure below. The rest fold into their headlines,
+  // each saying its figure; the wait opens when it is lengthening, the lanes when one went quiet.
+  const waitSays = waitFold(wait, t);
 
   return (
     <>
@@ -196,12 +201,19 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
       {series ? (
         <>
           {/* ---- how long the market is taking to answer ---- */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">{t('tower.market.waitTitle')}</span>
-              {wait?.stretching ? <span class="ctag ctag--warn">{t('tower.market.stretching')}</span> : null}
-              {wait?.thin ? <span class="ctag ctag--quiet">{t('tower.market.thin')}</span> : null}
-            </div>
+          <ConsoleFold
+            title={t('tower.market.waitTitle')}
+            hint={waitSays.hint}
+            defaultOpen={waitSays.open}
+            aside={
+              wait?.stretching || wait?.thin ? (
+                <>
+                  {wait?.stretching ? <span class="ctag ctag--warn">{t('tower.market.stretching')}</span> : null}
+                  {wait?.thin ? <span class="ctag ctag--quiet">{t('tower.market.thin')}</span> : null}
+                </>
+              ) : null
+            }
+          >
             <p class="cons__lede">{t('tower.market.waitHint')}</p>
             {wait?.medianHours == null ? (
               <p class="cons__empty">{t('tower.market.waitNone')}</p>
@@ -217,14 +229,14 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
                 </li>
               </ul>
             )}
-          </section>
+          </ConsoleFold>
 
           {/* ---- what negotiated loads cleared at ---- */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">{t('tower.market.priceTitle')}</span>
-              {price?.thin ? <span class="ctag ctag--quiet">{t('tower.market.thin')}</span> : null}
-            </div>
+          <ConsoleFold
+            title={t('tower.market.priceTitle')}
+            hint={priceHint(price, priceOver, t)}
+            aside={price?.thin ? <span class="ctag ctag--quiet">{t('tower.market.thin')}</span> : null}
+          >
             <p class="cons__lede">{t('tower.market.priceHint')}</p>
             {price == null || price.medianRatio == null ? (
               <p class="cons__empty">{t('tower.market.priceNone')}</p>
@@ -237,15 +249,12 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
                 <span class="ctbl__sub"> {t('tower.market.priceCount', { n: price.loads })}</span>
               </p>
             )}
-          </section>
+          </ConsoleFold>
 
           {/* ---- posted against claimed, day by day ---- */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">{t('tower.market.daysTitle')}</span>
-              <span class="ctbl__sub">{t('tower.market.daysLegend')}</span>
-            </div>
-            <div class="twr-spark" role="img" aria-label={t('tower.market.daysAria', { n: points.length })}>
+          <ConsoleFold title={t('tower.market.daysTitle')} hint={daysHint(series.days, t)}>
+            <p class="ctbl__sub">{t('tower.market.daysLegend')}</p>
+            <div class="twr-spark"role="img" aria-label={t('tower.market.daysAria', { n: points.length })}>
               {points.map((p) => (
                 <span key={p.day} class="twr-spark__day" title={p.day}>
                   <span class="twr-spark__posted" style={{ height: `${Math.round(p.posted * 100)}%` }} />
@@ -260,15 +269,15 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
                 return `${d.day.slice(5)} ${d.postedLoads}/${d.claimedLoads}${pct == null ? '' : ` (${pct}%)`}`;
               }).join(' · ')}
             </p>
-          </section>
+          </ConsoleFold>
 
           {/* ---- lanes ---- */}
-          <section class="cons__panel">
-            <div class="cons__panelhead">
-              <span class="cons__panelt">{t('tower.market.lanesTitle')}</span>
-              <span class="chint">{t('tower.market.laneCount', { n: allLanes.length })}</span>
-              {quiet.length ? <span class="ctag ctag--warn">{t('tower.market.quietCount', { n: quiet.length })}</span> : null}
-            </div>
+          <ConsoleFold
+            title={t('tower.market.lanesTitle')}
+            hint={t('tower.market.laneCount', { n: allLanes.length })}
+            defaultOpen={quiet.length > 0}
+            aside={quiet.length ? <span class="ctag ctag--warn">{t('tower.market.quietCount', { n: quiet.length })}</span> : null}
+          >
 
             {/*
               * THE MAP GOES ABOVE THE LIST AND NEVER INSTEAD OF IT. A lane named "Nairobi → South B" is
@@ -394,7 +403,7 @@ export function MarketScreen({ actions }: { actions: TowerActions }) {
             {unplaceable > 0 ? <p class="chint">{t('tower.market.unplaceable', { n: unplaceable })}</p> : null}
             {openLane ? <LaneSheet lane={openLane} since={since} api={client?.api as never} onClose={() => setPicked(null)} /> : null}
             <p class="ctbl__sub">{t('tower.market.lanesFoot')}</p>
-          </section>
+          </ConsoleFold>
         </>
       ) : null}
     </>

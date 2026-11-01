@@ -954,16 +954,13 @@
 /* A company's record as whoever does NOT keep it reads it — its own administrator before it is switched on, staff
    after. Every field is shown and none is offered for change: a Save the server refuses is worse than no Save. The
    fieldset disables what is inside it; this takes the buttons away, keeps what is written readable, and gives the
-   wrapper no box of its own. */
+   wrapper no box of its own. It sits INSIDE each section's fold, never around the folds: a disabled fieldset disables
+   every button in it, and a fold's headline is the button that opens it. */
 .twr-locked {
   border: 0;
   margin: 0;
   padding: 0;
   min-width: 0;
-}
-
-.twr-locked > .cons__panel:last-child {
-  border-bottom: 1px solid var(--bd);
 }
 
 .twr-locked:disabled .twr-corridorsave,

@@ -3,6 +3,7 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { ContactCardPanel, type ContactCardView } from './ContactCardPanel';
 import { ConsoleAction } from '../ConsoleAction';
+import { ConsoleFold } from '../ConsoleFold';
 import { CountrySelect, useCountryAtlas } from './CountrySelect';
 import { YardSheet } from './YardSheet';
 import { initials } from '../ConsoleMenu';
@@ -75,6 +76,8 @@ export function DepotsScreen({ state, actions }: { state: Pick<TowerState, 'who'
 
   const [rows, setRows] = useState<DepotRow[] | null>(null);
   const [register, setRegister] = useState<DepotRegister | null>(null);
+  // Whether the first read has come back: until it has, nobody knows whether the caller keeps a register.
+  const [read, setRead] = useState(false);
   /*
    * NO FREE-TEXT "anything a haulier should know" HERE, and the user's reason is the right one: it is a
    * leading question. A box that suggests "gate open 6am to 6pm, reach stacker on site" is us deciding
@@ -113,6 +116,7 @@ export function DepotsScreen({ state, actions }: { state: Pick<TowerState, 'who'
       const own = await client.api.depotRegister(mine);
       setRegister(own.error ? null : (own.data as unknown as DepotRegister));
     }
+    setRead(true);
   }, [client, mine, find.country, find.q]);
 
   useEffect(() => {
@@ -376,15 +380,15 @@ export function DepotsScreen({ state, actions }: { state: Pick<TowerState, 'who'
       ) : null}
 
       {/* THE YARD'S OWN ENTRY — how to reach them, beside the register they keep. One card per company:
-          the same panel a clearing agent edits, because it is the same entry. */}
-      {register ? <ContactCardPanel entityId={register.entityId} who={who} client={client as never} /> : null}
+          the same panel a clearing agent edits, because it is the same entry. Folded here, where the register
+          above is the yard's work: it opens itself while there is no way to reach them. */}
+      {register ? <ContactCardPanel entityId={register.entityId} who={who} client={client as never} fold /> : null}
 
-      {/* ---- The finder: which yards exist, and what each SAYS it holds ---- */}
-      <section class="cons__panel">
-        <div class="cons__panelhead">
-          <span class="cons__panelt">{t('tower.depots.findTitle')}</span>
-          {rows ? <span class="ctag ctag--quiet">{rows.length}</span> : null}
-        </div>
+      {/* ---- The finder: which yards exist, and what each SAYS it holds ----
+          Open for whoever keeps no register here — for them it is the screen. Beneath a yard's own register it
+          folds into how many yards it lists. Mounted again once the first read is back, since only then is it
+          known which of the two the caller is. */}
+      <ConsoleFold key={read ? 'read' : 'reading'} title={t('tower.depots.findTitle')} hint={rows ? t('tower.depots.fold.found', { n: rows.length }) : undefined} defaultOpen={!register}>
         {/*
           * ONE SEARCH AND A COUNTRY LIST — not two labelled boxes over a three-column table. The
           * countries offered are the ones that ACTUALLY HAVE YARDS, derived from the answer: a filter
@@ -431,7 +435,7 @@ export function DepotsScreen({ state, actions }: { state: Pick<TowerState, 'who'
           </div>
         ) : null}
         {openYard ? <YardSheet yard={openYard} onClose={() => setOpenYard(null)} /> : null}
-      </section>
+      </ConsoleFold>
     </>
   );
 }

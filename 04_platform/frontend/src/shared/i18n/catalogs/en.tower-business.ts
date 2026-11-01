@@ -14,6 +14,7 @@ export const enTowerBusiness = {
   'tower.contact.hint':
     'Shown on your public page and in the directories. Use the gate’s number, not a private one.',
   'tower.contact.saidBy': 'written by {by} on {d}',
+  'tower.contact.fold.none': 'No way to reach you on record yet',
   'tower.contact.save': 'Save my entry',
   'tower.contact.saved': 'Saved.',
   'tower.contact.f.person': 'Who to ask for',
@@ -104,6 +105,7 @@ export const enTowerBusiness = {
   'tower.depots.derivedNone': 'Nothing has arrived here through us yet.',
   'tower.depots.arrivedOn': '{code}, arrived {d}',
   'tower.depots.findTitle': 'Find a yard',
+  'tower.depots.fold.found': '{n, plural, one {# yard} other {# yards}} listed',
   'tower.depots.sheetHolding': 'Holding',
   'tower.depots.addContact': 'Add to contacts',
   'tower.depots.mapLabel': 'Where {yard} is',

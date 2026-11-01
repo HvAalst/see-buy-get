@@ -1,7 +1,9 @@
 import { WEEK } from '../../../shared/visitHours';
+import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
-import { addClosedDate, closedDateWords, ownHoursOf, removeClosedDate, visitorsPerHourOf, windowOk, type ClosedDate, type VisitWindow } from '../contactCard';
+import { ConsoleFold } from '../ConsoleFold';
+import { addClosedDate, closedDateWords, contactFold, ownHoursOf, removeClosedDate, visitorsPerHourOf, windowOk, type ClosedDate, type VisitWindow } from '../contactCard';
 
 export interface ContactCardView {
   contactName?: string;
@@ -55,15 +57,20 @@ export function ContactCardPanel({
   who,
   client,
   desk = false,
+  fold = false,
 }: {
   entityId: string;
   who?: string;
   /** Round 39 — a country's company: it also keeps the desk a held driver rings. Nowhere else is it asked. */
   desk?: boolean;
+  /** Folded into its headline, where it sits beside work of its own (a yard's register): opens itself with no way to reach them. */
+  fold?: boolean;
   client: { api: Record<string, (...args: never[]) => Promise<{ data?: unknown; error?: { detail?: string; title?: string } | null }>> } | null;
 }) {
   const t = useT();
   const [card, setCard] = useState<ContactCardView | null>(null);
+  // Whether the card has been asked for yet: until it has, nobody knows whether there is a way to reach them.
+  const [read, setRead] = useState(false);
   const [form, setForm] = useState({
     contactName: '',
     phone: '',
@@ -94,6 +101,7 @@ export function ContactCardPanel({
     // No entry yet is a 404 and not a failure: the form simply starts empty.
     const got = r.error ? null : (r.data as ContactCardView);
     setCard(got);
+    setRead(true);
     if (got) {
       setForm({
         contactName: got.contactName ?? '',
@@ -146,12 +154,17 @@ export function ContactCardPanel({
     await load();
   };
 
+  const said = contactFold(card, t('tower.contact.fold.none'));
+
   return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.contact.title')}</span>
-        {card ? <span class="ctag ctag--quiet">{t('tower.contact.saidBy', { by: card.saidBy, d: card.saidAt.slice(0, 10) })}</span> : null}
-      </div>
+    <Frame
+      fold={fold}
+      read={read}
+      title={t('tower.contact.title')}
+      hint={said.hint}
+      open={said.open}
+      aside={card ? <span class="ctag ctag--quiet">{t('tower.contact.saidBy', { by: card.saidBy, d: card.saidAt.slice(0, 10) })}</span> : null}
+    >
       <p class="cons__lede">{t('tower.contact.hint')}</p>
 
       {error ? <p class="cons__caveat">{error}</p> : null}
@@ -330,6 +343,46 @@ export function ContactCardPanel({
       {/* Said on the screen as well as in the payload: an entry in a directory reads as endorsed unless
           somebody says otherwise, and nobody here checked any of it. */}
       {card ? <p class="cons__lede">{card.basis}</p> : null}
-    </section>
+    </Frame>
+  );
+}
+
+/**
+ * The panel as it always was, or folded into its headline. Folded, it is mounted again once the card has been read:
+ * whether it opens itself depends on what the card says, and before the answer nobody knows. The entry's state lives
+ * in the panel above, so nothing typed is lost by it.
+ */
+function Frame({
+  fold,
+  read,
+  title,
+  hint,
+  open,
+  aside,
+  children,
+}: {
+  fold: boolean;
+  read: boolean;
+  title: string;
+  hint: string;
+  open: boolean;
+  aside: ComponentChildren;
+  children: ComponentChildren;
+}) {
+  if (!fold) {
+    return (
+      <section class="cons__panel">
+        <div class="cons__panelhead">
+          <span class="cons__panelt">{title}</span>
+          {aside}
+        </div>
+        {children}
+      </section>
+    );
+  }
+  return (
+    <ConsoleFold key={read ? 'read' : 'reading'} title={title} hint={read ? hint : undefined} defaultOpen={read && open} aside={aside}>
+      {children}
+    </ConsoleFold>
   );
 }

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey, type Translate } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
+import { ConsoleFold } from '../ConsoleFold';
+import { adminsHint, amountsFold, changesHint, impactHint, topUpFeeHint } from '../folds';
 import {
   AMOUNT_HINT,
   AMOUNT_LABEL,
@@ -225,7 +227,6 @@ function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: T
   const busy = state.busyId === 'amounts';
   const currency = pricing.currency ?? '';
   const money = (n: number) => `${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`.trim();
-  const own = pricing.amounts.filter((r) => r.own).length;
   const body = amountsPayload(form, pricing);
   const changed = Object.keys(body).length > 0;
   const math = counterParcelMath(amountsInForce(form, pricing));
@@ -235,13 +236,11 @@ function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: T
     if (amountsFormError(form, pricing, t) || !changed) return;
     void actions.saveAmounts(body);
   };
+  // Opens of itself when the figures IN FORCE pay out more for a parcel than it brings in — read off the record, not the boxes.
+  const fold = amountsFold(pricing, t);
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.amounts.title')}</span>
-        <span class="ctbl__sub">{own ? t('tower.amounts.ownCount', { n: own, of: pricing.amounts.length }) : t('tower.amounts.noneOwn')}</span>
-      </div>
+    <ConsoleFold title={t('tower.amounts.title')} hint={fold.hint} defaultOpen={fold.open}>
 
       <div class="twr-knobs">
         <p class="chint">{t('tower.amounts.hint', { currency: currency || t('tower.amounts.itsMoney') })}</p>
@@ -280,7 +279,7 @@ function Amounts({ pricing, state, actions }: { pricing: EntityPricing; state: T
           {!changed ? <span class="ctbl__sub">{t('tower.amounts.nothingChanged')}</span> : null}
         </div>
       </div>
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -319,22 +318,18 @@ function TopUpFee({ pricing, state, actions }: { pricing: EntityPricing; state: 
   };
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.topupfee.title')}</span>
-        {/* What is charged TODAY, read off the record rather than off the boxes — the boxes are a draft
-            until somebody saves them, and the two are not the same claim. */}
-        <span class="ctbl__sub">
+    // What is charged TODAY, read off the record rather than off the boxes — the boxes are a draft until somebody
+    // saves them, and the two are not the same claim. The headline says it short; the sentence inside says it whole.
+    <ConsoleFold title={t('tower.topupfee.title')} hint={topUpFeeHint(pricing, t)}>
+      <div class="twr-knobs">
+        <p class="chint">
           {pricing.topUpFee
             ? t('tower.topupfee.current', {
                 charge: `${pricing.topUpFee.amount.toLocaleString()} ${currency}`.trim(),
                 freeAbove: `${pricing.topUpFee.freeAbove.toLocaleString()} ${currency}`.trim(),
               })
             : t('tower.topupfee.none')}
-        </span>
-      </div>
-
-      <div class="twr-knobs">
+        </p>
         <p class="chint">{t('tower.topupfee.hint')}</p>
         <div class="twr-knobs__row">
           <section class="twr-knob">
@@ -352,7 +347,7 @@ function TopUpFee({ pricing, state, actions }: { pricing: EntityPricing; state: 
           </section>
         </div>
       </div>
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -395,11 +390,7 @@ function CustodyCaps({ pricing, state, actions }: { pricing: EntityPricing; stat
   const said = (c?: { start: number; liftedAfter: number }) => (c ? t('tower.custodyCaps.said', { start: c.start, lift: c.liftedAfter }) : t('tower.custodyCaps.none'));
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.custodyCaps.title')}</span>
-        <span class="ctbl__sub">{t('tower.custodyCaps.current', { shop: said(stored.shop), rider: said(stored.rider) })}</span>
-      </div>
+    <ConsoleFold title={t('tower.custodyCaps.title')} hint={t('tower.custodyCaps.current', { shop: said(stored.shop), rider: said(stored.rider) })}>
       <div class="twr-knobs">
         <p class="chint">{t('tower.custodyCaps.hint')}</p>
         <div class="twr-knobs__row">
@@ -423,7 +414,7 @@ function CustodyCaps({ pricing, state, actions }: { pricing: EntityPricing; stat
           {t('tower.rates.save')}
         </button>
       </div>
-    </section>
+    </ConsoleFold>
   );
 }
 /**
@@ -442,11 +433,7 @@ function SealRules({ pricing, state, actions }: { pricing: EntityPricing; state:
   const KINDS = ['crossBorder', 'containers'] as const;
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.sealRules.title')}</span>
-        <span class="ctbl__sub">{where(stored) ? t('tower.sealRules.current', { where: where(stored) }) : t('tower.sealRules.currentNone')}</span>
-      </div>
+    <ConsoleFold title={t('tower.sealRules.title')} hint={where(stored) ? t('tower.sealRules.current', { where: where(stored) }) : t('tower.sealRules.currentNone')}>
       <div class="twr-knobs">
         <p class="chint">{t('tower.sealRules.hint')}</p>
         <div class="twr-knobs__row">
@@ -477,7 +464,7 @@ function SealRules({ pricing, state, actions }: { pricing: EntityPricing; state:
           </section>
         </div>
       </div>
-    </section>
+    </ConsoleFold>
   );
 }
 function CarrierPapers({ pricing, state, actions }: { pricing: EntityPricing; state: TowerState; actions: TowerActions }) {
@@ -493,15 +480,8 @@ function CarrierPapers({ pricing, state, actions }: { pricing: EntityPricing; st
   const label = (k: CarrierKind) => t(k === 'operator_licence' ? 'fleet.papers.operatorLicence' : 'fleet.papers.carrierInsurance');
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.carrierPapers.title')}</span>
-        {/* What is enforced TODAY, off the record — the toggles are a draft until saved. */}
-        <span class="ctbl__sub">
-          {stored.length ? t('tower.carrierPapers.current', { papers: stored.map(label).join(', ') }) : t('tower.carrierPapers.currentNone')}
-        </span>
-      </div>
-
+    // What is enforced TODAY, off the record — the toggles are a draft until saved.
+    <ConsoleFold title={t('tower.carrierPapers.title')} hint={stored.length ? t('tower.carrierPapers.current', { papers: stored.map(label).join(', ') }) : t('tower.carrierPapers.currentNone')}>
       <div class="twr-knobs">
         <p class="chint">{t('tower.carrierPapers.hint')}</p>
         <div class="twr-knobs__row">
@@ -537,7 +517,7 @@ function CarrierPapers({ pricing, state, actions }: { pricing: EntityPricing; st
           </section>
         </div>
       </div>
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -552,11 +532,8 @@ function RecentChanges({ pricing }: { pricing: EntityPricing }) {
   const t = useT();
   if (!pricing.recentChanges.length) return null;
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.changes.title')}</span>
-        <span class="ctbl__sub">{t('tower.changes.hint')}</span>
-      </div>
+    <ConsoleFold title={t('tower.changes.title')} hint={changesHint(pricing.recentChanges, (iso) => new Date(iso).toLocaleString(), t)}>
+      <p class="chint">{t('tower.changes.hint')}</p>
       <table class="ctbl ctbl--stack">
         <thead>
           <tr>
@@ -582,7 +559,7 @@ function RecentChanges({ pricing }: { pricing: EntityPricing }) {
           ))}
         </tbody>
       </table>
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -608,9 +585,9 @@ function Administrators({ pricing, state, actions }: { pricing: EntityPricing; s
   };
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.admins.title', { name: pricing.name })}</span>
+    // Held open while a new password is on screen: it exists nowhere else, and is closed only by hand.
+    <ConsoleFold title={t('tower.admins.title', { name: pricing.name })} hint={adminsHint(rows, t)} open={state.newAdmin ? true : undefined}>
+      <div class="twr-panelend">
         <button type="button" class="cbtn cbtn--ghost cbtn--sm" aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? t('common.close') : t('tower.admins.add')}
         </button>
@@ -690,7 +667,7 @@ function Administrators({ pricing, state, actions }: { pricing: EntityPricing; s
           </tbody>
         </table>
       )}
-    </section>
+    </ConsoleFold>
   );
 }
 
@@ -839,11 +816,8 @@ function RateImpact({ state }: { state: TowerState }) {
   if (!impact) return null;
 
   return (
-    <section class="cons__panel" style="margin-top:18px">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('tower.impact.title')}</span>
-        <span class="ctbl__sub">{t('tower.impact.hint')}</span>
-      </div>
+    <ConsoleFold title={t('tower.impact.title')} hint={impactHint(impact, t)}>
+      <p class="chint">{t('tower.impact.hint')}</p>
       {impact.spells.length === 0 ? (
         <div class="cons__empty">
           <p class="cons__emptyt">{t('tower.impact.emptyTitle')}</p>
@@ -878,6 +852,6 @@ function RateImpact({ state }: { state: TowerState }) {
         </table>
       )}
       {impact.unpriced ? <p class="chint" style="padding:8px 0 12px">{t('tower.impact.unpriced', { n: impact.unpriced })}</p> : null}
-    </section>
+    </ConsoleFold>
   );
 }
