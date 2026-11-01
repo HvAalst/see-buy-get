@@ -186,7 +186,7 @@ export const AIRPORT_COUNTRY: Readonly<Record<string, string>> = {
   LOS: 'NG', ABV: 'NG',
   ACC: 'GH',
   CAI: 'EG',
-  AMS: 'NL', LGG: 'BE', BRU: 'BE', FRA: 'DE', CGN: 'DE', LEJ: 'DE', CDG: 'FR', LHR: 'GB', STN: 'GB', MAD: 'ES', MXP: 'IT', LUX: 'LU',
+  AMS: 'NL', MST: 'NL', EIN: 'NL', LGG: 'BE', BRU: 'BE', OST: 'BE', FRA: 'DE', CGN: 'DE', LEJ: 'DE', CDG: 'FR', LHR: 'GB', STN: 'GB', MAD: 'ES', MXP: 'IT', LUX: 'LU',
   DXB: 'AE', DWC: 'AE', SHJ: 'AE', DOH: 'QA', IST: 'TR', BOM: 'IN', DEL: 'IN', HKG: 'HK', CAN: 'CN', PVG: 'CN',
 };
 

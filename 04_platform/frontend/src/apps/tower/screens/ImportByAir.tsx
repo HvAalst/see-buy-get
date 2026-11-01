@@ -68,6 +68,8 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
     handler: air?.handler ?? '',
     // 2026-11-01 — the country it landed in, where its airport is not one we know.
     landedIn: air?.landedIn ?? '',
+    // 2026-11-01 — collected built up on airline pallets: how many.
+    builtUp: air?.builtUp ? String(air.builtUp) : '',
     pieces: air ? String(air.pieces) : '',
     kg: air ? String(air.weightKg) : '',
     minC: air?.temp ? String(air.temp.minC) : '',
@@ -132,6 +134,7 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
           flights: [{ flight: form.flight.trim(), date: form.date, from: form.from.trim(), to: form.to.trim(), ...(form.arrives ? { arrivesLocal: form.arrives } : {}) }],
           handler: form.handler.trim(),
           ...(form.landedIn.trim() ? { landedIn: form.landedIn.trim().toUpperCase() } : {}),
+          ...(Number(form.builtUp) > 0 ? { builtUp: Math.round(Number(form.builtUp)) } : {}),
           pieces: Number(form.pieces),
           weightKg: Number(form.kg),
           ...(form.minC.trim() && form.maxC.trim() ? { minC: Number(form.minC), maxC: Number(form.maxC) } : {}),
@@ -198,6 +201,7 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
         <>
           {/* 2026-11-01 — landed in another country than the importer's: released for transit, on by road under bond. */}
           {air.landedIn ? <p class="chint"><span class="ctag ctag--warn">{t('tower.byAir.transitTag')}</span> {t('tower.byAir.transitLine', { landed: air.landedIn, dest: destCountry })}</p> : null}
+          {air.builtUp ? <p class="chint">{t('tower.byAir.builtUpLine', { n: air.builtUp })}</p> : null}
           <p class="cons__lede">{t('tower.byAir.held', { awb: air.awb, airline: air.airline, flights: air.flights.map((f) => `${f.flight} ${f.date} ${f.from}→${f.to}`).join('; '), handler: air.handler, pieces: air.pieces, kg: air.weightKg })}</p>
           {air.temp ? <p class="chint">{t('tower.byAir.temp', { min: air.temp.minC ?? '', max: air.temp.maxC ?? '' })}</p> : null}
           {air.animals ? (
@@ -313,6 +317,7 @@ export function ImportByAir({ code, air, youAre, natureCode, destCountry, calls,
           <div class="twr-knobs__row">
             {field('handler', 'tower.byAir.f.handler', { maxLength: '80' })}
             {field('landedIn', 'tower.byAir.f.landedIn', { maxLength: '2' })}
+            {field('builtUp', 'tower.byAir.f.builtUp', { type: 'number', min: '0', max: '40', step: '1' })}
           </div>
           <div class="twr-knobs__row">
             {field('pieces', 'tower.byAir.f.pieces', { type: 'number', min: '1' })}

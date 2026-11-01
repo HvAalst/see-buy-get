@@ -716,7 +716,7 @@ export class ImportService {
   setAir(
     importId: string,
     actorEntityId: string,
-    input: { awb: string; waybillKind: 'master' | 'house' | 'direct'; houseNumber?: string; airline?: string; flights: Array<{ flight: string; date: string; from: string; to: string; arrivesLocal?: string }>; handler: string; landedIn?: string; pieces: number; weightKg: number; minC?: number; maxC?: number; agencies: string[]; freeHours?: number; freeHoursSource?: string; animals?: LiveAnimalsDto; quarantine?: { label: string; location: GeoPoint } },
+    input: { awb: string; waybillKind: 'master' | 'house' | 'direct'; houseNumber?: string; airline?: string; flights: Array<{ flight: string; date: string; from: string; to: string; arrivesLocal?: string }>; handler: string; landedIn?: string; builtUp?: number; pieces: number; weightKg: number; minC?: number; maxC?: number; agencies: string[]; freeHours?: number; freeHoursSource?: string; animals?: LiveAnimalsDto; quarantine?: { label: string; location: GeoPoint } },
     by: string,
     now = Date.now(),
   ): ImportDetail {
@@ -792,6 +792,8 @@ export class ImportService {
       ...(input.freeHoursSource?.trim() ? { freeHoursSource: input.freeHoursSource.trim().slice(0, 160) } : {}),
       ...(before?.warned ? { warned: before.warned } : {}),
       ...(animals ? { animals } : {}),
+      // Collected built up on airline pallets: a truck with a roller floor takes them.
+      ...(input.builtUp && input.builtUp > 0 ? { builtUp: Math.round(input.builtUp) } : {}),
       recordedAt: new Date(now).toISOString(),
       recordedBy: by,
     };
@@ -902,6 +904,7 @@ export class ImportService {
     return [
       `Import ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}. Collect it at ${a.handler} against this waybill and the delivery order${a.deliveryOrder?.reference ? ` ${a.deliveryOrder.reference}` : ''}${a.handlerCharges?.reference ? `; the handler’s charges are paid, receipt ${a.handlerCharges.reference}` : ''}. Count the pieces before you leave the shed: the waybill says ${a.pieces}.`,
       a.slot ? `Your slot at the shed: ${slotWords(a.slot)}. Come inside it — a truck outside its slot waits, or is turned away.` : '',
+      a.builtUp ? `${a.builtUp} built-up airline ${a.builtUp === 1 ? 'pallet' : 'pallets'}, as the airline delivered them: roll them on and off — never break them down.` : '',
       a.landedIn ? `In transit: it landed in ${catalogueEntry(a.landedIn)?.name ?? a.landedIn} and goes on under bond to ${catalogueEntry(c.destCountry)?.name ?? c.destCountry}, to be cleared there — keep the seal and the transit papers with it, and stop at no place on the way but the border.` : '',
       a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
       a.animals ? animalWords(a.animals) : '',
@@ -984,6 +987,7 @@ export class ImportService {
         pickupCountry: a.landedIn ?? c.destCountry,
         destCountry: c.destCountry,
         ...(a.landedIn ? { bonded: true, bondCountry: a.landedIn } : {}),
+        ...(a.builtUp ? { airPallets: a.builtUp } : {}),
         instructions: this.airRoadWords(c),
         // Collected from the airline's shed under this waybill: the pieces are counted there before the goods leave it.
         airTerminal: { side: 'collection', awb: a.awb, airline: a.airline, handler: a.handler, pieces: a.pieces, ...(damageNoticeDays(airRegimeOf(c.originCountry, a.landedIn ?? c.destCountry, a.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) ? { complainDays: damageNoticeDays(airRegimeOf(c.originCountry, a.landedIn ?? c.destCountry, a.flights[0]?.date ?? new Date(now).toISOString().slice(0, 10))) } : {}) },

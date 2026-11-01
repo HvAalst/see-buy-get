@@ -50243,6 +50243,10 @@
               }
             ]
           },
+          "builtUp": {
+            "type": "number",
+            "description": "2026-11-01 — COLLECTED BUILT UP on airline pallets or containers (ULDs), as the airline delivered them — flowers flown\ninto Maastricht go on to the auction like this: how many. A truck with a roller floor takes them, never broken down."
+          },
           "collectAnyway": {
             "type": "object",
             "properties": {
@@ -51537,6 +51541,10 @@
               }
             ]
           },
+          "builtUp": {
+            "type": "number",
+            "description": "2026-11-01 — COLLECTED BUILT UP on airline pallets or containers (ULDs), as the airline delivered them — flowers flown\ninto Maastricht go on to the auction like this: how many. A truck with a roller floor takes them, never broken down."
+          },
           "collectAnyway": {
             "type": "object",
             "properties": {
@@ -52164,6 +52172,12 @@
           "freeHoursSource": {
             "type": "string",
             "maxLength": 160
+          },
+          "builtUp": {
+            "type": "number",
+            "description": "2026-11-01 — collected built up on airline pallets or containers: how many.",
+            "minimum": 1,
+            "maximum": 40
           },
           "animals": {
             "description": "Live animals (2026-10-30): the declaration, and on an import the place the veterinary officer named.",

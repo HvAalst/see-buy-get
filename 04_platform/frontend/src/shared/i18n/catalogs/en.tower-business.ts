@@ -661,6 +661,8 @@ export const enTowerBusiness = {
   'tower.byAir.slotTitle': 'The truck’s slot at the shed',
   'tower.byAir.f.landedIn': 'Country it landed in (two letters), if its airport is not one we know',
   'tower.byAir.transitTag': 'In transit',
+  'tower.byAir.f.builtUp': 'Built up on airline pallets or containers — how many, if it is collected so',
+  'tower.byAir.builtUpLine': '{n, plural, one {# airline pallet or container, built up} other {# airline pallets or containers, built up}}: only a truck with a roller floor is offered the road leg.',
   'tower.byAir.transitLine': 'It landed in {landed}, not in {dest}: customs at the airport release it for transit, and the road leg runs under bond across the border. The agencies of {dest} look at it there, where it is cleared.',
   'tower.byAir.slotNone': 'No slot recorded. Where the shed gives trucks a slot, record it: the driver is told to come inside it.',
   'tower.byAir.slotLine': '{from} – {to}{reference}. Told to the driver.',

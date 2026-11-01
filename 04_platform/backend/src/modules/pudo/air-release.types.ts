@@ -2,7 +2,7 @@ import { catalogueEntry } from '../../foundation/countries/catalogue';
 import { TerminalSlot } from './air-terminal.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsInt, ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { LiveAnimals, LiveAnimalsDto } from './live-animals.types';
 
 /**
@@ -243,6 +243,11 @@ export class ImportAir {
   @ApiPropertyOptional() collected?: { at: string; counted: number; reservations?: string; complainBy?: string };
   /** 2026-11-01 — the truck's slot at the shed to collect it, as the shed gave it: told to the driver. */
   @ApiPropertyOptional({ type: TerminalSlot }) slot?: TerminalSlot;
+  /**
+   * 2026-11-01 — COLLECTED BUILT UP on airline pallets or containers (ULDs), as the airline delivered them — flowers flown
+   * into Maastricht go on to the auction like this: how many. A truck with a roller floor takes them, never broken down.
+   */
+  @ApiPropertyOptional() builtUp?: number;
   /** The importer's word to send the truck before it is released — with why; its truck's waiting is its own. */
   @ApiPropertyOptional() collectAnyway?: { by: string; at: string; reason: string };
   /** The handler's free storage, in hours, as on its notice or tariff — and where that figure came from. */
@@ -298,6 +303,8 @@ export class ImportAirDto {
   @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) agencies!: string[];
   @IsOptional() @IsNumber() @Min(0) @Max(720) freeHours?: number;
   @IsOptional() @IsString() @MaxLength(160) freeHoursSource?: string;
+  /** 2026-11-01 — collected built up on airline pallets or containers: how many. */
+  @IsOptional() @IsInt() @Min(1) @Max(40) builtUp?: number;
   /** Live animals (2026-10-30): the declaration, and on an import the place the veterinary officer named. */
   @IsOptional() @ValidateNested() @Type(() => LiveAnimalsDto) animals?: LiveAnimalsDto;
 }

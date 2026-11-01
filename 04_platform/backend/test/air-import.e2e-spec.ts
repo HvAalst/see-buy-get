@@ -258,4 +258,20 @@ describe('an import by air, over the wire', () => {
     expect(homeSet.air.landedIn).toBeUndefined();
     expect(homeSet.air.gaps[0]).toBe('the customs release');
   });
+
+  it('flowers from Addis Ababa into Maastricht, collected built up on airline pallets (2026-11-01): landed at home, chilled, and only a truck with a roller floor takes them', async () => {
+    const imp = await aBusiness(['importer'], 'Aalsmeer Flowers');
+    const shed = await imp.site('port', 'Cargo shed, Maastricht Aachen Airport', { lat: 50.915, lng: 5.775 });
+    const auction = await imp.site('delivery', 'Flower auction, Aalsmeer', { lat: 52.27, lng: 4.77 });
+    const made = (await http().post('/v1/sbg/imports').set(bearer(imp.token)).send({ goodsDescription: 'Roses, 4 pallets', originCountry: 'ET', destCountry: 'NL', destPort: 'Maastricht', mode: 'air', natureCode: 'FOP' }).expect(201)).body;
+    const path = `/v1/sbg/imports/${made.importId}`;
+    const set = (await http().post(`${path}/air`).set(bearer(imp.token)).send({ awb: '071-12345675', waybillKind: 'master', flights: [{ flight: 'ET 3714', date: today(), from: 'ADD', to: 'MST' }], handler: 'Cargo shed, Maastricht Aachen Airport', pieces: 480, weightKg: 9_600, minC: 2, maxC: 6, agencies: [], builtUp: 4 }).expect(201)).body;
+    // Maastricht is in the Netherlands: no border on the road, and the pallets as the airline built them.
+    expect(set.air.landedIn).toBeUndefined();
+    expect(set.air.builtUp).toBe(4);
+    const leg = (await http().post(`${path}/road-leg`).set(bearer(imp.token)).send({ pickupSiteId: shed, destSiteId: auction, weightKg: 9_600 }).expect(201)).body;
+    const freight = app.get(DispatchService).requireFreightPublic(leg.roadFreightId);
+    expect(freight).toMatchObject({ airPallets: 4, pickupCountry: 'NL', destCountry: 'NL', tempRange: { minC: 2, maxC: 6 } });
+    expect(freight.instructions?.text).toMatch(/4 built-up airline pallets, as the airline delivered them: roll them on and off — never break them down/);
+  });
 });
