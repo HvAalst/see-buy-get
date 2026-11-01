@@ -46,7 +46,9 @@ export type CargoNature = (typeof CARGO_NATURES)[number];
 
 /** Load/unload equipment codes. A vehicle/site declares what it carries or has on hand; a cargo class
  *  declares what it needs (enforced from S31/S32 — S30 only defines the lookup). */
-export const EQUIPMENT = ['MAN', 'HTR', 'PLT', 'FLT', 'TLT', 'CRN', 'RMP', 'STR'] as const;
+// 2026-11-01 — ROL: a roller floor, which takes airline pallets and containers (ULDs) on and off whole — fitted to a box,
+// curtain-side, insulated or refrigerated body alike, so it is equipment, not a body.
+export const EQUIPMENT = ['MAN', 'HTR', 'PLT', 'FLT', 'TLT', 'CRN', 'RMP', 'STR', 'ROL'] as const;
 export type Equipment = (typeof EQUIPMENT)[number];
 
 /** The pairwise verdict from the compatibility matrix. */

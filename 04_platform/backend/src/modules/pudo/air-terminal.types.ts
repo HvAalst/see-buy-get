@@ -24,6 +24,17 @@ export class TerminalSlotChangeDto extends TerminalSlotDto {
   @IsOptional() @IsBoolean() clear?: boolean;
 }
 
+/**
+ * 2026-11-01 — AIRLINE PALLETS AND CONTAINERS BUILT UP (ULDs) RIDE ON A ROLLER FLOOR (equipment ROL): it takes them on at the
+ * forwarder's shed and rolls them off at the terminal's dock. On any other body they would be broken down to load and
+ * built up again — the work and the risk the forwarder built them up to avoid. Undefined: this vehicle may.
+ */
+export function palletVehicleRefusal(units: number | undefined, vehicle: { vehicleClass?: string; equipment?: readonly string[] } | null | undefined): string | undefined {
+  if (!units || !vehicle) return undefined;
+  if (vehicle.vehicleClass === 'truck' && vehicle.equipment?.includes('ROL')) return undefined;
+  return `${units} built-up airline ${units === 1 ? 'pallet rides' : 'pallets ride'} on a truck with a roller floor, which rolls ${units === 1 ? 'it' : 'them'} on and off at the terminal’s dock without breaking ${units === 1 ? 'it' : 'them'} down.`;
+}
+
 /** A slot is a window of at most this long. */
 export const SLOT_MAX_H = 12;
 

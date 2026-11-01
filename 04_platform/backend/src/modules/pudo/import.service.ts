@@ -1,4 +1,4 @@
-import { slotOf, slotWords } from './terminal-slot.types';
+import { slotOf, slotWords } from './air-terminal.types';
 import { Injectable, Optional } from '@nestjs/common';
 import { catalogueEntry, isKnownCurrency } from '../../foundation/countries/catalogue';
 import { QuoteService } from './quote.service';

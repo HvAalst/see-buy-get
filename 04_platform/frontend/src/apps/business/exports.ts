@@ -208,6 +208,8 @@ export interface ExportAir {
   inspectionAtAirport?: boolean;
   /** 2026-11-01 — the truck's slot at the cargo terminal, as the shed gave it: the truck is timed to its end. */
   slot?: { from: string; to: string; reference?: string };
+  /** 2026-11-01 — built up on airline pallets or containers: how many; a truck with a roller floor takes them. */
+  builtUp?: number;
   /** Live animals (2026-10-30): as their keeper declared them; the originals ride with them. */
   animals?: { kind: 'livestock' | 'crated'; species: string; count: number; hatchedAt?: string; permit: string; healthCertificate: string; cites?: string; movementPermit?: string; attendant?: { name: string; phone?: string }; shipperCertifiedBy?: string; fitToTravel: { by: string; at: string } };
   /** The booking as it stood before each change recorded: kept, never overwritten. */

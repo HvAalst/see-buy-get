@@ -1,4 +1,4 @@
-import { TerminalSlot } from './terminal-slot.types';
+import { TerminalSlot } from './air-terminal.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';

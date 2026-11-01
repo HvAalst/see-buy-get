@@ -8707,6 +8707,25 @@ describe('PUDO Light', () => {
     expect(shed.airTerminal?.side).toBe('collection');
   });
 
+  it('road meets air (2026-11-01): built-up airline pallets ride only on a truck with a roller floor — a reefer with one takes chilled pallets; a flatbed is told why', () => {
+    const pickup = { lat: -1.32, lng: 36.92 };
+    const f = dispatch.registerFreight({ description: 'Roses, built up', pickupLocation: pickup, pickupLabel: 'Forwarder shed', destLabel: 'KQ cargo', destLocation: pickup, weightKg: 3000, packaging: 'palletised', packages: 3, airPallets: 3 });
+    expect(f.airPallets).toBe(3);
+    const flat = coupleFlatbedWithForklift('ULDF', { min: 0.8, max: 1.5 });
+    const row = dispatch.board({ driverDid: flat.did, from: pickup }).find((r) => r.freightId === f.freightId);
+    expect(row?.blockers.find((b) => b.code === 'PALLETS_VEHICLE')?.message).toBe('3 built-up airline pallets ride on a truck with a roller floor, which rolls them on and off at the terminal’s dock without breaking them down.');
+    expect(dispatch.suggest(flat.did, { from: pickup, to: pickup }).some((o) => o.ref === f.freightId)).toBe(false);
+    // …and a fleet's office cannot hand it to that truck either: the take refuses it, whatever door it came through.
+    expect(() => dispatch.assign(f.freightId, flat.did, { managerDid: 'did:office:x' })).toThrow(/roller floor/);
+    // A refrigerated truck with a roller floor: cold and whole.
+    const d = drivers.register({ displayName: 'ULDR', fullName: 'ULDR', nationalId: 'ID-ULDR', mobile: '+2547ULDR', licenceClasses: ['truck'], licenceNumber: 'L-ULDR', licenceExpiresAt: new Date(Date.now() + 365 * 86_400_000).toISOString(), criminalRecordClear: true });
+    drivers.submitKyc(d.did, { idCopyRef: 'i', licenceCopyRef: 'l' });
+    drivers.decideKyc(d.did, true);
+    const v = vehicles.register({ plate: 'RL-ULDR', vehicleClass: 'truck', truckSubtype: 'refrigerated', capacityKg: 20_000, ownerName: 'X', equipment: ['ROL'], baseFee: 10, pricePerKm: 0.5, minMultiplier: 0.8, maxMultiplier: 1.5 });
+    fleet.couple(d.did, v.vehicleId);
+    expect(dispatch.board({ driverDid: d.did, from: pickup }).find((r) => r.freightId === f.freightId)?.blockers.map((b) => b.code) ?? []).not.toContain('PALLETS_VEHICLE');
+  });
+
   it('D9: what the receiver found at the handover — counted against the note, a damaged line with its photo, refused whole before anything is written — lands beside their name and reaches the sender', () => {
     const pickup = { lat: -1.86, lng: 36.36 };
     const d = coupleFlatbedWithForklift('RSV', { min: 0.8, max: 1.5 }); // bagged: a flatbed with its own forklift

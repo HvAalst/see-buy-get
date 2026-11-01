@@ -56,6 +56,8 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
     slotFrom: '',
     slotTo: '',
     slotRef: '',
+    // 2026-11-01 — built up on airline pallets or containers at the forwarder's shed: how many.
+    builtUp: '',
   });
   const [flights, setFlights] = useState([blankFlight()]);
   // Live animals (2026-10-30): the keeper's declaration, with the shipper's certification.
@@ -95,6 +97,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
         ...(form.nature === 'FOP' ? { temp: { minC: Number(form.minC), maxC: Number(form.maxC), ...(form.preCooled ? { preCooled: true } : {}) } } : {}),
         ...(form.inspection ? { inspectionAtAirport: true } : {}),
         ...(fromUtcInput(form.slotFrom) && fromUtcInput(form.slotTo) ? { slot: { from: fromUtcInput(form.slotFrom)!, to: fromUtcInput(form.slotTo)!, ...(form.slotRef.trim() ? { reference: form.slotRef.trim() } : {}) } } : {}),
+        ...(Number(form.builtUp) > 0 ? { builtUp: Math.round(Number(form.builtUp)) } : {}),
         ...(form.nature === 'animals' ? { animals: animalsBody(animals, 'export') } : {}),
       },
     });
@@ -255,6 +258,9 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
         {field('kg', 'business.exports.air.kg', { type: 'number', min: '0.1', step: '0.1' })}
       </div>
       {field('m3', 'business.exports.air.m3', { type: 'number', min: '0', step: '0.01' })}
+      {/* 2026-11-01 — built up on airline pallets or containers: a truck with a roller floor takes them, whole. */}
+      {field('builtUp', 'business.exports.air.builtUp', { type: 'number', min: '0', max: '40', step: '1' })}
+      <p class="chint">{t('business.exports.air.builtUpHint')}</p>
       <ConsolePick
         label={t('business.exports.air.security')}
         value={form.security}
@@ -365,6 +371,7 @@ export function AirWaybillPanel({ d, client, mine, onDetail }: { d: ExportDetail
         {fact('business.exports.air.d.lat', utcWords(a.latAt))}
         {fact('business.exports.air.d.cargo', t('business.exports.air.d.cargoLine', { pieces: a.pieces, kg: a.weightKg.toLocaleString('en') }) + (a.volumeM3 ? `, ${a.volumeM3} m³` : ''))}
         {a.handler ? fact('business.exports.air.d.handler', a.handler) : null}
+        {a.builtUp ? fact('business.exports.air.d.builtUp', t('business.exports.air.d.builtUpLine', { n: a.builtUp })) : null}
         {a.slot ? fact('business.exports.air.d.slot', `${utcWords(a.slot.from)} – ${utcWords(a.slot.to)}${a.slot.reference ? ` (${a.slot.reference})` : ''}`) : null}
         {a.animals ? fact('business.exports.air.d.animals', t('business.exports.air.d.animalsLine', { count: a.animals.count, species: a.animals.species, by: a.animals.shipperCertifiedBy ?? '' })) : null}
         {fact('business.exports.air.d.security', a.security.status === 'secured' ? t('business.exports.air.d.securedBy', { who: a.security.agentName ?? '', number: a.security.agentNumber ? ` (${a.security.agentNumber})` : '' }) : t('business.exports.air.d.notSecured'))}

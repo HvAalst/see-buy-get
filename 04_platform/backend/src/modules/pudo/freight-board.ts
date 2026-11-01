@@ -36,6 +36,7 @@ const EQUIPMENT_NAME: Record<Equipment, string> = {
   CRN: 'a crane or Hiab',
   RMP: 'a loading ramp',
   STR: 'securement straps',
+  ROL: 'a roller floor',
 };
 
 // A cargo capability is not one kind of "no". Carrying hazardous goods without a certified body is illegal;
@@ -104,6 +105,8 @@ export function blockersFor(
     release?: string;
     /** Live animals, and a vehicle not made for them (2026-10-30): the take's words. */
     animals?: string;
+    /** 2026-11-01 — built-up airline pallets, on a vehicle without a roller floor. */
+    pallets?: string;
     indicativeCharge?: number;
     /**
      * What the crowd-sourced constraint map says about this road, computed by the caller.
@@ -154,6 +157,7 @@ export function blockersFor(
   if (ctx.release) out.push({ kind: 'resolvable', code: 'NOT_RELEASED', message: ctx.release });
   // Live animals: a vehicle made for them (2026-10-30).
   if (ctx.animals) out.push({ kind: 'physical', code: 'ANIMALS_VEHICLE', message: ctx.animals });
+  if (ctx.pallets) out.push({ kind: 'physical', code: 'PALLETS_VEHICLE', message: ctx.pallets });
   // Secured air cargo: carried only by a driver whose ID was seen (2026-10-29).
   if (ctx.secured) out.push({ kind: 'resolvable', code: 'SECURED_CARGO', message: ctx.secured });
   if (ctx.overHours) {

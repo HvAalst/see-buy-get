@@ -41309,6 +41309,10 @@
                 "$ref": "#/components/schemas/TerminalSlot"
               }
             ]
+          },
+          "builtUp": {
+            "type": "number",
+            "description": "2026-11-01 — built up on airline pallets or containers (ULDs) at the forwarder's shed: how many. A truck with a roller floor takes them."
           }
         },
         "required": [
@@ -41849,6 +41853,12 @@
                 "$ref": "#/components/schemas/TerminalSlotDto"
               }
             ]
+          },
+          "builtUp": {
+            "type": "number",
+            "description": "2026-11-01 — built up on airline pallets or containers (ULDs): how many.",
+            "minimum": 1,
+            "maximum": 40
           }
         },
         "required": [
@@ -48013,7 +48023,8 @@
               "TLT",
               "CRN",
               "RMP",
-              "STR"
+              "STR",
+              "ROL"
             ]
           }
         },
@@ -60758,6 +60769,10 @@
               }
             ]
           },
+          "airPallets": {
+            "type": "number",
+            "description": "2026-11-01 — BUILT UP ON AIRLINE PALLETS OR CONTAINERS (ULDs): how many. They ride only on a truck with a roller floor\n(equipment ROL), which rolls them on at the forwarder's shed and off at the terminal's dock — never broken down."
+          },
           "countedAtPickup": {
             "type": "number",
             "description": "2026-11-01 — at collection from a cargo terminal: the pieces the driver counted, against the waybill's."
@@ -61602,7 +61617,8 @@
               "TLT",
               "CRN",
               "RMP",
-              "STR"
+              "STR",
+              "ROL"
             ]
           },
           "baseFee": {
@@ -64931,7 +64947,8 @@
                 "TLT",
                 "CRN",
                 "RMP",
-                "STR"
+                "STR",
+                "ROL"
               ]
             }
           },

@@ -67,7 +67,7 @@ export interface VehicleForm {
 
 /** Load/unload equipment a fleet manager can declare (S32). Mirrors the backend EQUIPMENT tuple; plain
  *  labels for the console. 'MAN' is implicit (every vehicle can do manual handling) so it is not listed. */
-export type Equipment = 'HTR' | 'PLT' | 'FLT' | 'TLT' | 'CRN' | 'RMP' | 'STR';
+export type Equipment = 'HTR' | 'PLT' | 'FLT' | 'TLT' | 'CRN' | 'RMP' | 'STR' | 'ROL';
 const EQUIPMENT_KEYS: Array<{ key: Equipment; labelKey: MessageKey; detailKey: MessageKey }> = [
   { key: 'HTR', labelKey: 'fleet.equipment.htr', detailKey: 'fleet.equipment.htrWhy' },
   { key: 'PLT', labelKey: 'fleet.equipment.plt', detailKey: 'fleet.equipment.pltWhy' },
@@ -76,6 +76,8 @@ const EQUIPMENT_KEYS: Array<{ key: Equipment; labelKey: MessageKey; detailKey: M
   { key: 'CRN', labelKey: 'fleet.equipment.crn', detailKey: 'fleet.equipment.crnWhy' },
   { key: 'RMP', labelKey: 'fleet.equipment.rmp', detailKey: 'fleet.equipment.rmpWhy' },
   { key: 'STR', labelKey: 'fleet.equipment.str', detailKey: 'fleet.equipment.strWhy' },
+  // 2026-11-01 — a roller floor: built-up airline pallets and containers, rolled on and off whole.
+  { key: 'ROL', labelKey: 'fleet.equipment.rol', detailKey: 'fleet.equipment.rolWhy' },
 ];
 
 /** The declarable equipment options with their plain-words labels resolved in the active locale. */

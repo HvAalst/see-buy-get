@@ -677,6 +677,10 @@ export const enBusiness = {
   'business.exports.air.title': 'Record an export by air',
   // 2026-11-01 — where road meets air.
   'business.exports.air.d.accepted': 'Handed in at the terminal',
+  'business.exports.air.builtUp': 'Built up on airline pallets or containers — how many',
+  'business.exports.air.builtUpHint': 'Only where your forwarder builds the cargo up on airline pallets or containers before it leaves. They then go on a truck with a roller floor, which rolls them on and off whole. Leave it empty for loose pieces.',
+  'business.exports.air.d.builtUp': 'Built up',
+  'business.exports.air.d.builtUpLine': '{n} airline pallets or containers — a truck with a roller floor',
   'business.exports.air.slotFrom': 'Truck slot at the terminal — from',
   'business.exports.air.slotTo': 'Truck slot — until',
   'business.exports.air.slotRef': 'Slot reference',

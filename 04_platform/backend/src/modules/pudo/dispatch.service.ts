@@ -73,6 +73,7 @@ import { buildOfferResponse, type OfferResponse } from './offer-response';
 import { railRefusal, type FreightRailGate } from './rail-leg.types';
 import { releaseRefusal, type FreightReleaseGate } from './air-release.types';
 import { animalVehicleRefusal, type FreightLiveAnimals } from './live-animals.types';
+import { palletVehicleRefusal } from './air-terminal.types';
 
 /**
  * FB0c — how a load may be taken, defaulted ON READ.
@@ -586,7 +587,7 @@ export class DispatchService {
     return { code: t.code, status: t.status };
   }
 
-  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal }, now: number = Date.now(), checkOnly = false): Freight {
+  registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal; airPallets?: number }, now: number = Date.now(), checkOnly = false): Freight {
     // How many packages: a whole number, or not said at all — never a fraction of a box.
     if (input.packages != null && (!Number.isInteger(input.packages) || input.packages < 1)) throw new GlosError('INVALID_INPUT', 'The number of packages is a whole number, 1 or more');
     // `checkOnly` — a test key's post (round 12): every check runs, the load is worked out, and nothing is kept,
@@ -732,6 +733,7 @@ export class DispatchService {
       ...(input.tempRange && input.tempRange.minC < input.tempRange.maxC ? { tempRange: { minC: input.tempRange.minC, maxC: input.tempRange.maxC } } : {}),
       ...(input.securedBy?.trim() ? { securedBy: input.securedBy.trim().slice(0, 120) } : {}),
       ...(input.airTerminal ? { airTerminal: { ...input.airTerminal } } : {}),
+      ...(input.airPallets && input.airPallets > 0 ? { airPallets: Math.round(input.airPallets) } : {}),
       // Live animals (2026-10-30): what they are and how many, as the road needs them.
       ...(input.liveAnimals ? { liveAnimals: { kind: input.liveAnimals.kind, species: input.liveAnimals.species, count: input.liveAnimals.count } } : {}),
       // BL1 — uncleared goods. The country defaults to the leg's own, because a bond is held where the
@@ -1371,6 +1373,9 @@ export class DispatchService {
     // Live animals (2026-10-30): only on a vehicle made for them.
     const animals = animalVehicleRefusal(f.liveAnimals, vehicle);
     if (animals) throw new GlosError('FORBIDDEN', animals);
+    // Built-up airline pallets (2026-11-01): only on a truck with a roller floor.
+    const pallets = palletVehicleRefusal(f.airPallets, vehicle);
+    if (pallets) throw new GlosError('FORBIDDEN', pallets);
     // FB2c — the shipper's own exclusion now BINDS, deliberately only from the moment the board can explain
     // it. Enforcing it while no screen could show it would have dropped qualifying drivers with no reason
     // given, which is the invisible exclusion the whole board exists to remove; enforcing it here, where the
@@ -1512,6 +1517,7 @@ export class DispatchService {
           release: releaseRefusal(f),
           secured: input.driverDid ? this.securedRefusal(input.driverDid, f, vehicle) : undefined,
           animals: animalVehicleRefusal(f.liveAnimals, vehicle),
+          pallets: palletVehicleRefusal(f.airPallets, vehicle),
           indicativeCharge: price ? this.shipperBill(price.total, f).gross : undefined,
           // The road, as drivers reported it.
           //
@@ -4653,7 +4659,7 @@ export class DispatchService {
     if (load.kind !== 'freight') return undefined;
     const f = this.freights.get(load.ref);
     // Secured air cargo, and live animals (2026-10-30): each only on a vehicle that suits it.
-    return this.securedRefusal(driverDid, f, vehicle) ?? animalVehicleRefusal(f?.liveAnimals, vehicle);
+    return this.securedRefusal(driverDid, f, vehicle) ?? animalVehicleRefusal(f?.liveAnimals, vehicle) ?? palletVehicleRefusal(f?.airPallets, vehicle);
   }
 
   private railRefusalFor(load: Claimable): string | undefined {

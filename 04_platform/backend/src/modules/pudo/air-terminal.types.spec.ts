@@ -1,4 +1,4 @@
-import { SLOT_MAX_H, slotOf, slotWords } from './terminal-slot.types';
+import { SLOT_MAX_H, palletVehicleRefusal, slotOf, slotWords } from './air-terminal.types';
 
 /** 2026-11-01 — a truck's slot at an airline's cargo terminal: a window the shed gives, checked, and said. */
 describe('a truck’s slot at the cargo terminal', () => {
@@ -20,5 +20,12 @@ describe('a truck’s slot at the cargo terminal', () => {
   it('says it in the driver’s words', () => {
     expect(slotWords({ from: '2026-11-02T10:00:00.000Z', to: '2026-11-02T11:00:00.000Z', reference: 'S-120' })).toBe('10:00–11:00 UTC on 2026-11-02 (slot S-120)');
     expect(slotWords({ from: '2026-11-02T23:00:00.000Z', to: '2026-11-03T01:00:00.000Z' })).toBe('23:00–2026-11-03 01:00 UTC on 2026-11-02');
+  });
+
+  it('puts built-up airline pallets only on a truck with a roller floor (2026-11-01)', () => {
+    expect(palletVehicleRefusal(undefined, { vehicleClass: 'truck' })).toBeUndefined();
+    expect(palletVehicleRefusal(2, { vehicleClass: 'truck', equipment: ['ROL', 'TLT'] })).toBeUndefined();
+    expect(palletVehicleRefusal(2, { vehicleClass: 'van', equipment: ['ROL'] })).toMatch(/^2 built-up airline pallets ride on a truck with a roller floor/);
+    expect(palletVehicleRefusal(1, { vehicleClass: 'truck', equipment: ['FLT'] })).toBe('1 built-up airline pallet rides on a truck with a roller floor, which rolls it on and off at the terminal’s dock without breaking it down.');
   });
 });

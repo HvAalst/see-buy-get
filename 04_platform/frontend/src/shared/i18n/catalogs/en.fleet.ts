@@ -1201,6 +1201,8 @@ export const enFleet = {
   'fleet.equipment.crnWhy': 'A crane arm on the truck. Lifts heavy or awkward single pieces on and off from above, with no yard equipment at all.',
   'fleet.equipment.rmpWhy': 'Ramps to drive or roll a load up onto the deck. For anything with wheels — vehicles, machinery, drums.',
   'fleet.equipment.strWhy': 'Slings, straps and chains for securing a load down. Required for heavy freight, and what a securement photo shows.',
+  'fleet.equipment.rol': 'Roller floor (airline pallets)',
+  'fleet.equipment.rolWhy': 'Rollers in the floor take airline pallets and containers on and off whole, at a forwarder’s shed and a cargo terminal’s dock. Fitted to a box, curtain-side or refrigerated truck.',
 
   // logic.ts sentence builders (each takes `t` and returns the finished string).
   'fleet.logic.vMissingPlate': 'Type the number plate.',

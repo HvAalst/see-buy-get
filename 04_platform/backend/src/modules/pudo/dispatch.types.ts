@@ -726,6 +726,11 @@ export class Freight {
    * collection asks the pieces counted against the waybill — what the shed hands over is what the road answers for.
    */
   @ApiPropertyOptional({ type: () => FreightAirTerminal }) airTerminal?: FreightAirTerminal;
+  /**
+   * 2026-11-01 — BUILT UP ON AIRLINE PALLETS OR CONTAINERS (ULDs): how many. They ride only on a truck with a roller floor
+   * (equipment ROL), which rolls them on at the forwarder's shed and off at the terminal's dock — never broken down.
+   */
+  @ApiPropertyOptional() airPallets?: number;
   /** 2026-11-01 — at collection from a cargo terminal: the pieces the driver counted, against the waybill's. */
   @ApiPropertyOptional() countedAtPickup?: number;
   /** 2026-11-01 — at acceptance at a cargo terminal: the handler's receipt for the goods, as it gave it. */

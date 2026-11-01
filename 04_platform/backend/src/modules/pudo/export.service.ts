@@ -1,4 +1,4 @@
-import { slotOf, slotWords } from './terminal-slot.types';
+import { slotOf, slotWords } from './air-terminal.types';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { CompanyDocumentService } from '../../foundation/entity/company-documents.service';
@@ -279,6 +279,7 @@ export class ExportService {
         inspectionAtAirport?: boolean;
         animals?: LiveAnimalsDto;
         slot?: { from: string; to: string; reference?: string };
+        builtUp?: number;
       };
     },
     by: string,
@@ -347,6 +348,8 @@ export class ExportService {
       ...(a.inspectionAtAirport ? { inspectionAtAirport: true } : {}),
       // A truck's slot at the shed, where it gives one: checked to end before the latest acceptance time.
       ...(a.slot ? { slot: slotOf(a.slot, now, { at: latAt, what: 'the latest acceptance time' }) } : {}),
+      // Built up on airline pallets or containers: a truck with a roller floor takes them, never broken down.
+      ...(a.builtUp && a.builtUp > 0 ? { builtUp: Math.round(a.builtUp) } : {}),
       ...(animals ? { animals } : {}),
     };
     const consignment: ExportConsignment = {
@@ -798,6 +801,7 @@ export class ExportService {
         ...(dangerousGoods ? { dangerousGoods } : {}),
         // Handed in at the airline's cargo terminal against this waybill: the handler's receipt is asked at delivery.
         airTerminal: { side: 'acceptance', awb: a.awb, airline: a.airline, handler: a.handler ?? c.terminal.label, pieces: a.pieces },
+        ...(a.builtUp ? { airPallets: a.builtUp } : {}),
         pickupCountry: c.originCountry,
         destCountry: c.originCountry,
         deliveryWindow: words.deliveryWindow,
@@ -820,6 +824,7 @@ export class ExportService {
       `Export ${c.code} by air: air waybill ${a.awb} (${a.airline})${a.houseNumber ? `, house waybill ${a.houseNumber}` : ''}, ${flights}. Hand it in at ${a.handler ?? c.terminal.label} against this waybill, before the latest acceptance time, and ask for its receipt: you give its number when you deliver.`,
       a.bookingStatus === 'queued' ? 'The airline has not confirmed the booking: it may not fly on this flight.' : '',
       a.slot ? `Your slot at the terminal: ${slotWords(a.slot)}. Arrive inside it — a truck outside its slot waits, or is turned away.` : '',
+      a.builtUp ? `${a.builtUp} built-up airline ${a.builtUp === 1 ? 'pallet' : 'pallets'}: roll them on and off — never break them down; the terminal checks them as built.` : '',
       a.security.status === 'secured' ? `Secured cargo (${a.security.agentName}): keep it locked and sealed, with no stops on the way; the seal is checked at the terminal.` : '',
       a.temp ? `Keep it between ${a.temp.minC} and ${a.temp.maxC} °C, the set-point inside that range, and record the temperature on the way.` : '',
       a.animals ? animalWords(a.animals) : '',

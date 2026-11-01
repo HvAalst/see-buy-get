@@ -1,4 +1,4 @@
-import { TerminalSlot, TerminalSlotChangeDto, TerminalSlotDto } from './terminal-slot.types';
+import { TerminalSlot, TerminalSlotChangeDto, TerminalSlotDto } from './air-terminal.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
@@ -307,6 +307,8 @@ export class ExportAir {
   @ApiPropertyOptional({ type: LiveAnimals }) animals?: LiveAnimals;
   /** 2026-11-01 — the truck's slot at the cargo terminal, as the shed gave it: the truck is timed to its end. */
   @ApiPropertyOptional({ type: TerminalSlot }) slot?: TerminalSlot;
+  /** 2026-11-01 — built up on airline pallets or containers (ULDs) at the forwarder's shed: how many. A truck with a roller floor takes them. */
+  @ApiPropertyOptional() builtUp?: number;
 }
 export class ExportConsignment {
   @ApiProperty() exportId: string;
@@ -616,6 +618,8 @@ class ExportAirDto {
   @IsOptional() @ValidateNested() @Type(() => LiveAnimalsDto) animals?: LiveAnimalsDto;
   /** 2026-11-01 — the truck's slot at the cargo terminal, where the shed gives one. */
   @IsOptional() @ValidateNested() @Type(() => TerminalSlotDto) slot?: TerminalSlotDto;
+  /** 2026-11-01 — built up on airline pallets or containers (ULDs): how many. */
+  @IsOptional() @IsInt() @Min(1) @Max(40) builtUp?: number;
 }
 
 /** AN EXPORT BY AIR: the goods, the countries, the two places and the booking with the airline. */

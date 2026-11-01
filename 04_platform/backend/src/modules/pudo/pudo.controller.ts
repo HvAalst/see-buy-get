@@ -1,4 +1,4 @@
-﻿import { TerminalSlotChangeDto } from './terminal-slot.types';
+﻿import { TerminalSlotChangeDto } from './air-terminal.types';
 import { CarriageContractService } from './carriage-contract.service';
 import { driverPapers, lapsedOf, offRoadLine } from './papers';
 import { standInCode } from '../../foundation/runtime/standin-code';
