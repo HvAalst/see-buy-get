@@ -114,8 +114,8 @@ describe('a business’s parcel delivered to its own place', () => {
   /** A rider near the shop takes the load, at their own price. */
   const aRiderTakes = (freightId: string) => {
     const drivers = app.get(DriverService);
-    const rider = drivers.register({ displayName: `Otieno ${seq}`, fullName: 'Otieno Rider', nationalId: `ID-BPO-R-${digits()}`, mobile: `+2547${digits()}1`.slice(0, 13), licenceClasses: ['motorcycle'] } as never);
-    const bike = app.get(VehicleService).register({ plate: `KMA ${digits().slice(0, 3)}X`, vehicleClass: 'motorcycle', ownerName: 'Otieno' } as never);
+    const rider = drivers.register({ displayName: `Otieno ${seq}`, fullName: 'Otieno Rider', nationalId: `ID-BPO-R-${digits()}`, mobile: `+2547${digits()}1`.slice(0, 13), licenceClasses: ['bike'] } as never);
+    const bike = app.get(VehicleService).register({ plate: `KMA ${digits().slice(0, 3)}X`, vehicleClass: 'bike', ownerName: 'Otieno' } as never);
     app.get(FleetService).couple(rider.did, bike.vehicleId);
     declared(app, 'driver', rider.did);
     const dispatch = app.get(DispatchService);
@@ -174,7 +174,7 @@ describe('a business’s parcel delivered to its own place', () => {
     expect(before - vendors.balanceOf(till.vendorId)).toBeLessThanOrEqual(most + 0.001);
     // Its driver cannot take the load over before the shop hands the box.
     expect(() => dispatch.pickupFreight(load.freightId, rider.did, {})).toThrow(/show your pass at its counter/);
-    const other = app.get(DriverService).register({ displayName: 'Stranger', fullName: 'S', nationalId: `ID-BPO-S-${digits()}`, mobile: `+2547${digits()}2`.slice(0, 13), licenceClasses: ['motorcycle'] } as never);
+    const other = app.get(DriverService).register({ displayName: 'Stranger', fullName: 'S', nationalId: `ID-BPO-S-${digits()}`, mobile: `+2547${digits()}2`.slice(0, 13), licenceClasses: ['bike'] } as never);
     expect((await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${id}`).set(kisumu.token).send({ badge: app.get(DriverService).get(other.did).badgeId }).expect(403)).body.detail).toMatch(/That pass is not the driver of load/);
     await http().post(`/v1/sbg/agents/${kisumu.did}/door-handovers/${id}`).set(operator).send({ badge: rider.badge }).expect(403);
     // A box not on the shelf is handed to nobody — and nothing is written for the load.

@@ -123,8 +123,8 @@ describe('the nudge floor', () => {
   /** A coupled bike rider, taking work, standing at HERE. */
   function rider() {
     seq += 1;
-    const d = drivers.register({ displayName: `R${seq}`, fullName: `R ${seq}`, nationalId: `ID-N${seq}`, mobile: `+2547300${seq}`, licenceClasses: ['motorcycle'] });
-    const bike = vehicles.register({ plate: `NF-${seq}`, vehicleClass: 'motorcycle', ownerName: 'R' });
+    const d = drivers.register({ displayName: `R${seq}`, fullName: `R ${seq}`, nationalId: `ID-N${seq}`, mobile: `+2547300${seq}`, licenceClasses: ['bike'] });
+    const bike = vehicles.register({ plate: `NF-${seq}`, vehicleClass: 'bike', ownerName: 'R' });
     fleet.couple(d.did, bike.vehicleId);
     return d;
   }

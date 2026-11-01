@@ -127,7 +127,7 @@ describe('what the network owes its drivers', () => {
   /** An independent courier — the network contracts them directly. */
   function courier() {
     seq += 1;
-    return drivers.register({ displayName: `C${seq}`, fullName: `C ${seq}`, nationalId: `ID-S${seq}`, mobile: `+2547400${seq}`, licenceClasses: ['motorcycle'] });
+    return drivers.register({ displayName: `C${seq}`, fullName: `C ${seq}`, nationalId: `ID-S${seq}`, mobile: `+2547400${seq}`, licenceClasses: ['bike'] });
   }
 
   /** A real fleet, and a driver employed by it. */
@@ -145,7 +145,7 @@ describe('what the network owes its drivers', () => {
     managers.recordBond(manager.did);
     const driver = drivers.register({
       displayName: `E${seq}`, fullName: `E ${seq}`, nationalId: `ID-E${seq}`, mobile: `+2547500${seq}`,
-      licenceClasses: ['motorcycle'], managerDid: manager.did,
+      licenceClasses: ['bike'], managerDid: manager.did,
     });
     return { manager, driver };
   }

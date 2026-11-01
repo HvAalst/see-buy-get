@@ -104,7 +104,7 @@ describe('registering somebody who is already registered', () => {
   };
 
   const courier = (over: Record<string, unknown> = {}) =>
-    drivers.register({ displayName: 'Peer D.', fullName: 'Peer Dan', nationalId: '27781234', mobile: '+254712345678', licenceClasses: ['motorcycle'], ...over } as never);
+    drivers.register({ displayName: 'Peer D.', fullName: 'Peer Dan', nationalId: '27781234', mobile: '+254712345678', licenceClasses: ['bike'], ...over } as never);
 
   describe('a driver', () => {
     it('is refused for the same phone typed another way — the old check counted these as two people', () => {
@@ -151,7 +151,7 @@ describe('registering somebody who is already registered', () => {
   describe('through the sign-up form', () => {
     const verify = (phone: string) => otp.verify(phone, otp.request(phone).code);
     const signup = (phone: string, nationalId: string, email: string) =>
-      accounts.signup({ role: 'driver', email, password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'P', fullName: 'P P', nationalId, mobile: phone, licenceClasses: ['motorcycle'] } } });
+      accounts.signup({ role: 'driver', email, password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'P', fullName: 'P P', nationalId, mobile: phone, licenceClasses: ['bike'] } } });
 
     it('spends the phone’s verification after a few refusals, so one phone cannot ask about every ID', () => {
       verify('+254733000001');

@@ -367,7 +367,7 @@ describe('a fleet’s office hears that one of its drivers sent a renewed licenc
     let n = 0;
     const driver = (managerDid?: string) => {
       n += 1;
-      return drivers.register({ displayName: `Card ${n}.`, fullName: `Card Driver ${n}`, nationalId: `ID-CARD-TOLD-${n}-${Date.now()}`, mobile: `+25470055${n}${Date.now() % 100000}`, licenceClasses: ['motorcycle'], criminalRecordClear: true, ...(managerDid ? { managerDid } : {}) } as never);
+      return drivers.register({ displayName: `Card ${n}.`, fullName: `Card Driver ${n}`, nationalId: `ID-CARD-TOLD-${n}-${Date.now()}`, mobile: `+25470055${n}${Date.now() % 100000}`, licenceClasses: ['bike'], criminalRecordClear: true, ...(managerDid ? { managerDid } : {}) } as never);
     };
     const card = (ownerDid: string) => media.upload({ ownerDid, kind: 'kyc_licence', dataUrl: PNG }).mediaId;
     return { notifications, drivers, driver, card };

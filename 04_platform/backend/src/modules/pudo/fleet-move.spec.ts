@@ -504,7 +504,7 @@ describe('a driver changing fleet', () => {
       const otp = moduleOtp();
       const phone = '+254781999002';
       otp.verify(phone, otp.request(phone).code);
-      const opened = accounts().signup({ role: 'driver', email: 'rider@sbg.test', password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'Rider', fullName: 'R R', nationalId: '88001122', mobile: phone, licenceClasses: ['motorcycle'] } } });
+      const opened = accounts().signup({ role: 'driver', email: 'rider@sbg.test', password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'Rider', fullName: 'R R', nationalId: '88001122', mobile: phone, licenceClasses: ['bike'] } } });
       expect(auth.introspect(opened.token.access_token).tenant).toBeUndefined();
       const o = offers.offer(pwani.did, phone);
       offers.accept(o.offerId, opened.did);
@@ -523,12 +523,12 @@ describe('a driver changing fleet', () => {
       const phone = '+254781999003';
       otp.verify(phone, otp.request(phone).code);
       expect(() =>
-        accounts().signup({ role: 'driver', email: 'coded@sbg.test', password: 'mkate-na-chai-1', phone, profile: { fleetCode: kilima.loginCode, driver: { displayName: 'Coded', fullName: 'C C', nationalId: '88001133', mobile: phone, licenceClasses: ['motorcycle'] } } }),
+        accounts().signup({ role: 'driver', email: 'coded@sbg.test', password: 'mkate-na-chai-1', phone, profile: { fleetCode: kilima.loginCode, driver: { displayName: 'Coded', fullName: 'C C', nationalId: '88001133', mobile: phone, licenceClasses: ['bike'] } } }),
       ).toThrow(/A fleet adds its own drivers/);
 
       const phone2 = '+254781999004';
       otp.verify(phone2, otp.request(phone2).code);
-      const sneaky = accounts().signup({ role: 'driver', email: 'sneaky@sbg.test', password: 'mkate-na-chai-1', phone: phone2, profile: { driver: { displayName: 'Sneaky', fullName: 'S S', nationalId: '88001144', mobile: phone2, licenceClasses: ['motorcycle'], managerDid: kilima.did }, vehicle: { plate: 'KMSNK 1', vehicleClass: 'motorcycle', managerDid: kilima.did } } });
+      const sneaky = accounts().signup({ role: 'driver', email: 'sneaky@sbg.test', password: 'mkate-na-chai-1', phone: phone2, profile: { driver: { displayName: 'Sneaky', fullName: 'S S', nationalId: '88001144', mobile: phone2, licenceClasses: ['bike'], managerDid: kilima.did }, vehicle: { plate: 'KMSNK 1', vehicleClass: 'bike', managerDid: kilima.did } } });
       expect(drivers.get(sneaky.did).managerDid).toBeUndefined();
       expect(vehicles.list({ managerDid: kilima.did })).toHaveLength(0);
     });
@@ -631,7 +631,7 @@ describe('a driver changing fleet', () => {
    */
   describe('a driver who is in no fleet rides for themselves', () => {
     /** A rider a fleet added itself: light registry, so cleared the moment they were registered. */
-    function aRider(managerDid: string, classes: string[] = ['motorcycle']) {
+    function aRider(managerDid: string, classes: string[] = ['bike']) {
       seq += 1;
       const phone = `+2547820${seq}00`;
       const d = drivers.register({ displayName: `Rider ${seq}`, fullName: `R ${seq}`, nationalId: `ID-RA-${seq}`, mobile: phone, licenceClasses: classes, criminalRecordClear: true, managerDid } as never);
@@ -652,11 +652,11 @@ describe('a driver changing fleet', () => {
       // What it would take, read before anything is asked of them.
       const terms = moves.rideAloneTerms(r.driver.did);
       const kenya = entities.forJurisdiction('KE')!;
-      expect(terms).toMatchObject({ offered: true, classes: ['motorcycle'] });
+      expect(terms).toMatchObject({ offered: true, classes: ['bike'] });
       expect(terms).not.toHaveProperty('why');
       expect(terms.countries).toEqual(expect.arrayContaining([{ jurisdiction: 'KE', companyName: kenya.name }]));
 
-      const done = moves.rideAlone(r.driver.did, { country: 'ke', vehicleClass: 'motorcycle', plate: 'kmdx 123a' });
+      const done = moves.rideAlone(r.driver.did, { country: 'ke', vehicleClass: 'bike', plate: 'kmdx 123a' });
       const now = drivers.get(r.driver.did);
       // A COURIER: contracted where they live, by that country's company — and no longer "between fleets".
       expect(done.companyName).toBe(kenya.name);
@@ -670,7 +670,7 @@ describe('a driver changing fleet', () => {
       // PAID AS ONE: the money for work they do now is theirs, from the company that contracts them.
       expect(drivers.payeeOf(r.driver.did)).toEqual({ entityId: kenya.entityId, payeeDid: r.driver.did });
       // THEIR OWN VEHICLE: no fleet's, recorded as theirs, and on their screen before they have ever driven it.
-      expect(done.vehicle).toMatchObject({ plate: 'KMDX 123A', vehicleClass: 'motorcycle', ownerType: 'driver_owned', ownerDriverDid: r.driver.did });
+      expect(done.vehicle).toMatchObject({ plate: 'KMDX 123A', vehicleClass: 'bike', ownerType: 'driver_owned', ownerDriverDid: r.driver.did });
       expect(done.vehicle!.managerDid).toBeUndefined();
       expect(fleet.recentVehicles(r.driver.did).map((v) => v.vehicleId)).toEqual([done.vehicle!.vehicleId]);
       expect(() => fleet.couple(r.driver.did, done.vehicle!.vehicleId)).not.toThrow();
@@ -815,17 +815,17 @@ describe('a driver changing fleet', () => {
     it('one licence that covers a van as well as a motorcycle is checked as the van it covers', () => {
       const kilima = aFleet('Kilima Logistics');
       const both = aDriver(kilima.did);
-      drivers.get(both.driver.did).licence.classes = ['truck', 'motorcycle'];
+      drivers.get(both.driver.did).licence.classes = ['truck', 'bike'];
       moves.leave(both.driver.did);
       expect(moves.rideAloneTerms(both.driver.did)).toMatchObject({ offered: true, check: true });
-      expect(() => moves.rideAlone(both.driver.did, { country: 'KE', vehicleClass: 'motorcycle', plate: 'KMEE 1' })).toThrow(/photograph of your ID card/);
+      expect(() => moves.rideAlone(both.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'KMEE 1' })).toThrow(/photograph of your ID card/);
     });
 
     it('is refused by name — in a fleet, already a courier, suspended, no country, a country we are not in, a vehicle they are not cleared for, no plate — and a refusal leaves them as they were', () => {
       const kilima = aFleet('Kilima Logistics');
       const r = aRider(kilima.did);
       const ask = (over: Partial<{ country: string; vehicleClass: string; plate: string }> = {}) => () =>
-        moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDY 456B', ...over } as never);
+        moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'KMDY 456B', ...over } as never);
 
       // Still in a fleet: leaving is its own act, with its own questions.
       expect(ask()).toThrow('You drive for Kilima Logistics. Leave that fleet first: “Your fleet”, under your name');
@@ -843,7 +843,7 @@ describe('a driver changing fleet', () => {
       untouched();
       expect(ask({ country: 'zz' })).toThrow('The network does not operate in ZZ yet, so a courier cannot register there');
       untouched();
-      expect(ask({ vehicleClass: 'bike' })).toThrow('You are not licence-cleared for a bike. Choose a vehicle you are cleared for');
+      expect(ask({ vehicleClass: 'motorcycle' })).toThrow('You are not licence-cleared for a motorcycle. Choose a vehicle you are cleared for');
       untouched();
       expect(ask({ vehicleClass: 'truck' })).toThrow(/not licence-cleared for a truck/);
       untouched();
@@ -866,7 +866,7 @@ describe('a driver changing fleet', () => {
       const pwani = aFleet('Pwani Haulage');
       const r = aRider(kilima.did);
       moves.leave(r.driver.did);
-      const { vehicle } = moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'motorcycle', plate: 'KMEA 111A' });
+      const { vehicle } = moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'KMEA 111A' });
       joins(pwani.did, r);
       const now = drivers.get(r.driver.did);
       expect(now.managerDid).toBe(pwani.did);

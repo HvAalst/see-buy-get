@@ -223,9 +223,9 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     const onShift = async (name: string): Promise<{ did: string; token: { authorization: string } }> => {
       seq += 1;
       const u = `${tag}${seq}`;
-      const d = (await http().post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: name, fullName: `${name} Rider`, nationalId: `DRV-TK-${u}`, mobile: `+2547${digits().slice(-6)}${seq}`, licenceClasses: ['motorcycle'] }).expect(201)).body;
+      const d = (await http().post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: name, fullName: `${name} Rider`, nationalId: `DRV-TK-${u}`, mobile: `+2547${digits().slice(-6)}${seq}`, licenceClasses: ['bike'] }).expect(201)).body;
       declared(app, 'driver', d.did);
-      const moto = (await http().post('/v1/sbg/vehicles').set(operator).send({ plate: `TK-${u}`, vehicleClass: 'motorcycle', ownerName: name }).expect(201)).body;
+      const moto = (await http().post('/v1/sbg/vehicles').set(operator).send({ plate: `TK-${u}`, vehicleClass: 'bike', ownerName: name }).expect(201)).body;
       await http().post(`/v1/sbg/fleet/drivers/${d.did}/start-session`).set(operator).send({ vehicleId: moto.vehicleId }).expect(201);
       return { did: d.did as string, token: bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: d.did, type: 'client_credentials' }).expect(201)).body.access_token) };
     };
@@ -265,8 +265,8 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
     expect(mine?.bagSeal).toEqual({ closedWith: 'seal', taken: false, check: createHash('sha256').update(`${two}|${SEAL_TWO.replace(' ', '')}`).digest('hex') });
     expect(JSON.stringify(mine)).not.toContain(SEAL_TWO.slice(3));
     expect((await claimOf(amina, two))).toBeUndefined();
-    // Never claimed, and on the motorcycle all the same: the space left says so (a medium parcel's bag counts 5 kg of 50).
-    expect((await http().get(`/v1/sbg/fleet/drivers/${baraka.did}/claims`).set(baraka.token).expect(200)).body).toMatchObject({ remainingCapacityKg: 45 });
+    // Never claimed, and on the bicycle all the same: the space left says so (a medium parcel's bag counts 5 kg of 20).
+    expect((await http().get(`/v1/sbg/fleet/drivers/${baraka.did}/claims`).set(baraka.token).expect(200)).body).toMatchObject({ remainingCapacityKg: 15 });
     const take = (who: { authorization: string }, body: Record<string, unknown>) => http().post(`/v1/sbg/totes/${two}/take`).set(who).send(body);
     await take(operator, { photoRef: 'x', asClosed: true }).expect(403);
     expect((await take(amina.token, { photoRef: await photo(amina.token, 'seal'), sealNumber: SEAL_TWO, asClosed: true }).expect(404)).body.detail).toBe('No bag you carry has that code');

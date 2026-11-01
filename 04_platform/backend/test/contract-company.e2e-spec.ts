@@ -79,7 +79,7 @@ describe('who you contract with, and its papers, over the wire', () => {
       .expect(201);
     await http().post(`/v1/sbg/fleet/managers/${fleet.did}/kyc-decision`).set(bearer(operator)).send({ approve: true, by: 'A second member of staff' }).expect(201);
     await http().post(`/v1/sbg/fleet/managers/${fleet.did}/bond`).set(bearer(operator)).expect(201);
-    const driver = (await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Boda', fullName: 'Boda Rider', nationalId: `DRV-${u}`, mobile: `+2547${u}2`, licenceClasses: ['motorcycle'], managerDid: fleet.did }).expect(201)).body;
+    const driver = (await http().post('/v1/sbg/drivers/onboard').set(bearer(operator)).send({ displayName: 'Boda', fullName: 'Boda Rider', nationalId: `DRV-${u}`, mobile: `+2547${u}2`, licenceClasses: ['bike'], managerDid: fleet.did }).expect(201)).body;
     const store = (await http().post('/v1/sbg/vendors').set(bearer(operator)).send({ ...AGREED, name: `Duka ${u}` }).expect(201)).body;
     const asShop = await tokenFor('agent', shop.did);
     const asFleet = await tokenFor('fleet_manager', fleet.did, fleet.did);

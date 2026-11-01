@@ -347,7 +347,8 @@ export class DriverService {
     };
     this.drivers.set(did, driver);
 
-    // Light registry (bike/motorcycle): no KYC gate — activate immediately and issue a badge.
+    // Light registry (a bicycle): no KYC gate — activate immediately and issue a badge. A motorcycle is checked like a
+    // van since 2026-10-30 (the owner: "Motorcycle and up"): it needs a licence by law almost everywhere.
     if (registry === 'light') this.activate(driver, 'light registry');
     return driver;
   }
@@ -355,7 +356,7 @@ export class DriverService {
   /** Heavy registry: upload ID + licence copy → KYC_PENDING. */
   submitKyc(did: string, documents: { idCopyRef: string; licenceCopyRef: string; photoRef?: string }): FleetDriver {
     const driver = this.require(did);
-    if (driver.registry !== 'heavy') throw new GlosError('INVALID_STATE', 'Light-registry drivers (bike/motorcycle) do not need KYC');
+    if (driver.registry !== 'heavy') throw new GlosError('INVALID_STATE', 'A bicycle rider does not send papers: nothing on a bicycle needs a licence');
     if (driver.status !== 'DRAFT') throw new GlosError('INVALID_STATE', `Driver is ${driver.status}, expected DRAFT`);
     if (!documents.idCopyRef || !documents.licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'KYC requires an ID copy and a licence copy');
     // The portrait rides along when there is one, and is absent without complaint when there is not —
@@ -403,6 +404,33 @@ export class DriverService {
     const at = new Date().toISOString();
     this.dropCheckedPapers(driver.kyc.idCopyRef, driver.kyc.licenceCopyRef);
     driver.kyc = { submittedAt: driver.kyc.submittedAt, checkedAt: at, ...(by ? { checkedBy: by } : {}), photosDeletedAt: at };
+    this.drivers.set(did, driver);
+    return driver;
+  }
+
+  /**
+   * THE TWO PHOTOGRAPHS A DRIVER TOOK WHILE SIGNING UP — their ID card and their driving licence (the owner, 2026-10-30: "I
+   * didn't see the picture upload of a drivers licence during sign up, now we can't confirm"). Asked BEFORE the driver
+   * is made, so a refusal writes nothing: both sent, two different pictures, and each one uploaded under this person's
+   * own sign-in and attached nowhere else.
+   */
+  assertSignupPapers(ownerDid: string, papers: { idCopyRef?: string; licenceCopyRef?: string }): { idCopyRef: string; licenceCopyRef: string } {
+    const idCopyRef = papers.idCopyRef?.trim() ?? '';
+    const licenceCopyRef = papers.licenceCopyRef?.trim() ?? '';
+    if (!idCopyRef || !licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'Send a photograph of your ID card and one of your driving licence');
+    if (idCopyRef === licenceCopyRef) throw new GlosError('KYC_INCOMPLETE', 'Your ID card and your licence are two photographs, not one');
+    if (!this.media || ![idCopyRef, licenceCopyRef].every((ref) => this.media!.mayAdopt(ref, ownerDid))) {
+      throw new GlosError('PHOTO_REQUIRED', 'That picture could not be attached: take the photograph again');
+    }
+    return { idCopyRef, licenceCopyRef };
+  }
+
+  /** …and once the driver is made: the two photographs become theirs, and wait for staff to look at them. */
+  sendSignupPapers(did: string, ownerDid: string, papers: { idCopyRef: string; licenceCopyRef: string }): FleetDriver {
+    const link = { type: 'driver' as const, id: did };
+    this.media?.adopt(papers.idCopyRef, ownerDid, link, 'kyc_id');
+    this.media?.adopt(papers.licenceCopyRef, ownerDid, link, 'kyc_licence');
+    const driver = this.submitKyc(did, papers);
     this.drivers.set(did, driver);
     return driver;
   }
@@ -859,7 +887,7 @@ export class DriverService {
    */
   sendIdPhoto(did: string, photoRef: string, now: number = Date.now()): FleetDriver {
     const driver = this.require(did);
-    if (driver.registry !== 'light' || driver.managerDid) throw new GlosError('INVALID_STATE', 'A photo of your ID is asked of a bicycle or motorcycle rider in no fleet: your papers were seen when you joined');
+    if (driver.registry !== 'light' || driver.managerDid) throw new GlosError('INVALID_STATE', 'A photo of your ID is asked of a bicycle rider in no fleet: your papers were seen when you joined');
     if (!idUnseen(driver)) throw new GlosError('INVALID_STATE', 'Your ID has been seen already');
     if (!this.media) throw new GlosError('INVALID_STATE', 'Photographs cannot be kept in this deployment, so an ID photo cannot be sent');
     if (!photoRef || !this.media.adopt(photoRef, did, { type: 'driver', id: did }, 'kyc_id')) throw new GlosError('PHOTO_REQUIRED', 'The photograph could not be attached — take it again');

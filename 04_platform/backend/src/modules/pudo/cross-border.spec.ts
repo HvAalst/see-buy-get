@@ -380,7 +380,7 @@ describe('crossing a border', () => {
     it('never fails a delivery or an earnings screen for its driver — nothing of ours pays, so nothing is booked', () => {
       presence.set({ jurisdiction: 'TZ', level: 'matched' });
       const m = fleetIn('TZ');
-      const d = drivers.register({ displayName: 'Juma', fullName: 'Juma', nationalId: 'NID-JUMA', mobile: '+255711000111', licenceClasses: ['motorcycle'], managerDid: m.did } as never);
+      const d = drivers.register({ displayName: 'Juma', fullName: 'Juma', nationalId: 'NID-JUMA', mobile: '+255711000111', licenceClasses: ['bike'], managerDid: m.did } as never);
       // The earnings read answers — who is paid is the fleet — rather than refusing for want of a sister.
       expect(drivers.settlementFor(d.did, { forPayee: () => ({ settled: 0, inFlight: 0 }) })).toMatchObject({ payeeDid: m.did, paidToMe: false });
       // A payout at delivery records nothing, and throws nothing.
@@ -393,7 +393,7 @@ describe('crossing a border', () => {
 
     it('lets an independent courier register with no sister — and refuses paying them by name', () => {
       presence.set({ jurisdiction: 'TZ', level: 'matched' });
-      const c = drivers.register({ displayName: 'Baraka', fullName: 'Baraka', nationalId: 'NID-BARAKA', mobile: '+255711000222', licenceClasses: ['motorcycle'], jurisdiction: 'TZ' } as never);
+      const c = drivers.register({ displayName: 'Baraka', fullName: 'Baraka', nationalId: 'NID-BARAKA', mobile: '+255711000222', licenceClasses: ['bike'], jurisdiction: 'TZ' } as never);
       expect(c).toMatchObject({ jurisdiction: 'TZ' });
       expect(c.entityId).toBeUndefined();
       expect(() => drivers.settlingEntityIdOf(c)).toThrow(/cannot pay out in this country/i);

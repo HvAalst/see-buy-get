@@ -259,14 +259,19 @@ export class AccountService implements OnApplicationBootstrap {
     if (tries.length >= MAX_DRIVER_REFUSALS_PER_DAY) {
       throw new GlosError('RATE_LIMITED', 'Too many sign-ups refused today. Check your details and try again tomorrow, or write to us from the help.');
     }
+    // The two photographs a driver who needs a licence check took while signing up: refused before anything is made.
+    const sent = profile.kyc as { idCopyRef?: string; licenceCopyRef?: string } | undefined;
+    const classes = Array.isArray(profile.licenceClasses) ? (profile.licenceClasses as string[]) : [];
+    const papers = sent && this.drivers.registryFor(classes as never) === 'heavy' ? this.drivers.assertSignupPapers(personDid, sent) : undefined;
     let provisioned: { did: string; entityStatus?: string };
     try {
-      provisioned = this.provision('driver', profile);
+      provisioned = this.provision('driver', { ...profile, kyc: undefined });
     } catch (err) {
       if (err instanceof GlosError && err.code === 'DUPLICATE') this.driverRefusals.set(personDid, [...tries, now]);
       throw err;
     }
     this.persons.attachRole(phone.trim(), 'driver', provisioned.did, undefined);
+    if (papers) provisioned = { ...provisioned, entityStatus: this.drivers.sendSignupPapers(provisioned.did, personDid, papers).status };
     const address = this.persons.emailOf(this.persons.requireByDid(personDid));
     if (address) void this.mail?.send('welcome', { address }, { name: welcomeName('driver', profile), email: address, role: 'driver' });
     return provisioned;

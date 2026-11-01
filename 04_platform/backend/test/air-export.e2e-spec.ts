@@ -292,13 +292,13 @@ describe('an export by air, over the wire', () => {
 
     // A rider in no fleet, their ID not yet seen: the board says why, in the take's words, before any vehicle.
     const drivers = app.get(DriverService);
-    const rider = drivers.register({ displayName: `Kamau ${digits().slice(-3)}`, fullName: 'Kamau Rider', nationalId: `ID-AIR-R-${digits()}`, mobile: `+2547${digits()}1`.slice(0, 13), licenceClasses: ['motorcycle'] } as never);
+    const rider = drivers.register({ displayName: `Kamau ${digits().slice(-3)}`, fullName: 'Kamau Rider', nationalId: `ID-AIR-R-${digits()}`, mobile: `+2547${digits()}1`.slice(0, 13), licenceClasses: ['bike'] } as never);
     declared(app, 'driver', rider.did);
     const from = load.pickupLocation;
     const blocker = () => dispatch.board({ driverDid: rider.did, from }).find((r) => r.freightId === load.freightId)?.blockers.find((b) => b.code === 'SECURED_CARGO')?.message;
     expect(blocker()).toBe('Secured air cargo goes only with a driver whose ID has been seen: send a photo of your ID from the Driver app, and take it once it has been looked at.');
     // On a motorcycle: nothing to lock or seal — said on the board, withheld from the offers.
-    const bike = app.get(VehicleService).register({ plate: `KMB ${digits().slice(0, 3)}A`, vehicleClass: 'motorcycle', ownerName: 'Kamau' } as never);
+    const bike = app.get(VehicleService).register({ plate: `KMB ${digits().slice(0, 3)}A`, vehicleClass: 'bike', ownerName: 'Kamau' } as never);
     app.get(FleetService).couple(rider.did, bike.vehicleId);
     expect(blocker()).toBe('Secured air cargo goes in a closed vehicle that locks and takes a seal — a car, a van or a closed truck: never on a bike, a motorcycle or a tuk-tuk.');
 

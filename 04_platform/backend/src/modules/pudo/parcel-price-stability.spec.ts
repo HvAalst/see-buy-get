@@ -135,8 +135,8 @@ describe('a parcel price does not surge', () => {
   /** A coupled driver who can be offered freight — the witness that a surge rule is really live. */
   function rider() {
     seq += 1;
-    const d = drivers.register({ displayName: `S${seq}`, fullName: `S ${seq}`, nationalId: `ID-SD${seq}`, mobile: `+2547700${seq}`, licenceClasses: ['motorcycle'] });
-    const bike = vehicles.register({ plate: `SG-${seq}`, vehicleClass: 'motorcycle', ownerName: 'S' });
+    const d = drivers.register({ displayName: `S${seq}`, fullName: `S ${seq}`, nationalId: `ID-SD${seq}`, mobile: `+2547700${seq}`, licenceClasses: ['bike'] });
+    const bike = vehicles.register({ plate: `SG-${seq}`, vehicleClass: 'bike', ownerName: 'S' });
     fleet.couple(d.did, bike.vehicleId);
     return d;
   }

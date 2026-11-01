@@ -140,7 +140,7 @@ describe('the registration prints', () => {
             { forJurisdiction: () => undefined } as never,
             { can: () => true } as never,
           );
-        const courier = { displayName: 'Peer D.', fullName: 'Peer Dan', nationalId: '27781234', mobile: '+254712345678', licenceClasses: ['motorcycle'] as never };
+        const courier = { displayName: 'Peer D.', fullName: 'Peer Dan', nationalId: '27781234', mobile: '+254712345678', licenceClasses: ['bike'] as never };
         build().register(courier);
         // The same person, the next morning, after a deploy.
         expect(() => build().register({ ...courier, mobile: '+254700000001' })).toThrow(/national ID already exists/);

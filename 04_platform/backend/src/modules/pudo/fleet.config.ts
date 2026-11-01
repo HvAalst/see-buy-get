@@ -102,7 +102,7 @@ export interface VehicleClassSpec {
 
 export const VEHICLE_SPEC: Record<VehicleClass, VehicleClassSpec> = {
   bike: { registry: 'light', defaultCapacityKg: 20, maxCapacityKg: 20, defaultTotes: 1, maxParcelKg: 20, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.5, role: 'micro feeder · MDP→PUDO last mile' },
-  motorcycle: { registry: 'light', defaultCapacityKg: 50, maxCapacityKg: 80, defaultTotes: 2, maxParcelKg: 30, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.8, role: 'micro feeder · last mile' },
+  motorcycle: { registry: 'heavy', defaultCapacityKg: 50, maxCapacityKg: 80, defaultTotes: 2, maxParcelKg: 30, allowsFragile: false, carriesBulk: false, defaultBaseFee: 0.8, role: 'micro feeder · last mile' },
   tuktuk: { registry: 'heavy', defaultCapacityKg: 250, maxCapacityKg: 400, defaultTotes: 4, maxParcelKg: 80, allowsFragile: true, carriesBulk: false, defaultBaseFee: 1.5, role: 'last mile · light distribution' },
   car: { registry: 'heavy', defaultCapacityKg: 300, maxCapacityKg: 500, defaultTotes: 4, maxParcelKg: 100, allowsFragile: true, carriesBulk: false, defaultBaseFee: 2, role: 'last mile' },
   van: { registry: 'heavy', defaultCapacityKg: 1200, maxCapacityKg: 2000, defaultTotes: 15, maxParcelKg: 300, allowsFragile: true, carriesBulk: false, defaultBaseFee: 5, role: 'feeder · distribution' },
