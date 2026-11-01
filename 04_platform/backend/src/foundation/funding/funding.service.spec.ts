@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { FundingService } from './funding.service';
 import { SandboxFundingRail } from './sandbox-funding-rail.adapter';
-import { FUNDING_RAIL, FundingPayer, RailPayment } from './funding.types';
+import { FUNDING_RAIL, FundingPayer, FundingRail, RailPayment } from './funding.types';
 
 /**
  * Money coming in — rule 5 of the money model, finally enforced.
@@ -14,6 +14,127 @@ import { FUNDING_RAIL, FundingPayer, RailPayment } from './funding.types';
  * nothing. The amount is the rail's, never the payer's. And our own bookkeeping state does not get a vote
  * on whether money arrived — only a provider reference we have already seen can refuse a confirmation.
  */
+/**
+ * 2026-11-01 — A PAYBILL PAYMENT CHECKED BEFORE IT IS CREDITED. Its notice proves where it came from and nothing more, so
+ * where the rail can ask M-Pesa, the money is held and asked about; M-Pesa's agreeing answer credits it, with no person in
+ * the loop; a person reading the statement decides only the ones M-Pesa would not confirm.
+ */
+describe('a paybill payment checked before it is credited', () => {
+  let funding: FundingService;
+  let credited: Array<{ payerDid: string; gross: number }>;
+  let asked: RailPayment[];
+  let askAnswer: () => Promise<{ askedRef: string }>;
+  const rail: FundingRail = {
+    provider: 'mpesa',
+    open: async () => ({ reference: 'SBG-QNTS-QP5D', instructions: 'Paybill 174379, account SBG-QNTS-QP5D' }),
+    verify: async () => {
+      throw new Error('not used');
+    },
+    canAsk: () => true,
+    askAbout: async (payment) => {
+      asked.push(payment);
+      return askAnswer();
+    },
+  };
+  const paybill = (over: Partial<RailPayment> = {}): RailPayment => ({ provider: 'mpesa', providerRef: 'RKTQDM7W6S', reference: 'SBGQNTSQP5D', amount: 400, currency: 'KES', uncorroborated: true, ...over });
+
+  beforeEach(async () => {
+    const moduleRef = await Test.createTestingModule({ providers: [FundingService, { provide: FUNDING_RAIL, useValue: rail }] }).compile();
+    funding = moduleRef.get(FundingService);
+    credited = [];
+    asked = [];
+    askAnswer = async () => ({ askedRef: 'AG_1' });
+    funding.register('agent', {
+      resolve: () => ({ entityId: 'ent_ke', currency: 'KES', label: 'Mama Njeri Shop' }),
+      credit: (payerDid, c) => {
+        credited.push({ payerDid, gross: c.gross });
+        return { entryId: `je_${credited.length}` };
+      },
+      reverse: () => ({ entryId: 'je_rev' }),
+    });
+  });
+
+  it('holds it and asks M-Pesa — credits nobody — and the shop is told it is being checked, not still awaited', async () => {
+    const request = await funding.open({ payerKind: 'agent', payerDid: 'did:shop:njeri', amount: 400 });
+    const r = funding.receive(paybill());
+    expect(r.held).toBeDefined();
+    await r.asked;
+    expect(credited).toHaveLength(0);
+    expect(asked.map((p) => p.providerRef)).toEqual(['RKTQDM7W6S']);
+    expect(funding.get(request.fundingId)).toEqual(expect.objectContaining({ status: 'awaiting', checking: expect.objectContaining({ amount: 400, providerRef: 'RKTQDM7W6S' }) }));
+    expect(funding.heldPayments()[0]).toEqual(expect.objectContaining({ askedRef: 'AG_1', fundingId: request.fundingId }));
+    // M-Pesa retrying its notice is the same payment, not a second question
+    expect(funding.receive(paybill()).duplicate).toBe(true);
+    expect(asked).toHaveLength(1);
+  });
+
+  it('credits it when M-Pesa’s answer agrees — by M-Pesa, no person — and only once', async () => {
+    const request = await funding.open({ payerKind: 'agent', payerDid: 'did:shop:njeri', amount: 400 });
+    await funding.receive(paybill()).asked;
+    const done = funding.answer({ askedRef: 'AG_1', paid: true, providerRef: 'RKTQDM7W6S', amount: 400, words: 'Completed' });
+    expect(done).toEqual(expect.objectContaining({ outcome: 'credited', decidedBy: 'M-Pesa', creditedTo: { fundingId: request.fundingId } }));
+    expect(credited).toEqual([{ payerDid: 'did:shop:njeri', gross: 400 }]);
+    expect(funding.get(request.fundingId)).toEqual(expect.objectContaining({ status: 'confirmed', confirmedAmount: 400 }));
+    expect(funding.get(request.fundingId).checking).toBeUndefined();
+    // the same answer again, and the notice again: nothing more
+    expect(funding.answer({ askedRef: 'AG_1', paid: true, providerRef: 'RKTQDM7W6S', amount: 400, words: 'Completed' })).toBeNull();
+    expect(funding.receive(paybill()).duplicate).toBe(true);
+    expect(credited).toHaveLength(1);
+    expect(funding.heldPayments()).toHaveLength(0);
+  });
+
+  it('leaves it for a person when M-Pesa does not agree — and the person who reads the statement credits it in their name', async () => {
+    await funding.open({ payerKind: 'agent', payerDid: 'did:shop:njeri', amount: 400 });
+    await funding.receive(paybill()).asked;
+    expect(funding.answer({ askedRef: 'AG_1', paid: true, providerRef: 'RKTQDM7W6S', amount: 40, words: 'Completed' })?.answer?.words).toMatch(/40 was paid, not 400/);
+    expect(funding.answer({ askedRef: 'AG_1', paid: false, words: 'The transaction was not found' })?.answer?.words).toBe('The transaction was not found');
+    // an answer to no question of ours credits nothing
+    expect(funding.answer({ askedRef: 'AG_nobody', paid: true, providerRef: 'RKTQDM7W6S', amount: 400, words: 'Completed' })).toBeNull();
+    expect(credited).toHaveLength(0);
+    const held = funding.heldPayments()[0];
+    expect(funding.releaseHeld(held.id, 'Wanjiru (money)')).toEqual(expect.objectContaining({ outcome: 'credited', decidedBy: 'Wanjiru (money)' }));
+    expect(credited).toEqual([{ payerDid: 'did:shop:njeri', gross: 400 }]);
+    expect(() => funding.releaseHeld(held.id, 'Wanjiru (money)')).toThrow(/already credited/);
+  });
+
+  it('refuses one not on the statement: nothing credited, the shop’s request waits again, and the notice retried stays refused', async () => {
+    const request = await funding.open({ payerKind: 'agent', payerDid: 'did:shop:njeri', amount: 400 });
+    await funding.receive(paybill()).asked;
+    const held = funding.heldPayments()[0];
+    expect(() => funding.refuseHeld(held.id, ' ', 'Wanjiru')).toThrow(/Say why/);
+    expect(funding.refuseHeld(held.id, 'Not on the M-Pesa statement for 22 Nov', 'Wanjiru')).toEqual(expect.objectContaining({ outcome: 'refused', refusalReason: 'Not on the M-Pesa statement for 22 Nov' }));
+    expect(funding.get(request.fundingId)).toEqual(expect.objectContaining({ status: 'awaiting' }));
+    expect(funding.get(request.fundingId).checking).toBeUndefined();
+    expect(funding.receive(paybill()).duplicate).toBe(true);
+    expect(() => funding.releaseHeld(held.id, 'Wanjiru')).toThrow(/already refused/);
+    expect(credited).toHaveLength(0);
+  });
+
+  it('keeps it held, with why, when M-Pesa cannot be asked; and a held payment naming no request goes to the unnamed pile when credited', async () => {
+    askAnswer = async () => {
+      throw new Error('M-Pesa did not answer in time');
+    };
+    await funding.receive(paybill({ reference: undefined })).asked;
+    const held = funding.heldPayments()[0];
+    expect(held).toEqual(expect.objectContaining({ askFailed: 'M-Pesa did not answer in time' }));
+    expect(held.fundingId).toBeUndefined();
+    const out = funding.releaseHeld(held.id, 'Wanjiru');
+    expect(out.creditedTo?.unmatchedId).toBeDefined();
+    expect(credited).toHaveLength(0); // the unnamed pile is recorded, not posted
+  });
+
+  it('credits at once, as before, where the rail cannot ask — and a payment its notice proves (STK) is never held', async () => {
+    const plain = await Test.createTestingModule({ providers: [FundingService, { provide: FUNDING_RAIL, useValue: { ...rail, canAsk: () => false } }] }).compile();
+    const service = plain.get(FundingService);
+    service.register('agent', { resolve: () => ({ entityId: 'ent_ke', currency: 'KES', label: 'Shop' }), credit: () => ({ entryId: 'je_1' }), reverse: () => ({ entryId: 'je_r' }) });
+    await service.open({ payerKind: 'agent', payerDid: 'did:shop:njeri', amount: 400 });
+    expect(service.receive(paybill()).funding?.status).toBe('confirmed');
+    await funding.open({ payerKind: 'agent', payerDid: 'did:shop:njeri', amount: 400 });
+    expect(funding.receive(paybill({ uncorroborated: undefined, providerRef: 'STK1' })).funding?.status).toBe('confirmed');
+    expect(asked).toHaveLength(0);
+  });
+});
+
 describe('money coming in', () => {
   let funding: FundingService;
   let rail: SandboxFundingRail;

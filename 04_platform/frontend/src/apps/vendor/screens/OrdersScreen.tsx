@@ -508,12 +508,22 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
     return (
       <Sheet open={open} onClose={onClose} title={t(waiting.pushed ? 'vendor.topup.pushTitle' : 'vendor.topup.waitTitle')}>
         {/* Watching a phone and reading a reference are different jobs — see the shop app's twin. */}
-        <Note
-          tone="info"
-          icon={waiting.pushed ? 'keypad' : 'clock'}
-          title={t(waiting.pushed ? 'vendor.topup.pushNote' : 'vendor.topup.waitNote', { amount: money(waiting.amount, waiting.currency) })}
-          detail={waiting.instructions}
-        />
+        {/* Paid, and being checked with M-Pesa before it is credited (2026-11-01). */}
+        {waiting.checking ? (
+          <Note
+            tone="ok"
+            icon="check"
+            title={t('vendor.topup.checking', { amount: money(waiting.checking.amount, waiting.checking.currency) })}
+            detail={t('vendor.topup.checkingBody', { ref: waiting.checking.providerRef })}
+          />
+        ) : (
+          <Note
+            tone="info"
+            icon={waiting.pushed ? 'keypad' : 'clock'}
+            title={t(waiting.pushed ? 'vendor.topup.pushNote' : 'vendor.topup.waitNote', { amount: money(waiting.amount, waiting.currency) })}
+            detail={waiting.instructions}
+          />
+        )}
         <div class="field">
           <span class="field__label">{t(waiting.pushed ? 'vendor.topup.referenceAlso' : 'vendor.topup.reference')}</span>
           <p class="payref">{waiting.reference}</p>

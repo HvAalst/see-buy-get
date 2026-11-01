@@ -3,7 +3,7 @@ import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { EntityPicker } from './EntityPicker';
 import { amount } from '../queues';
-import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, morningRunLine, needsReceipt, payoutHow, payoutTone, payoutWho, waitsForRail, type FundingAction, type FundingRow, type UnmatchedRow } from '../settlement';
+import { FUNDING_ACTIONS, PAYOUT_ACTIONS, fundingLine, fundingTone, heldLine, morningRunLine, needsReceipt, payoutHow, payoutTone, payoutWho, waitsForRail, type FundingAction, type FundingRow, type HeldRow, type UnmatchedRow } from '../settlement';
 import { ConsoleDetail } from '../ConsoleDetail';
 import { TaxInvoicesPanel } from './TaxInvoicesPanel';
 import type { TowerActions, TowerState } from '../useTowerApp';
@@ -236,6 +236,7 @@ function MoneyIn({ state, actions }: { state: TowerState; actions: TowerActions 
   const t = useT();
   const [asking, setAsking] = useState<{ row: FundingRow; action: FundingAction } | null>(null);
   const [attributing, setAttributing] = useState<UnmatchedRow | null>(null);
+  const [refusing, setRefusing] = useState<HeldRow | null>(null);
   const rows = state.funding;
 
   return (
@@ -362,7 +363,62 @@ function MoneyIn({ state, actions }: { state: TowerState; actions: TowerActions 
         </section>
       ) : null}
 
+      {/* 2026-11-01 — paybill payments M-Pesa has not confirmed: credited from its statement, or refused with why. */}
+      {state.held.length ? (
+        <section class="cons__panel" style="margin-top:18px">
+          <div class="cons__panelhead">
+            <span class="cons__panelt">{t('tower.money.in.held.title')}</span>
+            <span class="ctbl__sub">{state.held.length}</span>
+          </div>
+          <p class="cons__caveat">
+            <Icon name="warning" size={18} />
+            <span>{t('tower.money.in.held.lede')}</span>
+          </p>
+          <table class="ctbl ctbl--stack">
+            <thead>
+              <tr>
+                <th>{t('tower.money.in.unmatchedCol.from')}</th>
+                <th class="ctbl__num">{t('tower.money.col.amount')}</th>
+                <th>{t('tower.money.col.ref')}</th>
+                <th>{t('tower.money.in.held.col.check')}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {state.held.map((h) => (
+                <tr key={h.id}>
+                  <td>{h.payment.payerLabel || h.payment.reference || '—'}</td>
+                  <td class="ctbl__num ctbl__strong">
+                    <span class="ctbl__lbl">{t('tower.money.col.amount')}</span>
+                    {amount(h.payment.amount ?? 0, h.payment.currency)}
+                  </td>
+                  <td class="ctbl__mono">
+                    <span class="ctbl__lbl">{t('tower.money.col.ref')}</span>
+                    {h.payment.providerRef || '—'}
+                  </td>
+                  <td class="ctbl__sub">
+                    <span class="ctbl__lbl">{t('tower.money.in.held.col.check')}</span>
+                    {heldLine(h, t)}
+                  </td>
+                  <td class="ctbl__num">
+                    <span class="twr-clear__act">
+                      <button type="button" class="cbtn cbtn--sm cbtn--ghost" disabled={state.busyId === h.id} onClick={() => void actions.releaseHeld(h.id)}>
+                        {t('tower.money.in.held.credit')}
+                      </button>
+                      <button type="button" class="cbtn cbtn--sm cbtn--danger" disabled={state.busyId === h.id} onClick={() => setRefusing(h)}>
+                        {t('tower.money.in.held.refuse')}
+                      </button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+
       {asking ? <ConfirmFundingSheet ask={asking} onClose={() => setAsking(null)} state={state} actions={actions} /> : null}
+      {refusing ? <RefuseHeldPanel held={refusing} onClose={() => setRefusing(null)} state={state} actions={actions} /> : null}
       {attributing ? <AttributePaymentPanel payment={attributing} onClose={() => setAttributing(null)} state={state} actions={actions} /> : null}
     </>
   );
@@ -616,6 +672,42 @@ function AttributePaymentPanel({
       <div class="twr-clear__act">
         <button type="button" class="cbtn cbtn--ghost" onClick={onClose}>
           {t('tower.money.in.cancel')}
+        </button>
+      </div>
+    </ConsoleDetail>
+  );
+}
+
+/** 2026-11-01 — a held paybill payment that is not on M-Pesa's statement: refused, with why — the shop will ask. */
+function RefuseHeldPanel({ held, onClose, state, actions }: { held: HeldRow; onClose: () => void; state: TowerState; actions: TowerActions }) {
+  const t = useT();
+  const [reason, setReason] = useState('');
+  const why = reason.trim();
+  return (
+    <ConsoleDetail openKey={held.id} title={t('tower.money.in.held.refuseTitle')} onClose={onClose}>
+      <div class="cons__panelhead">
+        <span class="cons__panelt">{t('tower.money.in.held.refuseTitle')}</span>
+        <span class="ctbl__sub">{amount(held.payment.amount ?? 0, held.payment.currency)}</span>
+      </div>
+      <p class="cons__lede">{t('tower.money.in.held.refuseBody', { ref: held.payment.providerRef ?? '—' })}</p>
+      <label class="cfield__label" for="held-why">
+        {t('tower.money.in.held.refuseWhy')}
+      </label>
+      <textarea id="held-why" class="cinput" rows={3} maxLength={200} value={reason} onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)} />
+      <div class="twr-clear__act">
+        <button type="button" class="cbtn cbtn--ghost" onClick={onClose}>
+          {t('tower.money.in.cancel')}
+        </button>
+        <button
+          type="button"
+          class="cbtn cbtn--danger"
+          disabled={why.length < 3 || state.busyId === held.id}
+          onClick={async () => {
+            await actions.refuseHeld(held.id, why);
+            onClose();
+          }}
+        >
+          {t('tower.money.in.held.refuse')}
         </button>
       </div>
     </ConsoleDetail>

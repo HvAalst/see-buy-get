@@ -2413,6 +2413,22 @@ export const enTowerMoney = {
   'tower.money.in.applyNoFloat': 'no float here',
   'tower.money.in.applyNoMatch': 'No shop matches that.',
   'tower.money.in.applied': 'Recorded — the payment is credited.',
+  // 2026-11-01 — a paybill payment held until it is checked.
+  'tower.money.in.held.title': 'Paybill payments M-Pesa has not confirmed',
+  'tower.money.in.held.lede':
+    'M-Pesa’s notice of a paybill payment proves only where it came from, so we ask M-Pesa about each one before it is credited. These it has not confirmed. Look for each on the M-Pesa statement: credit it if it is there, refuse it if it is not.',
+  'tower.money.in.held.col.check': 'The check with M-Pesa',
+  'tower.money.in.held.asking': 'Being asked',
+  'tower.money.in.held.asked': 'Asked — no answer yet',
+  'tower.money.in.held.askFailed': 'Could not be asked: {why}',
+  'tower.money.in.held.answered': 'M-Pesa answered: {words}',
+  'tower.money.in.held.credit': 'On the statement — credit it',
+  'tower.money.in.held.refuse': 'Not on the statement — refuse',
+  'tower.money.in.held.refuseTitle': 'Refuse this payment',
+  'tower.money.in.held.refuseBody': 'Nothing has been credited for {ref}, so nothing is taken back. The shop’s request waits for a payment again.',
+  'tower.money.in.held.refuseWhy': 'Why — the shop will ask',
+  'tower.money.in.held.credited': 'Credited — it was on the statement.',
+  'tower.money.in.held.refused': 'Refused — nothing was credited.',
 
   'tower.money.ledgerTitle': 'The network’s own ledger',
   'tower.money.todayRevenue': 'today’s fees {amount}',

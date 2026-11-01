@@ -252,6 +252,14 @@ export function createOperatorApi(sbg: SbgClient) {
         }),
       ),
 
+    /** 2026-11-01 — a held paybill payment is on M-Pesa's statement: credited, with the person's name on it. */
+    releaseHeld: (heldId: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/rails/funding/held/{id}/release', { params: { path: { id: heldId } }, body: { ...(by ? { by } : {}) } })),
+
+    /** …or it is not on the statement: refused, with why. */
+    refuseHeld: (heldId: string, reason: string, by?: string) =>
+      sbg.request((c) => c.POST('/v1/rails/funding/held/{id}/refuse', { params: { path: { id: heldId } }, body: { reason, ...(by ? { by } : {}) } })),
+
     /** Close a request nobody paid, or take back one that bounced. */
     moveFunding: (fundingId: string, action: 'fail' | 'expire' | 'reverse', reason: string) =>
       sbg.request((c) =>

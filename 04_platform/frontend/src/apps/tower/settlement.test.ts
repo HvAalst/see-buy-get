@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FUNDING_ACTIONS, MORNING_RUN, PAYOUT_ACTIONS, fundingLine, fundingTone, morningRunLine, needsReceipt, payoutHow, payoutTone, payoutWho, runSummary, waitsForRail } from './settlement';
+import { FUNDING_ACTIONS, MORNING_RUN, PAYOUT_ACTIONS, fundingLine, fundingTone, heldLine, morningRunLine, needsReceipt, payoutHow, payoutTone, payoutWho, runSummary, waitsForRail } from './settlement';
 
 /**
  * Paying people.
@@ -104,6 +104,14 @@ describe('money coming in', () => {
     expect(fundingTone('reversed')).toBe('warn');
     expect(fundingTone('expired')).toBe('quiet');
     expect(fundingTone('something_new')).toBe('quiet');
+  });
+
+  it('says where the check of a held paybill payment stands — M-Pesa’s own answer first', () => {
+    const row = { id: 'hld_1', payment: { providerRef: 'RKTQDM7W6S', amount: 400, currency: 'KES' } };
+    expect(heldLine(row, t)).toBe('tower.money.in.held.asking');
+    expect(heldLine({ ...row, askedAt: '2026-11-01T10:00:00Z' }, t)).toBe('tower.money.in.held.asked');
+    expect(heldLine({ ...row, askFailed: 'M-Pesa did not answer in time' }, t)).toBe('tower.money.in.held.askFailed(why=M-Pesa did not answer in time)');
+    expect(heldLine({ ...row, askedAt: '2026-11-01T10:00:00Z', answer: { at: '2026-11-01T10:03:00Z', paid: false, words: 'The transaction was not found' } }, t)).toBe('tower.money.in.held.answered(words=The transaction was not found)');
   });
 
   it('says what was ASKED for while it is still waiting', () => {

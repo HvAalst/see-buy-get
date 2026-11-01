@@ -52,7 +52,13 @@ GLOS_MPESA_PARTY_B=               # a till's store number, if different
 GLOS_MPESA_ALLOWED_IPS=           # overrides the published ranges
 GLOS_MPESA_STRICT_QUERY=1         # refuse what we could not corroborate
 GLOS_MPESA_HOST=                  # sandbox only — a stand-in Daraja
+GLOS_MPESA_INITIATOR=             # the API initiator's name, to ask M-Pesa about a paybill payment
+GLOS_MPESA_SECURITY_CREDENTIAL=   # its password encrypted with Safaricom's certificate (Daraja portal) — a secret
 ```
+
+With both of the last two set, a paybill payment is **held** until M-Pesa confirms it (see the first gap below);
+without them it is credited on the allowlist alone, as before. Register the result door with Safaricom:
+`https://api.seebuyget.com/v1/rails/funding/mpesa/answer` (used as both the ResultURL and the QueueTimeOutURL).
 
 There is deliberately **no `GLOS_USE_MPESA=1`**. The rail is chosen when it has everything it needs and
 not otherwise; a boolean beside an incomplete configuration is how a deployment ends up with a rail that
@@ -87,10 +93,16 @@ names the likely cause.
 
 ## Two open gaps, named rather than discovered later
 
-1. **A C2B confirmation is accepted on the allowlist alone.** There is no synchronous query for it:
-   Safaricom's Transaction Status API answers to a *result URL* minutes later, so it cannot corroborate a
-   callback we are answering now. Closing it means a result-URL endpoint and a pending-verification state
-   — real work, worth doing before the paybill carries serious volume.
+1. **A C2B confirmation is held until M-Pesa confirms it — once the initiator is set (built 2026-11-01).**
+   There is no synchronous query for it: Safaricom's Transaction Status API answers to a *result URL* minutes
+   later. So the payment is held (`FundingService.receive`, record `HeldPayment`), the shop's request says
+   "your payment has arrived — being checked with M-Pesa", and the question goes at once. M-Pesa's answer
+   arrives at `/v1/rails/funding/mpesa/answer` (from Safaricom's ranges, matched by the ConversationID it gave
+   us): completed, same receipt, same amount — credited, by "M-Pesa", no person in the loop. Anything else, or
+   a question M-Pesa would not take, waits on the console's money screen ("Paybill payments M-Pesa has not
+   confirmed") for a person who reads the statement: credited, or refused with why. A retry of a held or
+   refused notice credits nothing. **Still open:** until GLOS_MPESA_INITIATOR and
+   GLOS_MPESA_SECURITY_CREDENTIAL are set, a paybill payment is credited on the allowlist alone.
 2. **Safaricom's fee is not in the callback.** It is invoiced separately, so `fee` is 0 and the shop is
    credited the gross — which is the rule anyway ("credit the GROSS at top-up, never net-credit"). But
    custody will read high against the bank by exactly the provider's cut until those invoices are posted.

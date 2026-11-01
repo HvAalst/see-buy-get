@@ -187,6 +187,28 @@ export interface UnmatchedRow {
   reason?: string;
 }
 
+/**
+ * 2026-11-01 — A PAYBILL PAYMENT HELD UNTIL IT IS CHECKED: M-Pesa's notice proves only where it came from, so it is asked
+ * about; one M-Pesa would not confirm waits here for a person who reads the statement.
+ */
+export interface HeldRow {
+  id: string;
+  payment: { provider?: string; providerRef?: string; reference?: string; amount?: number; currency?: string; payerLabel?: string; paidAt?: string };
+  at?: string;
+  fundingId?: string;
+  askedAt?: string;
+  askFailed?: string;
+  answer?: { at: string; paid: boolean; words: string };
+}
+
+/** Where the check stands, in words: being asked, asked and not yet answered, could not ask, or what M-Pesa answered. */
+export function heldLine(row: HeldRow, t: Translate): string {
+  if (row.answer) return t('tower.money.in.held.answered', { words: row.answer.words });
+  if (row.askFailed) return t('tower.money.in.held.askFailed', { why: row.askFailed });
+  if (row.askedAt) return t('tower.money.in.held.asked');
+  return t('tower.money.in.held.asking');
+}
+
 export type FundingAction = 'confirm' | 'simulate' | 'expire' | 'reverse';
 
 /**

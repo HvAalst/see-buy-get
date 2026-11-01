@@ -76,6 +76,21 @@ export class ApplyFundingDto {
   by?: string;
 }
 
+/** A person's decision on a held paybill payment (2026-11-01): credited (on the statement), or refused with why. */
+export class HeldDecisionDto {
+  @ApiPropertyOptional({ description: 'Why it is refused — required to refuse; the shop will ask.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  reason?: string;
+
+  @ApiPropertyOptional({ description: 'The person deciding, where the token cannot say.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  by?: string;
+}
+
 /** Why a funding request failed, expired or was reversed. Always in words somebody can act on. */
 export class FundingFailureDto {
   @ApiProperty()

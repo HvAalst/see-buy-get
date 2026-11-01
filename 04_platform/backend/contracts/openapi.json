@@ -328,6 +328,84 @@
         }
       }
     },
+    "/v1/rails/funding/held/{id}/release": {
+      "post": {
+        "operationId": "Funding.releaseHeld",
+        "summary": "",
+        "description": "A HELD PAYMENT IS ON M-PESA'S STATEMENT (2026-11-01): credited, with the person's name on it. The route is under\n`held/` because the id is a payment, never a funding request.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeldDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldPayment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/rails/funding/held/{id}/refuse": {
+      "post": {
+        "operationId": "Funding.refuseHeld",
+        "summary": "",
+        "description": "…or it is not on the statement: refused, with why — nothing was credited, so nothing is unwound.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HeldDecisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeldPayment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/rails/funding/{fundingId}/fail": {
       "post": {
         "operationId": "Funding.fail",
@@ -36446,6 +36524,100 @@
           "payerDid"
         ]
       },
+      "HeldDecisionDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Why it is refused — required to refuse; the shop will ask."
+          },
+          "by": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "The person deciding, where the token cannot say."
+          }
+        }
+      },
+      "HeldPayment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "payment": {
+            "type": "object"
+          },
+          "at": {
+            "type": "string"
+          },
+          "fundingId": {
+            "type": "string",
+            "description": "The request it would be credited to, when its reference names one."
+          },
+          "askedRef": {
+            "type": "string",
+            "description": "M-Pesa's handle for our question, which its answer quotes."
+          },
+          "askedAt": {
+            "type": "string"
+          },
+          "askFailed": {
+            "type": "string",
+            "description": "Why it could not be asked about, in the rail's words."
+          },
+          "answer": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "required": true,
+                "type": "string"
+              },
+              "paid": {
+                "required": true,
+                "type": "boolean"
+              },
+              "words": {
+                "required": true,
+                "type": "string"
+              }
+            }
+          },
+          "outcome": {
+            "type": "object"
+          },
+          "decidedAt": {
+            "type": "string"
+          },
+          "decidedBy": {
+            "type": "string",
+            "description": "Who decided — a person's name, or \"M-Pesa\" when its answer did."
+          },
+          "refusalReason": {
+            "type": "string"
+          },
+          "creditedTo": {
+            "type": "object",
+            "properties": {
+              "fundingId": {
+                "required": false,
+                "type": "string"
+              },
+              "unmatchedId": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "id",
+          "payment",
+          "at",
+          "answer",
+          "creditedTo"
+        ]
+      },
       "FundingFailureDto": {
         "type": "object",
         "properties": {
@@ -36549,6 +36721,27 @@
           "reversalEntryId": {
             "type": "string",
             "description": "…and the entry that took it back, if the payment was later recalled."
+          },
+          "checking": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "required": true,
+                "type": "number"
+              },
+              "currency": {
+                "required": true,
+                "type": "string"
+              },
+              "providerRef": {
+                "required": true,
+                "type": "string"
+              },
+              "since": {
+                "required": true,
+                "type": "string"
+              }
+            }
           }
         },
         "required": [
@@ -36563,7 +36756,8 @@
           "reference",
           "provider",
           "instructions",
-          "openedAt"
+          "openedAt",
+          "checking"
         ]
       },
       "RegisterDto": {

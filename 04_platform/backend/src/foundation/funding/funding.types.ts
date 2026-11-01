@@ -112,6 +112,12 @@ export class Funding {
   entryId?: string;
   /** …and the entry that took it back, if the payment was later recalled. */
   reversalEntryId?: string;
+  /**
+   * WORD OF A PAYMENT AGAINST THIS REQUEST, BEING CHECKED BEFORE IT IS CREDITED (2026-11-01): a paybill payment, whose
+   * notice M-Pesa does not sign, is asked about first. Said to the payer so a shop that has paid is not told "waiting for
+   * your payment". Gone once it is credited or refused.
+   */
+  checking?: { amount: number; currency: string; providerRef: string; since: string };
 }
 
 /**
@@ -153,6 +159,49 @@ export class UnmatchedPayment {
   appliedTo?: string;
   /** Who decided. Never a role — a name. */
   appliedBy?: string;
+}
+
+/**
+ * A PAYMENT HELD UNTIL IT IS CHECKED (2026-11-01) — the paybill's, whose notice carries nothing that proves it true.
+ *
+ * Its notice came from M-Pesa's own addresses, which says where it came from and not that it is so. Where the rail can ask
+ * M-Pesa about it (the transaction status query), it is held and asked, and credited when M-Pesa's answer agrees — no
+ * person in the loop for an ordinary payment (the user, 2026-09-22: "sbg staff confirming every top up is a tough call").
+ * One M-Pesa would not confirm, or could not be asked about, waits here for a person who reads the M-Pesa statement:
+ * credited if it is on it, refused with a reason if it is not. Kept after either, with who and when.
+ */
+export class HeldPayment {
+  id: string;
+  payment: RailPayment;
+  at: string;
+  /** The request it would be credited to, when its reference names one. */
+  fundingId?: string;
+  /** M-Pesa's handle for our question, which its answer quotes. */
+  askedRef?: string;
+  askedAt?: string;
+  /** Why it could not be asked about, in the rail's words. */
+  askFailed?: string;
+  /** M-Pesa's answer when it did not confirm the payment, in its own words. */
+  answer?: { at: string; paid: boolean; words: string };
+  outcome?: 'credited' | 'refused';
+  decidedAt?: string;
+  /** Who decided — a person's name, or "M-Pesa" when its answer did. */
+  decidedBy?: string;
+  refusalReason?: string;
+  /** Where the credited money went: a request, or the pile of payments with no name on them. */
+  creditedTo?: { fundingId?: string; unmatchedId?: string };
+}
+
+/** M-Pesa's answer to "was this payment made?" — read by the rail from the body it posts back. */
+export interface RailCheckAnswer {
+  /** Our question's handle, as the answer quotes it. */
+  askedRef: string;
+  /** True only when the provider says the payment was completed. */
+  paid: boolean;
+  /** The provider's own id for the payment, and the amount, as it reports them. */
+  providerRef?: string;
+  amount?: number;
+  words: string;
 }
 
 /** What the rail is asked to set up. Deliberately tiny, like its outbound twin. */
@@ -200,6 +249,11 @@ export interface RailPayment {
   fee?: number;
   paidAt?: string;
   payerLabel?: string;
+  /**
+   * Its provenance is where it came from and nothing more (a paybill notice): checked with the provider before it is
+   * credited, where the rail can ask (`FundingRail.canAsk`).
+   */
+  uncorroborated?: boolean;
 }
 
 /**
@@ -277,6 +331,16 @@ export interface FundingRail {
    * it: a provider signs its own callbacks, and we have no business being able to.
    */
   simulate?(payment: Omit<RailPayment, 'provider'>): { headers: Record<string, string>; body: Record<string, unknown> };
+  /**
+   * CAN THIS RAIL ASK THE PROVIDER, LATER, WHETHER A PAYMENT IS REAL (2026-11-01)? M-Pesa's transaction status query, when
+   * the deployment holds its initiator's credentials. A rail that cannot leaves an uncorroborated payment to be credited
+   * on its provenance alone, as before — and says so on the record.
+   */
+  canAsk?(): boolean;
+  /** Ask about one payment. Resolves to the handle the answer will quote; the answer arrives at its own door. */
+  askAbout?(payment: RailPayment): Promise<{ askedRef: string }>;
+  /** Read the provider's answer, after establishing where it came from, as `verify` does. */
+  readAnswer?(headers: Record<string, string | undefined>, body: unknown, meta?: CallbackMeta): Promise<RailCheckAnswer>;
 }
 
 /**

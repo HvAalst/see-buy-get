@@ -173,6 +173,11 @@ export interface FundingView {
   railRef?: string;
   /** Why it will not be paid, in the provider's own words ("Request cancelled by user"). */
   failureReason?: string;
+  /**
+   * A payment against this request, being checked with M-Pesa before it is credited (2026-11-01) — said so a shop that
+   * has paid is not told "waiting for your payment".
+   */
+  checking?: { amount: number; currency: string; providerRef: string; since: string };
   openedAt: string;
   confirmedAmount?: number;
   confirmedAt?: string;

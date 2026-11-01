@@ -8,6 +8,7 @@ import {
   FundingInstruction,
   FundingRail,
   RailCallback,
+  RailCheckAnswer,
   RailOpening,
   RailPayment,
 } from './funding.types';
@@ -17,12 +18,15 @@ import {
   DARAJA_TRANSACTION_TYPE,
   DarajaC2bConfirmation,
   DarajaEnv,
+  DarajaResultBody,
   DarajaShortcodeKind,
   DarajaStkCallback,
   DarajaStkQueryResponse,
   DarajaStkRequest,
   DarajaStkResponse,
   DarajaTokenResponse,
+  DarajaTransactionStatusRequest,
+  DarajaTransactionStatusResponse,
 } from './mpesa.types';
 
 /**
@@ -52,17 +56,18 @@ import {
  *    and authenticated — and ask what that checkout actually ended in. A "paid" callback whose query says
  *    cancelled is refused. This is corroboration, not the boundary, and it can veto but not admit.
  *
- * WHAT THAT LEAVES OPEN, SAID PLAINLY RATHER THAN HIDDEN. The C2B fallback has no synchronous query to
- * make: Safaricom's Transaction Status API answers to a *result URL* minutes later, so it cannot
- * corroborate a callback we are answering right now. A paybill confirmation is therefore accepted on the
- * allowlist alone. That is a real and narrower guarantee than the STK path's, it is recorded on the
- * payment, and it is a named gap — not a thing to discover later from a reconciliation that will not
- * balance.
+ * THE PAYBILL IS ASKED ABOUT LATER (2026-11-01). The C2B fallback has no synchronous query to make: Safaricom's
+ * Transaction Status API answers to a *result URL* minutes later, so it cannot corroborate a callback we are answering
+ * right now. So a paybill confirmation is marked `uncorroborated`, and where the deployment holds the initiator's
+ * credentials (GLOS_MPESA_INITIATOR, GLOS_MPESA_SECURITY_CREDENTIAL) the money is HELD, the question asked, and the
+ * payment credited when the answer agrees (FundingService.receive). Without them it is credited on the allowlist alone,
+ * as before — a narrower guarantee, said here and on the progress page rather than assumed away.
  */
 
 const TOKEN_PATH = '/oauth/v1/generate?grant_type=client_credentials';
 const STK_PATH = '/mpesa/stkpush/v1/processrequest';
 const STK_QUERY_PATH = '/mpesa/stkpushquery/v1/query';
+const STATUS_PATH = '/mpesa/transactionstatus/v1/query';
 
 /** The alphabet a payer can read off one screen and type into another — no 0/O, no 1/I/L. */
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -105,6 +110,12 @@ export interface MpesaConfig {
   host?: string;
   /** Refuse an STK confirmation we could not corroborate, instead of accepting it on provenance alone. */
   strictQuery?: boolean;
+  /**
+   * WHO ASKS M-PESA ABOUT A PAYBILL PAYMENT (2026-11-01): the initiator's name, and its security credential (the
+   * initiator's password encrypted with Safaricom's certificate, from the Daraja portal). A secret. Both, or no asking.
+   */
+  initiator?: string;
+  securityCredential?: string;
 }
 
 /** Is there enough configuration to talk to Daraja at all? Absent any of it, the sandbox rail stays. */
@@ -130,6 +141,8 @@ export function mpesaConfigFromEnv(env: NodeJS.ProcessEnv = process.env): MpesaC
       .map((s) => s.trim())
       .filter(Boolean),
     strictQuery: (env.GLOS_MPESA_STRICT_QUERY ?? '').trim() === '1',
+    initiator: (env.GLOS_MPESA_INITIATOR ?? '').trim() || undefined,
+    securityCredential: (env.GLOS_MPESA_SECURITY_CREDENTIAL ?? '').trim() || undefined,
     host: (env.GLOS_MPESA_HOST ?? '').trim() || undefined,
   };
 }
@@ -346,6 +359,68 @@ export class MpesaFundingRail implements FundingRail {
       // Whatever Safaricom chose to tell us. The number is masked at their end in production; it is a
       // label for a person chasing a payment, never an identity.
       payerLabel: [name, body.MSISDN ? maskMsisdn(String(body.MSISDN)) : ''].filter(Boolean).join(' · ') || undefined,
+      // Where it came from is all this notice proves: asked about before it is credited, where we can ask.
+      uncorroborated: true,
+    };
+  }
+
+  /* ============================================================ asking later == */
+
+  /** Whether this deployment can ask M-Pesa about a paybill payment: the initiator's name and credential are both set. */
+  canAsk(): boolean {
+    return Boolean(this.config.initiator && this.config.securityCredential);
+  }
+
+  /**
+   * ASK M-PESA WHETHER A PAYBILL PAYMENT WAS MADE (2026-11-01). Taken at once, answered later at the result door — whose
+   * address carries nothing secret; the answer is matched by the handle M-Pesa gives us here, over a connection we opened.
+   */
+  async askAbout(payment: RailPayment): Promise<{ askedRef: string }> {
+    if (!this.canAsk()) throw new Error('This deployment holds no initiator to ask M-Pesa with');
+    const door = `${this.config.callbackBase}/v1/rails/funding/${this.provider}/answer`;
+    const request: DarajaTransactionStatusRequest = {
+      Initiator: this.config.initiator!,
+      SecurityCredential: this.config.securityCredential!,
+      CommandID: 'TransactionStatusQuery',
+      TransactionID: payment.providerRef,
+      PartyA: this.config.shortcode,
+      IdentifierType: '4',
+      ResultURL: door,
+      QueueTimeOutURL: door,
+      Remarks: 'Paybill payment check',
+      Occasion: 'Top-up',
+    };
+    const answer = await this.post<DarajaTransactionStatusResponse>(STATUS_PATH, request as unknown as Record<string, unknown>);
+    if (answer.errorCode) throw new Error(`${answer.errorCode}: ${answer.errorMessage ?? 'refused'}`);
+    if (String(answer.ResponseCode ?? '') !== '0') throw new Error(answer.ResponseDescription?.trim() || 'M-Pesa would not take the question');
+    const askedRef = String(answer.ConversationID ?? answer.OriginatorConversationID ?? '').trim();
+    if (!askedRef) throw new Error('M-Pesa took the question without a ConversationID');
+    return { askedRef };
+  }
+
+  /**
+   * M-PESA'S ANSWER, at the result door. From Safaricom's addresses, like every callback; and it is an answer to a question
+   * WE asked, matched by the handle we were given — an answer to no question of ours credits nothing.
+   */
+  async readAnswer(_headers: Record<string, string | undefined>, body: unknown, meta?: CallbackMeta): Promise<RailCheckAnswer> {
+    this.assertFromSafaricom(meta?.ip);
+    const result = ((body ?? {}) as DarajaResultBody).Result;
+    if (!result) throw new GlosError('CALLBACK_INVALID', 'An answer from M-Pesa must carry its Result');
+    const askedRef = String(result.ConversationID ?? result.OriginatorConversationID ?? '').trim();
+    if (!askedRef) throw new GlosError('CALLBACK_INVALID', 'An answer from M-Pesa must carry the ConversationID of our question');
+    const raw = result.ResultParameters?.ResultParameter;
+    const params = new Map<string, string | number | undefined>((Array.isArray(raw) ? raw : raw ? [raw] : []).map((p) => [String(p.Key ?? '').toLowerCase(), p.Value]));
+    const code = Number(result.ResultCode);
+    const status = String(params.get('transactionstatus') ?? '').trim();
+    const amount = Number(params.get('amount'));
+    const receipt = String(params.get('receiptno') ?? result.TransactionID ?? '').trim();
+    const paid = code === 0 && status.toLowerCase() === 'completed';
+    return {
+      askedRef,
+      paid,
+      ...(receipt ? { providerRef: receipt } : {}),
+      ...(Number.isFinite(amount) && amount > 0 ? { amount } : {}),
+      words: result.ResultDesc?.trim() || (paid ? 'Completed' : status ? `M-Pesa says: ${status}` : `M-Pesa answered with code ${result.ResultCode}`),
     };
   }
 

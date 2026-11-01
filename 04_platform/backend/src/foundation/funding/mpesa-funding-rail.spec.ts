@@ -353,6 +353,42 @@ describe('the M-Pesa rail', () => {
       const rail = new MpesaFundingRail(CONFIG, darajaAnswering({}));
       await expect(rail.verify({}, { ...CONFIRMATION, BusinessShortCode: '999999' }, FROM_SAFARICOM)).rejects.toThrow(/not ours/);
     });
+
+    /* 2026-11-01 — asked about later, where the deployment holds an initiator. */
+    const ASKING: MpesaConfig = { ...CONFIG, initiator: 'sbgapi', securityCredential: 'enc_cred' };
+
+    it('says the notice proves only where it came from — and asks only where it holds an initiator', async () => {
+      const out = (await new MpesaFundingRail(CONFIG, darajaAnswering({})).verify({}, CONFIRMATION, FROM_SAFARICOM)) as RailPayment;
+      expect(out.uncorroborated).toBe(true);
+      expect(new MpesaFundingRail(CONFIG, darajaAnswering({})).canAsk()).toBe(false);
+      expect(new MpesaFundingRail({ ...CONFIG, initiator: 'sbgapi' }, darajaAnswering({})).canAsk()).toBe(false);
+      expect(new MpesaFundingRail(ASKING, darajaAnswering({})).canAsk()).toBe(true);
+      // and an STK payment, corroborated by its query, is not marked
+      expect(mpesaConfigFromEnv({ GLOS_MPESA_CONSUMER_KEY: 'k', GLOS_MPESA_CONSUMER_SECRET: 's', GLOS_MPESA_SHORTCODE: '174379', GLOS_MPESA_PASSKEY: 'p', GLOS_MPESA_CALLBACK_BASE: 'https://x.test', GLOS_MPESA_INITIATOR: 'sbgapi', GLOS_MPESA_SECURITY_CREDENTIAL: 'c' })).toEqual(expect.objectContaining({ initiator: 'sbgapi', securityCredential: 'c' }));
+    });
+
+    it('asks M-Pesa about the payment with the request Daraja expects, and keeps the handle its answer will quote', async () => {
+      const rail = new MpesaFundingRail(ASKING, darajaAnswering({ '/oauth/': TOKEN, '/transactionstatus/': { OriginatorConversationID: 'oc_1', ConversationID: 'AG_20191122_1', ResponseCode: '0', ResponseDescription: 'Accept the service request successfully.' } }));
+      const payment = (await rail.verify({}, CONFIRMATION, FROM_SAFARICOM)) as RailPayment;
+      await expect(rail.askAbout(payment)).resolves.toEqual({ askedRef: 'AG_20191122_1' });
+      const sent = JSON.parse(String(calls.find((c) => c.url.includes('/transactionstatus/'))!.init.body));
+      expect(sent).toEqual(expect.objectContaining({ Initiator: 'sbgapi', SecurityCredential: 'enc_cred', CommandID: 'TransactionStatusQuery', TransactionID: 'RKTQDM7W6S', PartyA: '174379', IdentifierType: '4', ResultURL: 'https://api.seebuyget.test/v1/rails/funding/mpesa/answer', QueueTimeOutURL: 'https://api.seebuyget.test/v1/rails/funding/mpesa/answer' }));
+      // a question M-Pesa will not take is an error to the caller, which keeps the payment held for a person
+      const refusing = new MpesaFundingRail(ASKING, darajaAnswering({ '/oauth/': TOKEN, '/transactionstatus/': { errorCode: '400.002.02', errorMessage: 'Bad Request - Invalid Initiator' } }));
+      await expect(refusing.askAbout(payment)).rejects.toThrow(/Invalid Initiator/);
+    });
+
+    it('reads M-Pesa’s answer — completed, or not — and takes it only from Safaricom, about a question of ours', async () => {
+      const rail = new MpesaFundingRail(ASKING, darajaAnswering({}));
+      const answer = (params: unknown, code: number | string = 0) => ({ Result: { ResultType: 0, ResultCode: code, ResultDesc: code === 0 ? 'The service request is processed successfully.' : 'The transaction was not found', OriginatorConversationID: 'oc_1', ConversationID: 'AG_20191122_1', TransactionID: 'X1', ResultParameters: { ResultParameter: params } } });
+      const completed = [{ Key: 'ReceiptNo', Value: 'RKTQDM7W6S' }, { Key: 'TransactionStatus', Value: 'Completed' }, { Key: 'Amount', Value: 400 }];
+      await expect(rail.readAnswer({}, answer(completed), FROM_SAFARICOM)).resolves.toEqual({ askedRef: 'AG_20191122_1', paid: true, providerRef: 'RKTQDM7W6S', amount: 400, words: 'The service request is processed successfully.' });
+      // one parameter alone arrives as an object, not a list
+      expect((await rail.readAnswer({}, answer({ Key: 'TransactionStatus', Value: 'Declined' }), FROM_SAFARICOM)).paid).toBe(false);
+      expect((await rail.readAnswer({}, answer([], 2001), FROM_SAFARICOM))).toEqual(expect.objectContaining({ paid: false, words: 'The transaction was not found' }));
+      await expect(rail.readAnswer({}, answer(completed), { ip: '8.8.8.8' })).rejects.toThrow(/did not come from M-Pesa/);
+      await expect(rail.readAnswer({}, { Result: { ResultCode: 0 } }, FROM_SAFARICOM)).rejects.toThrow(/ConversationID/);
+    });
   });
 
   /* =================================================================== the door == */

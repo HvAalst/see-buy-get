@@ -278,6 +278,10 @@ export const enAgent = {
   'agent.home.topUpWaitRow': 'Quote {reference} when you pay',
   'agent.home.topUpReference': 'Quote this reference',
   'agent.home.topUpWaitBody': 'Nothing has been added yet. When the payment provider confirms it, the amount they confirm goes into your wallet.',
+  // 2026-11-01 — paid, and being checked with M-Pesa before it is credited.
+  'agent.home.topUpChecking': 'Your payment of {amount} has arrived',
+  'agent.home.topUpCheckingRow': 'Being checked with M-Pesa — then it goes into your wallet',
+  'agent.home.topUpCheckingBody': 'M-Pesa reference {ref}. We check every paybill payment with M-Pesa before it goes into your wallet — usually a few minutes. There is nothing more to do.',
   'agent.home.topUpCheck': 'Check again',
 
   /* STK PUSH, the main way to pay (decided 2026-09-22) — we ask M-Pesa to make a phone ring, and the

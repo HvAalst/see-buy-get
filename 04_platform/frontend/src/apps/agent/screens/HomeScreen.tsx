@@ -161,8 +161,13 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
             <Icon name="clock" size={24} />
           </span>
           <span class="row__body">
-            <span class="row__t">{t('agent.home.topUpWaitNote', { amount: money(state.funding.amount, state.funding.currency) })}</span>
-            <span class="row__s">{t('agent.home.topUpWaitRow', { reference: state.funding.reference })}</span>
+            {/* Paid, and being checked with M-Pesa before it is credited (2026-11-01): said, not "waiting for your payment". */}
+            <span class="row__t">
+              {state.funding.checking
+                ? t('agent.home.topUpChecking', { amount: money(state.funding.checking.amount, state.funding.checking.currency) })
+                : t('agent.home.topUpWaitNote', { amount: money(state.funding.amount, state.funding.currency) })}
+            </span>
+            <span class="row__s">{state.funding.checking ? t('agent.home.topUpCheckingRow') : t('agent.home.topUpWaitRow', { reference: state.funding.reference })}</span>
           </span>
           <span class="row__end">
             <Icon name="chevronRight" size={22} />
@@ -299,12 +304,21 @@ function TopUpSheet({ open, onClose, state, actions }: { open: boolean; onClose:
          * and type it at a kiosk, and the reference is the biggest thing. Showing the wrong one leaves a
          * shopkeeper watching a handset that is never going to ring.
          */}
-        <Note
-          tone="info"
-          icon={waiting.pushed ? 'keypad' : 'clock'}
-          title={t(waiting.pushed ? 'agent.home.topUpPushNote' : 'agent.home.topUpWaitNote', { amount: money(waiting.amount, waiting.currency) })}
-          detail={waiting.instructions}
-        />
+        {waiting.checking ? (
+          <Note
+            tone="ok"
+            icon="check"
+            title={t('agent.home.topUpChecking', { amount: money(waiting.checking.amount, waiting.checking.currency) })}
+            detail={t('agent.home.topUpCheckingBody', { ref: waiting.checking.providerRef })}
+          />
+        ) : (
+          <Note
+            tone="info"
+            icon={waiting.pushed ? 'keypad' : 'clock'}
+            title={t(waiting.pushed ? 'agent.home.topUpPushNote' : 'agent.home.topUpWaitNote', { amount: money(waiting.amount, waiting.currency) })}
+            detail={waiting.instructions}
+          />
+        )}
         <div class="field">
           <span class="field__label">{t(waiting.pushed ? 'agent.home.topUpReferenceAlso' : 'agent.home.topUpReference')}</span>
           <p class="payref">{waiting.reference}</p>

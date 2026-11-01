@@ -165,6 +165,48 @@ export interface DarajaC2bConfirmation {
 }
 
 /**
+ * THE TRANSACTION STATUS QUERY (2026-11-01) — asking M-Pesa whether a paybill payment is real. It answers at once only
+ * that the question was taken (`ConversationID`), and posts the answer to the `ResultURL` minutes later. Needs the
+ * initiator's name and its security credential (the initiator's password encrypted with Safaricom's certificate, made in
+ * the Daraja portal) — a deployment without them does not ask.
+ */
+export interface DarajaTransactionStatusRequest {
+  Initiator: string;
+  SecurityCredential: string;
+  CommandID: 'TransactionStatusQuery';
+  TransactionID: string;
+  PartyA: string;
+  /** 4 = an organisation's shortcode. */
+  IdentifierType: '4';
+  ResultURL: string;
+  QueueTimeOutURL: string;
+  Remarks: string;
+  Occasion: string;
+}
+
+export interface DarajaTransactionStatusResponse {
+  OriginatorConversationID?: string;
+  ConversationID?: string;
+  ResponseCode?: string;
+  ResponseDescription?: string;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+/** The answer, posted to the `ResultURL` (and a queue timeout to the `QueueTimeOutURL`, in the same envelope). */
+export interface DarajaResultBody {
+  Result?: {
+    ResultType?: number | string;
+    ResultCode?: number | string;
+    ResultDesc?: string;
+    OriginatorConversationID?: string;
+    ConversationID?: string;
+    TransactionID?: string;
+    ResultParameters?: { ResultParameter?: Array<{ Key?: string; Value?: string | number }> | { Key?: string; Value?: string | number } };
+  };
+}
+
+/**
  * SAFARICOM'S PUBLISHED CALLBACK RANGES.
  *
  * The only provenance an unsigned callback has, and on its own not enough — an allowlist says a body came

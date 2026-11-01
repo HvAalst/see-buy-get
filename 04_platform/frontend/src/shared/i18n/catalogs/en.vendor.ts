@@ -413,6 +413,9 @@ export const enVendor = {
   'vendor.topup.waitNote': 'You said you are paying in {amount}',
   'vendor.topup.reference': 'Quote this reference',
   'vendor.topup.waitBody': 'Nothing has been added yet. When the payment provider confirms it, the amount they confirm goes into your balance.',
+  // 2026-11-01 — paid, and being checked with M-Pesa before it is credited.
+  'vendor.topup.checking': 'Your payment of {amount} has arrived',
+  'vendor.topup.checkingBody': 'M-Pesa reference {ref}. We check every paybill payment with M-Pesa before it is added to your balance — usually a few minutes. There is nothing more to do.',
   'vendor.topup.check': 'Check again',
 
   /* STK push — the shop app's twin. A prompt on a phone is the main path and the paybill is the fallback,

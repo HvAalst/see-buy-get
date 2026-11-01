@@ -28,7 +28,7 @@ import type { DisputeReportRow, ReportRow } from './reports';
 import { EMPTY_COUNTRY_FORM, newCountryCode, overridesOf, type CatalogueCountry, type InterestCountry, type NewCountryForm, type PresenceLevel, type PresenceProposalRow, type PresenceRow } from './presence';
 import type { ExpiringItem } from './company';
 import type { AgentRow, CoverageCounts, FlagRow, HubRow, ToteRow } from './network';
-import { runSummary, type FundingAction, type FundingRow, type MorningRun, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
+import { runSummary, type FundingAction, type FundingRow, type HeldRow, type MorningRun, type PayoutAction, type PayoutRow, type RunResult, type UnmatchedRow } from './settlement';
 import type { HelpOption } from './pictures';
 import { approvedSays } from './connections';
 import { staffListOf } from './staff';
@@ -194,6 +194,8 @@ export interface TowerState {
   funding: FundingRow[] | null;
   /** …and what arrived with nobody's name on it. Staff only; never posted to any book. */
   unmatched: UnmatchedRow[];
+  /** …and paybill payments M-Pesa has not confirmed, waiting for a person who reads its statement (2026-11-01). */
+  held: HeldRow[];
   finance: FinanceView | null;
 
   /* ---- the companies, side by side (the group's view) ---- */
@@ -396,6 +398,9 @@ export interface TowerActions {
   moveFunding(fundingId: string, action: FundingAction, input?: { providerRef?: string; amount?: number; reason?: string }): Promise<void>;
   /** Say whose an unattributed payment was, and credit it. A judgement — the server records the name. */
   applyFunding(unmatchedId: string, payerKind: 'agent' | 'vendor', payerDid: string): Promise<void>;
+  /** A held paybill payment: on the statement (credited), or not (refused, with why). */
+  releaseHeld(heldId: string): Promise<void>;
+  refuseHeld(heldId: string, reason: string): Promise<void>;
   lookupParcel(parcelId: string): Promise<void>;
   reissueRelease(parcelId: string): Promise<void>;
   /** 2026-10-27 — what withdrawing a person's parcel would do now (null where it could not be read), and doing it with why. */
@@ -514,6 +519,7 @@ const INITIAL: TowerState = {
   morningRun: null,
   funding: null,
   unmatched: [],
+  held: [],
   finance: null,
   dashboard: null,
   agents: null,
@@ -735,6 +741,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
       // so nothing is filtered here — "which company am I" is a question the token already answered.
       funding: funding.error ? null : (narrow<{ items: FundingRow[] }>(funding.data)?.items ?? []),
       unmatched: funding.error ? [] : (narrow<{ unmatched: UnmatchedRow[] }>(funding.data)?.unmatched ?? []),
+      held: funding.error ? [] : (narrow<{ held?: HeldRow[] }>(funding.data)?.held ?? []),
       // Kept as-is on a failure rather than emptied: "we could not ask" must never wear "there are no
       // shops" clothes, and here it would mean a stray payment looked unattributable to anybody.
       agents: shops.error ? s.agents : (narrow<AgentRow[]>(shops.data) ?? s.agents),
@@ -1917,6 +1924,33 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           return;
         }
         setState((s) => ({ ...s, busyId: null, done: t('tower.money.in.applied') }));
+        await loadMoney(client, entityId);
+      },
+      /** 2026-11-01 — a held paybill payment, decided by the person reading M-Pesa's statement; the name comes from the token. */
+      releaseHeld: async (heldId: string) => {
+        const client = clientRef.current;
+        const entityId = stateRef.current.entityId;
+        if (!client || !entityId) return;
+        setState((s) => ({ ...s, busyId: heldId, queueError: null }));
+        const { error } = await client.api.releaseHeld(heldId, stateRef.current.who?.name);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.money.in.held.credited') }));
+        await loadMoney(client, entityId);
+      },
+      refuseHeld: async (heldId: string, reason: string) => {
+        const client = clientRef.current;
+        const entityId = stateRef.current.entityId;
+        if (!client || !entityId) return;
+        setState((s) => ({ ...s, busyId: heldId, queueError: null }));
+        const { error } = await client.api.refuseHeld(heldId, reason, stateRef.current.who?.name);
+        if (error) {
+          setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+          return;
+        }
+        setState((s) => ({ ...s, busyId: null, done: t('tower.money.in.held.refused') }));
         await loadMoney(client, entityId);
       },
       lookupParcel,

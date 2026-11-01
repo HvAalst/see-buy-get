@@ -9,7 +9,7 @@ import { GlosError } from '../http/glos-error';
 import { isSandbox } from '../runtime/sandbox';
 import { FundingService } from './funding.service';
 import { FUNDING_RAIL, FundingRail, isPayment } from './funding.types';
-import { ApplyFundingDto, ConfirmFundingDto, FundingFailureDto, SimulateFundingDto } from './funding.dto';
+import { ApplyFundingDto, ConfirmFundingDto, FundingFailureDto, HeldDecisionDto, SimulateFundingDto } from './funding.dto';
 
 /**
  * The door money comes in through, and the operator's view of what is standing outside it.
@@ -73,15 +73,32 @@ export class FundingController {
       const closed = this.funding.notePaymentRefused(outcome);
       return { ok: true, duplicate: false, status: closed?.status ?? 'unknown', fundingId: closed?.fundingId, note: outcome.reason };
     }
-    const result = this.funding.confirm(outcome);
+    // A paybill payment is held and asked about where the rail can ask (2026-11-01); the question is not waited on here —
+    // the provider wants its 200, and the answer comes to its own door.
+    const result = this.funding.receive(outcome);
     return {
       ok: true,
       duplicate: result.duplicate,
-      status: result.funding?.status ?? 'unmatched',
-      fundingId: result.funding?.fundingId,
+      status: result.held ? 'checking' : (result.funding?.status ?? 'unmatched'),
+      fundingId: result.funding?.fundingId ?? result.held?.fundingId,
       /** Said plainly in the answer so a provider's own dashboard shows it, not only our logs. */
       note: result.unmatched?.reason,
     };
+  }
+
+  /**
+   * THE PROVIDER'S ANSWER to a question we asked about a payment (2026-11-01) — M-Pesa's transaction status. Public, as the
+   * callback is: the rail establishes where it came from, and the answer is matched to a question of ours or ignored.
+   * Always 200 for one read, so the provider does not retry an answer we have.
+   */
+  @Public()
+  @ApiExcludeEndpoint()
+  @Post(':provider/answer')
+  async answer(@Param('provider') provider: string, @Headers() headers: Record<string, string | undefined>, @Body() body: Record<string, unknown>, @Ip() ip: string) {
+    if (provider !== this.rail.provider || !this.rail.readAnswer) throw new GlosError('NOT_FOUND', `No payment rail answers for ${provider}`);
+    const answer = await this.rail.readAnswer(headers, body, { ip });
+    const held = this.funding.answer(answer);
+    return { ok: true, matched: Boolean(held), status: held?.outcome ?? (held ? 'checking' : 'unknown') };
   }
 
   /* ------------------------------------------------------- the operator's side -- */
@@ -109,6 +126,9 @@ export class FundingController {
       // Network-wide, and only for staff: an unattributed payment has no company on it yet, which is
       // precisely what makes it a problem, so it cannot be filtered to one.
       unmatched: actor?.role === 'operator' ? this.funding.unmatchedPayments() : [],
+      // Paybill payments M-Pesa has not confirmed, waiting for a person who reads its statement (2026-11-01). Staff only,
+      // as the unmatched are.
+      held: actor?.role === 'operator' ? this.funding.heldPayments() : [],
     };
   }
 
@@ -176,6 +196,23 @@ export class FundingController {
   @Post('unmatched/:id/apply')
   applyUnmatched(@Param('id') id: string, @Body() dto: ApplyFundingDto, @Actor() actor: IntrospectionResult) {
     return this.funding.apply(id, { payerKind: dto.payerKind, payerDid: dto.payerDid }, auditActor(actor, dto.by));
+  }
+
+  /**
+   * A HELD PAYMENT IS ON M-PESA'S STATEMENT (2026-11-01): credited, with the person's name on it. The route is under
+   * `held/` because the id is a payment, never a funding request.
+   */
+  @Roles('operator')
+  @Post('held/:id/release')
+  releaseHeld(@Param('id') id: string, @Body() dto: HeldDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.funding.releaseHeld(id, auditActor(actor, dto.by));
+  }
+
+  /** …or it is not on the statement: refused, with why — nothing was credited, so nothing is unwound. */
+  @Roles('operator')
+  @Post('held/:id/refuse')
+  refuseHeld(@Param('id') id: string, @Body() dto: HeldDecisionDto, @Actor() actor: IntrospectionResult) {
+    return this.funding.refuseHeld(id, dto.reason ?? '', auditActor(actor, dto.by));
   }
 
   /** The payer said no, or the rail did. Nothing moved, so nothing is unwound. */

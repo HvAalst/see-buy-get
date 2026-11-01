@@ -517,6 +517,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST rails/funding/:fundingId/reverse': 'money',
   'POST rails/funding/:fundingId/simulate': 'money',
   'POST rails/funding/unmatched/:id/apply': 'money',
+  // 2026-11-01 — a paybill payment M-Pesa would not confirm: credited from its statement, or refused with why.
+  'POST rails/funding/held/:id/release': 'money',
+  'POST rails/funding/held/:id/refuse': 'money',
   'POST reputation/:did/challenge': 'admin',
   'POST reputation/:did/dispute': 'admin',
   'POST reputation/:did/export': 'admin',

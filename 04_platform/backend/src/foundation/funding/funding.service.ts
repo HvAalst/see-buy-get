@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../http/glos-error';
 import { PersistentMap } from '../store/persistent-map';
-import { FUNDING_OPEN, FUNDING_RAIL, Funding, FundingPayer, FundingPayerKind, FundingPurpose, FundingRail, FundingStatus, RailPayment, UnmatchedPayment } from './funding.types';
+import { FUNDING_OPEN, FUNDING_RAIL, Funding, FundingPayer, FundingPayerKind, FundingPurpose, FundingRail, FundingStatus, HeldPayment, RailCheckAnswer, RailPayment, UnmatchedPayment } from './funding.types';
 
 /**
  * The reference a payer quotes, and the reason it looks the way it does.
@@ -41,6 +41,8 @@ function payerReference(): string {
 export class FundingService {
   private readonly fundings = new PersistentMap<string, Funding>('funding');
   private readonly unmatched = new PersistentMap<string, UnmatchedPayment>('funding-unmatched');
+  /** Paybill payments held until M-Pesa, or a person reading its statement, says they are real (2026-11-01). */
+  private readonly held = new PersistentMap<string, HeldPayment>('funding-held');
   private readonly payers = new Map<FundingPayerKind, FundingPayer>();
 
   constructor(@Inject(FUNDING_RAIL) private readonly rail: FundingRail) {}
@@ -103,7 +105,113 @@ export class FundingService {
    * none of those are facts about whether the money came, and our bookkeeping state does not get a vote
    * on that. The rail is the authority; we are the record.
    */
-  confirm(payment: RailPayment, now: number = Date.now()): { funding?: Funding; unmatched?: UnmatchedPayment; duplicate: boolean } {
+  /**
+   * A PAYMENT THE RAIL REPORTS, credited or held (2026-11-01). One whose notice proves only where it came from (a paybill's)
+   * is HELD where the rail can ask the provider about it — the question goes at once, and `asked` settles when M-Pesa has
+   * taken it (its answer arrives later, at `answer`). Every other payment goes straight to `confirm`, as before.
+   */
+  receive(payment: RailPayment, now: number = Date.now()): { funding?: Funding; unmatched?: UnmatchedPayment; held?: HeldPayment; duplicate: boolean; asked?: Promise<HeldPayment> } {
+    if (!payment.uncorroborated || !this.rail.canAsk?.() || !this.rail.askAbout) return this.confirm(payment, now);
+    const seen = this.byProviderRef(payment.provider, payment.providerRef);
+    if (seen) return { ...seen, duplicate: true };
+    const match = this.byReference(payment.reference);
+    const record: HeldPayment = {
+      id: `hld_${randomBytes(6).toString('hex')}`,
+      payment: { ...payment },
+      at: new Date(now).toISOString(),
+      ...(match ? { fundingId: match.fundingId } : {}),
+    };
+    this.held.set(record.id, record);
+    if (match && match.status === 'awaiting') {
+      match.checking = { amount: payment.amount, currency: payment.currency, providerRef: payment.providerRef, since: record.at };
+      this.save(match);
+    }
+    const asked = this.rail
+      .askAbout(payment)
+      .then(({ askedRef }) => this.updateHeld(record.id, { askedRef, askedAt: new Date().toISOString() }))
+      .catch((err: Error) => this.updateHeld(record.id, { askFailed: err.message || 'M-Pesa could not be asked' }));
+    return { held: record, duplicate: false, asked };
+  }
+
+  /**
+   * M-PESA ANSWERED A QUESTION WE ASKED (2026-11-01). It agrees — completed, the same receipt, the same amount — and the
+   * payment is credited, by "M-Pesa". Anything else leaves it held for a person, with M-Pesa's words beside it. An answer
+   * to no open question of ours is ignored: it credits nothing.
+   */
+  answer(answer: RailCheckAnswer, now: number = Date.now()): HeldPayment | null {
+    const record = [...this.held.values()].find((h) => !h.outcome && h.askedRef === answer.askedRef);
+    if (!record) return null;
+    const p = record.payment;
+    const agrees =
+      answer.paid &&
+      answer.providerRef === p.providerRef &&
+      answer.amount !== undefined &&
+      Math.round(answer.amount * 100) === Math.round(p.amount * 100);
+    if (agrees) return this.releaseHeld(record.id, 'M-Pesa', now);
+    const words = answer.paid && answer.providerRef !== p.providerRef
+      ? `M-Pesa answered about ${answer.providerRef ?? 'another payment'}, not ${p.providerRef}`
+      : answer.paid
+        ? `M-Pesa says ${answer.amount ?? 'no amount'} was paid, not ${p.amount}`
+        : answer.words;
+    return this.updateHeld(record.id, { answer: { at: new Date(now).toISOString(), paid: answer.paid, words } });
+  }
+
+  /** Held payments a person may decide on, newest first — and, asked for, the decided ones too. */
+  heldPayments(includeDecided = false): HeldPayment[] {
+    return [...this.held.values()].filter((h) => includeDecided || !h.outcome).sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  /**
+   * CREDITED: on M-Pesa's statement, says the person reading it — or M-Pesa's own answer agreed. It then goes where any
+   * payment goes: to the request its reference names, or, naming none, to the pile of payments with no name on them.
+   */
+  releaseHeld(heldId: string, by: string, now: number = Date.now()): HeldPayment {
+    const record = this.requireOpenHeld(heldId);
+    // Decided FIRST, so the payment is no longer "seen" as held when it is confirmed below.
+    record.outcome = 'credited';
+    record.decidedAt = new Date(now).toISOString();
+    record.decidedBy = by;
+    this.held.set(record.id, record);
+    const { uncorroborated: _drop, ...payment } = record.payment;
+    const result = this.confirm(payment, now);
+    record.creditedTo = { ...(result.funding ? { fundingId: result.funding.fundingId } : {}), ...(result.unmatched ? { unmatchedId: result.unmatched.id } : {}) };
+    this.held.set(record.id, record);
+    return record;
+  }
+
+  /** REFUSED: not on M-Pesa's statement. Nothing was credited, so nothing is unwound; a retry of its notice stays refused. */
+  refuseHeld(heldId: string, reason: string, by: string, now: number = Date.now()): HeldPayment {
+    const record = this.requireOpenHeld(heldId);
+    const why = reason.trim();
+    if (why.length < 3) throw new GlosError('FIELD_REQUIRED', 'Say why it is refused — the shop will ask');
+    record.outcome = 'refused';
+    record.decidedAt = new Date(now).toISOString();
+    record.decidedBy = by;
+    record.refusalReason = why;
+    this.held.set(record.id, record);
+    const funding = record.fundingId ? this.fundings.get(record.fundingId) : undefined;
+    if (funding?.checking?.providerRef === record.payment.providerRef) {
+      funding.checking = undefined;
+      this.save(funding);
+    }
+    return record;
+  }
+
+  private requireOpenHeld(heldId: string): HeldPayment {
+    const record = this.held.get(heldId);
+    if (!record) throw new GlosError('NOT_FOUND', `No held payment found: ${heldId}`);
+    if (record.outcome) throw new GlosError('INVALID_STATE', `That payment was already ${record.outcome} on ${record.decidedAt}`);
+    return record;
+  }
+
+  private updateHeld(heldId: string, patch: Partial<HeldPayment>): HeldPayment {
+    const record = this.held.get(heldId)!;
+    Object.assign(record, patch);
+    this.held.set(record.id, record);
+    return record;
+  }
+
+  confirm(payment: RailPayment, now: number = Date.now()): { funding?: Funding; unmatched?: UnmatchedPayment; held?: HeldPayment; duplicate: boolean } {
     const amount = Math.round((Number.isFinite(payment.amount) ? payment.amount : 0) * 100) / 100;
     const fee = Math.max(0, Math.round((Number.isFinite(payment.fee ?? 0) ? (payment.fee as number) : 0) * 100) / 100);
 
@@ -181,6 +289,7 @@ export class FundingService {
     target.confirmedAt = payment.paidAt ?? new Date(now).toISOString();
     target.entryId = entryId;
     target.failureReason = undefined;
+    target.checking = undefined;
     return { funding: this.save(target), duplicate: false };
   }
 
@@ -380,12 +489,16 @@ export class FundingService {
 
   /** Have we already recorded this exact payment? Both piles are searched — a payment that landed as
    *  unmatched yesterday must not be credited when the provider retries its callback today. */
-  private byProviderRef(provider: string, providerRef: string): { funding?: Funding; unmatched?: UnmatchedPayment } | null {
+  private byProviderRef(provider: string, providerRef: string): { funding?: Funding; unmatched?: UnmatchedPayment; held?: HeldPayment } | null {
     if (!providerRef) return null;
     const funding = [...this.fundings.values()].find((f) => f.provider === provider && f.providerRef === providerRef);
     if (funding) return { funding };
     const unmatched = [...this.unmatched.values()].find((u) => u.provider === provider && u.providerRef === providerRef);
-    return unmatched ? { unmatched } : null;
+    if (unmatched) return { unmatched };
+    // A payment held, or refused, is seen too: a provider retrying its notice must not credit it around the check.
+    // (A credited one has become a request's or the pile's, found above.)
+    const held = [...this.held.values()].find((h) => h.outcome !== 'credited' && h.payment.provider === provider && h.payment.providerRef === providerRef);
+    return held ? { held } : null;
   }
 
   /**
