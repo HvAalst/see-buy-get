@@ -1,4 +1,5 @@
 import { BusinessSystemCounts } from './business-hook.types';
+import { AddressPartsDto } from './pudo.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BUSINESS_ACTIVITIES, VERIFICATION_STATES, type BusinessActivity, type VerificationState } from '../../foundation/entity/entity.types';
 
@@ -122,6 +123,8 @@ export class BusinessView {
   @ApiPropertyOptional() taxNo?: string;
   /** The sender's address on its consignment notes. */
   @ApiPropertyOptional() address?: string;
+  /** The same in its country's parts, where it was given that way — for the form that changes it (2026-11-01). */
+  @ApiPropertyOptional({ type: () => AddressPartsDto }) addressParts?: AddressPartsDto;
   @ApiProperty({ type: BusinessCheckView }) check: BusinessCheckView;
   /** Its public address — only once checked. */
   @ApiPropertyOptional() handle?: string;

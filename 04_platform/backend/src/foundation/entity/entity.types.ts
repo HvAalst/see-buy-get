@@ -1,4 +1,5 @@
 import type { CompanyRecord } from './company-record.types';
+import type { AddressParts } from '../countries/address-format';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AMOUNT_KEYS, type AmountKey } from '../../modules/pudo/amount-keys';
 
@@ -63,6 +64,8 @@ export interface BusinessProfile {
   taxNo?: string;
   /** Where the business is, in its own words: the sender's address on its consignment notes (CMR Art. 6(1)(b)). */
   address?: string;
+  /** The same address in its country's parts, where it was given that way (2026-11-01); `address` is its printed line. */
+  addressParts?: AddressParts;
   createdBy: string;
   createdByPersonDid: string;
   verification: BusinessVerification;

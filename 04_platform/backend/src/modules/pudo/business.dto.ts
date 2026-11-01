@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { AddressPartsDto } from './pudo.dto';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { AgreementDto } from '../../foundation/documents/documents.types';
@@ -32,6 +33,11 @@ export class UpdateBusinessDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(60) @ApiPropertyOptional({ nullable: true }) taxNo?: string | null;
   /** The sender's address on its consignment notes. Null clears it. */
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(300) @ApiPropertyOptional({ nullable: true }) address?: string | null;
+  /**
+   * The same in its country's parts (the owner, 2026-11-01: "it goes on invoices"): checked by the field, and printed as
+   * one line in the country's own order. Null clears the address.
+   */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @ValidateNested() @Type(() => AddressPartsDto) @ApiPropertyOptional({ type: () => AddressPartsDto, nullable: true }) addressParts?: AddressPartsDto | null;
   @IsOptional() @ApiPropertyOptional({ enum: BUSINESS_ACTIVITIES, isArray: true }) @IsArray() @ArrayMaxSize(BUSINESS_ACTIVITIES.length) @IsString({ each: true }) activities?: string[];
 }
 

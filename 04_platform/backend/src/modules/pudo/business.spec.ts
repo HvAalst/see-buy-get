@@ -276,6 +276,24 @@ describe('a customer’s business', () => {
       expect(businesses.update(acting, { name: 'Somebody Else Entirely PLC' }).business?.verification.state).toBe('unverified');
     });
 
+    it('keeps its address in its country’s parts, checked by the field, and prints it as one line', () => {
+      // The owner, 2026-11-01: the business's address "goes on invoices" — asked as Settings asks one.
+      const owner = aPerson();
+      const { entity } = setUp(owner.personDid, { country: 'NL' });
+      const acting = actingAs(owner.personDid, entity.entityId);
+      expect(() => businesses.update(acting, { addressParts: { country: 'NL', street: 'Keizersgracht', number: '1', postcode: '10155', town: 'Amsterdam' } })).toThrow(/not a postcode of Netherlands/);
+      businesses.update(acting, { addressParts: { country: 'nl', street: 'Keizersgracht', number: '123', postcode: '1015cj', town: 'Amsterdam' } });
+      const view = businesses.view(entity.entityId, owner.personDid);
+      expect(view.address).toBe('Keizersgracht 123, 1015 CJ Amsterdam');
+      expect(view.addressParts).toEqual({ country: 'NL', street: 'Keizersgracht', number: '123', postcode: '1015 CJ', town: 'Amsterdam' });
+      // A line typed on its own leaves no parts behind; null clears the address.
+      businesses.update(acting, { address: 'Herengracht 1, Amsterdam' });
+      expect(businesses.view(entity.entityId, owner.personDid)).toMatchObject({ address: 'Herengracht 1, Amsterdam' });
+      expect(businesses.view(entity.entityId, owner.personDid).addressParts).toBeUndefined();
+      businesses.update(acting, { addressParts: null });
+      expect(businesses.view(entity.entityId, owner.personDid).address).toBeUndefined();
+    });
+
     it('lets only an owner ask', () => {
       const owner = aPerson();
       const { entity } = setUp(owner.personDid);

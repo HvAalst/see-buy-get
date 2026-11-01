@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { checkAddress, formatAddress, type AddressParts } from '../../foundation/countries/address-format';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -167,6 +168,7 @@ export class BusinessService {
       registrationNo: p.registrationNo,
       ...(p.taxNo ? { taxNo: p.taxNo } : {}),
       ...(p.address ? { address: p.address } : {}),
+      ...(p.address && p.addressParts ? { addressParts: p.addressParts } : {}),
       check: {
         state: p.verification.state,
         ...(p.verification.askedAt ? { askedAt: p.verification.askedAt } : {}),
@@ -204,7 +206,7 @@ export class BusinessService {
    * a verified "Acme Ltd" renamed to something else is not something anybody verified. Its public address, once issued,
    * does not move (a handle never follows a rename).
    */
-  update(acting: ActingMember, patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; activities?: string[] }): Entity {
+  update(acting: ActingMember, patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; addressParts?: AddressParts | null; activities?: string[] }): Entity {
     this.requireOwner(acting);
     const entity = acting.entity;
     const p = entity.business!;
@@ -213,11 +215,15 @@ export class BusinessService {
     const registrationNo = patch.registrationNo !== undefined ? patch.registrationNo.trim() : undefined;
     if (registrationNo !== undefined && !registrationNo) throw new GlosError('FIELD_REQUIRED', 'Give the number the company registry knows the business by', { field: 'registrationNo' });
     const identityChanged = (name !== undefined && name !== entity.name) || (registrationNo !== undefined && registrationNo !== p.registrationNo);
+    // ITS ADDRESS IN ITS COUNTRY'S PARTS (2026-11-01), checked by the field before anything is written; the line its notes
+    // and invoices print is made from them. A line typed on its own (an older app, a system) leaves no parts behind.
+    const parts = patch.addressParts ? checkAddress(patch.addressParts) : undefined;
+    const address = parts ? formatAddress(parts) : patch.addressParts === null ? null : patch.address;
     const profile = {
       ...(registrationNo !== undefined ? { registrationNo } : {}),
       ...(patch.taxNo !== undefined ? { taxNo: patch.taxNo?.trim() || undefined } : {}),
       // Where it is: not something staff checked, so changing it leaves the check as it stands.
-      ...(patch.address !== undefined ? { address: patch.address?.trim().slice(0, 300) || undefined } : {}),
+      ...(address !== undefined ? { address: address?.trim().slice(0, 600) || undefined, addressParts: parts } : {}),
       ...(patch.activities !== undefined ? { activities: cleanActivities(patch.activities) } : {}),
       ...(identityChanged && p.verification.state !== 'unverified' ? { verification: { state: 'unverified' as const } } : {}),
     };

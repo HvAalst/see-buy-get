@@ -12,6 +12,8 @@ import { Gs1Panel } from './Gs1Panel';
 import { SystemPanel } from './SystemPanel';
 import { KeysPanel } from './KeysPanel';
 import { DirectoryPanel } from './DirectoryPanel';
+import { AddressFields, addressPartName } from '../../../shared/account/AddressFields';
+import { addressBody, anyPart, missingPart, sameAddress, type AddressFormat, type AddressParts } from '../../../shared/account/address';
 
 /**
  * WHAT THE BUSINESS SAYS ABOUT ITSELF — its name and numbers, what it does, how to reach it, the places it uses.
@@ -23,7 +25,10 @@ import { DirectoryPanel } from './DirectoryPanel';
 export function DetailsScreen({ business, actions, client }: { business: BusinessView; actions: BusinessActions; client: BusinessClient | null }) {
   const t = useT();
   const owner = mayManage(business.you.role);
-  const [form, setForm] = useState({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', address: business.address ?? '', activities: business.activities });
+  // Its address in its country's parts (the owner, 2026-11-01: "it goes on invoices"): its own country first.
+  const partsOf = (b: BusinessView): AddressParts => (b.addressParts ? { ...b.addressParts } : { country: b.country });
+  const [form, setForm] = useState({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', addressParts: partsOf(business), activities: business.activities });
+  const [addressFormat, setAddressFormat] = useState<AddressFormat | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sites, setSites] = useState<SiteView[] | null>(null);
@@ -40,7 +45,7 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
   const works = mayAct(business.you.role);
 
   useEffect(() => {
-    setForm({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', address: business.address ?? '', activities: business.activities });
+    setForm({ name: business.name, registrationNo: business.registrationNo, taxNo: business.taxNo ?? '', addressParts: partsOf(business), activities: business.activities });
   }, [business]);
 
   const loadSites = useCallback(async () => {
@@ -74,20 +79,23 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
   };
 
   const identityChanges = form.name.trim() !== business.name || form.registrationNo.trim() !== business.registrationNo;
-  const dirty = identityChanges || form.taxNo.trim() !== (business.taxNo ?? '') || form.address.trim() !== (business.address ?? '') || form.activities.join() !== business.activities.join();
+  const addressChanged = !sameAddress(form.addressParts, partsOf(business));
+  const addressMissing = addressChanged && anyPart(form.addressParts) ? missingPart(form.addressParts, addressFormat) : null;
+  const dirty = identityChanges || form.taxNo.trim() !== (business.taxNo ?? '') || addressChanged || form.activities.join() !== business.activities.join();
   const checked = business.check.state !== 'unverified';
   const toggle = (a: BusinessActivity) => setForm((f) => ({ ...f, activities: f.activities.includes(a) ? f.activities.filter((x) => x !== a) : [...f.activities, a] }));
 
   const save = async (e: Event) => {
     e.preventDefault();
-    if (!client || !dirty) return;
+    if (!client || !dirty || addressMissing) return;
     setBusy(true);
     setError(null);
     const r = await client.update({
       ...(form.name.trim() !== business.name ? { name: form.name.trim() } : {}),
       ...(form.registrationNo.trim() !== business.registrationNo ? { registrationNo: form.registrationNo.trim() } : {}),
       ...(form.taxNo.trim() !== (business.taxNo ?? '') ? { taxNo: form.taxNo.trim() || null } : {}),
-      ...(form.address.trim() !== (business.address ?? '') ? { address: form.address.trim() || null } : {}),
+      // Nothing filled in is no address; otherwise its parts, which the server checks and prints as one line.
+      ...(addressChanged ? (anyPart(form.addressParts) ? { addressParts: addressBody(form.addressParts.country, form.addressParts, addressFormat) } : { addressParts: null }) : {}),
       ...(form.activities.join() !== business.activities.join() ? { activities: form.activities } : {}),
     });
     setBusy(false);
@@ -123,11 +131,24 @@ export function DetailsScreen({ business, actions, client }: { business: Busines
                 <input class="cinput" value={form.taxNo} onInput={(e) => setForm((prev) => ({ ...prev, taxNo: (e.target as HTMLInputElement).value }))} />
               </label>
             </div>
-            <label class="cfield">
-              <span class="cfield__label">{t('business.details.address')}</span>
-              <input class="cinput" maxLength={300} value={form.address} onInput={(e) => setForm((prev) => ({ ...prev, address: (e.target as HTMLInputElement).value }))} />
+            <fieldset class="cfield">
+              <legend class="cfield__label">{t('business.details.address')}</legend>
               <span class="chint">{t('business.details.addressHint')}</span>
-            </label>
+              {/* Typed as one line before: shown, so it can be put into its parts rather than lost. */}
+              {business.address && !business.addressParts ? <span class="chint">{t('account.address.before', { address: business.address })}</span> : null}
+              {client ? (
+                <AddressFields
+                  id="biz-address"
+                  look="console"
+                  value={form.addressParts}
+                  onChange={(addressParts) => setForm((prev) => ({ ...prev, addressParts }))}
+                  loadFormat={(country) => client.addressFormat(country)}
+                  loadCountries={() => client.countries()}
+                  onFormat={setAddressFormat}
+                />
+              ) : null}
+              {addressMissing ? <span class="chint">{t('account.address.missing', { part: addressPartName(t, addressMissing).toLowerCase() })}</span> : null}
+            </fieldset>
             <fieldset class="cfield biz-acts">
               <legend class="cfield__label">{t('business.new.activities')}</legend>
               {ACTIVITIES.map((a) => (

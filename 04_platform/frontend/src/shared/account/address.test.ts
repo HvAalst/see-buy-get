@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addressBody, missingPart, startingCountry, type AddressFormat } from './address';
+import { addressBody, anyPart, missingPart, sameAddress, startingCountry, type AddressFormat } from './address';
 
 const NL: AddressFormat = {
   country: 'NL',
@@ -31,5 +31,17 @@ describe('an address in its country’s parts, as Settings asks it', () => {
     expect(missingPart({ street: 'Keizersgracht', postcode: '1015 CJ', town: 'Amsterdam' }, NL)).toBe('number');
     expect(missingPart({ street: 'Keizersgracht', number: '1', postcode: '1015 CJ', town: 'Amsterdam' }, NL)).toBeNull();
     expect(missingPart({}, null)).toBeNull();
+  });
+  it('tells the same address from a changed one, spaces and case of the country aside', () => {
+    expect(sameAddress({ country: 'nl', street: 'Keizersgracht ', town: 'Amsterdam' }, { country: 'NL', street: 'Keizersgracht', town: 'Amsterdam' })).toBe(true);
+    expect(sameAddress({ country: 'NL', street: 'Keizersgracht' }, { country: 'NL', street: 'Herengracht' })).toBe(false);
+    expect(sameAddress({ country: 'NL' }, { country: 'BE' })).toBe(false);
+    expect(sameAddress(undefined, { country: '' })).toBe(true);
+  });
+
+  it('calls an address with no part filled in no address at all', () => {
+    expect(anyPart({ country: 'NL' })).toBe(false);
+    expect(anyPart({ country: 'NL', town: '  ' })).toBe(false);
+    expect(anyPart({ country: 'NL', town: 'Amsterdam' })).toBe(true);
   });
 });

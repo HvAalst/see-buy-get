@@ -32,6 +32,17 @@ export function addressBody(country: string, values: Partial<Record<AddressField
   return body;
 }
 
+/** Whether two addresses say the same: the country and every part, spaces aside. */
+export function sameAddress(a: Partial<AddressParts> | undefined, b: Partial<AddressParts> | undefined): boolean {
+  const norm = (x: Partial<AddressParts> | undefined) => JSON.stringify([(x?.country ?? '').trim().toUpperCase(), ...ADDRESS_FIELDS.map((k) => (x?.[k] ?? '').trim())]);
+  return norm(a) === norm(b);
+}
+
+/** Whether any part is filled in at all (the country aside): nothing filled is "no address". */
+export function anyPart(value: Partial<AddressParts>): boolean {
+  return ADDRESS_FIELDS.some((k) => (value[k] ?? '').trim());
+}
+
 /** The first required part still empty — said before anything is sent; the server checks the rest by the field. */
 export function missingPart(values: Partial<Record<AddressField, string>>, format: AddressFormat | null): AddressField | null {
   for (const { key, required } of format?.fields ?? []) if (required && !(values[key] ?? '').trim()) return key;

@@ -10,6 +10,7 @@ import { createAgentApi, createNotificationsApi, createOperatorApi, createSeeded
 import { inboundApi, type InboundApi } from './inbound';
 import { exportsApi, type ExportsApi } from './exports';
 import type { QuoteView } from '../../shared/quote';
+import type { AddressFormat, AddressParts } from '../../shared/account/address';
 import type { ArrivalView, CrossingView, PassageView } from '../../shared/passages';
 import type { SealView } from '../../shared/seals';
 import type { UnitHold } from '../../shared/tamper';
@@ -105,6 +106,8 @@ export interface BusinessView {
   taxNo?: string;
   /** The sender's address on its consignment notes. */
   address?: string;
+  /** The same in its country's parts, where it was given that way (2026-11-01). */
+  addressParts?: AddressParts;
   check: { state: CheckState; askedAt?: string; verifiedAt?: string; refusedAt?: string; reason?: string; missing: string[] };
   handle?: string;
   createdAt: string;
@@ -373,7 +376,11 @@ export interface BusinessClient {
   bookingQuote(departureId: string, bookingId: string): Promise<Result<{ quote: QuoteView | null }>>;
   recordBookingQuote(departureId: string, bookingId: string, body: { amount?: number; currency?: string; reference?: string; note?: string }): Promise<Result<QuoteView>>;
   me(): Promise<Result<BusinessView>>;
-  update(patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; activities?: BusinessActivity[] }): Promise<Result<BusinessView>>;
+  update(patch: { name?: string; registrationNo?: string; taxNo?: string | null; address?: string | null; addressParts?: AddressParts | null; activities?: BusinessActivity[] }): Promise<Result<BusinessView>>;
+  /** The parts an address in this country has, for the form (2026-11-01). */
+  addressFormat(country: string): Promise<Result<AddressFormat>>;
+  /** Every country, by its name. */
+  countries(): Promise<Result<Array<{ country: string; name: string }>>>;
   members(): Promise<Result<{ items: MemberRow[] }>>;
   invite(input: { phone: string; name: string; role: MemberRole }): Promise<Result<MemberRow>>;
   setRole(memberId: string, role: MemberRole): Promise<Result<MemberRow>>;
@@ -462,6 +469,8 @@ export function createBusinessClient(): BusinessClient {
       call((c) => c.POST(`/v1/sbg/departures/${encodeURIComponent(departureId)}/bookings/${encodeURIComponent(bookingId)}/quote` as never, { body } as never) as never),
     me: () => call((c) => c.GET('/v1/sbg/business/me' as never, {} as never) as never),
     update: (patch) => call((c) => c.PATCH('/v1/sbg/business/me' as never, { body: patch } as never) as never),
+    addressFormat: (country) => call((c) => c.GET(`/v1/sbg/account/address-format/${encodeURIComponent(country)}` as never, {} as never) as never),
+    countries: () => call((c) => c.GET('/v1/sbg/countries' as never, {} as never) as never),
     members: () => call((c) => c.GET('/v1/sbg/business/me/members' as never, {} as never) as never),
     invite: (input) => call((c) => c.POST('/v1/sbg/business/me/members' as never, { body: input } as never) as never),
     setRole: (memberId, role) => call((c) => c.POST(`/v1/sbg/business/me/members/${encodeURIComponent(memberId)}/role` as never, { body: { role } } as never) as never),

@@ -69828,6 +69828,14 @@
             "type": "string",
             "description": "The sender's address on its consignment notes."
           },
+          "addressParts": {
+            "description": "The same in its country's parts, where it was given that way — for the form that changes it (2026-11-01).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AddressPartsDto"
+              }
+            ]
+          },
           "check": {
             "$ref": "#/components/schemas/BusinessCheckView"
           },
@@ -69965,6 +69973,15 @@
             "nullable": true,
             "description": "The sender's address on its consignment notes. Null clears it.",
             "maxLength": 300
+          },
+          "addressParts": {
+            "nullable": true,
+            "description": "The same in its country's parts (the owner, 2026-11-01: \"it goes on invoices\"): checked by the field, and printed as\none line in the country's own order. Null clears the address.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AddressPartsDto"
+              }
+            ]
           },
           "activities": {
             "type": "array",
