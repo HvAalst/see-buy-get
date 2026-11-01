@@ -563,6 +563,8 @@ export const en = {
   'account.menu.addressPh': 'Street, area, town',
   'account.menu.addressBody': 'Kept for paperwork and payments, and never shown to anyone you deliver to. You can remove it whenever you like.',
   'account.menu.addressClear': 'Remove my address',
+  // A code sent before the page was loaded again (2026-11-01): the one in the inbox still works.
+  'account.safety.codeSentEarlier': 'We sent a code to this address at {time}. Type it here: it works for 15 minutes, and asking again sends the same one.',
   // The address in its country's parts (2026-10-30): which are asked is the country's to say.
   'account.address.country': 'Country',
   'account.address.chooseCountry': 'Choose the country',

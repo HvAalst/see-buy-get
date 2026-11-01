@@ -3,6 +3,7 @@ import { Button, CodeBoxes, RefusalNote } from '../ui';
 import { useT } from '../i18n';
 import type { Result, SbgError } from '../../lib/sbg';
 import { looksLikeEmail } from './recovery';
+import { rememberSent, sentEarlier } from './sentCode';
 
 export interface EmailStepProps {
   /** Unique within the screen — two of these can be on one sheet. */
@@ -26,7 +27,10 @@ export interface EmailStepProps {
  */
 export function EmailStep({ id, email, code, onEmail, onCode, send, disabled, label }: EmailStepProps) {
   const t = useT();
-  const [sent, setSent] = useState(false);
+  // A code sent to this address a moment ago, before the browser loaded the page again: its box is open, so the code
+  // in the inbox can be typed (the owner, 2026-11-01). Asked for again, it is the same code while it is good.
+  const [earlier, setEarlier] = useState<number | null>(() => sentEarlier(email));
+  const [sent, setSent] = useState(() => earlier !== null);
   const [busy, setBusy] = useState(false);
   const [testCode, setTestCode] = useState('');
   const [error, setError] = useState<SbgError | null>(null);
@@ -38,6 +42,8 @@ export function EmailStep({ id, email, code, onEmail, onCode, send, disabled, la
     setError(r.error ?? null);
     if (r.error) return;
     setSent(true);
+    setEarlier(null);
+    rememberSent(email);
     setTestCode(r.data?.code ?? '');
     onCode('');
   };
@@ -61,7 +67,9 @@ export function EmailStep({ id, email, code, onEmail, onCode, send, disabled, la
           disabled={disabled || busy}
           onInput={(e) => {
             onEmail(e.currentTarget.value);
-            setSent(false);
+            const before = sentEarlier(e.currentTarget.value);
+            setEarlier(before);
+            setSent(before !== null);
             setError(null);
           }}
           placeholder="name@example.com"
@@ -75,7 +83,13 @@ export function EmailStep({ id, email, code, onEmail, onCode, send, disabled, la
         <div class="field">
           <span class="field__label">{t('account.safety.emailCodeLabel')}</span>
           <CodeBoxes id={`${id}-code`} label={t('account.safety.emailCodeLabel')} length={6} value={code} onInput={onCode} disabled={disabled} />
-          <p class="hint">{testCode ? t('account.safety.testCode', { code: testCode }) : t('account.safety.codeSent')}</p>
+          <p class="hint">
+            {testCode
+              ? t('account.safety.testCode', { code: testCode })
+              : earlier !== null
+                ? t('account.safety.codeSentEarlier', { time: new Date(earlier).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
+                : t('account.safety.codeSent')}
+          </p>
         </div>
       ) : null}
     </div>

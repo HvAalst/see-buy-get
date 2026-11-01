@@ -65,6 +65,17 @@ export class EmailCodeService {
     const e = normalizeEmail(email);
     if (!isPlausibleEmail(e)) throw new GlosError('VALIDATION_FAILED', 'Enter a valid email address', { field: 'email' });
     this.assertWithinRate(e, now);
+    /*
+     * THE SAME CODE WHILE THE ONE SENT IS STILL GOOD (the owner, 2026-11-01: "when I have to switch apps, from chrome on
+     * mobile to mail, to fetch the security code to confirm my email, the sbg page is refreshed and I can't write the
+     * code from the earlier email … the code should be reusable for the said 15 minutes"). A phone's browser drops a
+     * page it put in the background; asked again, a NEW code made the one in the inbox wrong. Now it is sent again,
+     * keeping its first expiry — so it is never good for longer than fifteen minutes from when it was first sent, and
+     * five wrong tries still burn it. Not the review code, nor the owner's stand-in, which are their own.
+     */
+    const held = this.codes.get(e);
+    const again = !opts.standIn && !opts.review && held && !held.review && held.expires > now && held.attempts < MAX_ATTEMPTS ? held : undefined;
+    if (again) return { code: again.code, minutes: Math.max(1, Math.ceil((again.expires - now) / 60_000)) };
     const code = opts.standIn ?? (opts.review ? REVIEW_CODE : String(randomInt(0, 1_000_000)).padStart(6, '0'));
     this.codes.set(e, { code, expires: now + CODE_TTL_MS, attempts: 0, ...(opts.review ? { review: true } : {}) });
     return { code, minutes: CODE_TTL_MS / 60_000 };

@@ -90,9 +90,16 @@ export class OtpService {
     const p = this.phoneFor(phone);
     this.assertWithinRate(p);
 
+    // THE SAME CODE WHILE THE ONE TEXTED IS STILL GOOD (the owner, 2026-11-01): a phone's browser drops the page while
+    // its owner reads the text, and a new code asked for then made the one they were reading wrong. Sent again, with its
+    // first expiry, and burned by five wrong tries as before. Not the review code, nor the owner's stand-in.
+    const held = this.codes.get(p);
+    const now = Date.now();
+    if (!opts.standIn && !opts.review && held && !held.review && held.expires > now && held.attempts < MAX_ATTEMPTS) return { sent: true, code: held.code };
+
     // The owner's stand-in code (foundation/runtime/standin-code.ts) is the number's own: it is no review code.
     const code = opts.standIn ?? (opts.review ? REVIEW_CODE : String(randomInt(0, 1_000_000)).padStart(6, '0'));
-    this.codes.set(p, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0, ...(opts.review ? { review: true } : {}) });
+    this.codes.set(p, { code, expires: now + OTP_TTL_MS, attempts: 0, ...(opts.review ? { review: true } : {}) });
     return { sent: true, code };
   }
 

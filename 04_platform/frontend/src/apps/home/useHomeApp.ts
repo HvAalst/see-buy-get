@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { joinRestored, joinSnapshot, readJoinMemory, writeJoinMemory } from './joinMemory';
 import { t } from '../../shared/i18n';
 import type { SbgError } from '../../lib/sbg';
 import {
@@ -380,6 +381,30 @@ export function useHomeApp() {
     }
     setState((s) => ({ ...s, screen: 'report', reportKey: key }));
   }, []);
+
+  /*
+   * A SIGN-UP PUT BACK WHERE IT WAS (the owner, 2026-11-01: "when I have to switch apps, from chrome on mobile to mail, to
+   * fetch the security code … the sbg page is refreshed"). A phone's browser loads a page again that it dropped in the
+   * background; read before the address is stripped of a link, so a link to a NEW sign-up wins over an old one. Kept as
+   * it goes, by the effect after it (joinMemory.ts: never the PIN, a password or a code).
+   */
+  const joinKeptRef = useRef(false);
+  useEffect(() => {
+    joinKeptRef.current = true;
+    const search = globalThis.location?.search ?? '';
+    if (readDeepLink(search) || new URLSearchParams(search).get('store') || stateRef.current.screen !== 'welcome') return;
+    const back = joinRestored(readJoinMemory(), (id) => roleById(id)?.kind ?? null, Date.now());
+    const role = back ? roleById(back.roleId) : undefined;
+    if (!back || !role) return;
+    setState((st) => ({ ...st, screen: 'join', role, step: back.step, form: { ...EMPTY_JOIN, ...back.form }, ...NO_FLEET, pinEmail: back.pinEmail, issuedCode: null, error: null }));
+    void loadPoints();
+    void loadCountries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!joinKeptRef.current) return;
+    writeJoinMemory(joinSnapshot({ screen: state.screen, roleId: state.role?.id, step: state.step, form: state.form, pinEmail: state.pinEmail }, Date.now()));
+  }, [state.screen, state.role, state.step, state.form, state.pinEmail]);
 
   /*
    * `/?join=driver`, `/?go=market` — every card on the front page is a real address (shareable, opens in a new tab,
