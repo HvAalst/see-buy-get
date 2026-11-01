@@ -24991,6 +24991,35 @@
         }
       }
     },
+    "/v1/sbg/account/address-format/{country}": {
+      "get": {
+        "operationId": "Account.addressFormat",
+        "summary": "",
+        "description": "The fields an address in this country has, in the order a form asks them, which are required, and what its postcode\nlooks like (2026-10-30). Only the shape of an address: nothing about anybody's.",
+        "parameters": [
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddressFormatView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/account/profile": {
       "patch": {
         "operationId": "Account.setProfile",
@@ -66997,6 +67026,96 @@
           "pin"
         ]
       },
+      "AddressFormatField": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "building, street, number, addition, line, area, poBox, postcode, town or region"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "required"
+        ]
+      },
+      "AddressFormatView": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "fields": {
+            "description": "The parts asked, in the order a form shows them.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AddressFormatField"
+            }
+          },
+          "postcodeExample": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "country",
+          "fields"
+        ]
+      },
+      "AddressPartsDto": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "pattern": "/^[A-Za-z]{2}$/"
+          },
+          "building": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "street": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "number": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "addition": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "line": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "area": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "poBox": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "postcode": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "town": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "region": {
+            "type": "string",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "country"
+        ]
+      },
       "AccountProfileDto": {
         "type": "object",
         "properties": {
@@ -67009,7 +67128,16 @@
           },
           "address": {
             "type": "string",
+            "description": "One line, as before; an empty one clears the address.",
             "maxLength": 240
+          },
+          "addressParts": {
+            "description": "The address in its country's parts: checked, and kept with the one line every paper prints.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AddressPartsDto"
+              }
+            ]
           }
         }
       },

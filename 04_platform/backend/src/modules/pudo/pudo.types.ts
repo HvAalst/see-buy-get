@@ -1378,8 +1378,15 @@ export class Driver {
 }
 
 /** The fields an address in a country has, for the form that asks them (2026-10-30): never anybody's address. */
+export class AddressFormatField {
+  /** building, street, number, addition, line, area, poBox, postcode, town or region */
+  key: string;
+  required: boolean;
+}
+
 export class AddressFormatView {
   country: string;
-  fields: Array<{ key: string; required: boolean }>;
+  /** The parts asked, in the order a form shows them. */
+  fields: AddressFormatField[];
   postcodeExample?: string;
 }

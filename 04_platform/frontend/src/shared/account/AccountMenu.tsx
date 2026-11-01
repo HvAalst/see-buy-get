@@ -1,4 +1,5 @@
 import type { ComponentChildren } from 'preact';
+import { addressBody, missingPart, startingCountry, type AddressField, type AddressFormat } from './address';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage } from '../ui/AuthImage';
 import { Button } from '../ui/Button';
@@ -11,7 +12,7 @@ import { AllAppsLink } from '../ui/AllAppsLink';
 import type { GuideApp } from '../guide/articles';
 import { SettingsSheet, hasSettings } from './SettingsSheet';
 import type { PinDevicesApi } from './devices';
-import { useT } from '../i18n';
+import { useT, type MessageKey } from '../i18n';
 import { publicPageUrl } from '../../lib/sbg/config';
 import type { AccountApi } from './useAccount';
 
@@ -282,24 +283,85 @@ function ProfileSheet({ open, onClose, api }: { open: boolean; onClose: () => vo
   );
 }
 
+/**
+ * THE ADDRESS, IN ITS COUNTRY'S PARTS (the owner, 2026-10-30: "the address field is poor, especially for countries that do
+ * have formal physical addresses. We say it is used for invoicing"). The country first; then the parts that country's
+ * addresses have — a street, a number and a postcode in the Netherlands, an area and a post office box in Kenya — as the
+ * server says, which checks them too and keeps the one line every paper prints.
+ */
 function AddressSheet({ open, onClose, api }: { open: boolean; onClose: () => void; api: AccountApi }) {
   const t = useT();
-  const [address, setAddress] = useState('');
+  const [country, setCountry] = useState('');
+  const [values, setValues] = useState<Partial<Record<AddressField, string>>>({});
+  const [format, setFormat] = useState<AddressFormat | null>(null);
+  const [countries, setCountries] = useState<Array<{ country: string; name: string }>>([]);
+  const [tried, setTried] = useState(false);
   useEffect(() => {
-    if (open) setAddress(api.account?.address ?? '');
-  }, [open, api.account?.address]);
+    if (!open) return;
+    const saved = api.account?.addressParts;
+    setCountry(startingCountry(saved, typeof navigator !== 'undefined' ? navigator.language : undefined));
+    setValues(saved ? { ...saved } : {});
+    setTried(false);
+    if (!countries.length) void api.countries().then((r) => setCountries((r.data ?? []).map((c) => ({ country: c.country, name: c.name })).sort((a, b) => a.name.localeCompare(b.name))));
+  }, [open, api.account?.addressParts]);
+  useEffect(() => {
+    if (!open || !country) return setFormat(null);
+    let live = true;
+    void api.addressFormat(country).then((r) => {
+      if (live) setFormat(r.data ?? null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, country]);
+  const missing = missingPart(values, format);
 
   return (
     <Sheet open={open} onClose={onClose} title={t('account.menu.address')}>
       <p class="t-body">{t('account.menu.addressBody')}</p>
+      {/* Typed as one line before: shown, so it can be put into its parts rather than lost. */}
+      {api.account?.address && !api.account.addressParts ? <p class="t-body">{t('account.address.before', { address: api.account.address })}</p> : null}
       <div class="field">
-        <label class="field__label" for="acct-address">
-          {t('account.menu.address')}
+        <label class="field__label" for="acct-address-country">
+          {t('account.address.country')}
         </label>
-        <textarea id="acct-address" class="input" rows={3} value={address} onInput={(e) => setAddress(e.currentTarget.value)} placeholder={t('account.menu.addressPh')} />
+        <select id="acct-address-country" class="input" value={country} onChange={(e) => setCountry(e.currentTarget.value)}>
+          <option value="">{t('account.address.chooseCountry')}</option>
+          {countries.map((c) => (
+            <option key={c.country} value={c.country}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
+      {format?.fields.map(({ key, required }) => (
+        <div class="field" key={key}>
+          <label class="field__label" for={`acct-address-${key}`}>
+            {t(ADDRESS_LABEL[key])}
+            {required ? null : <span class="t-meta"> {t('account.address.optional')}</span>}
+          </label>
+          <input
+            id={`acct-address-${key}`}
+            class="input"
+            value={values[key] ?? ''}
+            onInput={(e) => setValues({ ...values, [key]: e.currentTarget.value })}
+            {...(key === 'postcode' && format.postcodeExample ? { placeholder: format.postcodeExample } : {})}
+            autocomplete={ADDRESS_AUTOCOMPLETE[key]}
+          />
+        </div>
+      ))}
+      {tried && missing ? <p class="hint">{t('account.address.missing', { part: t(ADDRESS_LABEL[missing]).toLowerCase() })}</p> : null}
       {api.error ? <ErrorNote error={api.error} /> : null}
-      <Button chevron={false} busy={api.busy} onClick={async () => { if (await api.save({ address: address.trim() })) onClose(); }}>
+      <Button
+        chevron={false}
+        busy={api.busy}
+        disabled={!country || !format}
+        onClick={async () => {
+          setTried(true);
+          if (!format || missing) return;
+          if (await api.save({ addressParts: addressBody(country, values, format) })) onClose();
+        }}
+      >
         {t('common.save')}
       </Button>
       {/* Taking it back is a real act with its own control, not something you discover by clearing a box. */}
@@ -314,6 +376,22 @@ function AddressSheet({ open, onClose, api }: { open: boolean; onClose: () => vo
     </Sheet>
   );
 }
+
+/** Each part's name, as the form asks it. */
+const ADDRESS_LABEL: Record<AddressField, MessageKey> = {
+  building: 'account.address.building',
+  street: 'account.address.street',
+  number: 'account.address.number',
+  addition: 'account.address.addition',
+  line: 'account.address.line',
+  area: 'account.address.area',
+  poBox: 'account.address.poBox',
+  postcode: 'account.address.postcode',
+  town: 'account.address.town',
+  region: 'account.address.region',
+};
+/** What the browser may fill each part in from: only where the meaning is the same. */
+const ADDRESS_AUTOCOMPLETE: Partial<Record<AddressField, string>> = { line: 'street-address', street: 'address-line1', postcode: 'postal-code', town: 'address-level2', region: 'address-level1' };
 
 /**
  * Downscale a picked photo to a 512px square-ish JPEG before upload.

@@ -1,4 +1,5 @@
 import { saveDeviceKey } from './pin';
+import type { AddressFormat, AddressParts } from './address';
 import { pinDevicesApi, type PinDevicesApi } from './devices';
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sbg';
@@ -20,6 +21,8 @@ export interface AccountView {
   displayName?: string;
   avatarMediaId?: string;
   address?: string;
+  /** The same address in its country's parts, where it was saved that way (2026-10-30). */
+  addressParts?: AddressParts;
   pinChangedAt?: string;
   /** The role this token is acting as, and its DID — what the menu heads itself with. */
   actingAs?: string;
@@ -81,8 +84,12 @@ export interface AccountApi {
   error: SbgError | null;
   busy: boolean;
   reload: () => Promise<void>;
-  /** Name, photo or address. Each independent; an empty address clears it. */
-  save: (patch: { displayName?: string; avatarMediaId?: string; address?: string }) => Promise<boolean>;
+  /** Name, photo or address. Each independent; an empty address clears it; an address in parts is checked by the field. */
+  save: (patch: { displayName?: string; avatarMediaId?: string; address?: string; addressParts?: AddressParts }) => Promise<boolean>;
+  /** The parts an address in this country has, for the form (2026-10-30). */
+  addressFormat: (country: string) => Promise<Result<AddressFormat>>;
+  /** Every country, by its name — for the address's country. */
+  countries: () => Promise<Result<Array<{ country: string; name: string }>>>;
   /**
    * Change the PIN. Resolves TRUE when it changed — and the caller must then sign the person out, because
    * changing a PIN ends every session it opened, this one included. That is not a quirk to work around:
@@ -143,6 +150,8 @@ const IDLE: AccountApi = {
   busy: false,
   reload: async () => {},
   save: async () => false,
+  addressFormat: async () => NO_CLIENT,
+  countries: async () => NO_CLIENT,
   changePin: async () => false,
   saveAvatar: async () => null,
   loadMedia: async () => ({ data: null, error: null }),
@@ -212,7 +221,7 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   }, [enabled, client, loadPayout]);
 
   const save = useCallback(
-    async (patch: { displayName?: string; avatarMediaId?: string; address?: string }) => {
+    async (patch: { displayName?: string; avatarMediaId?: string; address?: string; addressParts?: AddressParts }) => {
       if (!client) return false;
       setBusy(true);
       const r: Result<unknown> = await client.request((raw) => raw.PATCH('/v1/sbg/account/profile' as never, { body: patch } as never) as never);
@@ -354,6 +363,17 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
     [post],
   );
 
+  const addressFormat = useCallback(
+    async (country: string): Promise<Result<AddressFormat>> =>
+      client ? client.request((raw) => raw.GET(`/v1/sbg/account/address-format/${encodeURIComponent(country)}` as never, {} as never) as never) : NO_CLIENT,
+    [client],
+  );
+  const countries = useCallback(
+    async (): Promise<Result<Array<{ country: string; name: string }>>> =>
+      client ? client.request((raw) => raw.GET('/v1/sbg/countries' as never, {} as never) as never) : NO_CLIENT,
+    [client],
+  );
+
   const closing = useCallback(async (): Promise<Result<ClosingStanding>> => {
     if (!client) return NO_CLIENT;
     return client.request((raw) => raw.GET('/v1/sbg/account/closing' as never, {} as never) as never) as Promise<Result<ClosingStanding>>;
@@ -375,5 +395,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, payout, sendPayoutCode, savePayoutNumber };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, payout, sendPayoutCode, savePayoutNumber };
 }
