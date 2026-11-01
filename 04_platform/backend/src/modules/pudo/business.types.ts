@@ -1,5 +1,5 @@
 import { BusinessSystemCounts } from './business-hook.types';
-import { AddressPartsDto } from './pudo.dto';
+import { AddressPartsDto } from './address-parts.dto';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BUSINESS_ACTIVITIES, VERIFICATION_STATES, type BusinessActivity, type VerificationState } from '../../foundation/entity/entity.types';
 

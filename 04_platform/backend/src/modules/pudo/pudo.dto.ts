@@ -1,4 +1,5 @@
 import { ParcelInvoiceDto } from './parcel-invoice.types';
+import { AddressPartsDto } from './address-parts.dto';
 import { BagClosureDto, BagReceiptDto } from './bag-closure.types';
 import { MAX_SEALS, SEALS_AT_DELIVERY, SealReadDto, type SealsAtDelivery } from './load-seal.types';
 import { DESTINATION_KINDS } from './destination.types';
@@ -2200,20 +2201,7 @@ export class ProfileDto {
  * `address` allows the empty string on purpose: it is how somebody takes theirs back. A field that can
  * only ever be filled in is a field nobody should fill in.
  */
-/** An address in the parts its country writes (2026-10-30): which are asked, and checked, is the country's to say. */
-export class AddressPartsDto {
-  @IsString() @Matches(/^[A-Za-z]{2}$/) country!: string;
-  @IsOptional() @IsString() @MaxLength(120) building?: string;
-  @IsOptional() @IsString() @MaxLength(120) street?: string;
-  @IsOptional() @IsString() @MaxLength(120) number?: string;
-  @IsOptional() @IsString() @MaxLength(120) addition?: string;
-  @IsOptional() @IsString() @MaxLength(120) line?: string;
-  @IsOptional() @IsString() @MaxLength(120) area?: string;
-  @IsOptional() @IsString() @MaxLength(120) poBox?: string;
-  @IsOptional() @IsString() @MaxLength(120) postcode?: string;
-  @IsOptional() @IsString() @MaxLength(120) town?: string;
-  @IsOptional() @IsString() @MaxLength(120) region?: string;
-}
+export { AddressPartsDto } from './address-parts.dto';
 
 export class AccountProfileDto {
   @IsOptional() @IsString() @MaxLength(80) displayName?: string;
