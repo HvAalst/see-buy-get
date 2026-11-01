@@ -513,6 +513,7 @@ export const enTower = {
   'tower.papers.readFromUnknown': 'Recorded before this was kept',
   'tower.papers.lastRefused': 'Their last card was not accepted: “{reason}” — {who}, {date}.',
   'tower.papers.nothingSent': 'Nothing sent. They send the renewed card from the driver app, which asks for it once the licence is running out.',
+  'tower.papers.checkedDeleted': 'Their ID and licence were checked by {who} on {date}, and the photos were deleted then. The number, the classes and the date are what was kept.',
   'tower.papers.vetted': 'The licence they were vetted on — it shows the date at vetting, not a renewal',
   'tower.papers.noDateWatched': 'No date on record, so nothing is watched and nothing switches off.',
   'tower.papers.withoutPhoto': 'Record a date without a photo',

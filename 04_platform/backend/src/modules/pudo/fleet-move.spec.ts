@@ -740,7 +740,10 @@ describe('a driver changing fleet', () => {
 
       const kenya = entities.forJurisdiction('KE')!;
       const rides = moves.decideRideAlone(did, { approve: true, by: 'Amina Otieno', criminalRecordClear: true });
-      expect(rides).toMatchObject({ jurisdiction: 'KE', entityId: kenya.entityId, status: 'ACTIVE', criminalRecordClear: true, kyc: { idCopyRef: papers.idCopyRef, licenceCopyRef: papers.licenceCopyRef } });
+      expect(rides).toMatchObject({ jurisdiction: 'KE', entityId: kenya.entityId, status: 'ACTIVE', criminalRecordClear: true, kyc: { checkedBy: 'Amina Otieno', photosDeletedAt: expect.any(String) } });
+      // What was checked is kept; the two photographs are deleted at the decision (the owner, 2026-10-30).
+      expect([rides.kyc?.idCopyRef, rides.kyc?.licenceCopyRef]).toEqual([undefined, undefined]);
+      expect([media.get(papers.idCopyRef), media.get(papers.licenceCopyRef)]).toEqual([undefined, undefined]);
       expect(rides.courierAsk).toBeUndefined();
       expect(rides.removedFrom).toBeUndefined();
       expect(drivers.isIndependent(rides)).toBe(true);
@@ -758,11 +761,14 @@ describe('a driver changing fleet', () => {
 
     it('staff refuse with a reason the driver reads; they stay as they were, and may ask again', async () => {
       const { did } = aTruckerOutOf('Kilima Logistics');
-      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papersOf(did) });
+      const papers = papersOf(did);
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papers });
       expect(() => moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno' })).toThrow(/must say why/);
       expect(() => moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno', reason: '   ' })).toThrow(/must say why/);
       const no = moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno', reason: 'The licence photograph is too dark to read.' });
       expect(no.courierAsk).toBeUndefined();
+      // Refused: the two photographs are deleted too (the owner, 2026-10-30); they send new ones if they ask again.
+      expect([media.get(papers.idCopyRef), media.get(papers.licenceCopyRef)]).toEqual([undefined, undefined]);
       expect(no.removedFrom).toBeDefined();
       expect(drivers.isIndependent(no)).toBe(false);
       expect(ownedBy(did)).toHaveLength(0);
@@ -773,6 +779,27 @@ describe('a driver changing fleet', () => {
       // Asking again clears the refusal they read.
       moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papersOf(did) });
       expect(moves.rideAloneTerms(did)).not.toHaveProperty('refused');
+    });
+
+    it('a courier on a van is told when their papers are refused and when approved — and that the photos were deleted', async () => {
+      // The owner, 2026-10-30: "a refusal message and notification to the driver"; the photos deleted either way.
+      const v = drivers.register({ displayName: 'Vanessa', fullName: 'Vanessa Told', nationalId: 'DRV-TOLD-1', mobile: '+254700929292', licenceClasses: ['van'], licenceNumber: 'DL-TOLD-1', licenceExpiresAt: '2031-06-30', criminalRecordClear: true });
+      drivers.submitKyc(v.did, papersOf(v.did));
+      drivers.decideKyc(v.did, false, 'Amina Otieno', 'The ID photo is blurred.');
+      await settle();
+      expect(notifications.inboxFor(v.did)[0]).toMatchObject({ kind: 'signup_rejected', title: 'Your papers need another look' });
+      expect(notifications.inboxFor(v.did)[0].body).toBe('The ID photo is blurred. The photos you sent have been deleted. Send your ID and licence again when you have them.');
+
+      drivers.submitKyc(v.did, papersOf(v.did));
+      drivers.decideKyc(v.did, true, 'Amina Otieno');
+      await settle();
+      expect(notifications.inboxFor(v.did)[0]).toMatchObject({ kind: 'papers_checked', title: 'Your papers are checked: you can drive' });
+      expect(notifications.inboxFor(v.did)[0].body).toContain('The photos you sent have been deleted');
+
+      // A bicycle rider switched on at sign-up: nobody looked at anything, so nothing is said.
+      const b = drivers.register({ displayName: 'Bikey', fullName: 'Bikey Quiet', nationalId: 'DRV-TOLD-2', mobile: '+254700929293', licenceClasses: ['bike'] });
+      await settle();
+      expect(notifications.inboxFor(b.did).filter((n) => n.kind === 'papers_checked')).toEqual([]);
     });
 
     it('taking a fleet’s place while the ask waits ends the ask: they chose', () => {
@@ -1098,8 +1125,9 @@ describe('a driver changing fleet', () => {
       expect(left.title).toBe(`${d.driver.displayName} left your fleet`);
       expect(left.body).toContain('stays in your records');
       expect(left.body).not.toContain('Pwani');
-      // The driver was told of the offer — and of nothing else; they did the rest themselves.
-      expect(notifications.inboxFor(d.driver.did).map((n) => n.kind)).toEqual(['fleet_offer']);
+      // The driver was told of the offer, and that their papers were checked when they first joined (the owner,
+      // 2026-10-30) — and of nothing else; they did the rest themselves.
+      expect(notifications.inboxFor(d.driver.did).map((n) => n.kind)).toEqual(['fleet_offer', 'papers_checked']);
     });
 
     it('five wrong PINs tell the person — in their own inbox and their driver’s, never the fleet’s', async () => {
@@ -1110,14 +1138,16 @@ describe('a driver changing fleet', () => {
       // The phone the PIN is typed on was confirmed by a code — and THAT is news: their PIN works somewhere it never had.
       const theirPhone = persons.trustDevice(d.phone);
       await settle();
-      expect(notifications.inboxFor(d.driver.did)).toHaveLength(1);
+      // Besides "your papers are checked" from when their fleet joined them (the owner, 2026-10-30): this, and only this.
+      const security = () => notifications.inboxFor(d.driver.did).filter((n) => n.kind === 'security');
+      expect(security()).toHaveLength(1);
       expect(notifications.inboxFor(d.driver.did)[0]).toMatchObject({ kind: 'security', title: 'A new phone or browser can use your PIN' });
       expect(notifications.inboxFor(d.driver.did)[0].body).toContain('forgot your PIN');
       expect(notifications.inboxFor(person.personDid)[0]).toMatchObject({ kind: 'security', title: 'A new phone or browser can use your PIN' });
       expect(notifications.inboxFor(kilima.did)).toHaveLength(0);
       for (let i = 0; i < 4; i++) expect(() => persons.loginWithPin(d.phone, '00000', theirPhone)).toThrow(/Wrong phone or PIN/);
       await settle();
-      expect(notifications.inboxFor(d.driver.did)).toHaveLength(1); // four wrong is a typo, not news
+      expect(security()).toHaveLength(1); // four wrong is a typo, not news
       expect(() => persons.loginWithPin(d.phone, '00000', theirPhone)).toThrow(/Too many wrong PINs/);
       await settle();
       expect(notifications.inboxFor(d.driver.did)[0]).toMatchObject({ kind: 'security', title: 'Your PIN was locked' });

@@ -71,7 +71,8 @@ export interface CourierPaperRow {
    * it is guarding is whether somebody may legally drive. The refs ride on the row; whether there are
    * bytes behind them is the media route's answer, and the screen says plainly when there are none.
    */
-  documents?: { licenceCopyRef?: string; idCopyRef?: string; submittedAt?: string };
+  /** The photographs while they wait; once decided, who checked them and when, and when they were deleted. */
+  documents?: { licenceCopyRef?: string; idCopyRef?: string; submittedAt?: string; checkedAt?: string; checkedBy?: string; photosDeletedAt?: string };
   papers: PaperStatus[];
   offRoad: string[];
   onShift: boolean;
@@ -317,7 +318,18 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
           ...(d.licenceRenewal ? { renewal: { ...d.licenceRenewal } } : {}),
           ...(d.licenceRenewalRefusal ? { renewalRefusal: { ...d.licenceRenewalRefusal } } : {}),
           ...(d.cover ? { cover: { ...d.cover } } : {}),
-          ...(d.kyc ? { documents: { licenceCopyRef: d.kyc.licenceCopyRef, idCopyRef: d.kyc.idCopyRef, submittedAt: d.kyc.submittedAt } } : {}),
+          ...(d.kyc
+            ? {
+                documents: {
+                  ...(d.kyc.licenceCopyRef ? { licenceCopyRef: d.kyc.licenceCopyRef } : {}),
+                  ...(d.kyc.idCopyRef ? { idCopyRef: d.kyc.idCopyRef } : {}),
+                  submittedAt: d.kyc.submittedAt,
+                  ...(d.kyc.checkedAt ? { checkedAt: d.kyc.checkedAt } : {}),
+                  ...(d.kyc.checkedBy ? { checkedBy: d.kyc.checkedBy } : {}),
+                  ...(d.kyc.photosDeletedAt ? { photosDeletedAt: d.kyc.photosDeletedAt } : {}),
+                },
+              }
+            : {}),
           papers,
           offRoad: lapsedOf(papers).map(offRoadLine),
           onShift: Boolean(this.fleet.activeForDriver(d.did)),

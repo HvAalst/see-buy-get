@@ -383,6 +383,8 @@ export class DriverService {
       const why = reason?.trim();
       if (!why) throw new GlosError('REASON_REQUIRED', 'A rejection must say why: the driver is shown it');
       driver.kycRejection = { reason: why, at: new Date().toISOString(), ...(by ? { by } : {}) };
+      // The photographs go with the decision: nothing was recorded from them, and they send new ones.
+      this.dropCheckedPapers(driver.kyc?.idCopyRef, driver.kyc?.licenceCopyRef);
       driver.kyc = undefined;
       driver.status = 'DRAFT';
       void this.events
@@ -396,7 +398,21 @@ export class DriverService {
     if (this.isExpired(driver.licence.expiresAt)) throw new GlosError('APPROVAL_BLOCKED', 'Cannot approve: the driving licence has expired');
     this.core.upsert({ did, vaultRef: driver.vaultRef, tier: 2, status: 'active', capabilities: ['pudo-driver'], metadata: { by } });
     this.activate(driver, by ?? 'vetting');
+    // Approved: what was checked stays (the licence's number, classes and expiry are on `driver.licence`) and the two
+    // photographs are deleted now (the owner, 2026-10-30).
+    const at = new Date().toISOString();
+    this.dropCheckedPapers(driver.kyc.idCopyRef, driver.kyc.licenceCopyRef);
+    driver.kyc = { submittedAt: driver.kyc.submittedAt, checkedAt: at, ...(by ? { checkedBy: by } : {}), photosDeletedAt: at };
+    this.drivers.set(did, driver);
     return driver;
+  }
+
+  /**
+   * DELETE A DRIVER'S ID OR LICENCE PHOTOGRAPHS NOW: called the moment staff (or their fleet's office, for a renewed
+   * licence) have decided on them, either way (the owner, 2026-10-30). See MediaService.dropCheckedPaper.
+   */
+  dropCheckedPapers(...refs: Array<string | undefined>): void {
+    for (const ref of refs) this.media?.dropCheckedPaper(ref);
   }
 
   /**
@@ -421,9 +437,10 @@ export class DriverService {
      * Either way the previous card starts its clock (MediaService.retireAccountDoc).
      */
     const pending = driver.licenceRenewal;
-    const previous = driver.licence.copyRef;
-    driver.licence.copyRef = pending?.copyRef;
-    if (previous && previous !== pending?.copyRef) this.media?.retireAccountDoc(previous, new Date(now));
+    // Read, and recorded: neither the card sent nor the one before it is kept (the owner, 2026-10-30); the number and
+    // the date are, with who recorded them.
+    this.dropCheckedPapers(pending?.copyRef, driver.licence.copyRef);
+    driver.licence.copyRef = undefined;
     driver.licence.expiresAt = input.expiresAt;
     driver.licence.recordedAt = new Date(now).toISOString();
     driver.licence.recordedBy = by;
@@ -521,7 +538,7 @@ export class DriverService {
     if (!pending) throw new GlosError('INVALID_STATE', 'Nothing has been sent to refuse');
     const why = reason?.trim();
     if (!why) throw new GlosError('REASON_REQUIRED', 'A refusal must say why: the driver is shown it');
-    this.media?.purgeByOwner(pending.copyRef, did);
+    this.dropCheckedPapers(pending.copyRef);
     driver.licenceRenewal = undefined;
     driver.licenceRenewalRefusal = { reason: why, at: new Date(now).toISOString(), ...(by ? { by } : {}) };
     this.drivers.set(did, driver);
@@ -866,10 +883,13 @@ export class DriverService {
     if (!driver.idCheck || driver.idCheck.seenAt) throw new GlosError('INVALID_STATE', 'There is no photo of their ID waiting to be seen');
     const at = new Date(now).toISOString();
     if (seen) {
-      driver.idCheck = { ...driver.idCheck, seenAt: at, ...(by ? { seenBy: by } : {}) };
+      // Seen: when and by whom is kept; the photograph is not (the owner, 2026-10-30).
+      this.dropCheckedPapers(driver.idCheck.photoRef);
+      driver.idCheck = { sentAt: driver.idCheck.sentAt, seenAt: at, ...(by ? { seenBy: by } : {}), photoDeletedAt: at };
     } else {
       const why = reason?.trim();
       if (!why) throw new GlosError('REASON_REQUIRED', 'Say why it is not their ID: they are shown it, and send another');
+      this.dropCheckedPapers(driver.idCheck.photoRef);
       delete driver.idCheck;
       driver.idCheckRefusal = { reason: why, at, ...(by ? { by } : {}) };
     }
@@ -881,6 +901,8 @@ export class DriverService {
   /** The ask is over — decided, or overtaken by a fleet’s place. A refusal is kept for the driver to read. */
   closeCourierAsk(did: string, refusal?: { reason: string; at: string; by?: string }): FleetDriver {
     const driver = this.require(did);
+    // Decided, or overtaken: the two photographs sent with it are deleted either way (the owner, 2026-10-30).
+    this.dropCheckedPapers(driver.courierAsk?.idCopyRef, driver.courierAsk?.licenceCopyRef);
     delete driver.courierAsk;
     if (refusal) driver.courierAskRefusal = refusal;
     this.drivers.set(did, driver);
@@ -888,10 +910,12 @@ export class DriverService {
   }
 
   /** Staff’s own check, recorded when they approve an ask: one way, as at vetting. */
-  recordCourierCheck(did: string, papers: { idCopyRef: string; licenceCopyRef: string; at: string }): FleetDriver {
+  recordCourierCheck(did: string, papers: { at: string; by?: string }, now: number = Date.now()): FleetDriver {
     const driver = this.require(did);
     driver.criminalRecordClear = true;
-    driver.kyc = { idCopyRef: papers.idCopyRef, licenceCopyRef: papers.licenceCopyRef, submittedAt: papers.at } as DriverKyc;
+    // What was checked, and when; the photographs themselves go when the ask closes (closeCourierAsk).
+    const at = new Date(now).toISOString();
+    driver.kyc = { submittedAt: papers.at, checkedAt: at, ...(papers.by ? { checkedBy: papers.by } : {}), photosDeletedAt: at };
     this.drivers.set(did, driver);
     return driver;
   }

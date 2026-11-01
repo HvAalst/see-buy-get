@@ -499,6 +499,11 @@ function LicenceSection({ row, state, actions }: { row: CourierPaperRow; state: 
               and labelled for what it is — it shows the date at vetting, never a renewal. */}
           {row.documents?.licenceCopyRef ? (
             <DocumentStrip refs={[row.documents.licenceCopyRef]} state={state} actions={actions} titleKey="tower.papers.vetted" emptyKey="tower.papers.licenceNoProof" />
+          ) : row.documents?.photosDeletedAt ? (
+            // Checked, and the photographs deleted at the decision (the owner, 2026-10-30): said, never looked for.
+            <p class="chint">
+              {t('tower.papers.checkedDeleted', { who: row.documents.checkedBy ?? '—', date: formatDate(row.documents.checkedAt ?? row.documents.photosDeletedAt) })}
+            </p>
           ) : null}
           {mode === 'record' ? (
             <RecordForm row={row} state={state} actions={actions} onCancel={() => setMode('view')} />

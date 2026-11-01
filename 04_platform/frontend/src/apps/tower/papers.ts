@@ -30,7 +30,7 @@ export interface CourierPaperRow {
   /** Their own insurance cover (2026-10-28): a policy sent and waiting to be read, and the cover on record. */
   cover?: { sent?: { copyRef: string; expiresAt: string; reference?: string; sentAt: string }; refused?: { reason: string; at: string; by?: string }; policy?: string; expiresAt?: string; copyRef?: string; covers?: string; limit?: number; currency?: string; recordedBy?: string; recordedAt?: string };
   /** The licence and ID the driver submitted AT VETTING — heavy registry only, and showing the old date. */
-  documents?: { licenceCopyRef?: string; idCopyRef?: string; submittedAt?: string };
+  documents?: { licenceCopyRef?: string; idCopyRef?: string; submittedAt?: string; checkedAt?: string; checkedBy?: string; photosDeletedAt?: string };
   papers: PaperView[];
   /** The lapsed papers, in the server's words. Non-empty means no shift can start. */
   offRoad: string[];

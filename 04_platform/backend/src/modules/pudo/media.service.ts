@@ -355,6 +355,21 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /**
+   * A PHOTOGRAPH OF A DRIVER'S ID OR LICENCE, DELETED THE MOMENT STAFF HAVE DECIDED ON IT — approved or refused (the
+   * owner, 2026-10-30: "delete the image after it has been checked and confirmed or a refusal"). What was checked stays
+   * on the driver's record — the licence number, its classes and expiry, who checked it and when; the picture does not.
+   * Whoever uploaded it (the driver, or their fleet's office): it is the driver's paper either way. Only those two kinds,
+   * and never one held as evidence, so this cannot become a way to delete anything else.
+   */
+  dropCheckedPaper(mediaId: string | undefined): void {
+    if (!mediaId) return;
+    const ref = this.refs.get(mediaId);
+    if (!ref || (ref.kind !== 'kyc_id' && ref.kind !== 'kyc_licence')) return;
+    if (ref.retentionClass === 'shipment-proof' || ref.retentionClass === 'dispute-evidence') return;
+    this.purge(ref);
+  }
+
+  /**
    * An account document has been REPLACED — a licence renewed from a newer photograph — so the old one
    * starts its clock instead of waiting for the account to close.
    *

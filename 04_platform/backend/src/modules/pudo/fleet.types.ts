@@ -338,10 +338,19 @@ export class LicenceRenewal {
   sentAt: string;
 }
 
+/**
+ * A DRIVER'S PAPERS: the two photographs while they wait for staff, and once decided, only what was checked. The
+ * photographs are deleted at the decision (the owner, 2026-10-30); `photosDeletedAt` says when, so a screen says "seen
+ * and deleted" rather than looking for a picture that is gone.
+ */
 export class DriverKyc {
-  idCopyRef: string;
-  licenceCopyRef: string;
+  idCopyRef?: string;
+  licenceCopyRef?: string;
   submittedAt: string;
+  /** Who of staff looked, and when: the papers were approved. */
+  checkedAt?: string;
+  checkedBy?: string;
+  photosDeletedAt?: string;
 }
 
 /**
@@ -445,7 +454,7 @@ export class FleetDriver {
    * rides at once, under the custody cap's starting number until a photo of their ID has been seen by network staff;
    * then the cap grows as anybody's does. The photo they sent, and when it was seen and by whom.
    */
-  idCheck?: { photoRef: string; sentAt: string; seenAt?: string; seenBy?: string };
+  idCheck?: { photoRef?: string; sentAt: string; seenAt?: string; seenBy?: string; photoDeletedAt?: string };
   /** Why the last photo of their ID was not accepted, in staff's words. Shown to them; cleared when they send another. */
   idCheckRefusal?: { reason: string; at: string; by?: string };
   /**

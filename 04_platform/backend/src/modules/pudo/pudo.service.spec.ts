@@ -8806,6 +8806,51 @@ describe('PUDO Light', () => {
     fleet.uncouple(lapsed.did);
   });
 
+  it('deletes a driver’s ID and licence photographs the moment staff decide — refused or approved — and keeps what was checked', () => {
+    // The owner, 2026-10-30: "upload a picture, check by one staff member and delete the image after it has been checked
+    // and confirmed or a refusal message and notification to the driver".
+    const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const v = drivers.register({ displayName: 'Vanna', fullName: 'Vanna Papers', nationalId: 'DRV-PAPERS-1', mobile: '+254700919191', licenceClasses: ['van'], licenceNumber: 'DL-PAPERS-1', licenceExpiresAt: '2031-06-30', criminalRecordClear: true });
+    const pair = () => ({ idCopyRef: media.upload({ ownerDid: v.did, kind: 'kyc_id', dataUrl: PNG }).mediaId, licenceCopyRef: media.upload({ ownerDid: v.did, kind: 'kyc_licence', dataUrl: PNG }).mediaId });
+
+    // Refused: the reason is theirs to read, and both photographs are gone.
+    const first = pair();
+    drivers.submitKyc(v.did, first);
+    drivers.decideKyc(v.did, false, 'Vetting', 'The licence is cut off at the corner.');
+    expect([media.get(first.idCopyRef), media.get(first.licenceCopyRef)]).toEqual([undefined, undefined]);
+    expect(drivers.get(v.did)).toMatchObject({ status: 'DRAFT', kycRejection: { reason: 'The licence is cut off at the corner.' } });
+
+    // Sent again and approved: the number, the classes and the date stay; who checked and when; the photographs do not.
+    const second = pair();
+    drivers.submitKyc(v.did, second);
+    expect(media.get(second.licenceCopyRef)).toBeDefined(); // waiting: staff can open it
+    drivers.decideKyc(v.did, true, 'Vetting');
+    expect([media.get(second.idCopyRef), media.get(second.licenceCopyRef)]).toEqual([undefined, undefined]);
+    const after = drivers.get(v.did);
+    expect(after.status).toBe('ACTIVE');
+    expect(after.kyc).toMatchObject({ checkedBy: 'Vetting', photosDeletedAt: expect.any(String), submittedAt: expect.any(String) });
+    expect([after.kyc?.idCopyRef, after.kyc?.licenceCopyRef]).toEqual([undefined, undefined]);
+    expect(after.licence).toMatchObject({ number: 'DL-PAPERS-1', classes: ['van'], expiresAt: '2031-06-30' });
+
+    // A bicycle rider's ID photo: refused and gone; sent again, seen, and gone — when and by whom is kept.
+    const b = drivers.register({ displayName: 'Baiski', fullName: 'Baiski Rider', nationalId: 'DRV-PAPERS-2', mobile: '+254700919192', licenceClasses: ['bike'] });
+    const no = media.upload({ ownerDid: b.did, kind: 'kyc_id', dataUrl: PNG }).mediaId;
+    drivers.sendIdPhoto(b.did, no);
+    drivers.decideIdPhoto(b.did, false, 'Vetting', 'This is not an ID card.');
+    expect(media.get(no)).toBeUndefined();
+    const yes = media.upload({ ownerDid: b.did, kind: 'kyc_id', dataUrl: PNG }).mediaId;
+    drivers.sendIdPhoto(b.did, yes);
+    drivers.decideIdPhoto(b.did, true, 'Vetting');
+    expect(media.get(yes)).toBeUndefined();
+    expect(drivers.get(b.did).idCheck).toMatchObject({ seenBy: 'Vetting', seenAt: expect.any(String), photoDeletedAt: expect.any(String) });
+    expect(drivers.get(b.did).idCheck?.photoRef).toBeUndefined();
+
+    // Never anything else: a shop's photograph is not a driver's paper, and is left alone.
+    const shopPhoto = media.upload({ ownerDid: v.did, kind: 'shop', dataUrl: PNG }).mediaId;
+    drivers.dropCheckedPapers(shopPhoto);
+    expect(media.get(shopPhoto)).toBeDefined();
+  });
+
   it('FP4: a courier without a fleet sends the renewed card; staff record the date FROM it, or refuse it with a reason', () => {
     const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
     const c = drivers.register({ displayName: 'Card C.', fullName: 'Card Courier', nationalId: 'ID-CARD-1', mobile: '+254700111222', licenceClasses: ['motorcycle'], licenceNumber: 'L-CARD-1', licenceExpiresAt: '2026-02-01', criminalRecordClear: true });
@@ -8844,23 +8889,22 @@ describe('PUDO Light', () => {
     expect(rowOf().renewalRefusal).toMatchObject({ reason: 'The date is not readable in the photo.', by: 'Amina Otieno' });
     expect(() => drivers.refuseLicenceRenewal(c.did, 'again')).toThrow(/Nothing has been sent/);
 
-    // Sent again and recorded: the DATE is the one staff typed, the photograph becomes the licence's own
-    // copy with who read it, and the courier can drive.
+    // Sent again and recorded: the DATE is the one staff typed, with who read it, and the courier can drive. The
+    // photograph is deleted then (the owner, 2026-10-30): the number and the date are what is kept.
     const third = media.upload({ ownerDid: c.did, kind: 'kyc_licence', dataUrl: PNG });
     drivers.sendLicenceRenewal(c.did, { copyRef: third.mediaId, expiresAt: '2030-05-31' });
     expect(rowOf().renewalRefusal).toBeUndefined(); // sending again clears the old refusal
     drivers.renewLicence(c.did, { expiresAt: '2030-05-30' }, Date.now(), 'Amina Otieno');
     expect(drivers.canOperate(c.did)).toBe(true);
-    expect(rowOf().licence).toMatchObject({ expiresAt: '2030-05-30', copyRef: third.mediaId, recordedBy: 'Amina Otieno' });
+    expect(rowOf().licence).toMatchObject({ expiresAt: '2030-05-30', recordedBy: 'Amina Otieno' });
+    expect(rowOf().licence.copyRef).toBeUndefined();
     expect(rowOf().renewal).toBeUndefined();
-    expect(media.get(third.mediaId)?.expiresAt).toBeUndefined(); // the current card is kept, not timed
+    expect(media.get(third.mediaId)).toBeUndefined(); // deleted at the decision
 
-    // A later date recorded with NO card sent never leaves the old card beside the new date; the old
-    // photograph starts its clock instead of waiting for the account to close.
+    // A later date recorded with NO card sent: nothing beside the new date, and nothing to delete.
     drivers.renewLicence(c.did, { expiresAt: '2031-01-31' }, Date.now(), 'Brian K.');
     expect(rowOf().licence.copyRef).toBeUndefined();
     expect(rowOf().licence.recordedBy).toBe('Brian K.');
-    expect(media.get(third.mediaId)?.expiresAt).toBeDefined();
 
     // Told each time they were waiting on an answer — and not when nobody was.
     expect(heard).toEqual([
@@ -8940,16 +8984,18 @@ describe('PUDO Light', () => {
     expect(() => controller.driverLicenceCard(amos.did, card.mediaId, office)).toThrow(/No such photograph/);
     expect(controller.getFleetDriver(amos.did, asAmos).licenceRenewalRefusal).toMatchObject({ reason: 'The corner with the date is cut off.' });
 
-    // SENT AGAIN AND RECORDED by the office: the date the OFFICE typed, the photograph it read it from
-    // kept as the licence's own copy — and still the office's to open, a month on.
+    // SENT AGAIN AND RECORDED by the office: the date the OFFICE typed, with who typed it; the photograph it read it
+    // from is deleted then (the owner, 2026-10-30), so there is nothing left to open.
     const second = media.upload({ ownerDid: amos.did, kind: 'kyc_licence', dataUrl: PNG });
     controller.sendLicenceRenewal(amos.did, { copyRef: second.mediaId, expiresAt: '2031-03-31' } as never, asAmos);
     expect(() => controller.renewDriverLicence(amos.did, { expiresAt: '2031-03-30' } as never, otherOffice)).toThrow(/not in your fleet/);
     const recorded = controller.renewDriverLicence(amos.did, { expiresAt: '2031-03-30' } as never, office);
-    expect(recorded.licence).toMatchObject({ expiresAt: '2031-03-30', copyRef: second.mediaId, recordedBy: mgr.did });
+    expect(recorded.licence).toMatchObject({ expiresAt: '2031-03-30', recordedBy: mgr.did });
+    expect(recorded.licence.copyRef).toBeUndefined();
     expect(recorded.licenceRenewal).toBeUndefined();
     expect(recorded.licenceRenewalRefusal).toBeUndefined();
-    expect(controller.driverLicenceCard(amos.did, second.mediaId, office)).toBeInstanceOf(StreamableFile);
+    expect(media.get(second.mediaId)).toBeUndefined();
+    expect(() => controller.driverLicenceCard(amos.did, second.mediaId, office)).toThrow(/No such photograph/);
     // The driver was waiting on an answer both times, and heard both.
     expect(checked).toEqual([
       expect.objectContaining({ did: amos.did, accepted: false, reason: 'The corner with the date is cut off.' }),
@@ -8960,7 +9006,7 @@ describe('PUDO Light', () => {
     // fleet's to read, and the one they left opens nothing of theirs.
     drivers.get(amos.did).managerDid = other.did;
     expect(() => controller.driverLicenceCard(amos.did, second.mediaId, office)).toThrow(/not in your fleet/);
-    expect(controller.driverLicenceCard(amos.did, second.mediaId, otherOffice)).toBeInstanceOf(StreamableFile);
+    expect(() => controller.driverLicenceCard(amos.did, second.mediaId, otherOffice)).toThrow(/No such photograph/);
   });
 
   it('FP4: only the driver sends their own card; staff refuse a courier’s, and no fleet’s office does', () => {

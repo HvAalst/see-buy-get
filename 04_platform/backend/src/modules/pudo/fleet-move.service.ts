@@ -310,7 +310,7 @@ export class FleetMoveService {
       throw new GlosError('FORBIDDEN', `The network does not operate in ${ask.country} any more, so a courier cannot be registered there`);
     }
     const vehicle = this.vehicles.register({ plate: ask.plate, vehicleClass: ask.vehicleClass, ...(ask.truckSubtype ? { truckSubtype: ask.truckSubtype } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country: ask.country } as never);
-    this.drivers.recordCourierCheck(driverDid, { idCopyRef: ask.idCopyRef, licenceCopyRef: ask.licenceCopyRef, at: ask.askedAt });
+    this.drivers.recordCourierCheck(driverDid, { at: ask.askedAt, ...(input.by ? { by: input.by } : {}) }, now);
     this.drivers.rideAlone(driverDid, ask.country);
     this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);
     const rides = this.drivers.closeCourierAsk(driverDid);

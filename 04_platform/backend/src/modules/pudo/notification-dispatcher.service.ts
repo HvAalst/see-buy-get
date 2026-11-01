@@ -497,6 +497,19 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.AgentKycRejected, (e) => this.onSignupStalled(e.payload.did));
     // …and the same for a driver, who was left in exactly the same silence.
     this.events.subscribe<{ did: string; reason: string }>(GlosEvent.Pudo.DriverKycRejected, (e) => this.onDriverRefused(e.payload));
+    // …and approved: they are told they can drive, and that the photographs they sent are gone (the owner, 2026-10-30).
+    // Not a bicycle rider switched on at sign-up: nobody looked at anything, so there is nothing to tell.
+    this.events.subscribe<{ did: string; by?: string }>(GlosEvent.Pudo.DriverActivated, (e) => {
+      const p = e.payload;
+      if (p.by === 'light registry') return;
+      void this.tell(p.did, {
+        kind: 'papers_checked',
+        title: 'Your papers are checked: you can drive',
+        body: 'SeeBuyGet has checked your ID and your driving licence. The photos you sent have been deleted; your licence number and its date are kept.',
+        tag: `driver-papers:${p.did}`,
+        data: { approved: true },
+      });
+    });
     // …and a hub, whose papers staff approved or sent back: the hub is the one waiting, so the hub is told.
     this.events.subscribe<{ did: string; mdpId: string; name: string; approved: boolean; reason?: string }>(GlosEvent.Pudo.HubPapersDecided, (e) => {
       const p = e.payload;
@@ -532,7 +545,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       void this.tell(p.did, {
         kind: 'papers_checked',
         title: p.seen ? 'SeeBuyGet has seen your ID' : 'Your ID photo was not accepted',
-        body: p.seen ? 'From now, how many parcels you may carry at once grows with each one you hand on.' : `${p.reason ?? 'Something was wrong with it.'} Send another from the Driver app’s home screen.`,
+        body: p.seen
+          ? 'From now, how many parcels you may carry at once grows with each one you hand on. The photo you sent has been deleted.'
+          : `${p.reason ?? 'Something was wrong with it.'} The photo has been deleted. Send another from the Driver app’s home screen.`,
         tag: `id-photo:${p.did}`,
         data: { seen: p.seen },
       });
@@ -1781,7 +1796,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       await this.notifications.notify(payload.did, {
         kind: 'signup_rejected',
         title: 'Your papers need another look',
-        body: `${payload.reason} Send your ID and licence again when you have them.`,
+        body: `${payload.reason} The photos you sent have been deleted. Send your ID and licence again when you have them.`,
         link: '/',
         tag: `driver-papers:${payload.did}:${Date.now()}`,
         data: { did: payload.did },
