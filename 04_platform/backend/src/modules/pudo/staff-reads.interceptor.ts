@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { StaffReadService } from './staff-reads.service';
+import { RECORD_COUNTRIES } from '../../foundation/auth/staff-country.interceptor';
 
 /**
  * WHAT STAFF OPENED (staff-reads.types.ts): every record a member of staff reads by its name or number — a GET whose
@@ -20,6 +21,8 @@ export class StaffReadInterceptor implements NestInterceptor {
     // Staff only: StaffReadService.note says who is staff, in one place.
     if (req.method !== 'GET' || !path || !path.includes(':')) return next.handle();
     const record = Object.values((req.params ?? {}) as Record<string, string>).join(' · ');
-    return next.handle().pipe(tap(() => this.reads.note(req.auth, `GET ${path}`, record)));
+    // The countries of what was opened, where the country check could tell them (staff separated by country, 2026-11-01).
+    const countries = (req as unknown as Record<string, unknown>)[RECORD_COUNTRIES];
+    return next.handle().pipe(tap(() => this.reads.note(req.auth, `GET ${path}`, record, Date.now(), Array.isArray(countries) ? (countries as string[]) : undefined)));
   }
 }

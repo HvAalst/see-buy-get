@@ -122,6 +122,12 @@ const VGM_WARN_H = 12;
 @Injectable()
 export class ExportService {
   private readonly exports = new PersistentMap<string, ExportConsignment>('export-consignments');
+
+  /** 2026-11-01 — the countries this record touches, for staff separated by country; null when there is no such record. */
+  countriesOf(exportId: string): string[] | null {
+    const found = this.exports.get(exportId);
+    return found ? [found.originCountry, found.destCountry] : null;
+  }
   /** Each signed letter of instruction, exactly as it was signed: `exportId:version` → its page and the fingerprint of its bytes. */
   private readonly sliCopies = new PersistentMap<string, { html: string; fingerprint: string }>('export-sli-copies');
   /** Each signed packing list, exactly as signed, with the fingerprint of its page and of its lines. */

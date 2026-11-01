@@ -37,6 +37,12 @@ export class PresenceService implements OnApplicationBootstrap {
   private readonly presences = new PersistentMap<string, Presence>('presence');
   /** CA2 — changes that raise a country, waiting for a second person. Kept after they are decided. */
   private readonly proposals = new PersistentMap<string, PresenceProposal>('presence-proposals');
+
+  /** 2026-11-01 — the countries this record touches, for staff separated by country; null when there is no such record. */
+  proposalCountries(proposalId: string): string[] | null {
+    const proposal = this.proposals.get(proposalId);
+    return proposal ? [proposal.jurisdiction] : null;
+  }
   /** Which ACCOUNT proposed each. Beside the proposal, not on it: a proposal is read whole by every member of staff. */
   private readonly proposerKeys = new PersistentMap<string, string>('presence-proposal-keys');
 

@@ -93,6 +93,12 @@ import { CARGO_NATURES, DANGEROUS_GOODS_NATURES, type CargoNature } from './carg
 @Injectable()
 export class ImportService {
   private readonly imports = new PersistentMap<string, ImportConsignment>('import-consignments');
+
+  /** 2026-11-01 — the countries this record touches, for staff separated by country; null when there is no such record. */
+  countriesOf(importId: string): string[] | null {
+    const found = this.imports.get(importId);
+    return found ? [found.originCountry, found.destCountry] : null;
+  }
   /** Every grant ever made, live and revoked. Revoked ones are KEPT — see `DocumentGrant`. */
   private readonly grants = new PersistentMap<string, DocumentGrant>('document-grants');
   /** What agents have actually been asked for, per border. First-hand by construction. */

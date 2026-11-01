@@ -67,6 +67,12 @@ export interface InterestByCountry {
 export class InterestService {
   private readonly notes = new PersistentMap<string, InterestNote>('country-interest');
 
+  /** 2026-11-01 — the countries this record touches, for staff separated by country; null when there is no such record. */
+  countriesOf(noteId: string): string[] | null {
+    const note = this.notes.get(noteId);
+    return note ? [note.country] : null;
+  }
+
   /**
    * Record that somebody wants the network where they are.
    *

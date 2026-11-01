@@ -134,6 +134,12 @@ export class IdDisputeService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(IdDisputeService.name);
   private readonly disputes = new PersistentMap<string, StoredDispute>('id-disputes');
 
+  /** 2026-11-01 — the countries this record touches, for staff separated by country; null when there is no such record. */
+  countriesOf(disputeId: string): string[] | null {
+    const dispute = this.disputes.get(disputeId);
+    return dispute ? (dispute.country ? [dispute.country] : []) : null;
+  }
+
   constructor(
     private readonly persons: PersonService,
     private readonly recovery: AccountRecoveryService,

@@ -74,6 +74,12 @@ const OPEN: MoveState[] = ['asked', 'checked'];
 export class AccountMoveService {
   private readonly moves = new PersistentMap<string, StoredMove>('account-move-requests');
 
+  /** 2026-11-01 — the countries this record touches, for staff separated by country; null when there is no such record. */
+  countriesOf(moveId: string): string[] | null {
+    const move = this.moves.get(moveId);
+    return move ? (move.country ? [move.country] : []) : null;
+  }
+
   constructor(
     private readonly persons: PersonService,
     private readonly recovery: AccountRecoveryService,

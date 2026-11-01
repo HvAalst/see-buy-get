@@ -13,7 +13,7 @@ export class StaffReadService {
   private readonly recent = new Map<string, string>();
 
   /** Note a record a member of staff opened. Anybody else's reading is not noted here. */
-  note(actor: IntrospectionResult | undefined, route: string, record: string, now: number = Date.now()): void {
+  note(actor: IntrospectionResult | undefined, route: string, record: string, now: number = Date.now(), countries?: string[]): void {
     if (actor?.role !== 'operator') return;
     const by = readerOf(actor);
     const key = `${by.staffId ?? by.name}|${route}|${record}`;
@@ -24,17 +24,18 @@ export class StaffReadService {
       return;
     }
     const at = new Date(now).toISOString();
-    const read: StaffRead = { readId: `srd_${randomBytes(8).toString('hex')}`, at, lastAt: at, times: 1, by, route, record };
+    const read: StaffRead = { readId: `srd_${randomBytes(8).toString('hex')}`, at, lastAt: at, times: 1, by, route, record, ...(countries?.length ? { countries } : {}) };
     this.reads.set(read.readId, read);
     this.recent.set(key, read.readId);
   }
 
   /** The log, newest first: of one member of staff (by name), of one record, or all of it. */
-  list(filter: { by?: string; record?: string } = {}, limit: number = STAFF_READS_LIMIT): StaffReadList {
+  list(filter: { by?: string; record?: string; country?: string } = {}, limit: number = STAFF_READS_LIMIT): StaffReadList {
     const by = filter.by?.trim().toLowerCase();
     const record = filter.record?.trim().toLowerCase();
+    const country = filter.country?.trim().toUpperCase();
     const all = [...this.reads.values()]
-      .filter((r) => (!by || r.by.name.toLowerCase().includes(by)) && (!record || r.record.toLowerCase().includes(record)))
+      .filter((r) => (!by || r.by.name.toLowerCase().includes(by)) && (!record || r.record.toLowerCase().includes(record)) && (!country || Boolean(r.countries?.includes(country))))
       .sort((a, b) => (a.lastAt < b.lastAt ? 1 : a.lastAt > b.lastAt ? -1 : 0));
     return {
       total: all.length,
@@ -48,6 +49,7 @@ export class StaffReadService {
         ...(r.by.staffId ? { staffId: r.by.staffId } : {}),
         route: r.route,
         record: r.record,
+        ...(r.countries?.length ? { countries: r.countries } : {}),
       })),
     };
   }

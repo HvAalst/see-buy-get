@@ -15,8 +15,9 @@ export class StaffReadController {
   @Get('staff-reads')
   @ApiQuery({ name: 'by', required: false, description: 'A member of staff, by name (part of it will do).' })
   @ApiQuery({ name: 'record', required: false, description: 'A record, by its number, code or id (part of it will do).' })
-  list(@Query('by') by: string | undefined, @Query('record') record: string | undefined, @Actor() actor: IntrospectionResult): StaffReadList {
-    const answer = this.reads.list({ by, record });
+  @ApiQuery({ name: 'country', required: false, description: 'Only what was opened in this country (its code).' })
+  list(@Query('by') by: string | undefined, @Query('record') record: string | undefined, @Actor() actor: IntrospectionResult, @Query('country') country?: string): StaffReadList {
+    const answer = this.reads.list({ by, record, country });
     this.reads.note(actor, 'GET /v1/sbg/staff-reads', [by ? `by ${by.trim()}` : '', record ? `record ${record.trim()}` : ''].filter(Boolean).join(' · ') || 'the whole log');
     return answer;
   }

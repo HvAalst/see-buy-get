@@ -156,6 +156,11 @@ export class FundingService {
     return this.updateHeld(record.id, { answer: { at: new Date(now).toISOString(), paid: answer.paid, words } });
   }
 
+  /** 2026-11-01 — the money of a payment with no name on it, or of a held one: whose countries' staff chase it. */
+  unnamedCurrency(id: string): string | null {
+    return this.unmatched.get(id)?.currency ?? this.held.get(id)?.payment.currency ?? null;
+  }
+
   /** Held payments a person may decide on, newest first — and, asked for, the decided ones too. */
   heldPayments(includeDecided = false): HeldPayment[] {
     return [...this.held.values()].filter((h) => includeDecided || !h.outcome).sort((a, b) => b.at.localeCompare(a.at));

@@ -35227,6 +35227,15 @@
         "operationId": "StaffRead.list",
         "parameters": [
           {
+            "name": "country",
+            "required": false,
+            "in": "query",
+            "description": "Only what was opened in this country (its code).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "record",
             "required": false,
             "in": "query",
@@ -79310,6 +79319,13 @@
           },
           "staffId": {
             "type": "string"
+          },
+          "countries": {
+            "description": "2026-11-01 — the countries of what was opened, where they could be told.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "readId": {
             "type": "string"

@@ -103,6 +103,23 @@ export class OperatorAccountService {
   private readonly proposals = new PersistentMap<string, StaffProposal>('operator-account-proposals');
 
   /**
+   * 2026-11-01 — the countries a staff account works in (`*` for every country), and those a request touches — the
+   * countries asked for and, for a change, the ones held now; null when there is no such account or request.
+   */
+  accountCountries(operatorId: string): string[] | null {
+    const account = [...this.accounts.values()].find((a) => a.operatorId === operatorId);
+    return account ? heldCountries(account) : null;
+  }
+
+  proposalCountries(proposalId: string): string[] | null {
+    const proposal = this.proposals.get(proposalId);
+    if (!proposal) return null;
+    const asked = proposal.countries ? countriesOf(proposal.countries) : [EVERY_COUNTRY];
+    const now = proposal.operatorId ? (this.accountCountries(proposal.operatorId) ?? []) : [];
+    return [...new Set([...asked, ...now])];
+  }
+
+  /**
    * A wrong password: counted, and answered — the fifth in a quarter of an hour locks the sign-in and tells its
    * holder. An address nobody holds, and one that was taken away, are counted and timed like any other.
    */

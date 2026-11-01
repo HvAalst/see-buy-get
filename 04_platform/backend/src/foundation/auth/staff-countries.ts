@@ -27,6 +27,8 @@ export function holdsEvery(held: readonly string[] | undefined): boolean {
 /** May somebody holding these countries see a record that touches those? Any one in common is enough. */
 export function reaches(held: readonly string[] | undefined, touched: readonly string[]): boolean {
   if (holdsEvery(held)) return true;
+  // A record that touches every country (a colleague who works in every country) is in each of them.
+  if (touched.includes(EVERY_COUNTRY)) return true;
   return touched.some((c) => held!.includes(c.toUpperCase()));
 }
 

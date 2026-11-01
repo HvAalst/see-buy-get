@@ -31,6 +31,8 @@ export interface StaffRead {
   route: string;
   /** The record it names: the values in the address, in order. */
   record: string;
+  /** 2026-11-01 — the countries of what was opened, where they could be told (staff separated by country). */
+  countries?: string[];
 }
 
 export class StaffReadView {
@@ -43,6 +45,8 @@ export class StaffReadView {
   @ApiPropertyOptional() staffId?: string;
   route!: string;
   record!: string;
+  /** 2026-11-01 — the countries of what was opened, where they could be told. */
+  @ApiPropertyOptional({ type: [String] }) countries?: string[];
 }
 
 export class StaffReadList {
