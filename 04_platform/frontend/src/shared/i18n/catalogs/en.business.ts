@@ -9,7 +9,13 @@ export const enBusiness = {
 
   /* ---- the door ---- */
   'business.signIn.loginTitle': 'Sign in',
-  'business.signIn.loginLede': 'With your phone number and your 5-digit PIN — the same PIN you use in any SeeBuyGet app.',
+  'business.signIn.steps.title': 'Setting up your sign-in',
+  'business.signIn.steps.phone': 'Your phone number',
+  'business.signIn.steps.code': 'The code we text you',
+  'business.signIn.steps.pin': 'Your PIN',
+  'business.signIn.steps.email': 'Your email address (the first time)',
+  'business.signIn.ready': 'Have ready: this phone, and an email address you can open now — the first time, we send a code to it to confirm it.',
+  'business.signIn.loginLede': 'With your phone number and your 5-digit PIN — the same PIN you use in every SeeBuyGet app you open with your phone number.',
   'business.signIn.loginCta': 'Sign in',
   'business.signIn.phoneTitle': 'Your phone number',
   'business.signIn.phoneLede': 'New here, on a new device, or forgot your PIN? We send a code to your phone to prove it is yours.',

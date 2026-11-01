@@ -341,6 +341,39 @@ export function stepsFor(kind: JoinKind, papers = false): JoinStep[] {
   return ['phone', 'code', 'about', 'where', 'login', 'done'];
 }
 
+/**
+ * EACH STEP BY ITS NAME, for the list that says where somebody is and what comes next (the owner, 2026-11-01: "now it
+ * shows a couple of dots but you don't read what is gonna come next"). Named for the role: a driver's "about" is about
+ * them, a hub's about the hub.
+ */
+export function stepName(role: RoleSpec, step: JoinStep, t: Translate): string {
+  const kind = role.kind;
+  switch (step) {
+    case 'phone':
+      return t('home.join.steps.phone');
+    case 'code':
+      return t('home.join.steps.code');
+    case 'pin':
+      return t('home.join.steps.pin');
+    case 'about':
+      return kind === 'driver' ? t('home.join.steps.aboutYou') : kind === 'fleet' ? t('home.join.steps.aboutFleet') : t('home.join.steps.aboutPlace', { place: roleMeta(role, t).appNoun });
+    case 'where':
+      return kind === 'driver' ? t('home.join.steps.whereStart') : kind === 'fleet' ? t('home.join.steps.whereDepot') : t('home.join.steps.wherePlace');
+    case 'papers':
+      return kind === 'driver' ? t('home.join.steps.driverPapers') : t('home.join.steps.fleetPapers');
+    case 'login':
+      return t('home.join.steps.login');
+    default:
+      return t('home.join.steps.done');
+  }
+}
+
+/** WHAT TO HAVE READY, said on the first step: the sign-ups are not alike, and each says what it will ask (2026-11-01). */
+export function readyLine(role: RoleSpec, t: Translate): string {
+  const key: Record<RoleSpec['id'], MessageKey> = { pudo: 'home.join.ready.pudo', mdp: 'home.join.ready.mdp', vendor: 'home.join.ready.vendor', driver: 'home.join.ready.driver', fleet: 'home.join.ready.fleet' };
+  return t(key[role.id]);
+}
+
 export function nextStep(kind: JoinKind, step: JoinStep, papers = false): JoinStep {
   const steps = stepsFor(kind, papers);
   return steps[Math.min(steps.indexOf(step) + 1, steps.length - 1)];
@@ -375,7 +408,7 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       if (role.kind === 'driver') return f.driverPapers.idCopyRef && f.driverPapers.licenceCopyRef ? null : t('home.block.driverPapers');
       return FLEET_PAPERS.every(([key]) => f.papers[key]) ? null : t('home.block.papers');
     case 'about':
-      // A store never reaches the 'where' step, so its country is asked for here instead.
+      // A store never reaches the 'where' step; its country was asked on the first step, and is checked again here.
       if (role.kind === 'vendor') return !f.displayName.trim() ? t('home.block.nameStore') : !f.country.trim() ? t('home.block.country') : null;
       if (role.kind === 'fleet') {
         if (!f.displayName.trim()) return t('home.block.nameFleet');
@@ -422,7 +455,8 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       // Every country is offered, so the one we are not in has to be refused HERE — where the answer is
       // on screen beside it — rather than by the server at the end of a sign-up.
       if (notJoinable?.includes(f.country)) return t('home.block.countryNotActive');
-      if (!f.location) return t('home.block.location');
+      // A driver's start is an AREA: no pin of theirs is kept anywhere, so none is demanded (2026-11-01 audit).
+      if (!f.location && role.kind !== 'driver') return t('home.block.location');
       // A fleet's depot is a pin and an address; the network's delivery areas are a shop's and a courier's question.
       if (role.kind === 'fleet') return null;
       if (!f.zone.trim()) return t('home.block.zone');
@@ -470,7 +504,7 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
           zone: f.zone.trim(),
           landmark: f.landmark.trim() || 'Pin dropped on the map',
           location: f.location,
-          pricePerParcel: 1.5,
+          // No fee from here: the shop starts at its country's company's figure and sets its own (2026-11-01 audit).
           shelf: { rows: 4, cols: 5 },
           openingHours: everyDay(f.openFrom, f.openTo),
           requirements: {
@@ -529,7 +563,9 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
         zones: [f.zone.trim()],
         country: f.country.trim().toUpperCase(), // a hub may serve zones across a border; it stands in one country
         location: f.location,
-        pricePerParcel: 0.4,
+        // The nearest landmark it was asked for — kept as its address (it was asked and dropped, 2026-11-01 audit). No fee
+        // from here: a hub starts at its country's company's sort fee and sets its own from the Hub app.
+        ...(f.landmark.trim() ? { address: f.landmark.trim() } : {}),
       },
     },
   };

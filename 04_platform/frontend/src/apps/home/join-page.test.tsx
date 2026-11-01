@@ -8,6 +8,8 @@ import { JoinScreen } from './screens/JoinScreen';
  * chosen, can they claim it already?"). Nobody claims one: it is made from the name, once staff have approved them.
  * Shown to a shop, a hub and a fleet, who are given a page; never to a store, which is not, nor to a driver.
  */
+/** The step-list item of a kind ('done', 'now', 'next') that names this step, whatever order its attributes are in. */
+const item = (html: string, where: string, name: string) => (html.match(new RegExp(`<li[^>]*steps__item--${where}[^>]*>(?:(?!</li>).)*${name}(?:(?!</li>).)*</li>`)) ?? [''])[0];
 const role = (id: string) => ROLES.find((r) => r.id === id)!;
 const render = (id: string, form: Record<string, unknown>) => {
   const state = { role: role(id), step: 'about', form: { ...EMPTY_JOIN, country: 'NL', ...form }, busy: null, countries: [], countriesState: 'idle', issuedCode: null, points: [] } as never;
@@ -40,8 +42,9 @@ describe('signing up: the page the name will give', () => {
     expect(html).toContain('id="driver-id');
     expect(html).toContain('id="driver-licence');
     expect(html).toContain('Sign up and send them');
-    // Six steps before the end: the papers step counts.
-    expect((html.match(/<span class="dots__dot/g) ?? []).length).toBe(6);
+    // Six steps before the end, each by name: the papers step counts, and is the one now.
+    expect((html.match(/<li class="steps__item/g) ?? []).length).toBe(6);
+    expect(item(html, 'now', 'Your ID and licence')).toContain('aria-current="step"');
   });
 
   it('shows nothing while the name gives nothing, and nothing to a store or a driver', () => {

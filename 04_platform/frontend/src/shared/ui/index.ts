@@ -10,6 +10,7 @@ export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { Card, type CardProps } from './Card';
 export { Pill, type PillProps, type PillTone } from './Pill';
 export { Checklist, type ChecklistProps } from './Checklist';
+export { StepList, type StepListProps } from './StepList';
 export { CheckGate, type CheckGateItem, type CheckGateProps } from './CheckGate';
 export { PhotoField, type PhotoFieldProps } from './PhotoField';
 export { GlanceNumber, type GlanceNumberProps } from './GlanceNumber';

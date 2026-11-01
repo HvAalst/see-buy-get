@@ -2,7 +2,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { AgreementBlock } from '../../../shared/documents/Agreement';
 import { countryOfNumber } from '../../../shared/phone/dial';
-import { BrandMark, CodeBoxes, PhoneField } from '../../../shared/ui';
+import { BrandMark, CodeBoxes, PhoneField, StepList } from '../../../shared/ui';
 import { AllAppsLink, frontDoorLink } from '../../../shared/ui/AllAppsLink';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { EmailStep } from '../../../shared/account/EmailStep';
@@ -31,6 +31,19 @@ const LEDE: Record<Exclude<SignInStep, 'code'>, MessageKey> = {
   pin: 'business.signIn.pinLede',
   email: 'business.signIn.emailLede',
 };
+/**
+ * SETTING UP A SIGN-IN, STEP BY STEP (the owner, 2026-11-01: "give phone number, confirm sim, set device pin, give email,
+ * confirm email. An indicator of the steps and how far you are … can be more clear"). The email is asked the first time
+ * only, and its name says so; signing in with a PIN already chosen is one screen and has no list.
+ */
+const SETUP: Array<Exclude<SignInStep, 'login'>> = ['phone', 'code', 'pin', 'email'];
+const SETUP_NAME: Record<Exclude<SignInStep, 'login'>, MessageKey> = {
+  phone: 'business.signIn.steps.phone',
+  code: 'business.signIn.steps.code',
+  pin: 'business.signIn.steps.pin',
+  email: 'business.signIn.steps.email',
+};
+
 const CTA: Record<SignInStep, MessageKey> = {
   login: 'business.signIn.loginCta',
   phone: 'business.signIn.phoneCta',
@@ -90,8 +103,11 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
         </div>
 
         <form onSubmit={submit}>
+          {step !== 'login' ? <StepList title={t('business.signIn.steps.title')} steps={SETUP.map((s) => t(SETUP_NAME[s]))} at={SETUP.indexOf(step)} /> : null}
           <h1 class="cons__title">{t(step === 'email' && state.emailReset ? 'account.safety.resetTitle' : TITLE[step])}</h1>
           <p class="cons__lede">{step === 'code' ? t('business.signIn.codeLede', { phone: state.phone }) : t(step === 'email' && state.emailReset ? 'account.safety.resetLede' : LEDE[step])}</p>
+          {/* What to have ready, before the first code is sent (2026-11-01). */}
+          {step === 'phone' ? <p class="chint">{t('business.signIn.ready')}</p> : null}
 
           {step === 'login' || step === 'phone' ? (
             state.phoneKnown && step === 'login' ? (

@@ -356,6 +356,28 @@ export const enHome = {
 
   // Join wizard — shared.
   'home.join.step': 'Step {at} of {total}',
+  // The step list (2026-11-01): every step by name, so what comes next can be read.
+  'home.join.signingUpAs': 'Signing up as {role}',
+  'home.join.steps.phone': 'Your phone number',
+  'home.join.steps.code': 'The code we text you',
+  'home.join.steps.pin': 'Your PIN',
+  'home.join.steps.aboutYou': 'About you',
+  'home.join.steps.aboutPlace': 'About your {place}',
+  'home.join.steps.aboutFleet': 'About your fleet',
+  'home.join.steps.whereStart': 'Where you start',
+  'home.join.steps.wherePlace': 'Where it is',
+  'home.join.steps.whereDepot': 'Where your depot is',
+  'home.join.steps.driverPapers': 'Your ID and licence',
+  'home.join.steps.fleetPapers': 'Your four papers',
+  'home.join.steps.login': 'Your email and password',
+  'home.join.steps.done': 'Done',
+  // What to have ready, on the first step: the sign-ups are not alike (2026-11-01).
+  'home.join.ready.title': 'Have ready',
+  'home.join.ready.pudo': 'Your ID number, the shop’s trading licence number and its opening hours — and an email address and a password for the shop’s account: the Shop app signs in with them.',
+  'home.join.ready.mdp': 'An email address and a password for the hub’s account — the Hub app signs in with them — and where the hub is.',
+  'home.join.ready.vendor': 'An email address and a password for the store’s account: the Store app signs in with them.',
+  'home.join.ready.driver': 'Your ID number. On a motorcycle or anything larger, your driving licence too — its number, its expiry date and a photo of it — and a photo of your ID card. The Driver app opens with this phone number and a PIN you choose.',
+  'home.join.ready.fleet': 'The company’s registration, operator’s licence and tax numbers, and a photo of four papers: the certificate of registration, the operator’s licence, the owner’s ID and a proof of address. The Fleet app opens with this phone number and a PIN you choose.',
   'home.join.joinAs': 'Sign up as {role}',
 
   // Join wizard — the spoken lines (logic.ts joinSpoken).
@@ -412,6 +434,7 @@ export const enHome = {
 
   // Join wizard — step: phone.
   'home.join.phone.lede': 'Your phone number is your key to the network. We send a code to check it works.',
+  'home.join.phone.ledePlace': 'The {place}’s phone number. Its app signs in with an email and a password you choose at the end; this number confirms each new phone or browser with a code. We send a code now to check it works.',
   'home.join.phone.ledeStore': 'The store’s phone number. The store’s sign-in works only on its own phones and browsers, and each new one is confirmed by a code to this number. We send a code now to check it works.',
   'home.join.phone.ledeFleet': 'The phone number of the person who runs the fleet. You open the Fleet app with it, and a PIN you choose next. We send a code now to check it works.',
   'home.join.phone.label': 'Phone number',
@@ -425,7 +448,7 @@ export const enHome = {
   'home.join.pin.title': 'Choose your PIN',
   'home.join.pin.lede': 'Five digits. You open the {app} app with your phone number and this PIN.',
   'home.join.pin.label': 'Your PIN',
-  'home.join.pin.note': 'It is the same PIN in every SeeBuyGet app. Already have one? Choosing a new one here replaces it, and your other phones ask for a code once.',
+  'home.join.pin.note': 'It is the same PIN in every SeeBuyGet app you open with your phone number. Already have one? Choosing a new one here replaces it, and your other phones ask for a code once.',
   'home.join.pin.emailTitle': 'Add a recovery email',
   'home.join.pin.emailLede': 'If you ever lose this phone number, this email is how you get back in. We send it a code to check it is yours.',
   'home.join.pin.cta': 'Continue',
@@ -567,6 +590,8 @@ export const enHome = {
   'home.join.where.titleDriver': 'Where do you start?',
   'home.join.where.title': 'Where are you?',
   'home.join.where.lede': 'Tap the map to drop your pin — or tap a shop to see it. No street address needed.',
+  'home.join.where.ledeDriver': 'Choose the area you start from. The map shows the shops near it; you need not drop a pin.',
+  'home.join.where.ledeFleet': 'Tap the map to drop a pin where your depot is, and add its street address if it has one.',
   'home.join.where.mapLabel': 'Tap the map to drop your pin',
   'home.join.where.wordsTitle': 'Your three words',
   'home.join.where.wordsNote': 'Say these three words and anyone can find you. Put them on your sign.',
@@ -605,6 +630,7 @@ export const enHome = {
   'home.join.done.pending1': 'SeeBuyGet checks your details — usually same day',
   'home.join.done.pending2': 'You can open your app and look around now',
   'home.join.done.pending3': 'You start working the moment you are approved',
+  'home.join.done.signInPlace': 'Sign in to the {app} app with your email and password; a new phone or browser asks for a code sent to this number',
   'home.join.done.hubPapers': 'Open the Hub app and send its papers: an ID, the trading licence and a photo of the hub',
   'home.join.done.shopPapers': 'Open the Shop app and send its papers: your ID, the trading licence and a photo of the shop',
   'home.join.done.openApp': 'Open the {name} app',

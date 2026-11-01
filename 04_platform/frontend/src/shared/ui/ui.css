@@ -2923,3 +2923,60 @@ a.btn {
   font-size: 15px;
   color: var(--tx2);
 }
+
+/* ------------------------------------------------------------ step list -- */
+/* Where you are in a sign-up, every step by name (2026-11-01): done, now, still to come. */
+
+.steps {
+  margin: 0 0 4px;
+}
+
+.steps__head {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--tx3);
+}
+
+.steps__head b {
+  color: var(--tx);
+}
+
+.steps__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.steps__item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--tx2);
+}
+
+.steps__item--done {
+  color: var(--tx3);
+}
+
+.steps__item--now {
+  color: var(--tx);
+  font-weight: 700;
+}
+
+.steps__mark {
+  flex: 0 0 14px;
+  text-align: center;
+}
+
+.steps__item--done .steps__mark {
+  color: var(--blue);
+}
+
+/* The step now — the nav-indicator use of the accent, as the dots had it. */
+.steps__item--now .steps__mark {
+  color: var(--org);
+}

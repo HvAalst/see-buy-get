@@ -362,6 +362,9 @@ export const en = {
   'common.frontDoor': 'SeeBuyGet front page',
   'common.done': 'Done',
   'common.save': 'Save',
+  // The step list (2026-11-01): "Signing up as a sort hub · step 3 of 5"; a step done is read out as done.
+  'common.stepOf': 'step {at} of {total}',
+  'common.stepDone': 'done',
   'common.skip': 'Skip',
   'common.next': 'Next',
   'common.loading': 'Loading…',

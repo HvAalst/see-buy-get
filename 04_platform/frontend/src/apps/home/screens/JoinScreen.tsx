@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet, PhoneField } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet, PhoneField, StepList } from '../../../shared/ui';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { AgreementBlock, AgreementCheck } from '../../../shared/documents/Agreement';
 import { countryOfNumber } from '../../../shared/phone/dial';
@@ -12,7 +12,7 @@ import { geocode, homeConfig, myAgreement } from '../api';
 import { countryNameIn } from '../../../shared/documents/documents';
 import { pageNameFor } from '../../../shared/handle';
 
-import { driverSendsPapers, ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
+import { readyLine, stepName, driverSendsPapers, ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -23,9 +23,8 @@ export interface JoinScreenProps {
 
 /**
  * The join wizard — one decision per screen, the only place in the product where an
- * account is BORN. Roles the backend can self-serve (shop, driver, hub) run the full
- * phone-verified signup; a store registers itself; a fleet office is invite-only and says
- * so instead of dead-ending.
+ * account is BORN. Every role signs itself up from a checked phone number: a shop, a hub and
+ * a store choose an email and a password at the end; a driver and a fleet office a PIN.
  */
 export function JoinScreen({ state, actions }: JoinScreenProps) {
   const t = useT();
@@ -41,12 +40,9 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
 
   return (
     <div class="scr">
+      {/* Every step by name — done, now, still to come (the owner, 2026-11-01: "you don't read what is gonna come next"). */}
       {state.step !== 'done' ? (
-        <div class="dots" role="img" aria-label={t('home.join.step', { at, total: steps.length - 1 })}>
-          {steps.slice(0, -1).map((s, i) => (
-            <span key={s} class={`dots__dot${i === at - 1 ? ' dots__dot--on' : i < at - 1 ? ' dots__dot--done' : ''}`} />
-          ))}
-        </div>
+        <StepList title={t('home.join.signingUpAs', { role: roleMeta(role, t).labelLower })} steps={steps.slice(0, -1).map((s) => stepName(role, s, t))} at={at - 1} />
       ) : null}
 
       {state.error ? duplicateField(state.error) ? <AlreadyRegistered state={state} actions={actions} /> : <ErrorNote error={state.error} /> : null}
@@ -102,17 +98,18 @@ function AlreadyRegistered({ state, actions }: JoinScreenProps) {
   const t = useT();
   const role = state.role!;
   const field = duplicateField(state.error)!;
-  const signsIn = role.id === 'driver' || role.id === 'pudo';
+  // Every role has an app to open: "sign in with that account" with no way there was a dead end for a hub and a store.
+  const signsIn = true;
   // The ID is theirs and somebody else holds it: the dispute is opened here, where they were refused, with what they typed.
   const [disputing, setDisputing] = useState(false);
-  const disputable = field === 'nationalId' && signsIn;
+  const disputable = field === 'nationalId' && (role.id === 'driver' || role.id === 'pudo');
   return (
     <div class="dup">
       <Note tone="warn" icon="lock" title={t(DUP_TITLE[field])} detail={t(dupDetail(role.id, field))} />
       <div class="crow" style="margin-top:10px">
         {signsIn ? (
           <Button full={false} chevron={false} onClick={() => window.location.assign(role.app)}>
-            {t(role.id === 'driver' ? 'home.dup.openDriver' : 'home.dup.openShop')}
+            {t('home.join.done.openApp', { name: roleMeta(role, t).appNoun })}
           </Button>
         ) : null}
         {isIdentityDocument(field) || field === 'email' ? (
@@ -150,7 +147,17 @@ function PhoneStep({ state, actions }: JoinScreenProps) {
   return (
     <>
       <h1 class="scr__title">{t('home.join.joinAs', { role: roleMeta(role, t).labelLower })}</h1>
-      <p class="scr__lede">{t(role.kind === 'vendor' ? 'home.join.phone.ledeStore' : role.kind === 'fleet' ? 'home.join.phone.ledeFleet' : 'home.join.phone.lede')}</p>
+      <p class="scr__lede">
+        {role.kind === 'vendor'
+          ? t('home.join.phone.ledeStore')
+          : role.kind === 'fleet'
+            ? t('home.join.phone.ledeFleet')
+            : role.kind === 'driver'
+              ? t('home.join.phone.lede')
+              : // A shop's and a hub's app signs in with an email and a password: the number only confirms new phones (2026-11-01).
+                t('home.join.phone.ledePlace', { place: roleMeta(role, t).appNoun })}
+      </p>
+      <Note tone="info" icon="info" title={t('home.join.ready.title')} detail={readyLine(role, t)} />
 
       <Card>
         {/* Where they will work, first: it decides whether they can sign up at all, and where their map opens. */}
@@ -388,7 +395,7 @@ function PinStep({ state, actions }: JoinScreenProps) {
   return (
     <>
       <h1 class="scr__title">{t(state.pinEmail === 'reset' ? 'account.safety.resetTitle' : state.pinEmail ? 'home.join.pin.emailTitle' : driver ? 'home.join.pin.titleDriver' : 'home.join.pin.title')}</h1>
-      <p class="scr__lede">{state.pinEmail === 'reset' ? t('account.safety.resetLede') : state.pinEmail ? t('home.join.pin.emailLede') : t('home.join.pin.lede', { app: driver ? 'Driver' : 'Fleet' })}</p>
+      <p class="scr__lede">{state.pinEmail === 'reset' ? t('account.safety.resetLede') : state.pinEmail ? t('home.join.pin.emailLede') : t('home.join.pin.lede', { app: roleMeta(role, t).appNoun })}</p>
 
       <Card>
         <div class="field">
@@ -917,7 +924,7 @@ function WhereStep({ state, actions }: JoinScreenProps) {
   return (
     <>
       <h1 class="scr__title">{role.id === 'driver' ? t('home.join.where.titleDriver') : t('home.join.where.title')}</h1>
-      <p class="scr__lede">{t('home.join.where.lede')}</p>
+      <p class="scr__lede">{t(role.kind === 'fleet' ? 'home.join.where.ledeFleet' : role.kind === 'driver' ? 'home.join.where.ledeDriver' : 'home.join.where.lede')}</p>
 
       <PlaceMap
         label={t('home.join.where.mapLabel')}
@@ -1102,11 +1109,11 @@ function DoneStep({ state, actions }: JoinScreenProps) {
               acc.entityStatus === 'ACTIVE'
                 ? [t('home.join.done.active1'), t(role.kind === 'driver' ? 'home.join.done.active2Pin' : 'home.join.done.active2'), t('home.join.done.active3')]
                 : role.id === 'mdp'
-                  ? // A hub sends its papers from the Hub app first: nobody checks what has not been sent.
-                    [t('home.join.done.hubPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
+                  ? // A hub sends its papers from the Hub app first: nobody checks what has not been sent. And how it signs in.
+                    [t('home.join.done.signInPlace', { app: roleMeta(role, t).appNoun }), t('home.join.done.hubPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
                   : role.id === 'pudo'
                     ? // …and so does a shop, from the Shop app: this list said "we check your details" and never what to send.
-                      [t('home.join.done.shopPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
+                      [t('home.join.done.signInPlace', { app: roleMeta(role, t).appNoun }), t('home.join.done.shopPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
                     : [t('home.join.done.pending1'), t('home.join.done.pending2'), t('home.join.done.pending3')]
             }
           />
