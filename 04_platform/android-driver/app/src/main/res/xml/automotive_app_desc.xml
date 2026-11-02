@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android Auto (2026-11-02): this app takes part through its messaging notifications only — a message read aloud,
+    answered by voice, marked read. No car screen of its own: a decision does not belong at the wheel.
+-->
+<automotiveApp>
+    <uses name="notification" />
+</automotiveApp>

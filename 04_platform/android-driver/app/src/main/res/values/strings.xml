@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The native part's own words (2026-11-02). Everything else the driver reads is the web app's, in the driver's
+    language. These are few, said plainly, and read aloud by the car where they are a message ("Not sent: …").
+    An apostrophe is written \' here: the resource compiler refuses a bare one.
+-->
+<resources>
+    <string name="app_name">SeeBuyGet Driver</string>
+
+    <!-- The notification channel, as the phone's settings list it. -->
+    <string name="channel_messages">Messages in the car</string>
+    <string name="channel_messages_description">Messages from the people in your chats about loads. Android Auto reads them aloud and takes your spoken answer.</string>
+
+    <!-- In the conversation the car reads. -->
+    <string name="chat_me">You</string>
+    <string name="chat_someone">Someone in the chat</string>
+    <string name="chat_untitled">A chat about a load</string>
+    <string name="chat_system">SeeBuyGet</string>
+    <!-- Said when the server gives no reason of its own for a chat that cannot be answered. -->
+    <string name="chat_closed">This conversation is closed.</string>
+    <string name="action_reply">Reply</string>
+    <string name="action_mark_read">Mark as read</string>
+    <string name="reply_label">Your answer</string>
+
+    <!-- A spoken reply that did not go: posted back as a message, so the car reads it aloud. -->
+    <string name="not_sent">Not sent: %1$s</string>
+    <string name="refused_key_off">messages in the car are off for this phone. Turn them on again in the app when you stop.</string>
+    <string name="refused_no_signal">there is no signal. Say it again when there is.</string>
+    <string name="refused_too_many">too many messages at once. Wait a minute and say it again.</string>
+    <string name="refused_nothing_heard">nothing was heard.</string>
+    <string name="refused_server">the server did not take it. Say it again in a minute.</string>
+    <string name="refused_plain">the server refused it.</string>
+
+    <!-- The car link: turning Messages in the car on or off for this phone. -->
+    <string name="link_title">Messages in the car</string>
+    <string name="link_back">Back to the app</string>
+    <string name="link_turning_on">Turning on for this phone…</string>
+    <string name="link_on">On for this phone. Messages from your chats will be read aloud in the car.</string>
+    <string name="link_off">Off for this phone. The car will not read your messages any more.</string>
+    <string name="link_not_ours">This link did not come from the Driver app. Turn Messages in the car on in the app\'s Settings.</string>
+    <string name="link_old_android">Messages in the car needs Android 9 or newer on this phone.</string>
+    <string name="link_not_kept">This phone could not keep the key safely. Try again; if it happens again, restart the phone.</string>
+    <string name="link_not_ready">Messages in the car cannot be turned on in this version of the app yet.</string>
+    <string name="link_no_token">This phone could not be reached for messages (Google Play services did not answer). Try again in a minute.</string>
+    <string name="link_no_signal">There is no signal. Try again when there is.</string>
+    <string name="link_key_refused">The server did not accept this phone. Turn Messages in the car off and on again in the app\'s Settings.</string>
+    <string name="link_refused">The server refused: %1$s</string>
+    <string name="link_server">The server did not answer. Try again in a minute.</string>
+    <string name="link_notifications_off">On, but notifications are off for this app, so the car cannot read your messages. Allow notifications for SeeBuyGet Driver in the phone\'s settings.</string>
+</resources>

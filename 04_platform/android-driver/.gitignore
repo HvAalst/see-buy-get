@@ -1,0 +1,15 @@
+# Gradle and Android Studio leave these; none is ever committed.
+.gradle/
+.kotlin/
+build/
+local.properties
+captures/
+.idea/
+*.iml
+.externalNativeBuild/
+.cxx/
+
+# Keys never live in the repository: the upload key is a GitHub secret (README.md, "Signing").
+*.jks
+*.keystore
+*.p12

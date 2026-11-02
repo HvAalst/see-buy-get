@@ -1,0 +1,230 @@
+name: Android driver app
+
+# 2026-11-02 — SEEBUYGET DRIVER FOR ANDROID: the Driver web app as a Trusted Web Activity, plus Messages in the car
+# (05_engineering/android-auto-messages.md, slice S2; 04_platform/android-driver/README.md).
+#
+# Built HERE only. A Gradle build on the owner's machine is exactly the load that shuts it down, so the project has no
+# wrapper and is never built there. Every push or pull request that touches the app builds and tests it; the site's own
+# workflows (deploy.yml, ci.yml) leave this folder out, so the app never redeploys the site.
+#
+# READING A FAILURE WITHOUT THE LOG. Build logs need admin rights; a check run's annotations do not
+# (api.github.com/repos/<owner>/<repo>/check-runs/<id>/annotations). So Gradle's output is kept in a file, and on a
+# failure ci/report.mjs turns it into annotations — Kotlin and resource errors at their file and line, Gradle's "What went
+# wrong", failed unit tests — printed ten at a time (GitHub shows ten errors a step, fifty a job): first one annotation
+# that lists every problem, then one for each.
+
+on:
+  push:
+    paths:
+      - '04_platform/android-driver/**'
+      - '.github/workflows/android-driver.yml'
+  pull_request:
+    paths:
+      - '04_platform/android-driver/**'
+      - '.github/workflows/android-driver.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-driver-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: 04_platform/android-driver
+    env:
+      # Gradle itself, pinned: there is no wrapper (README.md, "How it is built"). 8.14.6, the 8.14 line's latest fix
+      # (8 October 2026), the line the Android Gradle Plugin 8.13 is made for.
+      GRADLE_VERSION: '8.14.6'
+      # Release signing only when the upload key is among the repository's secrets (README.md, "Signing").
+      HAS_UPLOAD_KEY: ${{ secrets.SBG_UPLOAD_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Its own problem matcher off: GitHub keeps fifty annotations a job, and they are for ci/report.mjs to spend.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          problem-matcher: false
+
+      # The open-source cache ('basic'): the default 'enhanced' one is a commercial component under Gradle's own terms
+      # (gradle/actions v6), which is the owner's to accept or not.
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-provider: basic
+          add-job-summary: on-failure
+
+      # A debug build signed with the same key every time, when the owner gives one (optional): a newer test build then
+      # installs over an older one. Without it each run makes its own debug key.
+      - name: The debug key, when there is one
+        env:
+          SBG_DEBUG_KEYSTORE_BASE64: ${{ secrets.SBG_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$SBG_DEBUG_KEYSTORE_BASE64" ]; then
+            mkdir -p ~/.android
+            printf '%s' "$SBG_DEBUG_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > ~/.android/debug.keystore
+            echo "The repository's debug key is used."
+          else
+            echo "No SBG_DEBUG_KEYSTORE_BASE64: this run makes its own debug key."
+          fi
+
+      # What the app is built for: the site (from SBG_PUBLIC_URL, which the site's release uses too) and Firebase's
+      # public settings (repository VARIABLES, not secrets). Only what is set is passed, so gradle.properties stays the
+      # fallback.
+      - name: What the app is built for
+        env:
+          SBG_PUBLIC_URL: ${{ vars.SBG_PUBLIC_URL }}
+          FIREBASE_PROJECT_ID: ${{ vars.SBG_FIREBASE_PROJECT_ID }}
+          FIREBASE_APP_ID: ${{ vars.SBG_FIREBASE_APP_ID }}
+          FIREBASE_API_KEY: ${{ vars.SBG_FIREBASE_API_KEY }}
+          FIREBASE_SENDER_ID: ${{ vars.SBG_FIREBASE_SENDER_ID }}
+        run: |
+          args="$RUNNER_TEMP/gradle-args"
+          : > "$args"
+          host="$(sed -n 's/^sbgHost=//p' gradle.properties | tr -d '\r')"
+          if [ -n "$SBG_PUBLIC_URL" ]; then
+            host="$(printf '%s' "$SBG_PUBLIC_URL" | sed -E 's#^[a-zA-Z]+://##; s#/.*$##' | tr 'A-Z' 'a-z')"
+            echo "-PsbgHost=$host" >> "$args"
+          fi
+          firebase=set
+          for pair in "firebaseProjectId=$FIREBASE_PROJECT_ID" "firebaseAppId=$FIREBASE_APP_ID" "firebaseApiKey=$FIREBASE_API_KEY" "firebaseSenderId=$FIREBASE_SENDER_ID"; do
+            name="${pair%%=*}"; value="${pair#*=}"
+            if [ -n "$value" ]; then
+              echo "-P$name=$value" >> "$args"
+            elif [ -z "$(sed -n "s/^$name=//p" gradle.properties | tr -d '\r')" ]; then
+              firebase="not set: the app builds, and says Messages in the car is not ready"
+            fi
+          done
+          echo "-PsbgVersionCode=${GITHUB_RUN_NUMBER}" >> "$args"
+          echo "-PsbgVersionName=0.1.${GITHUB_RUN_NUMBER}" >> "$args"
+          agp="$(sed -n 's/.*id("com.android.application") version "\([^"]*\)".*/\1/p' build.gradle.kts)"
+          kotlin="$(sed -n 's/.*id("org.jetbrains.kotlin.android") version "\([^"]*\)".*/\1/p' build.gradle.kts)"
+          {
+            echo "SBG_FACT_SITE=$host"
+            echo "SBG_FACT_FIREBASE=$firebase"
+            echo "SBG_FACT_VERSIONS=Android Gradle Plugin $agp · Kotlin $kotlin · Gradle $GRADLE_VERSION · compile and target SDK 36 · min SDK 24"
+          } >> "$GITHUB_ENV"
+          echo "Site: $host. Firebase: $firebase."
+
+      - name: Unit tests and the debug app
+        id: build
+        run: |
+          set -o pipefail
+          mapfile -t args < "$RUNNER_TEMP/gradle-args"
+          gradle "${args[@]}" --console=plain --continue testDebugUnitTest assembleDebug 2>&1 | tee "$RUNNER_TEMP/gradle-debug.log"
+
+      - name: The release bundle, signed with the upload key
+        id: release
+        if: ${{ env.HAS_UPLOAD_KEY == 'true' && github.event_name != 'pull_request' }}
+        env:
+          SBG_UPLOAD_KEYSTORE_BASE64: ${{ secrets.SBG_UPLOAD_KEYSTORE_BASE64 }}
+          SBG_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.SBG_UPLOAD_KEYSTORE_PASSWORD }}
+          SBG_UPLOAD_KEY_ALIAS: ${{ secrets.SBG_UPLOAD_KEY_ALIAS }}
+          SBG_UPLOAD_KEY_PASSWORD: ${{ secrets.SBG_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -o pipefail
+          export SBG_UPLOAD_KEYSTORE="$RUNNER_TEMP/upload.jks"
+          printf '%s' "$SBG_UPLOAD_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$SBG_UPLOAD_KEYSTORE"
+          mapfile -t args < "$RUNNER_TEMP/gradle-args"
+          gradle "${args[@]}" --console=plain bundleRelease 2>&1 | tee "$RUNNER_TEMP/gradle-release.log"
+
+      - name: Forget the upload key
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/upload.jks"
+
+      # ---- What happened, where it can be read -------------------------------------------------------------------------
+
+      - name: Read what the build said
+        if: ${{ always() }}
+        env:
+          OUTCOME: ${{ job.status == 'success' && 'success' || 'failure' }}
+          RELEASE: ${{ steps.release.outcome }}
+        run: |
+          # Nothing here may stop the step (the shell stops at the first failing command): every lookup may come back empty.
+          apk="$(ls app/build/outputs/apk/debug/*.apk 2>/dev/null | head -n 1 || true)"
+          aab="$(ls app/build/outputs/bundle/release/*.aab 2>/dev/null | head -n 1 || true)"
+          size() {
+            if [ -n "$1" ] && [ -f "$1" ]; then
+              printf '%s, %s MB' "$(basename "$1")" "$(awk -v b="$(stat -c %s "$1")" 'BEGIN { printf "%.1f", b / 1048576 }')"
+            else
+              printf 'not built'
+            fi
+          }
+          case "$RELEASE" in
+            success) release="$(size "$aab")" ;;
+            failure) release="failed" ;;
+            *) release="not built (no upload key among the secrets, or a pull request)" ;;
+          esac
+          node ci/report.mjs --outcome "$OUTCOME" \
+            --log "$RUNNER_TEMP/gradle-debug.log" --log "$RUNNER_TEMP/gradle-release.log" \
+            --tests app/build/test-results \
+            --problems "$RUNNER_TEMP/problems.txt" --warnings "$RUNNER_TEMP/warnings.txt" \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            --root "$GITHUB_WORKSPACE" --project 04_platform/android-driver \
+            --fact "Debug app=$(size "$apk")" \
+            --fact "Release bundle=$release" \
+            --fact "Site=${SBG_FACT_SITE:-?}" \
+            --fact "Firebase=${SBG_FACT_FIREBASE:-?}" \
+            --fact "Versions=${SBG_FACT_VERSIONS:-?}" || echo "::warning title=Android build report::The build's report could not be written."
+
+      - name: What went wrong (1 of 5)
+        if: ${{ failure() }}
+        run: sed -n '1,10p' "$RUNNER_TEMP/problems.txt" 2>/dev/null || true
+      - name: What went wrong (2 of 5)
+        if: ${{ failure() }}
+        run: sed -n '11,20p' "$RUNNER_TEMP/problems.txt" 2>/dev/null || true
+      - name: What went wrong (3 of 5)
+        if: ${{ failure() }}
+        run: sed -n '21,30p' "$RUNNER_TEMP/problems.txt" 2>/dev/null || true
+      - name: What went wrong (4 of 5)
+        if: ${{ failure() }}
+        run: sed -n '31,40p' "$RUNNER_TEMP/problems.txt" 2>/dev/null || true
+      - name: What went wrong (5 of 5)
+        if: ${{ failure() }}
+        run: sed -n '41,50p' "$RUNNER_TEMP/problems.txt" 2>/dev/null || true
+
+      - name: Kotlin warnings
+        if: ${{ success() }}
+        run: cat "$RUNNER_TEMP/warnings.txt" 2>/dev/null || true
+
+      # ---- What was built ----------------------------------------------------------------------------------------------
+
+      - name: Keep the debug app
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: seebuyget-driver-debug-${{ github.run_number }}
+          path: 04_platform/android-driver/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Keep the release bundle
+        if: ${{ !cancelled() && steps.release.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: seebuyget-driver-release-${{ github.run_number }}
+          path: 04_platform/android-driver/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Keep the logs and test reports of a failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: seebuyget-driver-failure-${{ github.run_number }}
+          path: |
+            ${{ runner.temp }}/gradle-debug.log
+            ${{ runner.temp }}/gradle-release.log
+            04_platform/android-driver/app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -17,6 +17,10 @@ on:
       - 'brand/**'
       - '.dockerignore'
       - '.github/workflows/**'
+      # 2026-11-02 — The Android app is no part of the site: it is built by its own workflow (android-driver.yml), and a
+      # push that touches only it releases nothing. Last, so they take out what the lines above let in.
+      - '!04_platform/android-driver/**'
+      - '!.github/workflows/android-driver.yml'
   workflow_dispatch:
     inputs:
       release:

@@ -14,6 +14,9 @@ on:
       - 'brand/**'
       - '.dockerignore'
       - '.github/workflows/**'
+      # 2026-11-02 — The Android app is tested by its own workflow (android-driver.yml), not here.
+      - '!04_platform/android-driver/**'
+      - '!.github/workflows/android-driver.yml'
   workflow_dispatch:
   workflow_call:
     inputs:

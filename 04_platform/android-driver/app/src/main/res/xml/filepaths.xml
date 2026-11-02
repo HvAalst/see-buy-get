@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The splash picture is handed to the browser through this folder (the browser helper's own arrangement). -->
+<paths>
+    <files-path
+        name="twa_splash"
+        path="twa_splash/" />
+</paths>

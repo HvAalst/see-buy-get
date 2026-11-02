@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The brand (2026-11-02): navy and orange, as the Driver web app wears them. -->
+<resources>
+    <color name="sbg_navy">#FF000963</color>
+    <color name="sbg_orange">#FFFB6200</color>
+    <color name="sbg_white">#FFFFFFFF</color>
+    <color name="sbg_ink">#FF1A1A2E</color>
+</resources>

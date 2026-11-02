@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The car link's short confirmation (2026-11-02): a small dialog over the Driver app, closed by itself once it is
+        on, or with its one button. A platform theme: the app carries no theme library for one dialog.
+    -->
+    <style name="Theme.Driver.CarLink" parent="android:Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:colorPrimary">@color/sbg_navy</item>
+        <item name="android:colorAccent">@color/sbg_orange</item>
+        <item name="android:windowCloseOnTouchOutside">false</item>
+    </style>
+</resources>
