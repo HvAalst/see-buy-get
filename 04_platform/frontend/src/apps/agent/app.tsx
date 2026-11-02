@@ -1,4 +1,4 @@
-import { InstallBar } from '../../shared/ui/InstallBar';
+import { AppLayer } from '../../shared/ui/AppLayer';
 import type { SbgClient } from '../../lib/sbg';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
@@ -78,8 +78,8 @@ export function App() {
       <div class="app">
         <TopBar title={t('agent.appTitle')} subtitle={t('agent.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
-          {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
-          <InstallBar app="agent" />
+          {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
+          <AppLayer app="agent" />
           <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} deviceAsk={state.deviceAsk} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -136,8 +136,8 @@ export function App() {
       />
 
       <main class="app__scroll">
-        {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
-        <InstallBar app="agent" />
+        {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
+        <AppLayer app="agent" />
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
         <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} fiscal={fiscal} sbg={sbg} />

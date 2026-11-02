@@ -69,10 +69,12 @@ describe('the call to install, in every app that installs', () => {
       .map((e) => e.name);
     expect(apps.sort()).toEqual(['agent', 'driver', 'fleet', 'genesis', 'mdp', 'vendor']);
     expect(vite).toMatch(/business: \{[\s\S]*?installable: false/);
+    // The call lives in the app layer (shared/ui/AppLayer.tsx), first in each scroll area.
+    expect(readFileSync(join('src', 'shared', 'ui', 'AppLayer.tsx'), 'utf8')).toMatch(/<InstallBar app=\{app\} \/>/);
     for (const app of apps) {
       const src = readFileSync(join('src', 'apps', app, 'app.tsx'), 'utf8');
       const mains = (src.match(/<main class=/g) ?? []).length;
-      const bars = (src.match(/<main class=[^\n]*\n[^\n]*\n\s*<InstallBar app="(agent|mdp|driver|fleet|vendor|send)" \/>/g) ?? []).length;
+      const bars = (src.match(/<main class=[^\n]*\n[^\n]*\n\s*<AppLayer app="(agent|mdp|driver|fleet|vendor|send)"/g) ?? []).length;
       expect({ app, mains, bars }).toEqual({ app, mains, bars: mains });
     }
   });

@@ -1,4 +1,4 @@
-import { InstallBar } from '../../shared/ui/InstallBar';
+import { AppLayer } from '../../shared/ui/AppLayer';
 import { useState } from 'preact/hooks';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
@@ -52,8 +52,8 @@ export function App() {
       <div class="app">
         <TopBar title={t('vendor.appTitle')} subtitle={t('vendor.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
-          {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
-          <InstallBar app="vendor" />
+          {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
+          <AppLayer app="vendor" />
           <SignInScreen state={state} actions={actions} error={state.error} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -111,8 +111,8 @@ export function App() {
       />
 
       <main class="app__scroll">
-        {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
-        <InstallBar app="vendor" />
+        {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
+        <AppLayer app="vendor" />
         <ConnectivityNote stale={state.stale} />
         {/* Said above every screen until it is done: a store still signing in with its secret sets its account up. */}
         <AccountSetup state={state} actions={actions} />
