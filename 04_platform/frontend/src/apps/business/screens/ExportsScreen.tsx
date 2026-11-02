@@ -2,9 +2,8 @@ import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelec
 import { publicRequest } from '../../../lib/sbg';
 import { businessConfig } from '../api';
 import { useCallback, useEffect, useState } from 'preact/hooks';
-import { DocumentButton } from '../../../shared/ui';
+import { DocumentButton, PaperSheet, paperOfBlob, usePaper } from '../../../shared/ui';
 import { Abbreviated } from '../../../shared/ui/Abbr';
-import { tabAtTheTap } from '../../../shared/openPage';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { openLinked } from '../../../shared/linkedLoad';
 import { ConsolePick } from '../../tower/ConsolePick';
@@ -364,16 +363,18 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
   const [requoting, setRequoting] = useState(false);
   const [asking, setAsking] = useState({ key: '', title: '' });
 
-  /** A paper's bytes, opened in a tab at the tap — a PDF or a photograph, which the browser already knows how to show. */
-  const openPaper = async (key: ExportPaperKey, title: string) => {
-    const tab = tabAtTheTap();
-    try {
+  /**
+   * A paper's bytes, in the slide-up (2026-11-02; the owner: "the print function in slide up"): our own signed invoice,
+   * packing list or letter as it will print; a photograph on its page; a PDF in the browser's own viewer where it has one
+   * in a page — and where it has none, a button that opens it on its own.
+   */
+  const paperSheet = usePaper();
+  const openPaper = (key: ExportPaperKey, title: string) => {
+    paperSheet.show(title, async () => {
       const r = await client.exports.paperFile(exportId, key);
-      if (r.error || !r.data) return setError(t('business.exports.papers.unreadable', { title }));
-      tab.show(r.data as Blob);
-    } finally {
-      tab.cancel();
-    }
+      if (r.error || !r.data) return { error: t('business.exports.papers.unreadable', { title }) };
+      return { paper: await paperOfBlob(r.data as Blob) };
+    });
   };
 
   const read = useCallback(async () => {
@@ -1085,7 +1086,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         </div>
         <p class="chint">{t(byAir ? 'business.exports.handover.hintAir' : 'business.exports.handover.hint')}</p>
         <div class="twr-panelend">
-          <DocumentButton label={t('business.exports.handover.open')} title={t('business.exports.handover.open')} fetch={() => client.exports.handover(c.exportId)} />
+          <DocumentButton look="console" label={t('business.exports.handover.open')} title={t('business.exports.handover.open')} fetch={() => client.exports.handover(c.exportId)} />
         </div>
         {byAir ? null : c.billOfLading ? (
           <p class="cons__lede">{t('business.exports.bl.recorded', { number: c.billOfLading.number })}</p>
@@ -1145,6 +1146,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
         }}
       />
       )}
+      <PaperSheet state={paperSheet} look="console" />
     </>
   );
 }

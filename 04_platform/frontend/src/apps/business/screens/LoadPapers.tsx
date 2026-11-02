@@ -3,7 +3,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { publicRequest } from '../../../lib/sbg';
 import { downloadZpl } from '../../../shared/download';
-import { tabAtTheTap } from '../../../shared/openPage';
+import { pageGot, PaperSheet, usePaper } from '../../../shared/ui';
 import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
 import { CurrencySelect } from '../../tower/screens/CurrencySelect';
 import { ConsolePick } from '../../tower/ConsolePick';
@@ -56,17 +56,14 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
     await read();
   };
 
-  /** A printable page the server rendered, in a tab opened at the tap: the same way the consignment note opens. */
-  const print = async (page: () => Promise<{ data?: string | null; error?: unknown }>) => {
+  /**
+   * A printable page the server rendered, in the slide-up as it will print: the same way the consignment note opens
+   * (2026-11-02; the owner: "the print function in slide up"). Labels show as their own 100 × 150 mm pages.
+   */
+  const paper = usePaper();
+  const print = (title: string, page: () => Promise<{ data?: string | null; error?: unknown }>) => {
     setError(null);
-    const tab = tabAtTheTap();
-    try {
-      const r = await page();
-      if (r.error || !r.data) return setError(t('business.papers.gone'));
-      tab.show(r.data);
-    } finally {
-      tab.cancel();
-    }
+    paper.show(title, async () => pageGot(await page(), t('business.papers.gone')));
   };
 
   const current = invoice?.current;
@@ -86,7 +83,7 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
             <span class="crow__sub">{t('business.papers.printHint')}</span>
           </span>
           <span class="crow__tail">
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!client} onClick={() => void print(() => client!.packageLabelsPage(row.freightId))}>
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!client} onClick={() => print(t('business.papers.labelsTitle'), () => client!.packageLabelsPage(row.freightId))}>
               {t('business.papers.print')}
             </button>
             {/* Round 27 — the same labels for a thermal label printer (ZPL), 100 × 150 mm, one a package. */}
@@ -120,7 +117,7 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
           </span>
           <span class="crow__tail biz-choose__acts">
             {current ? (
-              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!client} onClick={() => void print(() => client!.invoicePage(row.freightId))}>
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!client} onClick={() => print(t('business.papers.invoiceTitle'), () => client!.invoicePage(row.freightId))}>
                 {t('business.papers.printCopies')}
               </button>
             ) : null}
@@ -159,6 +156,7 @@ export function LoadPapers({ row, client, business, act }: { row: PostedLoad; cl
         </p>
       ) : null}
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
+      <PaperSheet state={paper} look="console" />
     </section>
   );
 }

@@ -5,7 +5,8 @@ import { CodeCard } from '../../../shared/ui/CodeCard';
 import { downscaleImage } from '../../../shared/media';
 import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
 import { failedWords, mediaIdOf, type Uploaded } from '../../../shared/upload';
-import { tabAtTheTap } from '../../../shared/openPage';
+import { PaperSheet, usePaper } from '../../../shared/ui';
+import { pageOfSvg } from '../../../shared/ui/paperPreview';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
@@ -720,15 +721,16 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
     void api.detail(row.parcelId).then((r) => setD(r.error ? null : (r.data ?? null)));
   }, [api, row.parcelId, row.status, row.paid]);
 
-  const print = async () => {
-    const tab = tabAtTheTap();
-    try {
+  // 2026-11-02 — the label in the slide-up, on its page as it will print (the owner: "the print function in slide up").
+  const paper = usePaper();
+  const print = () => {
+    setLabelError(null);
+    const title = t('business.parcels.labelTitle');
+    paper.show(title, async () => {
       const r = await api.label(row.parcelId);
-      if (r.error) return setLabelError(words(r.error));
-      if (r.data?.svg) tab.show(r.data.svg, 'image/svg+xml');
-    } finally {
-      tab.cancel();
-    }
+      if (r.error || !r.data?.svg) return { error: words(r.error) ?? '' };
+      return { paper: { kind: 'page', html: pageOfSvg(r.data.svg, `${title} — ${row.parcelId}`) } };
+    });
   };
 
   const stage = parcelStage(row);
@@ -862,6 +864,7 @@ function ParcelOpened({ api, row, works, busy, act }: { api: ReturnType<typeof p
           ))}
         </div>
       ) : null}
+      <PaperSheet state={paper} look="console" />
     </section>
   );
 }

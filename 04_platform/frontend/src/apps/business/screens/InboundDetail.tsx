@@ -7,7 +7,8 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { abroadLine, inboundTitle, type InboundRow } from '../inbound';
 import { LoadClaimPanel } from './LoadClaim';
 import { NoteFile, NoteLinksPanel } from './LoadNote';
-import { tabAtTheTap } from '../../../shared/openPage';
+import { pageGot, PaperSheet, usePaper } from '../../../shared/ui';
+import { useNoteLinks } from '../../../shared/archive/useNoteLinks';
 
 /**
  * ONE DELIVERED LOAD, OPENED FROM COMING IN (the user, 2026-10-26: "Its copy, no carriage price"): what came and what
@@ -21,18 +22,15 @@ export function InboundDetail({ row, client, act, onClose, onChanged }: { row: I
   const name = title.kind === 'order' ? t('business.inbound.order', { ref: title.text }) : title.text;
   const delivered = row.steps.find((s) => s.status === 'delivered')?.at;
   const found = foundWords(row.exceptions, t);
+  // 2026-11-02 — the receiver's copy opens in the slide-up, as it will print (the owner: "the print function in slide
+  // up"); Share there passes on a link to it, the same links listed below.
+  const paper = usePaper();
+  const noteLinks = useNoteLinks(client ? client.client.sbg : null, row.noteId);
 
-  const note = async () => {
+  const note = () => {
     if (!client) return;
     setError(null);
-    const tab = tabAtTheTap();
-    try {
-      const r = await client.shipping.freightNote(row.freightId);
-      if (r.error || !r.data) return setError(t('business.inbound.noteGone'));
-      tab.show(r.data as unknown as string);
-    } finally {
-      tab.cancel();
-    }
+    paper.show(t('business.inbound.note'), async () => pageGot(await client.shipping.freightNote(row.freightId), t('business.inbound.noteGone')));
   };
 
   return (
@@ -106,7 +104,8 @@ export function InboundDetail({ row, client, act, onClose, onChanged }: { row: I
       <LoadClaimPanel row={{ freightId: row.freightId, code: row.ref, status: row.status, claim: row.claim, claimant: row.claimant, canClaim: row.canClaim, incoterm: row.incoterm }} client={client} act={act} onChanged={onChanged} side="receiver" />
 
       {/* The links to its copy: to hand the note — with a claim on it, the report — to an insurer or the carrier. */}
-      {row.noteId ? <NoteLinksPanel client={client} noteId={row.noteId} title={`${name} · ${row.ref}`} act={act} /> : null}
+      {row.noteId ? <NoteLinksPanel client={client} noteId={row.noteId} title={`${name} · ${row.ref}`} act={act} links={noteLinks} /> : null}
+      <PaperSheet state={paper} look="console" share={row.noteId && act ? { links: noteLinks, title: `${name} · ${row.ref}` } : undefined} />
     </ConsoleDetail>
   );
 }

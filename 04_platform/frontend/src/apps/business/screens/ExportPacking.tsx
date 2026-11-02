@@ -185,7 +185,7 @@ export function ExportPacking({ d, client, mine, signatory, onDetail }: { d: Exp
           </div>
           {p.lineCount > p.preview.length ? <p class="chint">{t('business.exports.packing.more', { n: p.lineCount - p.preview.length })}</p> : null}
           <div class="twr-panelend">
-            {mine ? <DocumentButton label={t('business.exports.packing.previewAll')} title={t('business.exports.packing.title')} fetch={() => client.exports.packingPage(c.exportId, { draft: true })} /> : null}
+            {mine ? <DocumentButton look="console" label={t('business.exports.packing.previewAll')} title={t('business.exports.packing.title')} fetch={() => client.exports.packingPage(c.exportId, { draft: true })} /> : null}
           </div>
           {p.versions.length ? (
             <div class="crows">
@@ -198,7 +198,7 @@ export function ExportPacking({ d, client, mine, signatory, onDetail }: { d: Exp
                     </span>
                     <span class="crow__sub">{t('business.exports.packing.versionLine', { who: v.signedBy, when: utcWords(v.signedAt), lines: v.lines.toLocaleString('en'), packages: v.packages.toLocaleString('en') })}</span>
                     <span class="twr-panelend">
-                      <DocumentButton label={t('business.exports.sli.open')} title={t('business.exports.sli.version', { n: v.version })} fetch={() => client.exports.packingPage(c.exportId, { version: v.version })} />
+                      <DocumentButton look="console" label={t('business.exports.sli.open')} title={t('business.exports.sli.version', { n: v.version })} fetch={() => client.exports.packingPage(c.exportId, { version: v.version })} />
                     </span>
                   </span>
                 </div>

@@ -186,7 +186,7 @@ export const enHelpApp = {
   'help.business-parcels.step1': 'Under Parcels, open a parcel account once. It is a balance with the SeeBuyGet company in your country.',
   'help.business-parcels.step2': '“Top up”: give the amount and the phone that pays, and approve the prompt on it — or pay by paybill with the reference shown. The balance grows once the payment is confirmed, never before.',
   'help.business-parcels.step3': '“Send a parcel”: the shop it is handed in at, the shop it is collected at, the phone of who collects it, its four measurements and a photo of what is inside. The price is shown before you send; it is paid from the balance at once, and its label prints.',
-  'help.business-parcels.step4': 'Open a parcel to print its label, see where it is, and copy the code the shop asks for. Pass the code to whoever collects it: SeeBuyGet sends them no text.',
+  'help.business-parcels.step4': 'Open a parcel to print its label — it opens in a slide-up on its page, with Print under it — see where it is, and copy the code the shop asks for. Pass the code to whoever collects it: SeeBuyGet sends them no text.',
   'help.business-parcels.note1': 'Why a balance: a parcel is paid when it is sent, so a shop never takes in a parcel nobody has paid for, and nobody waits for an invoice. What is held for the longest route and not spent comes back once it is collected.',
   'help.business-parcels.note2': 'Not enough in the balance: the parcel is made without a label, and “Pay now” pays it after you top up. Called off before it is handed in, its money comes back in full; at a hub it comes back to the shop it was handed in at, for the price shown.',
   'help.business-parcels.note3': 'A load of your own, or something too big for a shop — a pallet, a machine — goes under Domestic, where you agree its price with the carrier. Parcels across a border are not sent from here yet.',
@@ -274,7 +274,7 @@ export const enHelpApp = {
   // business-note
   'help.business-note.title': 'Download or pass on a consignment note',
   'help.business-note.summary': 'Once the carrier has taken the goods over, the note is kept. Download it as one file, or make a link for somebody who has no account. When the load is delivered, a receipt is emailed with such a link in it.',
-  'help.business-note.step1': 'Domestic › Loads, then open the load. Consignment note opens the note to read or print.',
+  'help.business-note.step1': 'Domestic › Loads, then open the load. Consignment note opens the note in a slide-up, page by page as it will print, with Print under it — “Save as PDF” in the print screen keeps it as a file. Once the note is kept, Share there sends a link to it, never the file.',
   'help.business-note.step2': 'Once the carrier has taken the goods over, press Download this note and its photographs. You get one file: the note, every copy of it as it was signed, and its photographs. On a phone the button says Share, and opens your phone’s own share sheet.',
   'help.business-note.step3': 'To give the note to somebody with no account, open “Papers” on the load, look under Links to this note and press Make a link to pass on. Then press Send it or Copy it, and send the link in a chat, a text or your own mail. The link is shown only once, because we keep no copy of it.',
   'help.business-note.step4': 'To stop a link, press Cancel it on its row, then Yes, cancel it. A cancelled link cannot be switched back on. The row then says who cancelled it.',
@@ -351,7 +351,7 @@ export const enHelpApp = {
   'help.thermal-labels.summary': 'Every label prints on paper from the page it opens, or on a thermal label printer — the 100 × 150 mm kind couriers use — from a file.',
   'help.thermal-labels.step1': 'Shop app: after taking a parcel in, “Open and print the label” opens it to print on paper; “Thermal printer (ZPL)” saves it as a file for a label printer.',
   'help.thermal-labels.step2': 'Store app: the same two once an order is paid — and again later, from the order under Orders: “Print the label again”, or “Thermal printer (ZPL)”.',
-  'help.thermal-labels.step3': 'Business app: Domestic › Loads, open the load, then “Papers”, under Papers for the goods: “Print labels” for paper, “Thermal printer (ZPL)” for a file with one label a package.',
+  'help.thermal-labels.step3': 'Business app: Domestic › Loads, open the load, then “Papers”, under Papers for the goods: “Print labels” for paper — it opens in a slide-up, one label a page as it prints, with Print under it — and “Thermal printer (ZPL)” for a file with one label a package.',
   'help.thermal-labels.step4': 'Send the file to the printer as it is: with the printer maker’s own tool (for a Zebra, Zebra Setup Utilities: “Open printer tools › Action › Send file”), or to the label printer shared on your computer.',
   'help.thermal-labels.note1': 'The file is written for a 203 dpi printer loaded with 100 × 150 mm labels. Set the label size on the printer first: a printer set to another size prints it cut off.',
   'help.thermal-labels.note2': 'A label never carries the code that releases a parcel — only its public tracking key.',
@@ -439,8 +439,9 @@ export const enHelpApp = {
   // consignment-note
   'help.consignment-note.title': 'The consignment note (CMR)',
   'help.consignment-note.summary': 'Every load carries one document from posting to delivery, in the CMR layout: sender, consignee, carrier and vehicle, the goods, taking over and delivery. Across a border it says which law the carriage is under: the CMR where either country is a party to it, the Northern Corridor’s road protocol between its members, or else its contract.',
-  'help.consignment-note.step1': 'Shop app: Freight, open the load, then “Consignment note”. Print or save it for your books.',
-  'help.consignment-note.step2': 'Driver app: “Loads › Consignment note” under the load — show it at a weighbridge, a border or the receiver’s gate.',
+  // 2026-11-02 — the note opens in a slide-up, as it will print (the owner: "the print function in slide up").
+  'help.consignment-note.step1': 'Shop app: Freight, open the load, then “Consignment note”. It opens in a slide-up, page by page as it will print. Print opens the phone’s print screen; choose “Save as PDF” there to keep it for your books. On an iPhone, “Open to print” opens it on a page of its own: tap Share, then Print.',
+  'help.consignment-note.step2': 'Driver app: “Loads › Consignment note” under the load — show it at a weighbridge, a border or the receiver’s gate. “Actual size” shows the page as large as it prints, to read from the phone.',
   'help.consignment-note.step3': 'Driver app, across a border: once you have taken the goods over, “Commercial invoice” is under the load beside the note — the paper the officer asks for. It is not shown before pickup, nor on a load in one country, nor to your fleet’s office: it is the shipper’s paper.',
   'help.consignment-note.step4': 'Fleet app: “Earnings › Consignment note” on any haul.',
   'help.consignment-note.note1': 'Every box is filled from a recorded act — posting, the load-safety check at pickup, the unload report at delivery. A box that says “not recorded” is not recorded; nothing is typed in by hand. The buyer of a store order is named as the buyer, never by phone number.',

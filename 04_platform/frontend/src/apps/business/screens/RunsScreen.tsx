@@ -12,7 +12,7 @@ import type { BusinessClient, BusinessView } from '../api';
 import { mayAct } from '../logic';
 import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
-import { tabAtTheTap } from '../../../shared/openPage';
+import { pageGot, PaperSheet, usePaper } from '../../../shared/ui';
 import { ConsolePick } from '../../tower/ConsolePick';
 import type { RunAsked } from '../../../shared/launch';
 import { bookingNamed, openLinked } from '../../../shared/linkedLoad';
@@ -345,16 +345,11 @@ function BookingDetail({ row, client, act, onClose, onChanged }: { row: MyBookin
     await read();
   };
 
-  const note = async () => {
+  // 2026-11-02 — the booking's note in the slide-up, as it will print (the owner: "the print function in slide up").
+  const paper = usePaper();
+  const note = () => {
     if (!client) return;
-    const tab = tabAtTheTap();
-    try {
-      const r = await client.bookingNote(row.departureId, row.bookingId);
-      if (r.error || !r.data) return setError(t('business.loads.noteGone'));
-      tab.show(r.data);
-    } finally {
-      tab.cancel();
-    }
+    paper.show(t('business.loads.note'), async () => pageGot(await client.bookingNote(row.departureId, row.bookingId), t('business.loads.noteGone')));
   };
 
   return (
@@ -441,6 +436,7 @@ function BookingDetail({ row, client, act, onClose, onChanged }: { row: MyBookin
         </section>
       ) : null}
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
+      <PaperSheet state={paper} look="console" />
     </ConsoleDetail>
   );
 }

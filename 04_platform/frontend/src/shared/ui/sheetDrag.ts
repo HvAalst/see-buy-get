@@ -55,6 +55,15 @@ const reduced = (): boolean => {
   }
 };
 
+/**
+ * A finger that went down in this sheet — not in one opened over it. A sheet opened from a sheet (a load's paper over
+ * the load, 2026-11-02) is drawn inside it, so its touches pass through this one too: they are the top sheet's alone, or
+ * a pull on the paper would drag the load's sheet away under it.
+ */
+export function ownTouch(target: { closest: (selector: string) => unknown }, panel: unknown): boolean {
+  return !target.closest('.sheet__backdrop') && target.closest('.sheet') === panel;
+}
+
 /** Something inside the sheet that scrolls on its own and is not at its top: a pull there is its scroll. */
 function scrolledWithin(from: Element, panel: Element): boolean {
   for (let n: Element | null = from; n && n !== panel; n = n.parentElement) {
@@ -124,7 +133,7 @@ export function useSheetDrag(panelRef: RefObject<HTMLElement>, backdropRef: RefO
     const down = (e: PointerEvent) => {
       if (g || !e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return;
       const target = e.target as Element | null;
-      if (!target || target.closest(NO_PULL)) return;
+      if (!target || target.closest(NO_PULL) || !ownTouch(target, panel)) return;
       const head = onHead(panel, target, e.clientY);
       // A mouse pulls by the handle only: in the body, a drag is choosing text.
       if (!head && (e.pointerType === 'mouse' || panel.scrollTop > 0 || scrolledWithin(target, panel))) return;

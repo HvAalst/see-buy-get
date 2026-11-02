@@ -14,7 +14,8 @@ export interface NoteLinksState {
   /** A link just made: its address, held only while this note is the one being looked at. The server kept no copy. */
   made: MadeLink | null;
   making: boolean;
-  makeLink: () => Promise<void>;
+  /** Make a link; what is made comes back too, so the paper's own Share can pass it on at once (2026-11-02). */
+  makeLink: () => Promise<MadeLink | null>;
   /** Why a link could not be made or cancelled, in the server's own words — it has a limit, and says what to do. */
   problem: string;
 }
@@ -60,17 +61,22 @@ export function useNoteLinks(client: SbgClient | null, docId: string | undefined
   }, [api, docId]);
 
   /** Make a link. Its address is in the answer and nowhere else, so it is held here to be passed on. */
-  const makeLink = useCallback(async () => {
-    if (!api || !docId) return;
+  const makeLink = useCallback(async (): Promise<MadeLink | null> => {
+    if (!api || !docId) return null;
     setMaking(true);
     setProblem('');
     const r: Result<unknown> = await api.makeNoteLink(docId);
-    if (current.current !== docId) return;
+    if (current.current !== docId) return null;
     setMaking(false);
-    if (r.error || !r.data) return setProblem(r.error?.detail || r.error?.title || '');
+    if (r.error || !r.data) {
+      setProblem(r.error?.detail || r.error?.title || '');
+      return null;
+    }
     const answer = narrow<{ url: string; link: DocumentLinkRow }>(r.data);
-    setMade({ url: answer.url, expiresAt: answer.link.expiresAt });
+    const made = { url: answer.url, expiresAt: answer.link.expiresAt };
+    setMade(made);
     setLinks((all) => [answer.link, ...all]);
+    return made;
   }, [api, docId]);
 
   /** Cancel a link. What comes back is the link as it now stands, and replaces the row. */

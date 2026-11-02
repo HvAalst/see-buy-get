@@ -1,5 +1,6 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
-import { PhoneField, Sections } from '../../../shared/ui';
+import { pageGot, PaperSheet, PhoneField, Sections, usePaper } from '../../../shared/ui';
+import { useNoteLinks } from '../../../shared/archive/useNoteLinks';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { foundWords } from '../../../shared/found';
@@ -18,7 +19,6 @@ import { openLinkedLoad } from '../../../shared/linkedLoad';
 import { passageWords } from '../../../shared/passages';
 import { heldLine } from '../../../shared/tamper';
 import { heldByLine } from '../../../shared/heldByAuthority';
-import { tabAtTheTap } from '../../../shared/openPage';
 
 /** A time on the road, as the shipper reads it: its day and hour. */
 const onRoad = (iso: string) => new Date(iso).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -661,6 +661,10 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
   const handed = deliverySays(row, t);
   const road = roadSays(row, t, onRoad);
   const kept = noteKept(row, stage);
+  // 2026-11-02 — the note opens in the slide-up, as it will print (the owner: "the print function in slide up"); once
+  // kept, Share there passes on a link to it — the same links its Papers panel lists, so one made in either shows in both.
+  const paper = usePaper();
+  const noteLinks = useNoteLinks(client ? client.client.sbg : null, kept === 'kept' ? row.noteId : undefined);
   const [proposals, setProposals] = useState<LoadProposal[] | null>(null);
   const [quote, setQuote] = useState<QuoteView | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -692,16 +696,9 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
     await read();
   };
 
-  const note = async () => {
+  const note = () => {
     if (!client) return;
-    const tab = tabAtTheTap();
-    try {
-      const r = await client.shipping.freightNote(row.freightId);
-      if (r.error || !r.data) return setError(t('business.loads.noteGone'));
-      tab.show(r.data as unknown as string);
-    } finally {
-      tab.cancel();
-    }
+    paper.show(t('business.loads.note'), async () => pageGot(await client.shipping.freightNote(row.freightId), t('business.loads.noteGone')));
   };
 
   return (
@@ -974,7 +971,7 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
 
                 {/* The links to its note — the one a receipt was emailed with, and the ones the business made to pass on. Shown to
                     a viewer too: what is a way into the business's papers is everybody's in it to see. */}
-                {kept === 'kept' ? <NoteLinksPanel client={client} noteId={row.noteId!} title={`${row.code} · ${row.description}`} act={act} /> : null}
+                {kept === 'kept' ? <NoteLinksPanel client={client} noteId={row.noteId!} title={`${row.code} · ${row.description}`} act={act} links={noteLinks} /> : null}
               </>
             ),
           },
@@ -1049,6 +1046,8 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
         ]}
       />
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
+      {/* Share is offered where a link may be made: a kept note, and somebody of the business who may act. */}
+      <PaperSheet state={paper} look="console" share={kept === 'kept' && act ? { links: noteLinks, title: `${row.code} · ${row.description}` } : undefined} />
     </ConsoleDetail>
   );
 }

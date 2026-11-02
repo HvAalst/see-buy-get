@@ -33,7 +33,7 @@ export interface ArchiveApiState {
   making: boolean;
   /** Why a link could not be made or cancelled, in the server's own words — it has a limit, and says what to do about it. */
   makeProblem: string;
-  makeLink: () => Promise<void>;
+  makeLink: () => Promise<MadeLink | null>;
   busy: '' | 'csv' | 'bundle' | 'bundles' | 'print';
   load: () => Promise<void>;
   setQuery: (patch: Partial<ArchiveQuery>) => void;

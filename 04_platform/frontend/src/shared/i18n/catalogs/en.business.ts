@@ -1675,6 +1675,8 @@ export const enBusiness = {
   'business.parcels.code': 'Code to collect it',
   'business.parcels.codeHint': 'Pass this code to the person collecting it. The shop asks for it before handing it over.',
   'business.parcels.printLabel': 'Print its label',
+  // 2026-11-02 — the label opens in the slide-up, as it will print (the owner: "the print function in slide up").
+  'business.parcels.labelTitle': 'The parcel’s label',
   'business.parcels.payNow': 'Pay {price} now',
   'business.parcels.paidNow': '{id} is paid. Print its label and hand it in.',
   'business.parcels.callOff': 'Call it off',

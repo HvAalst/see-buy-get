@@ -1,78 +1,35 @@
-import { useRef, useState } from 'preact/hooks';
-import type { Result, SbgError } from '../../lib/sbg';
-import { useT } from '../i18n';
+import type { Result } from '../../lib/sbg';
 import { Button } from './Button';
-import { ErrorNote, Note } from './ErrorNote';
 import { Icon } from './Icon';
-import { Sheet } from './Sheet';
+import { fetchPaper, PaperSheet, usePaper, type KeptDocument, type PaperLook } from './PaperSheet';
+
+export type { KeptDocument } from './PaperSheet';
 
 /**
- * A button that opens a DOCUMENT the server renders — the consignment note today — inside the app, with a way to
- * print or save it. Self-contained: it fetches when tapped, so no screen has to hold a document in its state, and
- * the token stays in the app (a document behind a bearer cannot simply be a link).
+ * A button that opens a DOCUMENT the server renders — the consignment note, an invoice, a letter of instruction —
+ * inside the app, with a way to print or save it. Self-contained: it fetches when tapped, so no screen has to hold a
+ * document in its state, and the token stays in the app (a document behind a bearer cannot simply be a link).
+ *
+ * 2026-11-02 — it opens in the paper's own slide-up (PaperSheet.tsx; the owner: "can we have a print preview of the
+ * consignment note? and the print function in slide up"): the pages as they will print, Print under them. The copy
+ * kept on the phone for no signal is shown as before, saying when it was kept. `look="console"` dresses the button as
+ * the Business app draws its own.
  */
-/** Where a document is kept on the phone (shared/keptPapers.ts): read with no signal, written when it is fetched. */
-export interface KeptDocument {
-  get: () => { html: string; keptAt: string } | null;
-  put: (html: string) => void;
-}
-
-const noSignal = (e: SbgError) => e.code === 'NETWORK' || e.code === 'OFFLINE' || e.code === 'TIMEOUT';
-
-export function DocumentButton({ label, title, fetch, variant = 'link', kept }: { label: string; title: string; fetch: () => Promise<Result<unknown>>; variant?: 'link' | 'outline'; kept?: KeptDocument }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const [html, setHtml] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<SbgError | null>(null);
-  // The copy kept on this phone, shown because there was no signal: when it was kept.
-  const [keptAt, setKeptAt] = useState<string | null>(null);
-  const frame = useRef<HTMLIFrameElement>(null);
-
-  const show = async () => {
-    setBusy(true);
-    setError(null);
-    setKeptAt(null);
-    const r = await fetch();
-    setBusy(false);
-    if (r.error) {
-      // No signal, and a copy kept on this phone: the copy, saying when it was kept. Any other refusal is said as it is.
-      const copy = noSignal(r.error) ? kept?.get() : null;
-      if (copy) {
-        setHtml(copy.html);
-        setKeptAt(copy.keptAt);
-        setOpen(true);
-        return;
-      }
-      setError(r.error);
-      setOpen(true);
-      return;
-    }
-    const doc = typeof r.data === 'string' ? r.data : String(r.data ?? '');
-    setHtml(doc);
-    kept?.put(doc);
-    setOpen(true);
-  };
-
+export function DocumentButton({ label, title, fetch, variant = 'link', kept, look = 'app' }: { label: string; title: string; fetch: () => Promise<Result<unknown>>; variant?: 'link' | 'outline'; kept?: KeptDocument; look?: PaperLook }) {
+  const paper = usePaper();
+  const open = () => paper.show(title, () => fetchPaper(fetch, kept));
   return (
     <>
-      <Button variant={variant} full={false} chevron={false} busy={busy} onClick={() => void show()}>
-        <Icon name="edit" size={18} /> {label}
-      </Button>
-      <Sheet open={open} onClose={() => setOpen(false)} title={title}>
-        {error ? <ErrorNote error={error} onRetry={() => void show()} /> : null}
-        {html ? (
-          <>
-            {keptAt ? <Note tone="warn" icon="offline" title={t('common.doc.keptTitle')} detail={t('common.doc.keptDetail', { when: new Date(keptAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) })} /> : null}
-            <iframe ref={frame} class="doc" title={title} srcDoc={html} style="width:100%; height:70vh; border:1px solid var(--line, #dcdce4); border-radius:10px; background:#fff" />
-            <div class="btnrow" style="margin-top:10px">
-              <Button variant="outline" full={false} chevron={false} onClick={() => frame.current?.contentWindow?.print()}>
-                {t('common.doc.print')}
-              </Button>
-            </div>
-          </>
-        ) : null}
-      </Sheet>
+      {look === 'console' ? (
+        <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={paper.loading} onClick={open}>
+          {label}
+        </button>
+      ) : (
+        <Button variant={variant} full={false} chevron={false} busy={paper.loading} onClick={open}>
+          <Icon name="edit" size={18} /> {label}
+        </Button>
+      )}
+      <PaperSheet state={paper} look={look} />
     </>
   );
 }

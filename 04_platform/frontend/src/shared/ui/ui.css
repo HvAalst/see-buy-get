@@ -532,6 +532,180 @@
   -webkit-user-select: none;
 }
 
+/* ------------------------------------------------------------- PaperSheet -- */
+
+/* 2026-11-02 — A PAPER IN THE SLIDE-UP, AS IT WILL PRINT (PaperSheet.tsx; the owner: "can we have a print preview of the
+   consignment note? and the print function in slide up"). Each page a white sheet on a grey ground, as a print screen
+   shows it; the row of Print, Share and Close held at the sheet's foot while the pages scroll under it. At a desk the
+   sheet is an A4 page wide and no wider. */
+.paper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .sheet:has(.paper) {
+    max-width: 920px;
+    margin-inline: auto;
+  }
+}
+
+.paper__wait,
+.paper__hint,
+.paper__count {
+  color: var(--tx2);
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.paper__count {
+  font-size: 14px;
+}
+
+.paper__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.paper__zoom {
+  min-height: 44px;
+  margin-left: auto;
+}
+
+/* The grey of a print screen, to the sheet's edges on a phone; it scrolls sideways only at actual size. */
+.paper__ground {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-inline: -12px;
+  padding: 12px;
+  border-radius: var(--r-card);
+  background: #d9dde3;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.paper__ground--actual {
+  align-items: flex-start;
+}
+
+.paper__page {
+  position: relative;
+  flex: none;
+  margin: 0;
+}
+
+/* Paper is white, whatever the app around it is dressed in. */
+.paper__sheet {
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 9, 99, 0.18), 0 6px 18px rgba(0, 9, 99, 0.1);
+  transform-origin: 0 0;
+}
+
+.paper__window {
+  overflow: hidden;
+  background: #fff;
+}
+
+/* The paper takes no finger: a touch on it scrolls the sheet, and a pull closes it, as anywhere else in a sheet. */
+.paper__frame {
+  display: block;
+  border: 0;
+  background: #fff;
+  pointer-events: none;
+}
+
+.paper__pageno {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  transform: translateY(100%);
+  text-align: center;
+  font-size: 12px;
+  color: var(--tx2);
+}
+
+.paper__page + .paper__page,
+.paper__ground:has(.paper__pageno) .paper__page {
+  margin-bottom: 14px;
+}
+
+.paper__pdf {
+  display: block;
+  width: 100%;
+  height: 70vh;
+  border: 1px solid var(--bd-soft);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.paper__link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.paper__url {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r-ctl);
+  font: 14px var(--font-mono);
+  background: var(--bg);
+  color: var(--tx);
+}
+
+.paper__problemline {
+  color: var(--dang);
+  font-size: 15px;
+}
+
+.paper__problem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* Held at the foot of the sheet over the pages, across the sheet's own bottom padding. */
+.paper__acts {
+  position: sticky;
+  bottom: calc(-20px - var(--sa-b));
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -20px calc(-20px - var(--sa-b));
+  padding: 10px 20px calc(12px + var(--sa-b));
+  background: var(--bg);
+  border-top: 1px solid var(--bd-soft);
+}
+
+.paper__acts .btn,
+.paper__acts .cbtn {
+  min-height: 48px;
+}
+
+.paper__acts .btn--primary,
+.paper__acts .cbtn--primary {
+  flex: 1 1 auto;
+}
+
+.paper__acts .cbtn {
+  padding: 8px 18px;
+  font-size: 15px;
+}
+
 /* ----------------------------------------------------------- NavScreen -- */
 
 /* 2026-11-02 — A SCREEN ARRIVES AS AN APP'S DOES (NavScreen.tsx). Forward comes in from the right, back from the

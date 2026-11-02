@@ -127,7 +127,7 @@ export function ExportInvoice({ d, client, mine, signatory, onDetail }: { d: Exp
                 </span>
                 <span class="crow__sub">{t('business.exports.invoice.versionLine', { who: v.signedBy, when: utcWords(v.signedAt), total: moneyWords(v.currency, v.total) })}</span>
                 <span class="twr-panelend">
-                  <DocumentButton label={t('business.exports.sli.open')} title={t('business.exports.sli.version', { n: v.version })} fetch={() => client.exports.invoicePage(c.exportId, { version: v.version })} />
+                  <DocumentButton look="console" label={t('business.exports.sli.open')} title={t('business.exports.sli.version', { n: v.version })} fetch={() => client.exports.invoicePage(c.exportId, { version: v.version })} />
                 </span>
               </span>
             </div>
@@ -270,7 +270,7 @@ export function ExportInvoice({ d, client, mine, signatory, onDetail }: { d: Exp
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void save()}>
               {t('business.exports.sli.save')}
             </button>
-            {inv.draft ? <DocumentButton label={t('business.exports.sli.preview')} title={t('business.exports.sli.preview')} fetch={() => client.exports.invoicePage(c.exportId, { draft: true })} /> : null}
+            {inv.draft ? <DocumentButton look="console" label={t('business.exports.sli.preview')} title={t('business.exports.sli.preview')} fetch={() => client.exports.invoicePage(c.exportId, { draft: true })} /> : null}
           </div>
           <div class="biz-two">
             {input(t('business.exports.sli.signatory'), who, setWho, { max: 120 })}

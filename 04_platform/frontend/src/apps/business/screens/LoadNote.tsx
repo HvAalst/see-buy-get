@@ -4,7 +4,7 @@ import { narrow, type Result } from '../../../lib/sbg';
 import { createArchiveApi, type ArchivedNoteDoc } from '../../../lib/sbg/personas/archive';
 import { linkRowSays, splitLinks } from '../../../shared/archive/documentLink';
 import { canShareFiles, fileNameFor, handOverFile, passOnLink, waysToPassOn } from '../../../shared/archive/handOver';
-import { useNoteLinks } from '../../../shared/archive/useNoteLinks';
+import { useNoteLinks, type NoteLinksState } from '../../../shared/archive/useNoteLinks';
 import { day, retentionLines } from '../../../shared/archive/words';
 import type { BusinessClient } from '../api';
 import { linksTag } from '../logic';
@@ -71,10 +71,14 @@ export function NoteFile({ client, noteId, code }: { client: BusinessClient | nu
   );
 }
 
-/** The links to this load's note: where each went, how it was used, whether it still opens — and making and stopping one. */
-export function NoteLinksPanel({ client, noteId, title, act }: { client: BusinessClient | null; noteId: string; title: string; act: boolean }) {
+/**
+ * The links to this load's note: where each went, how it was used, whether it still opens — and making and stopping one.
+ * `links` — the screen's own, where the note's slide-up shares a link too (2026-11-02): one made there is listed here.
+ */
+export function NoteLinksPanel({ client, noteId, title, act, links: given }: { client: BusinessClient | null; noteId: string; title: string; act: boolean; links?: NoteLinksState }) {
   const t = useT();
-  const links = useNoteLinks(client ? client.client.sbg : null, noteId);
+  const own = useNoteLinks(given || !client ? null : client.client.sbg, given ? undefined : noteId);
+  const links = given ?? own;
   const [asking, setAsking] = useState('');
   const [passed, setPassed] = useState('');
   const [showStopped, setShowStopped] = useState(false);
