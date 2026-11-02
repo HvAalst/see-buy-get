@@ -10,6 +10,7 @@ import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { ChoosePinSheet } from '../../../shared/account/ChoosePinSheet';
 import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
+import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
 import { fleetConfig } from '../api';
 
 // Built once: the doors a person uses before they are signed in.
@@ -66,6 +67,14 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const again = useRef<() => void>(() => undefined);
   const confirming = isNewDevice(error) && closedFor !== error;
+  /**
+   * 2026-11-02 — where the fingerprint or face was turned on for this number here, it is the first choice; the PIN is one
+   * tap away. The ticket it brings is held apart from the PIN box, and sent wherever the PIN would be — "which fleets are
+   * mine", then the fleet chosen from that list (the server hands that second door a fresh ticket of its own).
+   */
+  const unlock = useUnlockFirst(phone);
+  const [ticket, setTicket] = useState('');
+  const secret = ticket || pin;
   /**
    * Their fleets, found by phone and PIN. One fleet, and active: it opens at once, as every other app opens on a phone
    * and PIN. Several, or one not active yet: they are listed, each with where it stands.
@@ -138,22 +147,37 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           enterKeyHint="next"
         />
       </div>
-      <div class="field">
-        <label class="field__label" for="mgr-pin">
-          {t('fleet.signin.pinLabel')}
-        </label>
-        <input
-          id="mgr-pin"
-          class="input input--mono"
-          type="password"
-          inputMode="numeric"
-          value={pin}
-          maxLength={PIN_LENGTH}
-          onInput={(e) => setPin(e.currentTarget.value)}
-          autocomplete="current-password"
-          enterkeyhint="go"
-        />
-      </div>
+      <UnlockFirst
+        state={unlock}
+        phone={phone}
+        config={fleetConfig()}
+        busy={busy}
+        onTicket={(unlocked) => {
+          setTicket(unlocked);
+          if (mode === 'phone') attempt(() => open(phone, unlocked));
+          else attempt(() => void actions.signIn(phone, unlocked));
+        }}
+      >
+        <div class="field">
+          <label class="field__label" for="mgr-pin">
+            {t('fleet.signin.pinLabel')}
+          </label>
+          <input
+            id="mgr-pin"
+            class="input input--mono"
+            type="password"
+            inputMode="numeric"
+            value={pin}
+            maxLength={PIN_LENGTH}
+            onInput={(e) => {
+              setPin(e.currentTarget.value);
+              setTicket('');
+            }}
+            autocomplete="current-password"
+            enterkeyhint="go"
+          />
+        </div>
+      </UnlockFirst>
     </>
   );
 
@@ -179,7 +203,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
             <div class="rows">
               {/* A fleet that signed itself up is listed before it is active — said in words, and not a door yet. */}
               {fleets.map((f) => (
-                <button key={f.did} type="button" class="row" disabled={busy || f.status !== 'ACTIVE'} onClick={() => attempt(() => void actions.signInToFleet(f.did, phone, pin))}>
+                <button key={f.did} type="button" class="row" disabled={busy || f.status !== 'ACTIVE'} onClick={() => attempt(() => void actions.signInToFleet(f.did, phone, secret))}>
                   <span class="row__body">
                     <span class="row__t">{f.companyName}</span>
                     <span class="row__s">{t(FLEET_STANDS[f.status] ?? 'fleet.signin.stands.other')}</span>
@@ -190,7 +214,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           </Card>
         )}
 
-        {fleets === null ? (
+        {fleets === null && !unlock.offered ? (
           <div class="scr__cta">
             <Button type="submit" disabled={!phone.trim() || !pin.trim()} busy={busy}>
               {t('fleet.signin.submit')}
@@ -265,11 +289,13 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
         </Card>
       )}
 
-      <div class="scr__cta">
-        <Button type="submit" disabled={company ? !phone.trim() || !pin.trim() : !code.trim()} busy={busy}>
-          {company ? t('fleet.signin.submit') : t('fleet.signin.next')}
-        </Button>
-      </div>
+      {company && unlock.offered ? null : (
+        <div class="scr__cta">
+          <Button type="submit" disabled={company ? !phone.trim() || !pin.trim() : !code.trim()} busy={busy}>
+            {company ? t('fleet.signin.submit') : t('fleet.signin.next')}
+          </Button>
+        </div>
+      )}
       {company ? (
         <Button variant="link" onClick={() => actions.clearCompany()}>
           {t('fleet.signin.otherCompany')}

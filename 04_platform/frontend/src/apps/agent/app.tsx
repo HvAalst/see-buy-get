@@ -35,8 +35,15 @@ import { agentWorkLine } from './logic';
 import { LoadFinderContext, loadFinderFor } from '../../shared/loadFinder';
 import { ParcelFinderContext, parcelFinderFor } from '../../shared/parcelFinder';
 import { ownerOnlyScreen, type StaffAtCounter } from './staff';
+import { screensOf, useScreenNav } from '../../shared/nav';
+import { NavScreen } from '../../shared/ui/NavScreen';
 
 type Tab = 'home' | 'accept' | 'release' | 'records';
+
+// 2026-11-02 — Back, as an app means it (shared/nav.ts): the counter is home, the tab bar's screens swap in place, and a
+// shortcut on the app's icon may open any screen (an owner's screen opens the counter for one of the shop's people).
+const TABS: readonly Screen[] = ['accept', 'release', 'collect', 'records'];
+const LAUNCH = screensOf<Screen>({ home: true, accept: true, handover: true, bag: true, release: true, collect: true, receivebag: true, rates: true, void: true, records: true, consignments: true, shelf: true, freight: true, tamper: true });
 
 export function App() {
   const t = useT();
@@ -69,6 +76,7 @@ export function App() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
+  const nav = useScreenNav<Screen>({ screen: state.screen, home: 'home', tabs: TABS, ready: state.phase === 'ready', go: actions.go, launch: LAUNCH });
 
   if (state.phase === 'outdated') return <UpdateGate />;
   if (state.phase === 'boot') return <Boot />;
@@ -79,7 +87,7 @@ export function App() {
         <TopBar title={t('agent.appTitle')} subtitle={t('agent.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-          <AppLayer app="agent" />
+          <AppLayer app="agent" chats={null} />
           <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} deviceAsk={state.deviceAsk} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -106,8 +114,8 @@ export function App() {
         title={t('agent.appTitle')}
         subtitle={agentWorkLine(state.agent, state.shopParcels, t)}
         subtitleHint={state.agent?.shopName}
-        onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
-        backLabel={t('agent.backToShop')}
+        onBack={state.screen === 'home' ? undefined : nav.back}
+        backLabel={nav.backTo && nav.backTo !== 'home' ? t('common.back') : t('agent.backToShop')}
         end={
           <>
             <NotificationBell api={notifications} />
@@ -137,10 +145,12 @@ export function App() {
 
       <main class="app__scroll">
         {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-        <AppLayer app="agent" />
+        <AppLayer app="agent" chats={actions.chatApi} onRefresh={actions.refresh} />
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} fiscal={fiscal} sbg={sbg} />
+        <NavScreen nav={nav}>
+          <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} fiscal={fiscal} sbg={sbg} />
+        </NavScreen>
       </main>
 
       <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} />

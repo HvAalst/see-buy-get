@@ -1781,7 +1781,9 @@ export class ManagerSessionDto {
   @IsOptional() @IsString() code?: string;
   @IsOptional() @IsString() did?: string;
   @IsString() phone!: string;
-  @IsString() pin!: string;
+  /** Or the unlock ticket in its place, which a fingerprint or face on this device was just checked for (passkeys.ts, 2026-11-02). */
+  @ValidateIf((o: { unlock?: string }) => !o.unlock) @IsString() pin?: string;
+  @IsOptional() @IsString() @MaxLength(80) unlock?: string;
   /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
   @IsOptional() @IsString() @MaxLength(120) device?: string;
 }
@@ -1789,7 +1791,9 @@ export class ManagerSessionDto {
 /** Forgot the fleet code: phone + PIN name the fleets this person manages. */
 export class ManagerChoicesDto {
   @IsString() phone!: string;
-  @IsString() pin!: string;
+  /** Or the unlock ticket in its place, which a fingerprint or face on this device was just checked for (passkeys.ts, 2026-11-02). */
+  @ValidateIf((o: { unlock?: string }) => !o.unlock) @IsString() pin?: string;
+  @IsOptional() @IsString() @MaxLength(80) unlock?: string;
   /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
   @IsOptional() @IsString() @MaxLength(120) device?: string;
 }
@@ -1797,7 +1801,9 @@ export class ManagerChoicesDto {
 /** A driver signs in: the phone they were registered with, and their PIN. `did` only picks one if the phone drives for several. */
 export class DriverSessionDto {
   @IsString() phone!: string;
-  @IsString() pin!: string;
+  /** Or the unlock ticket in its place, which a fingerprint or face on this device was just checked for (passkeys.ts, 2026-11-02). */
+  @ValidateIf((o: { unlock?: string }) => !o.unlock) @IsString() pin?: string;
+  @IsOptional() @IsString() @MaxLength(80) unlock?: string;
   @IsOptional() @IsString() did?: string;
   /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
   @IsOptional() @IsString() @MaxLength(120) device?: string;
@@ -2180,7 +2186,9 @@ export class CreateInviteDto {
 /** Reopen the app: phone + 4-digit PIN, no OTP. */
 export class PinLoginDto {
   @IsString() phone!: string;
-  @IsString() pin!: string;
+  /** Or the unlock ticket in its place, which a fingerprint or face on this device was just checked for (passkeys.ts, 2026-11-02). */
+  @ValidateIf((o: { unlock?: string }) => !o.unlock) @IsString() pin?: string;
+  @IsOptional() @IsString() @MaxLength(80) unlock?: string;
   /** The key this device was handed when a code to the phone was typed on it. Without it the PIN is not looked at. */
   @IsOptional() @IsString() @MaxLength(120) device?: string;
 }

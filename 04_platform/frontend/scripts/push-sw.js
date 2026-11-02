@@ -46,7 +46,20 @@ self.addEventListener('push', (event) => {
     data: Object.assign({ link: link, kind: payload.kind }, payload.data || {}),
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  // 2026-11-02 — the app's icon is marked too, as a native app's is (shared/appBadge.ts): the exact count when the
+  // message carries one, else a plain mark, set right the next time the app is open. Where badges are not drawn,
+  // or the browser refuses, the notification shows all the same.
+  var badge = Promise.resolve();
+  try {
+    var nav = self.navigator;
+    if (nav && typeof nav.setAppBadge === 'function') {
+      badge = (typeof payload.unread === 'number' && payload.unread > 0 ? nav.setAppBadge(payload.unread) : nav.setAppBadge()).catch(function () {});
+    }
+  } catch (_e) {
+    /* no badges here */
+  }
+
+  event.waitUntil(Promise.all([self.registration.showNotification(title, options), badge]));
 });
 
 self.addEventListener('notificationclick', (event) => {
@@ -80,13 +93,15 @@ self.addEventListener('notificationclick', (event) => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       // Prefer focusing an already-open window of THIS app, navigating it to the deep link.
       for (const client of windows) {
-        if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
+        if (ofThisApp(client.url, self.registration.scope) && 'focus' in client) {
           await client.focus();
           if ('navigate' in client && client.url !== target) {
             try {
               await client.navigate(target);
             } catch (_e) {
-              /* cross-origin or detached — the focus alone is still the right outcome */
+              // 2026-11-02 — a window this worker does not control cannot be sent somewhere: the link is opened
+              // rather than dropped, so the tap still lands where the notice pointed.
+              if (self.clients.openWindow) await self.clients.openWindow(target);
             }
           }
           return;
@@ -96,6 +111,22 @@ self.addEventListener('notificationclick', (event) => {
     })(),
   );
 });
+
+/**
+ * 2026-11-02 — Is this window one of THIS app's? The front page's scope is the site's root, which every other app's
+ * address also starts with: under it, a window of the Driver or the Shop app is not the front page's, and must not be
+ * taken over by a notice meant for the front page.
+ */
+var OTHER_APPS = ['/driver/', '/agent/', '/send/', '/fleet/', '/mdp/', '/vendor/', '/business/', '/tower/'];
+function ofThisApp(url, scope) {
+  if (!url || !url.startsWith(scope)) return false;
+  var scopePath = new URL(scope).pathname;
+  if (scopePath !== '/') return true;
+  var path = new URL(url).pathname;
+  return !OTHER_APPS.some(function (base) {
+    return path.startsWith(base);
+  });
+}
 
 /** Resolve an app asset against the SW scope so the correct per-app icon is used. */
 function iconUrl(path) {

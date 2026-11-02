@@ -7,6 +7,7 @@ import type { DirectoryListingView } from '../../shared/directoryListing';
 import type { CompanyKey, CompanyKeyIssued } from '../../shared/companyKeys';
 import type { CommercialInvoice, CommercialInvoiceView, Gs1View, PackageLabels } from './papers';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
+import { secretBody } from '../../shared/account/unlock';
 import { createAgentApi, createNotificationsApi, createOperatorApi, createSeededClient, makeConfig, publicRequest, type AgentApi, type NotificationsApi, type OperatorApi, type Result, type SbgConfig, type SeededAppClient } from '../../lib/sbg';
 import { inboundApi, type InboundApi } from './inbound';
 import { exportsApi, type ExportsApi } from './exports';
@@ -68,7 +69,8 @@ export async function enroll(phone: string, pin: string, recovery?: { email: str
 
 export function pinLogin(phone: string, pin: string): Promise<Result<PersonAuth>> {
   // `device`: the key this phone or browser was handed when the code was typed on it. Without it the PIN is not looked at.
-  return publicRequest<PersonAuth>(businessConfig(), '/v1/sbg/identity/login', { body: { phone, pin, device: readDeviceKey(phone) } });
+  // `secretBody`: the PIN, or (2026-11-02) a fingerprint-or-face unlock ticket sent as `unlock` in its place.
+  return publicRequest<PersonAuth>(businessConfig(), '/v1/sbg/identity/login', { body: { phone, ...secretBody(pin), device: readDeviceKey(phone) } });
 }
 
 /* ---------------------------------------------------------------- the person -- */

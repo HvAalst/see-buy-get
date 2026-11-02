@@ -535,6 +535,11 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/account/pin-devices': 'none',
   'POST sbg/account/pin-devices/forget-others': 'none',
   'POST sbg/account/pin-devices/forget-this': 'none',
+  // 2026-11-02 — unlock with fingerprint or face: a person's own, on their own device. Staff turn nobody's on or off.
+  'POST sbg/account/passkey': 'none',
+  'POST sbg/account/passkey/options': 'none',
+  'POST sbg/account/passkey/on': 'none',
+  'POST sbg/account/passkey/off': 'none',
   'POST sbg/account/pin/change': 'none',
   'POST sbg/account/shop-devices': 'none',
   'POST sbg/account/shop-devices/forget-others': 'none',

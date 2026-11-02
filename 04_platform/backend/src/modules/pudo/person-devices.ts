@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
+import type { DevicePasskey } from './passkeys';
 
 /**
  * THE DEVICES A PERSON'S PIN WORKS ON (the user, 2026-10-11: "I thought that the pin was unique to the device. so
@@ -23,6 +24,12 @@ export interface KnownDevice {
   addedAt: string;
   /** When its key last came with the right PIN, or with a code typed on it again. Absent: not since it was confirmed. */
   usedAt?: string;
+  /**
+   * 2026-11-02 — ITS FINGERPRINT-OR-FACE UNLOCK, where its owner turned one on here (the owner: "if face unlock works,
+   * integrate it, but then in settings users should be able to undo it"). Kept ON the device's own record, so that it
+   * goes with the device, by every path that forgets one, and there is no second place to forget it from. See passkeys.ts.
+   */
+  passkey?: DevicePasskey;
 }
 
 /** The least recently used goes when an eleventh is added: a phone, a tablet, the office computer, and room to replace each twice. */
@@ -91,6 +98,43 @@ export class DeviceBook {
     const at = new Date(now).toISOString();
     if (d.usedAt?.slice(0, 10) === at.slice(0, 10)) return;
     this.store.set(hash, { ...d, usedAt: at });
+  }
+
+  /* ---------------------------------------------- 2026-11-02: unlock with fingerprint or face, per device -- */
+
+  /** This device's passkey, where it is a device of this person's (still known) and one was turned on here. */
+  passkeyOf(personDid: string | undefined, key: string | undefined, now: number = Date.now()): DevicePasskey | undefined {
+    if (!this.knows(personDid, key, now)) return undefined;
+    return this.store.get(hashOf(key as string))?.passkey;
+  }
+
+  /** Turn it on here: replaces any passkey this device had. False when this is not a known device of this person's. */
+  setPasskey(personDid: string, key: string, passkey: DevicePasskey, now: number = Date.now()): boolean {
+    if (!this.knows(personDid, key, now)) return false;
+    const hash = hashOf(key);
+    this.store.set(hash, { ...(this.store.get(hash) as KnownDevice), passkey });
+    return true;
+  }
+
+  /** Turn it off here: the device stays one the PIN works on. The passkey it had, or undefined when it had none. */
+  dropPasskey(personDid: string, key: string | undefined): DevicePasskey | undefined {
+    if (!key) return undefined;
+    const hash = hashOf(key);
+    const d = this.store.get(hash);
+    if (!d || d.personDid !== personDid || !d.passkey) return undefined;
+    const { passkey, ...rest } = d;
+    this.store.set(hash, rest);
+    return passkey;
+  }
+
+  /** It unlocked: the phone's counter as it now stands, and the day (written once a day at most, like `used`). */
+  passkeyUsed(personDid: string, key: string, counter: number, now: number = Date.now()): void {
+    const hash = hashOf(key);
+    const d = this.store.get(hash);
+    if (!d || d.personDid !== personDid || !d.passkey) return;
+    const at = new Date(now).toISOString();
+    if (d.passkey.counter === counter && d.passkey.usedAt?.slice(0, 10) === at.slice(0, 10)) return;
+    this.store.set(hash, { ...d, passkey: { ...d.passkey, counter, usedAt: at } });
   }
 
   /** How many devices this person's PIN works on. */

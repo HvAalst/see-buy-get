@@ -516,6 +516,66 @@
   padding-top: 6px;
 }
 
+/* 2026-11-02 — PULLED DOWN TO CLOSE (sheetDrag.ts; the owner: "make it as native as today can be"). Scrolling to the
+   end of a sheet never scrolls what is under it; the handle is the thumb's, never the page's; and while a pull is on,
+   no words are chosen by the finger (its own rising is switched off from the script, for the rest of its life). */
+.sheet {
+  overscroll-behavior: contain;
+}
+
+.sheet__grab {
+  touch-action: none;
+}
+
+.sheet--dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ----------------------------------------------------------- NavScreen -- */
+
+/* 2026-11-02 — A SCREEN ARRIVES AS AN APP'S DOES (NavScreen.tsx). Forward comes in from the right, back from the
+   left: a short travel and a fade, about a fifth of a second, easing out — the arriving half of Material's shared
+   axis. Tabs swap in place and the first screen just appears (no class). Only transform and opacity move, so nothing
+   is laid out again; the body clips sideways overflow, so the page never scrolls sideways during the travel. */
+.navscreen--push {
+  animation: sbg-screen-push 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.navscreen--pop {
+  animation: sbg-screen-pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes sbg-screen-push {
+  from {
+    transform: translate3d(32px, 0, 0);
+    opacity: 0.2;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes sbg-screen-pop {
+  from {
+    transform: translate3d(-32px, 0, 0);
+    opacity: 0.2;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* Vestibular safety: the screen still changes, it just does not travel. */
+@media (prefers-reduced-motion: reduce) {
+  .navscreen--push,
+  .navscreen--pop {
+    animation: none;
+  }
+}
+
 /* --------------------------------------------------------------- TopBar -- */
 
 .topbar {
@@ -3283,4 +3343,161 @@ a.btn {
 .iguide__step + .btn,
 .iguide__said + .btn {
   margin-top: 22px;
+}
+
+/* ------------------------------------------------------ pull to refresh -- */
+
+/* 2026-11-02 — the native list's gesture (shared/ui/PullToRefresh.tsx): a circle comes down from under the top bar as
+   the finger pulls, turns orange when letting go would refresh, and spins while the screen loads again. */
+.ptr {
+  position: fixed;
+  top: calc(var(--topbar-h) + var(--sa-t) + 4px);
+  left: 50%;
+  z-index: 45;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--tx3);
+  box-shadow: var(--sh-lg);
+  transform: translate(-50%, 0);
+  pointer-events: none;
+}
+.ptr--armed,
+.ptr--busy {
+  color: var(--org);
+}
+.ptr--busy {
+  transform: translate(-50%, 56px);
+}
+.ptr__ic {
+  display: flex;
+}
+.ptr--busy .ptr__ic {
+  animation: sbg-spin 0.8s linear infinite;
+}
+
+/* 2026-11-02 — SHARED WITH SEEBUYGET (shared/conversation/SharedIn.tsx): what was shared, as it will read in the chat — its
+   own lines kept, a long link broken anywhere rather than pushing the sheet sideways on a phone. */
+.sharedin__what {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-ctl);
+  background: var(--panel);
+  border: 1px solid var(--bd-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--tx);
+}
+.sharedin__link {
+  color: var(--blue);
+  text-decoration: underline;
+  word-break: break-all;
+}
+.sharedin__acts,
+.sharedin__heldacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.sharedin__done {
+  margin-bottom: 12px;
+}
+.sharedin__refused {
+  margin: 6px 4px 0;
+}
+.sharedin__held {
+  margin-bottom: 12px;
+}
+
+/* ------------------------------------------- a long record in sections -- */
+
+/* 2026-11-02 — shared/ui/Sections.tsx (the owner: "a sticky but swipable subheader"): the names pinned to the top of the
+   detail as it scrolls — the top of a sheet on a phone, under the console's mast at a desk — the one now underlined in
+   the accent, as a tab bar marks where you are. The content swipes sideways; up and down stays the page's own. */
+.secs {
+  --secs-top: 0px;
+}
+.twr-detail .secs {
+  --secs-top: var(--c-mast-h, 0px);
+}
+/* In a sheet the row covers the sheet's own top padding, so nothing scrolls past above it. */
+.sheet .secs {
+  --secs-top: -10px;
+}
+.sheet .secs__tabs {
+  padding-top: 14px;
+}
+.secs__tabs {
+  position: sticky;
+  top: var(--secs-top);
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 0 14px;
+  padding-top: 4px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--bd-soft);
+}
+.secs__tabs::-webkit-scrollbar {
+  display: none;
+}
+.secs__tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tx3);
+  cursor: pointer;
+}
+.secs__tab--on {
+  color: var(--tx);
+  border-bottom-color: var(--org);
+}
+.secs__count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--blue-light);
+  color: var(--blue-dark);
+  font-size: 12px;
+  text-align: center;
+}
+.secs__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--org);
+}
+.secs__panes {
+  touch-action: pan-y;
+}
+.secs__panes:not([style]) {
+  transition: transform 0.18s ease-out;
+}
+.secs__pane {
+  display: grid;
+  gap: 14px;
+  animation: sbg-fade 0.2s ease-out;
+}
+.secs__pane[hidden] {
+  display: none;
 }

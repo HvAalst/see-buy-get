@@ -155,6 +155,9 @@ export const ERROR_CODES = {
   AUTH_FAILED: { status: 401, title: 'Wrong email or password' },
   AUTH_CODE_INVALID: { status: 401, title: 'Unknown sign-in code' },
   AUTH_NOT_ACTIVE: { status: 401, title: 'This account is not active yet' },
+  // 2026-11-02 — a fingerprint or face unlock that did not check out, or whose ticket ran out or was used: unlock again,
+  // or use the PIN. A 401: it is said at a sign-in door, where nobody is signed in yet.
+  UNLOCK_FAILED: { status: 401, title: 'The fingerprint or face unlock did not go through' },
   // Money is created by a confirmed payment, so an unsigned or replayed confirmation is refused the way
   // a forged token is — these two are the lock on the door that creates money.
   CALLBACK_UNSIGNED: { status: 401, title: 'This payment confirmation is not signed' },
@@ -186,6 +189,9 @@ export const ERROR_CODES = {
   // A phone + PIN sign-in from a device no code to that phone was ever typed on. The PIN was not looked at. A 403
   // of its own (never a 401, never "wrong PIN"): the app's answer is to send the code and confirm the device.
   DEVICE_NOT_KNOWN: { status: 403, title: 'This device has not signed in to this account before' },
+  // 2026-11-02 — unlocking with fingerprint or face (modules/pudo/passkeys.ts): this device holds no passkey of this
+  // account (turned off, or never on). The app forgets its mark and shows the PIN.
+  UNLOCK_OFF: { status: 403, title: 'Unlocking with fingerprint or face is off on this device' },
   // The same, for a store asked for its password (or, with no account yet, its current secret) before its signing
   // secret is replaced: it is signed in, and a mistyped password must not be read as "your sign-in ended".
   PASSWORD_WRONG: { status: 403, title: 'That is not the password' },

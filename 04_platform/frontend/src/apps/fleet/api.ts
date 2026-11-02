@@ -1,4 +1,5 @@
 import { readDeviceKey } from '../../shared/account/pin';
+import { relayUnlock, secretBody } from '../../shared/account/unlock';
 import {
   createConversationsApi,
   createFleetApi,
@@ -51,17 +52,22 @@ export function managerLookup(code: string): Promise<Result<{ did: string; compa
  * whose sign-in screen is decoration.
  */
 export function managerSession(code: string, phone: string, pin: string): Promise<Result<ManagerView & { token: MintedToken }>> {
-  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { code, phone, pin, device: readDeviceKey(phone) } });
+  // `secretBody`: the PIN, or (2026-11-02) a fingerprint-or-face unlock ticket sent as `unlock` in its place.
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { code, phone, ...secretBody(pin), device: readDeviceKey(phone) } });
 }
 
 /** Forgot the fleet code: phone + PIN name the fleets this person manages. Mints nothing. */
-export function managerChoices(phone: string, pin: string): Promise<Result<{ fleets: Array<{ did: string; companyName: string; status: string }> }>> {
-  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/mine', { body: { phone, pin, device: readDeviceKey(phone) } });
+export async function managerChoices(phone: string, pin: string): Promise<Result<{ fleets: Array<{ did: string; companyName: string; status: string }> }>> {
+  const r = await publicRequest<{ fleets: Array<{ did: string; companyName: string; status: string }>; unlock?: string }>(fleetConfig(), '/v1/sbg/fleet/managers/mine', { body: { phone, ...secretBody(pin), device: readDeviceKey(phone) } });
+  // Opened by a fingerprint or face, this door spent the ticket and minted nothing: the fresh one it hands back is what
+  // the sign-in to the chosen fleet sends, while the screen goes on holding the first where it would hold the PIN.
+  relayUnlock(pin, r.data?.unlock);
+  return r;
 }
 
 /** Sign in to a fleet CHOSEN after phone + PIN — the PIN and the manager role are checked again. */
 export function managerSessionByFleet(did: string, phone: string, pin: string): Promise<Result<ManagerView & { token: MintedToken }>> {
-  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { did, phone, pin, device: readDeviceKey(phone) } });
+  return publicRequest(fleetConfig(), '/v1/sbg/fleet/managers/session', { body: { did, phone, ...secretBody(pin), device: readDeviceKey(phone) } });
 }
 
 /** Change your own PIN, proven with the current one. Other sessions end. */

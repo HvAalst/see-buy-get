@@ -11,6 +11,7 @@ import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/pin';
 import { PinGuessHint } from '../../../shared/account/PinGuessHint';
 import { recoveryApi } from '../../../shared/account/recovery';
+import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
 import { businessConfig } from '../api';
 import { digitsReady, phoneReady } from '../logic';
 import type { BusinessActions, BusinessState, SignInStep } from '../useBusinessApp';
@@ -69,6 +70,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const confirming = step === 'login' && isNewDevice(state.error) && closedFor !== state.error;
   const error = state.error && !confirming ? state.error.detail || state.error.title : null;
+  const unlock = useUnlockFirst(state.phone);
 
   const submit = (e: Event) => {
     e.preventDefault();
@@ -125,11 +127,19 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
             )
           ) : null}
 
-          {step === 'login' || step === 'pin' ? (
+          {step === 'login' ? (
+            // 2026-11-02 — where the fingerprint or face was turned on for this number here, it is the first choice; the PIN is one tap away.
+            <UnlockFirst state={unlock} phone={state.phone} config={businessConfig()} busy={busy} look="console" onTicket={(ticket) => actions.submitLogin(ticket)}>
+              <div class="cfield">
+                <span class="cfield__label">{t('business.signIn.pin')}</span>
+                <CodeBoxes id="biz-pin" label={t('business.signIn.pin')} length={PIN_LENGTH} value={state.pin} onInput={(v) => actions.set({ pin: v })} disabled={busy} mask />
+              </div>
+            </UnlockFirst>
+          ) : step === 'pin' ? (
             <div class="cfield">
-              <span class="cfield__label">{t(step === 'pin' ? 'business.signIn.newPin' : 'business.signIn.pin')}</span>
-              <CodeBoxes id="biz-pin" label={t('business.signIn.pin')} length={PIN_LENGTH} value={state.pin} onInput={(v) => actions.set({ pin: v })} disabled={busy} mask={step === 'login'} />
-              {step === 'pin' ? <PinGuessHint pin={state.pin} /> : null}
+              <span class="cfield__label">{t('business.signIn.newPin')}</span>
+              <CodeBoxes id="biz-pin" label={t('business.signIn.pin')} length={PIN_LENGTH} value={state.pin} onInput={(v) => actions.set({ pin: v })} disabled={busy} mask={false} />
+              <PinGuessHint pin={state.pin} />
             </div>
           ) : null}
           {/* Choosing a first PIN is where the person's account is made: everybody signing up agrees here (2026-10-25). */}
@@ -159,9 +169,11 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
 
           {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
-          <button type="submit" class="cbtn cbtn--primary" disabled={busy || !ready} style="margin-top:8px">
-            {t(CTA[step])}
-          </button>
+          {step === 'login' && unlock.offered ? null : (
+            <button type="submit" class="cbtn cbtn--primary" disabled={busy || !ready} style="margin-top:8px">
+              {t(CTA[step])}
+            </button>
+          )}
         </form>
 
         {/* The same foot as every sign-in screen, in this app's own buttons: the PIN's way back, "Trouble signing in?",

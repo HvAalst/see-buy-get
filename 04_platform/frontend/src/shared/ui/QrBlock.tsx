@@ -1,4 +1,5 @@
 import { qrMatrix, qrPath, type EccLevel } from '../qr';
+import { useWakeLock } from '../wakeLock';
 
 export interface QrBlockProps {
   /** What the scanner will read. Use `qrPayload()` so every app namespaces the same way. */
@@ -25,6 +26,8 @@ export interface QrBlockProps {
  * silently fails in the field — it looks fine and never scans.
  */
 export function QrBlock({ value, size = 132, ecc = 'Q', caption, label }: QrBlockProps) {
+  // 2026-11-02 — a code held up to be scanned keeps the screen on while it shows (shared/wakeLock.ts).
+  useWakeLock();
   let matrix: boolean[][];
   try {
     matrix = qrMatrix(value, { ecc });

@@ -1,3 +1,4 @@
+import { useWakeLock } from '../../../shared/wakeLock';
 import { useState } from 'preact/hooks';
 import { Button, Card, Icon, Pill, Sheet } from '../../../shared/ui';
 import { Explainer } from '../../../shared/ui/Explainer';
@@ -28,6 +29,8 @@ export function RunSection({ state, actions }: { state: DriverState; actions: Dr
   const t = useT();
   // A run that has been called off is not work, and one that has gone carries no more gates to clock.
   const runs = state.departures.filter((d) => d.status !== 'cancelled');
+  // 2026-11-02 — on the road, the run stays on screen, as a native app's trip does (shared/wakeLock.ts).
+  useWakeLock(runs.some((d) => d.status === 'departed'));
   if (runs.length === 0) return null;
 
   return (

@@ -24,6 +24,13 @@ import { OpensSoonNote } from '../../shared/opening/OpensSoonNote';
 import { useVendorApp, type Screen, type VendorActions, type VendorState } from './useVendorApp';
 import '../../shared/screens.css';
 import './vendor.css';
+import { screensOf, useScreenNav } from '../../shared/nav';
+import { NavScreen } from '../../shared/ui/NavScreen';
+
+// 2026-11-02 — Back, as an app means it (shared/nav.ts): the orders are home and every other screen is a tab's, so
+// they swap in place and Back from any of them is the orders. A shortcut may open any screen; Ship starts a new parcel.
+const TABS: readonly Screen[] = ['mint', 'books', 'dock', 'notes', 'store'];
+const LAUNCH = screensOf<Screen>({ orders: true, mint: true, books: true, dock: true, store: true, notes: true });
 
 export function App() {
   const t = useT();
@@ -43,6 +50,14 @@ export function App() {
   const destination = useDestination(sbg, state.phase === 'ready' && state.screen === 'notes');
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
+  const nav = useScreenNav<Screen>({
+    screen: state.screen,
+    home: 'orders',
+    tabs: TABS,
+    ready: state.phase === 'ready',
+    go: (to) => (to === 'mint' ? actions.startMint() : actions.go(to)),
+    launch: LAUNCH,
+  });
 
   if (state.phase === 'outdated') return <UpdateGate />;
   if (state.phase === 'boot') return <Boot />;
@@ -53,7 +68,7 @@ export function App() {
         <TopBar title={t('vendor.appTitle')} subtitle={t('vendor.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-          <AppLayer app="vendor" />
+          <AppLayer app="vendor" chats={null} />
           <SignInScreen state={state} actions={actions} error={state.error} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -78,7 +93,7 @@ export function App() {
         title={t('vendor.appTitle')}
         subtitle={vendorWorkLine(state.orderStats, t)}
         subtitleHint={state.vendor?.name}
-        onBack={state.screen === 'orders' ? undefined : () => actions.go('orders')}
+        onBack={state.screen === 'orders' ? undefined : nav.back}
         backLabel={t('vendor.backToOrders')}
         end={
           <>
@@ -112,13 +127,15 @@ export function App() {
 
       <main class="app__scroll">
         {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-        <AppLayer app="vendor" />
+        <AppLayer app="vendor" chats={actions.chatApi} onRefresh={actions.refresh} />
         <ConnectivityNote stale={state.stale} />
         {/* Said above every screen until it is done: a store still signing in with its secret sets its account up. */}
         <AccountSetup state={state} actions={actions} />
         {/* Signed up before its country opened (COMING, 2026-10-25): said above every screen, as nothing ships yet. */}
         <OpensSoonNote country={state.vendor?.country} detail={t('opening.store')} />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} client={sbg} />
+        <NavScreen nav={nav}>
+          <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} client={sbg} />
+        </NavScreen>
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => (key === 'mint' ? actions.startMint() : actions.go(key))} labels={false} />

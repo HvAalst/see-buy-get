@@ -1,5 +1,7 @@
 import type { ComponentChildren, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
+import { useBackLayer } from '../nav';
+import { useSheetDrag } from './sheetDrag';
 
 export interface SheetProps {
   open: boolean;
@@ -52,6 +54,14 @@ export function Sheet({ open, onClose, title, children, dismissible = true }: Sh
   // open sheet mid-interaction.
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  // 2026-11-02 — as an app's sheet (the owner: "make it as native as today can be"): the phone's Back closes this
+  // sheet alone, the top one first when one is opened over another (shared/nav.ts); and a thumb pulls it down to close
+  // it (sheetDrag.ts). One that must be answered is neither closed by Back — nor left by it, the app staying open
+  // under it — nor moved by a pull.
+  useBackLayer(open, () => onCloseRef.current(), dismissible);
+  useSheetDrag(panelRef, backdropRef, open && dismissible, () => onCloseRef.current());
 
   useEffect(() => {
     if (!open) return;
@@ -114,6 +124,7 @@ export function Sheet({ open, onClose, title, children, dismissible = true }: Sh
     <>
       <div
         class="sheet__backdrop"
+        ref={backdropRef}
         onClick={dismissible ? onClose : undefined}
         aria-hidden="true"
       />

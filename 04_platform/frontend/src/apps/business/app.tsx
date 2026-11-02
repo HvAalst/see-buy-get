@@ -13,6 +13,7 @@ import { ImportsScreen } from '../tower/screens/ImportsScreen';
 import { DepotsScreen } from '../tower/screens/DepotsScreen';
 import { mayAct, navGroupsFor, navSectionOf, sectionsFor, type Section } from './logic';
 import { useBusinessApp } from './useBusinessApp';
+import { screensOf, useScreenNav } from '../../shared/nav';
 import { SignInScreen } from './screens/SignInScreen';
 import { ChooseScreen } from './screens/ChooseScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -29,6 +30,9 @@ import '../../shared/screens.css';
 import '../../shared/console.css';
 import '../tower/tower.css';
 import './business.css';
+
+/** Every section, for Back and for a shortcut's `?go=` (shared/nav.ts); one the business does not do opens its home. */
+const SECTIONS = screensOf<Section>({ home: true, loads: true, runs: true, parcels: true, contracts: true, clients: true, exports: true, imports: true, yard: true, inbound: true, people: true, details: true });
 
 const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
   home: { label: 'business.nav.home', icon: 'home' },
@@ -67,6 +71,9 @@ export function App() {
   const client = actions.businessClient();
   // The person's own account (PIN, recovery email, phone) — reached through the business session, which carries them.
   const account = useAccount(client?.client.sbg ?? null, state.phase === 'ready');
+  // 2026-11-02 — Back, as an app means it (shared/nav.ts), on a phone as at a desk: every section is top-level — the
+  // rail's or the tab bar's — so they swap in place, keep their place on the page, and Back from any of them is home.
+  useScreenNav<Section>({ screen: state.section, home: 'home', tabs: SECTIONS, ready: state.phase === 'ready' && Boolean(state.business), go: actions.go, launch: SECTIONS });
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
   if (state.phase === 'signin') return <SignInScreen state={state} actions={actions} />;

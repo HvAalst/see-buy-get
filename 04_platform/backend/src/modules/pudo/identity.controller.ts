@@ -28,6 +28,8 @@ import { toInviteView } from './invite.types';
 import { BuyerDisputeDto, CollectionResponseDto, RateMerchantDto, ConsumerSendDto, CreateInviteDto, EnrollDto, EmailCodeDto, AccountCodeDto, UndoNumberDto, RecoverAccountDto, NominateCollectorDto, PinLoginDto, PodDto, ProfileDto, SetPinDto, ChangePinDto, SwitchRoleDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
+import { PasskeyService } from './passkey.service';
+import { UnlockDto, UnlockOptionsDto } from './passkey.dto';
 
 /**
  * Identity — the authenticated consumer surface (S20). "One person, one account, many roles."
@@ -55,6 +57,8 @@ export class IdentityController {
     private readonly emailCodes: EmailCodeService,
     private readonly recovery: AccountRecoveryService,
     private readonly fleets: FleetManagerService,
+    // 2026-11-02 — unlock with fingerprint or face: the ticket a sign-in door takes in place of the PIN.
+    private readonly passkeys: PasskeyService,
     // 2026-10-25 — every sign-up agrees to the terms of use, the data notice and the cookie statement that count now.
     @Optional() private readonly agreements?: AgreementService,
     // 2026-10-27 — their goods coming back from a hub, to their own door, paid first by mobile money.
@@ -224,8 +228,34 @@ export class IdentityController {
   @RateLimit(60, 15 * 60) // each PIN locks after five; this stops one caller spreading guesses across many phones
   @Post('login')
   login(@Body() dto: PinLoginDto) {
-    const { person, token } = this.persons.loginWithPin(dto.phone, dto.pin, dto.device);
+    const { person, token } = this.persons.loginWithPin(dto.phone, dto.pin, dto.device, dto.unlock);
     return { ...this.persons.view(person), token };
+  }
+
+  /**
+   * UNLOCK WITH FINGERPRINT OR FACE, step one (the owner, 2026-11-02): what the phone needs to sign — asked by number and
+   * device key, from a sign-in screen. The same shape for everybody: a number nobody has, a device not theirs and a
+   * device with nothing turned on all get a challenge and an empty list. Limited as the PIN door is.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60)
+  @Post('unlock/options')
+  unlockOptions(@Body() dto: UnlockOptionsDto) {
+    return this.passkeys.unlockOptions(dto.phone, dto.device);
+  }
+
+  /**
+   * …step two: the phone's answer, for a TICKET — one use, two minutes — that the app's own sign-in door takes in place
+   * of the PIN (`unlock`). The device is asked first, then the lock, as at the PIN door; a bad answer counts as a
+   * wrong PIN. Limited as the PIN door is.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60)
+  @Post('unlock')
+  unlock(@Body() dto: UnlockDto) {
+    return this.passkeys.unlock(dto.phone, dto.device, dto.response as never);
   }
 
   /** Set or change the signed-in person's PIN. */

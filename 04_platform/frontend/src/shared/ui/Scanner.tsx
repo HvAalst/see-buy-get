@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { checkScan, kindLabel, type ScanKind } from '../scan';
 import { signal } from '../feedback';
 import { Icon } from './Icon';
+import { useWakeLock } from '../wakeLock';
+import { useBackLayer } from '../nav';
 
 /** BarcodeDetector is not in the DOM lib types; the shape we use is tiny. */
 interface DetectedBarcode {
@@ -59,6 +61,10 @@ export function Scanner({ open, expect, title, onResult, onClose }: ScannerProps
   const [torchOn, setTorchOn] = useState(false);
   const torchTrackRef = useRef<MediaStreamTrack | null>(null);
   const [torchable, setTorchable] = useState(false);
+  // 2026-11-02 — the screen stays on while the camera looks for a label (shared/wakeLock.ts).
+  useWakeLock(open);
+  // 2026-11-02 — the phone's Back puts the camera away, as it closes a sheet, instead of leaving the screen under it.
+  useBackLayer(open, onClose);
 
   // Latest onResult/onClose without re-subscribing the camera effect (they are inline arrows).
   const cb = useRef({ onResult, onClose });

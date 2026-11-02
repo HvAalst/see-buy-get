@@ -547,9 +547,10 @@ export function useDriverApp() {
         error: null,
         stale: false,
         refreshing: false,
-        // A stale tab can still be sitting on offers/loads after the shift ended — send it home. Earnings is
-        // exempt (a driver reviews jobs + pay OFF shift), matching the ScreenRouter guard in app.tsx.
-        screen: !session.active && s.screen !== 'home' && s.screen !== 'earnings' ? 'home' : s.screen,
+        // A stale tab can still be sitting on offers/loads after the shift ended — send it home. Earnings and the
+        // freight market are exempt (a driver reviews jobs + pay, and shops for work, OFF shift), matching the
+        // ScreenRouter guard in app.tsx — the market was missing here, so a refresh threw a driver off it (2026-11-02).
+        screen: !session.active && s.screen !== 'home' && s.screen !== 'earnings' && s.screen !== 'board' ? 'home' : s.screen,
         offers: session.active ? s.offers : [],
         expected: session.active ? s.expected : [],
       }));

@@ -55,6 +55,7 @@ import { IdentityController } from './identity.controller';
 import { AccountService } from './account.service';
 import { OtpService } from './otp.service';
 import { PersonService } from './person.service';
+import { PasskeyService } from './passkey.service';
 import { EmailCodeService } from './email-code.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { InviteService } from './invite.service';
@@ -136,7 +137,7 @@ describe('dimensional weight', () => {
         DriverService, FleetService, DispatchService, RouteConstraintService, MarketPulseStore, MarketPulseService, FleetManagerService,
         MediaService, CargoService, DigitalTwinService, TrackingService, TrackingContextService, NormalizationService,
         ConnectorRegistry, RestCarrierConnector, MobileSdkConnector,
-        EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, InviteService, ApiKeyService, AuthService,
+        EmailCodeService, AccountRecoveryService, AccountService, OtpService, PersonService, PasskeyService, InviteService, ApiKeyService, AuthService,
         WalletService, DidService, IdentityVault, OperationalStore, FieldEncryption, LedgerService, EventBus,
         EntityService, EntityAdminService, OperatorAccountService, ConsignmentNoteService, DepartureNoteService, NoteArchiveService, NoteBundleService, DestinationService, PresenceService, InterestService, DepartureService, CompanyDocumentService, HandleService, HandleDirectory, BusinessService, BusinessMemberGuard, BusinessClientService, CompanyReadinessService, BorderRuleService, BooksService, FxService,
         ShopStaffService, // the shop controller keeps its counter's record of who did what (CounterLogInterceptor)

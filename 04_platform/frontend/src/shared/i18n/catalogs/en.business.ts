@@ -457,6 +457,13 @@ export const enBusiness = {
   'business.loads.fact.tracking': 'Tracking',
   'business.loads.fact.trackingHint': 'Share this with whoever is receiving it.',
   'business.loads.note': 'Consignment note',
+  // 2026-11-02 — a load's record in sections (shared/ui/Sections.tsx).
+  'business.loads.sections': 'This load, in parts',
+  'business.loads.sec.overview': 'Overview',
+  'business.loads.sec.road': 'On the road',
+  'business.loads.sec.papers': 'Papers',
+  'business.loads.sec.money': 'Payment',
+  'business.loads.sec.claim': 'Claim',
   'business.loads.noteGone': 'The consignment note could not be opened.',
   'business.note.notYet': 'A copy of the note is kept from the moment the carrier takes the goods over. From then you can download the whole file here, and make a link to it for somebody who has no account.',
   'business.note.fileFailed': 'The file could not be fetched just now. Try once more.',

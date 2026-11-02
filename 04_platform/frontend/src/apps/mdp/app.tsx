@@ -25,8 +25,15 @@ import { SignInScreen } from './screens/SignInScreen';
 import { useMdpApp, type MdpActions, type MdpState, type Screen } from './useMdpApp';
 import '../../shared/screens.css';
 import './mdp.css';
+import { screensOf, useScreenNav } from '../../shared/nav';
+import { NavScreen } from '../../shared/ui/NavScreen';
 
 type Tab = 'home' | 'arrivals' | 'sort' | 'load';
+
+// 2026-11-02 — Back, as an app means it (shared/nav.ts): the hub's home, the tab bar's screens swap in place, and a
+// shortcut may open any screen but one arrival, which is opened from its list.
+const TABS: readonly Screen[] = ['arrivals', 'sort', 'load'];
+const LAUNCH = screensOf<Screen>({ home: true, drop: true, sort: true, load: true, newtote: true, rates: true, arrivals: true, arrival: true }).filter((s) => s !== 'arrival');
 
 export function App() {
   const t = useT();
@@ -41,6 +48,16 @@ export function App() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
+  const nav = useScreenNav<Screen>({
+    screen: state.screen,
+    home: 'home',
+    tabs: TABS,
+    ready: state.phase === 'ready',
+    go: actions.go,
+    // Back from one arrival to the list puts the arrival down, as the list's own way out of it always did.
+    back: (to, from) => (from === 'arrival' && to === 'arrivals' ? actions.openArrival(null) : actions.go(to)),
+    launch: LAUNCH,
+  });
 
   if (state.phase === 'outdated') return <UpdateGate />;
   if (state.phase === 'boot') return <Boot />;
@@ -87,9 +104,10 @@ export function App() {
         // under it can never report different numbers because there is only one computation.
         subtitle={state.hub ? homeSummary(unsortedAt(state.inbound, state.hub.mdpId).length, fillingBags(state.totes).length, t) : undefined}
         subtitleHint={state.hub?.name}
-        // One arrival goes back to the list it was opened from; every other screen to the hub's home.
-        onBack={state.screen === 'home' ? undefined : state.screen === 'arrival' ? () => actions.openArrival(null) : () => actions.go('home')}
-        backLabel={state.screen === 'arrival' ? t('mdp.backToArrivals') : t('mdp.backToHub')}
+        // The arrow does what the phone's Back does (2026-11-02): one arrival goes back to the list it was opened from,
+        // every other screen to the one before it — the hub's home, mostly.
+        onBack={state.screen === 'home' ? undefined : nav.back}
+        backLabel={nav.backTo === 'arrivals' ? t('mdp.backToArrivals') : nav.backTo && nav.backTo !== 'home' ? t('common.back') : t('mdp.backToHub')}
         end={
           <>
             {needRefresh ? (
@@ -114,10 +132,12 @@ export function App() {
 
       <main class="app__scroll">
         {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-        <AppLayer app="mdp" />
+        <AppLayer app="mdp" onRefresh={actions.refresh} />
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} sbg={sbg} />
+        <NavScreen nav={nav}>
+          <ScreenRouter screen={state.screen} state={state} actions={actions} sbg={sbg} />
+        </NavScreen>
       </main>
 
       {floorOpen(state.hub) ? <BottomNav<Tab> items={tabs} active={tab} onSelect={(key) => actions.go(key as Screen)} labels={false} /> : null}

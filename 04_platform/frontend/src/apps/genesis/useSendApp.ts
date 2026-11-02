@@ -663,10 +663,11 @@ export function useSendApp() {
     await completeSignIn(r.data as AuthResult, phone);
   }, [completeSignIn]);
 
-  const submitLogin = useCallback(async () => {
+  // `unlock` (2026-11-02): a ticket a fingerprint or face on this phone was just checked for, sent in the PIN's place.
+  const submitLogin = useCallback(async (unlock?: string) => {
     const phone = cleanPhone(stateRef.current.authPhone);
-    const pin = stateRef.current.authPin;
-    if (!phoneReady(phone) || !codeReady(pin, PIN_LENGTH)) return;
+    const pin = unlock ?? stateRef.current.authPin;
+    if (!phoneReady(phone) || (!unlock && !codeReady(pin, PIN_LENGTH))) return;
     const epoch = ++authEpoch.current;
     setState((s) => ({ ...s, authBusy: true, authError: null }));
     const r = await pinLogin(phone, pin);

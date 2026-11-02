@@ -28,3 +28,8 @@ declare module 'node:fs' {
 declare module 'node:path' {
   export function join(...parts: string[]): string;
 }
+
+/** 2026-11-02 — a test runs the push worker's own script in a sandbox (src/shared/appBadge.test.ts). */
+declare module 'node:vm' {
+  export function runInNewContext(code: string, context: object): unknown;
+}

@@ -1,5 +1,5 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
-import { PhoneField } from '../../../shared/ui';
+import { PhoneField, Sections } from '../../../shared/ui';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { foundWords } from '../../../shared/found';
@@ -655,280 +655,334 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
 
   return (
     <ConsoleDetail openKey={row.freightId} title={`${row.code} · ${row.description}`} onClose={onClose}>
-      <section class="cons__panel">
-        <div class="cons__panelhead">
-          <span class="cons__panelt">
-            {row.code} · {row.description}
-          </span>
-          <span class={`ctag ctag--${STAGE[stage].tone}`}>{t(STAGE[stage].label)}</span>
-        </div>
-        <dl class="cons__facts">
-          <div class="cons__fact">
-            <dt class="cons__factk">{t('business.loads.fact.to')}</dt>
-            <dd class="cons__factv">{row.destLabel}</dd>
-          </div>
-          <div class="cons__fact">
-            <dt class="cons__factk">{t('business.loads.fact.weight')}</dt>
-            <dd class="cons__factv">{row.weightKg.toLocaleString()} kg</dd>
-          </div>
-          {row.contract ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.contract')}</dt>
-              <dd class="cons__factv">
-                {row.contract.fleetName}
-                {row.contract.reference ? ` · ${row.contract.reference}` : ''}
-                {row.deliverOn ? ` · ${t('business.loads.fact.arrivesOn', { day: row.deliverOn })}` : ''}
-                {row.orderRef ? ` · ${row.orderRef}` : ''}
-              </dd>
-            </div>
-          ) : null}
-          {row.returnOf ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.return')}</dt>
-              <dd class="cons__factv">{t('refusal.returnOf', { code: row.returnOf.code })}</dd>
-            </div>
-          ) : null}
-          {row.partOf ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.order')}</dt>
-              <dd class="cons__factv">{t('business.loads.loadOfFull', { no: row.partOf.no, of: row.partOf.of, order: row.partOf.rootCode, kg: row.partOf.orderKg.toLocaleString() })}</dd>
-            </div>
-          ) : null}
-          {says ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.plan')}</dt>
-              <dd class="cons__factv">
-                {says.full}
-                <span class="chint"> {planDo(says, row.contract?.fleetName ?? '', t)}</span>
-              </dd>
-            </div>
-          ) : null}
-          {row.carrier?.driverName ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.carrier')}</dt>
-              <dd class="cons__factv">
-                {row.carrier.driverName}
-                {row.carrier.plate ? ` · ${row.carrier.plate}` : ''}
-              </dd>
-            </div>
-          ) : null}
-          {/* Round 14 — what its driver said on the road, in order; across a border, the allowance and when it is expected. */}
-          {row.passages?.length || road ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.road')}</dt>
-              <dd class="cons__factv">
-                {(row.passages ?? []).map((p) => (
-                  <span key={`${p.kind}-${p.at}`} class="biz-road__line">
-                    {passageWords(p, t, onRoad)}
-                  </span>
-                ))}
-                {road?.row && !row.passages?.length ? <span class="biz-road__line">{road.row}</span> : null}
-                {road?.wait ? <span class="biz-road__line chint">{road.wait}</span> : null}
-                {road?.expected ? (
-                  <span class="biz-road__line">
-                    <b>{road.expected}</b>
-                  </span>
-                ) : null}
-                {road?.drive ? <span class="biz-road__line chint">{road.drive}</span> : null}
-              </dd>
-            </div>
-          ) : null}
-          {/* Round 25 — its cold chain broken on the road: the reading that broke it, when, and whether it reached us late. */}
-          {row.coldChainBroken ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.coldChain')}</dt>
-              <dd class="cons__factv">
-                <b>{t('business.loads.coldChainBroken', { temp: row.coldChainBroken.celsius, when: onRoad(row.coldChainBroken.at), min: row.coldChainBroken.minC, max: row.coldChainBroken.maxC })}</b>
-                {row.coldChainBroken.receivedAt ? <span class="biz-road__line chint">{t('business.loads.coldChainLate', { when: onRoad(row.coldChainBroken.receivedAt) })}</span> : null}
-              </dd>
-            </div>
-          ) : null}
-          {row.agreedPrice != null ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.agreed')}</dt>
-              <dd class="cons__factv">
-                {priced(row.agreedPrice, row.currency)}
-                {/* A match (2026-10-27): the business pays the driver directly — and, once the carrier says so, that it did. */}
-                {shipperPaidLine(row, t) ? <span class="biz-road__line chint">{shipperPaidLine(row, t)}</span> : null}
-              </dd>
-            </div>
-          ) : null}
-          {row.deliveredAt ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.delivered')}</dt>
-              <dd class="cons__factv">
-                {t('business.loads.fact.deliveredTo', { when: row.deliveredAt.slice(0, 10), who: row.receiverName ?? '—' })}
-                {handed ? ` ${handed.full}` : ''}
-                {handed ? <span class="chint"> {t('business.loads.done.clock')}</span> : null}
-              </dd>
-            </div>
-          ) : null}
-          {/* D9 — what the receiver found at the handover, as the note has it beside their name. */}
-          {row.exceptions?.length ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.found')}</dt>
-              <dd class="cons__factv">{foundWords(row.exceptions, t)}</dd>
-            </div>
-          ) : null}
-          {row.trackingUrl ? (
-            <div class="cons__fact">
-              <dt class="cons__factk">{t('business.loads.fact.tracking')}</dt>
-              <dd class="cons__factv">
-                <a href={row.trackingUrl} target="_blank" rel="noopener noreferrer">
-                  {row.trackingKey}
-                </a>
-                <span class="chint"> {t('business.loads.fact.trackingHint')}</span>
-              </dd>
-            </div>
-          ) : null}
-        </dl>
-        <div class="twr-panelend">
-          <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void note()}>
-            {t('business.loads.note')}
-          </button>
-          {/* Once a copy is kept: the whole file — the note, every copy as it was signed, its photographs. */}
-          {kept === 'kept' ? <NoteFile client={client} noteId={row.noteId!} code={row.code} /> : null}
-        </div>
-        {kept === 'not_yet' ? <p class="chint">{t('business.note.notYet')}</p> : null}
-      </section>
-
-      {/* Refused at the door: where the goods go, the business's to say — or what became of them (the user, 2026-10-27). */}
-      <LoadRefusal row={row} client={client} business={business} act={act} onChanged={onChanged} />
-      {/* A driver said it was not paid: the business answers that it paid, with a reference — both sides heard (2026-10-27). */}
-      <LoadPaidAnswer row={row} client={client} act={act} onChanged={onChanged} />
-      {/* At the door: every attempt the driver made, and what the driver is told — the business's to add to (2026-10-27). */}
-      <LoadDoor row={row} client={client} act={act} onChanged={onChanged} />
-
-      {/* A problem with the goods delivered: the business's claim, where it is the one to make it (claim.ts). */}
-      {stage === 'delivered' ? <LoadClaimPanel row={row} client={client} act={act} onChanged={onChanged} /> : null}
-
-      {/* The labels for its packages and, across a border, its commercial invoice — the business's own papers. */}
-      {/* Box 18 at taking over, and this business's answer (CMR Art. 8(2)). */}
-      <LoadReservations row={row} client={client} act={act} onChanged={onChanged} />
-      {stage !== 'cancelled' ? <LoadPapers row={row} client={client} business={business} act={act} /> : null}
-      {/* Round 15 — the seals on the load: written before pickup, and what became of each after. */}
-      {stage !== 'cancelled' ? <LoadSeals row={row} client={client} act={act} /> : null}
-
-      {proposals && proposals.some((p) => p.status === 'open') ? (
-        <section class="cons__panel">
-          <div class="cons__panelhead">
-            <span class="cons__panelt">{t('business.loads.offersTitle')}</span>
-          </div>
-          <p class="cons__lede">{t('business.loads.offersLede')}</p>
-          <div class="crows">
-            {proposals
-              .filter((p) => p.status === 'open')
-              .map((p) => (
-                <div class="crow" key={p.proposalId}>
-                  <span class="crow__body">
-                    <span class="crow__top">
-                      <span class="crow__name">{priced(p.price, row.currency)}</span>
+      {/* 2026-11-02 — a load's whole record, in sections the reader swipes through (the owner: "we don't want to mush
+          scrolling … a sticky but swipable subheader"). Whatever waits for this business's answer is in the first. */}
+      <Sections
+        label={t('business.loads.sections')}
+        sections={[
+          {
+            key: 'overview',
+            label: t('business.loads.sec.overview'),
+            attention: Boolean(proposals?.some((p) => p.status === 'open')),
+            content: (
+              <>
+                <section class="cons__panel">
+                  <div class="cons__panelhead">
+                    <span class="cons__panelt">
+                      {row.code} · {row.description}
                     </span>
-                    {p.note ? <span class="crow__sub">{p.note}</span> : null}
-                  </span>
-                  {act ? (
-                    <span class="crow__tail biz-choose__acts">
-                      <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void run(() => client!.shipping.acceptProposal(p.proposalId) as never, t('business.loads.accepted'))}>
-                        {t('business.loads.accept')}
-                      </button>
-                      <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void run(() => client!.shipping.declineProposal(p.proposalId) as never, t('business.loads.declined'))}>
-                        {t('business.loads.decline')}
-                      </button>
-                    </span>
-                  ) : null}
-                </div>
-              ))}
-          </div>
-        </section>
-      ) : null}
-
-      {/* What the carrier asked to be paid, once a carrier has it — kept here, settled between the two of them. */}
-      {stage === 'taken' || stage === 'moving' || stage === 'delivered' ? (
-        <section class="cons__panel">
-          <div class="cons__panelhead">
-            <span class="cons__panelt">{t('business.pay.title')}</span>
-            {quote ? <span class={`ctag ctag--${quoteTone(quote)}`}>{quote.status === 'paid' ? t('business.pay.paid') : t('business.pay.open', { figure: quoteFigure(quote) })}</span> : null}
-          </div>
-          {quote ? (
-            <QuotePanel quote={quote} api={client ? (client.api as never) : null} canChange={act} onChanged={() => read()} />
-          ) : quote === null ? (
-            <>
-              <p class="cons__lede">{t('business.pay.lede')}</p>
-              {act ? (
-                <>
-                  <div class="biz-two">
-                    <label class="cfield">
-                      <span class="cfield__label">{t('business.pay.amount')}</span>
-                      <input class="cinput" type="number" min={0} value={quoteForm.amount} placeholder={row.agreedPrice != null ? String(row.agreedPrice) : ''} onInput={(e) => setQuoteForm((prev) => ({ ...prev, amount: (e.target as HTMLInputElement).value }))} />
-                    </label>
-                    <label class="cfield">
-                      <span class="cfield__label">{t('business.pay.reference')}</span>
-                      <input class="cinput" value={quoteForm.reference} onInput={(e) => setQuoteForm((prev) => ({ ...prev, reference: (e.target as HTMLInputElement).value }))} />
-                    </label>
+                    <span class={`ctag ctag--${STAGE[stage].tone}`}>{t(STAGE[stage].label)}</span>
                   </div>
+                  <dl class="cons__facts">
+                    <div class="cons__fact">
+                      <dt class="cons__factk">{t('business.loads.fact.to')}</dt>
+                      <dd class="cons__factv">{row.destLabel}</dd>
+                    </div>
+                    <div class="cons__fact">
+                      <dt class="cons__factk">{t('business.loads.fact.weight')}</dt>
+                      <dd class="cons__factv">{row.weightKg.toLocaleString()} kg</dd>
+                    </div>
+                    {row.contract ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.contract')}</dt>
+                        <dd class="cons__factv">
+                          {row.contract.fleetName}
+                          {row.contract.reference ? ` · ${row.contract.reference}` : ''}
+                          {row.deliverOn ? ` · ${t('business.loads.fact.arrivesOn', { day: row.deliverOn })}` : ''}
+                          {row.orderRef ? ` · ${row.orderRef}` : ''}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {row.returnOf ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.return')}</dt>
+                        <dd class="cons__factv">{t('refusal.returnOf', { code: row.returnOf.code })}</dd>
+                      </div>
+                    ) : null}
+                    {row.partOf ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.order')}</dt>
+                        <dd class="cons__factv">{t('business.loads.loadOfFull', { no: row.partOf.no, of: row.partOf.of, order: row.partOf.rootCode, kg: row.partOf.orderKg.toLocaleString() })}</dd>
+                      </div>
+                    ) : null}
+                    {says ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.plan')}</dt>
+                        <dd class="cons__factv">
+                          {says.full}
+                          <span class="chint"> {planDo(says, row.contract?.fleetName ?? '', t)}</span>
+                        </dd>
+                      </div>
+                    ) : null}
+                    {row.carrier?.driverName ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.carrier')}</dt>
+                        <dd class="cons__factv">
+                          {row.carrier.driverName}
+                          {row.carrier.plate ? ` · ${row.carrier.plate}` : ''}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {row.agreedPrice != null ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.agreed')}</dt>
+                        <dd class="cons__factv">
+                          {priced(row.agreedPrice, row.currency)}
+                          {/* A match (2026-10-27): the business pays the driver directly — and, once the carrier says so, that it did. */}
+                          {shipperPaidLine(row, t) ? <span class="biz-road__line chint">{shipperPaidLine(row, t)}</span> : null}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {row.deliveredAt ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.delivered')}</dt>
+                        <dd class="cons__factv">
+                          {t('business.loads.fact.deliveredTo', { when: row.deliveredAt.slice(0, 10), who: row.receiverName ?? '—' })}
+                          {handed ? ` ${handed.full}` : ''}
+                          {handed ? <span class="chint"> {t('business.loads.done.clock')}</span> : null}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {/* D9 — what the receiver found at the handover, as the note has it beside their name. */}
+                    {row.exceptions?.length ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.found')}</dt>
+                        <dd class="cons__factv">{foundWords(row.exceptions, t)}</dd>
+                      </div>
+                    ) : null}
+                    {row.trackingUrl ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.loads.fact.tracking')}</dt>
+                        <dd class="cons__factv">
+                          <a href={row.trackingUrl} target="_blank" rel="noopener noreferrer">
+                            {row.trackingKey}
+                          </a>
+                          <span class="chint"> {t('business.loads.fact.trackingHint')}</span>
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
                   <div class="twr-panelend">
-                    <button
-                      type="button"
-                      class="cbtn cbtn--primary"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(
-                          () =>
-                            client!.recordFreightQuote(row.freightId, {
-                              ...(Number(quoteForm.amount) > 0 ? { amount: Number(quoteForm.amount) } : {}),
-                              ...(quoteForm.currency.trim() ? { currency: quoteForm.currency.trim() } : {}),
-                              ...(quoteForm.reference.trim() ? { reference: quoteForm.reference.trim() } : {}),
-                            }),
-                          t('business.pay.recorded'),
-                        )
-                      }
-                    >
-                      {t('business.pay.record')}
+                    <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void note()}>
+                      {t('business.loads.note')}
                     </button>
+                    {/* Once a copy is kept: the whole file — the note, every copy as it was signed, its photographs. */}
+                    {kept === 'kept' ? <NoteFile client={client} noteId={row.noteId!} code={row.code} /> : null}
                   </div>
-                </>
-              ) : null}
-            </>
-          ) : null}
-        </section>
-      ) : null}
+                  {kept === 'not_yet' ? <p class="chint">{t('business.note.notYet')}</p> : null}
+                </section>
 
-      {/* The links to its note — the one a receipt was emailed with, and the ones the business made to pass on. Shown to
-          a viewer too: what is a way into the business's papers is everybody's in it to see. */}
-      {kept === 'kept' ? <NoteLinksPanel client={client} noteId={row.noteId!} title={`${row.code} · ${row.description}`} act={act} /> : null}
+                {/* Refused at the door: where the goods go, the business's to say — or what became of them (the user, 2026-10-27). */}
+                <LoadRefusal row={row} client={client} business={business} act={act} onChanged={onChanged} />
+                {/* A driver said it was not paid: the business answers that it paid, with a reference — both sides heard (2026-10-27). */}
+                <LoadPaidAnswer row={row} client={client} act={act} onChanged={onChanged} />
+                {proposals && proposals.some((p) => p.status === 'open') ? (
+                  <section class="cons__panel">
+                    <div class="cons__panelhead">
+                      <span class="cons__panelt">{t('business.loads.offersTitle')}</span>
+                    </div>
+                    <p class="cons__lede">{t('business.loads.offersLede')}</p>
+                    <div class="crows">
+                      {proposals
+                        .filter((p) => p.status === 'open')
+                        .map((p) => (
+                          <div class="crow" key={p.proposalId}>
+                            <span class="crow__body">
+                              <span class="crow__top">
+                                <span class="crow__name">{priced(p.price, row.currency)}</span>
+                              </span>
+                              {p.note ? <span class="crow__sub">{p.note}</span> : null}
+                            </span>
+                            {act ? (
+                              <span class="crow__tail biz-choose__acts">
+                                <button type="button" class="cbtn cbtn--primary cbtn--sm" disabled={busy} onClick={() => void run(() => client!.shipping.acceptProposal(p.proposalId) as never, t('business.loads.accepted'))}>
+                                  {t('business.loads.accept')}
+                                </button>
+                                <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={busy} onClick={() => void run(() => client!.shipping.declineProposal(p.proposalId) as never, t('business.loads.declined'))}>
+                                  {t('business.loads.decline')}
+                                </button>
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                    </div>
+                  </section>
+                ) : null}
 
-      {act && row.canCancel ? (
-        <section class="cons__panel">
-          <div class="cons__panelhead">
-            <span class="cons__panelt">{t('business.loads.cancelTitle')}</span>
-          </div>
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.cancelWhy')}</span>
-            <input class="cinput" value={reason} onInput={(e) => setReason((e.target as HTMLInputElement).value)} />
-          </label>
-          <div class="twr-panelend">
-            <button type="button" class="cbtn cbtn--danger" disabled={busy || !reason.trim()} onClick={() => void run(() => client!.shipping.cancelFreight(row.freightId, reason.trim()) as never, t('business.loads.cancelled'))}>
-              {t('business.loads.cancelCta')}
-            </button>
-          </div>
-        </section>
-      ) : null}
+                {act && row.canCancel ? (
+                  <section class="cons__panel">
+                    <div class="cons__panelhead">
+                      <span class="cons__panelt">{t('business.loads.cancelTitle')}</span>
+                    </div>
+                    <label class="cfield">
+                      <span class="cfield__label">{t('business.loads.cancelWhy')}</span>
+                      <input class="cinput" value={reason} onInput={(e) => setReason((e.target as HTMLInputElement).value)} />
+                    </label>
+                    <div class="twr-panelend">
+                      <button type="button" class="cbtn cbtn--danger" disabled={busy || !reason.trim()} onClick={() => void run(() => client!.shipping.cancelFreight(row.freightId, reason.trim()) as never, t('business.loads.cancelled'))}>
+                        {t('business.loads.cancelCta')}
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
 
-      {act && row.canRate ? (
-        <section class="cons__panel">
-          <div class="cons__panelhead">
-            <span class="cons__panelt">{t('business.loads.rateTitle')}</span>
-            {row.rating ? <span class="chint">{t('business.loads.rated', { n: row.rating.stars })}</span> : null}
-          </div>
-          <div class="biz-stars">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button type="button" key={n} class={`cbtn cbtn--sm ${row.rating?.stars === n ? 'cbtn--primary' : 'cbtn--ghost'}`} disabled={busy} onClick={() => void run(() => client!.shipping.rateFreight(row.freightId, { stars: n }) as never, t('business.loads.thanks'))}>
-                {n}
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
+                {act && row.canRate ? (
+                  <section class="cons__panel">
+                    <div class="cons__panelhead">
+                      <span class="cons__panelt">{t('business.loads.rateTitle')}</span>
+                      {row.rating ? <span class="chint">{t('business.loads.rated', { n: row.rating.stars })}</span> : null}
+                    </div>
+                    <div class="biz-stars">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button type="button" key={n} class={`cbtn cbtn--sm ${row.rating?.stars === n ? 'cbtn--primary' : 'cbtn--ghost'}`} disabled={busy} onClick={() => void run(() => client!.shipping.rateFreight(row.freightId, { stars: n }) as never, t('business.loads.thanks'))}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+              </>
+            ),
+          },
+          {
+            key: 'road',
+            label: t('business.loads.sec.road'),
+            attention: Boolean(row.coldChainBroken),
+            content: (
+              <>
+                {row.passages?.length || road || row.coldChainBroken ? (
+                  <section class="cons__panel">
+                    <div class="cons__panelhead">
+                      <span class="cons__panelt">{t('business.loads.fact.road')}</span>
+                    </div>
+                    <dl class="cons__facts">
+                        {/* Round 14 — what its driver said on the road, in order; across a border, the allowance and when it is expected. */}
+                        {row.passages?.length || road ? (
+                          <div class="cons__fact">
+                            <dt class="cons__factk">{t('business.loads.fact.road')}</dt>
+                            <dd class="cons__factv">
+                              {(row.passages ?? []).map((p) => (
+                                <span key={`${p.kind}-${p.at}`} class="biz-road__line">
+                                  {passageWords(p, t, onRoad)}
+                                </span>
+                              ))}
+                              {road?.row && !row.passages?.length ? <span class="biz-road__line">{road.row}</span> : null}
+                              {road?.wait ? <span class="biz-road__line chint">{road.wait}</span> : null}
+                              {road?.expected ? (
+                                <span class="biz-road__line">
+                                  <b>{road.expected}</b>
+                                </span>
+                              ) : null}
+                              {road?.drive ? <span class="biz-road__line chint">{road.drive}</span> : null}
+                            </dd>
+                          </div>
+                        ) : null}
+                        {/* Round 25 — its cold chain broken on the road: the reading that broke it, when, and whether it reached us late. */}
+                        {row.coldChainBroken ? (
+                          <div class="cons__fact">
+                            <dt class="cons__factk">{t('business.loads.fact.coldChain')}</dt>
+                            <dd class="cons__factv">
+                              <b>{t('business.loads.coldChainBroken', { temp: row.coldChainBroken.celsius, when: onRoad(row.coldChainBroken.at), min: row.coldChainBroken.minC, max: row.coldChainBroken.maxC })}</b>
+                              {row.coldChainBroken.receivedAt ? <span class="biz-road__line chint">{t('business.loads.coldChainLate', { when: onRoad(row.coldChainBroken.receivedAt) })}</span> : null}
+                            </dd>
+                          </div>
+                        ) : null}
+                    </dl>
+                  </section>
+                ) : null}
+                {/* At the door: every attempt the driver made, and what the driver is told — the business's to add to (2026-10-27). */}
+                <LoadDoor row={row} client={client} act={act} onChanged={onChanged} />
+              </>
+            ),
+          },
+          {
+            key: 'papers',
+            label: t('business.loads.sec.papers'),
+            content: (
+              <>
+                {/* The labels for its packages and, across a border, its commercial invoice — the business's own papers. */}
+                {/* Box 18 at taking over, and this business's answer (CMR Art. 8(2)). */}
+                <LoadReservations row={row} client={client} act={act} onChanged={onChanged} />
+                {stage !== 'cancelled' ? <LoadPapers row={row} client={client} business={business} act={act} /> : null}
+                {/* Round 15 — the seals on the load: written before pickup, and what became of each after. */}
+                {stage !== 'cancelled' ? <LoadSeals row={row} client={client} act={act} /> : null}
+
+                {/* The links to its note — the one a receipt was emailed with, and the ones the business made to pass on. Shown to
+                    a viewer too: what is a way into the business's papers is everybody's in it to see. */}
+                {kept === 'kept' ? <NoteLinksPanel client={client} noteId={row.noteId!} title={`${row.code} · ${row.description}`} act={act} /> : null}
+              </>
+            ),
+          },
+          {
+            key: 'money',
+            label: t('business.loads.sec.money'),
+            content: (
+              <>
+                {/* What the carrier asked to be paid, once a carrier has it — kept here, settled between the two of them. */}
+                {stage === 'taken' || stage === 'moving' || stage === 'delivered' ? (
+                  <section class="cons__panel">
+                    <div class="cons__panelhead">
+                      <span class="cons__panelt">{t('business.pay.title')}</span>
+                      {quote ? <span class={`ctag ctag--${quoteTone(quote)}`}>{quote.status === 'paid' ? t('business.pay.paid') : t('business.pay.open', { figure: quoteFigure(quote) })}</span> : null}
+                    </div>
+                    {quote ? (
+                      <QuotePanel quote={quote} api={client ? (client.api as never) : null} canChange={act} onChanged={() => read()} />
+                    ) : quote === null ? (
+                      <>
+                        <p class="cons__lede">{t('business.pay.lede')}</p>
+                        {act ? (
+                          <>
+                            <div class="biz-two">
+                              <label class="cfield">
+                                <span class="cfield__label">{t('business.pay.amount')}</span>
+                                <input class="cinput" type="number" min={0} value={quoteForm.amount} placeholder={row.agreedPrice != null ? String(row.agreedPrice) : ''} onInput={(e) => setQuoteForm((prev) => ({ ...prev, amount: (e.target as HTMLInputElement).value }))} />
+                              </label>
+                              <label class="cfield">
+                                <span class="cfield__label">{t('business.pay.reference')}</span>
+                                <input class="cinput" value={quoteForm.reference} onInput={(e) => setQuoteForm((prev) => ({ ...prev, reference: (e.target as HTMLInputElement).value }))} />
+                              </label>
+                            </div>
+                            <div class="twr-panelend">
+                              <button
+                                type="button"
+                                class="cbtn cbtn--primary"
+                                disabled={busy}
+                                onClick={() =>
+                                  void run(
+                                    () =>
+                                      client!.recordFreightQuote(row.freightId, {
+                                        ...(Number(quoteForm.amount) > 0 ? { amount: Number(quoteForm.amount) } : {}),
+                                        ...(quoteForm.currency.trim() ? { currency: quoteForm.currency.trim() } : {}),
+                                        ...(quoteForm.reference.trim() ? { reference: quoteForm.reference.trim() } : {}),
+                                      }),
+                                    t('business.pay.recorded'),
+                                  )
+                                }
+                              >
+                                {t('business.pay.record')}
+                              </button>
+                            </div>
+                          </>
+                        ) : null}
+                      </>
+                    ) : null}
+                  </section>
+                ) : null}
+              </>
+            ),
+          },
+          {
+            key: 'claim',
+            label: t('business.loads.sec.claim'),
+            content: (
+              <>
+                {/* A problem with the goods delivered: the business's claim, where it is the one to make it (claim.ts). */}
+                {stage === 'delivered' ? <LoadClaimPanel row={row} client={client} act={act} onChanged={onChanged} /> : null}
+              </>
+            ),
+          },
+        ]}
+      />
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
     </ConsoleDetail>
   );

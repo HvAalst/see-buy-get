@@ -4,6 +4,7 @@ import type { ComponentChildren } from 'preact';
 import { addressBody, missingPart, startingCountry, type AddressFormat, type AddressParts } from './address';
 import { AddressFields, addressPartName } from './AddressFields';
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { useBackLayer } from '../nav';
 import { AuthImage } from '../ui/AuthImage';
 import { Button } from '../ui/Button';
 import { ErrorNote } from '../ui/ErrorNote';
@@ -77,6 +78,8 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
   // 2026-11-02 — an app that installs keeps its guide here once the call to install has gone.
   const installs: InstallApp | null = app === 'agent' || app === 'mdp' || app === 'driver' || app === 'fleet' || app === 'vendor' ? app : null;
   const wrap = useRef<HTMLDivElement>(null);
+  // 2026-11-02 — and the phone's Back closes it, as it closes a sheet, rather than leaving the screen under it.
+  useBackLayer(open, () => setOpen(false));
 
   // A drop-down that only closes by pressing its own button is a trap on a phone, where the rest of the
   // screen is the obvious way out. Escape too: a keyboard user must never be parked inside it.

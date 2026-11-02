@@ -12,6 +12,7 @@ import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
+import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
 import { sendConfig } from '../api';
 
 // Built once: the doors a person uses before they are signed in.
@@ -85,6 +86,8 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
   // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once.
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const confirming = isNewDevice(state.authError) && closedFor !== state.authError;
+  // 2026-11-02 — where the fingerprint or face was turned on for this number here, it is the first choice; the PIN is one tap away.
+  const unlock = useUnlockFirst(state.authPhone);
   return (
     <>
       <h1 class="scr__title">{t('send.auth.loginTitle')}</h1>
@@ -102,17 +105,21 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
         ) : (
           <PhoneField id="auth-phone" state={state} actions={actions} hint="next" />
         )}
-        <div class="field">
-          <span class="field__label">{t('send.auth.pin')}</span>
-          <CodeBoxes id="auth-pin" label={t('send.auth.pin')} length={PIN_LENGTH} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} mask />
-        </div>
+        <UnlockFirst state={unlock} phone={state.authPhone} config={sendConfig()} busy={busy} onTicket={(ticket) => actions.submitLogin(ticket)}>
+          <div class="field">
+            <span class="field__label">{t('send.auth.pin')}</span>
+            <CodeBoxes id="auth-pin" label={t('send.auth.pin')} length={PIN_LENGTH} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} mask />
+          </div>
+        </UnlockFirst>
       </Card>
 
-      <div class="scr__cta">
-        <Button chevron={false} onClick={() => void actions.submitLogin()} disabled={!ready} busy={busy}>
-          {t('send.auth.signIn')}
-        </Button>
-      </div>
+      {unlock.offered ? null : (
+        <div class="scr__cta">
+          <Button chevron={false} onClick={() => void actions.submitLogin()} disabled={!ready} busy={busy}>
+            {t('send.auth.signIn')}
+          </Button>
+        </div>
+      )}
 
       {/* The same foot as every sign-in screen. Forgot-PIN and sign-up are the same step here — a code, then a PIN —
           but they are two questions, so two links. */}

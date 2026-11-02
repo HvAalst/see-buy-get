@@ -1,5 +1,6 @@
 import { dropInvite, inviteBody } from '../../shared/invite';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
+import { secretBody } from '../../shared/account/unlock';
 import {
   createConversationsApi,
   createDriverApi,
@@ -100,7 +101,8 @@ export interface DriverSignIn {
 /** Phone + PIN → the driver this phone was registered to, and a token for them. */
 export function driverSession(phone: string, pin: string): Promise<Result<DriverSignIn>> {
   // `device`: the key this phone was handed when the code was typed on it. Without it the PIN is not looked at.
-  return publicRequest<DriverSignIn>(driverConfig(), '/v1/sbg/drivers/session', { body: { phone, pin, device: readDeviceKey(phone) } });
+  // `secretBody`: the PIN, or (2026-11-02) a fingerprint-or-face unlock ticket sent as `unlock` in its place.
+  return publicRequest<DriverSignIn>(driverConfig(), '/v1/sbg/drivers/session', { body: { phone, ...secretBody(pin), device: readDeviceKey(phone) } });
 }
 
 /** First time, or a forgotten PIN: a one-time code to the phone (echoed back only in a sandbox). */

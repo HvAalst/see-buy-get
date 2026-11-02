@@ -14,6 +14,13 @@ import { useSendApp, type Screen, type SendActions, type SendState } from './use
 import '../../shared/screens.css';
 import './send.css';
 import { sendWorkLine } from './logic';
+import { screensOf, useBackLayer, useScreenNav } from '../../shared/nav';
+import { NavScreen } from '../../shared/ui/NavScreen';
+
+// 2026-11-02 — Back, as an app means it (shared/nav.ts): Send is home and the other three are tabs, so they swap in
+// place and Back from any of them is Send. A shortcut may open any of the four.
+const TABS: readonly Screen[] = ['track', 'parcels', 'account'];
+const LAUNCH = screensOf<Screen>({ send: true, track: true, parcels: true, account: true });
 
 /**
  * The consumer shell. Send + Track are open to everyone — the first paint is still the first question,
@@ -27,6 +34,10 @@ export function App() {
   const account = useAccount(sbg, Boolean(state.identity));
   const sw = useRegisterSW();
   const [needRefresh] = sw.needRefresh;
+  // No sign-in shell to wait for: Send and Track are open to everyone, and the two that need a person ask on the tab.
+  const nav = useScreenNav<Screen>({ screen: state.screen, home: 'send', tabs: TABS, ready: true, go: actions.go, launch: LAUNCH });
+  // One parcel open on My parcels is a step in of its own: Back puts it down before it leaves the tab.
+  useBackLayer(state.screen === 'parcels' && Boolean(state.openParcelId), actions.closeParcel);
 
   const tabs: NavItem<Screen>[] = [
     { key: 'send', label: t('send.nav.send'), icon: 'send' },
@@ -64,9 +75,11 @@ export function App() {
 
       <main class="app__scroll">
         {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-        <AppLayer app="send" />
+        <AppLayer app="send" chats={state.identity ? actions.chatApi : state.restoring ? undefined : null} onSignIn={() => actions.go('parcels')} onRefresh={state.identity ? actions.loadParcels : undefined} />
         <ConnectivityNote />
-        <Router state={state} actions={actions} account={account} sbg={sbg} />
+        <NavScreen nav={nav}>
+          <Router state={state} actions={actions} account={account} sbg={sbg} />
+        </NavScreen>
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />

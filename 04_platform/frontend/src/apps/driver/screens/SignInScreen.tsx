@@ -10,6 +10,7 @@ import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/pin';
 import { PinGuessHint } from '../../../shared/account/PinGuessHint';
 import { recoveryApi } from '../../../shared/account/recovery';
+import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
 import { driverConfig } from '../api';
 
 export interface SignInScreenProps {
@@ -49,6 +50,9 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
   // A PIN typed on a phone no code was ever typed on: not an error, a step — the code, once.
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const confirming = step === 'pin' && isNewDevice(error) && closedFor !== error;
+  // 2026-11-02 — where the fingerprint or face was turned on for this number here, it is the first choice; the PIN is one tap away.
+  const unlock = useUnlockFirst(phone);
+  const faceFirst = step === 'pin' && unlock.offered;
 
   const busyWhile = async (work: () => Promise<unknown>) => {
     setBusy(true);
@@ -133,10 +137,12 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
       <Card>
         {step === 'email' ? <EmailStep id="drv-mail" email={email} code={emailCode} onEmail={setEmail} onCode={setEmailCode} send={recovery.emailCode} disabled={busy} /> : phoneField}
         {step === 'pin' ? (
-          <div class="field">
-            <span class="field__label">{t('driver.signin.pinLabel')}</span>
-            <CodeBoxes id="drv-pin" label={t('driver.signin.pinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} mask />
-          </div>
+          <UnlockFirst state={unlock} phone={phone} config={driverConfig()} busy={busy} onTicket={(ticket) => busyWhile(() => onSignIn(phone, ticket))}>
+            <div class="field">
+              <span class="field__label">{t('driver.signin.pinLabel')}</span>
+              <CodeBoxes id="drv-pin" label={t('driver.signin.pinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} mask />
+            </div>
+          </UnlockFirst>
         ) : null}
         {step === 'code' ? (
           <>
@@ -155,11 +161,13 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         {step === 'email' ? null : <p class="card__note">{t('driver.signin.phoneNote')}</p>}
       </Card>
 
-      <div class="scr__cta">
-        <Button type="submit" disabled={!ready} busy={busy}>
-          {step === 'pin' ? t('driver.signin.continue') : step === 'phone' ? t('driver.signin.sendCode') : step === 'email' ? t(reset ? 'account.safety.resetCta' : 'account.safety.signupCta') : t('driver.signin.savePin')}
-        </Button>
-      </div>
+      {faceFirst ? null : (
+        <div class="scr__cta">
+          <Button type="submit" disabled={!ready} busy={busy}>
+            {step === 'pin' ? t('driver.signin.continue') : step === 'phone' ? t('driver.signin.sendCode') : step === 'email' ? t(reset ? 'account.safety.resetCta' : 'account.safety.signupCta') : t('driver.signin.savePin')}
+          </Button>
+        </div>
+      )}
 
       {step === 'pin' ? (
         <Card title={t('driver.signin.whyTitle')} tone="soft">

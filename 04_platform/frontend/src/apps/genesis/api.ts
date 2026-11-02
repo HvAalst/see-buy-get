@@ -1,5 +1,6 @@
 import { dropInvite, heldInvite } from '../../shared/invite';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
+import { secretBody } from '../../shared/account/unlock';
 import type { Agreement } from '../../shared/documents/documents';
 import {
   createConsumerApi,
@@ -119,7 +120,8 @@ export function changePinWithCurrent(phone: string, pin: string, newPin: string)
 export function pinLogin(phone: string, pin: string): Promise<Result<AuthResult>> {
   // `device`: the key this phone or browser was handed when the code was typed on it. Without it the server does not
   // look at the PIN, and answers DEVICE_NOT_KNOWN — the sign-in screen then sends the code (NewDeviceSheet).
-  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/login', { body: { phone, pin, device: readDeviceKey(phone) } });
+  // `secretBody`: the PIN, or (2026-11-02) a fingerprint-or-face unlock ticket sent as `unlock` in its place.
+  return publicRequest<AuthResult>(sendConfig(), '/v1/sbg/identity/login', { body: { phone, ...secretBody(pin), device: readDeviceKey(phone) } });
 }
 
 /** sessionStorage namespace for the consumer's bearer — one key per personDid, purged on every

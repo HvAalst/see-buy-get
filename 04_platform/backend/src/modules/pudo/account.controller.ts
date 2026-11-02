@@ -14,6 +14,8 @@ import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { AccountClosingService } from './account-closing.service';
+import { PasskeyService, type PasskeyHere } from './passkey.service';
+import { PasskeyOnDto, PasskeyOnOptionsDto } from './passkey.dto';
 
 /**
  * THE ACCOUNT — one surface, every app.
@@ -51,6 +53,8 @@ export class AccountController {
     private readonly idDisputes: IdDisputeService,
     private readonly accounts: AccountService,
     private readonly closing: AccountClosingService,
+    // 2026-11-02 — unlock with fingerprint or face, turned on and off under Settings.
+    private readonly passkeys: PasskeyService,
   ) {}
 
   /**
@@ -219,6 +223,38 @@ export class AccountController {
   @Post('pin-devices/forget-this')
   forgetThisDevice(@Body() dto: PinDevicesDto, @Actor() actor: IntrospectionResult) {
     return this.persons.forgetThisDevice(actingPerson(actor), dto.devices);
+  }
+
+  /**
+   * UNLOCK WITH FINGERPRINT OR FACE — is it on, on this phone or browser? (The owner, 2026-11-02: "if face unlock works,
+   * integrate it, but then in settings users should be able to undo it and get back to a preferred option".) A POST
+   * although it only reads, for the PIN devices' reason: the device keys travel in the body. Keyed to the token.
+   */
+  @SignedIn()
+  @Post('passkey')
+  passkey(@Body() dto: PinDevicesDto, @Actor() actor: IntrospectionResult): PasskeyHere {
+    return this.passkeys.here(actingPerson(actor), dto.devices);
+  }
+
+  /** Turn it on here, step one: the PIN again (the door's check and counter), then what the phone needs to make one. */
+  @SignedIn()
+  @Post('passkey/options')
+  passkeyOptions(@Body() dto: PasskeyOnOptionsDto, @Actor() actor: IntrospectionResult) {
+    return this.passkeys.turnOnOptions(actingPerson(actor), dto.devices, dto.pin);
+  }
+
+  /** …step two: the phone's answer. Kept on this device's own record — and gone with it, whenever it goes. */
+  @SignedIn()
+  @Post('passkey/on')
+  passkeyOn(@Body() dto: PasskeyOnDto, @Actor() actor: IntrospectionResult): Promise<PasskeyHere> {
+    return this.passkeys.turnOn(actingPerson(actor), dto.devices, dto.response as never);
+  }
+
+  /** Turn it off here: the PIN, as it always was, is the way in on this device again. No PIN to turn it off. */
+  @SignedIn()
+  @Post('passkey/off')
+  passkeyOff(@Body() dto: PinDevicesDto, @Actor() actor: IntrospectionResult): PasskeyHere {
+    return this.passkeys.turnOff(actingPerson(actor), dto.devices);
   }
 
   /**

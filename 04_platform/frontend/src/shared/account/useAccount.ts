@@ -1,6 +1,7 @@
 import { saveDeviceKey } from './pin';
 import type { AddressFormat, AddressParts } from './address';
 import { pinDevicesApi, type PinDevicesApi } from './devices';
+import { passkeyApi, type PasskeyApi } from './passkey';
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sbg';
 import type { ContractView } from './contract';
@@ -130,6 +131,8 @@ export interface AccountApi {
   ownId: (nationalId: string) => Promise<Result<{ saved: boolean }>>;
   /** The phones and browsers this person's PIN works on: read them, forget the others, forget this one. */
   devices: PinDevicesApi;
+  /** 2026-11-02 — unlock with fingerprint or face on this phone: is it on, turn it on (the PIN again), turn it off. */
+  passkey: PasskeyApi;
   /**
    * WHERE THIS PAYEE IS PAID (the user, 2026-10-18): in a country that pays by M-Pesa, a number the payee set and
    * confirmed with a code. Null until read, and for a sign-in that is not paid out at all.
@@ -173,6 +176,7 @@ const IDLE: AccountApi = {
   idDispute: idDisputeApi(async () => NO_CLIENT),
   ownId: async () => NO_CLIENT,
   devices: pinDevicesApi(async () => NO_CLIENT),
+  passkey: passkeyApi(async () => NO_CLIENT),
   payout: null,
   sendPayoutCode: async () => NO_CLIENT,
   savePayoutNumber: async () => NO_CLIENT,
@@ -394,6 +398,7 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   const idDispute = useMemo(() => idDisputeApi(post), [post]);
   const ownId = useCallback((nationalId: string) => post<{ saved: boolean }>('/v1/sbg/account/id-disputes/own-id', { nationalId }), [post]);
   const devices = useMemo(() => pinDevicesApi(post), [post]);
+  const passkey = useMemo(() => passkeyApi(post), [post]);
   const sendPayoutCode = useCallback((phone: string) => post<Sent & { masked: string }>('/v1/sbg/payout-number/code', { phone }), [post]);
   const savePayoutNumber = useCallback(
     async (code: string) => {
@@ -406,5 +411,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, payout, sendPayoutCode, savePayoutNumber };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, payout, sendPayoutCode, savePayoutNumber };
 }

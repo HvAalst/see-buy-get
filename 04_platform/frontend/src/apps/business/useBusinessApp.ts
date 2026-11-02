@@ -82,7 +82,8 @@ export interface BusinessActions {
   set: (patch: Partial<Pick<BusinessState, 'phone' | 'pin' | 'code' | 'email' | 'emailCode' | 'agreement'>>) => void;
   setStep: (step: SignInStep) => void;
   forgetPhone: () => void;
-  submitLogin: () => Promise<void>;
+  /** `unlock` (2026-11-02): a ticket a fingerprint or face on this device was just checked for, sent in the PIN's place. */
+  submitLogin: (unlock?: string) => Promise<void>;
   requestCode: () => Promise<void>;
   submitCode: () => Promise<void>;
   submitPin: () => Promise<void>;
@@ -192,10 +193,10 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       patch({ phone: '', phoneKnown: false, step: 'phone', pin: '', error: null });
     },
 
-    submitLogin: async () => {
+    submitLogin: async (unlock) => {
       const s = stateRef.current;
       patch({ busy: true, error: null });
-      const r = await pinLogin(s.phone.trim(), s.pin);
+      const r = await pinLogin(s.phone.trim(), unlock ?? s.pin);
       // A device that is new is not a wrong PIN: the PIN stays typed, for when the code has confirmed the device.
       if (r.error || !r.data) return patch({ busy: false, error: r.error, ...(isNewDevice(r.error) ? {} : { pin: '' }) });
       await signedIn(r.data);

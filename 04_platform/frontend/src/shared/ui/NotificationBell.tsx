@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { setIconCount } from '../appBadge';
 import type { NotificationsApi } from '../../lib/sbg';
 import { useT } from '../i18n';
 import { usePush } from '../usePush';
@@ -136,6 +137,11 @@ export function NotificationBell({ api, shared, act }: NotificationBellProps & {
     // Only when told: loading on opening is usePush's own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bellTick]);
+  // 2026-11-02 — the count on the app's icon follows the bell's (shared/appBadge.ts); gone when signed out.
+  useEffect(() => {
+    setIconCount(push.unread);
+  }, [push.unread]);
+  useEffect(() => () => setIconCount(0), []);
 
   const openSheet = () => {
     setOpen(true);

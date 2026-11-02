@@ -15,6 +15,7 @@ import { isPlausibleEmail, normalizeEmail } from './email-code.service';
 import { IdentityVault } from '../../foundation/data-firewall/identity-vault.service';
 import { MediaService } from './media.service';
 import { DEVICE_UNUSED_DAYS, DeviceBook, DeviceSeen, KnownDevice } from './person-devices';
+import { DevicePasskey, UNLOCK_TTL_MS, UnlockGrant, UnlockTickets, deviceHashOf } from './passkeys';
 import { OldNumber, Person, PersonRole, PersonView, PhoneChange, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
 
 /** Wrong-PIN attempts before the PIN locks. From then on only a code sent to the phone opens it again. */
@@ -93,6 +94,8 @@ export class PersonService {
   private readonly persons = new PersistentMap<string, Person>('sbg-persons'); // keyed by phoneHash
   /** The devices each person's PIN works on: the ones a code to their phone was typed on. Durable. */
   private readonly devices = new DeviceBook(new PersistentMap<string, KnownDevice>('person-devices'));
+  /** 2026-11-02 — what a fingerprint or face unlocked: one use, two minutes, redeemed where the PIN is checked (passkeys.ts). */
+  private readonly unlocks = new UnlockTickets();
   // Derived index personDid → phoneHash, so an authenticated request (token.did = personDid) resolves
   // in O(1). Rebuilt from the durable map at construction and kept in step on every save().
   private readonly byDid = new Map<string, string>();
@@ -453,8 +456,14 @@ export class PersonService {
    * Reopen the app with a phone + PIN — no OTP. A 4-digit PIN is only 10⁴ wide, so the lock is the credential's
    * real strength: after MAX_PIN_ATTEMPTS wrong tries it locks, and only a code sent to the phone opens it again.
    * Returns a consumer actor token.
+   *
+   * 2026-11-02 — OR AN UNLOCK TICKET IN THE PIN'S PLACE (`unlock`): what a fingerprint or face on THIS device was just
+   * checked for (PasskeyService.unlock). It is taken here, at the one check every PIN door goes through, so a driver's,
+   * a fleet office's and the Send app's door each keep their own token, roles, limits and lockouts — and a door that
+   * forgot to pass the ticket on simply refuses. The device is asked first, exactly as for a PIN; then the lock; then
+   * the ticket, which opens only this person, on this number, on this device, with the passkey it was made with.
    */
-  loginWithPin(phone: string, pin: string, device?: string): { person: Person; token: AccessToken } {
+  loginWithPin(phone: string, pin: string | undefined, device?: string, unlock?: string): { person: Person; token: AccessToken; unlocked?: UnlockGrant } {
     const person = this.findByPhone(phone);
     /*
      * THE PIN IS LOOKED AT ONLY ON A DEVICE THIS PERSON CONFIRMED BY A CODE. Asked FIRST, and answered the same
@@ -467,10 +476,94 @@ export class PersonService {
     }
     // Do not reveal whether the phone is registered — same error either way.
     if (!person || !person.pinHash || !person.pinSalt) throw new GlosError('AUTH_FAILED', 'Wrong phone or PIN');
-    this.checkPin(person, pin, 'AUTH_FAILED', 'Wrong phone or PIN');
+    const unlocked = unlock ? this.redeemUnlock(person, device as string, unlock) : undefined;
+    if (!unlocked) this.checkPin(person, pin ?? '', 'AUTH_FAILED', 'Wrong phone or PIN');
     // The right PIN, on this device, today: what its owner is shown, and what its ninety days are counted from.
     this.devices.used(person.personDid, device);
-    return { person, token: this.mintConsumerToken(person) };
+    return { person, token: this.mintConsumerToken(person), ...(unlocked ? { unlocked } : {}) };
+  }
+
+  /* ------------------------------------------- 2026-11-02: unlock with fingerprint or face (passkeys.ts) -- */
+
+  /**
+   * THE TICKET, TAKEN — once, whatever happens next. A locked PIN locks this too (the lock is the account's sign-in's,
+   * and only a code to the phone opens it). Refused when it ran out, was used, is somebody else's, was made on another
+   * device or for another number, or when the passkey it was made with is no longer on this device: turned off, or
+   * replaced. The right one resets the wrong-PIN count, as the right PIN does.
+   */
+  private redeemUnlock(person: Person, device: string, ticket: string): UnlockGrant {
+    if (pinLocked(person)) throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
+    const grant = this.unlocks.take(ticket);
+    if (!grant || grant.personDid !== person.personDid || grant.phoneHash !== person.phoneHash || grant.deviceHash !== deviceHashOf(device)) {
+      throw new GlosError('UNLOCK_FAILED', 'That unlock has run out, or was used already. Unlock again, or use your PIN.');
+    }
+    if (this.devices.passkeyOf(person.personDid, device)?.id !== grant.credentialId) {
+      throw new GlosError('UNLOCK_OFF', 'Unlocking with fingerprint or face is off on this phone or browser. Use your PIN.');
+    }
+    if (person.pinAttempts || person.pinLockedUntil) {
+      person.pinAttempts = 0;
+      person.pinLockedUntil = undefined;
+      this.save(person);
+    }
+    return grant;
+  }
+
+  /** Locked by wrong PINs (or wrong unlocks): only a code to the phone opens it again. */
+  isPinLocked(person: Person): boolean {
+    return pinLocked(person);
+  }
+
+  /** Which of the asking browser's keys is this person's, and the passkey on that device, if one was turned on there. */
+  passkeyHere(personDid: string, keys: string[] | undefined): { which: number; key?: string; passkey?: DevicePasskey } {
+    const which = this.devices.whichOf(personDid, keys);
+    const key = which >= 0 ? keys?.[which] : undefined;
+    return { which, ...(key ? { key } : {}), ...(key ? { passkey: this.devices.passkeyOf(personDid, key) } : {}) };
+  }
+
+  /** The passkey on this device of this person's — what a sign-in screen's unlock is checked against. */
+  passkeyOf(personDid: string | undefined, key: string | undefined): DevicePasskey | undefined {
+    return this.devices.passkeyOf(personDid, key);
+  }
+
+  /** Turn it on, on a device of this person's. The caller has checked the PIN and the phone's answer. */
+  setPasskey(personDid: string, key: string, passkey: DevicePasskey): boolean {
+    return this.devices.setPasskey(personDid, key, passkey);
+  }
+
+  /** Turn it off here — and every unlock it handed out goes with it. The device stays one the PIN works on. */
+  dropPasskey(personDid: string, key: string | undefined): DevicePasskey | undefined {
+    const dropped = this.devices.dropPasskey(personDid, key);
+    if (dropped) this.unlocks.dropFor(personDid);
+    return dropped;
+  }
+
+  /** It unlocked: the phone's counter as it now stands. */
+  passkeyUsed(personDid: string, key: string, counter: number): void {
+    this.devices.passkeyUsed(personDid, key, counter);
+  }
+
+  /** The phone's fingerprint or face checked out: a ticket for the door, two minutes, one use. */
+  issueUnlock(person: Person, device: string, credentialId: string, now: number = Date.now()): { ticket: string; expiresAt: number } {
+    const expiresAt = now + UNLOCK_TTL_MS;
+    return { ticket: this.unlocks.issue({ personDid: person.personDid, phoneHash: person.phoneHash, deviceHash: deviceHashOf(device), credentialId, expiresAt }, now), expiresAt };
+  }
+
+  /**
+   * A DOOR THAT MINTS NOTHING SPENT THE TICKET — the fleet office's "which fleets are mine" — and the door that signs
+   * in comes next. A fresh ticket for that door, bound the same and running out WHEN THE FIRST ONE DID: nothing is ever
+   * signed in more than two minutes after the finger or face was checked.
+   */
+  relayUnlock(grant: UnlockGrant): string {
+    return this.unlocks.issue({ ...grant });
+  }
+
+  /**
+   * AN UNLOCK THAT DID NOT CHECK OUT, on a device of this person's — a signature that is not its passkey's. Counted with
+   * the wrong PINs, against the same lock: a second way to the door is not a second set of tries.
+   */
+  failedUnlock(person: Person): never {
+    this.countWrong(person);
+    throw new GlosError('UNLOCK_FAILED', 'The fingerprint or face unlock did not check out. Try again, or use your PIN.');
   }
 
   /**
@@ -496,14 +589,7 @@ export class PersonService {
   private checkPin(person: Person, pin: string, code: 'AUTH_FAILED' | 'PIN_WRONG', wrong: string): void {
     if (pinLocked(person)) throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
     if (!this.verifyPin(pin, person)) {
-      person.pinAttempts = (person.pinAttempts ?? 0) + 1;
-      const lockedNow = person.pinAttempts >= MAX_PIN_ATTEMPTS;
-      if (lockedNow) person.pinLockedAt = new Date().toISOString();
-      this.save(person);
-      if (lockedNow) {
-        this.tellLocked(person);
-        throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
-      }
+      this.countWrong(person);
       throw new GlosError(code, wrong);
     }
     // The right PIN, and when: what is read when somebody tells staff this account's PIN is lost.
@@ -511,6 +597,21 @@ export class PersonService {
     person.pinLockedUntil = undefined;
     person.pinUsedAt = new Date().toISOString();
     this.save(person);
+  }
+
+  /**
+   * ONE MORE WRONG TRY — a wrong PIN, or (2026-11-02) an unlock that did not check out. The fifth locks, and the person
+   * is told; the locking one is answered PIN_LOCKED from here.
+   */
+  private countWrong(person: Person): void {
+    person.pinAttempts = (person.pinAttempts ?? 0) + 1;
+    const lockedNow = person.pinAttempts >= MAX_PIN_ATTEMPTS;
+    if (lockedNow) person.pinLockedAt = new Date().toISOString();
+    this.save(person);
+    if (lockedNow) {
+      this.tellLocked(person);
+      throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
+    }
   }
 
   /** Who is told a PIN locked: the person themselves, and every driver record they sign in as. */

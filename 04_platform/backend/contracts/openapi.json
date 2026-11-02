@@ -24479,6 +24479,59 @@
         }
       }
     },
+    "/v1/sbg/identity/unlock/options": {
+      "post": {
+        "operationId": "Identity.unlockOptions",
+        "summary": "",
+        "description": "UNLOCK WITH FINGERPRINT OR FACE, step one (the owner, 2026-11-02): what the phone needs to sign — asked by number and\ndevice key, from a sign-in screen. The same shape for everybody: a number nobody has, a device not theirs and a\ndevice with nothing turned on all get a challenge and an empty list. Limited as the PIN door is.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnlockOptionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/identity/unlock": {
+      "post": {
+        "operationId": "Identity.unlock",
+        "summary": "",
+        "description": "…step two: the phone's answer, for a TICKET — one use, two minutes — that the app's own sign-in door takes in place\nof the PIN (`unlock`). The device is asked first, then the lock, as at the PIN door; a bad answer counts as a\nwrong PIN. Limited as the PIN door is.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnlockDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/identity/pin": {
       "post": {
         "operationId": "Identity.setPin",
@@ -25363,6 +25416,119 @@
         "responses": {
           "201": {
             "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/passkey": {
+      "post": {
+        "operationId": "Account.passkey",
+        "summary": "",
+        "description": "UNLOCK WITH FINGERPRINT OR FACE — is it on, on this phone or browser? (The owner, 2026-11-02: \"if face unlock works,\nintegrate it, but then in settings users should be able to undo it and get back to a preferred option\".) A POST\nalthough it only reads, for the PIN devices' reason: the device keys travel in the body. Keyed to the token.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/passkey/options": {
+      "post": {
+        "operationId": "Account.passkeyOptions",
+        "summary": "",
+        "description": "Turn it on here, step one: the PIN again (the door's check and counter), then what the phone needs to make one.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyOnOptionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/passkey/on": {
+      "post": {
+        "operationId": "Account.passkeyOn",
+        "summary": "",
+        "description": "…step two: the phone's answer. Kept on this device's own record — and gone with it, whenever it goes.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyOnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/passkey/off": {
+      "post": {
+        "operationId": "Account.passkeyOff",
+        "summary": "",
+        "description": "Turn it off here: the PIN, as it always was, is the way in on this device again. No PIN to turn it off.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -59319,7 +59485,12 @@
             "type": "string"
           },
           "pin": {
-            "type": "string"
+            "type": "string",
+            "description": "Or the unlock ticket in its place, which a fingerprint or face on this device was just checked for (passkeys.ts, 2026-11-02)."
+          },
+          "unlock": {
+            "type": "string",
+            "maxLength": 80
           },
           "device": {
             "type": "string",
@@ -59328,8 +59499,7 @@
           }
         },
         "required": [
-          "phone",
-          "pin"
+          "phone"
         ]
       },
       "ManagerChoicesDto": {
@@ -59339,7 +59509,12 @@
             "type": "string"
           },
           "pin": {
-            "type": "string"
+            "type": "string",
+            "description": "Or the unlock ticket in its place, which a fingerprint or face on this device was just checked for (passkeys.ts, 2026-11-02)."
+          },
+          "unlock": {
+            "type": "string",
+            "maxLength": 80
           },
           "device": {
             "type": "string",
@@ -59348,8 +59523,7 @@
           }
         },
         "required": [
-          "phone",
-          "pin"
+          "phone"
         ]
       },
       "FleetAssignDto": {
@@ -62327,7 +62501,12 @@
             "type": "string"
           },
           "pin": {
-            "type": "string"
+            "type": "string",
+            "description": "Or the unlock ticket in its place, which a fingerprint or face on this device was just checked for (passkeys.ts, 2026-11-02)."
+          },
+          "unlock": {
+            "type": "string",
+            "maxLength": 80
           },
           "did": {
             "type": "string"
@@ -62339,8 +62518,7 @@
           }
         },
         "required": [
-          "phone",
-          "pin"
+          "phone"
         ]
       },
       "DriverOfferView": {
@@ -67302,7 +67480,12 @@
             "type": "string"
           },
           "pin": {
-            "type": "string"
+            "type": "string",
+            "description": "Or the unlock ticket in its place, which a fingerprint or face on this device was just checked for (passkeys.ts, 2026-11-02)."
+          },
+          "unlock": {
+            "type": "string",
+            "maxLength": 80
           },
           "device": {
             "type": "string",
@@ -67311,8 +67494,46 @@
           }
         },
         "required": [
+          "phone"
+        ]
+      },
+      "UnlockOptionsDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "device": {
+            "type": "string",
+            "description": "The key this device was handed when a code to the phone was typed on it.",
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "phone"
+        ]
+      },
+      "UnlockDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "device": {
+            "type": "string",
+            "description": "The key this device was handed when a code to the phone was typed on it.",
+            "maxLength": 120
+          },
+          "response": {
+            "type": "object",
+            "description": "The browser's `PublicKeyCredential` as JSON (an authentication response)."
+          }
+        },
+        "required": [
           "phone",
-          "pin"
+          "response"
         ]
       },
       "SetPinDto": {
@@ -67928,6 +68149,44 @@
         "required": [
           "password",
           "device"
+        ]
+      },
+      "PasskeyOnOptionsDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "pin": {
+            "type": "string",
+            "maxLength": 12
+          }
+        },
+        "required": [
+          "pin"
+        ]
+      },
+      "PasskeyOnDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "response": {
+            "type": "object",
+            "description": "The browser's `PublicKeyCredential` as JSON (a registration response)."
+          }
+        },
+        "required": [
+          "response"
         ]
       },
       "AccountEmailDto": {

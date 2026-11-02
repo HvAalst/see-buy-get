@@ -19,7 +19,7 @@ export type SbgErrorCode =
   | 'CANNOT_COUPLE' | 'HOURS_EXCEEDED' | 'CAPACITY_EXCEEDED' | 'NO_ROOM' | 'CARRIER_NOT_TRADING' | 'REASON_REQUIRED' | 'SAFETY_CHECK_INCOMPLETE' | 'RECEIVER_REQUIRED' | 'DELIVERY_PHOTO_REQUIRED' | 'FRAGILE_NOT_ALLOWED' | 'BAG_FULL' | 'BAG_EMPTY' | 'BAG_RESERVED'
   | 'BAG_MISADDRESSED' | 'ALREADY_IN_BAG' | 'STAGING_FULL' | 'SHELF_FULL' | 'NO_CAPACITY_AVAILABLE' | 'OTP_INVALID' | 'OTP_LOCKED' | 'PIN_INVALID' | 'UNAUTHORIZED'
   | 'AUTH_FAILED' | 'AUTH_CODE_INVALID' | 'AUTH_NOT_ACTIVE' | 'PAYMENT_REQUIRED' | 'WALLET_INSUFFICIENT'
-  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'DEVICE_NOT_KNOWN' | 'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PASSWORD_LOCKED' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'DRIVER_PASS_NEEDED' | 'DRIVER_PASS_WRONG' | 'VEHICLE_CHECK_NEEDED' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
+  | 'FORBIDDEN' | 'WRONG_PUDO' | 'AGENT_LOCKED' | 'PIN_LOCKED' | 'PIN_WRONG' | 'DEVICE_NOT_KNOWN' | 'UNLOCK_OFF' | 'UNLOCK_FAILED' |'PASSWORD_WRONG' | 'SECRET_WRONG' | 'PASSWORD_LOCKED' | 'PIN_GUESSABLE' | 'ROLE_NOT_HELD' | 'DRIVER_PASS_NEEDED' | 'DRIVER_PASS_WRONG' | 'VEHICLE_CHECK_NEEDED' | 'MEDIA_LOCKED' | 'CARGO_REQUIRES_DEDICATED' | 'CARGO_INCOMPATIBLE' | 'VEHICLE_MISSING_CAPABILITY' | 'NOT_FOUND' | 'CONFLICT' | 'DUPLICATE' | 'INCOMPLETE_MANIFEST' | 'INVITE_LIMIT'
   | 'MEDIA_EXPIRED' | 'MEDIA_TOO_LARGE' | 'UNSUPPORTED_MEDIA' | 'RATE_LIMITED' | 'PRICE_CHANGED' | 'SMS_NOT_SENT' | 'COUNTRY_NOT_OPEN' | 'AGREEMENT_REQUIRED'
   | 'INTERNAL'
   | 'NETWORK' | 'TIMEOUT' | 'OFFLINE' | 'CLIENT_OUTDATED'; // client-synthesised (no HTTP response)
@@ -104,6 +104,9 @@ const PRESENTATION: Partial<Record<SbgErrorCode, ErrorPresentation>> = {
   // A PIN typed on a device no code to that phone was ever typed on. Not a wrong PIN — it was not looked at. The apps
   // answer it with a step (NewDeviceSheet), and this is the sentence for where the step was closed.
   DEVICE_NOT_KNOWN: { icon: 'lock', tone: 'info', say: 'error.device_new' },
+  // 2026-11-02 — unlocking with fingerprint or face: turned off on this phone, or it did not go through.
+  UNLOCK_OFF: { icon: 'lock', tone: 'info', say: 'error.unlock_off' },
+  UNLOCK_FAILED: { icon: 'lock', tone: 'warn', say: 'error.unlock_failed' },
   ROLE_NOT_HELD: { icon: 'block', tone: 'warn', say: 'error.role_not_held' },
   PHONE_INVALID: { icon: 'keypad', tone: 'warn', say: 'error.phone_invalid' },
   // A good number, in a country this deployment does not text codes to. Not "check what you typed".

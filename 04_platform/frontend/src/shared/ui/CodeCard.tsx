@@ -1,6 +1,7 @@
 import { qrPayload } from '../qr';
 import { QrBlock } from './QrBlock';
 import { ReadAloud } from './ReadAloud';
+import { useWakeLock } from '../wakeLock';
 
 export interface CodeCardProps {
   /** Uppercase 14px label above the code. */
@@ -29,6 +30,8 @@ export interface CodeCardProps {
  * four-thousand-something is useless to the person at the counter.
  */
 export function CodeCard({ label, code, sayLabel = 'Hear the code', scanAs, long }: CodeCardProps) {
+  // 2026-11-02 — a code somebody reads off this screen keeps it on while it shows (shared/wakeLock.ts).
+  useWakeLock();
   const spoken = () => code.split('').join(', ');
   return (
     <section class={`codecard${long ? ' codecard--long' : ''}`} aria-label={`${label}: ${code.split('').join(' ')}`}>

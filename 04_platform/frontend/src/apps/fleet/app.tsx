@@ -28,6 +28,14 @@ import type { ArchiveApiState } from '../../shared/archive/useArchive';
 import '../../shared/screens.css';
 import './fleet.css';
 import { cardsToRead, fleetWorkLine } from './logic';
+import { screensOf, useScreenNav } from '../../shared/nav';
+import { NavScreen } from '../../shared/ui/NavScreen';
+
+// 2026-11-02 — Back, as an app means it (shared/nav.ts): the dashboard is home, the tab bar's screens swap in place,
+// what is reached from the dashboard (earnings, a dispatch, the notes, its own system) comes in over it, and a shortcut
+// may open any screen.
+const TABS: readonly Screen[] = ['vehicles', 'drivers', 'sessions', 'lines', 'runs', 'orders', 'sites'];
+const LAUNCH = screensOf<Screen>({ dash: true, vehicles: true, drivers: true, sessions: true, lines: true, runs: true, orders: true, sites: true, earnings: true, dispatch: true, notes: true, system: true });
 
 export function App() {
   const t = useT();
@@ -43,6 +51,16 @@ export function App() {
   const [needRefresh] = sw.needRefresh;
   // P3 — the plan board is read at a desk: it asks for the width while it is open.
   const [wide, setWide] = useState(false);
+  const nav = useScreenNav<Screen>({
+    screen: state.screen,
+    home: 'dash',
+    tabs: TABS,
+    ready: state.phase === 'ready',
+    go: actions.go,
+    launch: LAUNCH,
+    // A dispatch opened from the icon is opened as a shift row opens it: with its drivers fetched, for whoever was last chosen.
+    open: (to) => (to === 'dispatch' ? actions.openDispatch() : actions.go(to)),
+  });
 
   if (state.phase === 'outdated') return <UpdateGate />;
   if (state.phase === 'boot') return <Boot />;
@@ -53,7 +71,7 @@ export function App() {
         <TopBar title={t('fleet.appTitle')} subtitle={t('fleet.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-          <AppLayer app="fleet" />
+          <AppLayer app="fleet" chats={null} />
           <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} company={state.company} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -89,8 +107,8 @@ export function App() {
         title={t('fleet.appTitle')}
         subtitle={fleetWorkLine(state.dashboard, t)}
         subtitleHint={state.manager?.company}
-        onBack={state.screen === 'dash' ? undefined : () => actions.go('dash')}
-        backLabel={t('fleet.backLabel')}
+        onBack={state.screen === 'dash' ? undefined : nav.back}
+        backLabel={nav.backTo && nav.backTo !== 'dash' ? t('common.back') : t('fleet.backLabel')}
         end={
           <>
             {/* The office's inbox. Until this existed, everything the server addressed to a fleet — a load
@@ -131,13 +149,15 @@ export function App() {
 
       <main class={'app__scroll' + (wide && state.screen === 'orders' ? ' app__scroll--wide' : '')}>
         {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-        <AppLayer app="fleet" />
+        <AppLayer app="fleet" chats={actions.chatApi} onRefresh={actions.refresh} />
         <ConnectivityNote stale={state.stale} />
-        {state.screen === 'orders' ? (
-          <OrdersScreen sbg={sbg} managerDid={state.manager?.did} who={state.manager?.did} onWide={setWide} />
-        ) : (
-          <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} sbg={sbg} />
-        )}
+        <NavScreen nav={nav}>
+          {state.screen === 'orders' ? (
+            <OrdersScreen sbg={sbg} managerDid={state.manager?.did} who={state.manager?.did} onWide={setWide} />
+          ) : (
+            <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} sbg={sbg} />
+          )}
+        </NavScreen>
       </main>
 
       <BottomNav<Screen> items={tabs} active={state.screen} onSelect={(key) => actions.go(key)} labels={false} />

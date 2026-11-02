@@ -36,8 +36,13 @@ export function intentOf(href: string): LaunchIntent | null {
   }
   const p = u.searchParams;
   const go = clean(p.get('go'));
-  const share = p.get('share') === '1' ? { title: clean(p.get('title')), text: clean(p.get('text')), url: clean(p.get('url')) } : undefined;
-  const shared = share && (share.title || share.text || share.url) ? share : undefined;
+  // The share target's own fields (vite.config.ts): a GET share replaces the address's query with exactly these.
+  // `?share=1&title=…&text=…&url=…` is read too, for a link made by hand.
+  const marked = p.get('share') === '1';
+  const field = (k: 'title' | 'text' | 'url') => clean(p.get(`share_${k}`)) ?? (marked ? clean(p.get(k)) : undefined);
+  const share: SharedIn = { title: field('title'), text: field('text'), url: field('url') };
+  for (const k of ['title', 'text', 'url'] as const) if (share[k] === undefined) delete share[k];
+  const shared = share.title || share.text || share.url ? share : undefined;
   if (!go && !shared) return null;
   return { ...(go ? { go } : {}), ...(shared ? { share: shared } : {}) };
 }
@@ -45,24 +50,39 @@ export function intentOf(href: string): LaunchIntent | null {
 /** The address without what it asked for: the app's own address stays as it was. */
 export function withoutIntent(href: string): string {
   const u = new URL(href);
-  for (const k of ['go', 'share', 'title', 'text', 'url']) u.searchParams.delete(k);
+  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url']) u.searchParams.delete(k);
   const q = u.searchParams.toString();
   return `${u.pathname}${q ? `?${q}` : ''}${u.hash}`;
 }
 
-type Listener = (intent: LaunchIntent) => void;
-const listeners = new Set<Listener>();
-let pending: LaunchIntent[] = [];
+/** What each kind of launch carries: a screen's key, or what was shared. */
+export interface LaunchKinds {
+  go: string;
+  share: SharedIn;
+}
+type Kind = keyof LaunchKinds;
+type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
+
+/**
+ * Each kind waits for its own listener (the share helper's catch, 2026-11-02): a share made to a closed app arrives
+ * before anybody listens, and must reach the share sheet when it mounts — not whichever listener came first.
+ */
+const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set() };
+const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [] };
 let started = false;
+
+function deliverKind<K extends Kind>(kind: K, value: LaunchKinds[K] | undefined): void {
+  if (value === undefined) return;
+  const set = listeners[kind] as Set<Listener<K>>;
+  // Nobody listening for this kind yet (the app is still signing in): kept for the first who does.
+  if (set.size === 0) (pending[kind] as Array<LaunchKinds[K]>).push(value);
+  else set.forEach((l) => l(value));
+}
 
 function deliver(intent: LaunchIntent | null): void {
   if (!intent) return;
-  if (listeners.size === 0) {
-    // Nobody listening yet (the app is still signing in): kept for the first who does.
-    pending.push(intent);
-    return;
-  }
-  listeners.forEach((l) => l(intent));
+  deliverKind('go', intent.go);
+  deliverKind('share', intent.share);
 }
 
 /** Read the address the app was opened at, and the launch queue, once per page. */
@@ -88,16 +108,26 @@ function start(): void {
 }
 
 /**
- * Listen for what the app is opened for. Anything that came before the first listener is handed to it at once. Returns
- * the way to stop listening.
+ * Listen for one kind of launch: 'go' (a screen's key, from a shortcut) or 'share' (what another app shared).
+ * Whatever of that kind came before its first listener is handed to it at once. Returns the way to stop listening.
  */
-export function onLaunch(listener: Listener): () => void {
+export function onLaunch<K extends Kind>(kind: K, listener: Listener<K>): () => void {
   start();
-  listeners.add(listener);
-  if (pending.length) {
-    const held = pending;
-    pending = [];
-    held.forEach((i) => listener(i));
+  const set = listeners[kind] as Set<Listener<K>>;
+  set.add(listener);
+  const held = pending[kind] as Array<LaunchKinds[K]>;
+  if (held.length) {
+    const now = held.splice(0, held.length);
+    now.forEach((v) => listener(v));
   }
-  return () => void listeners.delete(listener);
+  return () => void set.delete(listener);
+}
+
+/** Tests only: forget every listener and everything waiting, as a fresh page would. */
+export function resetLaunchForTests(): void {
+  listeners.go.clear();
+  listeners.share.clear();
+  pending.go.length = 0;
+  pending.share.length = 0;
+  started = false;
 }

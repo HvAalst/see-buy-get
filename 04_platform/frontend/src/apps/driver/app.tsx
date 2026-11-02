@@ -21,8 +21,16 @@ import { AccountMenu } from '../../shared/account/AccountMenu';
 import { useAccount } from '../../shared/account/useAccount';
 import { isRidden, namedVehicleClass, vehicleWord } from './vehicle-words';
 import { LoadFinderContext, loadFinderFor } from '../../shared/loadFinder';
+import { screensOf, useScreenNav } from '../../shared/nav';
+import { NavScreen } from '../../shared/ui/NavScreen';
 
 type Tab = 'home' | 'route' | 'board' | 'loads' | 'earnings';
+
+// 2026-11-02 — Back, as an app means it (shared/nav.ts): every screen here is a tab's, so they swap in place and Back
+// from any of them is the van. An offer is the route tab's face while there is one. A shortcut may open any screen but
+// the offers, which open themselves when one comes.
+const TABS: readonly Screen[] = ['route', 'offers', 'board', 'loads', 'earnings'];
+const LAUNCH = screensOf<Screen>({ home: true, route: true, offers: true, loads: true, earnings: true, board: true }).filter((s) => s !== 'offers');
 
 export function App() {
   const t = useT();
@@ -36,6 +44,20 @@ export function App() {
   const [fleetOpen, setFleetOpen] = useState(false);
   // Round 19 — a load's package scanned into any box finds its load: one of theirs opens on My loads.
   const loadFinder = useMemo(() => (sbg ? loadFinderFor(sbg, () => actions.go('loads')) : null), [sbg]);
+  const nav = useScreenNav<Screen>({
+    screen: state.screen,
+    home: 'home',
+    tabs: TABS,
+    ready: state.phase === 'ready',
+    go: actions.go,
+    launch: LAUNCH,
+    // A shortcut does what the tab bar does with the same key: the route shows the offers while they wait, and the route
+    // and the loads stay shut off shift — the van's screen is where it opens then.
+    open: (to) => {
+      if ((to === 'route' || to === 'loads') && !state.session.active) return;
+      actions.go(to === 'route' && state.offers.length ? 'offers' : to);
+    },
+  });
 
   if (state.phase === 'outdated') return <UpdateGate />;
   if (state.phase === 'boot') return <Boot />;
@@ -46,7 +68,7 @@ export function App() {
         <TopBar title={t('driver.appTitle')} subtitle={t('driver.signinSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-          <AppLayer app="driver" />
+          <AppLayer app="driver" chats={null} />
           <SignInScreen onSignIn={actions.signIn} onSendCode={actions.sendPinCode} onSetPin={actions.setPinAndSignIn} error={state.error} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -79,7 +101,7 @@ export function App() {
         title={t('driver.appTitle')}
         subtitle={driverWorkLine(state.session, state.route, state.remainingTotes, t)}
         subtitleHint={state.driver?.displayName}
-        onBack={state.screen === 'home' ? undefined : () => actions.go('home')}
+        onBack={state.screen === 'home' ? undefined : nav.back}
         backLabel={t('driver.backToVan', { vehicle })}
         end={
           <>
@@ -112,10 +134,12 @@ export function App() {
 
       <main class="app__scroll">
         {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
-        <AppLayer app="driver" />
+        <AppLayer app="driver" chats={actions.chatApi} onRefresh={actions.refresh} />
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
-        <ScreenRouter screen={state.screen} state={state} actions={actions} onOpenFleet={() => setFleetOpen(true)} sbg={sbg} />
+        <NavScreen nav={nav}>
+          <ScreenRouter screen={state.screen} state={state} actions={actions} onOpenFleet={() => setFleetOpen(true)} sbg={sbg} />
+        </NavScreen>
       </main>
 
       <BottomNav<Tab>

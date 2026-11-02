@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin, type PluginOption } from 'vite';
 import preact from '@preact/preset-vite';
-import { VitePWA } from 'vite-plugin-pwa';
+import { VitePWA, type ManifestOptions } from 'vite-plugin-pwa';
 
 // `type: module` package — no __dirname, derive it.
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -68,7 +68,31 @@ type AppSpec = {
    * host (e.g. ops.seebuyget.com) behind a gate at the edge: see "The operator console's entrance" in README.md.
    */
   standalone?: boolean;
+  /**
+   * 2026-11-02 — WHAT THE PHONE KNOWS ABOUT THE APP (the owner: "make it as native as today can be").
+   *
+   * `shortcuts`: what holding the app's icon offers — its most common jobs, each opening one screen. `screenshots`: the
+   * pictures of the real app the install window shows beside its description, so installing reads like a store page and
+   * not a bare "Install app?". `chats`: the app has conversations, so it is offered in the phone's share list for a text
+   * or a link. Words here are the manifest's, in English, as the name and description are.
+   */
+  shortcuts?: Shortcut[];
+  screenshots?: Screenshot[];
+  chats?: boolean;
 };
+
+/**
+ * A job reached by holding the app's icon. `go` is a key of the app's own Screen type: the app is opened at `?go=<key>`
+ * and goes there (shared/launch.ts reads it). Its picture is icons/shortcuts/<go>-96.png and <go>-192.png in the app's
+ * public folder — the nav glyph in navy on a white round tile, over the orange bar the bottom nav marks the open tab with.
+ */
+type Shortcut = { go: string; name: string; short: string; description: string };
+
+/**
+ * A picture of the real app for the install window: screenshots/<file> in the app's public folder, a 390 × 844 phone at
+ * twice its size (780 × 1688). The screens are the apps' own, drawn with made-up shops, places and amounts.
+ */
+type Screenshot = { file: string; label: string };
 
 const APPS = {
   /**
@@ -80,59 +104,140 @@ const APPS = {
     base: '/',
     name: 'SeeBuyGet',
     short: 'SeeBuyGet',
-    description: 'Send, track, collect — or join the SeeBuyGet network.',
+    description: 'Send a parcel from a shop near you at a price you see first, and the person it is for collects it at a shop near them with a code. Or join the SeeBuyGet network as a shop, driver, hub, store or fleet.',
     devPort: 5180,
     previewPort: 5190,
+    // Its own screens only (logic.ts readDeepLink): sending and tracking are the Send app's, which installs on its own.
+    shortcuts: [
+      { go: 'signin', name: 'Open your app', short: 'Open my app', description: 'Sign in to the app you work with' },
+      { go: 'market', name: 'The freight market', short: 'Market', description: 'What freight moves around a place, and what it pays' },
+      { go: 'agents', name: 'Find a clearing agent', short: 'Agents', description: 'Clearing agents by what they clear and where' },
+      { go: 'roles', name: 'Sign up', short: 'Sign up', description: 'Join as a shop, driver, hub, store or fleet' },
+    ],
+    screenshots: [
+      { file: 'welcome.png', label: 'Drop a parcel at a shop near you; the person it is for collects it at a shop near them with a code' },
+      { file: 'signin.png', label: 'Open your app: one for each way you work with SeeBuyGet' },
+      { file: 'market.png', label: 'The freight market around a town, and what each load pays' },
+    ],
   },
   driver: {
     base: '/driver/',
     name: 'SeeBuyGet Driver',
     short: 'SBG Driver',
-    description: 'Claim, load and deliver work on the SeeBuyGet network.',
+    description: 'Start your shift, find loads on your way and on the freight market, carry them, and see what you have earned — on the SeeBuyGet network.',
     devPort: 5173,
     previewPort: 5174,
+    // Find work and My loads need a shift; opened off shift, the app shows the vehicle to start one with.
+    shortcuts: [
+      { go: 'route', name: 'Find work', short: 'Find work', description: 'Loads on your way that fit the space you have left' },
+      { go: 'loads', name: 'My loads', short: 'My loads', description: 'What you are carrying now' },
+      { go: 'board', name: 'The freight market', short: 'Market', description: 'Every load out there, and why you can or cannot take it yet' },
+      { go: 'earnings', name: 'Earnings', short: 'Earnings', description: 'What you earned, and what is still to come' },
+    ],
+    screenshots: [
+      { file: 'home.png', label: 'On shift: the space left on your van, and your vehicle' },
+      { file: 'board.png', label: 'The freight market: each load, what it pays per kilometre, and whether you can take it' },
+      { file: 'earnings.png', label: 'Earnings: what you earned and every job behind it' },
+    ],
+    chats: true,
   },
   agent: {
     base: '/agent/',
     // The Shop app: what the front door and the app itself call it (its folder keeps the older name, agent).
     name: 'SeeBuyGet Shop',
     short: 'SBG Shop',
-    description: 'Run a SeeBuyGet pickup and drop-off point.',
+    description: 'Run a SeeBuyGet pickup and drop-off point: take parcels in, hand them over by their code, give them to the bus, and see your float and your shelf at a glance.',
     devPort: 5175,
     previewPort: 5185,
+    shortcuts: [
+      { go: 'accept', name: 'Take in a parcel', short: 'Take in', description: 'A customer drops something off' },
+      { go: 'release', name: 'Hand over a parcel', short: 'Hand over', description: 'Any customer collecting anything' },
+      { go: 'handover', name: 'Hand to the bus', short: 'To the bus', description: 'Give waiting parcels to the driver' },
+      { go: 'receivebag', name: 'Receive a bag', short: 'Receive bag', description: 'A bus dropped a bag for your shop' },
+    ],
+    screenshots: [
+      { file: 'home.png', label: 'Your shop at a glance: the money in your wallet, shelf space and the counter’s jobs' },
+      { file: 'release.png', label: 'Hand over a parcel: the customer’s code, and the parcels waiting on your shelf' },
+      { file: 'accept.png', label: 'Take in a parcel: scan its label and measure it; the size is worked out for you' },
+    ],
+    chats: true,
   },
   genesis: {
     base: '/send/',
     name: 'SeeBuyGet Send',
     short: 'SBG Send',
-    description: 'Send a parcel on the SeeBuyGet network.',
+    description: 'Send a parcel on the SeeBuyGet network: see the price before you decide, drop it at a shop near you, and follow it until it is collected.',
     devPort: 5176,
     previewPort: 5186,
+    shortcuts: [
+      { go: 'send', name: 'Send a parcel', short: 'Send', description: 'See the price before you decide' },
+      { go: 'track', name: 'Track a parcel', short: 'Track', description: 'Type the tracking code from your message' },
+      { go: 'parcels', name: 'My parcels', short: 'My parcels', description: 'Everything you send and receive, in one place' },
+    ],
+    screenshots: [
+      { file: 'send.png', label: 'What are you sending? Measure it, and the size comes from the numbers' },
+      { file: 'track.png', label: 'Where is my parcel? Every step, and the shop it waits at' },
+      { file: 'parcels.png', label: 'My parcels: what is coming to you, and what you are sending' },
+    ],
+    chats: true,
   },
   fleet: {
     base: '/fleet/',
     name: 'SeeBuyGet Fleet',
     short: 'SBG Fleet',
-    description: 'Dispatch and follow a fleet on the SeeBuyGet network.',
+    description: 'Dispatch and follow a fleet on the SeeBuyGet network: who is on shift in which vehicle, the loads you put on them, the runs you sell space on and the orders you carry.',
     devPort: 5177,
     previewPort: 5187,
+    shortcuts: [
+      { go: 'dispatch', name: 'Dispatch a load', short: 'Dispatch', description: 'Put a load on one of your drivers on shift' },
+      { go: 'sessions', name: 'Shifts', short: 'Shifts', description: 'Who drives which vehicle today' },
+      { go: 'runs', name: 'Runs', short: 'Runs', description: 'The departures you sell space on' },
+      { go: 'orders', name: 'Orders', short: 'Orders', description: 'Your shippers’ orders, by the day they must arrive' },
+    ],
+    screenshots: [
+      { file: 'dash.png', label: 'Your fleet at a glance: vehicles, drivers on shift and cargo moving' },
+      { file: 'sessions.png', label: 'Shifts: who drives which vehicle today' },
+      { file: 'runs.png', label: 'Runs: the departures you sell space on, and what is left on each' },
+    ],
+    chats: true,
   },
   mdp: {
     base: '/mdp/',
     name: 'SeeBuyGet Hub',
     short: 'SBG Hub',
-    description: 'Run a SeeBuyGet merchant distribution hub.',
+    description: 'Run a SeeBuyGet sort hub: take in the bags and the stores’ parcels coming in, scan each parcel to the bag it goes in, and load the bags onward.',
     devPort: 5178,
     previewPort: 5188,
+    shortcuts: [
+      { go: 'arrivals', name: 'Coming in', short: 'Coming in', description: 'Stores’ parcels arriving in bulk' },
+      { go: 'drop', name: 'Drop a bag', short: 'Drop a bag', description: 'Scan the bag the bus brought in' },
+      { go: 'sort', name: 'Sort parcels', short: 'Sort', description: 'Scan a parcel: the screen answers which bag it goes in' },
+      { go: 'load', name: 'Load a bag onward', short: 'Load a bag', description: 'Hand a bag to the driver taking it on' },
+    ],
+    screenshots: [
+      { file: 'home.png', label: 'Your hub at a glance: parcels to sort and the bags going out' },
+      { file: 'sort.png', label: 'Sort parcels: scan one, and the screen says which bag it goes in' },
+    ],
   },
   vendor: {
     base: '/vendor/',
     // The Store app: what the front door and the app itself call it (its folder keeps the older name, vendor).
     name: 'SeeBuyGet Store',
     short: 'SBG Store',
-    description: 'Mint and follow your store orders on the SeeBuyGet network.',
+    description: 'Ship your store’s orders on the SeeBuyGet network: make labels from your buyers’ checkouts, follow every shipment, and keep your prepaid balance and your books.',
     devPort: 5179,
     previewPort: 5189,
+    shortcuts: [
+      { go: 'mint', name: 'Ship an order', short: 'Ship', description: 'A label from a buyer’s checkout, or by hand' },
+      { go: 'orders', name: 'Orders', short: 'Orders', description: 'Every shipment, and where it is' },
+      { go: 'dock', name: 'Dock', short: 'Dock', description: 'Let a driver collect from your own door' },
+      { go: 'books', name: 'Bookkeeping', short: 'Books', description: 'Your balance, payments and settlements' },
+    ],
+    screenshots: [
+      { file: 'orders.png', label: 'Your prepaid balance, and every shipment with where it is' },
+      { file: 'mint.png', label: 'Ship an order: start from a buyer’s checkout' },
+    ],
+    chats: true,
   },
   /**
    * B1 — the Business app: shippers, importers, expeditors, clearing agents and container yards, run by the
@@ -179,6 +284,91 @@ if (!(APP_ID in APPS)) {
 
 const app = APPS[APP_ID];
 const BASE = app.base;
+
+/**
+ * The web manifest of one app — exported so a test can hold every app's to what it promises (src/shared/manifest.test.ts):
+ * each shortcut a screen of that app, each picture there at its size.
+ *
+ * Relative addresses resolve against the manifest's own (e.g. /agent/manifest.webmanifest), so they stay right if the
+ * base moves: `./?go=accept` is /agent/?go=accept, and icons/… is /agent/icons/….
+ */
+export function manifestFor(id: AppId): Partial<ManifestOptions> {
+  const spec: AppSpec = APPS[id];
+  return {
+    id: spec.base,
+    name: spec.name,
+    short_name: spec.short,
+    description: spec.description,
+    scope: spec.base,
+    start_url: spec.base,
+    display: 'standalone',
+    orientation: 'portrait',
+    // Both the app's own surface, deliberately, and they are two different moments.
+    // `background_color` paints the splash while the app boots; matching the first thing that
+    // renders means the launch is a fade rather than an orange flash into a white screen. The
+    // brand moment on that splash is the ICON, which is the whole tile.
+    // `theme_color` paints the status bar directly above a white TopBar — see the note in each
+    // app's index.html for why that must not be a brand colour here.
+    background_color: '#FFFFFF',
+    theme_color: '#FFFFFF',
+    lang: 'en',
+    dir: 'ltr',
+    categories: ['business', 'productivity'],
+    icons: [
+      { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      {
+        src: 'icons/icon-512-maskable.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+    ],
+    // 2026-11-02 — holding the icon offers the app's most common jobs, each straight to its screen.
+    shortcuts: (spec.shortcuts ?? []).map((s) => ({
+      name: s.name,
+      short_name: s.short,
+      description: s.description,
+      url: `./?go=${s.go}`,
+      icons: [
+        { src: `icons/shortcuts/${s.go}-96.png`, sizes: '96x96', type: 'image/png' },
+        { src: `icons/shortcuts/${s.go}-192.png`, sizes: '192x192', type: 'image/png' },
+      ],
+    })),
+    // 2026-11-02 — the install window shows these beside the description, as a store page would. A phone's, so 'narrow'.
+    screenshots: (spec.screenshots ?? []).map((s) => ({
+      src: `screenshots/${s.file}`,
+      sizes: '780x1688',
+      type: 'image/png',
+      form_factor: 'narrow' as const,
+      label: s.label,
+    })),
+    /*
+     * 2026-11-02 — ONE WINDOW. A shortcut, something shared to the app or a tapped notification brings the window already
+     * open forward and hands it the address (window.launchQueue, read by shared/launch.ts) instead of opening a second
+     * copy of the app beside the first; with no window open, the browser does what it always does.
+     */
+    launch_handler: { client_mode: ['focus-existing', 'auto'] },
+    /*
+     * 2026-11-02 — IN THE SHARE LIST, for the apps with conversations: a text or a link shared from another app opens this
+     * one at ?share=1&title=…&text=…&url=… (shared/launch.ts), which offers it to a conversation. Text and links only for
+     * now — a file would need a POST the service worker answers.
+     */
+    ...(spec.chats
+      ? {
+          share_target: {
+            // A GET share REPLACES the action's query with these fields (Web Share Target), so the fields carry their
+            // own unmistakable names rather than a marker beside them; shared/launch.ts reads them. Android puts a
+            // shared link in `text`, not `url`.
+            action: './',
+            method: 'GET' as const,
+            enctype: 'application/x-www-form-urlencoded',
+            params: { title: 'share_title', text: 'share_text', url: 'share_url' },
+          },
+        }
+      : {}),
+  };
+}
 
 /** The root app ships at '/', so its output and service-worker scope cover every sibling. */
 const IS_ROOT = BASE === '/' && !('standalone' in app && app.standalone);
@@ -277,39 +467,8 @@ function installablePlugins(): PluginOption[] {
       // icons again would only put duplicate entries in the precache manifest.
       includeManifestIcons: false,
 
-      manifest: {
-        id: BASE,
-        name: app.name,
-        short_name: app.short,
-        description: app.description,
-        scope: BASE,
-        start_url: BASE,
-        display: 'standalone',
-        orientation: 'portrait',
-        // Both the app's own surface, deliberately, and they are two different moments.
-        // `background_color` paints the splash while the app boots; matching the first thing that
-        // renders means the launch is a fade rather than an orange flash into a white screen. The
-        // brand moment on that splash is the ICON, which is the whole tile.
-        // `theme_color` paints the status bar directly above a white TopBar — see the note in each
-        // app's index.html for why that must not be a brand colour here.
-        background_color: '#FFFFFF',
-        theme_color: '#FFFFFF',
-        lang: 'en',
-        dir: 'ltr',
-        categories: ['business', 'productivity'],
-        // Relative srcs resolve against the manifest URL (e.g. /agent/manifest.webmanifest),
-        // so they stay correct if BASE changes.
-        icons: [
-          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          {
-            src: 'icons/icon-512-maskable.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
+      // The name, icons, shortcuts, install pictures, one window and the share list — manifestFor above.
+      manifest: manifestFor(APP_ID),
 
       workbox: {
         // HARD CONSTRAINT: never skipWaiting. The waiting worker is activated only by
@@ -335,6 +494,10 @@ function installablePlugins(): PluginOption[] {
           // — does not pay ~166 KB for it. It is fetched from the network only when the map is opened.
           '**/PlaceMapLeaflet-*.js',
           '**/PlaceMapLeaflet-*.css',
+          // 2026-11-02 — the install window's pictures and the shortcuts' icons are fetched by the phone when the app is
+          // installed, never by a page: ~400 KB a first visit on a 2G phone would download for nothing.
+          'screenshots/**',
+          'icons/shortcuts/**',
           ...(IS_ROOT ? SIBLING_DIRS.map((d) => `${d}/**`) : []),
           ...(IS_ROOT ? ROOT_ON_DEMAND : []),
         ],

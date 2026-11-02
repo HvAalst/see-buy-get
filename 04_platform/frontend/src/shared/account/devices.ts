@@ -1,5 +1,6 @@
 import type { Result } from '../../lib/sbg';
 import { allDeviceKeys, dropDeviceKey } from './pin';
+import { dropUnlockMarkBySlot } from './unlock';
 
 /**
  * THE PHONES AND BROWSERS A PIN WORKS ON, as their owner sees them in Settings.
@@ -52,8 +53,12 @@ export function pinDevicesApi(post: Post): PinDevicesApi {
     forgetThis: async () => {
       const keys = allDeviceKeys();
       const r = await post<{ forgotten: boolean; which: number }>('/v1/sbg/account/pin-devices/forget-this', { devices: keys.map((k) => k.key) });
-      // The server no longer knows that key, so this browser's copy goes too — that one, and no other number's.
-      if (!r.error && r.data?.forgotten) dropDeviceKey(keys[r.data.which]?.slot);
+      // The server no longer knows that key, so this browser's copy goes too — that one, and no other number's. Its
+      // fingerprint-or-face note with it (2026-11-02): the server dropped that passkey with the device.
+      if (!r.error && r.data?.forgotten) {
+        dropDeviceKey(keys[r.data.which]?.slot);
+        dropUnlockMarkBySlot(keys[r.data.which]?.slot);
+      }
       return r;
     },
   };

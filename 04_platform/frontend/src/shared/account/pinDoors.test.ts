@@ -120,3 +120,45 @@ describe('the code was typed here: the key the server hands back is kept', () =>
     expect(readDeviceKey(PHONE)).toBe('dvc_after-the-code');
   });
 });
+
+/**
+ * 2026-11-02 — UNLOCK WITH FINGERPRINT OR FACE: every door that signs in with a PIN takes the ticket the phone's
+ * fingerprint or face was just checked for, in the PIN's place, as `unlock` — with the device's key, as a PIN goes.
+ * Changing a PIN does not: it is proven with the PIN.
+ */
+describe('a fingerprint-or-face ticket goes where the PIN would, as `unlock`', () => {
+  const TICKET = `unl_${'a'.repeat(64)}`;
+  const doors: Array<[string, string, () => Promise<unknown>]> = [
+    ['Send: signing in', '/v1/sbg/identity/login', () => send.pinLogin(PHONE, TICKET)],
+    ['Driver: signing in', '/v1/sbg/drivers/session', () => driver.driverSession(PHONE, TICKET)],
+    ['Fleet: signing in with the company code', '/v1/sbg/fleet/managers/session', () => fleet.managerSession('FM-1A2B3C', PHONE, TICKET)],
+    ['Fleet: which fleets are mine', '/v1/sbg/fleet/managers/mine', () => fleet.managerChoices(PHONE, TICKET)],
+    ['Business: signing in', '/v1/sbg/identity/login', () => business.pinLogin(PHONE, TICKET)],
+  ];
+
+  it.each(doors)('%s', async (_name, path, call) => {
+    saveDeviceKey(PHONE, 'dvc_this-phone');
+    serve({ token: { access_token: 't', expires_in: 60 } });
+    await call();
+    expect(last().path).toBe(path);
+    expect(last().body).toMatchObject({ phone: PHONE, unlock: TICKET, device: 'dvc_this-phone' });
+    expect(last().body.pin).toBeUndefined();
+  });
+
+  it('Fleet: the fresh ticket "which fleets are mine" hands back is what signing in to the chosen fleet sends', async () => {
+    const NEXT = `unl_${'b'.repeat(64)}`;
+    saveDeviceKey(PHONE, 'dvc_this-phone');
+    serve({ fleets: [{ did: 'did:glos:fleet', companyName: 'Kilima', status: 'ACTIVE' }], unlock: NEXT });
+    await fleet.managerChoices(PHONE, TICKET);
+    serve({ token: { access_token: 't', expires_in: 60 } });
+    await fleet.managerSessionByFleet('did:glos:fleet', PHONE, TICKET);
+    expect(last().body).toMatchObject({ did: 'did:glos:fleet', unlock: NEXT });
+  });
+
+  it('changing a PIN is proven with the PIN, never with a ticket', async () => {
+    serve({ token: { access_token: 't' } });
+    await send.changePinWithCurrent(PHONE, PIN, '73914');
+    expect(last().body).toMatchObject({ pin: PIN });
+    expect(last().body.unlock).toBeUndefined();
+  });
+});

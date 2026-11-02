@@ -15,11 +15,12 @@ import { settingsIdSays } from './idDispute';
 import { pinChangeBlocker } from './password';
 import { PIN_LENGTH } from './pin';
 import { PinGuessHint } from './PinGuessHint';
+import { PasskeyForm, passkeyRowSub, usePasskeyHere } from './PasskeySettings';
 import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, type PayoutNumberSaved } from './payoutNumber';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi, ClosingStanding } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'payout' | 'mute' | 'close' | 'closed';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'passkey' | 'payout' | 'mute' | 'close' | 'closed';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -90,9 +91,13 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   };
 
   const me = api.account;
+  // 2026-11-02 — UNLOCK WITH FINGERPRINT OR FACE: for somebody whose sign-in here is their PIN (not a shop's, hub's or
+  // store's password), where this phone can check a fingerprint or face itself. Asked when Settings opens.
+  const passkey = usePasskeyHere(api.passkey, open && Boolean(me?.hasPin) && !onChangePassword && !devices);
+  const passkeySub = passkeyRowSub(passkey, t as never);
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' || view === 'closed' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'passkey' ? t('account.passkey.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -151,6 +156,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {me?.hasPin ? <Row icon="phone" label={t('account.settings.phone')} sub={t('account.settings.phoneSub')} onClick={() => setView('phone')} /> : null}
             {/* WHERE THE PIN WORKS: every phone and browser a code to the number was typed on. Seen, and forgotten, here. */}
             {devices ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.shopDevices.sub', { party: t(PARTY_WORD[devices.party ?? 'shop']) })} onClick={() => setView('devices')} /> : me?.hasPin ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.devices.sub')} onClick={() => setView('devices')} /> : null}
+            {/* UNLOCK WITH FINGERPRINT OR FACE (the owner, 2026-11-02): which is on, here — and the way back to the PIN. */}
+            {passkeySub ? <Row icon="key" label={t('account.passkey.title')} sub={passkeySub} onClick={() => setView('passkey')} /> : null}
             {/* WHERE THEY ARE PAID, where their country pays to a number of their own (the user, 2026-10-18). */}
             {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t('account.payout.title')} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
@@ -196,6 +203,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'contract' ? <ContractCompany api={api} /> : null}
       {view === 'payout' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
       {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
+      {view === 'passkey' ? <PasskeyForm api={api.passkey} state={passkey} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'mute' ? <MuteForm api={api} onDone={() => setView('list')} /> : null}
       {view === 'close' ? <CloseForm api={api} onClosed={() => setView('closed')} /> : null}
