@@ -1,6 +1,7 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
+import { InstallBar } from '../../../shared/ui/InstallBar';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { publicPageUrl } from '../../../lib/sbg/config';
 import { DOCUMENT_LABEL, type CompanyDocument } from '../../tower/company';
@@ -100,6 +101,10 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
 
   return (
     <>
+      {/* 2026-11-02 — the call to install, pinned under the mast until the app is installed (the owner: "can the business
+          app also get the sticky 'install this app, how' … It works very well"). Only where this browser can install:
+          a phone always, a desk where Chrome or Edge offers it. */}
+      <InstallBar app="business" />
       <header class="cons__head">
         <h1 class="cons__title">{business.name}</h1>
         <p class="cons__lede">{t('business.home.lede', { country: business.country, reg: business.registrationNo })}</p>

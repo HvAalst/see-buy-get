@@ -39,20 +39,24 @@ describe('every app hands its screens to the shared navigation', () => {
 
 describe('every shortcut on an app icon opens a screen the app accepts', () => {
   // The manifest names an app by what people call it; its folder keeps the older name.
-  const FOLDER: Record<string, string> = { Shop: 'agent', Hub: 'mdp', Driver: 'driver', Fleet: 'fleet', Store: 'vendor', Send: 'genesis' };
+  const FOLDER: Record<string, string> = { Shop: 'agent', Hub: 'mdp', Driver: 'driver', Fleet: 'fleet', Store: 'vendor', Send: 'genesis', Business: 'business' };
   const config = read('vite.config.ts');
   const blocks = config.split(/name: 'SeeBuyGet /).slice(1);
   const shortcuts = blocks
     .map((b) => ({ app: FOLDER[b.slice(0, b.indexOf("'"))], keys: [...b.matchAll(/\{ go: '([a-z]+)'/g)].map((m) => m[1]) }))
     .filter((s) => s.app && s.keys.length);
 
-  it('reads the shortcuts of all six installable apps', () => {
-    expect(shortcuts.map((s) => s.app).sort()).toEqual(['agent', 'driver', 'fleet', 'genesis', 'mdp', 'vendor']);
+  it('reads the shortcuts of all seven installable apps', () => {
+    // The Business app installs since 2026-11-02: its shortcuts open its sections.
+    expect(shortcuts.map((s) => s.app).sort()).toEqual(['agent', 'business', 'driver', 'fleet', 'genesis', 'mdp', 'vendor']);
   });
 
   for (const { app, keys } of shortcuts) {
     it(`${app}: ${keys.join(', ')}`, () => {
-      const launch = read(`src/apps/${app}/app.tsx`).match(/const LAUNCH = screensOf<Screen>\(\{([^}]*)\}\)([^;\n]*)/);
+      const src = read(`src/apps/${app}/app.tsx`);
+      // The Business app's sections are its screens, and the same list is what a shortcut may open (useScreenNav's launch).
+      const launch = app === 'business' ? src.match(/const SECTIONS = screensOf<Section>\(\{([^}]*)\}\)([^;\n]*)/) : src.match(/const LAUNCH = screensOf<Screen>\(\{([^}]*)\}\)([^;\n]*)/);
+      if (app === 'business') expect(src).toMatch(/useScreenNav<Section>\(\{[^\n]*launch: SECTIONS/);
       expect(launch, `${app} has no LAUNCH`).not.toBeNull();
       for (const key of keys) {
         expect(launch![1], `${app} does not list ${key}`).toMatch(new RegExp(`\\b${key}: true`));

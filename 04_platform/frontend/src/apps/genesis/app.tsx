@@ -1,4 +1,6 @@
 import { AppLayer } from '../../shared/ui/AppLayer';
+import { useEffect, useState } from 'preact/hooks';
+import { onLaunch } from '../../shared/launch';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { BottomNav, ConnectivityNote, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
@@ -38,6 +40,17 @@ export function App() {
   const nav = useScreenNav<Screen>({ screen: state.screen, home: 'send', tabs: TABS, ready: true, go: actions.go, launch: LAUNCH });
   // One parcel open on My parcels is a step in of its own: Back puts it down before it leaves the tab.
   useBackLayer(state.screen === 'parcels' && Boolean(state.openParcelId), actions.closeParcel);
+  // 2026-11-02 — the bell's welcome opens the guide to getting the most out of the app, kept on the Account screen, on
+  // one tap (`?guide=1`, shared/launch.ts; the owner: "a tooltip on how to get more out of the app").
+  const [guideAsked, setGuideAsked] = useState(0);
+  useEffect(
+    () =>
+      onLaunch('guide', () => {
+        actions.go('account');
+        setGuideAsked((n) => n + 1);
+      }),
+    [],
+  );
 
   const tabs: NavItem<Screen>[] = [
     { key: 'send', label: t('send.nav.send'), icon: 'send' },
@@ -78,7 +91,7 @@ export function App() {
         <AppLayer app="send" chats={state.identity ? actions.chatApi : state.restoring ? undefined : null} onSignIn={() => actions.go('parcels')} onRefresh={state.identity ? actions.loadParcels : undefined} />
         <ConnectivityNote />
         <NavScreen nav={nav}>
-          <Router state={state} actions={actions} account={account} sbg={sbg} />
+          <Router state={state} actions={actions} account={account} sbg={sbg} guideAsked={guideAsked} onGuideShown={() => setGuideAsked(0)} />
         </NavScreen>
       </main>
 
@@ -90,12 +103,12 @@ export function App() {
 }
 
 /** The authenticated tabs gate on sign-in; a stored session restores silently (a brief boot spinner). */
-function Router({ state, actions, account, sbg }: { state: SendState; actions: SendActions; account: AccountApi; sbg: SbgClient | null }) {
+function Router({ state, actions, account, sbg, guideAsked = 0, onGuideShown }: { state: SendState; actions: SendActions; account: AccountApi; sbg: SbgClient | null; guideAsked?: number; onGuideShown?: () => void }) {
   if (state.screen === 'track') return <TrackScreen state={state} actions={actions} />;
   if (state.screen === 'parcels' || state.screen === 'account') {
     if (state.restoring) return <Boot />;
     if (!state.identity) return <AuthScreen state={state} actions={actions} />;
-    return state.screen === 'parcels' ? <MyParcelsScreen state={state} actions={actions} client={sbg} /> : <AccountScreen state={state} actions={actions} account={account} />;
+    return state.screen === 'parcels' ? <MyParcelsScreen state={state} actions={actions} client={sbg} /> : <AccountScreen state={state} actions={actions} account={account} guideAsked={guideAsked} onGuideShown={onGuideShown} />;
   }
   return <SendScreen state={state} actions={actions} />;
 }

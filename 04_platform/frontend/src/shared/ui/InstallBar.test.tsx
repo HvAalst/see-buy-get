@@ -68,7 +68,9 @@ describe('the call to install, in every app that installs', () => {
       .filter((e) => e.isDirectory() && !['home', 'tower', 'business'].includes(e.name))
       .map((e) => e.name);
     expect(apps.sort()).toEqual(['agent', 'driver', 'fleet', 'genesis', 'mdp', 'vendor']);
-    expect(vite).toMatch(/business: \{[\s\S]*?installable: false/);
+    // The console does not install; the Business app does since 2026-11-02, and has its bar on its home (below).
+    expect(vite).toMatch(/tower: \{[\s\S]*?installable: false/);
+    expect(/\n {2}business: \{([\s\S]*?)\n {2}\},/.exec(vite)?.[1]).not.toMatch(/installable: false/);
     // The call lives in the app layer (shared/ui/AppLayer.tsx), first in each scroll area.
     expect(readFileSync(join('src', 'shared', 'ui', 'AppLayer.tsx'), 'utf8')).toMatch(/<InstallBar app=\{app\} \/>/);
     for (const app of apps) {
@@ -77,5 +79,21 @@ describe('the call to install, in every app that installs', () => {
       const bars = (src.match(/<main class=[^\n]*\n[^\n]*\n\s*<AppLayer app="(agent|mdp|driver|fleet|vendor|send)"/g) ?? []).length;
       expect({ app, mains, bars }).toEqual({ app, mains, bars: mains });
     }
+  });
+
+  it('stands first on the Business app’s home, pinned under the console’s mast, with its guide in the menu', () => {
+    const home = readFileSync(join('src', 'apps', 'business', 'screens', 'HomeScreen.tsx'), 'utf8');
+    const drawn = home.slice(home.indexOf('export function HomeScreen('));
+    // The first thing the home draws, before its heading.
+    expect(drawn).toMatch(/return \(\s*<>\s*(\{\/\*[\s\S]*?\*\/\}\s*)?<InstallBar app="business" \/>\s*<header class="cons__head">/);
+    const css = readFileSync(join('src', 'apps', 'business', 'business.css'), 'utf8');
+    expect(css).toMatch(/\.biz \.installbar \{\s*top: var\(--c-mast-h\);/);
+    // The main area scrolls a wide table sideways; while the bar is there it must not, or the bar scrolls away.
+    expect(css).toMatch(/\.biz \.cons__main:has\(> \.installbar\) \{\s*overflow-x: clip;/);
+    // The mast's menu keeps "Get the most out of the app", opening the same guide.
+    const shell = readFileSync(join('src', 'apps', 'business', 'app.tsx'), 'utf8');
+    expect(shell).toMatch(/\{ key: 'install', icon: 'bell', label: t\('install\.menu'\), onGo: \(\) => setGuide\(true\) \}/);
+    expect(shell).toMatch(/<InstallGuideSheet open=\{guide\} onClose=\{\(\) => setGuide\(false\)\} app="business" \/>/);
+    expect(renderToString(<InstallSheet open onClose={() => undefined} app="business" install={state()} />)).toContain('Get the most out of the Business app');
   });
 });

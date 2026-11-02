@@ -524,3 +524,33 @@
   border-color: var(--org-light);
   color: #8a3b00;
 }
+
+/* 2026-11-02 — THE CALL TO INSTALL on the business home (shared/ui/InstallBar.tsx): pinned under the console's mast, where
+   the phone apps pin it under their top bar, and edge to edge across the main area at every width, as it is there. The
+   main area's own padding is what it reaches over: 24px at a desk, 16px below 1100px, 12px on a phone. */
+.biz .installbar {
+  top: var(--c-mast-h);
+  width: calc(100% + 48px);
+  margin: -22px -24px 18px;
+  padding: 10px 24px;
+}
+@media (max-width: 1100px) {
+  .biz .installbar {
+    width: calc(100% + 32px);
+    margin: -18px -16px 16px;
+    padding: 10px 16px;
+  }
+}
+@media (max-width: 640px) {
+  .biz .installbar {
+    width: calc(100% + 24px);
+    margin-left: -12px;
+    margin-right: -12px;
+    padding: 10px 12px;
+  }
+}
+/* A pinned bar sticks to the nearest box that scrolls. The main area scrolls a wide table sideways, which makes it that
+   box, and the bar would scroll away with the page; while the bar is there, the home screen clips sideways instead. */
+.biz .cons__main:has(> .installbar) {
+  overflow-x: clip;
+}

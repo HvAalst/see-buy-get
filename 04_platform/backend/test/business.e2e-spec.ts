@@ -129,7 +129,8 @@ describe('a customer’s business, over the wire', () => {
     await http().get('/v1/sbg/imports').set(bearer(viewerBiz)).expect(200);
     await http().post('/v1/sbg/imports').set(bearer(viewerBiz)).send({ goodsDescription: 'x', originCountry: 'NL', destCountry: 'ET', destPort: 'Modjo' }).expect(403);
     // The business's inbox is its people's: a viewer reads it and marks nothing read for the others.
-    expect((await http().get('/v1/sbg/notifications/inbox').set(bearer(viewerBiz)).expect(200)).body).toEqual({ items: [], unread: 0 });
+    // Its bell holds its welcome alone (2026-11-02), unread: a viewer reads it and marks nothing.
+    expect((await http().get('/v1/sbg/notifications/inbox').set(bearer(viewerBiz)).expect(200)).body).toEqual({ items: [expect.objectContaining({ kind: 'welcome', link: '/?guide=1' })], unread: 1 });
     await http().post('/v1/sbg/notifications/inbox/read-all').set(bearer(viewerBiz)).expect(403);
     await http().post('/v1/sbg/notifications/inbox/ntf_none/read').set(bearer(viewerBiz)).expect(403);
     // A link to a consignment note is a way in to it. Making one, or cancelling one, is a change: a viewer is refused
@@ -556,7 +557,7 @@ describe('a customer’s business, over the wire', () => {
     expect(notice.body).toContain('4 t');
     expect(notice.readAt).toBeUndefined();
     expect(told.unread).toBe(told.items.length);
-    expect((await http().get(inboxAt).set(bearer(otherBiz)).expect(200)).body.items).toEqual([]);
+    expect((await http().get(inboxAt).set(bearer(otherBiz)).expect(200)).body.items.map((n: { kind: string }) => n.kind)).toEqual(['welcome']);
     expect((await http().get(inboxAt).set(bearer(owner.token)).expect(200)).body.items.map((n: { kind: string }) => n.kind)).not.toContain('order_split');
     await http().post(`${inboxAt}/${notice.id}/read`).set(bearer(otherBiz)).expect(201);
     expect((await http().get(inboxAt).set(bearer(shop)).expect(200)).body.items.find((n: { id: string }) => n.id === notice.id).readAt).toBeUndefined();

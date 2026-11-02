@@ -242,17 +242,38 @@ const APPS = {
   /**
    * B1 — the Business app: shippers, importers, expeditors, clearing agents and container yards, run by the
    * people in them, each signed in with their own phone and PIN (the user, 2026-10-04: separate from the
-   * staff console). Built for a desk first and usable on a phone. Not installable, for the console's reason:
-   * it shows papers and containers somebody is about to act on, and a cached copy would be a copy that lies.
+   * staff console). Built for a desk first and usable on a phone.
+   *
+   * It shows papers and containers somebody is about to act on, and a cached copy would be a copy that lies — which is
+   * why, for a long time, it did not install at all. Since 2026-11-02 it installs (the owner: "can the business app also
+   * get the sticky 'install this app, how' … It works very well"), and the reason still holds, because what installing
+   * keeps on the phone is the APP and never its data:
+   *  - its service worker precaches only its own scripts, styles, icons and page, as every leaf app's does: no runtime
+   *    caching of any kind (that is the front page's alone, below), so not one answer from the API is ever kept by it;
+   *  - push-sw.js, which it imports, shows a notification and opens a window — it handles no fetch and keeps nothing;
+   *  - and the app's own read cache (shared/readcache.ts), which answers the other apps' reads from the phone in a dead
+   *    spot, is switched off for this one (keepNoReads in its main.tsx). Without a signal its screens say they cannot
+   *    reach SeeBuyGet, as they did before; they never show what they last knew as if it were now.
    */
   business: {
     base: '/business/',
     name: 'SeeBuyGet Business',
     short: 'Business',
-    description: 'Ship, import and clear goods on the SeeBuyGet network — for your whole team.',
+    description: 'Ship, import and clear goods on the SeeBuyGet network, for your whole team: post loads and book space on carriers’ runs, send parcels, and follow your exports and imports with their papers — each person with their own sign-in.',
     devPort: 5182,
     previewPort: 5192,
-    installable: false,
+    // Its sections (logic.ts Section; app.tsx SECTIONS): one a business does not do opens its overview.
+    shortcuts: [
+      { go: 'loads', name: 'Loads', short: 'Loads', description: 'Post a load, or follow the ones on the road' },
+      { go: 'exports', name: 'Exports', short: 'Exports', description: 'Goods going out through a port, and their papers' },
+      { go: 'imports', name: 'Imports', short: 'Imports', description: 'Containers coming in, and where they are' },
+      { go: 'parcels', name: 'Parcels', short: 'Parcels', description: 'Send a parcel from one of your places' },
+    ],
+    screenshots: [
+      { file: 'home.png', label: 'Your business at a glance: SeeBuyGet’s check, and the work it does' },
+      { file: 'loads.png', label: 'Loads: post one, see the prices carriers offer, and follow it to the door' },
+      { file: 'parcels.png', label: 'Parcels: your parcel balance, and every parcel sent from your places' },
+    ],
   },
   /**
    * The operator console — the first app in this family built for a LARGE SCREEN and a mouse, for the

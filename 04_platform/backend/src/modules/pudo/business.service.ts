@@ -13,6 +13,7 @@ import { MailService } from '../../foundation/mail/mail.service';
 import { hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
 import { PersonService } from './person.service';
 import { ShipperCodesService } from './shipper-codes.service';
+import { NotificationService } from './notification.service';
 import { isFor, waitsAt, type Addressed } from './addressed-to';
 import {
   BUSINESS_MEMBER_ROLES,
@@ -73,6 +74,7 @@ export class BusinessService {
     private readonly handles: HandleService,
     @Optional() private readonly mail?: MailService,
     @Optional() private readonly codes?: ShipperCodesService,
+    @Optional() private readonly notifications?: NotificationService,
   ) {
     // An account moving off a number takes its unanswered invitations with it.
     this.persons.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
@@ -151,6 +153,8 @@ export class BusinessService {
       joinedAt: now,
     };
     this.members.set(member.memberId, member);
+    // 2026-11-02 — its bell's first notice, the day it is set up: what arrives there, and the way to the app's guide.
+    this.notifications?.welcomeOnce(entity.did, 'business');
     return { entity, member };
   }
 

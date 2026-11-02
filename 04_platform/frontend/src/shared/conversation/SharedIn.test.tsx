@@ -229,7 +229,8 @@ describe('shared while signed out', () => {
 });
 
 describe('exactly the five apps with chats receive shares', () => {
-  const APPS: InstallApp[] = ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send'];
+  // The phone apps' layer. The Business app installs too (2026-11-02), with no app layer and no chats: not one of these.
+  const APPS: Array<Exclude<InstallApp, 'business'>> = ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send'];
 
   it('the layer mounts the share sheet in the five, and not in the hub', () => {
     const mounted = APPS.filter((app) => captureWhile(() => renderToString(<AppLayer app={app} chats={null} />)).made.some((v) => v.type === SharedInLayer));
@@ -237,7 +238,7 @@ describe('exactly the five apps with chats receive shares', () => {
   });
 
   it('each of the five hands its layer its chats — signed out and signed in — and the hub hands it none', () => {
-    const folder: Record<InstallApp, string> = { agent: 'agent', mdp: 'mdp', driver: 'driver', fleet: 'fleet', vendor: 'vendor', send: 'genesis' };
+    const folder: Record<(typeof APPS)[number], string> = { agent: 'agent', mdp: 'mdp', driver: 'driver', fleet: 'fleet', vendor: 'vendor', send: 'genesis' };
     let lines = 0;
     for (const app of APPS) {
       const src = readFileSync(join('src', 'apps', folder[app], 'app.tsx'), 'utf8');

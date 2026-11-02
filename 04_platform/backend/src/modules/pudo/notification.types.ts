@@ -247,6 +247,11 @@ export const NOTIFICATION_KINDS = [
    * cover the most it allows a driver (2026-10-29). To the business: top up and post it, or collect it at the shop.
    */
   'parcel_door_short',
+  /**
+   * 2026-11-02 — the bell's first notice, once per inbox: what arrives in this app's bell, and the way to its guide
+   * (welcome.ts).
+   */
+  'welcome',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 

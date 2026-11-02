@@ -12,8 +12,12 @@ import { AllowPicture, AndroidAppInfoPicture, AndroidBatteryPicture, AndroidHold
  * "sticky until the moment the app is installed"). Tapping it does not install: it opens the sheet below, which says
  * what installing gives and shows how, then how to let the app's notifications through.
  */
-/** The apps that install, by their folder's name: each is named in the words ("Shop", "Hub" …). */
-export type InstallApp = 'agent' | 'mdp' | 'driver' | 'fleet' | 'vendor' | 'send';
+/**
+ * The apps that install, by their folder's name: each is named in the words ("Shop", "Hub" …). The Business app joined
+ * them on 2026-11-02 (the owner: "can the business app also get the sticky 'install this app, how'") — its bar is on its
+ * home screen, under the console's mast (business.css).
+ */
+export type InstallApp = 'agent' | 'mdp' | 'driver' | 'fleet' | 'vendor' | 'send' | 'business';
 const nameOf = (t: (k: MessageKey) => string, app: InstallApp) => t(`install.app.${app}` as MessageKey);
 
 export function InstallBar({ app: key }: { app: InstallApp }) {

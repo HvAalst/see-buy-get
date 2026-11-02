@@ -17,6 +17,9 @@ export interface AccountScreenProps {
   actions: SendActions;
   /** The person's account as every app sees it — what Settings reads and changes. */
   account: AccountApi;
+  /** 2026-11-02 — the bell's welcome asked for the guide (`?guide=1`): it opens as this screen does, once. */
+  guideAsked?: number;
+  onGuideShown?: () => void;
 }
 
 /**
@@ -25,12 +28,17 @@ export interface AccountScreenProps {
  * role's own app and opens it, so a sender who is also a driver never signs in twice. The PIN, the recovery
  * email and the phone number live in Settings — the same sheet as in every other app; sign-out is the outline action.
  */
-export function AccountScreen({ state, actions, account }: AccountScreenProps) {
+export function AccountScreen({ state, actions, account, guideAsked = 0, onGuideShown }: AccountScreenProps) {
   const t = useT(); // re-render this screen's translated strings when the language changes
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(guideAsked > 0);
+  useEffect(() => {
+    if (!guideAsked) return;
+    setGuideOpen(true);
+    onGuideShown?.();
+  }, [guideAsked]);
   const [nameDraft, setNameDraft] = useState('');
   const avatarInput = useRef<HTMLInputElement>(null);
   const id = state.identity;

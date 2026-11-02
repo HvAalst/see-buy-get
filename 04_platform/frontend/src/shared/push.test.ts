@@ -40,6 +40,9 @@ function installBrowser(opts: {
     unsubscribe: () => Promise.resolve(true),
   };
   const reg = {
+    // A real registration: the app's own scope (the test's base is the root), and a worker that is active.
+    scope: 'http://localhost/',
+    active: {},
     pushManager: {
       getSubscription: () => Promise.resolve(opts.existingSub ? sub : null),
       subscribe: opts.subscribeThrows ? () => Promise.reject(new Error('blocked')) : () => Promise.resolve(sub),
@@ -223,5 +226,16 @@ describe('enablePush', () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe('the app’s own worker (2026-11-02)', () => {
+  it('is the one registered at the app’s own address — never the front page’s, whose scope covers every app', async () => {
+    const { ownsScope } = await import('./push');
+    expect(ownsScope('https://x.test/business/', '/business/')).toBe(true);
+    expect(ownsScope('https://x.test/', '/business/')).toBe(false);
+    expect(ownsScope('https://x.test/driver/', '/business/')).toBe(false);
+    expect(ownsScope('https://x.test/', '/')).toBe(true);
+    expect(ownsScope('not a url', '/')).toBe(false);
   });
 });

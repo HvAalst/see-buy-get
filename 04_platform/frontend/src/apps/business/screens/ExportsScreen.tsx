@@ -1,3 +1,6 @@
+import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
+import { publicRequest } from '../../../lib/sbg';
+import { businessConfig } from '../api';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { DocumentButton } from '../../../shared/ui';
 import { Abbreviated } from '../../../shared/ui/Abbr';
@@ -24,6 +27,9 @@ import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from '../../tower/screens
 import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
 import { uploadHint } from '../../../shared/upload';
 import { PaperPicker, type PaperReady } from './PaperPicker';
+
+/** The country atlas for the pickers, read as the business's sign-up reads it (2026-11-02). */
+const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
 type Problem = { detail?: string; title: string } | null | undefined;
 
@@ -214,6 +220,8 @@ function RegisterExport({ business, client, onDone }: { business: BusinessView; 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof typeof form) => (e: Event) => setForm({ ...form, [k]: (e.target as HTMLInputElement).value });
+  // 2026-11-02 — countries are picked from the atlas, never typed as codes (the owner: "'sent from' and 'going to' … should be country picker").
+  const countries = useCountryAtlas(atlasApi);
 
   useEffect(() => {
     void client.api.containerTypes().then((r) => {
@@ -267,8 +275,8 @@ function RegisterExport({ business, client, onDone }: { business: BusinessView; 
       <p class="chint">{t('business.exports.f.hint')}</p>
       {field('goods', 'business.exports.f.goods', { maxLength: '300' })}
       <div class="biz-two">
-        {field('from', 'business.exports.f.from', { maxLength: '2', placeholder: 'KE' })}
-        {field('to', 'business.exports.f.to', { maxLength: '2', placeholder: 'NL' })}
+        <CountrySelect value={form.from} onChange={(from) => setForm((prev) => ({ ...prev, from }))} label={t('business.exports.f.from')} options={countries} />
+        <CountrySelect value={form.to} onChange={(to) => setForm((prev) => ({ ...prev, to }))} label={t('business.exports.f.to')} options={countries} />
       </div>
       <div class="biz-two">
         {field('port', 'business.exports.f.port', { maxLength: '80', placeholder: 'Mombasa' })}

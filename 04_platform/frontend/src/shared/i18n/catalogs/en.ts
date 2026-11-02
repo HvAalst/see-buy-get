@@ -412,6 +412,9 @@ export const en = {
   'update.title': 'This app needs updating',
   'update.body': 'A newer version is required before you can carry on working.',
   'update.cta': 'Update now',
+  // 2026-11-02 — a new version waiting, offered from the bar by a tap (the Business app's mast; the others say it in their own words).
+  'update.ready.aria': 'A new version is ready — update now',
+  'update.ready.title': 'Update the app',
 
   // The offline banner (shown when the network drops and stale data is on screen).
   'offline.banner': 'No signal — showing what we last knew.',
@@ -661,6 +664,7 @@ export const en = {
   'install.app.fleet': 'Fleet',
   'install.app.vendor': 'Store',
   'install.app.send': 'Send',
+  'install.app.business': 'Business',
   'install.bar.title': 'Install the {app} app',
   'install.bar.sub': 'It opens from your home screen, and tells you when something needs you',
   'install.bar.how': 'How',

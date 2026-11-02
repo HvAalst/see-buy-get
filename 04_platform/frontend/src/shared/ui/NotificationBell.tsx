@@ -104,6 +104,8 @@ const KIND_ICON: Record<string, IconName> = {
   security: 'lock',
   // A new version of the terms of use, the data notice or the cookie statement (2026-10-25): what changed, read there.
   terms_updated: 'scale',
+  // 2026-11-02 — the bell's first notice: what arrives here, and the way to the app's guide.
+  welcome: 'star',
 };
 
 /**
@@ -148,7 +150,9 @@ export function noticeAction(item: InboxItem, act: NoticeAct | undefined, t: Tra
   const link = noticeLink(item);
   const leads = linkLeadsTo(link);
   if (!leads) return null;
-  return { label: t(leads === 'chat' ? 'notify.reply' : 'notify.open'), run: () => void followLink(link) };
+  // The welcome's way to the guide is said as the guide's own name, where it is kept in the app's menu.
+  const label = leads === 'chat' ? t('notify.reply') : leads === 'guide' ? t('install.menu') : t('notify.open');
+  return { label, run: () => void followLink(link) };
 }
 
 /**

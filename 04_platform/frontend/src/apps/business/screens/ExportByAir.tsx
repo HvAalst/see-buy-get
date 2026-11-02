@@ -1,3 +1,6 @@
+import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
+import { publicRequest } from '../../../lib/sbg';
+import { businessConfig } from '../api';
 import { useState } from 'preact/hooks';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
@@ -7,6 +10,9 @@ import type { BusinessClient, BusinessView } from '../api';
 import { fromUtcInput, utcWords, type ExportDetail, type ExportFlight } from '../exports';
 import { awbState } from '../../../shared/awb';
 import { animalsBody, animalsReady, EMPTY_ANIMALS, LiveAnimalsFields, type AnimalsForm } from '../../tower/screens/LiveAnimalsFields';
+
+/** The country atlas for the pickers, read as the business's sign-up reads it (2026-11-02). */
+const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
 
 type Problem = { detail?: string; title: string } | null | undefined;
 const sayProblem = (e: Problem) => (e ? e.detail || e.title : null);
@@ -68,6 +74,8 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (k: keyof typeof form) => (e: Event) => setForm({ ...form, [k]: (e.target as HTMLInputElement).value });
+  // 2026-11-02 — countries are picked from the atlas, never typed as codes (the owner: "'sent from' and 'going to' … should be country picker").
+  const countries = useCountryAtlas(atlasApi);
   const awb = awbState(form.awb);
   const flightsGiven = flights.filter((f) => f.flight.trim() && f.date && f.from.trim() && f.to.trim());
 
@@ -127,8 +135,8 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
       <p class="chint">{t('business.exports.air.hint')}</p>
       {field('goods', 'business.exports.f.goods', { maxLength: '300' })}
       <div class="biz-two">
-        {field('from', 'business.exports.f.from', { maxLength: '2', placeholder: 'KE' })}
-        {field('to', 'business.exports.f.to', { maxLength: '2', placeholder: 'NL' })}
+        <CountrySelect value={form.from} onChange={(from) => setForm((prev) => ({ ...prev, from }))} label={t('business.exports.f.from')} options={countries} />
+        <CountrySelect value={form.to} onChange={(to) => setForm((prev) => ({ ...prev, to }))} label={t('business.exports.f.to')} options={countries} />
       </div>
       <ConsolePick
         label={t('business.exports.air.nature')}
@@ -246,7 +254,7 @@ export function RegisterAirExport({ business, client, onDone }: { business: Busi
         {field('lat', 'business.exports.air.lat', { type: 'datetime-local' })}
         {field('handler', 'business.exports.air.handler', { maxLength: '80' })}
       </div>
-      {field('departsFrom', 'business.exports.air.departsFrom', { maxLength: '2' })}
+      <CountrySelect value={form.departsFrom} onChange={(departsFrom) => setForm((prev) => ({ ...prev, departsFrom }))} label={t('business.exports.air.departsFrom')} options={countries} />
       <p class="chint"><Abbreviated text={t('business.exports.air.latHint')} /></p>
       {/* 2026-11-01 — the truck's slot at the terminal, where the shed gives one: the truck is timed to its end. */}
       <div class="biz-two">

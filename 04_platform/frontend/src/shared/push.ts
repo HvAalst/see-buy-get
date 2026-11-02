@@ -90,7 +90,7 @@ export async function getPushState(): Promise<PushState> {
   if (!isPushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
   try {
-    const reg = await navigator.serviceWorker.getRegistration();
+    const reg = await ownRegistration();
     const sub = reg ? await reg.pushManager.getSubscription() : null;
     if (sub && Notification.permission === 'granted') return 'on';
   } catch {
@@ -120,7 +120,7 @@ export async function enablePush(api: NotificationsApi): Promise<PushOutcome> {
   // `.ready` hangs forever — which would strand the opt-in with `busy` stuck. Fail cleanly instead.
   let reg: ServiceWorkerRegistration;
   try {
-    reg = await withTimeout(navigator.serviceWorker.ready, 8000);
+    reg = await withTimeout(ownRegistrationReady(), 8000);
   } catch {
     return { ok: false, state: 'prompt', reason: 'no-serviceworker' };
   }
@@ -157,7 +157,7 @@ export async function disablePush(api: NotificationsApi): Promise<void> {
   if (!isPushSupported()) return;
   let sub: PushSubscription | null = null;
   try {
-    const reg = await navigator.serviceWorker.getRegistration();
+    const reg = await ownRegistration();
     sub = reg ? await reg.pushManager.getSubscription() : null;
   } catch {
     return;
@@ -180,6 +180,37 @@ export async function sendTestPush(api: NotificationsApi): Promise<{ ok: boolean
 }
 
 /** Reject if a promise has not settled within `ms` — so a never-resolving `.ready` cannot wedge opt-in. */
+/**
+ * 2026-11-02 — THIS APP'S OWN WORKER, NOT THE FIRST ONE THAT COVERS THE PAGE. Every app lives under one site, and the
+ * front page's worker has the site's root as its scope — which every other app's address starts with. Before an app's
+ * own worker has registered, `serviceWorker.ready` and `getRegistration()` hand back the front page's: notifications
+ * turned on then would be the front page's, shown under its icon and opened in it. So the app waits for the worker
+ * registered at its own base address.
+ */
+export function ownsScope(scope: string, base: string): boolean {
+  try {
+    return new URL(scope).pathname === base;
+  } catch {
+    return false;
+  }
+}
+
+const appBase = (): string => import.meta.env.BASE_URL ?? '/';
+
+async function ownRegistration(): Promise<ServiceWorkerRegistration | undefined> {
+  const reg = await navigator.serviceWorker.getRegistration(appBase());
+  return reg && ownsScope(reg.scope, appBase()) ? reg : undefined;
+}
+
+/** This app's worker, once it is active: asked again every quarter of a second (the caller puts a limit on it). */
+async function ownRegistrationReady(): Promise<ServiceWorkerRegistration> {
+  for (;;) {
+    const reg = await ownRegistration();
+    if (reg?.active) return reg;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('timeout')), ms);

@@ -144,7 +144,7 @@ export const enHelpApp = {
   // business-bell
   'help.business-bell.title': 'Read the notices under the bell',
   'help.business-bell.summary': 'What a carrier or SeeBuyGet tells your business is kept under the bell at the top of the Business app.',
-  'help.business-bell.step1': 'Tap the bell. The number on it is how many notices nobody in the business has read yet.',
+  'help.business-bell.step1': 'Tap the bell. The number on it is how many notices nobody in the business has read yet. The first is its welcome: what the bell tells you, and a tap on it opens “Get the most out of the app”.',
   'help.business-bell.step2': 'Tap a notice. One about something of yours — a load, a booking, an export or an import, a contract offered to you — opens it at once and is marked read for everybody in the business, saying who read it. One that only says something opens in full.',
   // 2026-11-02 — the buttons under each notice (the owner: "I need a 'mark as read' or 'respond' button").
   'help.business-bell.step3': 'A load opens on the part the notice is about: a problem on the way under On the road, a broken seal under Papers, a decided claim under Claim, and anything else on its Overview, where your answer is asked for. A booking opens under Runs, an export under Exports, an import under Imports.',
@@ -155,7 +155,7 @@ export const enHelpApp = {
   // notices-bell — 2026-11-02: every phone app's bell (the owner: "we must reduce the tapping, so that's why it should open").
   'help.notices-bell.title': 'Read the notices under the bell',
   'help.notices-bell.summary': 'What the network tells you is kept under the bell at the top of the app. A notice about something opens it in one tap.',
-  'help.notices-bell.step1': 'Tap the bell. The number on it is how many notices you have not read yet.',
+  'help.notices-bell.step1': 'Tap the bell. The number on it is how many notices you have not read yet. The first is its welcome: what this bell tells you, and a tap on it opens “Get the most out of the app”.',
   'help.notices-bell.step2': 'Tap a notice about something — a load, a chat, a parcel, an offer, your shift, your fleet — and it opens there at once, marked read. The notice says where it goes.',
   'help.notices-bell.step3': 'A notice that only says something opens in full when you tap it. Under a notice, “Mark as read” marks it read without opening it, and “Show all” shows all of a long one.',
   'help.notices-bell.note1': 'If you are driving, stop before you read the bell. Each notice is then one tap, and what it opens asks you to type nothing.',
@@ -645,9 +645,9 @@ export const enHelpApp = {
   'help.install-app.step4': 'Said no, or nothing arrives? Android: hold the app’s icon for two seconds, tap ⓘ for App info, then Notifications, and turn them all on. iPhone: open Settings, then Notifications, then the app, and turn on Allow Notifications.',
   'help.install-app.step5': 'Notifications come late? Many Android phones hold apps back to save battery. In the app’s App info, tap Battery, then Unrestricted — some phones say No restrictions, or Allow background activity.',
   'help.install-app.step6': 'On Android the bar goes by itself once the app is installed. On an iPhone, Safari cannot tell: once the app is on your home screen, tap “It is on my home screen” in the sheet.',
-  'help.install-app.note1': 'Notifications turned off later, or held back by the battery? The same guide stays in the app: in the Shop, Hub, Driver, Fleet and Store app, tap your picture, then “Get the most out of the app”; in the Send app, “Account”, then “Get the most out of the app”.',
+  'help.install-app.note1': 'Notifications turned off later, or held back by the battery? The same guide stays in the app: in the Shop, Hub, Driver, Fleet and Store app, tap your picture, then “Get the most out of the app”; in the Send app, “Account”, then “Get the most out of the app”; in the Business app — whose bar is on its Overview, and shows at a computer too where Chrome or Edge can install it — tap your initials at the top right, then “Get the most out of the app”.',
   'help.install-app.note2': 'An iPhone shows the app’s notifications only when the app was opened from its icon on the home screen, and only on iOS 16.4 or later.',
-  'help.install-app.note3': 'On an Android phone, hold the icon of the installed app for its shortcuts, each straight to one screen. Shop app: take in a parcel, hand over a parcel, hand to the bus, receive a bag. Hub app: coming in, drop a bag, sort parcels, load a bag onward. Driver app: find work, my loads, the freight market, earnings. Fleet app: dispatch a load, shifts, runs, orders. Store app: ship an order, orders, dock, bookkeeping. Send app: send a parcel, track a parcel, my parcels.',
+  'help.install-app.note3': 'On an Android phone, hold the icon of the installed app for its shortcuts, each straight to one screen. Shop app: take in a parcel, hand over a parcel, hand to the bus, receive a bag. Hub app: coming in, drop a bag, sort parcels, load a bag onward. Driver app: find work, my loads, the freight market, earnings. Fleet app: dispatch a load, shifts, runs, orders. Store app: ship an order, orders, dock, bookkeeping. Send app: send a parcel, track a parcel, my parcels. Business app: loads, exports, imports, parcels — a section your business does not do opens its Overview.',
   'help.install-app.note4': 'Where the phone shows one, a number on the app’s icon counts the notifications not yet read.',
   'help.install-app.note5': 'Why install: on the home screen the app opens in one tap, full screen, and its notifications reach you even while it is closed, so you need not keep it open to be told.',
   'help.install-app.note6': 'Every one of these apps keeps its notices under the bell at the top, read or not. Allowing notifications only makes the phone tell you as each one comes.',

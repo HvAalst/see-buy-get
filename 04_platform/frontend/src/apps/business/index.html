@@ -13,9 +13,18 @@
     <!-- A signed-in workplace: the front page is what search engines should read about business accounts. -->
     <meta name="robots" content="noindex, follow" />
 
-    <!-- No manifest: this app does not install (see AppSpec.installable in vite.config.ts). -->
+    <!-- Installed / standalone chrome (2026-11-02: it installs, keeping the app and never its data — see the business
+         entry in vite.config.ts). -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Business" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+
+    <!-- The web app manifest link is injected here by vite-plugin-pwa at build time. -->
   </head>
   <body>
     <div id="app"></div>

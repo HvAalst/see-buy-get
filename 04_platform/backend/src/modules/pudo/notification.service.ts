@@ -17,6 +17,7 @@ import {
   PUSH_SENDER,
   WebPushSubscription,
 } from './notification.types';
+import { GUIDE_LINK, WELCOME, type WelcomeApp } from './welcome';
 
 // The key this server is known to a push service by — where it comes from, and why it is one value: vapid.ts.
 
@@ -61,6 +62,9 @@ export class NotificationService {
   // notification centre shows history + an unread count even for a device that never enabled push or
   // was offline when the live message fired. Keyed by record id.
   private readonly inbox = new PersistentMap<string, NotificationRecord>('sbg-notifications');
+
+  // 2026-11-02 — which inboxes were welcomed, by app and owner, and when: the mark that it is said once (welcome.ts).
+  private readonly welcomed = new PersistentMap<string, string>('sbg-welcomed');
 
   /** Since this server started: kept in memory, and a restart forgets it. */
   private handed = 0;
@@ -206,6 +210,23 @@ export class NotificationService {
     if (opts?.push === false && payload.kind !== 'security') return record;
     await this.pushToOwner(ownerDid, payload);
     return record;
+  }
+
+  /**
+   * 2026-11-02 — THE BELL'S FIRST NOTICE, ONCE (the owner: "a welcome notification with a short text describing what
+   * the bell will be used for and a tooltip on how to get more out of the app"): what arrives in this app's bell, and
+   * the way to the app's guide. Marked as it is sent, so however often it is asked for, an inbox is welcomed once; kept
+   * in the inbox and never pushed — a lock screen has no use for it. True when it was sent now.
+   */
+  welcomeOnce(ownerDid: string, app: WelcomeApp, now = Date.now()): boolean {
+    const key = `${app}:${ownerDid}`;
+    if (!ownerDid || this.welcomed.has(key)) return false;
+    this.welcomed.set(key, new Date(now).toISOString());
+    // Recorded before the first await inside notify: an inbox read right after this already holds it.
+    void this.notify(ownerDid, { kind: 'welcome', ...WELCOME[app], link: GUIDE_LINK, tag: `welcome:${app}`, data: { app } }, { push: false }).catch((err: Error) =>
+      this.logger.warn(`welcome not recorded for ${ownerDid}: ${err.message}`),
+    );
+    return true;
   }
 
   /** An owner's notifications, newest first, capped (the centre paginates later if it ever needs to). */

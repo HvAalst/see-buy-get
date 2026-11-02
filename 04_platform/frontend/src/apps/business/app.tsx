@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { onLaunch } from '../../shared/launch';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { HelpLink } from '../../shared/guide/HelpLink';
@@ -8,6 +9,7 @@ import type { IconName } from '../../shared/ui/Icon';
 import { useWideScreen } from '../../shared/useWideScreen';
 import { SettingsSheet } from '../../shared/account/SettingsSheet';
 import { ShareSheet } from '../../shared/account/ShareSheet';
+import { InstallGuideSheet } from '../../shared/ui/InstallBar';
 import { useAccount } from '../../shared/account/useAccount';
 import { ConsoleMenu } from '../tower/ConsoleMenu';
 import { ImportsScreen } from '../tower/screens/ImportsScreen';
@@ -70,6 +72,13 @@ export function App() {
   const [settings, setSettings] = useState(false);
   // 2026-11-01 — share SeeBuyGet, as every app's settings offer it.
   const [sharing, setSharing] = useState(false);
+  // 2026-11-02 — "Get the most out of the app": the install bar's guide, from the menu, as every app that installs has it.
+  const [guide, setGuide] = useState(false);
+  // 2026-11-02 — THE APP'S OWN SERVICE WORKER, now that it installs: the app shell kept for opening, and the push the bell's
+  // "Turn on notifications" subscribes through. Registered in prompt mode like every app's — a new version waits for the
+  // tap in the mast, never swaps itself in mid-task — and it keeps none of the business's data (vite.config.ts).
+  const sw = useRegisterSW();
+  const [needRefresh] = sw.needRefresh;
   const [helpOpen, setHelpOpen] = useState(false);
   const [more, setMore] = useState(false);
   const client = actions.businessClient();
@@ -92,6 +101,8 @@ export function App() {
       onLaunch('run', (r) => setAsked({ section: 'runs', run: { ...r, seq: ++asks.current } })),
       onLaunch('export', (id) => setAsked({ section: 'exports', record: { id, seq: ++asks.current } })),
       onLaunch('import', (id) => setAsked({ section: 'imports', record: { id, seq: ++asks.current } })),
+      // 2026-11-02 — the bell's welcome: the guide to getting the most out of the app, kept in the menu, on one tap.
+      onLaunch('guide', () => setGuide(true)),
     ];
     return () => offs.forEach((off) => off());
   }, []);
@@ -151,6 +162,12 @@ export function App() {
           {/* The business's inbox. Until this was here, what a carrier told a business — a load that could not be
               delivered, an order coming in several loads — was recorded for it and could be read by nobody. */}
           <NotificationBell api={client?.notifications ?? null} shared={{ canMark: mayAct(business.you.role) }} />
+          {/* 2026-11-02 — a new version of the app itself, taken only by this tap, as in every app that installs. */}
+          {needRefresh ? (
+            <button type="button" class="topbar__lead" onClick={() => void sw.updateServiceWorker(true)} aria-label={t('update.ready.aria')} title={t('update.ready.title')}>
+              <Icon name="refresh" size={22} />
+            </button>
+          ) : null}
           <ConsoleMenu
             name={business.you.name}
             under={business.name}
@@ -158,6 +175,8 @@ export function App() {
               // ONE Settings entry for how this person signs in (the user: these actions live in Settings).
               { key: 'settings', icon: 'settings', label: t('business.menu.settings'), onGo: () => setSettings(true) },
               { key: 'share', icon: 'send', label: t('account.share.title'), onGo: () => setSharing(true) },
+              // 2026-11-02 — installing, and letting its notifications through, kept here once the home's bar has gone.
+              { key: 'install', icon: 'bell', label: t('install.menu'), onGo: () => setGuide(true) },
               { key: 'switch', icon: 'repeat', label: t('business.menu.switch'), onGo: () => void actions.backToList() },
               { key: 'help', icon: 'info', label: t('guide.link'), onGo: () => setHelpOpen(true) },
               { key: 'out', icon: 'lock', label: t('business.signOut'), danger: true, onGo: actions.signOut },
@@ -257,6 +276,7 @@ export function App() {
 
       <SettingsSheet open={settings} onClose={() => setSettings(false)} api={account} onSignOut={actions.signOut} />
       <ShareSheet open={sharing} onClose={() => setSharing(false)} api={account} />
+      <InstallGuideSheet open={guide} onClose={() => setGuide(false)} app="business" />
       {/* What they agreed to, asked again when a version since asks it (2026-10-25). */}
       <AgreementGate sbg={client?.client.sbg ?? null} onSignOut={actions.signOut} />
     </div>

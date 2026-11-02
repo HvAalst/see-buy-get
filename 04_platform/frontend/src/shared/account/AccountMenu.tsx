@@ -5,6 +5,7 @@ import { addressBody, missingPart, startingCountry, type AddressFormat, type Add
 import { AddressFields, addressPartName } from './AddressFields';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useBackLayer } from '../nav';
+import { onLaunch } from '../launch';
 import { AuthImage } from '../ui/AuthImage';
 import { Button } from '../ui/Button';
 import { ErrorNote, Note, uploadFailureSentence } from '../ui/ErrorNote';
@@ -81,6 +82,9 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
   const wrap = useRef<HTMLDivElement>(null);
   // 2026-11-02 — and the phone's Back closes it, as it closes a sheet, rather than leaving the screen under it.
   useBackLayer(open, () => setOpen(false));
+  // 2026-11-02 — the bell's first notice opens the guide here, on one tap (`?guide=1`, shared/launch.ts; the owner: "a
+  // tooltip on how to get more out of the app"). Installed already, the guide opens without its install step.
+  useEffect(() => (installs ? onLaunch('guide', () => setSheet('install')) : undefined), [installs]);
 
   // A drop-down that only closes by pressing its own button is a trap on a phone, where the rest of the
   // screen is the obvious way out. Escape too: a keyboard user must never be parked inside it.

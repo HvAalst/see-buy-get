@@ -25,13 +25,14 @@ type Manifest = {
   share_target?: { action: string; method?: string; enctype?: string; params: Record<string, string | Array<{ name: string; accept: string[] }>> };
 };
 
-/** The apps that install: every app's folder but the two that do not (vite.config.ts: installable false). */
-const INSTALLABLE = ['agent', 'driver', 'fleet', 'genesis', 'home', 'mdp', 'vendor'];
+/** The apps that install: every app's folder but the console's (vite.config.ts: installable false). The Business app since 2026-11-02. */
+const INSTALLABLE = ['agent', 'business', 'driver', 'fleet', 'genesis', 'home', 'mdp', 'vendor'];
 /** The apps with conversations, which the phone's share list offers. */
 const CHATS = ['agent', 'driver', 'fleet', 'genesis', 'vendor'];
-/** Where each app's Screen type is written. */
+/** Where each app's Screen type is written — the Business app's are its sections. */
 const SCREENS: Record<string, string> = {
   agent: 'agent/useAgentApp.ts',
+  business: 'business/logic.ts',
   driver: 'driver/useDriverApp.ts',
   fleet: 'fleet/useFleetApp.ts',
   genesis: 'genesis/useSendApp.ts',
@@ -40,10 +41,10 @@ const SCREENS: Record<string, string> = {
   vendor: 'vendor/useVendorApp.ts',
 };
 
-/** The keys of an app's `export type Screen = 'a' | 'b' …;`, read from its source. */
+/** The keys of an app's `export type Screen = 'a' | 'b' …;` (the Business app's `Section`), read from its source. */
 function screensOf(app: string): string[] {
   const src = readFileSync(join('src', 'apps', ...SCREENS[app].split('/')), 'utf8');
-  const decl = /export type Screen\s*=([^;]+);/.exec(src);
+  const decl = /export type (?:Screen|Section)\s*=([^;]+);/.exec(src);
   return decl ? [...decl[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]) : [];
 }
 
@@ -77,13 +78,18 @@ beforeAll(async () => {
 }, 60_000);
 
 describe('the apps that install', () => {
-  it('are every app but the console and the business app', () => {
+  it('are every app but the console — the Business app among them, since 2026-11-02', () => {
     const apps = readdirSync(join('src', 'apps'), { withFileTypes: true })
-      .filter((e) => e.isDirectory() && !['tower', 'business'].includes(e.name))
+      .filter((e) => e.isDirectory() && e.name !== 'tower')
       .map((e) => e.name)
       .sort();
     expect(apps).toEqual(INSTALLABLE);
-    expect(readFileSync('vite.config.ts', 'utf8')).toMatch(/business: \{[\s\S]*?installable: false/);
+    const config = readFileSync('vite.config.ts', 'utf8');
+    // Read from each app's own entry: the console's says it does not install; the Business app's no longer does.
+    const entry = (id: string) => new RegExp(`\\n  ${id}: \\{([\\s\\S]*?)\\n  \\},`).exec(config)?.[1] ?? '';
+    expect(entry('tower')).toMatch(/installable: false/);
+    expect(entry('business')).toMatch(/base: '\/business\/'/);
+    expect(entry('business')).not.toMatch(/installable: false/);
   });
 });
 
@@ -91,7 +97,7 @@ describe.each(INSTALLABLE)('the %s app', (app) => {
   it('offers its most common jobs from its icon, each a screen of its own', () => {
     const screens = screensOf(app);
     // Proof the Screen type was read: a screen every reader of the app knows is among them.
-    const known: Record<string, string> = { agent: 'accept', driver: 'board', fleet: 'runs', genesis: 'track', home: 'market', mdp: 'sort', vendor: 'mint' };
+    const known: Record<string, string> = { agent: 'accept', business: 'exports', driver: 'board', fleet: 'runs', genesis: 'track', home: 'market', mdp: 'sort', vendor: 'mint' };
     expect(screens).toContain(known[app]);
 
     const shortcuts = manifests[app].shortcuts ?? [];

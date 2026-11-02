@@ -7,6 +7,7 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BusinessMemberGuard } from './business-member.guard';
 import { NotificationService } from './notification.service';
+import { welcomeAppOf } from './welcome';
 import { SubscribeDto, UnsubscribeDto } from './notification.dto';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
@@ -85,6 +86,10 @@ export class NotificationsController {
   @AtTheCounter()
   inbox(@Actor() actor: IntrospectionResult) {
     const did = actingDid(actor);
+    // 2026-11-02 — the first read of a bell in an app — right after the first sign-in there, or a business's people's
+    // next — finds its welcome: what arrives here, and the way to the app's guide. Once per inbox (welcome.ts).
+    const app = welcomeAppOf(actor?.role);
+    if (app) this.notifications.welcomeOnce(did, app);
     return { items: this.notifications.inboxFor(did), unread: this.notifications.unreadCount(did) };
   }
 

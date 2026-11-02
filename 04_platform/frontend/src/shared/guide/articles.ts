@@ -167,7 +167,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   // 2026-11-01/02 — the apps feel native (the owner: "If needed, update the help pages too"). All inside the apps: none is
   // about getting in or getting started on the public site, which keeps its own list (help.test).
   // The call to install, pinned until the app is installed, and its guide to notifications; the shortcuts on its icon.
-  { id: 'install-app', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send'], group: 'start', steps: 6, notes: ['note', 'careful', 'note', 'note', 'why', 'note'] },
+  { id: 'install-app', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'start', steps: 6, notes: ['note', 'careful', 'note', 'note', 'why', 'note'] },
   // Back, a sheet swiped down, pulling down to refresh, and a business load's record in sections.
   { id: 'get-around', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'start', steps: 5, notes: ['note', 'note', 'rare', 'note'] },
   // Share SeeBuyGet from every app's menu: one link of the person's own, counted to them.

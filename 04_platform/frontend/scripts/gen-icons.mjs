@@ -223,6 +223,9 @@ const GLYPHS = {
   ),
   // Storefront: the awning over the shop body — the merchant console.
   vendor: union(roundRect(0.1, 0.14, 0.9, 0.34, 0.09), roundRect(0.18, 0.44, 0.82, 0.88, 0.09)),
+  // A shipping container side on, its ribs cut through: the goods a business sends, imports and clears (2026-11-02, when
+  // the Business app began to install; until then it wore the console's tab icon).
+  business: (x, y) => roundRect(0.08, 0.26, 0.92, 0.74, 0.07)(x, y) && !([0.29, 0.43, 0.57, 0.71].some((c) => Math.abs(x - c) < 0.028) && y > 0.35 && y < 0.65),
   // A tower: the cab on its stalk, on its base. The one app nobody in the field uses.
   tower: union(
     roundRect(0.3, 0.12, 0.7, 0.3, 0.06),

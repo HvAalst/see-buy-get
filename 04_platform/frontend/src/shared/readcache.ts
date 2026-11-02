@@ -108,6 +108,22 @@ export function clearReadCache(subject?: string): void {
 }
 
 /**
+ * 2026-11-02 — AN APP THAT KEEPS NO READS. The Business app shows papers and containers somebody is about to act on, and
+ * yesterday's answer shown as today's would be a copy that lies (vite.config.ts, its `business` entry). Since it installs,
+ * its page opens without a signal too, so it turns this off before anything is asked: its reads then go to the network and
+ * nowhere else — still telling the connectivity store what they saw — nothing is written for it, and nothing kept is
+ * handed back. Per page, so the other apps on the same phone keep theirs.
+ */
+let keeping = true;
+export function keepNoReads(): void {
+  keeping = false;
+}
+/** Whether this page keeps its reads — for a test, and for the business app's own guard. */
+export function keepsReads(): boolean {
+  return keeping;
+}
+
+/**
  * Wrap a fetch so that a GET to our own API is remembered when it succeeds and answered from memory when the
  * network cannot be reached. Every outcome also tells the connectivity store what it saw.
  */
@@ -117,7 +133,7 @@ export function cachedFetch(base: typeof fetch, apiOrigin: () => string): typeof
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
     const origin = apiOrigin();
     const ours = url.startsWith(origin);
-    if (!ours || method !== 'GET') {
+    if (!ours || method !== 'GET' || !keeping) {
       try {
         const res = await base(input, init);
         markOnline();
