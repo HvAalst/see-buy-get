@@ -1,3 +1,4 @@
+import { InstallBar } from '../../shared/ui/InstallBar';
 import type { SbgClient } from '../../lib/sbg';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
@@ -44,6 +45,8 @@ export function App() {
       <div class="app">
         <TopBar title={t('driver.appTitle')} subtitle={t('driver.signinSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
+          {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
+          <InstallBar app="driver" />
           <SignInScreen onSignIn={actions.signIn} onSendCode={actions.sendPinCode} onSetPin={actions.setPinAndSignIn} error={state.error} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -108,6 +111,8 @@ export function App() {
       />
 
       <main class="app__scroll">
+        {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
+        <InstallBar app="driver" />
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
         <ScreenRouter screen={state.screen} state={state} actions={actions} onOpenFleet={() => setFleetOpen(true)} sbg={sbg} />

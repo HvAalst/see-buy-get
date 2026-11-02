@@ -3084,3 +3084,203 @@ a.btn {
 .steps__item--now .steps__mark {
   color: var(--org);
 }
+
+/* 2026-11-02 — PINNED (the owner: the list "scrolls under the moment you actually start the process"): one slim bar under
+   the fixed top bar for as long as the sign-up takes, across the scroll area's side padding so the form slides under it
+   cleanly. Tapping it unfolds the whole list in place. */
+.steps--pinned {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--sa-t));
+  z-index: 20;
+  margin: 0 calc(-16px - var(--sa-r)) 14px calc(-16px - var(--sa-l));
+  padding: 0 calc(16px + var(--sa-r)) 0 calc(16px + var(--sa-l));
+  background: var(--appbg);
+  border-bottom: 1px solid var(--bd-soft);
+}
+.steps__bar {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 28px 10px 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.steps--pinned .steps__head {
+  margin: 0;
+}
+.steps__meter {
+  display: flex;
+  gap: 4px;
+}
+.steps__seg {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bd-soft);
+}
+.steps__seg--done {
+  background: var(--blue);
+}
+.steps__seg--now {
+  background: var(--org);
+}
+.steps__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.steps__now {
+  font-weight: 700;
+  color: var(--tx);
+}
+.steps__next {
+  color: var(--tx3);
+}
+.steps__chev {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--tx3);
+}
+.steps--pinned .steps__list {
+  padding: 0 0 12px;
+}
+/* Folded: the list keeps its grid when open, so the hidden attribute alone would not fold it. */
+.steps__list[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------ install this app -- */
+
+/* 2026-11-02 — the call to install (shared/ui/InstallBar.tsx), pinned under the top bar of every app that installs, until
+   it is installed (the owner: "sticky until the moment the app is installed"). Navy under the white top bar: one call,
+   plainly not part of the screen it sits on. Across the scroll area's side padding, like the sign-up's step bar. */
+.installbar {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--sa-t));
+  z-index: 19;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% + 32px + var(--sa-l) + var(--sa-r));
+  margin: 0 calc(-16px - var(--sa-r)) 12px calc(-16px - var(--sa-l));
+  padding: 10px calc(16px + var(--sa-r)) 10px calc(16px + var(--sa-l));
+  border: 0;
+  background: var(--navy);
+  color: #ffffff;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.installbar__ic {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--org);
+  color: #ffffff;
+}
+.installbar__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.installbar__t {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.installbar__s {
+  font-size: 13px;
+  line-height: 1.3;
+  opacity: 0.85;
+}
+.installbar__how {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* The sheet it opens: each step numbered, each picture with the words for what to tap, plenty of room between. */
+.iguide__lede {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tx2);
+}
+.iguide__phone {
+  margin-bottom: 6px;
+}
+.iguide__step {
+  margin: 22px 0 0;
+  display: grid;
+  gap: 12px;
+}
+.iguide__h {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--tx);
+}
+.iguide__n {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--navy);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+}
+.iguide__shot {
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+.iguide__shot .ipic {
+  width: 100%;
+  max-width: 280px;
+  height: auto;
+  border-radius: 16px;
+  border: 1px solid var(--bd-soft);
+}
+.iguide__cap {
+  max-width: 34ch;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--tx);
+}
+.iguide__said {
+  margin: 16px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+.iguide__step + .btn,
+.iguide__said + .btn {
+  margin-top: 22px;
+}

@@ -42,7 +42,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
     <div class="scr">
       {/* Every step by name — done, now, still to come (the owner, 2026-11-01: "you don't read what is gonna come next"). */}
       {state.step !== 'done' ? (
-        <StepList title={t('home.join.signingUpAs', { role: roleMeta(role, t).labelLower })} steps={steps.slice(0, -1).map((s) => stepName(role, s, t))} at={at - 1} />
+        <StepList title={t('home.join.signingUpAs', { role: roleMeta(role, t).labelLower })} steps={steps.slice(0, -1).map((s) => stepName(role, s, t))} at={at - 1} pinned />
       ) : null}
 
       {state.error ? duplicateField(state.error) ? <AlreadyRegistered state={state} actions={actions} /> : <ErrorNote error={state.error} /> : null}

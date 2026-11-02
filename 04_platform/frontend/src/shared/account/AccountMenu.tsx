@@ -1,4 +1,5 @@
 import { ShareSheet } from './ShareSheet';
+import { InstallGuideSheet, type InstallApp } from '../ui/InstallBar';
 import type { ComponentChildren } from 'preact';
 import { addressBody, missingPart, startingCountry, type AddressFormat, type AddressParts } from './address';
 import { AddressFields, addressPartName } from './AddressFields';
@@ -72,7 +73,9 @@ export interface AccountMenuProps {
 export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra, rows, devices }: AccountMenuProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [sheet, setSheet] = useState<'profile' | 'settings' | 'address' | 'share' | null>(null);
+  const [sheet, setSheet] = useState<'profile' | 'settings' | 'address' | 'share' | 'install' | null>(null);
+  // 2026-11-02 — an app that installs keeps its guide here once the call to install has gone.
+  const installs: InstallApp | null = app === 'agent' || app === 'mdp' || app === 'driver' || app === 'fleet' || app === 'vendor' ? app : null;
   const wrap = useRef<HTMLDivElement>(null);
 
   // A drop-down that only closes by pressing its own button is a trap on a phone, where the rest of the
@@ -173,6 +176,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
           {/* 2026-11-01 — SHARE SEEBUYGET in every app (the owner): an app with its own invite flow passes it; every other
               opens the shared sheet — a link of the person's own, sent to contacts in the apps their country uses. */}
           <MenuRow icon="send" label={t('account.share.title')} sub={t('account.share.sub')} onClick={() => { setOpen(false); if (onInvite) onInvite(); else setSheet('share'); }} />
+          {installs ? <MenuRow icon="bell" label={t('install.menu')} sub={t('install.menuSub')} onClick={() => { setOpen(false); setSheet('install'); }} /> : null}
           {(rows ?? []).map((r) => (
             <MenuRow key={r.key} icon={r.icon} label={r.label} sub={r.sub} onClick={() => { setOpen(false); r.onClick(); }} />
           ))}
@@ -194,6 +198,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
 
       <ProfileSheet open={sheet === 'profile'} onClose={() => setSheet(null)} api={api} />
       <ShareSheet open={sheet === 'share'} onClose={() => setSheet(null)} api={api} />
+      {installs ? <InstallGuideSheet open={sheet === 'install'} onClose={() => setSheet(null)} app={installs} /> : null}
       <AddressSheet open={sheet === 'address'} onClose={() => setSheet(null)} api={api} />
       <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} devices={devices} />
     </div>

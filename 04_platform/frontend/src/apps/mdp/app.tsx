@@ -1,3 +1,4 @@
+import { InstallBar } from '../../shared/ui/InstallBar';
 import type { SbgClient } from '../../lib/sbg';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
@@ -49,6 +50,8 @@ export function App() {
       <div class="app">
         <TopBar title={t('mdp.appTitle')} subtitle={t('mdp.appSubtitleSignin')} />
         <main class="app__scroll app__scroll--nonav">
+          {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
+          <InstallBar app="mdp" />
           <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} deviceAsk={state.deviceAsk} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -110,6 +113,8 @@ export function App() {
       />
 
       <main class="app__scroll">
+        {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
+        <InstallBar app="mdp" />
         <ConnectivityNote stale={state.stale} />
         <OutboxNote />
         <ScreenRouter screen={state.screen} state={state} actions={actions} sbg={sbg} />

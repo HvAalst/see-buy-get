@@ -1,3 +1,4 @@
+import { InstallBar } from '../../shared/ui/InstallBar';
 import { EarningsScreen } from './screens/EarningsScreen';
 import { recordContractFor } from './contractAsk';
 import { AgreementGate } from '../../shared/documents/Agreement';
@@ -51,6 +52,8 @@ export function App() {
       <div class="app">
         <TopBar title={t('fleet.appTitle')} subtitle={t('fleet.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
+          {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
+          <InstallBar app="fleet" />
           <SignInScreen actions={actions} error={state.error} busy={state.busy === 'signin'} company={state.company} />
         </main>
         <Toasts state={state} actions={actions} noNav />
@@ -127,6 +130,8 @@ export function App() {
       />
 
       <main class={'app__scroll' + (wide && state.screen === 'orders' ? ' app__scroll--wide' : '')}>
+        {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
+        <InstallBar app="fleet" />
         <ConnectivityNote stale={state.stale} />
         {state.screen === 'orders' ? (
           <OrdersScreen sbg={sbg} managerDid={state.manager?.did} who={state.manager?.did} onWide={setWide} />

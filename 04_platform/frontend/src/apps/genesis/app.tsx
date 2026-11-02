@@ -1,3 +1,4 @@
+import { InstallBar } from '../../shared/ui/InstallBar';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { BottomNav, ConnectivityNote, Icon, NotificationBell, TopBar, type NavItem } from '../../shared/ui';
@@ -62,6 +63,8 @@ export function App() {
       />
 
       <main class="app__scroll">
+        {/* 2026-11-02 — the call to install, pinned until the app is installed (the owner). */}
+        <InstallBar app="send" />
         <ConnectivityNote />
         <Router state={state} actions={actions} account={account} sbg={sbg} />
       </main>

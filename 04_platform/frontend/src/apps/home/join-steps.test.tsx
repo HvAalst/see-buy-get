@@ -72,3 +72,22 @@ describe('what the audit of every sign-up found, 2026-11-01', () => {
     expect(stepBlocker(role('mdp'), 'where', noPin, t)).toBe(t('home.block.location'));
   });
 });
+
+describe('the steps stay in sight while the form scrolls (the owner, 2026-11-02)', () => {
+  it('pins one bar above the step’s own title: the step now, the next by name, and the whole list folded in it', () => {
+    const html = render('pudo', 'code');
+    const bar = html.indexOf('steps--pinned');
+    expect(bar).toBeGreaterThan(-1);
+    // The bar comes first, then the step's own title.
+    expect(html.indexOf('class="scr__title"')).toBeGreaterThan(bar);
+    expect(html).toContain('<span class="steps__now">The code we text you</span>');
+    expect(html).toContain('Next: About your shop');
+    expect((html.match(/class="steps__seg /g) ?? []).length).toBe(5);
+    expect(html).toMatch(/<ol class="steps__list" id="steps-all" hidden/);
+    expect(html).toContain('aria-expanded="false"');
+  });
+
+  it('says the last step is the last', () => {
+    expect(render('pudo', 'login')).toContain('Last step');
+  });
+});
