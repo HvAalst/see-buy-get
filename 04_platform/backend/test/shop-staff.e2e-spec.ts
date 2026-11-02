@@ -234,6 +234,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'POST sbg/mdps/:id/drop-bag', 'POST sbg/mdps/:id/sort', 'POST sbg/mdps/:id/totes', 'GET sbg/totes', 'POST sbg/mdps/:id/parcels/:parcelId/tamper',
         // reading B — a store's parcels handed in at the hub's door in bulk: what is coming, counted, scanned off, finished
         'GET sbg/mdps/:id/arrivals', 'POST sbg/mdps/:id/arrivals/:arrivalId/receive', 'POST sbg/mdps/:id/arrivals/:arrivalId/scan', 'POST sbg/mdps/:id/arrivals/:arrivalId/finish', 'POST sbg/mdps/:id/arrivals/:arrivalId/missed', 'POST sbg/mdps/:id/arrivals/:arrivalId/empties', 'GET sbg/mdps/:id/contact', 'GET sbg/mdps/:id/carriers', 'GET sbg/mdps/:id/carrier-moves', 'POST sbg/mdps/:id/carrier-moves', 'POST sbg/mdps/:id/carrier-moves/:moveId/done',
+        // 2026-11-02 — what the hub's floor holds against its space: its people read it; its owner says it
+        'GET sbg/mdps/:id/space',
         // 2026-10-27 — a store's parcel called off at the hub: its new label, printed by the floor and put over the old one
         'GET sbg/mdps/:id/parcels/:parcelId/label', 'GET sbg/mdps/:id/parcels/:parcelId/label.zpl',
         // …or going to its store's own door as a load: kept aside, and handed to that load's driver by their pass

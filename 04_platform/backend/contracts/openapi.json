@@ -7406,6 +7406,72 @@
         }
       }
     },
+    "/v1/sbg/mdps/{id}/space": {
+      "get": {
+        "operationId": "HubSpace.read",
+        "summary": "",
+        "description": "What its floor holds now: bags waiting to be sorted and going out, of its places; parcels sorted today, of its day's.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubSpaceView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "HubSpace.write",
+        "summary": "",
+        "description": "Its owner says how many bags its floor holds at once, and how many parcels it sorts in a day.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHubSpaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubSpaceView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/mdps/{id}/carriers": {
       "get": {
         "operationId": "HubCarrier.read",
@@ -47467,6 +47533,112 @@
           }
         }
       },
+      "HubSpaceView": {
+        "type": "object",
+        "properties": {
+          "mdpId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "declared": {
+            "type": "boolean",
+            "description": "Its owner has said how many bags it holds and how many parcels it sorts a day. Until then it is never full."
+          },
+          "bagPlaces": {
+            "type": "number"
+          },
+          "sortPerDay": {
+            "type": "number"
+          },
+          "saidAt": {
+            "type": "string"
+          },
+          "inbound": {
+            "type": "number",
+            "description": "Bags emptied here whose parcels are not all sorted yet."
+          },
+          "outbound": {
+            "type": "number",
+            "description": "Bags here being filled, waiting for a driver, or claimed by one who has not come. A flat empty bag takes no place."
+          },
+          "onFloor": {
+            "type": "number",
+            "description": "The two together: what stands on the floor."
+          },
+          "free": {
+            "type": "number",
+            "description": "Places left (never below none), where it said how many it has."
+          },
+          "overBy": {
+            "type": "number",
+            "description": "Bags more than it has places for: dropped all the same — a driver is never turned away with bags in hand."
+          },
+          "comingIn": {
+            "type": "number",
+            "description": "Bags offered to drivers, claimed or on the road to it: they take a place when they come."
+          },
+          "waiting": {
+            "type": "number",
+            "description": "Bags elsewhere held for room here."
+          },
+          "sortedToday": {
+            "type": "number",
+            "description": "Parcels sorted here since midnight on the hub's clock."
+          },
+          "day": {
+            "type": "string",
+            "description": "Today, on the hub's clock (YYYY-MM-DD)."
+          },
+          "floorFull": {
+            "type": "boolean",
+            "description": "As many bags on the floor as it has places."
+          },
+          "dayFull": {
+            "type": "boolean",
+            "description": "As many parcels sorted today as it sorts in a day."
+          },
+          "noRoom": {
+            "type": "boolean",
+            "description": "No room for one more bag to be sent to it: what stands here, and what is on its way, fill every place."
+          }
+        },
+        "required": [
+          "mdpId",
+          "name",
+          "declared",
+          "inbound",
+          "outbound",
+          "onFloor",
+          "comingIn",
+          "waiting",
+          "sortedToday",
+          "day",
+          "floorFull",
+          "dayFull",
+          "noRoom"
+        ]
+      },
+      "SetHubSpaceDto": {
+        "type": "object",
+        "properties": {
+          "bagPlaces": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "sortPerDay": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000000
+          }
+        },
+        "required": [
+          "bagPlaces",
+          "sortPerDay"
+        ]
+      },
       "HubCarrierView": {
         "type": "object",
         "properties": {
@@ -58063,6 +58235,25 @@
           "destZone"
         ]
       },
+      "ToteWait": {
+        "type": "object",
+        "properties": {
+          "hubId": {
+            "type": "string"
+          },
+          "hubName": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "hubId",
+          "hubName",
+          "since"
+        ]
+      },
       "ToteHaulPart": {
         "type": "object",
         "properties": {
@@ -58155,6 +58346,18 @@
           },
           "destinationLabel": {
             "type": "string"
+          },
+          "toHubId": {
+            "type": "string",
+            "description": "2026-11-02 — THE HUB A BAG ADDRESSED TO A ZONE IS DRIVEN TO (a shop's or a dock's bag names its zone, not a hub): chosen\nwhen it is offered to drivers, one with room on its floor (the owner: \"new bags go to another approved hub that serves\nthe same zones\"), and kept from then, so the offer, the pay and the driver's next stop name the same hub. Absent on a\nbag addressed to a hub or a shop, and on one offered before this."
+          },
+          "waitsForRoom": {
+            "description": "2026-11-02 — held where it stands for room at the hub it goes to; not offered to drivers meanwhile (ToteWait).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ToteWait"
+              }
+            ]
           },
           "parcels": {
             "type": "array",
@@ -58580,6 +58783,18 @@
                 "$ref": "#/components/schemas/HubVetting"
               }
             ]
+          },
+          "bagPlaces": {
+            "type": "number",
+            "description": "2026-11-02 — HOW MANY BAGS CAN STAND ON ITS FLOOR AT ONCE (the owner: \"shouldn't a hub also declare its space?\"): bags\nwaiting to be sorted, and bags being filled or waiting for a driver. Its owner's word, as its fee is (MdpService.setSpace).\nAbsent on a hub that has not said — which is never treated as full: read it through MdpService.spaceOf."
+          },
+          "sortPerDay": {
+            "type": "number",
+            "description": "2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them."
+          },
+          "spaceSaidAt": {
+            "type": "string",
+            "description": "When its owner last said them."
           }
         },
         "required": [
@@ -59679,6 +59894,17 @@
           },
           "location": {
             "$ref": "#/components/schemas/GeoDto"
+          },
+          "bagPlaces": {
+            "type": "number",
+            "description": "2026-11-02 — how many bags can stand on its floor at once, and how many parcels it sorts in a day: both, or neither.",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "sortPerDay": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000000
           }
         },
         "required": [

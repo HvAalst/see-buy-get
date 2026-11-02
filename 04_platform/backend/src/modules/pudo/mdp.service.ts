@@ -23,12 +23,15 @@ import { CargoNature, VehicleCapability } from './cargo.types';
 import { countryOfSite, requireCountryCode } from './country';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { PresenceService } from '../../foundation/presence/presence.service';
-import { HubPapers, Mdp, NextHop, Parcel, Tote } from './pudo.types';
+import { HubPapers, HubSpaceView, Mdp, NextHop, Parcel, Tote } from './pudo.types';
 import { handedAt } from './observed-at';
 import { BagClosureService } from './bag-closure.service';
 import type { BagClosureKind } from './bag-closure.types';
 import { FINDING_WORDS } from './tamper.types';
 import { roadLeftToPay } from './pricing';
+import { clockAt, clocksOfCountry } from './fleet-clock';
+import { NotificationService } from './notification.service';
+import { HubDrop, HubFloorBook, spaceProblem } from './hub-space';
 
 /**
  * MdpService — Main Distribution Point hubs + the tote-bag sort flow (Compendium Ch 17).
@@ -70,7 +73,17 @@ export class MdpService {
     @Optional() private readonly corridors?: CorridorService,
     // The papers' ID photo is deleted at staff's decision (2026-11-01). Optional for the specs that build this by hand.
     @Optional() private readonly media?: MediaService,
+    // 2026-11-02 — a bag held for room at its hub, and let go on, is told to whoever holds it; a hub whose day is full is
+    // told so. In the bell, never a text. Optional for the specs that build this by hand.
+    @Optional() private readonly notifications?: NotificationService,
   ) {}
+
+  /**
+   * 2026-11-02 — WHAT STANDS ON EACH HUB'S FLOOR THAT ITS BAGS NO LONGER SAY: the bags emptied at it on arrival, until every
+   * parcel in them is sorted (a bag is emptied in the records the moment it is received, and stands on the floor until its
+   * parcels are in other bags); the parcels sorted on its clock's day; the day it was told its sorting was full.
+   */
+  private readonly floors = new PersistentMap<string, HubFloorBook>('pudo-hub-floors');
 
   /** The kilos left on a driver's vehicle, everything they hold counted (DispatchService.remainingCapacity). */
   private roomOf?: (driverDid: string) => number | undefined;
@@ -137,8 +150,13 @@ export class MdpService {
    * registered it themselves, and so approved it, by name — or `'joining'`, a hub that signed itself up and is vetted
    * from its papers before it works. Asked of every caller, so that no new way in can skip it by leaving it out.
    */
-  register(input: { name: string; zones: string[]; country?: string; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number }, vouched: { approvedBy: string } | 'joining'): Mdp {
+  register(input: { name: string; zones: string[]; country?: string; location: { lat: number; lng: number }; contactPhone?: string; address?: string; pricePerParcel?: number; bagPlaces?: number; sortPerDay?: number }, vouched: { approvedBy: string } | 'joining'): Mdp {
     if (!input.zones?.length) throw new GlosError('ZONES_REQUIRED', 'An MDP must cover at least one zone');
+    // 2026-11-02 — its space, asked at sign-up ("About your hub"): both numbers, or neither — a hub that says neither is asked
+    // on its start screen. The sign-up's profile is the form's own object, so the numbers are checked here, not by a DTO.
+    const saysSpace = input.bagPlaces != null || input.sortPerDay != null;
+    const wrongSpace = saysSpace ? spaceProblem(input.bagPlaces, input.sortPerDay) : null;
+    if (wrongSpace) throw new GlosError('INVALID_INPUT', wrongSpace.words, { field: wrongSpace.field });
     // Same question a shop answers: does the network operate here at all? Where we only match, a hub stands with
     // no sister behind it — it sorts and records custody, and nothing of ours is booked for the work.
     const country = requireCountryCode(input.country);
@@ -167,6 +185,7 @@ export class MdpService {
       pricePerParcel: input.pricePerParcel ?? this.entities.amountsFor(entity?.entityId).mdpSortFee,
       createdAt: now,
       vetting: vouched === 'joining' ? { state: 'draft' } : { state: 'approved', approvedAt: now, approvedBy: vouched.approvedBy },
+      ...(saysSpace ? { bagPlaces: input.bagPlaces, sortPerDay: input.sortPerDay, spaceSaidAt: now } : {}),
     };
     this.mdps.set(mdp.mdpId, mdp);
     return mdp;
@@ -288,6 +307,282 @@ export class MdpService {
     return sold && sold.currency === this.currencyOf(mdp) ? sold.fee : mdp.pricePerParcel;
   }
 
+  // --- its space (2026-11-02, the owner: "shouldn't a hub also declare its space?") ---
+
+  /**
+   * THE HUB'S OWNER SAYS ITS SPACE: how many bags can stand on its floor at once, and how many parcels it sorts in a day. Its
+   * own word, as its fee is — its people read it and staff change nothing in its name (the controller says who). Bags held
+   * for room here go on at once where the new number makes room for them.
+   */
+  setSpace(mdpId: string, input: { bagPlaces: number; sortPerDay: number }, now: number = Date.now()): HubSpaceView {
+    const wrong = spaceProblem(input.bagPlaces, input.sortPerDay);
+    if (wrong) throw new GlosError('INVALID_INPUT', wrong.words, { field: wrong.field });
+    const mdp = this.require(mdpId);
+    mdp.bagPlaces = input.bagPlaces;
+    mdp.sortPerDay = input.sortPerDay;
+    mdp.spaceSaidAt = new Date(now).toISOString();
+    this.mdps.set(mdp.mdpId, mdp);
+    this.letWaitingGo(now);
+    return this.spaceOf(mdp, now);
+  }
+
+  /** Its owner has said both numbers. */
+  declaresSpace(mdp: Mdp): boolean {
+    return typeof mdp.bagPlaces === 'number' && mdp.bagPlaces > 0 && typeof mdp.sortPerDay === 'number' && mdp.sortPerDay > 0;
+  }
+
+  /**
+   * WHAT STANDS ON A HUB'S FLOOR NOW, against what its owner said: the bags waiting to be sorted (emptied here, their parcels
+   * not all in other bags yet) and the bags going out (being filled, waiting for a driver, or claimed by one who has not
+   * come) — a flat empty bag takes no place; what is on its way to it; what it has sorted today, on its own clock.
+   *
+   * FULL is two things, and they are not the same. The FLOOR is full when the bags standing on it fill every place — what its
+   * start screen says, in red past it. No room to SEND one more is the floor and what is already on its way to it together:
+   * a bag offered to drivers, claimed or on the road takes its place the moment it comes, so counting only what stands there
+   * would send every waiting bag the minute one place came free, and a driver would arrive at a floor fuller than ever.
+   *
+   * A HUB THAT HAS NOT SAID IS NEVER FULL. "Absence of a report is not clearance", turned the other way round: nobody has
+   * told us its floor is full, so nothing is held back for it — bags held on a number nobody gave would strand real parcels
+   * on a guess. Its start screen asks its owner instead.
+   */
+  spaceOf(mdp: Mdp, now: number = Date.now()): HubSpaceView {
+    const inbound = this.inboundBags(mdp.mdpId).length;
+    const outbound = this.outboundBags(mdp.mdpId).length;
+    const onFloor = inbound + outbound;
+    const comingIn = this.bagsComingTo(mdp.mdpId).length;
+    const waiting = this.totes.list().filter((t) => t.waitsForRoom?.hubId === mdp.mdpId && t.status === 'available').length;
+    const day = this.dayOf(mdp, now);
+    const sortedToday = this.sortedOn(mdp.mdpId, day);
+    const declared = this.declaresSpace(mdp);
+    const places = mdp.bagPlaces ?? 0;
+    const perDay = mdp.sortPerDay ?? 0;
+    return {
+      mdpId: mdp.mdpId,
+      name: mdp.name,
+      declared,
+      ...(declared ? { bagPlaces: places, sortPerDay: perDay, free: Math.max(0, places - onFloor), ...(onFloor > places ? { overBy: onFloor - places } : {}) } : {}),
+      ...(mdp.spaceSaidAt ? { saidAt: mdp.spaceSaidAt } : {}),
+      inbound,
+      outbound,
+      onFloor,
+      comingIn,
+      waiting,
+      sortedToday,
+      day,
+      floorFull: declared && onFloor >= places,
+      dayFull: declared && sortedToday >= perDay,
+      noRoom: declared && onFloor + comingIn >= places,
+    };
+  }
+
+  /** The bags emptied at this hub whose parcels are not all sorted yet; the book is kept to those. */
+  private inboundBags(mdpId: string): HubDrop[] {
+    const book = this.floors.get(mdpId);
+    if (!book?.drops.length) return [];
+    const standing = book.drops.filter((d) => d.parcelIds.some((id) => this.unsortedHere(id, mdpId)));
+    if (standing.length !== book.drops.length) this.floors.set(mdpId, { ...book, drops: standing });
+    return standing;
+  }
+
+  /** A parcel still loose on this hub's floor: here, and in no bag yet. One sorted, sent back or gone is not. */
+  private unsortedHere(parcelId: string, mdpId: string): boolean {
+    try {
+      const p = this.parcels.get(parcelId);
+      return p.status === 'At_MDP' && p.atMdpId === mdpId && !p.toteId;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The bags on this hub's floor going out: being filled, waiting for a driver, or claimed by one who has not come. */
+  private outboundBags(mdpId: string): Tote[] {
+    return this.totes.atLocation(mdpId).filter((t) => t.status === 'filling' || t.status === 'available' || t.status === 'claimed');
+  }
+
+  /** The hub a bag is sent to, where it is sent to one: its address, or — a zone's bag — the hub chosen for it when offered. */
+  private hubOfBag(tote: Tote): string | undefined {
+    if (tote.toHubId) return tote.toHubId;
+    return tote.destinationNodeId && this.mdps.has(tote.destinationNodeId) ? tote.destinationNodeId : undefined;
+  }
+
+  /** The bags on their way to this hub — offered to drivers, claimed, or on the road — none of them held for room. */
+  private bagsComingTo(mdpId: string): Tote[] {
+    return this.totes.list().filter((t) => !t.waitsForRoom && (t.status === 'available' || t.status === 'claimed' || t.status === 'in_transit') && t.locationId !== mdpId && this.hubOfBag(t) === mdpId);
+  }
+
+  /** Today on the hub's clock: its country's, where the country keeps one clock — UTC where it keeps several, as its hours are read. */
+  private dayOf(mdp: Mdp, now: number): string {
+    const clocks = clocksOfCountry(this.countryOf(mdp), now);
+    return clockAt(now, clocks.length === 1 ? clocks[0] : 'UTC').day;
+  }
+
+  private sortedOn(mdpId: string, day: string): number {
+    const sorted = this.floors.get(mdpId)?.sorted;
+    return sorted && sorted.day === day ? sorted.count : 0;
+  }
+
+  /** A bag received here: it stands on the floor until its parcels are sorted. */
+  private noteDrop(mdpId: string, code: string, parcelIds: string[], now: number): void {
+    const book = this.floors.get(mdpId) ?? { mdpId, drops: [] };
+    this.floors.set(mdpId, { ...book, drops: [...book.drops.filter((d) => d.code !== code), { code, parcelIds: [...parcelIds], at: new Date(now).toISOString() }] });
+  }
+
+  /**
+   * One more parcel sorted here today. The parcel that fills the day's sorting tells the hub, once a day, in its bell: it
+   * goes on sorting — nothing is refused — and new bags go to another hub with room today where there is one.
+   */
+  private noteSorted(mdp: Mdp, now: number): void {
+    const day = this.dayOf(mdp, now);
+    const book = this.floors.get(mdp.mdpId) ?? { mdpId: mdp.mdpId, drops: [] };
+    const count = (book.sorted?.day === day ? book.sorted.count : 0) + 1;
+    const fills = this.declaresSpace(mdp) && count >= (mdp.sortPerDay ?? 0) && book.dayFullToldOn !== day;
+    this.floors.set(mdp.mdpId, { ...book, sorted: { day, count }, ...(fills ? { dayFullToldOn: day } : {}) });
+    if (!fills) return;
+    void this.notifications
+      ?.notify(mdp.did, {
+        kind: 'hub_space',
+        title: 'Today’s sorting is full',
+        body: `${mdp.name} has sorted ${count} parcels today, as many as you said it sorts in a day. Bags are still taken from every driver. New bags go to another hub for your areas where one has room today; what is not sorted today is sorted tomorrow.`,
+        link: '/',
+        tag: `hub-space:${mdp.mdpId}:day:${day}`,
+        data: { mdpId: mdp.mdpId, day },
+      })
+      .catch(() => undefined);
+  }
+
+  /** The hubs that may work and serve every one of these zones, in the order they joined. */
+  private hubsServing(zones: string[]): Mdp[] {
+    return [...this.mdps.values()].filter((m) => zones.every((z) => m.zones.includes(z)) && this.isApproved(m) && !this.notOpenYet(m));
+  }
+
+  /**
+   * OF THE HUBS THAT COULD TAKE A BAG, THE FIRST WITH ROOM (the owner: "new bags go to another approved hub that serves the
+   * same zones"): room on its floor and in today's sorting first; room on its floor alone next — a full day goes on, and is
+   * sorted tomorrow; none with room on its floor, and nothing: the bag waits where it is. A hub that has not said its space
+   * always has room (spaceOf).
+   */
+  private withRoom(hubs: Mdp[], now: number): Mdp | undefined {
+    const room = hubs.map((h) => ({ h, s: this.declaresSpace(h) ? this.spaceOf(h, now) : undefined })).filter(({ s }) => !s?.noRoom);
+    return (room.find(({ s }) => !s?.dayFull) ?? room[0])?.h;
+  }
+
+  /**
+   * WHERE A BAG GOES, WHERE IT GOES TO A HUB, AND WHETHER IT MAY GO NOW. A bag sorted for another hub may go to any approved
+   * hub serving where every parcel in it is going; a bag addressed to a zone (a shop's, a dock's), to any approved hub serving
+   * the zone. The one it was going to first, where that has room. Nothing for a bag going to a shop, or to a zone no hub
+   * serves (it runs direct). Nothing is written: the caller keeps what this says.
+   */
+  private placeBag(tote: Tote, now: number): { goes: true; hub: Mdp; zoneBag: boolean } | { goes: false; current: Mdp; areas: string[] } | undefined {
+    const id = tote.destinationNodeId;
+    if (!id) return undefined;
+    const addressed = this.mdps.get(id);
+    let current: Mdp;
+    let candidates: Mdp[];
+    let areas: string[];
+    if (addressed) {
+      areas = [...new Set(tote.parcels.map((p) => this.destZoneOf(p)).filter((z): z is string => Boolean(z)))];
+      const others = areas.length ? this.hubsServing(areas).filter((h) => h.mdpId !== addressed.mdpId && h.mdpId !== tote.locationId) : [];
+      current = addressed;
+      candidates = [addressed, ...others];
+    } else {
+      if (this.agents.find(id)) return undefined; // a shop: the last mile, no hub's floor on it
+      const serving = this.hubsServing([id]);
+      if (!serving.length) return undefined;
+      current = serving.find((h) => h.mdpId === tote.toHubId) ?? serving[0];
+      candidates = [current, ...serving.filter((h) => h.mdpId !== current.mdpId)];
+      areas = [id];
+    }
+    const hub = this.withRoom(candidates, now);
+    return hub ? { goes: true, hub, zoneBag: !addressed } : { goes: false, current, areas };
+  }
+
+  private destZoneOf(parcelId: string): string | undefined {
+    try {
+      return this.parcels.get(parcelId).destZone;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Keep the hub a bag was placed at: a hub's bag readdressed to it, a zone's bag given it. */
+  private keepPlace(tote: Tote, hub: Mdp, zoneBag: boolean): void {
+    if (zoneBag) {
+      if (tote.toHubId !== hub.mdpId) this.totes.pointTo(tote.code, { toHubId: hub.mdpId });
+    } else if (tote.destinationNodeId !== hub.mdpId) {
+      this.totes.pointTo(tote.code, { destinationNodeId: hub.mdpId, destinationLabel: hub.name });
+    }
+  }
+
+  /**
+   * A BAG PUT UP FOR DRIVERS, WHERE ITS HUB HAS ROOM (2026-11-02). Every way a bag is offered comes here — a shop's or a
+   * dock's bag closed, a hub's closed, full or out of time, or let go early. Going to a hub: to one with room on its floor
+   * (the one it was going to, or another approved hub for its areas), and offered. None has room: it waits where it stands,
+   * offered to nobody, and whoever holds it is told — once. It goes on by itself when room frees (letWaitingGo). True when
+   * it was offered.
+   */
+  offerBag(code: string, reason: string, now: number = Date.now()): boolean {
+    const tote = this.totes.requireByCode(code);
+    const placed = this.placeBag(tote, now);
+    if (placed && !placed.goes) {
+      if (!tote.waitsForRoom) {
+        const since = new Date(now).toISOString();
+        this.totes.markWaiting(code, { hubId: placed.current.mdpId, hubName: placed.current.name, since });
+        this.tellHolder(tote, 'waits', placed.current, placed.areas, since);
+      }
+      return false;
+    }
+    if (placed) this.keepPlace(tote, placed.hub, placed.zoneBag);
+    void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code, reason, weightKg: tote.weightKg, destination: tote.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
+    return true;
+  }
+
+  /**
+   * ROOM FREED: THE BAGS HELD FOR IT GO ON BY THEMSELVES, OLDEST FIRST (the owner: "whoever is waiting is told"). Asked
+   * wherever a hub's floor can have changed — a parcel sorted, a bag dropped or collected, its owner raising its places — and
+   * by the dispatch sweep. Each placed again: to the hub it waits for where that has room now, to another where that has, or
+   * it keeps waiting. Each let go is offered to drivers and its holder told. The codes let go.
+   */
+  letWaitingGo(now: number = Date.now()): string[] {
+    const waiting = this.totes
+      .list()
+      .filter((t) => t.waitsForRoom && t.status === 'available')
+      .sort((a, b) => a.waitsForRoom!.since.localeCompare(b.waitsForRoom!.since) || a.code.localeCompare(b.code));
+    const gone: string[] = [];
+    for (const tote of waiting) {
+      const placed = this.placeBag(tote, now);
+      if (placed && !placed.goes) continue;
+      const since = tote.waitsForRoom!.since;
+      this.totes.markWaiting(tote.code, undefined);
+      if (placed) this.keepPlace(tote, placed.hub, placed.zoneBag);
+      if (placed) this.tellHolder(tote, 'goes', placed.hub, [], since);
+      void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code: tote.code, reason: 'room', weightKg: tote.weightKg, destination: tote.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
+      gone.push(tote.code);
+    }
+    return gone;
+  }
+
+  /**
+   * Whoever holds a bag held for room, or let go on, told in their bell — never a text — with the way to their bags: a
+   * hub's load screen, a shop's bags, a store's dock.
+   */
+  private tellHolder(tote: Tote, what: 'waits' | 'goes', hub: Mdp, areas: string[], since: string): void {
+    if (!this.notifications) return;
+    const atHub = this.mdps.get(tote.locationId);
+    const did = atHub ? atHub.did : tote.locationId;
+    const link = atHub ? '/?go=load' : this.agents.find(tote.locationId) ? '/?go=bag' : '/?go=dock';
+    const where = areas.length ? areas.join(', ') : (tote.destinationLabel ?? 'its area');
+    const words =
+      what === 'waits'
+        ? {
+            title: `Bag ${tote.code} waits for room at ${hub.name}`,
+            body: `${hub.name} has no room on its floor for another bag, and no other hub for ${where} has room either. Keep bag ${tote.code} where it is: it is offered to drivers again by itself when there is room, and you are told then.`,
+          }
+        : { title: `Bag ${tote.code} can go on`, body: `There is room for it now: bag ${tote.code} goes to ${hub.name}, and is offered to drivers again.` };
+    void this.notifications
+      .notify(did, { kind: 'hub_space', ...words, link, tag: `hub-space:${tote.code}:${what}:${since}`, data: { code: tote.code, mdpId: hub.mdpId } })
+      .catch(() => undefined);
+  }
+
   list(): Mdp[] {
     return [...this.mdps.values()];
   }
@@ -298,11 +593,17 @@ export class MdpService {
     return mdp;
   }
 
-  /** The hub that last-mile-serves a delivery zone (the regional sort centre for that zone). */
-  mdpForZone(zone: string): Mdp | undefined {
+  /**
+   * The hub that last-mile-serves a delivery zone (the regional sort centre for that zone) — and where several do, the
+   * first with room (2026-11-02: placeBag's rule, read by the plan, the sort and the driver's offer alike). One hub for a
+   * zone is that zone's hub, full or not: a bag for it waits for it, it is never sent anywhere else.
+   */
+  mdpForZone(zone: string, now: number = Date.now()): Mdp | undefined {
     // Only a hub that may work: one not yet approved is chosen for nothing, so nothing is routed to it — nor one in a
     // country not open yet, whose floor opens the day it does.
-    return [...this.mdps.values()].find((m) => m.zones.includes(zone) && this.isApproved(m) && !this.notOpenYet(m));
+    const serving = this.hubsServing([zone]);
+    if (serving.length < 2) return serving[0];
+    return this.withRoom(serving, now) ?? serving[0];
   }
 
   /** COMING (2026-10-25): signed up where SeeBuyGet takes sign-ups and is not open yet. Only COMING — see DriverService. */
@@ -474,13 +775,10 @@ export class MdpService {
     const tote = announce ? this.totes.markAvailable(code, sealed.at) : bag;
     this.totes.markSealed(code, sealed);
     keepClosure(sealed);
-    if (announce) {
-      // …and tell the drivers near the shop. Without this the shop's deliberate "it is ready NOW" was the
-      // only publish in the network that pinged nobody, while the passive 24 h sweep did.
-      void this.events
-        .publish(GlosEvent.Pudo.ToteAvailable, { code: tote.code, reason: 'sealed', weightKg: tote.weightKg, destination: tote.destinationLabel }, { source: 'pudo' })
-        .catch(() => undefined);
-    }
+    // …and tell the drivers near the shop. Without this the shop's deliberate "it is ready NOW" was the
+    // only publish in the network that pinged nobody, while the passive 24 h sweep did. 2026-11-02 — offered where its hub
+    // has room; held at the counter, and the shop told, where none has (offerBag).
+    if (announce) this.offerBag(tote.code, 'sealed');
     return { tote, parcels: [...bag.parcels], missed, shortShipped: missed.length > 0 };
   }
 
@@ -507,11 +805,8 @@ export class MdpService {
     const announce = bag.status === 'filling';
     if (announce) this.totes.markAvailable(code, step.at);
     const closed = keep(step);
-    if (announce) {
-      void this.events
-        .publish(GlosEvent.Pudo.ToteAvailable, { code, reason: 'sealed', weightKg: bag.weightKg, destination: bag.destinationLabel }, { source: 'pudo' })
-        .catch(() => undefined);
-    }
+    // 2026-11-02 — offered where the hub it goes to has room; held where it stands, its holder told, where none has.
+    if (announce) this.offerBag(code, 'sealed');
     return { tote: this.totes.requireByCode(code), closedWith: closed.kind };
   }
 
@@ -560,6 +855,10 @@ export class MdpService {
     // Round 36 — a bag leaves closed (its coded seal on, or photographed closed), and never while it is held.
     const HELD = pending.held;
     if (HELD) throw new GlosError('UNIT_HELD', `Bag ${code} is held: ${FINDING_WORDS[HELD.finding]} (${HELD.where}). Keep it closed: operations has been told and releases it.`, { exceptionId: HELD.exceptionId });
+    // 2026-11-02 — held for room at the hub it goes to: it stays where it is (the owner: "they wait at the shop or hub they
+    // are at"), handed to no driver across a counter either, until it goes on by itself.
+    const WAITS = pending.waitsForRoom;
+    if (WAITS) throw new GlosError('BAG_WAITS_FOR_ROOM', `Bag ${code} waits for room at ${WAITS.hubName}: keep it here. It is offered to drivers again by itself when there is room, and you are told.`, { hubId: WAITS.hubId });
     // Round 39 — nothing new onto a rider whose security declaration (or whose fleet's) is not in force: said before the bag's
     // own state, because no closing of the bag makes it signed.
     const fleet = this.fleet.resolveBadge(driverBadgeId);
@@ -638,6 +937,7 @@ export class MdpService {
     const keepTake = take ? this.closures.checkTake(pending, { did: take.driverDid, name: take.name?.trim() || 'the driver', place: 'the driver' }, take.driverDid, take.reading) : undefined;
     // Loaded when it was loaded (round 23), never before the bag was filled, published or sealed.
     const after = [pending.filledAt, pending.availableAt, pending.sealedAt];
+    const offHubFloor = this.mdps.has(pending.locationId); // read before the load moves it onto the vehicle
     const tote = this.totes.load(code, driverBadgeId, fleet?.driverDid);
     keepTake?.(handedAt(observedAt, Date.now(), after));
     for (const parcelId of tote.parcels) {
@@ -647,11 +947,19 @@ export class MdpService {
     }
     if (fleet) this.gate.payBagLoad(fleet.driverDid); // for scanning it aboard, at the driver's own company's figure
     void this.events.publish(GlosEvent.Pudo.BagLoaded, { toteId: tote.toteId, code: tote.code, driverBadgeId, destinationNodeId: tote.destinationNodeId, parcels: tote.parcels.length }, { source: 'pudo' }).catch(() => undefined);
+    // 2026-11-02 — a bag collected off a hub's floor frees its place: bags held for room there go on.
+    if (offHubFloor) this.letWaitingGo();
     return { tote, moved: [...tote.parcels] };
   }
 
-  /** A bus drops a bag at this MDP → scan the bag code, empty it; parcels become unsorted (At_MDP). */
-  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string): { mdpId: string; emptied: string[] } {
+  /**
+   * A bus drops a bag at this MDP → scan the bag code, empty it; parcels become unsorted (At_MDP).
+   *
+   * 2026-11-02 — NEVER REFUSED FOR ROOM (the owner: "a driver is never turned away at the door with bags in hand"): a floor
+   * past its places takes the bag all the same, and says so in red on the hub's start screen (spaceOf.overBy). The bag
+   * stands on the floor until its parcels are sorted.
+   */
+  dropBag(mdpId: string, code: string, receipt: { sealNumber?: string; photoRef?: string; asClosed?: boolean } | undefined, byName?: string, now: number = Date.now()): { mdpId: string; emptied: string[] } {
     const mdp = this.working(mdpId);
     const before = this.totes.requireByCode(code);
     if (!before.parcels.length) throw new GlosError('BAG_EMPTY', `Bag ${code} is already empty`);
@@ -668,7 +976,10 @@ export class MdpService {
       const p = this.parcels.setTransit(parcelId, 'At_MDP', mdp.name, `dropped at ${mdp.name} · awaiting sort`, undefined);
       p.atMdpId = mdpId; // scope the inbound queue to this hub
     }
+    this.noteDrop(mdpId, code, parcels, now);
     void this.events.publish(GlosEvent.Pudo.BagArrivedAtMdp, { mdpId, mdpName: mdp.name, code, emptied: parcels.length }, { source: 'pudo' }).catch(() => undefined);
+    // A bag sent to another hub and dropped here instead is no longer on its way there: room may have freed at that one.
+    this.letWaitingGo(now);
     return { mdpId, emptied: parcels };
   }
 
@@ -741,7 +1052,7 @@ export class MdpService {
    * Sort one parcel at an MDP: compute its next destination, find/open the destination bag, drop it
    * in. Returns exactly what the worker's screen shows — the next destination + the bag code to use.
    */
-  sortParcel(mdpId: string, parcelId: string): { parcelId: string; nextDestination: NextHop; toteCode: string; toteId: string; fillPct: number } {
+  sortParcel(mdpId: string, parcelId: string, now: number = Date.now()): { parcelId: string; nextDestination: NextHop; toteCode: string; toteId: string; fillPct: number } {
     const mdp = this.working(mdpId);
     const parcel = this.parcels.get(parcelId);
     // Called off at this hub by its store (2026-10-27): the box still wears its old label. Told which label to put on it, and
@@ -766,7 +1077,8 @@ export class MdpService {
     this.parcels.refuseIfHeld(parcel); // round 35 — set apart: not sorted on
     if (!parcel.destAgentDid) throw new GlosError('INVALID_STATE', 'Parcel has no destination PUDO to sort toward');
 
-    const next = this.nextHop(mdp, parcel.destZone, parcel.destAgentDid);
+    // 2026-11-02 — onward to another hub: of those serving its zone, one with room (mdpForZone).
+    const next = this.nextHop(mdp, parcel.destZone, parcel.destAgentDid, now);
 
     // Find a filling bag already bound to that next hop with room AND cargo-compatible with this parcel, else
     // open a fresh one (S31). Passing the compatibility gate to findFilling means an incompatible parcel never
@@ -787,6 +1099,9 @@ export class MdpService {
     if (sortPay > 0) this.gate.sortLabour(mdpId, sortPay, parcelId, hubEntity, parcel.sellerEntityId);
 
     void this.events.publish(GlosEvent.Pudo.ParcelSorted, { parcelId, mdpId, nextDestinationId: next.id, nextDestinationType: next.type, toteCode: tote.code }, { source: 'pudo' }).catch(() => undefined);
+    // 2026-11-02 — counted against the day's sorting; and the last parcel of a bag sorted frees that bag's place.
+    this.noteSorted(hub, now);
+    this.letWaitingGo(now);
     return { parcelId, nextDestination: next, toteCode: tote.code, toteId: tote.toteId, fillPct: this.totes.fillPct(tote) };
   }
 
@@ -795,12 +1110,12 @@ export class MdpService {
    * if this MDP serves the destination zone → the destination PUDO (last mile);
    * otherwise → the MDP that serves the destination zone (inter-hub leg).
    */
-  nextHop(mdp: Mdp, destZone: string, destAgentDid: string): NextHop {
+  nextHop(mdp: Mdp, destZone: string, destAgentDid: string, now: number = Date.now()): NextHop {
     if (mdp.zones.includes(destZone)) {
       const dest = this.agents.get(destAgentDid);
       return { type: 'pudo', id: dest.did, label: dest.shopName, zone: destZone };
     }
-    const onward = this.mdpForZone(destZone);
+    const onward = this.mdpForZone(destZone, now);
     if (!onward) throw new GlosError('INVALID_STATE', `No MDP serves destination zone ${destZone}`);
     return { type: 'mdp', id: onward.mdpId, label: onward.name, zone: destZone };
   }

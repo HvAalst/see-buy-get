@@ -28,6 +28,41 @@ export interface MdpView {
    * that signed itself up works once staff have seen its papers. Absent: not vetted.
    */
   vetting?: { state: 'draft' | 'pending' | 'approved'; refusal?: { reason: string } };
+  /** 2026-11-02 — how many bags its floor holds at once, and how many parcels it sorts a day: its owner's word. */
+  bagPlaces?: number;
+  sortPerDay?: number;
+  /** Merged in by the controller for the hub itself: what its floor holds now, against that. */
+  space?: HubSpaceView;
+}
+
+/**
+ * 2026-11-02 — WHAT A HUB'S FLOOR HOLDS NOW, against what its owner said (backend pudo.types.ts HubSpaceView; the owner:
+ * "shouldn't a hub also declare its space?"). A hub that has not said is never full, and is asked.
+ */
+export interface HubSpaceView {
+  mdpId: string;
+  name: string;
+  declared: boolean;
+  bagPlaces?: number;
+  sortPerDay?: number;
+  saidAt?: string;
+  /** Bags emptied here whose parcels are not all sorted yet. */
+  inbound: number;
+  /** Bags being filled, waiting for a driver, or claimed. A flat empty bag takes no place. */
+  outbound: number;
+  onFloor: number;
+  free?: number;
+  /** Bags past its places: taken all the same. */
+  overBy?: number;
+  /** Bags on their way to it. */
+  comingIn: number;
+  /** Bags elsewhere held for room here. */
+  waiting: number;
+  sortedToday: number;
+  day: string;
+  floorFull: boolean;
+  dayFull: boolean;
+  noRoom: boolean;
 }
 
 export interface ToteView {
@@ -44,6 +79,8 @@ export interface ToteView {
   closedWith?: 'seal' | 'photo';
   /** Round 36 — held under the tamper protocol. */
   held?: UnitHold;
+  /** 2026-11-02 — held here for room at the hub it goes to; it goes on by itself. */
+  waitsForRoom?: { hubId: string; hubName: string; since: string };
 }
 
 export interface ParcelRow {

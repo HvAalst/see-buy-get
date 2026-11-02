@@ -227,6 +227,12 @@ export interface JoinForm {
   openTo: string;
   /** The applicant declares a clean criminal record, and that SeeBuyGet may check it. */
   recordClear: boolean;
+  /**
+   * 2026-11-02 — A HUB'S SPACE (the owner: "shouldn't a hub also declare its space?"): how many bags can stand on its floor
+   * at once, and how many parcels it sorts in a day. Typed, so kept as written; started at the owner's own example.
+   */
+  bagPlaces: string;
+  sortPerDay: string;
   /*
    * A FLEET'S ANSWERS. The person signs in first — the PIN they will open the Fleet app with, and, the first time a PIN
    * is chosen, a recovery email confirmed by its code — then gives what a member of staff would have typed into the
@@ -267,6 +273,23 @@ export type FleetPaper = (typeof FLEET_PAPERS)[number][0];
 /** The Android versions a shop is asked to choose from. */
 export const ANDROID_CHOICES = ['15', '14', '13', '12', '11', '10', 'older', 'none'] as const;
 
+/**
+ * 2026-11-02 — what a hub's two numbers start at, and how far they go: the server's bounds (backend hub-space.ts), said
+ * here so the step refuses what the server would, in words, before the sign-up is sent.
+ */
+export const HUB_BAG_PLACES_DEFAULT = 40;
+export const HUB_SORT_PER_DAY_DEFAULT = 600;
+export const HUB_BAG_PLACES_MAX = 10_000;
+export const HUB_SORT_PER_DAY_MAX = 1_000_000;
+
+/** A whole number from 1 to `max`, as typed: the number, or null. */
+export function wholeUpTo(v: string, max: number): number | null {
+  const s = v.trim();
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  return n >= 1 && n <= max ? n : null;
+}
+
 /** Hours open a day, from the two clock times; 0 when either is missing or close is not after open. */
 export function openHoursOf(from: string, to: string): number {
   const m = (s: string) => (/^\d{2}:\d{2}$/.test(s) ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3)) : NaN);
@@ -298,6 +321,9 @@ export const EMPTY_JOIN: JoinForm = {
   openFrom: '08:00',
   openTo: '18:00',
   recordClear: false,
+  // The owner's own example (2026-11-02): "18 of 40 bag places free · 600 parcels a day".
+  bagPlaces: String(HUB_BAG_PLACES_DEFAULT),
+  sortPerDay: String(HUB_SORT_PER_DAY_DEFAULT),
   pin: '',
   recoveryEmail: '',
   recoveryCode: '',
@@ -434,6 +460,11 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
         if (openHoursOf(f.openFrom, f.openTo) < 10) return t('home.block.hours');
         if (!f.recordClear) return t('home.block.record');
       }
+      // 2026-11-02 — a hub's space: two whole numbers, inside what the server keeps.
+      if (role.id === 'mdp') {
+        if (wholeUpTo(f.bagPlaces, HUB_BAG_PLACES_MAX) == null) return t('home.block.hubPlaces');
+        if (wholeUpTo(f.sortPerDay, HUB_SORT_PER_DAY_MAX) == null) return t('home.block.hubPerDay');
+      }
       if (role.id === 'driver' && f.licenceClasses.length === 0) return t('home.block.drive');
       if (role.id === 'driver' && needsLicence(f.licenceClasses)) {
         if (!f.licenceNumber.trim()) return t('home.block.licenceNumber');
@@ -566,6 +597,10 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
         // The nearest landmark it was asked for — kept as its address (it was asked and dropped, 2026-11-01 audit). No fee
         // from here: a hub starts at its country's company's sort fee and sets its own from the Hub app.
         ...(f.landmark.trim() ? { address: f.landmark.trim() } : {}),
+        // 2026-11-02 — its space, said on "About your hub": both numbers, which the step has checked.
+        ...(wholeUpTo(f.bagPlaces, HUB_BAG_PLACES_MAX) != null && wholeUpTo(f.sortPerDay, HUB_SORT_PER_DAY_MAX) != null
+          ? { bagPlaces: wholeUpTo(f.bagPlaces, HUB_BAG_PLACES_MAX), sortPerDay: wholeUpTo(f.sortPerDay, HUB_SORT_PER_DAY_MAX) }
+          : {}),
       },
     },
   };

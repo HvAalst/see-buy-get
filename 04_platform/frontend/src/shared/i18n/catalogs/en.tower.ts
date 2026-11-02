@@ -2346,6 +2346,13 @@ export const enTowerNetwork = {
   'tower.network.fleets.systemPositions': 'Sends where its vehicles are.',
   'tower.network.bagsOnRoad': '{n, plural, one {# bag} other {# bags}} on the road',
   'tower.network.freeBags': '{n} empty bags on hand',
+  // 2026-11-02 — a hub's space, as its owner said it: what its floor holds now, and when it is full.
+  'tower.network.spaceFree': '{free} of {places, plural, one {# bag place} other {# bag places}} free',
+  'tower.network.spaceFull': 'full — bags wait',
+  'tower.network.spaceFullWaiting': 'full — {n, plural, one {# bag waits} other {# bags wait}}',
+  'tower.network.spaceOver': 'over full by {n, plural, one {# bag} other {# bags}} — bags wait',
+  'tower.network.spaceDayFull': 'today’s sorting full',
+  'tower.network.spaceNotSaid': 'space not set',
   'tower.network.noOpenBags': 'No bags open here.',
   'tower.network.noHubsTitle': 'No hubs',
   'tower.network.noHubsBody': 'Nothing sorts through a hub yet — every parcel goes shop to shop.',

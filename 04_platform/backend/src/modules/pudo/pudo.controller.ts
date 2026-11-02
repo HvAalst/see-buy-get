@@ -5169,7 +5169,8 @@ export class SbgController {
     return this.mdps.list().filter((m) => actor?.role === 'operator' || (actor?.did && actor.did === m.did) || this.mdps.isApproved(m)).map((m) => {
       // What it charges is said with the money it charges in: the company's that contracts the hub.
       const currency = this.mdps.currencyOf(m);
-      if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length };
+      // 2026-11-02 — and what its floor holds against its space: its start screen, and staff's list of hubs ("full — bags wait").
+      if (actor?.role === 'operator' || (actor?.did && actor.did === m.did)) return { ...m, currency, totes: this.totes.list({ locationId: m.mdpId }).length, space: this.mdps.spaceOf(m) };
       return { mdpId: m.mdpId, did: m.did, name: m.name, country: m.country, zones: m.zones, location: m.location, address: m.address, pricePerParcel: m.pricePerParcel, currency };
     });
   }

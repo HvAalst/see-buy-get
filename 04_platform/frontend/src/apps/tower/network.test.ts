@@ -7,6 +7,7 @@ import {
   coverageLine,
   fillPct,
   groupFlags,
+  hubSpaceLine,
   hubSummaries,
   offlineFor,
   ratingLabel,
@@ -195,5 +196,25 @@ describe('coverage', () => {
     // numbers is the thing an operator is meant to notice.
     expect(coverageLine({ registered: 60, open: 4, closed: 2, inactive: 54 }, t)).toBe('tower.network.coverageLine(open=4,registered=60,closed=2,inactive=54)');
     expect(coverageLine(undefined, t)).toBe('tower.network.coverageLine(open=0,registered=0,closed=0,inactive=0)');
+  });
+});
+
+/**
+ * 2026-11-02 — A HUB'S SPACE WHERE STAFF ALREADY NAME THE HUB (the owner: "if there is none, they wait"): its places free,
+ * "full — bags wait" once nothing more is sent to it, over full, the day's sorting full, or not said by its owner.
+ */
+describe('a hub’s space, in a word', () => {
+  const space = { declared: true, bagPlaces: 40, free: 18, floorFull: false, dayFull: false, noRoom: false, waiting: 0 };
+  it('says its places free, and full — bags wait once it can take no more', () => {
+    expect(hubSpaceLine(space, t)).toBe('tower.network.spaceFree(free=18,places=40)');
+    expect(hubSpaceLine({ ...space, free: 2, noRoom: true }, t)).toBe('tower.network.spaceFull');
+    expect(hubSpaceLine({ ...space, free: 0, floorFull: true, noRoom: true, waiting: 3 }, t)).toBe('tower.network.spaceFullWaiting(n=3)');
+    expect(hubSpaceLine({ ...space, free: 0, floorFull: true, noRoom: true, overBy: 2 }, t)).toBe('tower.network.spaceOver(n=2)');
+    expect(hubSpaceLine({ ...space, dayFull: true }, t)).toBe('tower.network.spaceFree(free=18,places=40) · tower.network.spaceDayFull');
+  });
+
+  it('says a hub whose owner has not said is not set, and nothing for a row read before hubs had a space', () => {
+    expect(hubSpaceLine({ ...space, declared: false, bagPlaces: undefined }, t)).toBe('tower.network.spaceNotSaid');
+    expect(hubSpaceLine(undefined, t)).toBeNull();
   });
 });

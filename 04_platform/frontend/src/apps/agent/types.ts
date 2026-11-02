@@ -55,6 +55,8 @@ export interface OpenBag {
   parcels: number;
   fillPct: number;
   status: string;
+  /** 2026-11-02 — closed, and held here for room at the hub it goes to: that hub's name. It goes on by itself. */
+  waitsFor?: string;
 }
 
 export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';

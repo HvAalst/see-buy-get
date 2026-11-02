@@ -215,6 +215,8 @@ function DockWork({ state, actions }: { state: VendorState; actions: VendorActio
               <div class="dockrow__text">
                 <span class="dockrow__label">{b.destinationLabel || b.code}</span>
                 <span class="dockrow__sub">{t('vendor.dock.bagSub', { code: b.code, n: String(b.parcels), pct: String(b.fillPct) })}</span>
+                {/* 2026-11-02 — closed, and held on the dock for room at the hub it goes to: it goes on by itself. */}
+                {b.waitsFor ? <span class="dockrow__sub">{t('vendor.dock.waitsFor', { hub: b.waitsFor })}</span> : null}
               </div>
               <Button variant="outline" disabled={b.parcels === 0} busy={state.busy === `dock-seal-${b.code}`} onClick={() => setClosingBag(b.code)}>
                 {t('vendor.dock.seal')}

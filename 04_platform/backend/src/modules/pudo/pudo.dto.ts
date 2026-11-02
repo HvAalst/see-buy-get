@@ -4,6 +4,7 @@ import { AddressPartsDto } from './address-parts.dto';
 import { BagClosureDto, BagReceiptDto } from './bag-closure.types';
 import { MAX_SEALS, SEALS_AT_DELIVERY, SealReadDto, type SealsAtDelivery } from './load-seal.types';
 import { DESTINATION_KINDS } from './destination.types';
+import { BAG_PLACES_MAX, BAG_PLACES_MIN, SORT_PER_DAY_MAX, SORT_PER_DAY_MIN } from './hub-space';
 import { PaperCaseView } from '../../foundation/entity/company-paper-reports.service';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsDefined, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { INCOTERM_CODES } from '../../foundation/incoterms/catalogue';
@@ -1578,6 +1579,19 @@ export class RegisterMdpDto {
   /** The country the hub stands in. A hub may serve zones across a border; it stands in one country. */
   @IsOptional() @IsString() country?: string;
   @ValidateNested() @Type(() => GeoDto) location!: GeoDto;
+  /** 2026-11-02 — how many bags can stand on its floor at once, and how many parcels it sorts in a day: both, or neither. */
+  @IsOptional() @IsInt() @Min(BAG_PLACES_MIN) @Max(BAG_PLACES_MAX) bagPlaces?: number;
+  @IsOptional() @IsInt() @Min(SORT_PER_DAY_MIN) @Max(SORT_PER_DAY_MAX) sortPerDay?: number;
+}
+
+/**
+ * 2026-11-02 — A HUB SAYS ITS SPACE (the owner: "shouldn't a hub also declare its space?"): how many bags can stand on its
+ * floor at once — bags waiting to be sorted, and bags being filled or waiting for a driver — and how many parcels it sorts in
+ * a day. Its owner's word, signed in as the hub.
+ */
+export class SetHubSpaceDto {
+  @ApiProperty({ minimum: BAG_PLACES_MIN, maximum: BAG_PLACES_MAX }) @IsInt() @Min(BAG_PLACES_MIN) @Max(BAG_PLACES_MAX) bagPlaces!: number;
+  @ApiProperty({ minimum: SORT_PER_DAY_MIN, maximum: SORT_PER_DAY_MAX }) @IsInt() @Min(SORT_PER_DAY_MIN) @Max(SORT_PER_DAY_MAX) sortPerDay!: number;
 }
 
 export class AssignToteDto {

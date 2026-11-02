@@ -378,7 +378,7 @@ export const enHome = {
   // What to have ready, on the first step: the sign-ups are not alike (2026-11-01).
   'home.join.ready.title': 'Have ready',
   'home.join.ready.pudo': 'Your ID number, the shop’s trading licence number and its opening hours — and an email address and a password for the shop’s account: the Shop app signs in with them.',
-  'home.join.ready.mdp': 'An email address and a password for the hub’s account — the Hub app signs in with them — and where the hub is.',
+  'home.join.ready.mdp': 'An email address and a password for the hub’s account — the Hub app signs in with them — where the hub is, how many bags its floor holds at once and how many parcels it sorts in a day.',
   'home.join.ready.vendor': 'An email address and a password for the store’s account: the Store app signs in with them.',
   'home.join.ready.driver': 'Your ID number. On a motorcycle or anything larger, your driving licence too — its number, its expiry date and a photo of it — and a photo of your ID card. The Driver app opens with this phone number and a PIN you choose.',
   'home.join.ready.fleet': 'The company’s registration, operator’s licence and tax numbers, and a photo of four papers: the certificate of registration, the operator’s licence, the owner’s ID and a proof of address. The Fleet app opens with this phone number and a PIN you choose.',
@@ -401,6 +401,9 @@ export const enHome = {
   'home.block.nameStore': 'Name your store.',
   'home.block.nameShop': 'Name your shop.',
   'home.block.nameHub': 'Name your hub.',
+  // 2026-11-02 — a hub's space, on "About your hub".
+  'home.block.hubPlaces': 'Say how many bags can stand on your floor at once: a whole number from 1 to 10,000.',
+  'home.block.hubPerDay': 'Say how many parcels you sort in a day: a whole number from 1 to 1,000,000.',
   'home.block.nameGeneric': 'Type the name people will see.',
   'home.block.fullName': 'Type your full name.',
   'home.block.idNumber': 'Type your ID number.',
@@ -758,6 +761,13 @@ export const enHome = {
   'home.dup.checkTyped': 'Check what I typed',
   'home.dup.dispute': 'It is my ID: dispute it',
   'home.dup.disputeTitle': 'Somebody else registered with my ID',
+  // 2026-11-02 — a hub's space (the owner: "shouldn't a hub also declare its space?").
+  'home.join.hub.spaceTitle': 'Your hub’s space',
+  'home.join.hub.spaceLede': 'So the network never sends you more than you can take. When your floor is full, new bags go to another hub for your areas or wait where they are — a driver who brings bags is never turned away. You can change both numbers in the Hub app any day.',
+  'home.join.hub.places': 'Bag places',
+  'home.join.hub.placesHint': 'How many bags can stand on your floor at once: bags waiting to be sorted, and bags being filled or waiting for a driver.',
+  'home.join.hub.perDay': 'Parcels sorted in a day',
+  'home.join.hub.perDayHint': 'How many parcels your people sort on a normal day.',
   'home.join.shop.title': 'Your shop',
   'home.join.shop.lede': 'What every shop on the network needs. Staff read your answers when they review your shop.',
   'home.join.shop.android': 'Your phone',

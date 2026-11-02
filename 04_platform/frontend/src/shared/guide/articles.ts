@@ -142,6 +142,10 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   // A hub's own cards on its home screen: when it is open and how to reach it; what it moves bags on, and how they come back.
   { id: 'hub-hours', apps: ['mdp'], group: 'start', steps: 3, notes: ['note'] },
   { id: 'hub-carriers', apps: ['mdp'], group: 'daily', steps: 4, notes: ['note'] },
+  // 2026-11-02 — a hub's space (the owner: "shouldn't a hub also declare its space?"): what to say, what happens when full;
+  // and, for whoever holds a bag, a bag that waits for room at its hub.
+  { id: 'hub-space', apps: ['mdp'], group: 'start', steps: 4, notes: ['note', 'note', 'why', 'note'] },
+  { id: 'bag-waits', apps: ['agent', 'mdp', 'vendor'], group: 'daily', steps: 3, notes: ['note', 'why'] },
   // The public logistics directory (2026-10-30): whether a firm is shown, its own line, and how to be reached.
   { id: 'logistics-directory', apps: ['business', 'fleet'], group: 'start', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note'] },
   // A store calls an order off (2026-10-27): its money back, or the goods back at a price.

@@ -177,6 +177,34 @@ export interface HubRow {
   mdpId: string;
   name?: string;
   zones?: string[];
+  /** 2026-11-02 — what its floor holds against the space its owner said (backend HubSpaceView); staff read it. */
+  space?: HubSpaceRow;
+}
+
+export interface HubSpaceRow {
+  declared: boolean;
+  bagPlaces?: number;
+  free?: number;
+  overBy?: number;
+  floorFull: boolean;
+  dayFull: boolean;
+  noRoom: boolean;
+  waiting: number;
+}
+
+/**
+ * 2026-11-02 — A HUB'S SPACE IN A WORD, where staff already name the hub (the owner: "new bags go to another approved hub
+ * that serves the same zones; if there is none, they wait"): its places free; "full — bags wait" once nothing more is sent
+ * to it, with how many wait; over full; its day's sorting full; or that its owner has not said. Null for a row read before
+ * hubs had a space.
+ */
+export function hubSpaceLine(space: HubSpaceRow | undefined, t: Translate): string | null {
+  if (!space) return null;
+  if (!space.declared || space.bagPlaces == null) return t('tower.network.spaceNotSaid');
+  if (space.overBy && space.overBy > 0) return t('tower.network.spaceOver', { n: space.overBy });
+  if (space.floorFull || space.noRoom) return space.waiting > 0 ? t('tower.network.spaceFullWaiting', { n: space.waiting }) : t('tower.network.spaceFull');
+  const free = t('tower.network.spaceFree', { free: space.free ?? 0, places: space.bagPlaces });
+  return space.dayFull ? `${free} · ${t('tower.network.spaceDayFull')}` : free;
 }
 
 export interface ToteRow {

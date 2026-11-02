@@ -115,6 +115,8 @@ export function BagScreen({ state, actions }: BagScreenProps) {
           {bag.sealed ? (
             <>
               <Note tone="ok" icon="check" title={t('agent.bag.sealedTitle')} detail={t('agent.bag.sealedBody', { count: bag.parcels.length })} />
+              {/* 2026-11-02 — the hub it goes to has no room on its floor: kept here, and it goes on by itself. */}
+              {bag.waitsFor ? <Note tone="info" icon="clock" title={t('agent.bag.waitsTitle', { hub: bag.waitsFor })} detail={t('agent.bag.waitsBody')} /> : null}
               <div class="scr__cta">
                 <Button chevron={false} onClick={() => actions.clearBag()}>{t('agent.bag.startAnother')}</Button>
               </div>

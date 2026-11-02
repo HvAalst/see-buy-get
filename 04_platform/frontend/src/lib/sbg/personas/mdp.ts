@@ -98,6 +98,16 @@ export function createMdpApi(sbg: SbgClient) {
     setContact: (mdpId: string, body: { openingHours?: Record<string, { open: string; close: string } | null> | null; phone?: string; phoneAlt?: string; askFor?: string; gate?: string; email?: string; publish?: boolean }) =>
       sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/contact', { params: { path: { id: mdpId } }, body: body as never })),
 
+    /**
+     * 2026-11-02 — what its floor holds against its space (the owner: "shouldn't a hub also declare its space?"): bags
+     * waiting to be sorted and going out, of its places; parcels sorted today, of its day's. Its people read it too.
+     */
+    space: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/space', { params: { path: { id: mdpId } } })),
+
+    /** Its owner says how many bags its floor holds at once and how many parcels it sorts in a day. */
+    setSpace: (mdpId: string, body: { bagPlaces: number; sortPerDay: number }) =>
+      sbg.request((c) => c.PUT('/v1/sbg/mdps/{id}/space', { params: { path: { id: mdpId } }, body })),
+
     /** What the hub moves bags on between hubs (D11): its kinds, each with what it holds, worked out by the server. */
     carriers: (mdpId: string) => sbg.request((c) => c.GET('/v1/sbg/mdps/{id}/carriers', { params: { path: { id: mdpId } } })),
 

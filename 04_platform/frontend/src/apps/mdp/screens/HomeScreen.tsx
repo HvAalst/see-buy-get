@@ -11,6 +11,7 @@ import { DeclarationCard } from '../../../shared/DeclarationCard';
 import type { SbgClient } from '../../../lib/sbg';
 import { HubReachCard } from './HubReachCard';
 import { CarriersCard } from './CarriersCard';
+import { HubSpaceCard } from './HubSpaceCard';
 
 export interface HomeScreenProps {
   state: MdpState;
@@ -101,6 +102,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       {state.staff ? null : <DeclarationCard sbg={sbg ?? null} />}
 
       {hub && !open ? <HubPapers state={state} actions={actions} /> : null}
+      {/* 2026-11-02 — its space, said before it is approved too: the owner can say it while its papers are with staff. */}
+      {hub && !open ? <HubSpaceCard sbg={sbg ?? null} hub={hub} staff={Boolean(state.staff)} onSaved={() => void actions.refresh()} /> : null}
 
       {open ? (
       <>
@@ -110,6 +113,9 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
         <Tile value={free.length} label={t('mdp.home.tileEmpty')} />
         <Tile value={hub?.zones.length ?? 0} label={t('mdp.home.tileZones')} />
       </div>
+
+      {/* 2026-11-02 — the floor against its space (the owner: "shouldn't a hub also declare its space?"). */}
+      <HubSpaceCard sbg={sbg ?? null} hub={hub} staff={Boolean(state.staff)} onSaved={() => void actions.refresh()} />
 
       <Card
         title={t('mdp.home.inboundTitle')}

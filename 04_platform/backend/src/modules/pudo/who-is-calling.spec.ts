@@ -13,6 +13,7 @@ import { SbgController } from './pudo.controller';
 import { QuoteController } from './quote.controller';
 import { CarController } from './car.controller';
 import { CarKeyGuard } from './car-key.guard';
+import { HubSpaceController } from './hub-space.controller';
 import { RATE_LIMIT_KEY, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 
 /**
@@ -30,7 +31,7 @@ import { RATE_LIMIT_KEY, RateLimitGuard } from '../../foundation/http/rate-limit
  * This reads the door itself — of every controller the product has — so that a role taken off one of these fails
  * here rather than in production.
  */
-const CONTROLLERS = [SbgController, QuoteController, DocumentLinkController, ConversationController, AccountController, MediaController, AccountMoveController, IdDisputeController, CarController];
+const CONTROLLERS = [SbgController, QuoteController, DocumentLinkController, ConversationController, AccountController, MediaController, AccountMoveController, IdDisputeController, CarController, HubSpaceController];
 const VERB: Record<number, string> = { [RequestMethod.GET]: 'GET', [RequestMethod.POST]: 'POST', [RequestMethod.PATCH]: 'PATCH', [RequestMethod.PUT]: 'PUT', [RequestMethod.DELETE]: 'DELETE' };
 
 interface Door {
@@ -92,6 +93,14 @@ describe('who the door lets in', () => {
   /** Its fee is what it is paid: staff pass the role check and are then refused by name (pudo.controller.ts). */
   it('PATCH sbg/mdps/:id/pricing is for a hub', () => {
     expect(door('PATCH sbg/mdps/:id/pricing')).toMatchObject({ open: false, roles: ['mdp', 'operator'] });
+  });
+
+  /**
+   * 2026-11-02 — its space, read by the hub (its people too) and staff; said by its owner alone — staff pass the role check
+   * and are refused by name inside, its people at the guard (hub-space.controller.ts).
+   */
+  it.each(['GET sbg/mdps/:id/space', 'PUT sbg/mdps/:id/space'])('%s is for a hub', (route) => {
+    expect(door(route)).toMatchObject({ open: false, roles: ['mdp', 'operator'] });
   });
 
   /** A shop's fee is the least it is paid: the same — staff refused by name inside. */

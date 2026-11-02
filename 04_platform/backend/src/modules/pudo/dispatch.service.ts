@@ -552,9 +552,12 @@ export class DispatchService {
         continue;
       }
       this.totes.markAvailable(t.code);
-      published.push(t.code);
-      void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code: t.code, reason: full ? 'full' : 'max_wait', weightKg: t.weightKg, destination: t.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
+      // 2026-11-02 — offered where the hub it goes to has room; held where it stands, its holder told, where none has.
+      if (this.mdps.offerBag(t.code, full ? 'full' : 'max_wait', now)) published.push(t.code);
     }
+    // …and the bags held for room: any whose hub has room now go on, by themselves (a safety net under every act that
+    // frees a place — each of those asks too).
+    this.mdps.letWaitingGo(now);
     return published;
   }
 
@@ -576,15 +579,16 @@ export class DispatchService {
   }
 
   /** Agent manually publishes a not-yet-full tote early. */
-  release(code: string): { code: string; status: string } {
+  release(code: string): { code: string; status: string; waitsForRoom?: Tote['waitsForRoom'] } {
     // A shop bag has its own early-publish, and it is the seal: closing the bag runs the completeness gate
     // and publishes in one act. Releasing it from here would put a bag on the marketplace with parcels for
     // it still sitting on the shelf, unrecorded — the exact hole the gate exists to close.
     const bag = this.totes.requireByCode(code);
     if (bag.sealRequired) throw new GlosError('INVALID_STATE', `Bag ${code} is a shop bag — close it at the counter to send it`);
     const t = this.totes.markAvailable(code);
-    void this.events.publish(GlosEvent.Pudo.ToteAvailable, { code: t.code, reason: 'manual', weightKg: t.weightKg, destination: t.destinationLabel }, { source: 'pudo' }).catch(() => undefined);
-    return { code: t.code, status: t.status };
+    // 2026-11-02 — offered where the hub it goes to has room; held where it stands, its holder told, where none has.
+    this.mdps.offerBag(t.code, 'manual');
+    return { code: t.code, status: t.status, ...(t.waitsForRoom ? { waitsForRoom: t.waitsForRoom } : {}) };
   }
 
   registerFreight(input: { description: string; pickupLocation: { lat: number; lng: number }; pickupLabel: string; destLabel: string; destLocation?: { lat: number; lng: number }; weightKg: number; fragile?: boolean; bulk?: boolean; packaging?: Packaging; packages?: number; natureCode?: CargoNature; dimensionsCm?: [number, number, number]; heightM?: number; indivisible?: boolean; bodyHint?: TruckSubtype; excludedBodies?: TruckSubtype[]; commitMode?: FreightCommitMode; postedByDid?: string; postedByName?: string; onBehalfOf?: ClientRef; shipperDid?: string; originEquipment?: Equipment[]; destEquipment?: Equipment[]; buyerMobile?: string; externalOrderId?: string; maxSpend?: number; scheduledPickupAt?: string; allowEarlyClaim?: boolean; pickupCountry?: string; destCountry?: string; instructions?: string; contactName?: string; contactPhone?: string; deliveryWindow?: string; incoterm?: string; namedPlace?: string; containerNo?: string; emptyRun?: boolean; bonded?: boolean; bondCountry?: string; contract?: ContractRef; deliverOn?: string; orderRef?: string; receiver?: InboundReceiver; receiverRef?: string; coverRequired?: boolean; declaredValue?: { amount: number; currency: string }; specialInterest?: { amount: number; currency: string }; noTranshipment?: boolean; consignee?: { name: string; address?: string }; dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string }; customsInstructions?: string; returnOf?: FreightLink; betweenParties?: boolean; bringsBack?: { parcelId: string; atMdpId: string; hubName: string }; deliversParcel?: { parcelId: string; atShopDid: string; shopName: string }; tempRange?: { minC: number; maxC: number }; securedBy?: string; liveAnimals?: FreightLiveAnimals; sellerEntityId?: string; airTerminal?: FreightAirTerminal; airPallets?: number; truckFlight?: { awb?: string; flight?: string; airline?: string }; volumeM3?: number }, now: number = Date.now(), checkOnly = false): Freight {
@@ -4476,7 +4480,12 @@ export class DispatchService {
   // --- internals ---
 
   private availableLoads(): Claimable[] {
-    const totes = this.totes.list({ status: 'available' }).map((t) => this.wrapTote(t.code)).filter((c): c is Claimable => c != null);
+    // 2026-11-02 — never a bag held for room at the hub it goes to: it is offered to nobody until it goes on by itself.
+    const totes = this.totes
+      .list({ status: 'available' })
+      .filter((t) => !t.waitsForRoom)
+      .map((t) => this.wrapTote(t.code))
+      .filter((c): c is Claimable => c != null);
     // 'available' loads, PLUS a scheduled load the shipper lets drivers reserve ahead of its date (early claim).
     // FB0c — but never a load posted for NEGOTIATION. Everything downstream of here is a push: an offer card, a
     // lock-screen nudge, one decision and a Claim button. A load whose price is not settled cannot answer that
@@ -4515,7 +4524,8 @@ export class DispatchService {
       pickupLabel: place.label,
       ...this.hubStop('pickupHub', t.locationId),
       destLabel: t.destinationLabel || 'destination',
-      ...this.hubStop('destHub', t.destinationNodeId),
+      // The hub chosen for a zone's bag when it was offered (2026-11-02), else its address.
+      ...this.hubStop('destHub', t.toHubId ?? t.destinationNodeId),
       // Absent when the destination cannot be placed — never a guess, because a coordinate is about to be
       // used for distances and directions.
       destLocation: dest?.loc,
@@ -4853,7 +4863,11 @@ export class DispatchService {
     return stop ? { [key]: stop } : {};
   }
 
-  private destinationPlace(tote: { destinationNodeId?: string }): { loc: { lat: number; lng: number }; label: string } | null {
+  private destinationPlace(tote: { destinationNodeId?: string; toHubId?: string }): { loc: { lat: number; lng: number }; label: string } | null {
+    // 2026-11-02 — a zone's bag goes to the hub chosen for it, with room, when it was offered: kept, so the offer, the pay
+    // locked at claim and the driver's next stop all name that one hub, whatever the zone's hubs hold since.
+    const chosen = tote.toHubId ? this.mdps.list().find((m) => m.mdpId === tote.toHubId) : undefined;
+    if (chosen) return { loc: chosen.location, label: chosen.name };
     const id = tote.destinationNodeId;
     if (!id) return null;
     const node = this.pickupPlace(id); // a real node — an MDP, a shop, or a dock

@@ -169,10 +169,32 @@ export class ToteService {
     return this.save(tote);
   }
 
+  /**
+   * 2026-11-02 — WHICH HUB A BAG GOES TO, chosen with room on its floor (MdpService.placeBag): a bag addressed to a hub is
+   * addressed to another; a bag addressed to a zone is given the hub it is driven to. Only before a driver has it.
+   */
+  pointTo(code: string, to: { destinationNodeId?: string; destinationLabel?: string; toHubId?: string }): Tote {
+    const tote = this.requireByCode(code);
+    if (tote.status !== 'filling' && tote.status !== 'available') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}: where it goes is fixed`);
+    if (to.destinationNodeId) tote.destinationNodeId = to.destinationNodeId;
+    if (to.destinationLabel) tote.destinationLabel = to.destinationLabel;
+    if (to.toHubId) tote.toHubId = to.toHubId;
+    return this.save(tote);
+  }
+
+  /** 2026-11-02 — held for room at the hub it goes to, or let go on (`undefined`). */
+  markWaiting(code: string, wait: Tote['waitsForRoom']): Tote {
+    const tote = this.requireByCode(code);
+    tote.waitsForRoom = wait;
+    return this.save(tote);
+  }
+
   /** A driver claims an available bag (reserves it for pickup). */
   markClaimed(code: string, driverDid: string): Tote {
     const tote = this.requireByCode(code);
     if (tote.status !== 'available') throw new GlosError('INVALID_STATE', `Bag ${code} is ${tote.status}, not available to claim`);
+    // 2026-11-02 — a bag held for room at its hub is offered to nobody, so nobody takes it.
+    if (tote.waitsForRoom) throw new GlosError('BAG_WAITS_FOR_ROOM', `Bag ${code} waits for room at ${tote.waitsForRoom.hubName}: it goes on by itself when there is room`, { hubId: tote.waitsForRoom.hubId });
     tote.status = 'claimed';
     tote.claimedBy = driverDid;
     return this.save(tote);
@@ -241,6 +263,9 @@ export class ToteService {
     tote.status = 'free';
     tote.destinationNodeId = undefined;
     tote.destinationLabel = undefined;
+    // 2026-11-02 — arrived: the hub it was sent to, and any wait for room there, are over with the journey.
+    tote.toHubId = undefined;
+    tote.waitsForRoom = undefined;
     tote.filledAt = undefined;
     tote.filledReceivedAt = undefined;
     tote.availableAt = undefined;

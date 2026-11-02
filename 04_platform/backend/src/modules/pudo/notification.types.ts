@@ -72,6 +72,11 @@ export const NOTIFICATION_KINDS = [
   'bus_inbound',
   'intake_expected',
   'bag_ready_to_close',
+  /**
+   * 2026-11-02 — A HUB'S SPACE (the owner: "shouldn't a hub also declare its space?"): to whoever holds a bag, that it waits
+   * for room at the hub it goes to, and that it goes on when there is room; to a hub, that today's sorting is full.
+   */
+  'hub_space',
   'message',
   /**
    * Joining stopped short, and the applicant is the one who can finish it.

@@ -41,7 +41,7 @@ export class BagPlanService {
    */
   forShop(agentDid: string): {
     groups: BagGroup[];
-    bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string }>;
+    bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string; waitsFor?: string }>;
     staging: { capacity: number; used: number; free: number };
   } {
     const agent = this.agents.get(agentDid); // 404 for an unknown shop
@@ -73,7 +73,8 @@ export class BagPlanService {
       staging: { capacity, used: staged.length, free: Math.max(0, capacity - staged.length) },
       // parcelIds, not just a count: a shop fills a bag across a working day, so re-opening one has to show
       // what is already inside it — otherwise the screen says "0 in the bag" over a bag holding three.
-      bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status })),
+      // 2026-11-02 — a closed bag held at the counter for room at its hub says which hub: it goes on by itself.
+      bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status, ...(t.waitsForRoom ? { waitsFor: t.waitsForRoom.hubName } : {}) })),
     };
   }
 

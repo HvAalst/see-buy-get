@@ -236,7 +236,8 @@ export interface AgentState {
   /** The bag being packed right now. `missed` is the server's verdict at the last seal attempt —
    *  parcels for that destination still on the shelf. `scan` + `lastAdded` are the scanning loop: what is
    *  in the field, and what went in last (spoken back, so the counter never has to hunt the list). */
-  bag: { code: string; destKey: string; label: string; parcels: string[]; missed: string[]; sealed: boolean; scan: string; lastAdded: string | null; fillPct: number } | null;
+  /** `waitsFor` (2026-11-02): closed, and held at the counter for room at the hub it goes to — that hub's name. */
+  bag: { code: string; destKey: string; label: string; parcels: string[]; missed: string[]; sealed: boolean; scan: string; lastAdded: string | null; fillPct: number; waitsFor?: string } | null;
   rates: RatesView | null;
   ratesState: 'idle' | 'loading' | 'ready' | 'error';
   /** F3 — the shop's consolidation lots (loaded when the Consignments screen opens). */
@@ -2077,6 +2078,7 @@ export function useAgentApp() {
             scan: '',
             lastAdded: null,
             fillPct: already?.fillPct ?? 0,
+            ...(already?.waitsFor ? { waitsFor: already.waitsFor } : {}),
           },
         }));
         await loadBagPlan();
@@ -2180,7 +2182,9 @@ export function useAgentApp() {
           if (r.error.code === 'INCOMPLETE_MANIFEST') return; // the list explains it; no error banner needed
           return fail(r.error);
         }
-        setState((s) => (s.bag ? { ...s, bag: { ...s.bag, sealed: true, missed: [] } } : s));
+        // 2026-11-02 — closed, and held here where the hub it goes to has no room: said on the bag, not as a failure.
+        const waitsFor = narrow<{ tote?: { waitsForRoom?: { hubName?: string } } }>(r.data)?.tote?.waitsForRoom?.hubName;
+        setState((s) => (s.bag ? { ...s, bag: { ...s.bag, sealed: true, missed: [], ...(waitsFor ? { waitsFor } : {}) } } : s));
         pushToast({ tone: 'ok', icon: 'bag', title: t('agent.bag.toastSealed'), detail: t('agent.bag.toastSealedDetail', { count: bag.parcels.length }) });
         await loadShopParcels();
         await loadBagPlan();

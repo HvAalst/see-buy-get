@@ -132,6 +132,8 @@ export const ERROR_CODES = {
   ALREADY_IN_BAG: { status: 400, title: 'That parcel is already in a bag' },
   ALREADY_RATED: { status: 409, title: 'That order has already been rated' },
   STAGING_FULL: { status: 400, title: 'There is no floor room for another bag' },
+  // 2026-11-02 — the hub a bag goes to has no room on its floor: the bag waits where it is and goes on by itself.
+  BAG_WAITS_FOR_ROOM: { status: 409, title: 'The bag waits for room at its hub' },
   SHELF_FULL: { status: 400, title: 'The shelf is full' },
   NO_CAPACITY_AVAILABLE: { status: 400, title: 'No pick-up point with free capacity' },
 

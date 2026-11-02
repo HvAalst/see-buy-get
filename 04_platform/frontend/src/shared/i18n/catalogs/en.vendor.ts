@@ -714,6 +714,8 @@ export const enVendor = {
   'vendor.dock.bagsTitle': 'Bags on the floor',
   'vendor.dock.noBags': 'No bags open yet.',
   'vendor.dock.bagSub': '{code} · {n} inside · {pct}% full',
+  // 2026-11-02 — a closed bag held on the dock for room at the hub it goes to.
+  'vendor.dock.waitsFor': 'Waits here for room at {hub}: it goes to a driver by itself when there is room.',
   'vendor.dock.seal': 'Close the bag',
   'vendor.dock.closeTitle': 'Close bag {code} for the road',
   'vendor.dock.closeCancel': 'Not yet',

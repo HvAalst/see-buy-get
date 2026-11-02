@@ -6,7 +6,7 @@
 
 import type { Translate } from '../../shared/i18n';
 import { cash } from '../../shared/money';
-import type { Benchmark, MdpView, ParcelRow, SortView, ToteView } from './types';
+import type { Benchmark, HubSpaceView, MdpView, ParcelRow, SortView, ToteView } from './types';
 
 /* ------------------------------------------------------------------- hub -- */
 
@@ -161,6 +161,53 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
     matchPrice: roundMoney(benchmark.median),
     matchLabel: t('mdp.logic.matchLabel', { price: money(benchmark.median, currency) }),
   };
+}
+
+/* ------------------------------------------------------------------ space -- */
+
+/**
+ * 2026-11-02 — THE FLOOR AT A GLANCE (the owner: "shouldn't a hub also declare its space?" — "18 of 40 bag places free ·
+ * 600 parcels a day"). What the start screen's card says: the places free of its places and its day's sorting; the parcels
+ * sorted today of that; and, where there is one, the one thing to know now — over full (red: every bag is still taken),
+ * full, the day's sorting full, bags held elsewhere for room here. A hub that has not said is asked to, never told it is
+ * full. Null while the hub is not read yet.
+ */
+export interface SpaceLines {
+  headline: string;
+  sorted: string | null;
+  note: string | null;
+  tone: 'ok' | 'info' | 'warn' | 'danger';
+  /** The pill beside the title: full, over full, or the day full. */
+  pill: string | null;
+}
+
+export function spaceLines(space: HubSpaceView | null | undefined, t: Translate): SpaceLines | null {
+  if (!space) return null;
+  if (!space.declared || space.bagPlaces == null || space.sortPerDay == null) {
+    return { headline: t('mdp.space.notSaid'), sorted: null, note: t('mdp.space.notSaidNote'), tone: 'warn', pill: null };
+  }
+  const places = space.bagPlaces;
+  const perDay = space.sortPerDay;
+  const headline = t('mdp.space.headline', { free: space.free ?? Math.max(0, places - space.onFloor), places, perDay });
+  const sorted = t('mdp.space.sortedToday', { sorted: space.sortedToday, perDay });
+  const waiting = space.waiting > 0 ? t('mdp.space.waiting', { count: space.waiting }) : null;
+  if (space.overBy && space.overBy > 0) {
+    return { headline, sorted, note: t('mdp.space.over', { onFloor: space.onFloor, places, over: space.overBy }), tone: 'danger', pill: t('mdp.space.pillOver') };
+  }
+  if (space.floorFull) return { headline, sorted, note: [t('mdp.space.full'), waiting].filter(Boolean).join(' '), tone: 'warn', pill: t('mdp.space.pillFull') };
+  if (space.dayFull) return { headline, sorted, note: t('mdp.space.dayFull'), tone: 'warn', pill: t('mdp.space.pillDayFull') };
+  if (waiting) return { headline, sorted, note: waiting, tone: 'info', pill: null };
+  return { headline, sorted, note: null, tone: 'ok', pill: null };
+}
+
+/** What the owner types: a whole number inside the bounds the server keeps (backend hub-space.ts), or the key saying why not. */
+export const BAG_PLACES_MAX = 10_000;
+export const SORT_PER_DAY_MAX = 1_000_000;
+export function spaceProblem(bagPlaces: string, sortPerDay: string): 'mdp.space.badPlaces' | 'mdp.space.badPerDay' | null {
+  const whole = (v: string, max: number) => /^\d+$/.test(v.trim()) && Number(v) >= 1 && Number(v) <= max;
+  if (!whole(bagPlaces, BAG_PLACES_MAX)) return 'mdp.space.badPlaces';
+  if (!whole(sortPerDay, SORT_PER_DAY_MAX)) return 'mdp.space.badPerDay';
+  return null;
 }
 
 /* --------------------------------------------------------------- speaking -- */

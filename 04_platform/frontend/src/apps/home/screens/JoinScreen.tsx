@@ -760,6 +760,28 @@ function AboutStep({ state, actions }: JoinScreenProps) {
         </Card>
       ) : null}
 
+      {/* 2026-11-02 — A HUB'S SPACE (the owner: "shouldn't a hub also declare its space?"): two numbers, each said plainly,
+          started at an ordinary hub's; changed in the Hub app any day after. */}
+      {role.id === 'mdp' ? (
+        <Card title={t('home.join.hub.spaceTitle')}>
+          <p class="card__note">{t('home.join.hub.spaceLede')}</p>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="hub-places">
+              {t('home.join.hub.places')}
+            </label>
+            <input id="hub-places" class="input" type="number" inputMode="numeric" min="1" step="1" value={f.bagPlaces} onInput={(e) => actions.setForm({ bagPlaces: e.currentTarget.value })} />
+            <p class="card__note">{t('home.join.hub.placesHint')}</p>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="hub-per-day">
+              {t('home.join.hub.perDay')}
+            </label>
+            <input id="hub-per-day" class="input" type="number" inputMode="numeric" min="1" step="1" value={f.sortPerDay} onInput={(e) => actions.setForm({ sortPerDay: e.currentTarget.value })} />
+            <p class="card__note">{t('home.join.hub.perDayHint')}</p>
+          </div>
+        </Card>
+      ) : null}
+
       {/* `title`, not `label`: "What do you drive?" was the section's aria-label and rendered nothing, so
           the form showed a row of bare chips and never asked the question out loud. */}
       {role.id === 'driver' ? (

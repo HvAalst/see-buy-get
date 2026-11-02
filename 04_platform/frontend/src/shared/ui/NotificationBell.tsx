@@ -39,6 +39,8 @@ const KIND_ICON: Record<string, IconName> = {
   hub_arrival: 'truck',
   intake_expected: 'box',
   bag_ready_to_close: 'bag',
+  // 2026-11-02 — a bag held for room at its hub, or let go on; a hub's day of sorting full.
+  hub_space: 'bag',
   message: 'send',
   test: 'bell',
   // FP4 — papers and their dates. Without these a licence about to stop somebody working arrived under the

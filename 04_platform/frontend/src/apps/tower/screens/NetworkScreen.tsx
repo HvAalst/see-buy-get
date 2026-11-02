@@ -17,6 +17,7 @@ import {
   fillPct,
   flagLabel,
   groupFlags,
+  hubSpaceLine,
   hubSummaries,
   ratingLabel,
   slotsLabel,
@@ -269,6 +270,8 @@ export function NetworkScreen({ state, actions }: { state: TowerState; actions: 
                   <span class="ctbl__strong">{hub.name ?? hub.mdpId}</span>
                   <span class="ctbl__sub">
                     {(hub.zones ?? []).join(', ') || '—'} · {t('tower.network.freeBags', { n: free })}
+                    {/* 2026-11-02 — its floor against its space: "full — bags wait" where nothing more is sent to it. */}
+                    {hubSpaceLine(hub.space, t) ? ` · ${hubSpaceLine(hub.space, t)}` : ''}
                   </span>
                 </div>
                 {filling.length === 0 ? (

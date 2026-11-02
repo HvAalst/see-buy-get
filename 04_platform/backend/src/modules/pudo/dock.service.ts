@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GlosError } from '../../foundation/http/glos-error';
 import { EventBus } from '../../foundation/events/event-bus.service';
-import { GlosEvent } from '../../foundation/events/glos-events';
 import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import { ToteService } from './tote.service';
@@ -125,11 +124,8 @@ export class DockService {
     const tote = announce ? this.totes.markAvailable(code) : bag;
     this.totes.markSealed(code);
     keepClosure({ at: new Date().toISOString() });
-    if (announce) {
-      void this.events
-        .publish(GlosEvent.Pudo.ToteAvailable, { code: tote.code, reason: 'sealed', weightKg: tote.weightKg, destination: tote.destinationLabel }, { source: 'pudo' })
-        .catch(() => undefined);
-    }
+    // 2026-11-02 — offered where the hub it goes to has room; held on the dock, the store told, where none has.
+    if (announce) this.mdps.offerBag(tote.code, 'sealed');
     return { tote, parcels: [...bag.parcels], missed, shortShipped: missed.length > 0 };
   }
 
@@ -150,7 +146,7 @@ export class DockService {
   /** What to bag, and what is already open — the dock's answer to the shop's bag plan. */
   plan(vendorId: string): {
     groups: Array<{ key: string; label: string; parcelIds: string[]; openBagCode?: string }>;
-    bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string }>;
+    bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string; waitsFor?: string }>;
     staging: { capacity: number; used: number; free: number };
   } {
     const vendor = this.vendors.get(vendorId);
@@ -168,7 +164,8 @@ export class DockService {
       groups: [...byZone.entries()]
         .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
         .map(([key, parcelIds]) => ({ key, label: key, parcelIds, openBagCode: open.find((t) => t.destinationNodeId === key && t.status === 'filling')?.code })),
-      bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status })),
+      // 2026-11-02 — a closed bag held on the dock for room at its hub says which hub: it goes on by itself.
+      bags: open.map((t) => ({ code: t.code, destinationLabel: t.destinationLabel, parcelIds: [...t.parcels], parcels: t.parcels.length, fillPct: this.totes.fillPct(t), status: t.status, ...(t.waitsForRoom ? { waitsFor: t.waitsForRoom.hubName } : {}) })),
       staging: { capacity: dock.bays, used: staged.length, free: Math.max(0, dock.bays - staged.length) },
     };
   }

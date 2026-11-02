@@ -26,6 +26,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/mdps/:id/arrivals/:arrivalId/empties': 'support',
   'GET sbg/mdps/:id/contact': 'support',
   'PUT sbg/mdps/:id/contact': 'none',
+  // 2026-11-02 — a hub's space: staff read what its floor holds, as support reads its floor; its owner alone says it.
+  'GET sbg/mdps/:id/space': 'support',
+  'PUT sbg/mdps/:id/space': 'none',
   'GET sbg/mdps/:id/carriers': 'support',
   'PUT sbg/mdps/:id/carriers': 'none',
   'GET sbg/mdps/:id/carrier-moves': 'support',

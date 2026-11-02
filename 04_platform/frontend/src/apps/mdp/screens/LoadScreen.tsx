@@ -24,7 +24,8 @@ export function LoadScreen({ state, actions }: LoadScreenProps) {
   const picked = bags.find((b) => b.code === f.loadCode);
   const [closing, setClosing] = useState<BagCloseForm>(EMPTY_BAG_CLOSE);
   useEffect(() => setClosing(EMPTY_BAG_CLOSE), [f.loadCode]);
-  const ready = Boolean(picked?.closedWith) && !picked?.held;
+  // 2026-11-02 — a bag held here for room at the hub it goes to is handed to no driver until it goes on by itself.
+  const ready = Boolean(picked?.closedWith) && !picked?.held && !picked?.waitsForRoom;
 
   return (
     <div class="scr">
@@ -50,6 +51,7 @@ export function LoadScreen({ state, actions }: LoadScreenProps) {
                       <span class="bagrow__code">{bag.code}</span>
                       <span class="bagrow__dest">{bagLine(bag, t)}</span>
                       {bag.closedWith ? <span class="bagrow__dest">{t(bag.closedWith === 'seal' ? 'mdp.bag.closedLine' : 'mdp.bag.closedPhotoLine')}</span> : null}
+                      {bag.waitsForRoom ? <span class="bagrow__dest">{t('mdp.bag.waitsLine', { hub: bag.waitsForRoom.hubName })}</span> : null}
                       <span class="fillbar" role="progressbar" aria-valuenow={fillPercent(bag.unitsUsed)} aria-valuemin={0} aria-valuemax={100} aria-label={t('mdp.bagFillAria', { code: bag.code })}>
                         <span style={`width:${fillPercent(bag.unitsUsed)}%`} />
                       </span>
@@ -66,6 +68,7 @@ export function LoadScreen({ state, actions }: LoadScreenProps) {
           </Card>
 
           {picked?.held ? <Note tone="warn" icon="warning" title={t('mdp.bag.heldTitle')} detail={`${heldLine(picked.held, t)} ${t('common.bag.heldNote')}`} /> : null}
+          {picked?.waitsForRoom ? <Note tone="info" icon="clock" title={t('mdp.bag.waitsTitle', { hub: picked.waitsForRoom.hubName })} detail={t('mdp.bag.waitsBody')} /> : null}
 
           {picked && !picked.closedWith && !picked.held ? (
             <Card title={t('mdp.bag.closeFirst')}>

@@ -80,7 +80,8 @@ export interface VendorView {
  *  already open, and how much floor is left. Mirrors DockService.plan(). */
 export interface DockPlan {
   groups: Array<{ key: string; label: string; parcelIds: string[]; openBagCode?: string }>;
-  bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string }>;
+  /** `waitsFor` (2026-11-02): closed, and held on the dock for room at the hub it goes to — that hub's name. */
+  bags: Array<{ code: string; destinationLabel?: string; parcelIds: string[]; parcels: number; fillPct: number; status: string; waitsFor?: string }>;
   staging: { capacity: number; used: number; free: number };
 }
 

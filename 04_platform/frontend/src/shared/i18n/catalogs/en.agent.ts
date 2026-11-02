@@ -226,6 +226,9 @@ export const enAgent = {
   'agent.bag.reasonLater': 'It goes on a later bus',
   'agent.bag.sealedTitle': 'Bag closed',
   'agent.bag.sealedBody': '{count, plural, one {# parcel} other {# parcels}} inside. Give the bag to the driver — one scan takes them all.',
+  // 2026-11-02 — a bag held at the counter for room at the hub it goes to.
+  'agent.bag.waitsTitle': 'It waits here for room at {hub}',
+  'agent.bag.waitsBody': 'That hub has no room on its floor for another bag, and no other hub for this area has either. Keep the bag on your floor: it is offered to drivers by itself when there is room, and you are told in your bell.',
   'agent.bag.startAnother': 'Start another bag',
   'agent.bag.toastSealed': 'Bag closed',
   'agent.bag.toastSealedDetail': '{count, plural, one {# parcel} other {# parcels}} ready for the driver.',

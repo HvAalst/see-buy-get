@@ -473,6 +473,65 @@ export class Mdp {
   createdAt: string;
   /** Where it stands with SeeBuyGet: read it through MdpService.isApproved, never the field alone. */
   vetting?: HubVetting;
+  /**
+   * 2026-11-02 — HOW MANY BAGS CAN STAND ON ITS FLOOR AT ONCE (the owner: "shouldn't a hub also declare its space?"): bags
+   * waiting to be sorted, and bags being filled or waiting for a driver. Its owner's word, as its fee is (MdpService.setSpace).
+   * Absent on a hub that has not said — which is never treated as full: read it through MdpService.spaceOf.
+   */
+  bagPlaces?: number;
+  /** 2026-11-02 — how many parcels it sorts in a day, said with its bag places. Absent beside them. */
+  sortPerDay?: number;
+  /** When its owner last said them. */
+  spaceSaidAt?: string;
+}
+
+/**
+ * 2026-11-02 — A BAG HELD WHERE IT STANDS: the hub it goes to has no room on its floor for one more, and no other approved hub
+ * for its areas has (the owner: "if there is none, they wait at the shop or hub they are at, and whoever is waiting is
+ * told"). Not offered to drivers while it waits; it goes on by itself when room frees (MdpService.letWaitingGo).
+ */
+export class ToteWait {
+  hubId: string;
+  hubName: string;
+  since: string;
+}
+
+/**
+ * 2026-11-02 — WHAT A HUB'S FLOOR HOLDS NOW, against what its owner said it holds: read on its start screen, by its people
+ * and by staff, and asked by everything that sends a bag to it (MdpService.spaceOf).
+ */
+export class HubSpaceView {
+  mdpId: string;
+  name: string;
+  /** Its owner has said how many bags it holds and how many parcels it sorts a day. Until then it is never full. */
+  declared: boolean;
+  bagPlaces?: number;
+  sortPerDay?: number;
+  saidAt?: string;
+  /** Bags emptied here whose parcels are not all sorted yet. */
+  inbound: number;
+  /** Bags here being filled, waiting for a driver, or claimed by one who has not come. A flat empty bag takes no place. */
+  outbound: number;
+  /** The two together: what stands on the floor. */
+  onFloor: number;
+  /** Places left (never below none), where it said how many it has. */
+  free?: number;
+  /** Bags more than it has places for: dropped all the same — a driver is never turned away with bags in hand. */
+  overBy?: number;
+  /** Bags offered to drivers, claimed or on the road to it: they take a place when they come. */
+  comingIn: number;
+  /** Bags elsewhere held for room here. */
+  waiting: number;
+  /** Parcels sorted here since midnight on the hub's clock. */
+  sortedToday: number;
+  /** Today, on the hub's clock (YYYY-MM-DD). */
+  day: string;
+  /** As many bags on the floor as it has places. */
+  floorFull: boolean;
+  /** As many parcels sorted today as it sorts in a day. */
+  dayFull: boolean;
+  /** No room for one more bag to be sent to it: what stands here, and what is on its way, fill every place. */
+  noRoom: boolean;
 }
 
 /**
@@ -495,6 +554,15 @@ export class Tote {
   locationId: string; // where the bag is now (mdpId | agentDid | bus:<badge>)
   destinationNodeId?: string; // next hop this bag is committed to (a PUDO did or an MDP id)
   destinationLabel?: string;
+  /**
+   * 2026-11-02 — THE HUB A BAG ADDRESSED TO A ZONE IS DRIVEN TO (a shop's or a dock's bag names its zone, not a hub): chosen
+   * when it is offered to drivers, one with room on its floor (the owner: "new bags go to another approved hub that serves
+   * the same zones"), and kept from then, so the offer, the pay and the driver's next stop name the same hub. Absent on a
+   * bag addressed to a hub or a shop, and on one offered before this.
+   */
+  toHubId?: string;
+  /** 2026-11-02 — held where it stands for room at the hub it goes to; not offered to drivers meanwhile (ToteWait). */
+  waitsForRoom?: ToteWait;
   parcels: string[]; // parcelIds currently in the bag
   unitsUsed: number; // fill against BAG_CAPACITY_UNITS
   weightKg: number; // accumulated parcel weight (for vehicle capacity / dispatch matching)
