@@ -146,7 +146,9 @@ export const enHelpApp = {
   'help.business-bell.summary': 'What a carrier or SeeBuyGet tells your business is kept under the bell at the top of the Business app.',
   'help.business-bell.step1': 'Tap the bell. The number on it is how many notices nobody in the business has read yet.',
   'help.business-bell.step2': 'Tap a notice to read all of it. That marks it read for everybody in the business, and it then says who read it.',
-  'help.business-bell.step3': 'Mark all read clears the number in one go.',
+  // 2026-11-02 — the buttons under each notice (the owner: "I need a 'mark as read' or 'respond' button").
+  'help.business-bell.step3': 'Under a notice, Mark as read marks that one read without opening it. Where there is something to do about it, Open takes you there: a carriage contract offered to you opens Carriers, to accept it or decline it. Taking it marks the notice read too.',
+  'help.business-bell.step4': 'Mark all read clears the number in one go.',
   'help.business-bell.note1': 'The inbox belongs to the business, not to you alone: everybody in the business reads the same one.',
   'help.business-bell.note2': 'Somebody who can only view the business can read every notice but cannot mark one read. It stays unread until somebody who can act on it has read it.',
   'help.business-bell.note3': 'Notices are not sent to a phone or a computer. Open the Business app to read them. Somebody taken out of the business stops seeing them straight away.',

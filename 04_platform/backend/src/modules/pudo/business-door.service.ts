@@ -342,7 +342,8 @@ export class BusinessDoorService implements OnModuleInit {
           kind: 'parcel_door_short',
           title: `No driver has taken ${d.parcelId} to your door yet`,
           body: `It waits at ${d.shopName}; its last leg, load ${f.code}, has had no driver for a day at up to ${(f.maxSpend ?? d.maxSpend).toFixed(2)} ${d.currency}. Raise the most you pay under Parcels — or collect it at the shop with its code.`,
-          link: '/',
+          // 2026-11-02 — answered under Parcels, in the Business app: a tapped notice, or Open under it in the bell, goes there.
+          link: '/?go=parcels',
           data: { parcelId: d.parcelId, freightId: f.freightId },
         })
         .catch((err: Error) => this.logger.warn(`door reminder not sent: ${err.message}`));
@@ -370,7 +371,7 @@ export class BusinessDoorService implements OnModuleInit {
         kind: 'parcel_door_short',
         title: `Top up so ${d.shopName} can hand over ${d.parcelId}`,
         body: `Its driver is at the shop. The shop is owed ${holding.amount.toFixed(2)} ${holding.currency} for keeping it past its free days (${holding.billed.toFixed(2)} ${d.currency} from your balance), and your balance does not hold it yet.`,
-        link: '/',
+        link: '/?go=parcels',
         data: { parcelId: d.parcelId },
       })
       .catch((err: Error) => this.logger.warn(`holding notice not sent: ${err.message}`));
@@ -408,7 +409,7 @@ export class BusinessDoorService implements OnModuleInit {
         kind: 'parcel_door_short',
         title: `Top up so ${d.parcelId} can come to your door`,
         body: `It is ready at ${d.shopName}. Its last leg to ${d.label} needs up to ${d.maxSpend.toFixed(2)} ${d.currency} in your parcel balance before a driver is asked. Top up, then post it under Parcels — or collect it at the shop with its code.`,
-        link: '/',
+        link: '/?go=parcels',
         data: { parcelId: d.parcelId },
       })
       .catch((err: Error) => this.logger.warn(`door-short notice not sent: ${err.message}`));

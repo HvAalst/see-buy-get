@@ -100,10 +100,10 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'size-price', apps: ['send', 'vendor', 'agent'], group: 'start', site: true, steps: 4, notes: ['note', 'note', 'note', 'why', 'rare'] },
   { id: 'business-sign-in', apps: ['business', 'home'], group: 'start', site: true, steps: 5, notes: ['note', 'note'] },
   { id: 'business-people', apps: ['business'], group: 'start', steps: 4 },
-  { id: 'business-check', apps: ['business', 'console'], group: 'start', site: true, steps: 2, notes: ['note', 'note'] },
+  { id: 'business-check', apps: ['business', 'console'], group: 'start', site: true, steps: 3, notes: ['note', 'note', 'note'] },
   // The procedures every consignment note refers to (e-CMR Art. 5): public, because the note links here for whoever holds it.
   { id: 'electronic-note', apps: ['business', 'agent', 'driver', 'fleet', 'vendor'], group: 'freight', site: true, steps: 6, notes: ['why', 'note'] },
-  { id: 'business-bell', apps: ['business'], group: 'daily', steps: 3, notes: ['note', 'rare', 'note'] },
+  { id: 'business-bell', apps: ['business'], group: 'daily', steps: 4, notes: ['note', 'rare', 'note'] },
   // A business's parcels (the user, 2026-10-29: "Billed to the business"; "A prepaid balance").
   { id: 'business-parcels', apps: ['business'], group: 'daily', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note'] },
   { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note'] },

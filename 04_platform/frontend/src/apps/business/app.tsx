@@ -73,11 +73,13 @@ export function App() {
   const account = useAccount(client?.client.sbg ?? null, state.phase === 'ready');
   // 2026-11-02 — Back, as an app means it (shared/nav.ts), on a phone as at a desk: every section is top-level — the
   // rail's or the tab bar's — so they swap in place, keep their place on the page, and Back from any of them is home.
-  useScreenNav<Section>({ screen: state.section, home: 'home', tabs: SECTIONS, ready: state.phase === 'ready' && Boolean(state.business), go: actions.go, launch: SECTIONS });
+  useScreenNav<Section>({ screen: state.section, home: 'home', tabs: SECTIONS, ready: state.phase === 'ready' && Boolean(state.business) && !state.settingUp, go: actions.go, launch: SECTIONS });
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
   if (state.phase === 'signin') return <SignInScreen state={state} actions={actions} />;
-  if (state.phase === 'choose' || !state.business) return <ChooseScreen state={state} actions={actions} />;
+  // A business just signed up stays on its sign-up (2026-11-02) — the same screen, so the wizard keeps its place — until
+  // its papers and the ask are done or left for later.
+  if (state.phase === 'choose' || !state.business || state.settingUp) return <ChooseScreen state={state} actions={actions} />;
 
   const business = state.business;
   const sections = sectionsFor(business.activities);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
 import { useT } from '../i18n';
 import { Icon } from './Icon';
+import { BackStep } from './BackStep';
 import { useReadAloud } from './ReadAloud';
 import { frontDoorLink } from './AllAppsLink';
 import { TroubleSheet } from '../account/TroubleSheet';
@@ -24,6 +25,11 @@ export interface SignedOutBarProps {
    * whose Send and Track are open to everybody — and a second bar pinned over it would take two bars' height of a small phone.
    */
   inline?: boolean;
+  /**
+   * 2026-11-02 — which step this is, where Back leads through several: the phone's own Back then steps back as the bar's
+   * does, one step at a time (shared/ui/BackStep.tsx). Without it, a screen with one step back holds one Back.
+   */
+  backKey?: string;
 }
 
 /**
@@ -44,7 +50,7 @@ export interface SignedOutBarProps {
  * aside while the on-screen keyboard is up (`useKeyboardUp`), so it never sits over the field being typed in or the
  * keyboard's own Go.
  */
-export function SignedOutBar({ onBack, help, aloud, allApps = true, inline = false }: SignedOutBarProps) {
+export function SignedOutBar({ onBack, help, aloud, allApps = true, inline = false, backKey }: SignedOutBarProps) {
   const t = useT();
   const [helping, setHelping] = useState(false);
   const speech = useReadAloud(aloud ?? (() => ''));
@@ -57,6 +63,7 @@ export function SignedOutBar({ onBack, help, aloud, allApps = true, inline = fal
 
   return (
     <>
+      {onBack ? <BackStep key={backKey ?? 'back'} back={onBack} /> : null}
       {inline ? null : <div class="sobar__room" aria-hidden="true" />}
       <nav class={inline ? 'sobar sobar--inline' : `bnav sobar${away ? ' sobar--away' : ''}`} aria-label={t('common.bar.label')}>
         {onBack ? (

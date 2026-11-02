@@ -216,7 +216,10 @@ describe('the papers an export holds, on the panel', () => {
 
   it('offers the exporter a file of its own on a line not given, and its own ask to take off — never the agent’s', () => {
     const html = render(detail());
-    expect(html).toContain(t('business.exports.papers.upload'));
+    // 2026-11-02 — by camera, or a photo or PDF from the phone (PaperPicker).
+    expect(html).toContain(t('business.paper.takePhoto'));
+    expect(html).toContain(t('business.paper.choose'));
+    expect(html).toContain('capture="environment"');
     // Only the line it asked for (removable) offers to come off.
     expect(html.split(t('business.exports.papers.remove')).length - 1).toBe(1);
   });
@@ -225,7 +228,7 @@ describe('the papers an export holds, on the panel', () => {
     expect(render(detail())).toContain(t('business.exports.papers.ask'));
     const agent = render(detail({ you: 'agent', agent: appointed }));
     expect(agent).toContain(t('business.exports.papers.ask'));
-    expect(agent).not.toContain(t('business.exports.papers.upload'));
+    expect(agent).not.toContain(t('business.paper.takePhoto'));
     expect(render(detail({ you: 'staff' }))).not.toContain(t('business.exports.papers.ask'));
   });
 });

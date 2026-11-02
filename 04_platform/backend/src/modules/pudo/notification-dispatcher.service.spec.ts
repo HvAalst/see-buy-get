@@ -948,3 +948,52 @@ describe('NotificationDispatcher — onboarding: the applicant is told what is m
     expect(shop.signupNudgedFor).toBe('missing:id,licence,photos');
   });
 });
+
+/*
+ * 2026-11-02 — A NOTICE THAT ASKS FOR AN ANSWER SAYS WHERE IT IS ANSWERED (the owner: "on the notifications on the start
+ * screen I need a 'mark as read' or 'respond' button, is that possible?"). The link is what a tapped notification opens
+ * and what Open under it in the bell follows (frontend shared/launch.ts): a screen of the app that reads it
+ * (`/?go=<screen>`), or the Send app's parcel (`/?parcel=<id>`) — a query on the app root, never a path.
+ */
+describe('NotificationDispatcher — a notice that asks for an answer points at where it is answered', () => {
+  const linkOf = (notifications: NotificationService, did: string, kind: string) => notifications.inboxFor(did).find((n) => n.kind === kind)?.link;
+
+  it('sends the fleet office to Runs for a claim and for space sold, to Orders for an order handed on, to Drivers for a licence card', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.DepartureClaimOpened, { departureId: 'dep_1', bookingId: 'bk_1', managerDid: 'did:fleet:1', shipperDid: 'did:biz:1', company: 'Kilima', lineName: 'Nairobi–Mombasa', load: 'BK-1', kind: 'damaged', description: 'Two cartons crushed', currency: 'KES' });
+    await events.publish(GlosEvent.Pudo.DepartureBooked, { departureId: 'dep_1', bookingId: 'bk_2', managerDid: 'did:fleet:1', lineName: 'Nairobi–Mombasa', shipperDid: 'did:biz:1', description: 'Bricks', weightKg: 400, price: 9000, currency: 'KES' });
+    await events.publish(GlosEvent.Pudo.OrderHandedOn, { what: 'offered', fromFleetDid: 'did:fleet:2', fromFleetName: 'Pwani', toFleetDids: ['did:fleet:1'], count: 1, code: 'ORD-1', weightKg: 800, days: ['2026-11-03'] });
+    await events.publish(GlosEvent.Pudo.DriverLicenceSent, { did: 'did:drv:1', displayName: 'Amos K.', expiresAt: '2027-11-01', managerDid: 'did:fleet:1' });
+    expect(linkOf(notifications, 'did:fleet:1', 'claim_opened')).toBe('/?go=runs');
+    expect(linkOf(notifications, 'did:fleet:1', 'space_sold')).toBe('/?go=runs');
+    expect(linkOf(notifications, 'did:fleet:1', 'order_handed_on')).toBe('/?go=orders');
+    expect(linkOf(notifications, 'did:fleet:1', 'papers_sent')).toBe('/?go=drivers');
+  });
+
+  it('asks the driver and the office "were you paid?" under Earnings, where it is answered', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightPaidDirectAsked, { freightId: 'frt_1', code: 'FRT-1', amount: 5000, currency: 'KES', driverDid: 'did:drv:1', officeDid: 'did:fleet:1' });
+    expect(linkOf(notifications, 'did:drv:1', 'freight_paid_direct')).toBe('/?go=earnings');
+    expect(linkOf(notifications, 'did:fleet:1', 'freight_paid_direct')).toBe('/?go=earnings');
+  });
+
+  it('opens the parcel, with its code, for a person told it arrived — and for a report on it', async () => {
+    const people = { 'hash-rx': { personDid: 'did:person:rx' }, 'hash-tx': { personDid: 'did:person:tx' } };
+    const ready = harness({ parcel: { receiverPhoneHash: 'hash-rx', destAgentDid: 'did:agent:9', destZone: 'Westlands' }, personByHash: people, agents: { 'did:agent:9': { shopName: "Mama Sarah's" } } });
+    await ready.events.publish(GlosEvent.Pudo.ParcelReadyForPickup, { parcelId: 'PUD-7' });
+    expect(linkOf(ready.notifications, 'did:person:rx', 'parcel_ready')).toBe('/?parcel=PUD-7');
+
+    const report = harness({ parcel: { receiverPhoneHash: 'hash-rx', senderPhoneHash: 'hash-tx', binSlot: 'Amber-2' }, personByHash: people });
+    await report.events.publish(GlosEvent.Pudo.ParcelDisputeDecided, { parcelId: 'PUD-8', decision: 'report_only', award: 0, note: 'Crushed corner.', origin: 'counter', raisedBy: 'did:agent:9' });
+    expect(linkOf(report.notifications, 'did:person:rx', 'claim_decided')).toBe('/?parcel=PUD-8');
+    expect(linkOf(report.notifications, 'did:person:tx', 'claim_decided')).toBe('/?parcel=PUD-8');
+    // The shop that raised it reads it at its counter: home, as before — a parcel's link means nothing in the Shop app.
+    expect(linkOf(report.notifications, 'did:agent:9', 'claim_decided')).toBe('/');
+  });
+
+  it('every link is home, or home with a selection — never a path the build does not contain', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.DepartureClaimOpened, { departureId: 'dep_1', bookingId: 'bk_1', managerDid: 'did:fleet:1', shipperDid: 'did:biz:1', company: 'Kilima', lineName: 'L', load: 'BK-1', kind: 'short', description: 'x', currency: 'KES' });
+    for (const n of notifications.inboxFor('did:fleet:1')) expect(n.link === '/' || /^\/\?[a-z]+=[^/]+$/.test(n.link ?? '')).toBe(true);
+  });
+});

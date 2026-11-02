@@ -407,7 +407,7 @@ export class HubArrivalService {
     const seen = a.received?.note ? ` At the door: “${a.received.note}”` : '';
     try {
       const empties = a.emptiesBack ? ` ${unitsInWords(a.units.kind, a.emptiesBack.units)} handed back at its door.` : '';
-      await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}${empties}${receivingLine(a)}`, link: '/vendor/', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
+      await this.notifications.notify(did, { kind: 'hub_arrival', title, body: `${body}${seen}${empties}${receivingLine(a)}`, link: '/?go=dock', tag: `hub-arrival:${a.arrivalId}`, data: { arrivalId: a.arrivalId, mdpId: a.mdpId } });
     } catch (err) {
       this.logger.warn(`hub arrival notice failed for ${a.arrivalId}: ${(err as Error).message}`);
     }
@@ -429,7 +429,7 @@ export class HubArrivalService {
         kind: 'hub_arrival',
         title: `${hub.name}: your arrival did not come`,
         body: `${what}, booked for ${a.expectedOn}: ${hub.name} says nothing came. ${n === 1 ? 'Its parcel is' : `Its ${parcelsInWords(n)} are`} still with you: book ${n === 1 ? 'it' : 'them'} on a new arrival.${receivingLine(a)}`,
-        link: '/vendor/',
+        link: '/?go=dock',
         tag: `hub-arrival:${a.arrivalId}`,
         data: { arrivalId: a.arrivalId, mdpId: a.mdpId },
       });

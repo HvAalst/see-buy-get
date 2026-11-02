@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, PhotoField, ReadAloud, Sheet } from '../../../shared/ui';
 import { OpensSoonNote } from '../../../shared/opening/OpensSoonNote';
 import { useT } from '../../../shared/i18n';
-import { toPlaceWords } from '../../../shared/placewords';
+import { PlaceView } from '../../../shared/ui/PlaceView';
 import { bagLine, fillPercent, fillingBags, floorOpen, freeBags, homeSummary, hubPapersStep, money, swatchIndex, unsortedAt } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
 import { PeopleSheet } from '../../agent/screens/PeopleSheet';
@@ -170,12 +170,15 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       ) : null}
 
       {hub?.location ? (
-        <Card label={t('mdp.home.whereHub')}>
-          {/* The hub's three place words — what a new driver is told, address or not. */}
-          <p class="words">{toPlaceWords(hub.location)}</p>
-          <ReadAloud
-            text={() => t('mdp.home.hubWordsAloud', { words: toPlaceWords(hub.location!).split(' ').join(', ') })}
-            label={t('mdp.home.sayWords')}
+        <Card title={t('mdp.home.whereHub')}>
+          {/* The hub's three place words — what a new driver is told, address or not — under a small map of it where the
+              connection can spare one (the owner, 2026-11-02: "I prefer the map if the connection is good"). */}
+          <PlaceView
+            point={hub.location}
+            country={hub.country}
+            mapLabel={t('mdp.home.whereHub')}
+            aloud={(words) => t('mdp.home.hubWordsAloud', { words })}
+            aloudLabel={t('mdp.home.sayWords')}
           />
         </Card>
       ) : null}
@@ -209,12 +212,10 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       </Card>
       )}
 
+      {/* Signing out lives in the account menu, with the account's other actions (the owner, 2026-11-02: "that could
+          live in the settings only"): a start screen is the hub's work, not a door out of it. */}
       <div class="scr__foot">
         <ReadAloud text={() => homeSummary(unsorted.length, filling.length, t)} label={t('mdp.readAloud')} />
-
-        <Button variant="link" full={false} onClick={actions.signOut}>
-          {t('mdp.home.signOut')}
-        </Button>
       </div>
 
       <PriceSheet open={priceOpen} onClose={() => setPriceOpen(false)} state={state} actions={actions} />

@@ -1,9 +1,8 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Choice, ErrorNote, Info, Note, PlaceMap, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
+import { Button, Card, Choice, ErrorNote, Info, Note, PlaceMap, PlaceWords, ReadAloud, Sheet, ShopDetailSheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { toPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
 import type { SbgError } from '../../../lib/sbg';
 import { callbackLine, insurerLine, ledgerTypeWord, money, policyLine } from '../logic';
@@ -324,13 +323,11 @@ function PinCard({ state, actions }: { state: VendorState; actions: VendorAction
         location={preview?.location ?? null}
         onClose={() => setOpenShop(null)}
       />
+      {/* The words follow the pin on the map above — set here, not only shown (PlaceView, 2026-11-02). */}
       {current ? (
-        <>
-          <p class="words" style="margin-top:10px">
-            {toPlaceWords(current)}
-          </p>
-          <ReadAloud text={() => t('vendor.store.wordsSpoken', { words: toPlaceWords(current).split(' ').join(', ') })} label={t('vendor.store.sayWords')} />
-        </>
+        <div style="margin-top:10px">
+          <PlaceWords point={current} aloud={(words) => t('vendor.store.wordsSpoken', { words })} aloudLabel={t('vendor.store.sayWords')} />
+        </div>
       ) : (
         <p class="hint" style="margin-top:10px">
           {t('vendor.store.noPin')}

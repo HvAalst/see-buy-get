@@ -11,8 +11,8 @@ export interface StepListProps {
   at: number;
   /**
    * Pinned under the top bar for as long as the sign-up takes, folded to one bar (the owner, 2026-11-02: the list stood
-   * above the step's own title, and "it scrolls under the moment you actually start the process"). For a phone screen;
-   * a short form on a desk (the Business app's card) keeps the whole list open.
+   * above the step's own title, and "it scrolls under the moment you actually start the process"). The Business app's
+   * card pins it too, on a phone and at a desk (2026-11-02), at the top of the card — business.css.
    */
   pinned?: boolean;
 }

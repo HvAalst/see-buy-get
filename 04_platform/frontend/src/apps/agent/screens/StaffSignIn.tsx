@@ -298,6 +298,7 @@ export function StaffSignIn({
           lede read aloud, and the other apps. */}
       <SignedOutBar
         onBack={step === 'phone' || step === 'pin' || step === 'email' ? () => go(step === 'email' ? 'pin' : 'login') : undefined}
+        backKey={step}
         help={{ app: place === 'hub' ? 'mdp' : 'agent', api: recovery }}
         aloud={() => `${title}. ${lede}`}
       />

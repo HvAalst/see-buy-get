@@ -37,6 +37,191 @@
   margin-bottom: 14px;
 }
 
+/* -------------------------------------------- signing in and signing up, as a phone app (2026-11-02) -- */
+
+/* The step bar pinned at the top of the card (the owner, of the sign-up on a phone: "the steps of registration seem to be
+   a list still"): there is no app top bar before a business is open, so it sticks to the top of the screen, across the
+   card's own padding, in the card's white, so a step scrolls cleanly under it. */
+.twr-signin__card .steps--pinned {
+  top: var(--sa-t);
+  margin: 0 -24px 14px;
+  padding: 0 24px;
+  background: var(--card);
+}
+
+/* On a phone the card IS the screen — edge to edge, the house's 16px gutter, clear of a notch and the home bar — not a
+   card floating in a margin that takes a sixth of a small screen's width from the form. */
+@media (max-width: 560px) {
+  .biz-door {
+    padding: 0;
+    align-items: stretch;
+  }
+  .biz-door .twr-signin__card {
+    max-width: none;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: calc(16px + var(--sa-t)) calc(16px + var(--sa-r)) calc(24px + var(--sa-b)) calc(16px + var(--sa-l));
+  }
+  .biz-door .twr-signin__card .steps--pinned {
+    margin: 0 calc(-16px - var(--sa-r)) 14px calc(-16px - var(--sa-l));
+    padding: 0 calc(16px + var(--sa-r)) 0 calc(16px + var(--sa-l));
+  }
+  /* A paper's two ways in, one under the other across the screen: a thumb's whole width for the camera. */
+  .biz-wiz__pick .biz-pick,
+  .biz-wiz__pick .biz-pick__btns {
+    align-items: stretch;
+    width: 100%;
+  }
+  .biz-wiz__pick .biz-pick__btn {
+    flex: 1 1 100%;
+  }
+  /* The way on across the screen, first; the other choices under it; Back last — a phone's sign-up, not a desk's
+     row of buttons that wraps two and one. */
+  .biz-wiz .biz-wiz__end,
+  .biz-wiz .biz-wiz__go {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .biz-wiz .biz-wiz__go {
+    margin-left: 0;
+  }
+  /* The sign-in's one call, across the screen like the sign-up's. */
+  .biz-signin form > button[type='submit'] {
+    width: 100%;
+  }
+}
+
+/* On a phone, or anything with a thumb for a pointer, the door's controls take a thumb's size, as the console's own do
+   under `pointer: coarse` — which this card, drawn before the console's shell exists, never inherited — and a box being
+   typed in is 16px, under which an iPhone zooms the page when the box takes the focus. */
+@media (max-width: 560px), (pointer: coarse) {
+  .biz-door {
+    --c-ctl-h: 48px;
+    --c-fs: 15px;
+    --c-fs-sm: 13px;
+  }
+  .biz-door .twr-signin__card {
+    font-size: 15px;
+  }
+  .biz-door .cinput {
+    font-size: 16px;
+  }
+}
+
+/* The country picker keeps the right-hand edge of the boxes around it, as it does inside the app. */
+.biz-door .cselect__btn {
+  max-width: none;
+}
+
+/* A step's title takes the focus when the step opens, for a screen reader: not a box drawn round a heading. */
+.biz-wiz .cons__title:focus {
+  outline: none;
+}
+.biz-wiz .cons__lede {
+  margin-bottom: 14px;
+}
+/* Back on the left, the way on at the right — on a phone as at a desk. */
+.biz-wiz__end {
+  justify-content: space-between;
+  margin-top: 18px;
+}
+.biz-wiz__go {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+.biz-wiz__pick {
+  margin: 14px 0 4px;
+}
+.biz-saved {
+  margin: 4px 0 6px;
+}
+.biz-saved .cons__factv {
+  margin: 0;
+}
+
+/* A paper by camera, or a photo or PDF from the phone (PaperPicker.tsx): two buttons, then what it says. */
+.biz-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.biz-pick__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.biz-pick__btn {
+  position: relative;
+  gap: 6px;
+  cursor: pointer;
+}
+.biz-pick__btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: default;
+}
+.biz-pick .chint,
+.biz-pick .cerr {
+  margin-top: 0;
+}
+/* In a row of small buttons (a paper's row): its two buttons are the row's own, and what it says takes a line of its own. */
+.biz-pick--sm,
+.biz-pick--sm .biz-pick__btns {
+  display: contents;
+}
+.biz-pick--sm > .chint,
+.biz-pick--sm > .cerr {
+  flex: 1 0 100%;
+}
+
+/* What was added: the photo small, or a PDF's name on its tile. */
+.biz-added {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 6px;
+  padding: 8px;
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-ctl);
+}
+.biz-added__thumb,
+.biz-added__tile.cdoc__tile {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--panel);
+}
+.biz-added__body {
+  display: grid;
+  min-width: 0;
+}
+.biz-added__name {
+  font-weight: 600;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.biz-added .chint {
+  margin-top: 2px;
+}
+/* Inside a paper's row on the start screen: small, under its name. */
+.cdoc .biz-added {
+  margin: 6px 0 0;
+  padding: 0;
+  border: 0;
+}
+.cdoc .biz-added__thumb,
+.cdoc .biz-added__tile.cdoc__tile {
+  width: 44px;
+  height: 44px;
+}
+
 /* Two short fields side by side at a desk, stacked on a phone. */
 .biz-two {
   display: grid;

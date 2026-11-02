@@ -5,12 +5,12 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { publicPageUrl } from '../../../lib/sbg/config';
 import { DOCUMENT_LABEL, type CompanyDocument } from '../../tower/company';
 import type { BusinessClient, BusinessView } from '../api';
-import { paperForUpload } from '../../../shared/media';
 import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
 import { uploadHint } from '../../../shared/upload';
 import { checkStep, mayManage, sectionsFor, type Section } from '../logic';
 import type { BusinessActions } from '../useBusinessApp';
 import { CHECK_LABEL } from './ChooseScreen';
+import { PaperAdded, PaperPicker, type PaperReady } from './PaperPicker';
 
 /** The two papers the check is made from, in the order a business usually has them to hand. */
 const CHECK_PAPERS = ['certificate_of_incorporation', 'representative_id'] as const;
@@ -48,6 +48,8 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
   const [papers, setPapers] = useState<CompanyDocument[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A paper added on this visit, to be seen: the photo small, or a PDF's name (2026-11-02).
+  const [added, setAdded] = useState<Partial<Record<(typeof CHECK_PAPERS)[number], { name: string; preview?: string }>>>({});
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -62,16 +64,17 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
   /*
    * A PAPER, CHECKED HERE FIRST (2026-11-02, the owner: "if we put a filesize limit, it needs to show or tell"): a PDF over
    * the most is refused before it is sent, with its size and the most; a photo of the paper is made smaller to fit; and
-   * whatever stops it — this phone, the server, the signal — is said in words.
+   * whatever stops it — this phone, the server, the signal — is said in words. The picker (PaperPicker) reads it and says
+   * what this phone refused; what the server or the signal refused is said here.
    */
-  const upload = async (kind: (typeof CHECK_PAPERS)[number], file: File) => {
+  const upload = async (kind: (typeof CHECK_PAPERS)[number], { file, dataUrl }: PaperReady) => {
     if (!client) return;
     setBusy(kind);
     setError(null);
     try {
-      const dataUrl = await paperForUpload(file);
       const r = await client.api.uploadCompanyDocument(business.entityId, { kind, title: `${t(DOCUMENT_LABEL[kind])} — ${file.name}`, dataUrl });
       if (r.error) return setError(uploadFailureSentence(r.error));
+      setAdded((a) => ({ ...a, [kind]: { name: file.name, preview: dataUrl } }));
       await load();
       await actions.reloadBusiness();
     } catch (e) {
@@ -141,24 +144,13 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
                         t(kind === 'representative_id' ? 'business.paper.idHint' : 'business.paper.certHint')
                       )}
                     </span>
+                    {added[kind] && doc ? <PaperAdded name={added[kind]!.name} preview={added[kind]!.preview} /> : null}
                   </span>
+                  {/* 2026-11-02 — by camera, or a photo or PDF from the phone: two buttons, where one small "Add" opened
+                      only the Files app on most Androids. */}
                   {owner ? (
                     <span class="cdoc__acts">
-                      <label class={`cbtn cbtn--sm ${doc ? 'cbtn--ghost' : 'cbtn--primary'}`} aria-disabled={busy !== null}>
-                        {busy === kind ? t('business.paper.uploading') : doc ? t('business.paper.replace') : t('business.paper.add')}
-                        <input
-                          type="file"
-                          data-upload="document"
-                          accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
-                          class="biz-file"
-                          disabled={busy !== null}
-                          onChange={(e) => {
-                            const file = (e.target as HTMLInputElement).files?.[0];
-                            if (file) void upload(kind, file);
-                            (e.target as HTMLInputElement).value = '';
-                          }}
-                        />
-                      </label>
+                      <PaperPicker paper={t(DOCUMENT_LABEL[kind])} small hint={false} primary={!doc} working={busy === kind} disabled={busy !== null && busy !== kind} onReady={(ready) => upload(kind, ready)} />
                     </span>
                   ) : null}
                 </div>

@@ -1,4 +1,5 @@
 import { drain, onOutboxSent, outboxItems } from '../../shared/outbox';
+import { onLaunch } from '../../shared/launch';
 import { holdPhoto, mayHold } from '../../shared/heldPhotos';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { asksForEmail, isPinReset } from '../../shared/account/recovery';
@@ -596,18 +597,17 @@ export function useDriverApp() {
    * start with no route declared — we fetch what is still awaiting an answer and open the card. The parameter
    * is stripped once used: a later refresh (or the driver simply re-opening the app) must not re-jump them
    * onto a load they have already dealt with.
+   *
+   * 2026-11-02 — read by shared/launch.ts, which takes it off the address and hands it here: "Open" under the offer's
+   * notice in the bell lands on the same card, with no page loaded again (the owner: "a 'mark as read' or 'respond'
+   * button"). Held until the driver is signed in and the app has loaded.
    */
+  const linkedOffer = useRef<string | null>(null);
   const openOfferFromLink = useCallback(async () => {
-    if (!client || !did || typeof location === 'undefined') return;
-    const offerId = new URLSearchParams(location.search).get('offer');
+    if (!client || !did) return;
+    const offerId = linkedOffer.current;
     if (!offerId) return;
-    try {
-      const url = new URL(location.href);
-      url.searchParams.delete('offer');
-      history.replaceState(null, '', url.toString());
-    } catch {
-      /* a browser that refuses the rewrite still gets the right screen — it just may re-jump on reload */
-    }
+    linkedOffer.current = null;
     const r = await client.api.activeOffers(did);
     if (r.error) return; // the offer lapsed, or we are offline: the app opens where it normally would
     const offers = narrow<OfferView[]>(r.data) ?? [];
@@ -615,6 +615,18 @@ export function useDriverApp() {
     if (index < 0) return; // someone else took it, or it expired while the phone was in a pocket
     setState((s) => ({ ...s, offers, offerIndex: index, screen: 'offers' }));
   }, [client, did]);
+  // However the link came — the address the app opened at, or Open in the bell — it is held, and opened now if the app
+  // is ready; on a cold start the boot below opens it once the driver is signed in and the app has loaded.
+  const openOfferRef = useRef(openOfferFromLink);
+  openOfferRef.current = openOfferFromLink;
+  useEffect(
+    () =>
+      onLaunch('offer', (id) => {
+        linkedOffer.current = id;
+        void openOfferRef.current();
+      }),
+    [],
+  );
 
   /* -------------------------------------------------------------- recovery */
 

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, NeedsSignalNote, Note, Pill, PlaceMap, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName, PhoneField } from '../../../shared/ui';
+import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, NeedsSignalNote, Note, Pill, PlaceMap, PlaceWords, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName, PhoneField } from '../../../shared/ui';
 import { capLine, type CustodyCapView } from '../../../shared/custodyCap';
 import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
-import { fromPlaceWords, toPlaceWords } from '../../../shared/placewords';
+import { fromPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, licenceNotice, licenceReady, money, papersReady, papersStep } from '../logic';
 import { PhotoField } from './PhotoField';
 import { PeopleSheet } from './PeopleSheet';
@@ -485,9 +485,9 @@ function LocationSheet({ open, onClose, state, actions }: { open: boolean; onClo
 
       {pin ? (
         <>
+          {/* The words follow the pin on the map above — set here, not only shown (PlaceView, 2026-11-02). */}
           <p class="card__note">{t('agent.loc.yourWords')}</p>
-          <p class="words">{toPlaceWords(pin)}</p>
-          <ReadAloud text={() => t('agent.loc.wordsAloud', { words: toPlaceWords(pin).split(' ').join(', ') })} label={t('agent.loc.sayWords')} />
+          <PlaceWords point={pin} aloud={(words) => t('agent.loc.wordsAloud', { words })} aloudLabel={t('agent.loc.sayWords')} />
         </>
       ) : (
         <p class="hint">{t('agent.loc.noPin')}</p>

@@ -1,4 +1,5 @@
 import { captureInvite } from '../../shared/invite';
+import { onLaunch } from '../../shared/launch';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Agreement } from '../../shared/documents/documents';
 import { t } from '../../shared/i18n'; // plain t(): toasts/outbound text are built at action time in the sender's active locale
@@ -298,20 +299,12 @@ export function useSendApp() {
    *
    * The param is stripped as it is read, exactly as the driver's offer link is: a refresh (or simply
    * re-opening the app) must not keep re-jumping somebody onto a parcel they have already dealt with.
+   *
+   * 2026-11-02 — read by shared/launch.ts, which takes it off the address, so "Open" under a parcel's notice in the bell
+   * lands here too, with no page loaded again (the owner: "I need a 'mark as read' or 'respond' button").
    */
   const [deepParcel, setDeepParcel] = useState<string | null>(null);
-  useEffect(() => {
-    const id = new URLSearchParams(globalThis.location?.search ?? '').get('parcel');
-    if (!id) return;
-    setDeepParcel(id);
-    try {
-      const url = new URL(location.href);
-      url.searchParams.delete('parcel');
-      history.replaceState(null, '', url.toString());
-    } catch {
-      /* a browser that refuses the rewrite still lands on the right screen — it may re-jump on reload */
-    }
-  }, []);
+  useEffect(() => onLaunch('parcel', (id) => setDeepParcel(id)), []);
 
   useEffect(() => {
     if (!deepParcel || !state.identity) return; // signed out: it waits, and opens the moment they sign in

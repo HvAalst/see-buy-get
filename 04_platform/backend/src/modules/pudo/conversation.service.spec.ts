@@ -139,6 +139,12 @@ describe('conversations about a load', () => {
     expect(JSON.stringify(notify.mock.calls)).not.toMatch(/0712/);
   });
 
+  it('points the message notice at its own chat — a query on the app root, as every deep link (2026-11-02: Reply in the bell)', () => {
+    const { conversationId } = service.open('fr_1', 'did:drv:amos');
+    service.send(conversationId, 'did:drv:amos', { body: 'hello' });
+    expect(notify).toHaveBeenCalledWith('did:shop', expect.objectContaining({ kind: 'message', link: `/?chat=${conversationId}` }));
+  });
+
   it('tells a stranger nothing — not even that the conversation exists', () => {
     const { conversationId } = service.open('fr_1', 'did:drv:amos');
     expect(() => service.messagesFor(conversationId, 'did:drv:nosy')).toThrow(/not found/i);

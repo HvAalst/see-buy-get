@@ -680,15 +680,17 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     if (p.decision === 'report_only') return this.onDamageReportMade(p, parcel);
     const outcome = p.decision === 'upheld' ? 'upheld' : p.decision === 'partly_upheld' ? 'upheld in part' : 'not upheld';
     const tag = `dispute:${p.parcelId}:decided`;
+    // 2026-11-02 — to a person, the parcel in the Send app, where how it ended is read (Open under the notice).
+    const link = `/?parcel=${p.parcelId}`;
     const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
     const sender = accountFor(this.parcels.senderOf(parcel), this.persons);
     if (receiver) {
-      await this.tell(receiver.personDid, { kind: 'claim_decided', title: `${p.origin === 'buyer' ? 'Your report' : 'The report'} on parcel ${p.parcelId} was ${outcome}`, body: p.note, tag, data: { parcelId: p.parcelId } });
+      await this.tell(receiver.personDid, { kind: 'claim_decided', title: `${p.origin === 'buyer' ? 'Your report' : 'The report'} on parcel ${p.parcelId} was ${outcome}`, body: p.note, tag, data: { parcelId: p.parcelId }, link });
     }
     if (sender && sender.personDid !== receiver?.personDid) {
       // Owed to the sender only where no store sold the shipment: a store's award goes to the store's float.
       const owed = p.award > 0 && p.currency && !parcel.vendorId ? ` ${p.award.toFixed(2)} ${p.currency} is owed to you for it.` : '';
-      await this.tell(sender.personDid, { kind: 'claim_decided', title: `The report on parcel ${p.parcelId} was ${outcome}`, body: `${p.note}${owed}`, tag, data: { parcelId: p.parcelId } });
+      await this.tell(sender.personDid, { kind: 'claim_decided', title: `The report on parcel ${p.parcelId} was ${outcome}`, body: `${p.note}${owed}`, tag, data: { parcelId: p.parcelId }, link });
     }
     if (p.origin === 'counter' && p.raisedBy.startsWith('did:')) {
       const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, to be handed over as any parcel.` : '';
@@ -782,6 +784,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       body: 'What they found after it was handed over is on the damage claim report, beside it and dated. Open the parcel in your app to read it.',
       tag: `report-note:${p.parcelId}:${p.at}`,
       data: { parcelId: p.parcelId },
+      link: `/?parcel=${p.parcelId}`,
     });
   }
 
@@ -796,19 +799,21 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
   private async onDamageReportMade(p: DisputeDecided, parcel: ReturnType<ParcelService['get']>): Promise<void> {
     const tag = `dispute:${p.parcelId}:report`;
     const data = { parcelId: p.parcelId };
+    // 2026-11-02 — to a person, the parcel in the Send app, where the report is (Open under the notice in the bell).
+    const link = `/?parcel=${p.parcelId}`;
     const receiver = accountFor(this.parcels.receiverOf(parcel), this.persons);
     const sender = accountFor(this.parcels.senderOf(parcel), this.persons);
     if (receiver) {
       await this.tell(
         receiver.personDid,
         p.origin === 'buyer'
-          ? { kind: 'claim_decided', title: `A damage claim report was made for parcel ${p.parcelId}`, body: 'It holds the record of who held your parcel, and the photographs. Open the parcel to read it, or to pass it to an insurer.', tag, data }
-          : { kind: 'claim_decided', title: `The shop reported a problem with parcel ${p.parcelId}`, body: 'A damage claim report was made, and it is on the parcel in your app. The parcel can still be collected.', tag, data },
+          ? { kind: 'claim_decided', title: `A damage claim report was made for parcel ${p.parcelId}`, body: 'It holds the record of who held your parcel, and the photographs. Open the parcel to read it, or to pass it to an insurer.', tag, data, link }
+          : { kind: 'claim_decided', title: `The shop reported a problem with parcel ${p.parcelId}`, body: 'A damage claim report was made, and it is on the parcel in your app. The parcel can still be collected.', tag, data, link },
       );
     }
     if (sender && sender.personDid !== receiver?.personDid) {
       // A copy is theirs too (the user, 2026-10-15): on the parcel in their own app, to read, keep and pass on.
-      await this.tell(sender.personDid, { kind: 'claim_decided', title: `A problem was reported on parcel ${p.parcelId}`, body: 'A damage claim report was made. A copy is yours: open the parcel in your app to read it, keep the file, or pass it to an insurer.', tag, data });
+      await this.tell(sender.personDid, { kind: 'claim_decided', title: `A problem was reported on parcel ${p.parcelId}`, body: 'A damage claim report was made. A copy is yours: open the parcel in your app to read it, keep the file, or pass it to an insurer.', tag, data, link });
     }
     if (p.origin === 'counter' && p.raisedBy.startsWith('did:')) {
       const slot = parcel.binSlot ? ` It is on your shelf at ${parcel.binSlot}, and can be handed over as any parcel.` : '';
@@ -834,6 +839,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       body: `They read the new expiry as ${paperDay(p.expiresAt)}. Read the card under Drivers.`,
       tag: `papers:${p.did}:card`,
       data: { did: p.did },
+      link: '/?go=drivers',
     });
   }
 
@@ -1033,7 +1039,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     const body = `The shipper answers that it paid ${p.currency} ${p.amount.toLocaleString('en')} for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''} — its reference: ${p.reference}. If the money reached you, say it was paid, under Earnings. Until then drivers who look at its loads see both what was said and its answer.`;
     for (const did of [p.driverDid, p.officeDid].filter((x): x is string => Boolean(x))) {
       try {
-        await this.notifications.notify(did, { kind: 'freight_paid_direct', title: `Load ${p.code}: the shipper says it paid`, body, link: '/', tag: `freight:${p.freightId}:answered`, data: { freightId: p.freightId } });
+        // Answered under Earnings, in the Driver app and the fleet's alike (2026-11-02: a tapped notice goes there).
+        await this.notifications.notify(did, { kind: 'freight_paid_direct', title: `Load ${p.code}: the shipper says it paid`, body, link: '/?go=earnings', tag: `freight:${p.freightId}:answered`, data: { freightId: p.freightId } });
       } catch (err) {
         this.logger.warn(`not-paid-answered notify failed for ${p.freightId}: ${(err as Error).message}`);
       }
@@ -1050,7 +1057,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     ];
     for (const [did, title, body] of asks) {
       try {
-        await this.notifications.notify(did, { kind: 'freight_paid_direct', title, body, link: '/', tag: `freight:${p.freightId}:paid-asked`, data: { freightId: p.freightId } });
+        await this.notifications.notify(did, { kind: 'freight_paid_direct', title, body, link: '/?go=earnings', tag: `freight:${p.freightId}:paid-asked`, data: { freightId: p.freightId } });
       } catch (err) {
         this.logger.warn(`were-you-paid notify failed for ${p.freightId}: ${(err as Error).message}`);
       }
@@ -1328,26 +1335,28 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     const when = p.days.length === 1 ? `for ${p.days[0]}` : p.days.length ? `for ${p.days[0]} to ${p.days[p.days.length - 1]}` : '';
     const tag = `handon:${p.fromFleetDid}:${p.what}:${p.code ?? p.days.join(',')}`;
     const data = { what: p.what, count: p.count };
+    // Every side of it is a fleet's, and every side is planned under Orders.
+    const link = '/?go=orders';
     if (p.what === 'offered') {
       for (const to of p.toFleetDids ?? []) {
-        await this.tell(to, { kind: 'order_handed_on', title: `${p.fromFleetName} offers you ${many ? what : 'an order'}`, body: `${size} ${when}. Take ${many ? 'them' : 'it'} or leave ${many ? 'them' : 'it'} under Orders — the first fleet to take an order carries it.`, tag, data });
+        await this.tell(to, { kind: 'order_handed_on', title: `${p.fromFleetName} offers you ${many ? what : 'an order'}`, body: `${size} ${when}. Take ${many ? 'them' : 'it'} or leave ${many ? 'them' : 'it'} under Orders — the first fleet to take an order carries it.`, tag, data, link });
       }
     } else if (p.what === 'withdrawn') {
       for (const to of p.toFleetDids ?? []) {
-        await this.tell(to, { kind: 'order_handed_on', title: `${p.fromFleetName} took back an offer`, body: `${what}, ${size} ${when}, is no longer on offer to you.`, tag, data });
+        await this.tell(to, { kind: 'order_handed_on', title: `${p.fromFleetName} took back an offer`, body: `${what}, ${size} ${when}, is no longer on offer to you.`, tag, data, link });
       }
     } else if (p.what === 'taken') {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} took ${what}`, body: `${size} ${when}. It is theirs to plan and carry now; you still see it under Orders.`, tag, data });
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} took ${what}`, body: `${size} ${when}. It is theirs to plan and carry now; you still see it under Orders.`, tag, data, link });
     } else if (p.what === 'ran_out') {
       // A partner that was passing an order on cannot put it on the open board: that is the fleet's it was ordered from.
       const next = p.onward ? 'It is still yours to carry — or to give back to the fleet you took it from.' : 'It is back with you without a truck — the open board is the next step.';
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `No partner took ${what}`, body: `${size} ${when}. ${next}`, tag, data });
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `No partner took ${what}`, body: `${size} ${when}. ${next}`, tag, data, link });
     } else if (p.what === 'passed_on') {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.viaName} passed ${what} on to ${p.partnerName}`, body: `${size} ${when}. ${p.partnerName} carries ${many ? 'them' : 'it'} now, as you allowed; you still see ${many ? 'them' : 'it'} under Orders.`, tag, data });
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.viaName} passed ${what} on to ${p.partnerName}`, body: `${size} ${when}. ${p.partnerName} carries ${many ? 'them' : 'it'} now, as you allowed; you still see ${many ? 'them' : 'it'} under Orders.`, tag, data, link });
     } else if (p.what === 'lapsed') {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} no longer lets you pass its orders on`, body: `${what}, ${size} ${when}: your offer to your own partners was taken back. ${many ? 'They are' : 'It is'} still yours to carry, or to give back.`, tag, data });
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} no longer lets you pass its orders on`, body: `${what}, ${size} ${when}: your offer to your own partners was taken back. ${many ? 'They are' : 'It is'} still yours to carry, or to give back.`, tag, data, link });
     } else {
-      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} gave ${what} back`, body: `${size} ${when}. They said: ${p.reason ?? 'no reason given'}. It is back with you without a truck.`, tag, data });
+      await this.tell(p.fromFleetDid, { kind: 'order_handed_on', title: `${p.partnerName} gave ${what} back`, body: `${size} ${when}. They said: ${p.reason ?? 'no reason given'}. It is back with you without a truck.`, tag, data, link });
     }
   }
 
@@ -1359,6 +1368,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       body: `${p.weightKg} kg — ${p.description}, for ${p.price} ${p.currency}. It is on the run under Runs.`,
       tag: `departure:${p.departureId}:booking:${p.bookingId}`,
       data: { departureId: p.departureId, bookingId: p.bookingId },
+      link: '/?go=runs',
     });
   }
 
@@ -1405,6 +1415,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       body: `${what}: ${p.description}${p.amount != null ? ` — they put it at ${p.amount} ${p.currency}` : ''}. Answer it under Runs: accept it, or refuse it with your reason.`,
       tag: `departure:${p.departureId}:claim:${p.bookingId}`,
       data: { departureId: p.departureId, bookingId: p.bookingId },
+      // Where it is answered: the fleet app's Runs.
+      link: '/?go=runs',
     });
   }
 
@@ -1586,9 +1598,14 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     }
   }
 
-  private async tell(to: string, n: { kind: NotificationKind; title: string; body: string; tag: string; data: Record<string, unknown> }): Promise<void> {
+  /**
+   * `link`, where the notice is answered somewhere: `/?go=<screen>` (a screen of the app that reads it), `/?parcel=<id>`
+   * (the Send app's parcel). 2026-11-02 — a tapped notification opens the app there, and Open under it in the bell goes
+   * to the same place (the owner: "I need a 'mark as read' or 'respond' button"). Home otherwise.
+   */
+  private async tell(to: string, n: { kind: NotificationKind; title: string; body: string; tag: string; data: Record<string, unknown>; link?: string }): Promise<void> {
     try {
-      await this.notifications.notify(to, { ...n, link: '/' });
+      await this.notifications.notify(to, { ...n, link: n.link ?? '/' });
     } catch (err) {
       this.logger.warn(`${n.kind} notify failed for ${to}: ${(err as Error).message}`);
     }
@@ -1672,7 +1689,9 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'parcel_ready',
         title: 'Your parcel has arrived',
         body: `Ready to collect at ${where}.`,
-        link: '/',
+        // 2026-11-02 — the parcel itself, with its collection code: a tapped notification, or Open under it in the bell
+        // (the owner: "I need a 'mark as read' or 'respond' button"). The email's link says the same.
+        link: `/?parcel=${parcelId}`,
         // One notification per parcel-ready — a re-published event collapses onto the same one.
         tag: `parcel-ready:${parcelId}`,
         data: { parcelId },
@@ -1719,7 +1738,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           kind: 'parcel_ready',
           title: 'Your parcel is still waiting',
           body: `It is at ${where}. Bring your collection code.`,
-          link: '/',
+          link: `/?parcel=${parcel.parcelId}`,
           tag: `parcel-waiting:${parcel.parcelId}`,
           data: { parcelId: parcel.parcelId },
         });
@@ -1815,7 +1834,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'vehicle_defect',
         title: d.safety ? `${p.plate} is off the road: ${ITEM_WORDS[d.item].toLowerCase()} reported unsafe` : `${p.plate}: ${ITEM_WORDS[d.item].toLowerCase()} reported`,
         body: `${d.reportedBy}${d.note ? `: “${d.note}”` : ''}${d.hasPhoto ? ' (with a photo)' : ''}. ${d.safety ? 'No shift starts in it until you mark it fixed, or safe to drive as it is, under Vehicles → Upkeep.' : 'It can still go out; mark it fixed when it is, under Vehicles → Upkeep.'}`,
-        link: '/',
+        // 2026-11-02 — where it is decided: the fleet app's Vehicles (a tapped notification, or Open in the bell).
+        link: '/?go=vehicles',
         tag: `defect:${d.defectId}`,
         data: { vehicleId: d.vehicleId, defectId: d.defectId },
       });
@@ -2137,7 +2157,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           kind: 'parcel_ready',
           title: 'The pickup code has changed',
           body: `Open the app for the new code — the parcel is at ${where}.`,
-          link: '/',
+          link: `/?parcel=${parcelId}`,
           tag: `parcel-code-reissued:${parcelId}`,
           data: { parcelId },
         });
@@ -2402,7 +2422,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
               : payload.destLabel
                 ? `A freight load to ${payload.destLabel} is ready to claim nearby.`
                 : 'A freight load is ready to claim nearby.',
-            link: '/',
+            // 2026-11-02 — claimed on the Driver app's board: a tapped notification, or Open in the bell, goes there.
+            link: '/?go=board',
             tag: raised ? `freight:${payload.freightId}:raised:${payload.raisedTo}` : `freight:${payload.freightId}`,
             data: { freightId: payload.freightId },
           }),

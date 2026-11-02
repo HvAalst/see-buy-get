@@ -152,6 +152,10 @@ export class CompanyDocumentService {
     if (previous) {
       // Kept, never replaced in place: "which certificate did we rely on in March" outlives the new one.
       Object.assign(previous, { supersededFrom: previous.status, status: 'superseded', supersededBy: document.documentId });
+      // 2026-11-02 — a person's ID replaced before anybody decided on it will never be decided on: its file goes now,
+      // as it would have gone at the decision (the record that it was there stays). A file kept for nothing is the
+      // one thing the ID rule exists to prevent.
+      this.dropPersonalId(previous, now);
       this.documents.set(previous.documentId, previous);
     }
     return document;
@@ -200,6 +204,8 @@ export class CompanyDocumentService {
     const old = this.currentOf(entityId, kind, relatesTo);
     if (!old || old.documentId === replacedBy) return;
     Object.assign(old, { supersededFrom: old.status, status: 'superseded', ...(replacedBy ? { supersededBy: replacedBy } : {}) });
+    // A person's ID no longer counting for anything is not kept for anything (2026-11-02, as at upload).
+    this.dropPersonalId(old, Date.now());
     this.documents.set(old.documentId, old);
   }
 

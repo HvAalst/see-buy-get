@@ -184,7 +184,7 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
       {/* 2026-11-02 — pinned to the bottom until signed in (the owner: "that clutter would be better off in a sticky footer
           for as long as the page goes. It changes after the sign in"): Back from choosing a PIN to the PIN, Help — the
           cases a code to the number cannot solve, and how signing in works — Read aloud and the other apps. */}
-      <SignedOutBar onBack={step === 'pin' ? undefined : () => (busy ? undefined : back())} help={{ app: 'driver', api: recovery }} aloud={() => t('driver.signin.aloud')} />
+      <SignedOutBar onBack={step === 'pin' ? undefined : () => (busy ? undefined : back())} backKey={step} help={{ app: 'driver', api: recovery }} aloud={() => t('driver.signin.aloud')} />
     </form>
     {/* Outside the form: Enter in one of its fields must not submit the sign-in behind it. */}
     <NewDeviceSheet

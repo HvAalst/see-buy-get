@@ -20,9 +20,9 @@ import { ExportByRail } from './ExportByRail';
 import { AirWaybillPanel, RegisterAirExport } from './ExportByAir';
 import { exportJourney, JourneyStrip, ModeFilter, modesPresent, type LegMode } from '../../tower/screens/JourneyStrip';
 import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from '../../tower/screens/FblPanel';
-import { paperForUpload } from '../../../shared/media';
 import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
 import { uploadHint } from '../../../shared/upload';
+import { PaperPicker, type PaperReady } from './PaperPicker';
 
 type Problem = { detail?: string; title: string } | null | undefined;
 
@@ -394,16 +394,11 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
    * A FILE OF ITS OWN, uploaded right on the line: filed among the exporter's documents under this export's code and the
    * line (so two papers of one kind never replace each other), then attached. Never a loose upload.
    */
-  const upload = (p: ExportDetail['papers'][number], file: File) =>
-    // Checked here first, and said in words whatever stops it (2026-11-02): a PDF over the most, a photo this phone could
-    // not open, the server's refusal with the size and the most, no signal. A photo of the paper is made smaller to fit.
+  const upload = (p: ExportDetail['papers'][number], { dataUrl }: PaperReady) =>
+    // Checked first, and said in words whatever stops it (2026-11-02): a PDF over the most, a photo this phone could not
+    // open — said by the picker (PaperPicker, which made a photo of the paper smaller to fit); the server's refusal with
+    // the size and the most, no signal — said here.
     void act(async () => {
-      let dataUrl: string;
-      try {
-        dataUrl = await paperForUpload(file);
-      } catch (e) {
-        return { error: { title: uploadFailureSentence(e) } };
-      }
       const up = await client.api.uploadCompanyDocument(business.entityId, { kind: paperKindFor(p.key), title: paperName(p), dataUrl, relatesTo: `${c.code}:${p.key}` });
       const documentId = (up.data as { documentId?: string } | undefined)?.documentId;
       if (up.error) return { error: { title: uploadFailureSentence(up.error) } };
@@ -455,22 +450,9 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
                   {t('business.exports.papers.change')}
                 </button>
               ) : null}
-              {giving && p.key !== 'export_entry' ? (
-                <label class="cbtn cbtn--ghost cbtn--sm twr-quote__file">
-                  {t('business.exports.papers.upload')}
-                  <input
-                    type="file"
-                    data-upload="document"
-                    accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
-                    disabled={busy}
-                    onChange={(e) => {
-                      const file = (e.target as HTMLInputElement).files?.[0];
-                      if (file) upload(p, file);
-                      (e.target as HTMLInputElement).value = '';
-                    }}
-                  />
-                </label>
-              ) : null}
+              {/* 2026-11-02 — by camera, or a photo or PDF from the phone (PaperPicker): one picker taking both was, on most
+                  Androids, the Files app with no camera and no gallery. */}
+              {giving && p.key !== 'export_entry' ? <PaperPicker paper={paperName(p)} small hint={false} disabled={busy} onReady={(ready) => upload(p, ready)} /> : null}
               {giving ? (
                 <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: true })}>
                   {t(p.key === 'export_entry' ? 'business.exports.papers.writeNumber' : 'business.exports.papers.attachOrNumber')}
@@ -541,22 +523,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
               <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => setChanging({ ...changing, [p.key]: false })}>
                 {t('business.exports.notNow')}
               </button>
-              {p.key !== 'export_entry' ? (
-                <label class="cbtn cbtn--ghost cbtn--sm twr-quote__file">
-                  {t('business.exports.papers.upload')}
-                  <input
-                    type="file"
-                    data-upload="document"
-                    accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
-                    disabled={busy}
-                    onChange={(e) => {
-                      const file = (e.target as HTMLInputElement).files?.[0];
-                      if (file) upload(p, file);
-                      (e.target as HTMLInputElement).value = '';
-                    }}
-                  />
-                </label>
-              ) : null}
+              {p.key !== 'export_entry' ? <PaperPicker paper={paperName(p)} small hint={false} disabled={busy} onReady={(ready) => upload(p, ready)} /> : null}
             </span>
           ) : null}
         </span>

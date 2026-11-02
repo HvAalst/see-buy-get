@@ -72,7 +72,6 @@ export const enMdp = {
   'mdp.home.feeNote': 'What the network pays this hub to sort one parcel. It is public — nearby hubs compete on it.',
   'mdp.home.feesNear': 'Fees near you',
   'mdp.home.changeFee': 'Change my fee',
-  'mdp.home.signOut': 'Sign out of this hub',
   'mdp.home.changePassword': 'Change password',
   'mdp.home.feeSheetTitle': 'Your sort fee per parcel',
   'mdp.home.feeSheetBody': 'Senders pay this fee for every parcel your hub sorts, and you are paid it for each. A parcel already sold keeps the fee it was sold at. Nearby hubs see it and compete.',

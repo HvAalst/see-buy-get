@@ -12,8 +12,10 @@ import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/p
 import { PinGuessHint } from '../../../shared/account/PinGuessHint';
 import { recoveryApi } from '../../../shared/account/recovery';
 import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
+import { useWideScreen } from '../../../shared/useWideScreen';
 import { businessConfig } from '../api';
-import { digitsReady, phoneReady } from '../logic';
+import { PHONE_MAX, digitsReady, phoneReady } from '../logic';
 import type { BusinessActions, BusinessState, SignInStep } from '../useBusinessApp';
 
 // Built once: the doors a person uses before they are signed in.
@@ -63,9 +65,12 @@ const CTA: Record<SignInStep, MessageKey> = {
  * A new device, a new person or a forgotten PIN goes the long way: a code to the phone proves it is theirs, then a PIN
  * — and, the first time a PIN is chosen, a recovery email confirmed by its own code.
  */
-export function SignInScreen({ state, actions }: { state: BusinessState; actions: BusinessActions }) {
+export function SignInScreen({ state, actions, narrow }: { state: BusinessState; actions: BusinessActions; /** A phone's width, where the caller knows it (a test); otherwise read from the screen. */ narrow?: boolean }) {
   const t = useT();
   const { step, busy } = state;
+  // A phone: the card is the whole screen (business.css), and the bar before signing in is pinned to its bottom.
+  const wide = useWideScreen(PHONE_MAX + 1);
+  const phone = narrow ?? !wide;
   // A PIN typed on a phone or browser no code was ever typed on: not an error, a step — the code, once.
   const [closedFor, setClosedFor] = useState<unknown>(null);
   const confirming = step === 'login' && isNewDevice(state.error) && closedFor !== state.error;
@@ -94,7 +99,7 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
             : Boolean(state.email.trim()) && digitsReady(state.emailCode, 6);
 
   return (
-    <div class="twr-signin">
+    <div class="twr-signin biz-door">
       <div class="twr-signin__card biz-signin">
         <div class="twr-signin__brand">
           {/* The mark goes home: the front page, in this tab (the user, 2026-10-22). */}
@@ -105,7 +110,11 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
         </div>
 
         <form onSubmit={submit}>
-          {step !== 'login' ? <StepList title={t('business.signIn.steps.title')} steps={SETUP.map((s) => t(SETUP_NAME[s]))} at={SETUP.indexOf(step)} /> : null}
+          {/* 2026-11-02 — the step bar PINNED, on a phone and at a desk alike (the owner, of the business sign-up on a phone:
+              "the steps of registration seem to be a list still"): one bar at the top of the card that stays in sight as the
+              step scrolls, and opens to the whole list on a tap. One look everywhere — the card is the whole screen on a
+              phone, and a desk loses nothing to a bar it can open. */}
+          {step !== 'login' ? <StepList pinned title={t('business.signIn.steps.title')} steps={SETUP.map((s) => t(SETUP_NAME[s]))} at={SETUP.indexOf(step)} /> : null}
           <h1 class="cons__title">{t(step === 'email' && state.emailReset ? 'account.safety.resetTitle' : TITLE[step])}</h1>
           <p class="cons__lede">{step === 'code' ? t('business.signIn.codeLede', { phone: state.phone }) : t(step === 'email' && state.emailReset ? 'account.safety.resetLede' : LEDE[step])}</p>
           {/* What to have ready, before the first code is sent (2026-11-01). */}
@@ -207,23 +216,36 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
         </form>
 
         {/* 2026-11-02 — what the phone apps pin to the bottom of the screen before signing in (the owner: "that clutter
-            would be better off in a sticky footer"), kept here in the card: a desk's card is the whole screen, its foot
-            always in sight. The same things as the phone apps' bar — the way back where a step has one, "Trouble signing
-            in?", the other apps — and nothing else, in this app's own buttons. */}
-        <p class="twr-signin__foot">
-          {step === 'code' ? (
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
-              {t('business.signIn.changeNumber')}
-            </button>
-          ) : step === 'pin' || step === 'email' ? (
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep(step === 'email' ? 'pin' : 'phone')}>
-              {t('common.back')}
-            </button>
-          ) : null}
-          <SignInHelp app="business" api={recovery} buttonClass="cbtn cbtn--ghost cbtn--sm" />
-          <AllAppsLink buttonClass="cbtn cbtn--ghost cbtn--sm" />
-        </p>
+            would be better off in a sticky footer"), kept here in the card AT A DESK: a desk's card is the whole screen, its
+            foot always in sight. The same things as the phone apps' bar — the way back where a step has one, "Trouble
+            signing in?", the other apps — and nothing else, in this app's own buttons.
+            ON A PHONE the card is the whole screen and as long as its step, so its foot scrolled out of sight under a PIN's
+            boxes and the terms: there the bar is the phone apps' own, pinned to the bottom, as every other app's sign-in has
+            it — and somebody who uses the shop's app on the same phone finds Help where they always do. */}
+        {phone ? null : (
+          <p class="twr-signin__foot">
+            {step === 'code' ? (
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
+                {t('business.signIn.changeNumber')}
+              </button>
+            ) : step === 'pin' || step === 'email' ? (
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep(step === 'email' ? 'pin' : 'phone')}>
+                {t('common.back')}
+              </button>
+            ) : null}
+            <SignInHelp app="business" api={recovery} buttonClass="cbtn cbtn--ghost cbtn--sm" />
+            <AllAppsLink buttonClass="cbtn cbtn--ghost cbtn--sm" />
+          </p>
+        )}
         <p class="chint biz-signin__same">{t('business.signIn.samePin')}</p>
+        {phone ? (
+          <SignedOutBar
+            onBack={step === 'code' || step === 'pin' ? () => actions.setStep('phone') : step === 'email' ? () => actions.setStep('pin') : undefined}
+            backKey={step}
+            help={{ app: 'business', api: recovery }}
+            aloud={() => `${t(step === 'email' && state.emailReset ? 'account.safety.resetTitle' : TITLE[step])}. ${step === 'code' ? t('business.signIn.codeLede', { phone: state.phone }) : t(step === 'email' && state.emailReset ? 'account.safety.resetLede' : LEDE[step])}`}
+          />
+        ) : null}
       </div>
       <NewDeviceSheet
         open={confirming}

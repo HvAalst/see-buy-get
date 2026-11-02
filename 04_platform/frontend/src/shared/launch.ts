@@ -25,6 +25,15 @@ export interface LaunchIntent {
    * when what was shared never reached the app. Filed to a load or parcel, never sent loose (the owner, 2026-11-02).
    */
   files?: string;
+  /**
+   * 2026-11-02 — WHAT A NOTICE POINTS AT (the owner: "on the notifications on the start screen I need a 'mark as read'
+   * or 'respond' button"): a chat (`?chat=<conversation>`), a parcel (`?parcel=<id>`, the Send app's), an offer of a load
+   * (`?offer=<id>`, the Driver app's). A tapped notification opens the app at its link; the bell's Reply or Open hands
+   * the same link over inside the page (`followLink`), so both land in the same place.
+   */
+  chat?: string;
+  parcel?: string;
+  offer?: string;
 }
 
 /** What `share_files` says when the share reached the server instead of the app's own worker, or could not be read. */
@@ -57,23 +66,41 @@ export function intentOf(href: string): LaunchIntent | null {
   // not the photos): said, rather than nothing happening.
   const named = p.get('share_files')?.trim();
   const files = named && /^[a-z0-9]{1,40}$/i.test(named) ? named : /\/share-target\/?$/.test(u.pathname) ? SHARE_LOST : undefined;
-  if (!go && !shared && !files) return null;
-  return { ...(go ? { go } : {}), ...(shared ? { share: shared } : {}), ...(files ? { files } : {}) };
+  // What a notice points at: a record's own id, and nothing a hand-made address could slip past it.
+  const id = (k: 'chat' | 'parcel' | 'offer') => {
+    const v = p.get(k)?.trim();
+    return v && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(v) ? v : undefined;
+  };
+  const chat = id('chat');
+  const parcel = id('parcel');
+  const offer = id('offer');
+  if (!go && !shared && !files && !chat && !parcel && !offer) return null;
+  return {
+    ...(go ? { go } : {}),
+    ...(shared ? { share: shared } : {}),
+    ...(files ? { files } : {}),
+    ...(chat ? { chat } : {}),
+    ...(parcel ? { parcel } : {}),
+    ...(offer ? { offer } : {}),
+  };
 }
 
 /** The address without what it asked for: the app's own address stays as it was. */
 export function withoutIntent(href: string): string {
   const u = new URL(href);
-  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url', 'share_files']) u.searchParams.delete(k);
+  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url', 'share_files', 'chat', 'parcel', 'offer']) u.searchParams.delete(k);
   const q = u.searchParams.toString();
   return `${u.pathname}${q ? `?${q}` : ''}${u.hash}`;
 }
 
-/** What each kind of launch carries: a screen's key, what was shared, or where shared photos wait. */
+/** What each kind of launch carries: a screen's key, what was shared, where shared photos wait, or what a notice points at. */
 export interface LaunchKinds {
   go: string;
   share: SharedIn;
   files: string;
+  chat: string;
+  parcel: string;
+  offer: string;
 }
 type Kind = keyof LaunchKinds;
 type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
@@ -82,8 +109,8 @@ type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
  * Each kind waits for its own listener (the share helper's catch, 2026-11-02): a share made to a closed app arrives
  * before anybody listens, and must reach the share sheet when it mounts — not whichever listener came first.
  */
-const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set(), files: new Set() };
-const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [], files: [] };
+const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set(), files: new Set(), chat: new Set(), parcel: new Set(), offer: new Set() };
+const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [], files: [], chat: [], parcel: [], offer: [] };
 let started = false;
 
 function deliverKind<K extends Kind>(kind: K, value: LaunchKinds[K] | undefined): void {
@@ -99,6 +126,9 @@ function deliver(intent: LaunchIntent | null): void {
   deliverKind('go', intent.go);
   deliverKind('share', intent.share);
   deliverKind('files', intent.files);
+  deliverKind('chat', intent.chat);
+  deliverKind('parcel', intent.parcel);
+  deliverKind('offer', intent.offer);
 }
 
 /** Read the address the app was opened at, and the launch queue, once per page. */
@@ -139,13 +169,42 @@ export function onLaunch<K extends Kind>(kind: K, listener: Listener<K>): () => 
   return () => void set.delete(listener);
 }
 
+/**
+ * 2026-11-02 — WHAT A NOTICE'S LINK CAN LEAD TO INSIDE THE APP: a chat, a parcel, an offer, a screen — never a share
+ * or photos, which only another app hands over. A chat first: a message notice is answered there.
+ */
+const LINK_KINDS = ['chat', 'parcel', 'offer', 'go'] as const;
+export type LinkKind = (typeof LINK_KINDS)[number];
+
+/**
+ * Where a notice's link leads in THIS app: the kind of place it names, when something here opens that kind — or null.
+ * Null for a link to the app's home ('/', where the bell already is), to a page outside the app, or to a kind of place
+ * this app does not have (a parcel's link in the Shop app): nothing is offered that would go nowhere.
+ */
+export function linkLeadsTo(link: string | undefined): LinkKind | null {
+  if (!link) return null;
+  const intent = intentOf(link);
+  if (!intent) return null;
+  return LINK_KINDS.find((k) => intent[k] !== undefined && listeners[k].size > 0) ?? null;
+}
+
+/**
+ * Follow a notice's link inside the page, as a tapped notification arrives (scripts/push-sw.js opens the app at the same
+ * link): handed to whoever opens that kind of place here, with no page loaded again. False when it leads nowhere here.
+ */
+export function followLink(link: string | undefined): boolean {
+  const kind = linkLeadsTo(link);
+  const value = kind ? intentOf(link!)?.[kind] : undefined;
+  if (!kind || value === undefined) return false;
+  deliverKind<LinkKind>(kind, value);
+  return true;
+}
+
 /** Tests only: forget every listener and everything waiting, as a fresh page would. */
 export function resetLaunchForTests(): void {
-  listeners.go.clear();
-  listeners.share.clear();
-  listeners.files.clear();
-  pending.go.length = 0;
-  pending.share.length = 0;
-  pending.files.length = 0;
+  for (const k of Object.keys(listeners) as Kind[]) {
+    listeners[k].clear();
+    pending[k].length = 0;
+  }
   started = false;
 }

@@ -136,6 +136,64 @@ export function newBusinessGaps(form: NewBusiness): Array<keyof NewBusiness> {
   return gaps;
 }
 
+/**
+ * SIGNING UP A BUSINESS, ONE STEP PER SCREEN (the owner, 2026-11-02, on a phone: "It says that it works right after it is
+ * saved and that SBG staff checks the registration certificate, but there is no image upload … the steps of registration
+ * seem to be a list still but it is not carried to another screen. Can we optimise it still for PWA?").
+ *
+ * The business, what it does, you — then it is SAVED, on leaving "you": the papers go to a business that exists, by the
+ * same doors the start screen uses, and it works from that moment. Then its registration certificate, your ID, and the
+ * ask for SeeBuyGet's check, each of which can wait for the start screen. `done` is the screen after the last step, not a
+ * step of its own: the step bar names the six before it.
+ */
+export type SetupStep = 'business' | 'activities' | 'you' | 'certificate' | 'id' | 'ask' | 'done';
+export const SETUP_STEPS: readonly SetupStep[] = ['business', 'activities', 'you', 'certificate', 'id', 'ask', 'done'];
+/** The steps the bar names, in order. */
+export const SETUP_BAR: readonly SetupStep[] = SETUP_STEPS.slice(0, -1);
+/** Which of the form's fields each step asks for. */
+const SETUP_FIELDS: Record<SetupStep, Array<keyof NewBusiness>> = {
+  business: ['name', 'country', 'registrationNo', 'taxNo'],
+  activities: ['activities'],
+  you: ['yourName'],
+  certificate: [],
+  id: [],
+  ask: [],
+  done: [],
+};
+/** The paper each paper step adds. */
+export const SETUP_PAPER: Partial<Record<SetupStep, 'certificate_of_incorporation' | 'representative_id'>> = {
+  certificate: 'certificate_of_incorporation',
+  id: 'representative_id',
+};
+
+/** What this step still needs before it moves on — only its own fields, so a step never stops on another's gap. */
+export function setupGaps(step: SetupStep, form: NewBusiness): Array<keyof NewBusiness> {
+  return newBusinessGaps(form).filter((g) => SETUP_FIELDS[step].includes(g));
+}
+
+/**
+ * WHERE NEXT GOES, and whether the business is created on the way: leaving "you", and only while there is none yet. Back
+ * from the papers to "you" and forward again moves on; it never signs up a second business.
+ */
+export function setupNext(step: SetupStep, created: boolean): { to: SetupStep; create: boolean } {
+  const at = SETUP_STEPS.indexOf(step);
+  const to = SETUP_STEPS[Math.min(at + 1, SETUP_STEPS.length - 1)];
+  return { to, create: step === 'you' && !created };
+}
+
+/**
+ * The widest a phone is, in CSS pixels: at or under it the sign-in and sign-up card is the whole screen and the bar
+ * before signing in is pinned to its bottom. The same number as business.css's phone rules (max-width: 560px) —
+ * change them together.
+ */
+export const PHONE_MAX = 560;
+
+/** Where Back goes: the step before. None from the first (the screen before the wizard has its own way out) or from done. */
+export function setupBack(step: SetupStep): SetupStep | null {
+  const at = SETUP_STEPS.indexOf(step);
+  return at <= 0 || step === 'done' ? null : SETUP_STEPS[at - 1];
+}
+
 /** What the load form still needs, as field names — the screen says each in words. */
 export interface LoadForm {
   description: string;

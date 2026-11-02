@@ -51,6 +51,7 @@ export function AuthScreen({ state, actions }: AuthScreenProps) {
       <SignedOutBar
         inline
         onBack={state.authMode === 'enroll' && state.authStep !== 'phone' ? () => actions.authBack() : undefined}
+        backKey={state.authStep}
         help={{ app: 'send', api: recovery }}
         aloud={() =>
           state.authMode === 'login'

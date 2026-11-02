@@ -56,6 +56,8 @@ export { PlaceMap, type PlaceMapLine, type PlaceMapPin, type PlaceMapProps } fro
 export { OsmCredit } from './OsmCredit';
 export { PhoneField, type PhoneFieldProps } from './PhoneField';
 export { PlacePicker, type PlaceNote, type PlacePickerProps } from './PlacePicker';
+export { PlaceView, PlaceWords, type PlaceViewProps, type PlaceWordsProps } from './PlaceView';
+export { StaticMap, type StaticMapProps } from './StaticMap';
 export { QrBlock, type QrBlockProps } from './QrBlock';
 export { Scanner, type ScannerProps } from './Scanner';
 export { ScanField, type ScanFieldProps } from './ScanField';

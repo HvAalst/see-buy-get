@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { intentOf, onLaunch, resetLaunchForTests, withoutIntent } from './launch';
+import { followLink, intentOf, linkLeadsTo, onLaunch, resetLaunchForTests, withoutIntent } from './launch';
 
 /*
  * HOW THE APP WAS OPENED (2026-11-02): a shortcut from holding the icon, or something shared to it from another app.
@@ -88,5 +88,64 @@ describe('how the app was opened', () => {
     onLaunch('share', (s) => second.push(s.text ?? ''));
     expect(first).toEqual(['hello']);
     expect(second).toEqual([]);
+  });
+});
+
+/*
+ * 2026-11-02 — WHAT A NOTICE POINTS AT (the owner: "I need a 'mark as read' or 'respond' button"): a chat, a parcel, an
+ * offer, a screen. A tapped notification opens the app at the link; Reply or Open in the bell follows the same link inside
+ * the page — one way in, so both land in the same place.
+ */
+describe('where a notice points', () => {
+  const was = (globalThis as { window?: unknown }).window;
+  afterEach(() => {
+    resetLaunchForTests();
+    (globalThis as { window?: unknown }).window = was;
+  });
+
+  it('reads a chat, a parcel and an offer by their own ids — and nothing a hand-made address could slip past them', () => {
+    expect(intentOf('/?chat=cv_1a2b3c')).toEqual({ chat: 'cv_1a2b3c' });
+    expect(intentOf('https://x.test/send/?parcel=PUD-1')).toEqual({ parcel: 'PUD-1' });
+    expect(intentOf('/?offer=ofr_1')).toEqual({ offer: 'ofr_1' });
+    expect(intentOf('/?chat=..%2F..%2Fetc')).toBeNull();
+    expect(intentOf('/?chat=%3Cscript%3E')).toBeNull();
+    expect(intentOf('/')).toBeNull();
+    expect(withoutIntent('https://x.test/send/?parcel=PUD-1&invite=abc')).toBe('/send/?invite=abc');
+    expect(withoutIntent('https://x.test/driver/?offer=ofr_1&chat=cv_1')).toBe('/driver/');
+  });
+
+  it('a link that came before the app could open it waits for it: a tapped message, then the sign-in', () => {
+    const replaced = page('https://x.test/agent/?chat=cv_9');
+    onLaunch('go', () => undefined);
+    expect(replaced).toEqual(['/agent/']);
+    const opened: string[] = [];
+    onLaunch('chat', (id) => opened.push(id));
+    expect(opened).toEqual(['cv_9']);
+  });
+
+  it('leads only where this app opens that kind of place — home, a page outside it, or a parcel in the Shop app lead nowhere', () => {
+    onLaunch('go', () => undefined);
+    onLaunch('chat', () => undefined);
+    expect(linkLeadsTo('/?chat=cv_1')).toBe('chat');
+    expect(linkLeadsTo('/?go=runs')).toBe('go');
+    expect(linkLeadsTo('/?parcel=PUD-1')).toBeNull();
+    expect(linkLeadsTo('/')).toBeNull();
+    expect(linkLeadsTo('/terms/ke')).toBeNull();
+    expect(linkLeadsTo(undefined)).toBeNull();
+    // A notice never hands anything over as a share would: only another app shares.
+    expect(linkLeadsTo('/?share=1&text=hi')).toBeNull();
+  });
+
+  it('follows a link inside the page, to whoever opens that kind of place, with no page loaded again', () => {
+    const went: string[] = [];
+    const parcels: string[] = [];
+    onLaunch('go', (k) => went.push(k));
+    onLaunch('parcel', (id) => parcels.push(id));
+    expect(followLink('/?parcel=PUD-1')).toBe(true);
+    expect(followLink('/?go=parcels')).toBe(true);
+    expect(followLink('/')).toBe(false);
+    expect(followLink('/?chat=cv_1')).toBe(false);
+    expect(parcels).toEqual(['PUD-1']);
+    expect(went).toEqual(['parcels']);
   });
 });

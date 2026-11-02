@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, ReadAloud, Sheet, ShopDetailSheet, PhoneField, StepList } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, PlaceWords, Sheet, ShopDetailSheet, PhoneField, StepList } from '../../../shared/ui';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { AgreementBlock, AgreementCheck } from '../../../shared/documents/Agreement';
 import { countryOfNumber } from '../../../shared/phone/dial';
-import { toPlaceWords } from '../../../shared/placewords';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { duplicateField, isIdentityDocument, type DuplicateField } from '../../../shared/duplicate';
 import { IdDisputeOpen } from '../../../shared/account/IdDisputeOpen';
@@ -64,6 +63,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
           the steps behind it are spent. No All apps: this is where it leads. */}
       <SignedOutBar
         onBack={state.step !== 'done' ? actions.back : undefined}
+        backKey={state.step}
         help={{ open: () => setHelping(true) }}
         aloud={() => `${joinSpoken(role, state.step, t)} ${blocker ?? ''}`}
         allApps={false}
@@ -938,11 +938,16 @@ function WhereStep({ state, actions }: JoinScreenProps) {
         start={start}
       />
 
+      {/* The words the pin just set — the map is on screen above them to set it with, so here they follow the pin rather
+          than the map-or-words rule the screens that only SHOW a place follow (PlaceView, 2026-11-02). */}
       {f.location ? (
         <Card label={t('home.join.where.wordsTitle')}>
-          <p class="words">{toPlaceWords(f.location)}</p>
-          <p class="card__note">{t('home.join.where.wordsNote')}</p>
-          <ReadAloud text={() => t('home.join.where.wordsAloud', { words: toPlaceWords(f.location!).split(' ').join(', ') })} label={t('home.join.where.wordsAloudLabel')} />
+          <PlaceWords
+            point={f.location}
+            note={t('home.join.where.wordsNote')}
+            aloud={(words) => t('home.join.where.wordsAloud', { words })}
+            aloudLabel={t('home.join.where.wordsAloudLabel')}
+          />
         </Card>
       ) : (
         <Note tone="info" icon="pin" title={t('home.join.where.noPin')} />

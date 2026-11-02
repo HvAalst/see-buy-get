@@ -53,6 +53,11 @@ export interface BusinessState {
   error: SbgError | null;
   memberships: Membership[] | null;
   business: BusinessView | null;
+  /**
+   * A business just signed up HERE, its sign-up still on screen (2026-11-02): it exists and works, and the wizard goes on
+   * to its papers and the ask for the check before its start screen opens.
+   */
+  settingUp: boolean;
   section: Section;
   /** One line of good news after an act — "Selam is invited". Cleared on the next move. */
   note: string | null;
@@ -74,6 +79,7 @@ const INITIAL: BusinessState = {
   error: null,
   memberships: null,
   business: null,
+  settingUp: false,
   section: 'home',
   note: null,
 };
@@ -91,7 +97,10 @@ export interface BusinessActions {
   open: (entityId: string) => Promise<void>;
   accept: (memberId: string) => Promise<void>;
   decline: (memberId: string) => Promise<void>;
+  /** Sign up a business. It is open from then on, and its sign-up stays on screen (`settingUp`) for its papers and the ask. */
   create: (form: NewBusiness) => Promise<SbgError | null>;
+  /** The sign-up is over: the business's start screen. */
+  finishSetup: () => void;
   /** Where the person stands with what `country` asks them to agree to: read before a business is set up there. */
   readAgreement: (country: string) => Promise<Result<MyAgreement>>;
   backToList: () => Promise<void>;
@@ -261,9 +270,13 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
         return r.error;
       }
       await biz.current.client.seed({ access_token: r.data.token.access_token, expires_in: r.data.token.expires_in ?? 3600 });
+      // Open, and its sign-up goes on: the papers and the ask come next, before the start screen (2026-11-02).
+      patch({ settingUp: true });
       enterBusiness(r.data.business);
       return null;
     },
+
+    finishSetup: () => patch({ settingUp: false, section: 'home', note: null, error: null }),
 
     readAgreement: (country) => person.current.myAgreement(country),
 
@@ -272,7 +285,7 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
       rememberLast(null);
       biz.current = createBusinessClient();
       setBusinessOpen(false);
-      patch({ business: null, phase: 'boot', note: null, section: 'home' });
+      patch({ business: null, settingUp: false, phase: 'boot', note: null, section: 'home' });
       await loadMine();
     },
 

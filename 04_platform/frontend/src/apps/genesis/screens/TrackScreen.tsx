@@ -1,6 +1,5 @@
-import { Button, Card, ErrorNote, Icon, Note, ReadAloud } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Icon, Note, PlaceView, ReadAloud } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { toPlaceWords } from '../../../shared/placewords';
 import { LADDER, freightTrackSummary, ladderIndex, lateLine, mapsHref, showCollectCard, statusPresentation, stepTime, trackSummary } from '../logic';
 import { isFreightTrack } from '../types';
 import { FreightTrack } from './FreightTrack';
@@ -108,13 +107,17 @@ export function TrackScreen({ state, actions }: TrackScreenProps) {
                 <span class="row__body">
                   <span class="row__t">{res.destination}</span>
                   <span class="row__s">{res.destinationLandmark ?? t('send.zone', { zone: res.destZone })}</span>
-                  {res.destinationLocation ? <span class="row__s words">{toPlaceWords(res.destinationLocation)}</span> : null}
                 </span>
               </div>
+              {/* The shop's three words, under a small map of it where the connection can spare one (the owner,
+                  2026-11-02: "I prefer the map if the connection is good"). The way there is this screen's own button. */}
               {res.destinationLocation ? (
-                <ReadAloud
-                  text={() => t('send.track.sayWords', { words: toPlaceWords(res.destinationLocation!).split(' ').join(', ') })}
-                  label={t('send.track.sayWhere')}
+                <PlaceView
+                  point={res.destinationLocation}
+                  mapLabel={t('send.track.whereCollect')}
+                  aloud={(words) => t('send.track.sayWords', { words })}
+                  aloudLabel={t('send.track.sayWhere')}
+                  openInMaps={false}
                 />
               ) : null}
               {res.status === 'Ready_For_Pickup' && mapsHref(res) ? (

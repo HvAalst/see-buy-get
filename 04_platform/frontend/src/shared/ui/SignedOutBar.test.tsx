@@ -160,6 +160,8 @@ describe('the bar before signing in', () => {
       [
         'apps/agent/screens/SignInScreen.tsx',
         'apps/agent/screens/StaffSignIn.tsx',
+        // 2026-11-02 — the Business app's card, on a phone: there the bar is pinned to the bottom, as every app's is.
+        'apps/business/screens/SignInScreen.tsx',
         'apps/driver/screens/SignInScreen.tsx',
         'apps/fleet/screens/SignInScreen.tsx',
         'apps/genesis/screens/AuthScreen.tsx',
@@ -178,6 +180,7 @@ describe('the bar before signing in', () => {
   });
 
   it('is what every sign-in screen ends in, in place of the old foot — the desks’ cards (Business, the console) apart', () => {
+    // The Business card draws its foot at a desk and the bar on a phone (2026-11-02, signup-wizard.test.tsx holds it to that).
     const DESKS = ['apps/business/screens/SignInScreen.tsx', 'apps/tower/screens/SignInScreen.tsx'];
     const doors = [...FILES].filter((f) => /^apps\/[^/]+\/screens\/(SignInScreen|AuthScreen|JoinScreen|StaffSignIn|RolesScreen)\.tsx$/.test(f));
     expect(doors).toContain('apps/driver/screens/SignInScreen.tsx');

@@ -1,5 +1,6 @@
 import { InstallBar, type InstallApp } from './InstallBar';
 import type { ConversationsApi } from '../../lib/sbg';
+import { LinkedChat } from '../conversation/LinkedChat';
 import { SharedInLayer } from '../conversation/SharedIn';
 import { receivesShares } from '../conversation/sharedInLogic';
 import { PullToRefresh } from './PullToRefresh';
@@ -30,6 +31,9 @@ export function AppLayer({ app, chats, onSignIn, onRefresh }: AppLayerProps) {
     <>
       <InstallBar app={app} />
       {receivesShares(app) ? <SharedInLayer app={app} chats={chats} onSignIn={onSignIn} /> : null}
+      {/* 2026-11-02 — the chat a message notice points at: a tapped notification, or Reply under it in the bell. Once
+          signed in; a link that came first waits for it. */}
+      {chats ? <LinkedChat api={chats} /> : null}
       <PullToRefresh onRefresh={onRefresh} />
     </>
   );

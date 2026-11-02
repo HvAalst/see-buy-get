@@ -573,6 +573,10 @@ export class ConversationService {
         kind: 'message',
         title: `${pushTitle} ${this.codeOf(thread)}`,
         body: 'Open the conversation to read it.',
+        // 2026-11-02 — straight into the chat (the owner: "I need a 'mark as read' or 'respond' button"): a tapped
+        // notification opens the app at it, and Reply under the notice in the bell goes to the same place. A query on
+        // the app's own address, as every deep link here is — never a path the build does not contain.
+        link: `/?chat=${encodeURIComponent(thread.conversationId)}`,
         tag: `conv:${thread.conversationId}`,
         data: { conversationId: thread.conversationId, ...(thread.freightId ? { freightId: thread.freightId } : {}), ...(thread.parcelId ? { parcelId: thread.parcelId } : {}) },
       })

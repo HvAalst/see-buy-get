@@ -192,7 +192,8 @@ export class DirectoryService {
       kind: 'contract_asked',
       title: `${e.name} asks to carry under a contract with you`,
       body: `${e.name}${where ? `, in ${where},` : ''} found you in the logistics directory and asks you to record a carriage contract with it, so its loads come straight to you rather than onto the open board.${handle ? ` Who it is, and how to reach it, are on its page: @${handle}.` : ''} To agree, record the contract from this notice, or under Orders › Contracts: it is offered to ${e.name} in its app, and an owner there accepts it — no code. Nothing is agreed until then.`,
-      link: '/',
+      // 2026-11-02 — a tapped notification opens the fleet app under Orders; in the bell the app's own act records it.
+      link: '/?go=orders',
       data: { entityId: e.entityId, name: e.name, ...(handle ? { handle } : {}) },
     });
     return { fleetName: m.companyName, askedAt: at };

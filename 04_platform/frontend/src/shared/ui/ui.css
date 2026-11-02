@@ -769,7 +769,14 @@
   background: none;
   text-align: left;
 }
-.nitem--unread {
+/* Unread is the whole notice — its text and the buttons under it — so the tint is on the row, not the text alone. */
+.nrow {
+  border-radius: var(--r-ctl);
+}
+.nrow + .nrow {
+  margin-top: 4px;
+}
+.nrow--unread {
   background: var(--blue-soft);
 }
 .nitem__ic {
@@ -821,13 +828,32 @@
   font-size: 14px;
   color: var(--tx3);
 }
-/* A notice about a page to read (a new version of the terms): the page, under the opened notice, in line with its text. */
-.nitem__more {
-  display: inline-block;
-  margin: 0 0 8px 42px;
+/*
+ * 2026-11-02 — A NOTICE'S OWN BUTTONS, under its text and in line with it (the owner: "a 'mark as read' or 'respond'
+ * button"): Reply or Open, and Mark as read. Links, never solid — the sheet has at most one solid button — each a full
+ * touch target tall, drawn up under the text so the pair reads as part of the notice above it.
+ */
+.nitem__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  margin-top: -12px;
+  padding: 0 8px 2px 44px;
+}
+.nitem__act {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border-radius: var(--r-ctl);
+  background: none;
   font-size: 15px;
   font-weight: 600;
   color: var(--blue);
+  text-decoration: none;
+}
+.nitem__act:active {
+  background: var(--bd-soft);
 }
 .nitem__dot {
   flex: none;
@@ -1963,6 +1989,82 @@
   letter-spacing: 0.02em;
   color: var(--navy);
   word-spacing: 0.4em;
+}
+
+/* Under a map that already shows the place (PlaceView, 2026-11-02): a step smaller, still the words a person says. */
+.words--under {
+  margin-top: 10px;
+  font-size: 15px;
+}
+
+/* The say-aloud and what goes beside it — "Show the map", "Open in maps" — one row, wrapping on a narrow phone. */
+.placewords__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.placewords__acts:empty {
+  display: none;
+}
+
+/*
+ * A SMALL MAP OF ONE PLACE, TO LOOK AT (StaticMap, 2026-11-02): six tiles around the place, nothing to pan or zoom. The
+ * simple map's grid underneath, so the box reads as a map while its tiles come — or if they never do. Capped at 512
+ * wide: what three columns of tiles always cover around the place.
+ */
+.smap {
+  position: relative;
+  max-width: 512px;
+}
+.smap__view {
+  position: relative;
+  height: 160px;
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-ctl);
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(0deg, var(--appbg) 0 23px, var(--panel) 23px 24px),
+    repeating-linear-gradient(90deg, var(--appbg) 0 23px, var(--panel) 23px 24px);
+}
+.smap__tiles {
+  position: absolute;
+  width: 768px;
+  height: 512px;
+  pointer-events: none;
+}
+.smap__tile {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  max-width: none;
+  user-select: none;
+}
+/* The place: the navy of a pin set on the map, ringed so it stands out on a busy street. */
+.smap__pin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--navy);
+  border: 3px solid var(--bg);
+  box-shadow: 0 0 0 4px var(--blue-light), var(--sh-sm);
+}
+/* OpenStreetMap's credit, in the corner every map keeps it in. */
+.smap__credit {
+  position: absolute;
+  right: 1.5px;
+  bottom: 1.5px;
+  padding: 1px 6px;
+  border-top-left-radius: 6px;
+  border-bottom-right-radius: calc(var(--r-ctl) - 1.5px);
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  color: var(--tx2);
 }
 
 /* -------------------------------------------------------------- QR block -- */

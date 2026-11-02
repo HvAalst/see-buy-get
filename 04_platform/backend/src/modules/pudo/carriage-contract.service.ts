@@ -129,7 +129,8 @@ export class CarriageContractService {
       kind: 'contract_answered',
       title: `${entity.name} accepted your contract`,
       body: `${entity.name} accepted the carriage contract${c.reference ? ` ${c.reference}` : ''} you offered it. Its orders under it now come straight to you.`,
-      link: '/',
+      // 2026-11-02 — the fleet's contracts are under Orders: a tapped notification, or Open in the bell, goes there.
+      link: '/?go=orders',
       data: { contractId: c.contractId, entityId: entity.entityId },
     });
     return c;
@@ -145,7 +146,7 @@ export class CarriageContractService {
       kind: 'contract_answered',
       title: `${entity.name} declined your contract`,
       body: `${entity.name} declined the carriage contract${c.reference ? ` ${c.reference}` : ''} you offered it. It stays on your list, not linked: you can still send it a link code, or end it.`,
-      link: '/',
+      link: '/?go=orders',
       data: { contractId: c.contractId, entityId: entity.entityId },
     });
     return c;
@@ -158,7 +159,9 @@ export class CarriageContractService {
       kind: 'contract_offered',
       title: `${c.fleetName} offers you a carriage contract`,
       body: `You asked ${c.fleetName} for a contract through the logistics directory, and it recorded one with you${c.reference ? `, reference ${c.reference}` : ''}${period}. Accept it under Carriers to send it loads straight away, or decline it. Nothing is linked until an owner accepts.`,
-      link: '/',
+      // 2026-11-02 — where it is accepted: the Business app's Carriers (its `contracts` section). A tapped notice, or
+      // Open under it in the bell, goes there (the owner: "I need a 'mark as read' or 'respond' button").
+      link: '/?go=contracts',
       data: { contractId: c.contractId, fleetDid: c.fleetDid },
     });
   }

@@ -261,16 +261,19 @@ export const enHelp = {
   'help.business-sign-in.step1': 'Open the Business app from the front page: “Sign in › A business”.',
   'help.business-sign-in.step2': 'Type your phone number and your 5-digit PIN. New here, or forgot your PIN? Tap “New here? Sign up” or “Forgot your PIN?”: we send a code to your phone first.',
   'help.business-sign-in.step3': 'A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.',
-  'help.business-sign-in.step4': 'The first time, set up your business: its registered name, country, registration number and what it does. You become its owner.',
+  // 2026-11-02 — signing a business up, one step per screen: saved after "you", then the papers and the ask, each of which can wait.
+  'help.business-sign-in.step4': 'The first time, sign up your business, one step to a screen: the business (its registered name, country and registration number), what it does, and you. Then it is saved, with you as its owner, and it works. Next come its registration certificate and your ID, each by “Take a photo” or “Choose a photo or PDF”, and the ask for SeeBuyGet’s check: any of them can wait for the start screen.',
   'help.business-sign-in.step5': 'In more than one business? Pick one. Switch business, in the menu under your name, takes you back to the list.',
   // 2026-11-01 — the steps of setting up a sign-in, by name; 2026-11-02 — unlock with fingerprint or face.
-  'help.business-sign-in.note1': 'New here? Have this phone with you, and an email address you can open now: the first time, a code is sent to it too. The steps are listed by name as you go — your phone number, the code, your PIN, and your email address.',
+  'help.business-sign-in.note1': 'New here? Have this phone with you, and an email address you can open now: the first time, a code is sent to it too. The bar at the top of the screen names the step you are on and the one after it — tap it to see them all: your phone number, the code, your PIN, and your email address.',
   'help.business-sign-in.note2': 'Turned on “Unlock with fingerprint or face” on this phone? The sign-in screen offers it first, and “Use my PIN instead” is one tap away. Changing your PIN turns it off on every phone.',
   // business-check
   'help.business-check.title': 'How SeeBuyGet checks a business',
   'help.business-check.summary': 'A business works from the moment it is set up. It is shown to others — a public page, a place in the agent finder — once two members of SeeBuyGet staff have checked it.',
-  'help.business-check.step1': 'Business app, Overview: add the registration certificate and the ID of the person speaking for the business, then Ask SeeBuyGet to check us.',
-  'help.business-check.step2': 'Refused? The business reads the reason in its app and by email, puts it right, and asks again.',
+  // 2026-11-02 — the papers come straight after signing up, by camera or from the phone; the start screen keeps them for later.
+  'help.business-check.step1': 'Signing up, straight after the business is saved: its registration certificate, then the ID of the person speaking for it — each by “Take a photo” or “Choose a photo or PDF” — then “Ask SeeBuyGet to check us”. Each of them can wait.',
+  'help.business-check.step2': 'Left for later? The start screen keeps “SeeBuyGet’s check”: the same two buttons for each paper, then “Ask SeeBuyGet to check us”.',
+  'help.business-check.step3': 'Refused? The business reads the reason in its app and by email, puts it right, and asks again.',
   // The procedures of the electronic consignment note (e-CMR Protocol, Art. 5(1)(a)–(f)), as the system does them today.
   'help.electronic-note.title': 'How the electronic consignment note works',
   'help.electronic-note.summary': 'Every load carries its consignment note electronically. Using it, the sender, the carrier and the receiver agree to these procedures: how it is made out and handed over, how it stays as signed, who reads it, how delivery is confirmed, how it is added to, and how it is replaced by paper.',
@@ -285,6 +288,7 @@ export const enHelp = {
   'help.business-check.note1': 'Changing the business’s name or registration number puts it back to not checked: those are what was checked.',
   // 2026-11-01 — a person's ID is deleted the moment staff verify or refuse it; the company's papers are kept.
   'help.business-check.note2': 'The ID of the person speaking for the business is deleted the moment staff verify or refuse it. The registration certificate is kept: it is the business’s record.',
+  'help.business-check.note3': '“Take a photo” opens the phone’s own camera: lay the paper flat, in good light, with all four corners in view. A photo is made smaller on the phone before it is sent; a PDF can be up to 8 MB. At a desk, both buttons open the computer’s files.',
   // parcel-problem
   'help.parcel-problem.title': 'Report a problem with a parcel',
   'help.parcel-problem.summary': 'Broken, opened or wrong goods are reported with a photograph: by the receiver from the Send app, or by the shop at its counter. SeeBuyGet does not judge a claim or pay one. It makes a damage claim report on the spot — the record of who held the parcel and when, with the photographs — for the claimant to hand to an insurer.',

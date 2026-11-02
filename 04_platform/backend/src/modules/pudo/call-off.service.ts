@@ -283,7 +283,7 @@ export class CallOffService implements OnModuleInit {
           kind: 'freight_problem',
           title: `No driver has taken load ${f.code} yet`,
           body: `It brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}. Raise the most you pay, or send it to a shop instead — under Sent as freight.`,
-          link: '/vendor/',
+          link: '/',
           tag: `door-load:${f.freightId}:remind`,
           data: { freightId: f.freightId },
         })

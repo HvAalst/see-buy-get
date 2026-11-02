@@ -115,6 +115,10 @@ export const en = {
   'common.hub.askFor': 'Ask for {who}',
   'common.hub.gate': 'Where to come in: {gate}',
   'common.hub.call': 'Call {name}',
+  // A place shown (shared/ui/PlaceView.tsx): a small map first where the connection can spare it, else its three words with
+  // the map one tap away (the owner, 2026-11-02: "I prefer the map if the connection is good").
+  'common.place.showMap': 'Show the map',
+  'common.place.openInMaps': 'Open in maps',
   // A load the shipper pays its carrier for directly: the carrier says it was paid (the user, 2026-10-27: "Driver ticks 'paid'").
   // What set a measured parcel's price: its size or its weight, whichever is more (the user, 2026-10-27: "build the say").
   'common.sizePrice.bySize': 'Priced by its size: it counts as {counts} kg — it weighs {weighs} kg.',
@@ -189,6 +193,11 @@ export const en = {
   'agreement.gate.signOut': 'Not now: sign out',
   // The bell: a notice about a new version of what people agreed to links to the text itself.
   'notify.readIt': 'Read it',
+  // 2026-11-02 — under each notice in the bell (the owner: "I need a 'mark as read' or 'respond' button"): that one marked
+  // read without opening it; a chat message answered in its chat; anything else opened where it points.
+  'notify.markRead': 'Mark as read',
+  'notify.reply': 'Reply',
+  'notify.open': 'Open',
   // COMING (2026-10-25) — an account signed up before SeeBuyGet opened in its country (shared/opening).
   'opening.title': 'SeeBuyGet is not open in {country} yet',
   'opening.hub': 'Your hub is signed up. Its floor opens the day SeeBuyGet opens here: nothing is received, sorted or loaded until then. You are told that day, by email.',

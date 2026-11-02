@@ -265,7 +265,7 @@ export class InboundService implements OnModuleInit {
       withdrawn: { title: `${what} was withdrawn`, body: `${from} withdrew it: it is not coming to ${f.receiver.siteName}.` },
     };
     try {
-      await this.notifications.notify(receiver.did, { kind: 'inbound', ...lines[step], link: '/business/', tag: `inbound:${f.freightId}`, data: { freightId: f.freightId, step } });
+      await this.notifications.notify(receiver.did, { kind: 'inbound', ...lines[step], link: '/?go=inbound', tag: `inbound:${f.freightId}`, data: { freightId: f.freightId, step } });
     } catch (err) {
       this.logger.warn(`inbound notice failed for ${f.freightId}: ${(err as Error).message}`);
     }

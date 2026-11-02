@@ -259,6 +259,20 @@ describe('a company that is switched on keeps its own record', () => {
     expect(() => documents.file(KE, again.documentId)).toThrow(/deleted when it was checked/);
   });
 
+  it('deletes a person’s ID the moment it is replaced before anybody decided on it — it will never be decided on (2026-11-02)', () => {
+    const first = documents.upload({ entityId: KE, kind: 'representative_id', title: 'Director ID', dataUrl: pdf('id-a'), by: 'Brian K.' });
+    expect(documents.file(KE, first.documentId).intact).toBe(true);
+    const second = documents.upload({ entityId: KE, kind: 'representative_id', title: 'Director ID, sharper', dataUrl: pdf('id-b'), by: 'Brian K.' }, NOW);
+    expect(documents.get(KE, first.documentId)).toMatchObject({ status: 'superseded', fileDeletedAt: new Date(NOW).toISOString() });
+    expect(() => documents.file(KE, first.documentId)).toThrow();
+    // The one that waits is there for staff to open; a replaced company paper keeps its file, as before.
+    expect(documents.file(KE, second.documentId).intact).toBe(true);
+    const cert = documents.upload({ entityId: KE, kind: 'certificate_of_incorporation', title: 'Certificate', dataUrl: pdf('cert-a'), by: 'Brian K.' });
+    documents.upload({ entityId: KE, kind: 'certificate_of_incorporation', title: 'Certificate, again', dataUrl: pdf('cert-b'), by: 'Brian K.' }, NOW);
+    expect(documents.get(KE, cert.documentId).fileDeletedAt).toBeUndefined();
+    expect(documents.file(KE, cert.documentId).intact).toBe(true);
+  });
+
   /* ------------------------------------------------------------------ who is told -- */
 
   it('THE PEOPLE WHO WOULD KNOW ARE TOLD: every other administrator of the company, and of the company above it — not the one who did it, and nobody else', async () => {

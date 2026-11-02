@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { setIconCount } from '../appBadge';
 import type { NotificationsApi } from '../../lib/sbg';
-import { useT } from '../i18n';
+import { useT, type Translate } from '../i18n';
+import { followLink, linkLeadsTo } from '../launch';
 import { usePush } from '../usePush';
 import { useLiveTick } from '../useLiveTick';
 import { whenLine, type InboxItem } from '../push';
@@ -107,15 +108,49 @@ const KIND_ICON: Record<string, IconName> = {
 
 /**
  * AN ACT ON A NOTICE (2026-10-30: a haulier asked for a contract records one from the notice itself): an app says, for a
- * notice of a kind it knows, what can be done about it — shown once the notice is open; the bell closes when it is taken.
+ * notice of a kind it knows, what can be done about it. Since 2026-11-02 it is under the notice in the list, without
+ * opening it first (the owner: "on the notifications on the start screen I need a 'mark as read' or 'respond' button");
+ * the bell closes when it is taken.
  */
 export type NoticeAct = (item: InboxItem) => { label: string; run: () => void } | null;
 
 /** What moves the bell in an app that listens: its own name, and nothing else. */
 const BELL_ONLY = ['bell'] as const;
 
-/** Notices whose link is a public page to read — the terms, the data notice, cookies — offered as a link once opened. */
+/** Notices whose link is a public page to read — the terms, the data notice, cookies — offered as a link under it. */
 const READ_THERE = new Set(['terms_updated']);
+
+/**
+ * Where a notice points. Its own link — and a chat message sent before message notices carried one (2026-11-02) still
+ * names its conversation, so it is answered in the same place.
+ */
+export function noticeLink(item: InboxItem): string | undefined {
+  const conversation = item.data?.conversationId;
+  if (item.kind === 'message' && !item.link?.includes('chat=') && typeof conversation === 'string') return `/?chat=${encodeURIComponent(conversation)}`;
+  return item.link;
+}
+
+/** The one thing a notice's row offers to do about it: something to run, or a page outside the app to read. */
+export type NoticeAction = { label: string; run: () => void; href?: undefined } | { label: string; href: string; run?: undefined };
+
+/**
+ * 2026-11-02 — WHAT A NOTICE'S ROW OFFERS, besides "Mark as read" (the owner: "a 'mark as read' or 'respond' button").
+ * At most one, said by what it does:
+ *   - the app's own act on a notice of a kind it knows (the fleet records the contract a business asked for);
+ *   - "Read it" for a new version of a text everybody agreed to: the page itself, outside the app;
+ *   - "Reply" where the link is a chat, "Open" where it is a place in this app — a screen, a parcel, an offer: taken
+ *     there the way a tapped notification takes the person there (shared/launch.ts, followLink);
+ *   - nothing where the link is the app's home, where the bell already is, or a place this app does not have.
+ */
+export function noticeAction(item: InboxItem, act: NoticeAct | undefined, t: Translate): NoticeAction | null {
+  const own = act?.(item);
+  if (own) return own;
+  if (READ_THERE.has(item.kind) && item.link?.startsWith('/')) return { label: t('notify.readIt'), href: item.link };
+  const link = noticeLink(item);
+  const leads = linkLeadsTo(link);
+  if (!leads) return null;
+  return { label: t(leads === 'chat' ? 'notify.reply' : 'notify.open'), run: () => void followLink(link) };
+}
 
 /**
  * The notification centre (N2b), living in the TopBar's `end` slot. The bell carries an unread badge;
@@ -124,11 +159,14 @@ const READ_THERE = new Set(['terms_updated']);
  * persona without each app growing its own state.
  *
  * Design contract: at most one solid-blue CTA per sheet — "Turn on notifications" when push is off;
- * none when it is on (the inbox is the focus; test/turn-off are links).
+ * none when it is on (the inbox is the focus; test/turn-off are links). The buttons under each notice (Mark as read,
+ * and Reply or Open) are links as well: a list of solid buttons would be a list with no focus (2026-11-02).
  */
 export function NotificationBell({ api, shared, act }: NotificationBellProps & { act?: NoticeAct }) {
   const canMark = shared?.canMark ?? true;
   const [open, setOpen] = useState(false);
+  // The notices opened in full, by id: kept by the sheet, so marking one read from its row leaves it as it was.
+  const [opened, setOpened] = useState<string[]>([]);
   const push = usePush(api);
   // ONE LIVE VIEW: in an app that listens (a fleet office), a notice arriving or read elsewhere moves the badge now.
   const bellTick = useLiveTick(BELL_ONLY);
@@ -193,6 +231,8 @@ export function NotificationBell({ api, shared, act }: NotificationBellProps & {
                 <NotificationRow
                   key={it.id}
                   item={it}
+                  open={opened.includes(it.id)}
+                  onToggle={() => setOpened((ids) => (ids.includes(it.id) ? ids.filter((x) => x !== it.id) : [...ids, it.id]))}
                   onRead={canMark ? () => void push.markRead(it.id) : undefined}
                   act={act}
                   onActed={() => setOpen(false)}
@@ -251,25 +291,40 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
   );
 }
 
+export interface NotificationRowProps {
+  item: InboxItem;
+  /** Opened in full. */
+  open: boolean;
+  onToggle: () => void;
+  /** Marks this one read — absent for somebody who only reads a shared inbox. */
+  onRead?: () => void;
+  act?: NoticeAct;
+  /** Something was done about it: the bell closes. */
+  onActed?: () => void;
+}
+
 /**
  * One notification: what it is, the first two lines of what it says, and when. Pressing it opens that one
  * in full — and marks it read, which pressing it always did (not for somebody who only reads a shared inbox). Five-line bodies meant one notification per
  * phone screen and the next one cut in half by the bottom of the sheet.
+ *
+ * 2026-11-02 — AND UNDER IT, ITS OWN BUTTONS (the owner: "on the notifications on the start screen I need a 'mark as
+ * read' or 'respond' button, is that possible?"): "Mark as read" while it is unread, which marks that one and opens
+ * nothing; and the one thing to do about it, where there is one (noticeAction) — which marks it read too.
  */
-function NotificationRow({ item, onRead, act, onActed }: { item: InboxItem; onRead?: () => void; act?: NoticeAct; onActed?: () => void }) {
+export function NotificationRow({ item, open, onToggle, onRead, act, onActed }: NotificationRowProps) {
   const t = useT();
-  const [open, setOpen] = useState(false);
   const unread = !item.readAt;
-  const readThere = open && READ_THERE.has(item.kind) && item.link?.startsWith('/') ? item.link : null;
-  const action = open ? act?.(item) ?? null : null;
+  const action = noticeAction(item, act, t);
+  const markRead = unread && onRead ? onRead : undefined;
   return (
-    <li>
+    <li class={`nrow${unread ? ' nrow--unread' : ''}`}>
       <button
         type="button"
         class={`nitem${unread ? ' nitem--unread' : ''}${open ? ' nitem--open' : ''}`}
         aria-expanded={open}
         onClick={() => {
-          setOpen((was) => !was);
+          onToggle();
           if (unread) onRead?.();
         }}
       >
@@ -283,23 +338,33 @@ function NotificationRow({ item, onRead, act, onActed }: { item: InboxItem; onRe
         </span>
         {unread ? <span class="nitem__dot" aria-label="unread" /> : null}
       </button>
-      {readThere ? (
-        <a class="nitem__more" href={readThere} target="_blank" rel="noopener noreferrer">
-          {t('notify.readIt')}
-        </a>
-      ) : null}
-      {/* The app's own act on this notice, once it is open — taken there, and the bell closes. */}
-      {action ? (
-        <button
-          type="button"
-          class="nitem__more"
-          onClick={() => {
-            action.run();
-            onActed?.();
-          }}
-        >
-          {action.label}
-        </button>
+      {action || markRead ? (
+        <div class="nitem__acts">
+          {/* The page itself, outside the app: read in a tab of its own, the app left where it was. */}
+          {action?.href !== undefined ? (
+            <a class="nitem__act" href={action.href} target="_blank" rel="noopener noreferrer" onClick={() => (unread ? onRead?.() : undefined)}>
+              {action.label}
+            </a>
+          ) : action ? (
+            <button
+              type="button"
+              class="nitem__act"
+              onClick={() => {
+                // Doing what it asks is reading it.
+                if (unread) onRead?.();
+                action.run();
+                onActed?.();
+              }}
+            >
+              {action.label}
+            </button>
+          ) : null}
+          {markRead ? (
+            <button type="button" class="nitem__act" aria-label={`${t('notify.markRead')}: ${item.title}`} onClick={markRead}>
+              {t('notify.markRead')}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </li>
   );

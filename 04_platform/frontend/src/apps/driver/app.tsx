@@ -105,7 +105,12 @@ export function App() {
         backLabel={t('driver.backToVan', { vehicle })}
         end={
           <>
-            <NotificationBell api={notifications} />
+            {/* 2026-11-02 — a fleet's offer of a place is answered in "Your fleet", a sheet behind the account menu: the
+                notice opens it (the owner: "I need a 'mark as read' or 'respond' button"). Not the offer taken back. */}
+            <NotificationBell
+              api={notifications}
+              act={(it) => (it.kind === 'fleet_offer' && typeof it.data?.fleetDid === 'string' ? { label: t('driver.home.offerSee'), run: () => setFleetOpen(true) } : null)}
+            />
             {needRefresh ? (
               <button
                 type="button"
