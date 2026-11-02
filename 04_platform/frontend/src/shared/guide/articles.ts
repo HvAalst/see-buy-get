@@ -104,6 +104,8 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   // The procedures every consignment note refers to (e-CMR Art. 5): public, because the note links here for whoever holds it.
   { id: 'electronic-note', apps: ['business', 'agent', 'driver', 'fleet', 'vendor'], group: 'freight', site: true, steps: 6, notes: ['why', 'note'] },
   { id: 'business-bell', apps: ['business'], group: 'daily', steps: 4, notes: ['note', 'rare', 'note'] },
+  // 2026-11-02 — the bell in every phone app: a notice about something opens it in one tap.
+  { id: 'notices-bell', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 3, notes: ['careful', 'note'] },
   // A business's parcels (the user, 2026-10-29: "Billed to the business"; "A prepaid balance").
   { id: 'business-parcels', apps: ['business'], group: 'daily', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note'] },
   { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note'] },
@@ -178,6 +180,9 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'chat-photos', apps: ['agent', 'driver', 'vendor', 'send'], group: 'daily', steps: 5, notes: ['note', 'note', 'note', 'note', 'why', 'rare'] },
   // No upload fails in silence: a photo made smaller, a file's limit said, every refusal with its size and what to do.
   { id: 'upload-refused', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'wrong', steps: 6, notes: ['note', 'note', 'why'] },
+  // 2026-11-02 — messages in the car (the owner: "we start with 2"): read aloud by Android Auto and answered by voice, from
+  // the Play app's Settings; conversations only.
+  { id: 'car-messages', apps: ['driver'], group: 'daily', steps: 5, notes: ['careful', 'note', 'note', 'rare', 'note', 'why', 'note'] },
 ];
 
 const key = (id: string, part: string) => `help.${id}.${part}` as MessageKey;

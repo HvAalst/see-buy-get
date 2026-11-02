@@ -94,6 +94,13 @@ export interface ChatMessage {
   at: string;
   /** Written with no signal and sent when it came back (2026-11-01): when it was written. */
   writtenAt?: string;
+  /** 2026-11-02 — spoken in the car and sent as text from there (the owner: "we start with 2"): "Sent from the car", to both sides. */
+  via?: 'car';
+}
+
+/** 2026-11-02 — was this a reply spoken in the car? Said beside its time, to both sides. */
+export function sentFromCar(m: Pick<ChatMessage, 'via'>): boolean {
+  return m.via === 'car';
 }
 
 /**

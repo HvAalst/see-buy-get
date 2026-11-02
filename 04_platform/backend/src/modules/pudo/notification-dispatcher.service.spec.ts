@@ -1073,13 +1073,95 @@ describe('NotificationDispatcher — a notice to a load’s poster names the loa
     expect(linkOf(notifications, P, /FRT-13 was handed back/)).toBe('/?load=frt_13');
     expect(linkOf(notifications, 'did:fleet:1', /FRT-13 was handed back/)).toBe('/');
     expect(linkOf(notifications, P, /FRT-14: the vehicle carrying it broke down/)).toBe('/?load=frt_14&about=road');
-    // Space on a run is a booking, not a load: home, as before.
-    expect(linkOf(notifications, 'did:biz:booked', /broke down/)).toBe('/');
+    // Space on a run is a booking, not a load: its run (2026-11-02, below).
+    expect(linkOf(notifications, 'did:biz:booked', /broke down/)).toBe('/?run=dep_1');
   });
 
   it('every load link is a query on the app root, and names the load', async () => {
     const { events, notifications } = harness({});
     await events.publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: 'frt_1', code: 'FRT-1', posterDid: P, outcome: 'unreachable', attempts: 2 });
     for (const n of notifications.inboxFor(P)) expect(n.link).toMatch(/^\/\?load=frt_1(&about=(road|seals|claim))?$/);
+  });
+});
+
+/*
+ * 2026-11-02 — ONE TAP, AND IT OPENS (the owner: "yes, just to keep drivers' safety in mind, we must reduce the tapping,
+ * so that's why it should open"). Space booked on a run names its run and booking (`/?run=…&booking=…`), opened where
+ * a shop or a business reads its bookings; a driver's notice names the screen where the driver acts on it.
+ */
+describe('NotificationDispatcher — space booked on a run names the run, and the booking', () => {
+  const S = 'did:biz:shipper';
+  const linkOf = (notifications: NotificationService, did: string, title: RegExp) => notifications.inboxFor(did).find((n) => title.test(n.title))?.link;
+  const run = { departureId: 'dep_1', company: 'Kilima', lineName: 'Nairobi–Mombasa' };
+
+  it('called off, given back, a claim answered, another vehicle, delivered — each to its run, and its booking where named', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.DepartureCancelled, { ...run, originZone: 'Nairobi', destZone: 'Mombasa', leavesAt: '2026-11-03T06:00:00.000Z', shippers: [S], reason: 'The truck broke down' });
+    await events.publish(GlosEvent.Pudo.DepartureBookingCancelled, { ...run, bookingId: 'bk_1', managerDid: 'did:fleet:1', shipperDid: S, kind: 'sold', by: 'did:fleet:1', description: 'Bricks', reason: 'goods_not_as_booked' });
+    await events.publish(GlosEvent.Pudo.DepartureClaimAnswered, { ...run, bookingId: 'bk_1', shipperDid: S, managerDid: 'did:fleet:1', load: 'Bricks', answer: 'accepted' });
+    await events.publish(GlosEvent.Pudo.DepartureVehicleChanged, { ...run, managerDid: 'did:fleet:1', fromPlate: 'KDA 1', toPlate: 'KDA 2', fromClass: 'truck', toClass: 'van', shippers: [S] });
+    await events.publish(GlosEvent.Pudo.DepartureDelivered, { ...run, shipperDid: S, kind: 'sold', description: 'Bricks', destZone: 'Mombasa' });
+    expect(linkOf(notifications, S, /called off/)).toBe('/?run=dep_1');
+    expect(linkOf(notifications, S, /cancelled your booking/)).toBe('/?run=dep_1&booking=bk_1');
+    expect(linkOf(notifications, S, /your claim/)).toBe('/?run=dep_1&booking=bk_1');
+    expect(linkOf(notifications, S, /A different vehicle/)).toBe('/?run=dep_1');
+    expect(linkOf(notifications, S, /Delivered in Mombasa/)).toBe('/?run=dep_1');
+  });
+
+  it('the fleet hears its space given back under Runs; a breakdown of booked space names the run', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.DepartureBookingCancelled, { ...run, bookingId: 'bk_2', managerDid: 'did:fleet:1', shipperDid: S, kind: 'sold', by: S, description: 'Bricks' });
+    await events.publish(GlosEvent.Pudo.VehicleBrokeDown, { plate: 'KDA 1', carrier: 'Kilima', when: 'today', breakdown: { breakdownId: 'bd_9' }, tell: [{ shipperDid: S, kind: 'booking', state: 'aboard', label: 'Bricks', lineName: 'Nairobi–Mombasa', departureId: 'dep_1' }] });
+    expect(linkOf(notifications, 'did:fleet:1', /Space given back/)).toBe('/?go=runs');
+    expect(linkOf(notifications, S, /broke down/)).toBe('/?run=dep_1');
+  });
+});
+
+describe('NotificationDispatcher — a driver’s notice opens where the driver acts on it', () => {
+  const D = 'did:drv:amos';
+  const linkOf = (notifications: NotificationService, title: RegExp) => notifications.inboxFor(D).find((n) => title.test(n.title))?.link;
+
+  it('a load put on them, its instructions changed: My loads; a load withdrawn: the board, where the next one is', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightAssigned, { freightId: 'frt_1', code: 'FRT-1', driverDid: D, pickupLabel: 'Depot', destLabel: 'Gate 3', weightKg: 400 });
+    await events.publish(GlosEvent.Pudo.FreightInstructed, { freightId: 'frt_1', code: 'FRT-1', driverDid: D, amended: true, text: 'Ring at the gate' });
+    await events.publish(GlosEvent.Pudo.FreightCancelled, { freightId: 'frt_2', code: 'FRT-2', driverDid: D, reason: 'No longer needed' });
+    expect(linkOf(notifications, /FRT-1 was put on you/)).toBe('/?go=loads');
+    expect(linkOf(notifications, /New instruction for FRT-1/)).toBe('/?go=loads');
+    expect(linkOf(notifications, /FRT-2 was cancelled/)).toBe('/?go=board');
+  });
+
+  it('their vehicle for today and their papers checked: the home screen, where a shift starts', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.DriverVehicleSuggested, { driverDid: D, plate: 'KDA 7', vehicleClass: 'van' });
+    await events.publish(GlosEvent.Pudo.DriverActivated, { did: D });
+    await events.publish(GlosEvent.Pudo.DriverLicenceChecked, { did: D, accepted: true, expiresAt: '2027-11-01' });
+    expect(linkOf(notifications, /Your vehicle today/)).toBe('/?go=home');
+    expect(linkOf(notifications, /you can drive/)).toBe('/?go=home');
+    expect(linkOf(notifications, /Your licence is recorded/)).toBe('/?go=home');
+  });
+
+  it('a fleet’s offer, a day on the roster: no link — the Driver app opens its fleet sheet itself; a tapped push lands home', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FleetOfferMade, { offerId: 'fo_1', driverDid: D, fleetDid: 'did:fleet:1', companyName: 'Kilima', expiresAt: '2026-11-09T00:00:00.000Z' });
+    expect(linkOf(notifications, /offers you a place/)).toBe('/');
+  });
+
+  it('riding alone: yes opens the home screen; no is named for the fleet sheet, where it is asked again', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.DriverRideAloneDecided, { did: D, approved: false, reason: 'The licence photo is blurred.' });
+    const no = notifications.inboxFor(D).find((n) => /not approved/.test(n.title));
+    expect(no).toMatchObject({ link: '/', data: { about: 'ride_alone', approved: false } });
+    await events.publish(GlosEvent.Pudo.DriverRideAloneDecided, { did: D, approved: true });
+    expect(linkOf(notifications, /You ride for yourself now/)).toBe('/?go=home');
+  });
+
+  it('a shift’s hours: the driver’s home screen, where the shift is; the office hears a driver over the limit under its shifts', async () => {
+    const { notifications, dispatcher } = harness({});
+    // What is due comes from the fleet service: one driver over the limit, as it would hand it over.
+    (dispatcher as unknown as { fleet: { takeHoursNotices: () => unknown[] } }).fleet.takeHoursNotices = () => [{ kind: 'over', driverDid: D, managerDid: 'did:fleet:1', driverName: 'Amos K.', onDuty: 12 }];
+    expect(await dispatcher.sweepHours()).toBe(1);
+    expect(linkOf(notifications, /reached the shift limit/)).toBe('/?go=home');
+    expect(notifications.inboxFor('did:fleet:1').find((n) => n.kind === 'shift_hours')?.link).toBe('/?go=sessions');
   });
 });

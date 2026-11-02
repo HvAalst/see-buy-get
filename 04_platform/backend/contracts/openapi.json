@@ -25699,6 +25699,96 @@
         }
       }
     },
+    "/v1/sbg/account/car": {
+      "post": {
+        "operationId": "Account.carHere",
+        "summary": "",
+        "description": "2026-11-02 — MESSAGES IN THE CAR (the owner: \"we start with 2\" — the driver's chats read aloud in the car and answered\nby voice). Is it on, on this phone? The Driver app's own Settings, signed in as the driver: staff pass every role check\nand are refused by name (`driverOf`). A POST although it only reads, for the PIN devices' reason: the device keys\ntravel in the body. The app's language comes with it, and is kept with the key.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarHereDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarHere"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/car/on": {
+      "post": {
+        "operationId": "Account.carOn",
+        "summary": "",
+        "description": "Turn it on, on this phone: the PIN again (the door's check and counter). The car key comes back once, in this answer.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarOnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarTurnedOn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/car/off": {
+      "post": {
+        "operationId": "Account.carOff",
+        "summary": "",
+        "description": "Turn it off here: the car key opens nothing from now on. Nothing asked to turn it off.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarHereDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarHere"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/account/email": {
       "post": {
         "operationId": "Account.setEmail",
@@ -36606,6 +36696,143 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DocumentVersion"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/car/token": {
+      "post": {
+        "operationId": "Car.token",
+        "summary": "",
+        "description": "Where Firebase reaches this phone. Told when the key arrives, and again whenever Firebase gives the phone a new token.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarTokenRegistered"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/car/chats/{conversationId}": {
+      "get": {
+        "operationId": "Car.chat",
+        "summary": "",
+        "description": "One chat's unread messages, as the car reads them aloud. Asked when the phone is woken: \"this chat has news\".",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarChatView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/car/chats/{conversationId}/reply": {
+      "post": {
+        "operationId": "Car.reply",
+        "summary": "",
+        "description": "A spoken reply, as text — refused as a typed one would be; marked \"Sent from the car\".",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarReplySent"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/car/chats/{conversationId}/read": {
+      "post": {
+        "operationId": "Car.read",
+        "summary": "",
+        "description": "\"Mark as read\", up to the newest message the car showed.",
+        "parameters": [
+          {
+            "name": "conversationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarReadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CarChatRead"
                 }
               }
             }
@@ -68567,6 +68794,110 @@
           "response"
         ]
       },
+      "CarHereDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "lang": {
+            "type": "string",
+            "description": "The Driver app's language (`en`, `sw`, …): a quick reply is read aloud in it.",
+            "pattern": "/^[a-z]{2}$/"
+          }
+        }
+      },
+      "CarHere": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "A car key lives on this phone's record."
+          },
+          "which": {
+            "type": "number",
+            "description": "Which of the browser's device keys is this person's; -1 when none is (the PIN does not work here, so nothing can be turned on)."
+          },
+          "phone": {
+            "type": "object",
+            "description": "`waiting` — made, and the phone's native part has not told us where to wake it yet; `on` — it has. Absent when off."
+          },
+          "addedAt": {
+            "type": "string",
+            "description": "When it was turned on."
+          },
+          "tokenAt": {
+            "type": "string",
+            "description": "When the phone last told us where to wake it."
+          }
+        },
+        "required": [
+          "on",
+          "which"
+        ]
+      },
+      "CarOnDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "lang": {
+            "type": "string",
+            "description": "The Driver app's language (`en`, `sw`, …): a quick reply is read aloud in it.",
+            "pattern": "/^[a-z]{2}$/"
+          },
+          "pin": {
+            "type": "string",
+            "maxLength": 12
+          }
+        },
+        "required": [
+          "pin"
+        ]
+      },
+      "CarTurnedOn": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "A car key lives on this phone's record."
+          },
+          "which": {
+            "type": "number",
+            "description": "Which of the browser's device keys is this person's; -1 when none is (the PIN does not work here, so nothing can be turned on)."
+          },
+          "phone": {
+            "type": "object",
+            "description": "`waiting` — made, and the phone's native part has not told us where to wake it yet; `on` — it has. Absent when off."
+          },
+          "addedAt": {
+            "type": "string",
+            "description": "When it was turned on."
+          },
+          "tokenAt": {
+            "type": "string",
+            "description": "When the phone last told us where to wake it."
+          },
+          "key": {
+            "type": "string",
+            "description": "`car_` and 64 hex characters. Kept on the server only as a hash: this is the one time it is seen."
+          }
+        },
+        "required": [
+          "on",
+          "which",
+          "key"
+        ]
+      },
       "AccountEmailDto": {
         "type": "object",
         "properties": {
@@ -81521,6 +81852,187 @@
             "maxLength": 120
           }
         }
+      },
+      "CarTokenDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The phone's Firebase registration token.",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "CarTokenRegistered": {
+        "type": "object",
+        "properties": {
+          "registered": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "registered"
+        ]
+      },
+      "CarChatLine": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "number",
+            "description": "Its place in the chat: what \"Mark as read\" is given back."
+          },
+          "from": {
+            "type": "string",
+            "description": "Who it is from, as the chat names them to the driver: \"The poster\"."
+          },
+          "text": {
+            "type": "string",
+            "description": "What the car reads aloud — the words; a quick reply in the driver's language; or, for a voice message or a photo, what it is and to open the app when they stop."
+          },
+          "kind": {
+            "type": "string",
+            "description": "What kind of message it was: `text` and `quick` are words; anything else is something to open the app for."
+          },
+          "at": {
+            "type": "string",
+            "description": "When it arrived."
+          }
+        },
+        "required": [
+          "seq",
+          "from",
+          "text",
+          "kind",
+          "at"
+        ]
+      },
+      "CarChatView": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "description": "What the conversation is titled by: the load's code and what it is — \"FRT-7781 · Roses · Nakuru → Nairobi\"."
+          },
+          "code": {
+            "type": "string",
+            "description": "The load's code."
+          },
+          "label": {
+            "type": "string",
+            "description": "What the load is, from where to where."
+          },
+          "from": {
+            "type": "string",
+            "description": "The other side, as the chat names them."
+          },
+          "lang": {
+            "type": "string",
+            "description": "The language the words are in: the Driver app's."
+          },
+          "unread": {
+            "type": "number",
+            "description": "How many are unread in all; `messages` carries the newest of them."
+          },
+          "lastSeq": {
+            "type": "number",
+            "description": "The chat's last sequence number."
+          },
+          "canReply": {
+            "type": "boolean",
+            "description": "A reply can be sent: false when the conversation is closed."
+          },
+          "closed": {
+            "type": "string",
+            "description": "Why not, in the driver's language — what the car says instead of offering Reply."
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CarChatLine"
+            }
+          }
+        },
+        "required": [
+          "conversationId",
+          "title",
+          "code",
+          "label",
+          "from",
+          "lang",
+          "unread",
+          "lastSeq",
+          "canReply",
+          "messages"
+        ]
+      },
+      "CarReplyDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "CarReplySent": {
+        "type": "object",
+        "properties": {
+          "sent": {
+            "type": "boolean"
+          },
+          "seq": {
+            "type": "number"
+          },
+          "at": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sent",
+          "seq",
+          "at",
+          "via"
+        ]
+      },
+      "CarReadDto": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seq"
+        ]
+      },
+      "CarChatRead": {
+        "type": "object",
+        "properties": {
+          "read": {
+            "type": "boolean"
+          },
+          "unread": {
+            "type": "number",
+            "description": "Still unread after it: anything that arrived after the message the car was showing."
+          }
+        },
+        "required": [
+          "read",
+          "unread"
+        ]
       },
       "MilestoneTermDto": {
         "type": "object",

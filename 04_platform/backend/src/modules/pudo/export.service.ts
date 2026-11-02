@@ -14,6 +14,7 @@ import { DispatchService } from './dispatch.service';
 import { EXPORT_PAPER_GROUP, EXPORT_PAPER_KEYS, type ExportPaperGroup, type KnownExportPaperKey, type ExportBoxClockView, type ExportConsignment, type ExportDetail, type ExportLegView, type ExportPaper, type ExportPaperKey, type ExportPlace, type ExportRow, type ExportTiming, type BookedWith } from './export.types';
 import { LoadSealService } from './load-seal.service';
 import { NotificationService } from './notification.service';
+import { exportLink } from './notification.types';
 import { EXPORT_GATE_BUFFER_H, VEHICLE_SPEED_KMH } from './pudo.config';
 import { catalogueEntry, isCatalogued, isKnownCurrency } from '../../foundation/countries/catalogue';
 import type { FeeState } from './import.types';
@@ -1829,7 +1830,7 @@ ${d.missing.length ? `<p class="missing">Still missing: ${esc(d.missing.join('; 
       return;
     }
     if (!did) return;
-    void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `export:${c.exportId}:${title}`, data: { exportId: c.exportId } }).catch(() => undefined);
+    void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: exportLink(c.exportId), tag: `export:${c.exportId}:${title}`, data: { exportId: c.exportId } }).catch(() => undefined);
   }
 
   private legOf(freightId: string): ExportLegView {

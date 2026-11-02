@@ -286,6 +286,24 @@ export function loadLink(freightId: string, about?: LoadAbout): string {
 }
 
 /**
+ * 2026-11-02 — SPACE BOOKED ON A RUN (the owner: "we must reduce the tapping, so that's why it should open"): the run,
+ * and the booking where the notice is about one — `/?run=<departureId>&booking=<bookingId>`. A shop and a business book
+ * space; each opens its booking on that run where it reads its bookings. A run called off is told to every shipper on it
+ * by the run alone: each app finds its own booking there.
+ */
+export function runLink(departureId: string, bookingId?: string): string {
+  return `/?run=${encodeURIComponent(departureId)}${bookingId ? `&booking=${encodeURIComponent(bookingId)}` : ''}`;
+}
+
+/** 2026-11-02 — an export, or an import, a business reads under Exports or Imports: that one, opened. */
+export function exportLink(exportId: string): string {
+  return `/?export=${encodeURIComponent(exportId)}`;
+}
+export function importLink(importId: string): string {
+  return `/?import=${encodeURIComponent(importId)}`;
+}
+
+/**
  * What the service worker renders. `title`/`body` are the visible lines; `link` is the app-relative
  * deep link opened on tap (notificationclick); `tag` lets the SW collapse a re-send of the same event
  * onto the existing notification instead of stacking duplicates; `data` carries anything the click

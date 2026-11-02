@@ -80,6 +80,26 @@ describe('NotificationService — the push spine (N1)', () => {
     });
   });
 
+  /**
+   * 2026-11-02 — NOT RUNG TWICE ("Messages in the car"): a caller that reaches the owner another way keeps the notice in
+   * the inbox and pushes nothing — except a notice about the account's own safety, which reaches it wherever it is.
+   */
+  describe('kept, not pushed', () => {
+    it('`push: false` records the notice in the inbox and pushes to no device; a safety notice is pushed all the same', async () => {
+      const outbox = new OutboxPushSender();
+      const svc = new NotificationService(outbox);
+      svc.subscribe('did:drv:car', 'driver', sub('https://push/car'));
+      const kept = await svc.notify('did:drv:car', { ...payload, kind: 'message' }, { push: false });
+      expect(svc.inboxFor('did:drv:car').map((n) => n.id)).toEqual([kept.id]);
+      expect(svc.unreadCount('did:drv:car')).toBe(1);
+      expect(outbox.outboxFor('did:drv:car')).toEqual([]);
+      await svc.notify('did:drv:car', { ...payload, kind: 'security' }, { push: false });
+      expect(outbox.outboxFor('did:drv:car').map((d) => d.payload.kind)).toEqual(['security']);
+      await svc.notify('did:drv:car', { ...payload, kind: 'message' });
+      expect(outbox.outboxFor('did:drv:car')).toHaveLength(2);
+    });
+  });
+
   describe('fan-out', () => {
     it('pushes to every device the owner has and returns the count', async () => {
       const outbox = new OutboxPushSender();

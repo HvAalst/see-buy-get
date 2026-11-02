@@ -524,6 +524,8 @@ export const enAgent = {
      Space could be taken and never seen again: no time, no company, no way to give it back, and no way
      to learn the run had been called off. Nothing errored, which is why it looked finished. */
   'agent.mine.title': 'Space you have taken',
+  // 2026-11-02 — a notice named a booking this shop's list does not hold.
+  'agent.mine.notYours': 'The booking this notice is about is not among this shop’s bookings.',
   'agent.mine.lede': 'Every run you have booked onto, including the ones that are over. Nothing is tidied away — what you sent last month is still the answer to what you sent last month.',
   'agent.mine.with': '{company} · {from} → {to}',
   'agent.mine.leaves': 'Leaves {when}',

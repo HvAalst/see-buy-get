@@ -16,6 +16,7 @@ import { IdentityVault } from '../../foundation/data-firewall/identity-vault.ser
 import { MediaService } from './media.service';
 import { DEVICE_UNUSED_DAYS, DeviceBook, DeviceSeen, KnownDevice } from './person-devices';
 import { DevicePasskey, UNLOCK_TTL_MS, UnlockGrant, UnlockTickets, deviceHashOf } from './passkeys';
+import type { CarKeyFound, DeviceCarKey } from './car-keys';
 import { OldNumber, Person, PersonRole, PersonView, PhoneChange, ROLE_TO_ACTOR, RoleLink, toView } from './person.types';
 
 /** Wrong-PIN attempts before the PIN locks. From then on only a code sent to the phone opens it again. */
@@ -454,6 +455,9 @@ export class PersonService {
     // a PIN somebody else may have learnt must not outlive being changed by way of a passkey it let them make.
     this.devices.dropAllPasskeys(personDid);
     this.unlocks.dropFor(personDid);
+    // 2026-11-02 — and every car key made with it ("Messages in the car", car-keys.ts), for the same reason: a key that
+    // reads and answers this person's chats must not outlive the PIN that was typed to make it.
+    this.devices.dropAllCars(personDid);
   }
 
   /**
@@ -545,6 +549,41 @@ export class PersonService {
   /** It unlocked: the phone's counter as it now stands. */
   passkeyUsed(personDid: string, key: string, counter: number): void {
     this.devices.passkeyUsed(personDid, key, counter);
+  }
+
+  /* ------------------------------------------------ 2026-11-02: messages in the car (car-keys.ts) -- */
+
+  /** Which of the asking browser's keys is this person's, and the car key on that device, where one was turned on there. */
+  carHere(personDid: string, keys: string[] | undefined): { which: number; key?: string; car?: DeviceCarKey } {
+    const which = this.devices.whichOf(personDid, keys);
+    const key = which >= 0 ? keys?.[which] : undefined;
+    const car = key ? this.devices.carOf(personDid, key) : undefined;
+    return { which, ...(key ? { key } : {}), ...(car ? { car } : {}) };
+  }
+
+  /** Turn it on, on a device of this person's. The caller has checked the PIN. */
+  setCarKey(personDid: string, key: string, car: DeviceCarKey): boolean {
+    return this.devices.setCar(personDid, key, car);
+  }
+
+  /** Turn it off here. The device stays one the PIN works on. */
+  dropCarKey(personDid: string, key: string | undefined): DeviceCarKey | undefined {
+    return this.devices.dropCar(personDid, key);
+  }
+
+  /** The car key with this hash, on a device still known — or nothing. */
+  findCarKey(keyHash: string, now: number = Date.now()): CarKeyFound | undefined {
+    return this.devices.findCar(keyHash, now);
+  }
+
+  /** Change a car key in place: its Firebase token, its language, its day of use. */
+  updateCarKey(keyHash: string, change: (car: DeviceCarKey) => DeviceCarKey, now: number = Date.now()): boolean {
+    return this.devices.updateCar(keyHash, change, now);
+  }
+
+  /** The car keys that read this driver record's chats — the phones a message to it wakes. */
+  carKeysOfDriver(driverDid: string, now: number = Date.now()): CarKeyFound[] {
+    return this.devices.carsOfDriver(driverDid, now);
   }
 
   /** The phone's fingerprint or face checked out: a ticket for the door, two minutes, one use. */

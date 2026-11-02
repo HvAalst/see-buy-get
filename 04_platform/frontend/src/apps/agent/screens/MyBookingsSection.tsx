@@ -31,6 +31,14 @@ export function MyBookingsSection({ state, actions }: { state: AgentState; actio
     if (state.myBookingsState === 'idle') void actions.loadMyBookings();
   }, [state.myBookingsState, actions]);
 
+  // 2026-11-02 — the booking a notice named: brought into the middle of the screen, and the reader's place moved to it.
+  useEffect(() => {
+    if (!state.soughtBooking || typeof document === 'undefined') return;
+    const row = document.getElementById(`booking-${state.soughtBooking.id}`);
+    row?.scrollIntoView?.({ block: 'center' });
+    row?.focus?.({ preventScroll: true });
+  }, [state.soughtBooking?.seq]);
+
   if (state.myBookingsState === 'loading') {
     return (
       <>
@@ -52,7 +60,7 @@ export function MyBookingsSection({ state, actions }: { state: AgentState; actio
       <p class="hint">{t('agent.mine.lede')}</p>
       <div class="rows" role="list">
         {state.myBookings.map((b) => (
-          <Booking key={b.bookingId} row={b} state={state} actions={actions} />
+          <Booking key={b.bookingId} row={b} state={state} actions={actions} sought={state.soughtBooking?.id === b.bookingId} />
         ))}
       </div>
     </>
@@ -92,7 +100,7 @@ function strandedDetail(row: MyBookingRow, t: Translate): string {
   return words ? `${words}. ${advice}` : advice;
 }
 
-function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState; actions: AgentActions }) {
+function Booking({ row, state, actions, sought = false }: { row: MyBookingRow; state: AgentState; actions: AgentActions; sought?: boolean }) {
   const t = useT();
   const status = statusOf(row);
   // Their own standing time, and only theirs — three loads on one truck and the two-hour stand at the
@@ -107,7 +115,7 @@ function Booking({ row, state, actions }: { row: MyBookingRow; state: AgentState
   const travelling = row.bookingStatus !== 'cancelled' && row.runStatus !== 'cancelled';
 
   return (
-    <div class="row row--static" role="listitem">
+    <div id={`booking-${row.bookingId}`} tabIndex={-1} class={`row row--static${sought ? ' row--sought' : ''}`} role="listitem" aria-current={sought ? 'true' : undefined}>
       <span class="row__ic">
         <Icon name="truck" size={22} />
       </span>

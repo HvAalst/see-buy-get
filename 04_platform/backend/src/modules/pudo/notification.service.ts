@@ -183,7 +183,7 @@ export class NotificationService {
    * in-app centre reads), THEN fan it out to their devices. Recording first means a push-delivery
    * hiccup never loses the notification — the user still sees it in-app. Returns the stored record.
    */
-  async notify(ownerDid: string, payload: NotificationPayload): Promise<NotificationRecord> {
+  async notify(ownerDid: string, payload: NotificationPayload, opts?: { push?: boolean }): Promise<NotificationRecord> {
     const record: NotificationRecord = {
       id: `ntf_${randomBytes(8).toString('hex')}`,
       ownerDid,
@@ -200,6 +200,10 @@ export class NotificationService {
     // AN ACCOUNT AT REST is not rung — it is in the inbox, where its owner can read it — unless it is about the
     // account's own safety, which reaches it wherever it is.
     if (payload.kind !== 'security' && this.rest?.isResting(ownerDid)) return record;
+    // 2026-11-02 — NOT RUNG TWICE (the integrator, for "Messages in the car"): a caller that reaches this owner another
+    // way — a driver's chat message, which the Play app shows itself and the car reads aloud — keeps it in the bell's
+    // inbox and pushes nothing. Never a notice about the account's own safety.
+    if (opts?.push === false && payload.kind !== 'security') return record;
     await this.pushToOwner(ownerDid, payload);
     return record;
   }

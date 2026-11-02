@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'crypto';
 import type { DevicePasskey } from './passkeys';
+import type { CarKeyFound, DeviceCarKey } from './car-keys';
 
 /**
  * THE DEVICES A PERSON'S PIN WORKS ON (the user, 2026-10-11: "I thought that the pin was unique to the device. so
@@ -36,6 +37,12 @@ export interface KnownDevice {
    * unlock is refused there: whoever can unlock a phone colleagues use could sign in as the shop.
    */
   counterAt?: string;
+  /**
+   * 2026-11-02 — ITS CAR KEY, where its driver turned "Messages in the car" on here (the owner: "we start with 2" — the
+   * driver's chats read aloud in the car). Kept ON the device's own record, as the passkey is, so it goes with the device
+   * by every path that forgets one. Only the key's hash. See car-keys.ts.
+   */
+  car?: DeviceCarKey;
 }
 
 /** The least recently used goes when an eleventh is added: a phone, a tablet, the office computer, and room to replace each twice. */
@@ -56,8 +63,17 @@ const hashOf = (key: string) => createHash('sha256').update(key).digest('hex');
 const lastUse = (d: KnownDevice) => d.usedAt ?? d.addedAt;
 
 export class DeviceBook {
+  /**
+   * 2026-11-02 — WHICH DEVICE EACH CAR KEY LIVES ON: a car key's hash → its device's hash. An index, rebuilt from the
+   * durable store and kept in step as keys are set; never the truth. Every answer read through it is checked against
+   * the device's own record, so a device forgotten by any path — or an index entry gone stale — finds nothing.
+   */
+  private readonly carIndex = new Map<string, string>();
+
   /** @param store keyed by the hash of a device's key. A service passes the durable store. */
-  constructor(private readonly store: Map<string, KnownDevice>) {}
+  constructor(private readonly store: Map<string, KnownDevice>) {
+    for (const [hash, d] of store) if (d.car) this.carIndex.set(d.car.keyHash, hash);
+  }
 
   /** A new key for a device of this person's. Returned ONCE; only its hash is kept. */
   add(personDid: string, now: number = Date.now()): string {
@@ -179,6 +195,91 @@ export class DeviceBook {
     const at = new Date(now).toISOString();
     if (d.passkey.counter === counter && d.passkey.usedAt?.slice(0, 10) === at.slice(0, 10)) return;
     this.store.set(hash, { ...d, passkey: { ...d.passkey, counter, usedAt: at } });
+  }
+
+  /* -------------------------------------------------- 2026-11-02: messages in the car, per device -- */
+
+  /** This device's car key, where it is a device of this person's (still known) and one was turned on here. */
+  carOf(personDid: string | undefined, key: string | undefined, now: number = Date.now()): DeviceCarKey | undefined {
+    if (!this.knows(personDid, key, now)) return undefined;
+    return this.store.get(hashOf(key as string))?.car;
+  }
+
+  /** Turn it on here: replaces any car key this device had, which opens nothing from then on. False when this is not a known device of this person's. */
+  setCar(personDid: string, key: string, car: DeviceCarKey, now: number = Date.now()): boolean {
+    if (!this.knows(personDid, key, now)) return false;
+    const hash = hashOf(key);
+    const d = this.store.get(hash) as KnownDevice;
+    if (d.car) this.carIndex.delete(d.car.keyHash);
+    this.store.set(hash, { ...d, car });
+    this.carIndex.set(car.keyHash, hash);
+    return true;
+  }
+
+  /** Turn it off here: the device stays one the PIN works on. The car key it had, or undefined when it had none. */
+  dropCar(personDid: string, key: string | undefined): DeviceCarKey | undefined {
+    if (!key) return undefined;
+    const hash = hashOf(key);
+    const d = this.store.get(hash);
+    if (!d || d.personDid !== personDid || !d.car) return undefined;
+    const { car, ...rest } = d;
+    this.store.set(hash, rest);
+    this.carIndex.delete(car.keyHash);
+    return car;
+  }
+
+  /** Every car key of this person's off every device — the PIN was changed or replaced. The devices stay. How many there were. */
+  dropAllCars(personDid: string): number {
+    let dropped = 0;
+    for (const [hash, d] of [...this.store]) {
+      if (d.personDid !== personDid || !d.car) continue;
+      const { car, ...rest } = d;
+      this.store.set(hash, rest);
+      this.carIndex.delete(car.keyHash);
+      dropped += 1;
+    }
+    return dropped;
+  }
+
+  /**
+   * THE CAR KEY WHOSE HASH THIS IS — read on its device's own record, which must still be there and still say so. A device
+   * unused for ninety days is forgotten as it is met here, its car key with it. A car door does NOT keep a device known:
+   * only its PIN, or a code typed on it, does — a phone in a drawer that only the car still talks to goes in ninety days.
+   */
+  findCar(keyHash: string, now: number = Date.now()): CarKeyFound | undefined {
+    const deviceHash = this.carIndex.get(keyHash);
+    if (!deviceHash) return undefined;
+    const d = this.store.get(deviceHash);
+    if (!d?.car || d.car.keyHash !== keyHash) {
+      // Forgotten by another path, or replaced: the index catches up here.
+      this.carIndex.delete(keyHash);
+      return undefined;
+    }
+    if (this.lapsed(d, now)) {
+      this.store.delete(deviceHash);
+      this.carIndex.delete(keyHash);
+      return undefined;
+    }
+    return { personDid: d.personDid, deviceHash, car: d.car };
+  }
+
+  /** Change a car key in place — its Firebase token, its language, its day of use. False when it is no longer there. */
+  updateCar(keyHash: string, change: (car: DeviceCarKey) => DeviceCarKey, now: number = Date.now()): boolean {
+    const found = this.findCar(keyHash, now);
+    if (!found) return false;
+    const d = this.store.get(found.deviceHash) as KnownDevice;
+    this.store.set(found.deviceHash, { ...d, car: { ...change(found.car), keyHash: found.car.keyHash } });
+    return true;
+  }
+
+  /** Every car key of one driver record's, on devices still known — the phones a message to that driver wakes. */
+  carsOfDriver(driverDid: string, now: number = Date.now()): CarKeyFound[] {
+    const found: CarKeyFound[] = [];
+    for (const keyHash of [...this.carIndex.keys()]) {
+      const car = this.findCar(keyHash, now);
+      if (car && car.car.driverDid === driverDid) found.push(car);
+    }
+    return found;
   }
 
   /** How many devices this person's PIN works on. */

@@ -855,6 +855,26 @@
 .nitem__act:active {
   background: var(--bd-soft);
 }
+/*
+ * 2026-11-02 — ONE TAP, AND IT OPENS (the owner: "we must reduce the tapping"): a notice with somewhere to go is itself
+ * the button, the whole row a target a thumb finds at the wheel; it says where it goes, in the blue of a link.
+ */
+a.nitem {
+  color: inherit;
+  text-decoration: none;
+}
+.nitem:active {
+  background: var(--bd-soft);
+}
+.nitem__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--blue);
+}
 .nitem__dot {
   flex: none;
   width: 10px;

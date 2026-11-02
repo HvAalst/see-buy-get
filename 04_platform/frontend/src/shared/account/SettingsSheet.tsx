@@ -16,11 +16,13 @@ import { pinChangeBlocker } from './password';
 import { PIN_LENGTH } from './pin';
 import { PinGuessHint } from './PinGuessHint';
 import { PasskeyForm, passkeyRowSub, usePasskeyHere } from './PasskeySettings';
+import { CarForm, useCarHere } from './CarSettings';
+import { carRowSub, type CarApi } from './carMessages';
 import { hasPayoutNumber, payoutNumberSub, payoutSavedSays, type PayoutNumberSaved } from './payoutNumber';
 import { oldNumberSays, recoveryEmailSays } from './recovery';
 import type { AccountApi, ClosingStanding } from './useAccount';
 
-type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'passkey' | 'payout' | 'mute' | 'close' | 'closed';
+type View = 'list' | 'pin' | 'email' | 'phone' | 'phone-done' | 'old-number' | 'id' | 'contract' | 'devices' | 'passkey' | 'car' | 'payout' | 'mute' | 'close' | 'closed';
 
 export interface SettingsSheetProps {
   open: boolean;
@@ -40,6 +42,11 @@ export interface SettingsSheetProps {
    * "who is at the counter"), forgotten with the password. Omitted, the PIN's list shows where there is a PIN.
    */
   devices?: PinDevicesApi;
+  /**
+   * 2026-11-02 — MESSAGES IN THE CAR (the owner: "we start with 2"): the Driver app passes it. Its row is shown only inside
+   * the Play app, to a driver whose PIN works on this phone (CarSettings.tsx).
+   */
+  car?: CarApi;
 }
 
 /** True when there is anything to put in Settings for this person — the row that opens it is omitted otherwise. */
@@ -61,7 +68,7 @@ export function hasSettings(api: AccountApi, onChangePassword?: () => void, devi
  * holding a signed-in phone is its owner. Somebody who signs in with a password only has no PIN and is not shown
  * rows that could do nothing for them but refuse.
  */
-export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword, pin, devices }: SettingsSheetProps) {
+export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword, pin, devices, car }: SettingsSheetProps) {
   const t = useT();
   const [view, setView] = useState<View>('list');
   const [saved, setSaved] = useState(false);
@@ -97,9 +104,12 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   const passkeyApi = devices?.passkey ?? api.passkey;
   const passkey = usePasskeyHere(passkeyApi, open && (devices ? Boolean(devices.passkey) : Boolean(me?.hasPin) && !onChangePassword));
   const passkeySub = passkeyRowSub(passkey, t as never, passkeyApi);
+  // 2026-11-02 — MESSAGES IN THE CAR: inside the Play app only, for a driver whose sign-in is a PIN. Asked when Settings opens.
+  const carState = useCarHere(car, open && Boolean(car) && Boolean(me?.hasPin));
+  const carSub = car ? carRowSub(carState, t as never) : null;
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' || view === 'closed' ? () => { onClose(); onSignOut(); } : onClose;
-  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'passkey' ? t('account.passkey.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
+  const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'passkey' ? t('account.passkey.title') : view === 'car' ? t('account.car.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
   const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const old = oldNumberSays(me, t as never, when);
 
@@ -160,6 +170,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
             {devices ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.shopDevices.sub', { party: t(PARTY_WORD[devices.party ?? 'shop']) })} onClick={() => setView('devices')} /> : me?.hasPin ? <Row icon="lock" label={t('account.devices.title')} sub={t('account.devices.sub')} onClick={() => setView('devices')} /> : null}
             {/* UNLOCK WITH FINGERPRINT OR FACE (the owner, 2026-11-02): which is on, here — and the way back to the PIN. */}
             {passkeySub ? <Row icon="key" label={t('account.passkey.title')} sub={passkeySub} onClick={() => setView('passkey')} /> : null}
+            {/* MESSAGES IN THE CAR (the owner, 2026-11-02): read aloud and answered by voice — only inside the Play app. */}
+            {carSub ? <Row icon="speaker" label={t('account.car.title')} sub={carSub} onClick={() => setView('car')} /> : null}
             {/* WHERE THEY ARE PAID, where their country pays to a number of their own (the user, 2026-10-18). */}
             {hasPayoutNumber(api.payout) && api.payout ? <Row icon="wallet" label={t('account.payout.title')} sub={payoutNumberSub(api.payout, t as never, when)} onClick={() => setView('payout')} /> : null}
             {/* WHO THEY CONTRACT WITH, and the papers it trades on. Omitted where no company of ours contracts with them. */}
@@ -206,6 +218,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'payout' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
       {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
       {view === 'passkey' ? <PasskeyForm api={passkeyApi} state={passkey} /> : null}
+      {view === 'car' && car ? <CarForm api={car} state={carState} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'mute' ? <MuteForm api={api} onDone={() => setView('list')} /> : null}
       {view === 'close' ? <CloseForm api={api} onClosed={() => setView('closed')} /> : null}

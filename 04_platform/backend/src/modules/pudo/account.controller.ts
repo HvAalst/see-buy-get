@@ -16,6 +16,9 @@ import { AccountRecoveryService } from './account-recovery.service';
 import { AccountClosingService } from './account-closing.service';
 import { PasskeyService, type PasskeyHere } from './passkey.service';
 import { AccountPasskeyOnDto, AccountPasskeyOptionsDto, PasskeyOnDto, PasskeyOnOptionsDto } from './passkey.dto';
+import { CarMessagesService } from './car-messages.service';
+import { CarHereDto, CarOnDto } from './car.dto';
+import { CarHere, CarTurnedOn } from './car.types';
 
 /**
  * THE ACCOUNT — one surface, every app.
@@ -55,6 +58,8 @@ export class AccountController {
     private readonly closing: AccountClosingService,
     // 2026-11-02 — unlock with fingerprint or face, turned on and off under Settings.
     private readonly passkeys: PasskeyService,
+    // 2026-11-02 — messages in the car, turned on and off under the Driver app's Settings.
+    private readonly car: CarMessagesService,
   ) {}
 
   /**
@@ -290,6 +295,33 @@ export class AccountController {
   }
 
   /**
+   * 2026-11-02 — MESSAGES IN THE CAR (the owner: "we start with 2" — the driver's chats read aloud in the car and answered
+   * by voice). Is it on, on this phone? The Driver app's own Settings, signed in as the driver: staff pass every role check
+   * and are refused by name (`driverOf`). A POST although it only reads, for the PIN devices' reason: the device keys
+   * travel in the body. The app's language comes with it, and is kept with the key.
+   */
+  @Roles('driver')
+  @Post('car')
+  carHere(@Body() dto: CarHereDto, @Actor() actor: IntrospectionResult): CarHere {
+    return this.car.here(driverOf(actor).personDid, dto.devices, dto.lang);
+  }
+
+  /** Turn it on, on this phone: the PIN again (the door's check and counter). The car key comes back once, in this answer. */
+  @Roles('driver')
+  @Post('car/on')
+  carOn(@Body() dto: CarOnDto, @Actor() actor: IntrospectionResult): CarTurnedOn {
+    const { personDid, driverDid } = driverOf(actor);
+    return this.car.turnOn(personDid, driverDid, dto.devices, dto.pin, dto.lang);
+  }
+
+  /** Turn it off here: the car key opens nothing from now on. Nothing asked to turn it off. */
+  @Roles('driver')
+  @Post('car/off')
+  carOff(@Body() dto: CarHereDto, @Actor() actor: IntrospectionResult): CarHere {
+    return this.car.turnOff(driverOf(actor).personDid, dto.devices);
+  }
+
+  /**
    * Set or replace the recovery email — the PIN again (an open session is not proof of who holds the phone), and
    * the code sent to the NEW address. The address it replaces is told, because whoever swaps the email is one
    * step from owning the account.
@@ -330,6 +362,15 @@ export class AccountController {
   blockOldNumber(@Body() dto: BlockOldNumberDto, @Actor() actor: IntrospectionResult) {
     return this.persons.view(this.recovery.blockOldNumber(actingPerson(actor), dto.pin));
   }
+}
+
+/**
+ * 2026-11-02 — THE DRIVER A SIGN-IN SPEAKS FOR, and the person holding it: "Messages in the car" are a driver's own, turned
+ * on in the Driver app signed in as that driver. Never staff, who pass every role check; never a token that is nobody.
+ */
+function driverOf(actor: IntrospectionResult | undefined): { personDid: string; driverDid: string } {
+  if (actor?.role !== 'driver' || !actor.did || !actor.personDid) throw new GlosError('FORBIDDEN', 'Messages in the car are a driver’s own, turned on in the Driver app signed in as the driver. Staff change none.');
+  return { personDid: actor.personDid, driverDid: actor.did };
 }
 
 /** The shop a sign-in speaks for — the shop's own, never staff's, who pass every role check. A shop's own people never reach here: the guard lets them through counter doors only (at-the-counter.ts). */

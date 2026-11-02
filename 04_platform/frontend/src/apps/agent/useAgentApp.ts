@@ -1,6 +1,6 @@
 import type { InstructionsView } from '../../shared/instructions';
-import { onLaunch } from '../../shared/launch';
-import { openLinkedLoad } from '../../shared/linkedLoad';
+import { onLaunch, type RunAsked } from '../../shared/launch';
+import { bookingNamed, openLinked, openLinkedLoad } from '../../shared/linkedLoad';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   isMintSourced,
@@ -223,6 +223,8 @@ export interface AgentState {
   /** F3 — what this shop has booked, which until now it could not read back at all. */
   myBookings: MyBookingRow[];
   myBookingsState: 'idle' | 'loading' | 'ready' | 'error';
+  /** 2026-11-02 — the booking a notice named (`?run=…&booking=…`): brought into sight on the list, and marked. */
+  soughtBooking: { id: string; seq: number } | null;
   /** The run being taken, and what it would cost — quoted BEFORE anything is committed. */
   offerFor: OfferRow | null;
   offerQuote: OfferQuote | null;
@@ -362,6 +364,7 @@ const INITIAL: AgentState = {
   offersState: 'idle',
   myBookings: [],
   myBookingsState: 'idle',
+  soughtBooking: null,
   offerFor: null,
   offerQuote: null,
   offerQuoteError: null,
@@ -1081,6 +1084,51 @@ export function useAgentApp() {
   // A link that came before the sign-in opens once the shop is in.
   useEffect(() => {
     if (state.phase === 'ready' && linkedLoad.current) void openLoadRef.current();
+  }, [state.phase, client]);
+
+  /**
+   * 2026-11-02 — SPACE BOOKED ON A RUN, A NOTICE NAMES (`?run=<departureId>&booking=<bookingId>`; the owner: "we must
+   * reduce the tapping, so that's why it should open"): the shop's freight, its bookings read afresh, and that booking —
+   * or, on a run called off, the shop's booking on that run — brought into sight and marked. Not among this shop's
+   * bookings, it says so in words; one of the shop's people is told the freight is its owner's.
+   */
+  const linkedRun = useRef<RunAsked | null>(null);
+  const soughtSeq = useRef(0);
+  const openRunFromLink = useCallback(async () => {
+    const asked = linkedRun.current;
+    if (!asked || !client || stateRef.current.phase !== 'ready') return;
+    linkedRun.current = null;
+    await openLinked<MyBookingRow>(bookingNamed(asked), {
+      mayRead: !stateRef.current.staff,
+      fetch: async () => {
+        const r = await client.api.myDepartureBookings();
+        if (r.error) {
+          fail(r.error);
+          return null;
+        }
+        return narrow<{ items?: MyBookingRow[] }>(r.data).items ?? [];
+      },
+      keep: (myBookings) => setState((s) => ({ ...s, myBookings, myBookingsState: 'ready', soughtBooking: null, screen: 'freight', pricesFor: null, error: null })),
+      open: (b) => {
+        const seq = ++soughtSeq.current;
+        setState((s) => ({ ...s, soughtBooking: { id: b.bookingId, seq } }));
+      },
+      say: (why) =>
+        pushToast(why === 'not_read' ? { tone: 'info', icon: 'lock', title: t('agent.freight.ownerReads') } : { tone: 'warn', icon: 'warning', title: t('agent.mine.notYours') }),
+    });
+  }, [client, fail, pushToast]);
+  const openRunRef = useRef(openRunFromLink);
+  openRunRef.current = openRunFromLink;
+  useEffect(
+    () =>
+      onLaunch('run', (r) => {
+        linkedRun.current = r;
+        void openRunRef.current();
+      }),
+    [],
+  );
+  useEffect(() => {
+    if (state.phase === 'ready' && linkedRun.current) void openRunRef.current();
   }, [state.phase, client]);
 
   /* ---------------------------------------------------------------- forms */

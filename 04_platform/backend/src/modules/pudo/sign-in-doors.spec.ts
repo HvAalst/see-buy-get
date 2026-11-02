@@ -9,6 +9,7 @@ import { IdentityController } from './identity.controller';
 import { AccountMoveController } from './account-move.controller';
 import { IdDisputeController } from './id-dispute.controller';
 import { DocumentLinkController } from './document-link.controller';
+import { CarController } from './car.controller';
 
 /**
  * EVERY DOOR ANYBODY CAN KNOCK ON, AND WHETHER IT COUNTS THE KNOCKS.
@@ -49,6 +50,8 @@ const DOORS = [
   ...doorsOf(IdDisputeController, 'sbg/'),
   ...doorsOf(DocumentLinkController, 'sbg/'),
   ...doorsOf(AuthController, 'auth/'),
+  // 2026-11-02 — messages in the car: the doors the Play app's native part knocks on with its car key.
+  ...doorsOf(CarController, 'sbg/car/'),
 ];
 const door = (path: string) => DOORS.find((d) => d.path === path);
 const QUARTER_HOUR = 15 * 60;
@@ -119,6 +122,20 @@ describe('every door anybody can knock on', () => {
     for (const path of ['sbg/auth/phone/request', 'sbg/auth/signup', 'sbg/identity/enroll']) {
       expect([path, door(path)?.open, door(path)?.limit, door(path)?.guarded]).toEqual([path, true, { limit: 120, windowSec: QUARTER_HOUR }, true]);
     }
+  });
+
+  /**
+   * 2026-11-02 — THE CAR'S DOORS (the owner: "we start with 2"): open to the sign-in guard, taken by the car key's own, and
+   * each counting the calls of each key — a phone's token now and then, a reply a few times a minute at most, "mark as
+   * read" as often as the car reads.
+   */
+  it('the car’s doors count each car key’s calls, and the count is read', () => {
+    const limits: Record<string, { limit: number; windowSec: number }> = {
+      'sbg/car/token': { limit: 20, windowSec: QUARTER_HOUR },
+      'sbg/car/chats/:conversationId/reply': { limit: 20, windowSec: 60 },
+      'sbg/car/chats/:conversationId/read': { limit: 60, windowSec: 60 },
+    };
+    for (const [path, limit] of Object.entries(limits)) expect([path, door(path)?.open, door(path)?.limit, door(path)?.guarded]).toEqual([path, true, limit, true]);
   });
 
   it('no limit is written down without the guard that reads it, on any route', () => {

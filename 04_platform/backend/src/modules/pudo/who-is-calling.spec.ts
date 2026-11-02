@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { RequestMethod } from '@nestjs/common';
-import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { IS_PUBLIC_KEY } from '../../foundation/auth/public.decorator';
 import { MIN_TIER_KEY, ROLES_KEY, SCOPES_KEY, SIGNED_IN_KEY } from '../../foundation/auth/scopes.decorator';
 import { AccountMoveController } from './account-move.controller';
@@ -11,6 +11,9 @@ import { IdDisputeController } from './id-dispute.controller';
 import { MediaController } from './media.controller';
 import { SbgController } from './pudo.controller';
 import { QuoteController } from './quote.controller';
+import { CarController } from './car.controller';
+import { CarKeyGuard } from './car-key.guard';
+import { RATE_LIMIT_KEY, RateLimitGuard } from '../../foundation/http/rate-limit.guard';
 
 /**
  * WHO THE DOOR LETS IN.
@@ -27,7 +30,7 @@ import { QuoteController } from './quote.controller';
  * This reads the door itself — of every controller the product has — so that a role taken off one of these fails
  * here rather than in production.
  */
-const CONTROLLERS = [SbgController, QuoteController, DocumentLinkController, ConversationController, AccountController, MediaController, AccountMoveController, IdDisputeController];
+const CONTROLLERS = [SbgController, QuoteController, DocumentLinkController, ConversationController, AccountController, MediaController, AccountMoveController, IdDisputeController, CarController];
 const VERB: Record<number, string> = { [RequestMethod.GET]: 'GET', [RequestMethod.POST]: 'POST', [RequestMethod.PATCH]: 'PATCH', [RequestMethod.PUT]: 'PUT', [RequestMethod.DELETE]: 'DELETE' };
 
 interface Door {
@@ -153,6 +156,24 @@ describe('who the door lets in', () => {
     expect(door('GET sbg/vendors/:id')).toMatchObject({ open: false, scopes: ['vendor:manage:self'] });
     expect(door('GET sbg/parcels/:id/route')).toMatchObject({ open: false, scopes: ['vendor:manage:self'] });
     expect(door('GET sbg/fleet/assignments')).toMatchObject({ open: false, roles: ['fleet_manager', 'operator'] });
+  });
+
+  /**
+   * 2026-11-02 — MESSAGES IN THE CAR (the owner: "we start with 2"). Turned on and off in the Driver app's Settings, by a
+   * driver (staff pass the role check and are refused by name inside). The car's own doors are open to the sign-in guard
+   * and taken instead by the guard that reads a car key — and nothing else — each counting the calls of each key.
+   */
+  it('messages in the car: turned on and off by a driver; the car’s own doors open only to a car key, each one counted', () => {
+    for (const route of ['POST sbg/account/car', 'POST sbg/account/car/on', 'POST sbg/account/car/off']) expect(door(route)).toMatchObject({ open: false, roles: ['driver'] });
+    const carDoors = doorsOf(CarController);
+    expect(carDoors.map((d) => d.route).sort()).toEqual(['GET sbg/car/chats/:conversationId', 'POST sbg/car/chats/:conversationId/read', 'POST sbg/car/chats/:conversationId/reply', 'POST sbg/car/token']);
+    for (const d of carDoors) expect(d).toMatchObject({ open: true, labelled: false });
+    const proto = CarController.prototype as unknown as Record<string, object>;
+    for (const name of ['token', 'chat', 'reply', 'read']) {
+      // The car key first, then its limit: the limit spends the key the first guard found.
+      expect([name, Reflect.getMetadata(GUARDS_METADATA, proto[name])]).toEqual([name, [CarKeyGuard, RateLimitGuard]]);
+      expect(Reflect.getMetadata(RATE_LIMIT_KEY, proto[name])).toEqual(expect.objectContaining({ limit: expect.any(Number), windowSec: expect.any(Number) }));
+    }
   });
 
   it('riding for yourself is asked about, and chosen, by the driver alone', () => {

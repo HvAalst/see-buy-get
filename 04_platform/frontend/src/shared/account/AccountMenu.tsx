@@ -204,7 +204,8 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
       <ShareSheet open={sheet === 'share'} onClose={() => setSheet(null)} api={api} />
       {installs ? <InstallGuideSheet open={sheet === 'install'} onClose={() => setSheet(null)} app={installs} /> : null}
       <AddressSheet open={sheet === 'address'} onClose={() => setSheet(null)} api={api} />
-      <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} devices={devices} />
+      {/* 2026-11-02 — messages in the car are the Driver app's alone (shown there only inside the Play app). */}
+      <SettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} api={api} onSignOut={onSignOut} onChangePassword={onChangePassword} devices={devices} car={app === 'driver' ? api.car : undefined} />
     </div>
   );
 }

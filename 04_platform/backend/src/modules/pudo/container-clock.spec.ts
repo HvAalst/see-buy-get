@@ -84,6 +84,8 @@ describe('warning about a box before its date, and never about what it costs', (
     // The one who can act is named in the body, because a warning nobody owns is a warning nobody acts on.
     expect(sent[0].body).toContain('Addis Clearing booked the box');
     expect(sent[0].body).toContain('2 days of the 14 free days Hans recorded');
+    // 2026-11-02 — one tap opens the import its box came in on, under Imports.
+    expect((sent[0] as { link?: string }).link).toBe('/?import=imp_1');
   });
 
   it('says nothing about money, overdue or not', async () => {

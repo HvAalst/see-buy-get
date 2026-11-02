@@ -3,6 +3,7 @@ import { DocumentButton } from '../../../shared/ui';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { tabAtTheTap } from '../../../shared/openPage';
 import { useT, type MessageKey } from '../../../shared/i18n';
+import { openLinked } from '../../../shared/linkedLoad';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { ParticipantPicker } from '../../tower/screens/ParticipantPicker';
 import { agentRow, type DirectoryChoice } from '../../tower/directoryChoice';
@@ -70,7 +71,7 @@ const GROUP_WORD: Record<ExportPaperGroup, MessageKey> = {
  * exports: its forwarder's booking and the gate cut-off, the empty out, the box stuffed and sealed, the load to the
  * terminal, the verified gross mass, the papers, and the file its forwarder takes at the gate. SeeBuyGet books no ship.
  */
-export function ExportsScreen({ business, client }: { business: BusinessView; client: BusinessClient | null }) {
+export function ExportsScreen({ business, client, asked, onAsked }: { business: BusinessView; client: BusinessClient | null; asked?: { id: string; seq: number } | null; onAsked?: () => void }) {
   const t = useT();
   const works = mayAct(business.you.role);
   // A business that sends goods records its exports; a clearing agent only reads the ones it was appointed to clear.
@@ -93,6 +94,33 @@ export function ExportsScreen({ business, client }: { business: BusinessView; cl
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 2026-11-02 — AN EXPORT A NOTICE NAMES (`?export=<id>`; the owner: "that's why it should open"): the list read
+  // afresh, then that export opened — or, not among this business's exports, said so in words.
+  useEffect(() => {
+    if (!asked || !client) return;
+    const want = asked;
+    onAsked?.();
+    void openLinked<ExportRow>((r) => r.exportId === want.id, {
+      mayRead: true,
+      fetch: async () => {
+        const r = await client.exports.list();
+        if (r.error) {
+          setError(sayProblem(r.error));
+          return null;
+        }
+        return r.data?.items ?? [];
+      },
+      keep: (items) => {
+        setRows(items);
+        setForming(null);
+        setMode('');
+        setError(null);
+      },
+      open: (row) => setOpenId(row.exportId),
+      say: () => setError(t('business.exports.notYours')),
+    });
+  }, [asked?.seq, client]);
 
   return (
     <div class="cons__page">

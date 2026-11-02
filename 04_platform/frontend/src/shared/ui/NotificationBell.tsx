@@ -108,9 +108,8 @@ const KIND_ICON: Record<string, IconName> = {
 
 /**
  * AN ACT ON A NOTICE (2026-10-30: a haulier asked for a contract records one from the notice itself): an app says, for a
- * notice of a kind it knows, what can be done about it. Since 2026-11-02 it is under the notice in the list, without
- * opening it first (the owner: "on the notifications on the start screen I need a 'mark as read' or 'respond' button");
- * the bell closes when it is taken.
+ * notice of a kind it knows, what can be done about it. Since 2026-11-02 a tap on the notice takes it (the owner: "we
+ * must reduce the tapping, so that's why it should open"); the bell closes when it is taken.
  */
 export type NoticeAct = (item: InboxItem) => { label: string; run: () => void } | null;
 
@@ -160,7 +159,8 @@ export function noticeAction(item: InboxItem, act: NoticeAct | undefined, t: Tra
  *
  * Design contract: at most one solid-blue CTA per sheet — "Turn on notifications" when push is off;
  * none when it is on (the inbox is the focus; test/turn-off are links). The buttons under each notice (Mark as read,
- * and Reply or Open) are links as well: a list of solid buttons would be a list with no focus (2026-11-02).
+ * Show all) are links as well: a list of solid buttons would be a list with no focus (2026-11-02). A notice that leads
+ * somewhere is itself the button: one tap opens it (2026-11-02).
  */
 export function NotificationBell({ api, shared, act }: NotificationBellProps & { act?: NoticeAct }) {
   const canMark = shared?.canMark ?? true;
@@ -310,53 +310,87 @@ export interface NotificationRowProps {
  *
  * 2026-11-02 — AND UNDER IT, ITS OWN BUTTONS (the owner: "on the notifications on the start screen I need a 'mark as
  * read' or 'respond' button, is that possible?"): "Mark as read" while it is unread, which marks that one and opens
- * nothing; and the one thing to do about it, where there is one (noticeAction) — which marks it read too.
+ * nothing.
+ *
+ * 2026-11-02 — ONE TAP, AND IT OPENS (the owner: "yes, just to keep drivers' safety in mind, we must reduce the tapping,
+ * so that's why it should open"): a notice with somewhere to go (noticeAction) is one big target — the whole row — and
+ * a tap opens that place at once, marks it read and closes the bell, as a tapped notification on the phone does. The
+ * row says where it goes ("Reply ›", "Open ›"). A notice with nowhere to go opens in full on a tap, as before; one with
+ * a place and more to say than two lines hold offers "Show all" under it, so nothing it says is out of reach.
  */
 export function NotificationRow({ item, open, onToggle, onRead, act, onActed }: NotificationRowProps) {
   const t = useT();
   const unread = !item.readAt;
   const action = noticeAction(item, act, t);
   const markRead = unread && onRead ? onRead : undefined;
+  const long = item.body.length > LONG_BODY;
+  const cls = `nitem${unread ? ' nitem--unread' : ''}${open ? ' nitem--open' : ''}`;
+  const inner = (
+    <>
+      <span class="nitem__ic">
+        <Icon name={KIND_ICON[item.kind] ?? 'bell'} size={22} />
+      </span>
+      <span class="nitem__body">
+        <span class="nitem__t">{item.title}</span>
+        <span class="nitem__b">{item.body}</span>
+        <span class="nitem__time">{whenLine(item)}</span>
+        {/* Where the tap goes, said on the row it is a tap on. */}
+        {action ? (
+          <span class="nitem__go">
+            {action.label}
+            <Icon name="chevronRight" size={16} />
+          </span>
+        ) : null}
+      </span>
+      {unread ? <span class="nitem__dot" aria-label="unread" /> : null}
+    </>
+  );
   return (
     <li class={`nrow${unread ? ' nrow--unread' : ''}`}>
-      <button
-        type="button"
-        class={`nitem${unread ? ' nitem--unread' : ''}${open ? ' nitem--open' : ''}`}
-        aria-expanded={open}
-        onClick={() => {
-          onToggle();
-          if (unread) onRead?.();
-        }}
-      >
-        <span class="nitem__ic">
-          <Icon name={KIND_ICON[item.kind] ?? 'bell'} size={22} />
-        </span>
-        <span class="nitem__body">
-          <span class="nitem__t">{item.title}</span>
-          <span class="nitem__b">{item.body}</span>
-          <span class="nitem__time">{whenLine(item)}</span>
-        </span>
-        {unread ? <span class="nitem__dot" aria-label="unread" /> : null}
-      </button>
-      {action || markRead ? (
+      {action?.href !== undefined ? (
+        // The page itself, outside the app: read in a tab of its own, the app left where it was — and that is reading it.
+        <a class={cls} href={action.href} target="_blank" rel="noopener noreferrer" onClick={() => (unread ? onRead?.() : undefined)}>
+          {inner}
+        </a>
+      ) : action ? (
+        <button
+          type="button"
+          class={cls}
+          onClick={() => {
+            // Doing what it asks is reading it.
+            if (unread) onRead?.();
+            action.run();
+            onActed?.();
+          }}
+        >
+          {inner}
+        </button>
+      ) : (
+        <button
+          type="button"
+          class={cls}
+          aria-expanded={open}
+          onClick={() => {
+            onToggle();
+            if (unread) onRead?.();
+          }}
+        >
+          {inner}
+        </button>
+      )}
+      {markRead || (action && long) ? (
         <div class="nitem__acts">
-          {/* The page itself, outside the app: read in a tab of its own, the app left where it was. */}
-          {action?.href !== undefined ? (
-            <a class="nitem__act" href={action.href} target="_blank" rel="noopener noreferrer" onClick={() => (unread ? onRead?.() : undefined)}>
-              {action.label}
-            </a>
-          ) : action ? (
+          {action && long ? (
             <button
               type="button"
               class="nitem__act"
+              aria-expanded={open}
               onClick={() => {
-                // Doing what it asks is reading it.
+                onToggle();
                 if (unread) onRead?.();
-                action.run();
-                onActed?.();
               }}
             >
-              {action.label}
+              {t(open ? 'notify.showLess' : 'notify.showAll')}
             </button>
           ) : null}
           {markRead ? (
@@ -369,3 +403,6 @@ export function NotificationRow({ item, open, onToggle, onRead, act, onActed }: 
     </li>
   );
 }
+
+/** About what two lines of a notice hold on a phone: more than this, and a notice with a place offers "Show all". */
+const LONG_BODY = 90;

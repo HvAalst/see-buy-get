@@ -13,6 +13,7 @@ import { OffersScreen } from './screens/OffersScreen';
 import { RouteScreen } from './screens/RouteScreen';
 import { SignInScreen } from './screens/SignInScreen';
 import { FleetSheet } from './screens/FleetSheet';
+import { driverNoticeAct } from './notices';
 import { useDriverApp, type DriverActions, type DriverState, type Screen } from './useDriverApp';
 import '../../shared/screens.css';
 import './driver.css';
@@ -54,7 +55,9 @@ export function App() {
     // A shortcut does what the tab bar does with the same key: the route shows the offers while they wait, and the route
     // and the loads stay shut off shift — the van's screen is where it opens then.
     open: (to) => {
-      if ((to === 'route' || to === 'loads') && !state.session.active) return;
+      // 2026-11-02 — off shift, a notice about a load opens the van's screen, where the shift starts: a tap that went
+      // nowhere would leave a driver tapping again (the owner: "we must reduce the tapping").
+      if ((to === 'route' || to === 'loads') && !state.session.active) return actions.go('home');
       actions.go(to === 'route' && state.offers.length ? 'offers' : to);
     },
   });
@@ -105,12 +108,10 @@ export function App() {
         backLabel={t('driver.backToVan', { vehicle })}
         end={
           <>
-            {/* 2026-11-02 — a fleet's offer of a place is answered in "Your fleet", a sheet behind the account menu: the
-                notice opens it (the owner: "I need a 'mark as read' or 'respond' button"). Not the offer taken back. */}
-            <NotificationBell
-              api={notifications}
-              act={(it) => (it.kind === 'fleet_offer' && typeof it.data?.fleetDid === 'string' ? { label: t('driver.home.offerSee'), run: () => setFleetOpen(true) } : null)}
-            />
+            {/* 2026-11-02 — what is answered in "Your fleet", a sheet behind the account menu — a fleet's offer, a day on
+                its roster, leaving it — opens it on a tap (the owner: "we must reduce the tapping, so that's why it should
+                open"); every other notice names its own screen (apps/driver/notices.ts). */}
+            <NotificationBell api={notifications} act={driverNoticeAct(t, () => setFleetOpen(true))} />
             {needRefresh ? (
               <button
                 type="button"

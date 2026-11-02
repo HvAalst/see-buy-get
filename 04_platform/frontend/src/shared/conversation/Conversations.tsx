@@ -30,6 +30,7 @@ import {
   isMessageIn,
   waitingIn,
   wasQueued,
+  sentFromCar,
   type WaitingMessage,
   type ChatMessage,
   type ChatThread,
@@ -40,6 +41,15 @@ import {
 
 /** Catch-up while a thread is open. Push says something arrived; this is what fetches it. Enough to start. */
 const POLL_MS = 8000;
+
+/**
+ * 2026-11-02 — A REPLY SPOKEN IN THE CAR (the owner: "we start with 2"): said beside its time, to both sides, so that a
+ * short or misheard answer is read kindly. Nothing for any other message.
+ */
+export function ViaCar({ m }: { m: Pick<ChatMessage, 'via'> }) {
+  const t = useT();
+  return sentFromCar(m) ? <>{` · ${t('common.chat.fromCar')}`}</> : null;
+}
 
 /**
  * When a message was sent: the time today, the date and time otherwise. A chat stamped with a date alone
@@ -575,6 +585,7 @@ export function ConversationSheet({
 
                 <div class="hint" style="margin-top:2px; font-size:12px">
                   {authorOf(m)} · {m.writtenAt ? t('common.chat.writtenOffline', { written: whenSent(m.writtenAt), arrived: whenSent(m.at) }) : whenSent(m.at)}
+                  <ViaCar m={m} />
                   {!readOnly && !selecting && !m.mine && !reported.includes(m.seq) ? (
                     <>
                       {' · '}

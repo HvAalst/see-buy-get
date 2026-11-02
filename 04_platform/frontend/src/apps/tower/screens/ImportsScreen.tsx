@@ -2,6 +2,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { openLinked } from '../../../shared/linkedLoad';
 import { downscaleImage, paperForUpload } from '../../../shared/media';
 import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
 import { refusalWords, uploadHint } from '../../../shared/upload';
@@ -118,7 +119,7 @@ function importJourney(d: ImportDetailView, tt: Translate): JourneyLeg[] {
   return legs;
 }
 
-export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who'>; actions: Pick<TowerActions, 'client'> }) {
+export function ImportsScreen({ state, actions, asked, onAsked }: { state: Pick<TowerState, 'who'>; actions: Pick<TowerActions, 'client'>; asked?: { id: string; seq: number } | null; onAsked?: () => void }) {
   const t = useT();
   const client = actions.client();
   const who = state.who?.name;
@@ -286,6 +287,28 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
       setLines(view.required.length ? view.required.map((r2) => ({ label: r2.label, copies: r2.copies ? String(r2.copies) : '', note: r2.note ?? '' })) : [{ label: '', copies: '', note: '' }]);
     }
   };
+
+  // 2026-11-02 — AN IMPORT A NOTICE NAMES (`?import=<id>`, in the Business app; the owner: "that's why it should open"):
+  // the list read afresh, then that import opened — or, not among this company's imports, said so in words.
+  useEffect(() => {
+    if (!asked || !client) return;
+    const want = asked;
+    onAsked?.();
+    void openLinked<ImportRow>((r) => r.importId === want.id, {
+      mayRead: true,
+      fetch: async () => {
+        const r = await client.api.imports();
+        if (r.error) {
+          setError(r.error.detail || r.error.title);
+          return null;
+        }
+        return ((r.data as unknown as { items?: ImportRow[] })?.items ?? []) as ImportRow[];
+      },
+      keep: (items) => setRows(items),
+      open: (row) => openOne(row.importId),
+      say: () => setError(t('tower.imports.notYours')),
+    });
+  }, [asked?.seq, client]);
 
   /**
    * A LIST NOBODY CAN GET TO THE BOTTOM OF IS NOT A LIST — the user, at eighty-nine containers.

@@ -14,6 +14,8 @@ import { SentFor } from './SentFor';
 import type { BusinessActions } from '../useBusinessApp';
 import { tabAtTheTap } from '../../../shared/openPage';
 import { ConsolePick } from '../../tower/ConsolePick';
+import type { RunAsked } from '../../../shared/launch';
+import { bookingNamed, openLinked } from '../../../shared/linkedLoad';
 
 /**
  * B2 — SPACE ON A CARRIER'S RUN: a truck that is leaving anyway, with room in the back.
@@ -23,7 +25,12 @@ import { ConsolePick } from '../../tower/ConsolePick';
  * 2026-10-04). What the business gets from us is the space, the consignment note, and one place to keep the carrier's
  * quotation and whether it is paid.
  */
-export function RunsScreen({ business, client }: { business: BusinessView; actions: BusinessActions; client: BusinessClient | null }) {
+/** A booking a notice names (shared/launch.ts, `?run=…&booking=…`), and which asking it is. */
+export interface RunAskedFor extends RunAsked {
+  seq: number;
+}
+
+export function RunsScreen({ business, client, asked, onAsked }: { business: BusinessView; actions: BusinessActions; client: BusinessClient | null; asked?: RunAskedFor | null; onAsked?: () => void }) {
   const t = useT();
   const act = mayAct(business.you.role);
   const [offers, setOffers] = useState<OfferRow[] | null>(null);
@@ -44,6 +51,33 @@ export function RunsScreen({ business, client }: { business: BusinessView; actio
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 2026-11-02 — A BOOKING A NOTICE NAMES (the owner: "we must reduce the tapping, so that's why it should open"): the
+  // bookings read afresh, then that one opened — or, on a run called off, this business's booking on that run. Not
+  // among this business's bookings, it is said in words.
+  useEffect(() => {
+    if (!asked || !client) return;
+    const want = asked;
+    onAsked?.();
+    void openLinked<MyBookingRow>(bookingNamed(want), {
+      mayRead: true,
+      fetch: async () => {
+        const b = await client.shipping.myDepartureBookings();
+        if (b.error) {
+          setError(b.error.detail || b.error.title);
+          return null;
+        }
+        return ((b.data as unknown as { items?: MyBookingRow[] })?.items ?? []) as MyBookingRow[];
+      },
+      keep: (items) => {
+        setBookings(items);
+        setOffer(null);
+        setError(null);
+      },
+      open: (row) => setBooking(row),
+      say: () => setError(t('business.runs.notYours')),
+    });
+  }, [asked?.seq, client]);
 
   useEffect(() => {
     if (booking) setBooking(bookings?.find((x) => x.bookingId === booking.bookingId) ?? null);

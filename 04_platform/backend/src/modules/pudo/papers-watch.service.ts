@@ -492,7 +492,7 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
         // (paperStatus rounds up to the day it lapses), so the last day reads "in 1 day" and never "0".
         const left = p.daysLeft ?? 1;
         const title = p.state === 'lapsed' ? 'Your licence has lapsed' : `Your licence runs out in ${left} day${left === 1 ? '' : 's'}`;
-        if (await this.tellOnce(`driver:${d.did}:${p.kind}:${p.expiresAt}:${p.state}`, d.did, title, body, p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due', now)) out.notified++;
+        if (await this.tellOnce(`driver:${d.did}:${p.kind}:${p.expiresAt}:${p.state}`, d.did, title, body, p.state === 'lapsed' ? 'papers_lapsed' : 'papers_due', now, undefined, '/?go=home')) out.notified++;
       }
     }
     // Every fleet: a lapsed vehicle paper ends the shift on it and tells the driver; the fleet is mailed the report once per change.
@@ -605,15 +605,16 @@ export class PapersWatchService implements OnApplicationBootstrap, OnModuleDestr
       this.logger.warn(`could not end the shift of ${driverDid}: ${(err as Error).message}`);
       return;
     }
-    void this.notifications?.notify(driverDid, { kind: 'papers_lapsed', title: 'Your shift was ended', body, link: '/', tag: `papers:${driverDid}:shift`, data: {} }).catch(() => undefined);
+    void this.notifications?.notify(driverDid, { kind: 'papers_lapsed', title: 'Your shift was ended', body, link: '/?go=home', tag: `papers:${driverDid}:shift`, data: {} }).catch(() => undefined);
   }
 
-  private async tellOnce(key: string, did: string, title: string, body: string, kind: 'papers_lapsed' | 'papers_due', now: number, tag = `papers:${did}:${kind}`): Promise<boolean> {
+  /** `link`: where the paper is renewed — 2026-11-02, a driver's licence card on the Driver app's home (one tap). */
+  private async tellOnce(key: string, did: string, title: string, body: string, kind: 'papers_lapsed' | 'papers_due', now: number, tag = `papers:${did}:${kind}`, link = '/'): Promise<boolean> {
     if (!this.notifications || this.told.has(key)) return false;
     try {
       // The tag only collapses PUSH notifications on a lock screen; two different papers need two tags, or
       // the second warning silently replaces the first.
-      await this.notifications.notify(did, { kind, title, body, link: '/', tag, data: {} });
+      await this.notifications.notify(did, { kind, title, body, link, tag, data: {} });
       this.told.set(key, new Date(now).toISOString());
       return true;
     } catch (err) {

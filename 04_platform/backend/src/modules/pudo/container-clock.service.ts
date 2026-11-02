@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy, Optional }
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { EntityService } from '../../foundation/entity/entity.service';
 import { NotificationService } from './notification.service';
+import { importLink } from './notification.types';
 import { ContainerBoxService } from './container-box.service';
 import { BOX_WARN_DAYS, boxClock, boxDueSoon } from './container-box';
 
@@ -80,7 +81,8 @@ export class ContainerClockService implements OnApplicationBootstrap, OnModuleDe
               kind: 'box_due',
               title,
               body,
-              link: '/',
+              // 2026-11-02 — the import its box came in on, opened under Imports (a tapped notice goes there).
+              link: term.importId ? importLink(term.importId) : '/',
               tag: `box:${term.termId}:${clock.overdue ? 'over' : 'soon'}`,
               data: { containerNo: box.containerNo, ...(term.importId ? { importId: term.importId } : {}) },
             });

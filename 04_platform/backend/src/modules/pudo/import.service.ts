@@ -5,6 +5,7 @@ import { QuoteService } from './quote.service';
 import { holdRailNote, railNoteView } from './rail-note';
 import { journeyModes, railRefusal, railTerminalClock, type ImportByRailView } from './rail-leg.types';
 import { NotificationService } from './notification.service';
+import { importLink } from './notification.types';
 import { fblView, holdFbl, verifyFbl } from './fbl-note';
 import type { FblDto, FblVerifiedDto } from './fbl-note.types';
 import type { RailNoteDto } from './rail-note.types';
@@ -699,7 +700,7 @@ export class ImportService {
         } catch {
           did = undefined;
         }
-        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: importLink(c.importId), tag: `import:${c.importId}:${key}`, data: { importId: c.importId } }).catch(() => undefined);
       }
       told.push(`${c.code}:rail:${clock.state}`);
     }
@@ -933,7 +934,7 @@ export class ImportService {
     const did = this.entities.find(c.importerEntityId)?.did;
     const title = `${c.code}: something was noted when it was collected at ${c.air.handler}`;
     const body = `${reservations} Complain to ${c.air.airline} in writing${complainBy ? ` by ${complainBy} — the law gives ${days} days from receipt for damage` : ' at once — no convention sets the days here, the airline’s conditions do'}, quoting air waybill ${c.air.awb}.`;
-    if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:air:collected`, data: { importId: c.importId } }).catch(() => undefined);
+    if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: importLink(c.importId), tag: `import:${c.importId}:air:collected`, data: { importId: c.importId } }).catch(() => undefined);
   }
 
   private airViewOf(c: ImportConsignment, now: number): ImportAirView {
@@ -1032,7 +1033,7 @@ export class ImportService {
       } catch {
         did = undefined;
       }
-      if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+      if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: importLink(c.importId), tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
     }
   }
 
@@ -1075,7 +1076,7 @@ export class ImportService {
         } catch {
           did = undefined;
         }
-        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: '/', tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
+        if (did) void this.notifications?.notify(did, { kind: 'freight_problem', title, body, link: importLink(c.importId), tag: `import:${c.importId}:air:${key}`, data: { importId: c.importId } }).catch(() => undefined);
       }
       told.push(`${c.code}:air:${clock.state}`);
     }

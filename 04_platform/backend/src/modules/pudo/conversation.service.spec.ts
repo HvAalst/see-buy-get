@@ -393,6 +393,79 @@ describe('conversations about a load', () => {
   /**
    * CV5 — a parcel waiting at a shop: the person collecting it and the shop holding it.
    */
+  /**
+   * 2026-11-02 — MESSAGES IN THE CAR (the owner: "we start with 2"). A reply spoken in the car goes in by the same send as
+   * a typed one — refused the same way — and says so to both sides; a message for a driver wakes their phone with the
+   * chat's id and nothing else, and a wake-up that goes wrong never refuses a message.
+   */
+  describe('messages in the car', () => {
+    const drivers = { canOperate: (did: string) => did.startsWith('did:drv'), get: () => ({ displayName: 'Amos K.' }) };
+    const vendors = { has: () => false, get: () => ({ did: '' }) };
+    const withCar = (wake: jest.Mock, reachesInCar: (did: string) => boolean = () => false) => new ConversationService(dispatch as never, drivers as never, { notify } as never, vendors as never, undefined, undefined, undefined, undefined, { wake, reachesInCar } as never);
+
+    it('a driver the car reaches is not also pushed the notice — it is kept in the bell; everybody else is pushed as before', () => {
+      const chats = withCar(jest.fn(async () => 1), (did) => did === 'did:drv:amos');
+      const { conversationId } = chats.open('fr_1', 'did:drv:amos');
+      chats.send(conversationId, 'did:shop', { body: 'Gate 3' });
+      expect(notify).toHaveBeenLastCalledWith('did:drv:amos', expect.objectContaining({ kind: 'message' }), { push: false });
+      chats.send(conversationId, 'did:drv:amos', { body: 'OK' });
+      expect(notify.mock.calls.at(-1)).toEqual(['did:shop', expect.objectContaining({ kind: 'message' })]);
+    });
+
+    it('a reply from the car is marked so, for both sides — and in a report of it', () => {
+      const chats = withCar(jest.fn(async () => 1));
+      const { conversationId } = chats.open('fr_1', 'did:drv:amos');
+      const sent = chats.send(conversationId, 'did:drv:amos', { body: 'Nearly there' }, Date.now(), 'car');
+      expect(sent).toMatchObject({ kind: 'text', body: 'Nearly there', mine: true, via: 'car' });
+      expect(chats.messagesFor(conversationId, 'did:shop').items[0]).toMatchObject({ mine: false, via: 'car' });
+      // A typed one says nothing of the kind.
+      chats.send(conversationId, 'did:shop', { body: 'Thanks' });
+      expect(chats.messagesFor(conversationId, 'did:drv:amos').items[1].via).toBeUndefined();
+      const { reportId } = chats.shareDisputeReport(conversationId, 'did:shop', [1, 2]);
+      expect(chats.listDisputeReports().find((r) => r.reportId === reportId)?.messages.map((m) => m.via)).toEqual(['car', undefined]);
+    });
+
+    it('…refused exactly as a typed one: a closed chat, nothing said, too long, the hourly cap', () => {
+      const chats = withCar(jest.fn(async () => 1));
+      const { conversationId } = chats.open('fr_1', 'did:drv:amos');
+      expect(() => chats.send(conversationId, 'did:drv:amos', { body: '   ' }, Date.now(), 'car')).toThrow(/Write something first/);
+      expect(() => chats.send(conversationId, 'did:drv:amos', { body: 'x'.repeat(1001) }, Date.now(), 'car')).toThrow(/under 1000 characters/);
+      const t0 = Date.now();
+      for (let i = 0; i < MESSAGES_PER_HOUR; i++) chats.send(conversationId, 'did:drv:amos', { body: `m${i}` }, t0 + i, 'car');
+      expect(() => chats.send(conversationId, 'did:drv:amos', { body: 'one more' }, t0 + MESSAGES_PER_HOUR, 'car')).toThrow(/a lot of messages in one hour/);
+      chats.block(conversationId, 'did:shop');
+      expect(() => chats.send(conversationId, 'did:drv:amos', { body: 'hello?' }, t0 + 2 * 60 * 60 * 1000, 'car')).toThrow(/This conversation is closed/);
+      expect(() => chats.send(conversationId, 'did:stranger', { body: 'hi' }, Date.now(), 'car')).toThrow(/Conversation not found/);
+    });
+
+    it('a message wakes whoever it is for, with the chat and nothing else; a wake-up that fails refuses nothing', async () => {
+      const wake = jest.fn(async () => {
+        throw new Error('Firebase is down');
+      });
+      const chats = withCar(wake);
+      const { conversationId } = chats.open('fr_1', 'did:drv:amos');
+      expect(() => chats.send(conversationId, 'did:shop', { body: 'Gate 3, not gate 1' })).not.toThrow();
+      expect(wake).toHaveBeenCalledWith('did:drv:amos', conversationId);
+      expect(wake.mock.calls[0]).toHaveLength(2);
+      chats.send(conversationId, 'did:drv:amos', { body: 'OK' });
+      expect(wake).toHaveBeenLastCalledWith('did:shop', conversationId);
+      await new Promise((r) => setImmediate(r));
+    });
+
+    it('what a party has not read: the other side’s messages after their marker — a stranger finds no such chat', () => {
+      const chats = withCar(jest.fn(async () => 1));
+      const { conversationId } = chats.open('fr_1', 'did:drv:amos');
+      chats.send(conversationId, 'did:shop', { body: 'One' });
+      chats.send(conversationId, 'did:shop', { quick: 'on_my_way' });
+      expect(chats.unreadFor(conversationId, 'did:drv:amos').items.map((m) => m.seq)).toEqual([1, 2]);
+      chats.markRead(conversationId, 'did:drv:amos', 1);
+      expect(chats.unreadFor(conversationId, 'did:drv:amos').items.map((m) => m.quick)).toEqual(['on_my_way']);
+      chats.send(conversationId, 'did:drv:amos', { body: 'Mine' });
+      expect(chats.unreadFor(conversationId, 'did:drv:amos').items).toEqual([]);
+      expect(() => chats.unreadFor(conversationId, 'did:stranger')).toThrow(/Conversation not found/);
+    });
+  });
+
   describe('a conversation about a parcel waiting at a shop', () => {
     const parcelsById: Record<string, Record<string, unknown>> = {};
     const personsByDid: Record<string, { personDid: string; phoneHash: string; displayName?: string }> = {};

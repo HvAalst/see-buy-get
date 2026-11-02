@@ -21,7 +21,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { DetailsScreen } from './screens/DetailsScreen';
 import { LoadsScreen, type LoadAskedFor } from './screens/LoadsScreen';
-import { RunsScreen } from './screens/RunsScreen';
+import { RunsScreen, type RunAskedFor } from './screens/RunsScreen';
 import { ClientsScreen } from './screens/ClientsScreen';
 import { ContractsScreen } from './screens/ContractsScreen';
 import { InboundScreen } from './screens/InboundScreen';
@@ -60,6 +60,9 @@ const SECTION: Record<Section, { label: MessageKey; icon: IconName }> = {
  * WHAT IS EVERYBODY'S AND WHAT IS AN OWNER'S is decided by the server on every request; the screens only stop offering
  * what would be refused.
  */
+/** 2026-11-02 — what a notice named, and the section it opens in. */
+type LinkedAsked = { section: 'loads'; load: LoadAskedFor } | { section: 'runs'; run: RunAskedFor } | { section: 'exports' | 'imports'; record: { id: string; seq: number } };
+
 export function App() {
   const t = useT();
   const { state, actions } = useBusinessApp();
@@ -76,26 +79,36 @@ export function App() {
   // rail's or the tab bar's — so they swap in place, keep their place on the page, and Back from any of them is home.
   useScreenNav<Section>({ screen: state.section, home: 'home', tabs: SECTIONS, ready: state.phase === 'ready' && Boolean(state.business) && !state.settingUp, go: actions.go, launch: SECTIONS });
 
-  // 2026-11-02 — A LOAD A NOTICE NAMES (`?load=<id>`, shared/launch.ts; the owner: "wire it in"): Open under the notice
-  // in the bell, or a tapped notification on a closed app. The business's Loads, with that load open on the part the
-  // notice is about — once the business is open; a business with no Loads is told so, in words.
-  const [askedLoad, setAskedLoad] = useState<LoadAskedFor | null>(null);
+  // 2026-11-02 — A RECORD A NOTICE NAMES (shared/launch.ts; the owner: "wire it in"; "we must reduce the tapping, so
+  // that's why it should open"): a tap on the notice in the bell, or a tapped notification on a closed app. A load opens
+  // under Loads on the part the notice is about, a booking under Runs, an export under Exports, an import under Imports —
+  // once the business is open; a business with no such section is told so, in words.
+  const [asked, setAsked] = useState<LinkedAsked | null>(null);
   const [loadSaid, setLoadSaid] = useState<string | null>(null);
   const asks = useRef(0);
-  useEffect(() => onLaunch('load', (l) => setAskedLoad({ ...l, seq: ++asks.current })), []);
+  useEffect(() => {
+    const offs = [
+      onLaunch('load', (l) => setAsked({ section: 'loads', load: { ...l, seq: ++asks.current } })),
+      onLaunch('run', (r) => setAsked({ section: 'runs', run: { ...r, seq: ++asks.current } })),
+      onLaunch('export', (id) => setAsked({ section: 'exports', record: { id, seq: ++asks.current } })),
+      onLaunch('import', (id) => setAsked({ section: 'imports', record: { id, seq: ++asks.current } })),
+    ];
+    return () => offs.forEach((off) => off());
+  }, []);
   const open = state.phase === 'ready' && Boolean(state.business) && !state.settingUp;
   useEffect(() => {
-    if (!askedLoad || !open || !state.business) return;
-    if (!sectionsFor(state.business.activities).includes('loads')) {
-      setAskedLoad(null);
-      setLoadSaid(t('business.loads.notYours'));
+    if (!asked || !open || !state.business) return;
+    if (!sectionsFor(state.business.activities).includes(asked.section)) {
+      setAsked(null);
+      setLoadSaid(t('business.linked.notHere'));
       return;
     }
     setLoadSaid(null);
-    if (state.section !== 'loads') actions.go('loads');
-  }, [askedLoad, open]);
+    if (state.section !== asked.section) actions.go(asked.section);
+  }, [asked, open]);
   // Said once, where it was asked: gone with the next section.
   useEffect(() => setLoadSaid(null), [state.section]);
+  const answered = () => setAsked(null);
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
   if (state.phase === 'signin') return <SignInScreen state={state} actions={actions} />;
@@ -188,9 +201,9 @@ export function App() {
           ) : null}
           {domesticTabs}
           {section === 'loads' ? (
-            <LoadsScreen business={business} actions={actions} client={client} asked={askedLoad} onAsked={() => setAskedLoad(null)} />
+            <LoadsScreen business={business} actions={actions} client={client} asked={asked?.section === 'loads' ? asked.load : null} onAsked={answered} />
           ) : section === 'runs' ? (
-            <RunsScreen business={business} actions={actions} client={client} />
+            <RunsScreen business={business} actions={actions} client={client} asked={asked?.section === 'runs' ? asked.run : null} onAsked={answered} />
           ) : section === 'parcels' ? (
             <ParcelsScreen business={business} client={client} />
           ) : section === 'contracts' ? (
@@ -198,9 +211,9 @@ export function App() {
           ) : section === 'clients' ? (
             <ClientsScreen business={business} actions={actions} client={client} />
           ) : section === 'exports' ? (
-            <ExportsScreen business={business} client={client} />
+            <ExportsScreen business={business} client={client} asked={asked?.section === 'exports' ? asked.record : null} onAsked={answered} />
           ) : section === 'imports' ? (
-            <ImportsScreen state={{ who }} actions={towerActions as never} />
+            <ImportsScreen state={{ who }} actions={towerActions as never} asked={asked?.section === 'imports' ? asked.record : null} onAsked={answered} />
           ) : section === 'yard' ? (
             <DepotsScreen state={{ who }} actions={towerActions as never} />
           ) : section === 'inbound' ? (

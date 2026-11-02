@@ -172,6 +172,8 @@ export const enTowerBusiness = {
   'tower.imports.page': 'Page {page} of {pages} · showing {shown} of {total}',
   'tower.imports.count': '{n} on the way',
   'tower.imports.none': 'Nothing recorded yet.',
+  // 2026-11-02 — a notice named an import this company's list does not hold: said, rather than nothing opening.
+  'tower.imports.notYours': 'The import this notice is about is not among this company’s imports.',
   'tower.imports.waitingOnYou': '{n} waiting on you',
   'tower.imports.col.code': 'Import',
   'tower.imports.col.route': 'Route',

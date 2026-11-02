@@ -103,6 +103,8 @@ export interface DisputeReport {
     durationSec?: number;
     /** 2026-11-02 — a filed photo the party chose to include: its reference and labels; the operator may open exactly this one. */
     photo?: FiledPhotoRef;
+    /** 2026-11-02 — it was spoken in the car: the operator reads it as the parties did. */
+    via?: 'car';
     at: string;
   }>;
   /**
@@ -172,6 +174,11 @@ export interface ConversationMessage {
   at: string;
   /** Written on the phone before it had a signal, and sent when it did (2026-11-01): when it was written, by the phone. */
   writtenAt?: string;
+  /**
+   * 2026-11-02 — SPOKEN IN THE CAR and sent as text by the phone's native part (car-messages.service.ts; the owner: "we
+   * start with 2"). Both sides see "Sent from the car", so a short or misheard reply is read kindly.
+   */
+  via?: 'car';
 }
 
 /** A message reported by the party who received it — kept with a copy of what was reported. */
@@ -210,6 +217,8 @@ export interface MessageView {
   at: string;
   /** Written with no signal and sent later: when it was written. Absent when it went as it was written. */
   writtenAt?: string;
+  /** 2026-11-02 — spoken in the car and sent from there: "Sent from the car", to both sides. Absent otherwise. */
+  via?: 'car';
 }
 
 /** A thread as one party sees it. Carries no DID and no contact detail of the other party. */

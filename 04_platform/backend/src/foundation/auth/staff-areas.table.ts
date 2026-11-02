@@ -549,6 +549,11 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/account/shop-passkey/options': 'none',
   'POST sbg/account/shop-passkey/on': 'none',
   'POST sbg/account/shop-passkey/off': 'none',
+  // 2026-11-02 — messages in the car: a driver's own, on their own phone. Staff turn nobody's on or off. (The car's own
+  // doors, `sbg/car/…`, are @Public to the sign-in guard and open only to a car key: no member of staff passes them.)
+  'POST sbg/account/car': 'none',
+  'POST sbg/account/car/on': 'none',
+  'POST sbg/account/car/off': 'none',
   'POST sbg/account/pin/change': 'none',
   'POST sbg/account/shop-devices': 'none',
   'POST sbg/account/shop-devices/forget-others': 'none',

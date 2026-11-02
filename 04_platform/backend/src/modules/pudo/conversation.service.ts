@@ -14,6 +14,7 @@ import { NotificationService } from './notification.service';
 import { VendorService } from './vendor.service';
 import { FiledPhotoService } from './filed-photo.service';
 import type { FiledPhotoView, FileInput } from './filed-photo.types';
+import { CarWakeService } from './car-wake';
 import { ConversationSubject,
   QUICK_REPLIES,
   REPORT_REASONS,
@@ -83,6 +84,8 @@ export class ConversationService {
     @Optional() private readonly agents?: AgentService,
     // 2026-11-02 — the record's photo file: a photo enters a thread only by being filed to its load or parcel.
     @Optional() private readonly filed?: FiledPhotoService,
+    // 2026-11-02 — "Messages in the car" (car-wake.ts): the driver's phone woken, content-free, when a message is for them.
+    @Optional() private readonly car?: CarWakeService,
   ) {}
 
   /**
@@ -204,11 +207,30 @@ export class ConversationService {
     return { thread: this.viewFor(thread, did), items };
   }
 
-  send(conversationId: string, fromDid: string, input: { body?: string; quick?: string; writtenAt?: string }, now = Date.now()): MessageView {
+  /**
+   * A message — typed, a quick reply, or (2026-11-02, `via: 'car'`) spoken in the car and sent as text by the phone's
+   * native part (car-messages.service.ts). One path for all three, so a reply from the car is refused exactly as a typed
+   * one is: a stranger, a closed or blocked thread, nothing written, too long, a picture, the hourly cap.
+   */
+  send(conversationId: string, fromDid: string, input: { body?: string; quick?: string; writtenAt?: string }, now = Date.now(), via?: 'car'): MessageView {
     const thread = this.requireParty(conversationId, fromDid);
     this.requireOpen(thread, fromDid);
     const written = writtenEarlier(input.writtenAt, now);
-    return this.append(thread, fromDid, { ...composed(input), ...(written ? { writtenAt: written } : {}) }, now, 'New message about');
+    return this.append(thread, fromDid, { ...composed(input), ...(written ? { writtenAt: written } : {}), ...(via === 'car' ? { via } : {}) }, now, 'New message about');
+  }
+
+  /**
+   * 2026-11-02 — WHAT A PARTY HAS NOT READ YET, in one thread: the messages from the other side after their read marker,
+   * as they would read them. For the car (car-messages.service.ts): a party only — a stranger is told there is no such
+   * conversation, as everywhere here.
+   */
+  unreadFor(conversationId: string, did: string): { thread: ConversationView; items: MessageView[] } {
+    const thread = this.requireParty(conversationId, did);
+    const all = this.messages.get(conversationId) ?? [];
+    const agreed = agreedSeqs(all);
+    const readUpTo = thread.readSeq[did] ?? 0;
+    const items = all.filter((m) => m.seq > readUpTo && m.fromDid !== did).map((m) => this.viewOf(m, did, agreed, thread.posterDid));
+    return { thread: this.viewFor(thread, did), items };
   }
 
   /**
@@ -455,6 +477,7 @@ export class ConversationService {
       ...(m.voiceId ? { voiceId: m.voiceId, durationSec: m.durationSec } : {}),
       // 2026-11-02 — a filed photo goes in as its reference and labels; the operator opens exactly that photo (photoForReport).
       ...(m.photo ? { photo: { ...m.photo } } : {}),
+      ...(m.via === 'car' ? { via: 'car' as const } : {}),
       at: m.at,
     }));
     const report: DisputeReport = {
@@ -568,6 +591,9 @@ export class ConversationService {
     // DISCREET: the push says what KIND of thing arrived and about which load — never what it says, and never
     // an amount. A lock screen is read by whoever is holding the phone.
     const other = fromDid === thread.posterDid ? thread.askerDid : thread.posterDid;
+    // 2026-11-02 — a driver the car reaches (car-wake.ts) is not ALSO pushed a notice: the Play app shows the web app's
+    // push notices as its own, and would say it twice. It is kept in the bell's inbox all the same.
+    const inCar = this.car?.reachesInCar(other) === true;
     void this.notifications
       .notify(other, {
         kind: 'message',
@@ -579,8 +605,12 @@ export class ConversationService {
         link: `/?chat=${encodeURIComponent(thread.conversationId)}`,
         tag: `conv:${thread.conversationId}`,
         data: { conversationId: thread.conversationId, ...(thread.freightId ? { freightId: thread.freightId } : {}), ...(thread.parcelId ? { parcelId: thread.parcelId } : {}) },
-      })
+      }, ...(inCar ? [{ push: false }] : []))
       .catch(() => undefined);
+    // 2026-11-02 — MESSAGES IN THE CAR (the owner: "we start with 2"): where the message is for a driver who turned it on,
+    // their phone is woken with "this chat has news" and nothing else (car-wake.ts). Never awaited: a wake-up is not what
+    // a message waits on, and nothing that goes wrong with one can refuse a message.
+    if (this.car) void this.car.wake(other, thread.conversationId).catch(() => undefined);
 
     return this.viewOf(stored, fromDid, agreedSeqs(all), thread.posterDid);
   }
@@ -642,6 +672,8 @@ export class ConversationService {
     if (m.kind === 'voice' && m.voiceId) view.voice = { voiceId: m.voiceId, durationSec: m.durationSec ?? 0 };
     if (m.kind === 'photo' && m.photo) view.photo = { ...m.photo };
     if (m.writtenAt) view.writtenAt = m.writtenAt;
+    // 2026-11-02 — said to both sides: "Sent from the car".
+    if (m.via === 'car') view.via = 'car';
     return view;
   }
 

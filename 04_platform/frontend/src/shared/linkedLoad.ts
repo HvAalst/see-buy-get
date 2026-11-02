@@ -10,7 +10,7 @@
  */
 export type LinkedLoadOutcome = 'opened' | 'not_yours' | 'not_read' | 'failed';
 
-export interface LinkedLoadSteps<L extends { freightId: string }> {
+export interface LinkedLoadSteps<L> {
   /** Whether this person reads the account's loads at all. */
   mayRead: boolean;
   /** The account's loads, or null when they could not be read (the app says why, as it does for any failed read). */
@@ -23,19 +23,32 @@ export interface LinkedLoadSteps<L extends { freightId: string }> {
   say: (why: 'not_yours' | 'not_read') => void;
 }
 
-export async function openLinkedLoad<L extends { freightId: string }>(id: string, steps: LinkedLoadSteps<L>): Promise<LinkedLoadOutcome> {
+export function openLinkedLoad<L extends { freightId: string }>(id: string, steps: LinkedLoadSteps<L>): Promise<LinkedLoadOutcome> {
+  return openLinked((l: L) => l.freightId === id, steps);
+}
+
+/**
+ * 2026-11-02 — the same steps for any record a notice names (the owner: "that's why it should open"): a booking on a run,
+ * an export — read afresh, the one the notice names opened, or said in words that it is not the account's.
+ */
+export async function openLinked<L>(named: (record: L) => boolean, steps: LinkedLoadSteps<L>): Promise<LinkedLoadOutcome> {
   if (!steps.mayRead) {
     steps.say('not_read');
     return 'not_read';
   }
-  const loads = await steps.fetch();
-  if (!loads) return 'failed';
-  steps.keep(loads);
-  const load = loads.find((l) => l.freightId === id);
-  if (!load) {
+  const records = await steps.fetch();
+  if (!records) return 'failed';
+  steps.keep(records);
+  const record = records.find(named);
+  if (!record) {
     steps.say('not_yours');
     return 'not_yours';
   }
-  await steps.open(load);
+  await steps.open(record);
   return 'opened';
+}
+
+/** A booking a run's notice names: that booking, or — told to every shipper on a run — this account's on that run. */
+export function bookingNamed(asked: { run: string; booking?: string }): (b: { departureId: string; bookingId: string }) => boolean {
+  return (b) => b.departureId === asked.run && (!asked.booking || b.bookingId === asked.booking);
 }

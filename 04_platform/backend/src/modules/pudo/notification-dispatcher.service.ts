@@ -24,7 +24,7 @@ import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
 import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
-import { loadLink, type NotificationKind } from './notification.types';
+import { loadLink, runLink, type NotificationKind } from './notification.types';
 import { FINDING_WORDS, type TamperFinding } from './tamper.types';
 import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancelReason } from './departure.types';
 
@@ -343,14 +343,15 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
             : n.kind === 'over'
               ? { title: 'You have reached the shift limit', body: `You have been on shift ${n.onDuty} hours; the limit is ${limit}. Deliver what is aboard: no new load is offered or can be taken. Then end your shift and rest. You can start again ${rest} hours after you end it.` }
               : { title: 'Your rest is over', body: `It is ${rest} hours since your last shift ended. You can start a shift again.` };
-        await this.notifications.notify(n.driverDid, { kind: 'shift_hours', ...say, link: '/', tag: `hours:${n.kind}:${n.driverDid}` });
+        await this.notifications.notify(n.driverDid, { kind: 'shift_hours', ...say, link: '/?go=home', tag: `hours:${n.kind}:${n.driverDid}` });
         told += 1;
         if (n.kind === 'over' && n.managerDid) {
           await this.notifications.notify(n.managerDid, {
             kind: 'shift_hours',
             title: `${n.driverName} has reached the shift limit`,
             body: `On shift ${n.onDuty} hours${n.plate ? ` with ${n.plate}` : ''}; the limit is ${limit}. They deliver what is aboard and take nothing new, then rest ${rest} hours. Plan no new load for them until they have.`,
-            link: '/',
+            // The office's shifts, where the driver on it is.
+            link: '/?go=sessions',
             tag: `hours:over:${n.driverDid}`,
           });
         }
@@ -505,6 +506,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       void this.tell(p.did, {
         kind: 'papers_checked',
         title: 'Your papers are checked: you can drive',
+        // A shift starts on the home screen.
+        link: '/?go=home',
         body: 'SeeBuyGet has checked your ID and your driving licence. The photos you sent have been deleted; your licence number and its date are kept.',
         tag: `driver-papers:${p.did}`,
         data: { approved: true },
@@ -548,6 +551,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         body: p.seen
           ? 'From now, how many parcels you may carry at once grows with each one you hand on. The photo you sent has been deleted.'
           : `${p.reason ?? 'Something was wrong with it.'} The photo has been deleted. Send another from the Driver app’s home screen.`,
+        link: '/?go=home',
         tag: `id-photo:${p.did}`,
         data: { seen: p.seen },
       });
@@ -649,7 +653,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         body: payload.accepted
           ? `Recorded to ${payload.expiresAt ? paperDay(payload.expiresAt) : "its new date"}. You can start a shift.`
           : `${payload.reason} Send a new photo from the app.`,
-        link: '/',
+        // Its card is on the Driver app's home: a shift starts there, and a photo is sent again from there.
+        link: '/?go=home',
         tag: `papers:${payload.did}:checked`,
         data: { did: payload.did },
       });
@@ -991,7 +996,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'load_assigned',
         title: `Load ${payload.code} was put on you`,
         body: `${payload.byName ?? 'Your fleet office'} assigned you ${payload.code}: ${payload.weightKg} kg from ${payload.pickupLabel} to ${payload.destLabel}${payload.earning != null ? ` — you earn ${payload.earning.toFixed(2)}` : ''}. It is under My loads; collect it at the pickup.`,
-        link: '/',
+        // 2026-11-02 — a driver's notice opens where the driver acts on it, in one tap (the owner: "drivers' safety").
+        link: '/?go=loads',
         tag: `freight:${payload.freightId}`,
         data: { freightId: payload.freightId },
       });
@@ -1109,7 +1115,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
             p.choice === 'give_up'
               ? 'The sender gave the refused goods up. The receiver may keep them if it will; otherwise your company disposes of them, and any cost of that is the sender’s.'
               : `${p.byDeadline ? 'No answer in 48 hours: they go back to where they were picked up. ' : 'The sender decided. '}Carry the refused goods to ${p.destLabel} as load ${p.returnCode} — it is in your loads, at your vehicle’s price. Deliver it as any other.`,
-          link: '/',
+          link: '/?go=loads',
           tag: `freight:${p.freightId}:refusal`,
           data: { freightId: p.returnFreightId ?? p.freightId },
         });
@@ -1140,7 +1146,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'load_instructions',
         title: payload.amended ? `New instruction for ${payload.code}` : `Instructions for ${payload.code} changed`,
         body,
-        link: '/',
+        link: '/?go=loads',
         tag: `freight:${payload.freightId}:instructions`,
         data: { freightId: payload.freightId },
       });
@@ -1156,7 +1162,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'load_cancelled',
         title: `Load ${payload.code} was cancelled`,
         body: `The sender withdrew ${payload.code}${payload.destLabel ? ` to ${payload.destLabel}` : ''} before pickup: ${payload.reason}. Nothing to collect; your capacity is free again.`,
-        link: '/',
+        // Its capacity is free: the board, where the next load is.
+        link: '/?go=board',
         tag: `freight:${payload.freightId}`,
         data: { freightId: payload.freightId },
       });
@@ -1184,7 +1191,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           kind: 'load_cancelled',
           title: `${payload.company} called off the ${payload.originZone} → ${payload.destZone} run`,
           body,
-          link: '/',
+          // 2026-11-02 — the run, where each shipper finds its own booking (the owner: "that's why it should open").
+          link: runLink(payload.departureId),
           tag: `departure:${payload.departureId}:cancelled`,
           data: { departureId: payload.departureId },
         });
@@ -1390,6 +1398,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'load_cancelled',
         title: `Space given back on ${p.lineName}`,
         body: `The shipper cancelled ${p.description}. That space is for sale again.`,
+        // The fleet's runs, where the space is for sale again.
+        link: '/?go=runs',
         tag: `departure:${p.departureId}:booking:${p.bookingId}:cancelled`,
         data: { departureId: p.departureId, bookingId: p.bookingId },
       });
@@ -1404,6 +1414,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'load_cancelled',
         title: `${p.company} cancelled your booking`,
         body: `${p.company} gave back the space for ${p.description} on ${p.lineName}${said ? `: ${said}` : ''}. ${next}`,
+        link: runLink(p.departureId, p.bookingId),
         tag: `departure:${p.departureId}:booking:${p.bookingId}:cancelled`,
         data: { departureId: p.departureId, bookingId: p.bookingId },
       });
@@ -1435,6 +1446,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       kind: 'claim_answered',
       title: `${p.company} ${p.answer === 'accepted' ? 'accepted' : 'refused'} your claim`,
       body: `On ${p.load}${p.note ? `: “${p.note}”` : '.'} This is the carrier’s answer, kept with the consignment note — SeeBuyGet does not decide claims.`,
+      link: runLink(p.departureId, p.bookingId),
       tag: `departure:${p.departureId}:claim:${p.bookingId}:answered`,
       data: { departureId: p.departureId, bookingId: p.bookingId },
     });
@@ -1452,6 +1464,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'load_assigned',
         title: `A different vehicle on ${p.lineName}`,
         body: `${p.company} put another vehicle on the run your goods are booked on: it now goes on a ${p.toClass} instead of a ${p.fromClass}. Your booking stands.`,
+        link: runLink(p.departureId),
         tag: `departure:${p.departureId}:vehicle`,
         data: { departureId: p.departureId },
       });
@@ -1577,6 +1590,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       body: `Your fleet office put ${p.plate} (${p.vehicleClass}) at the top of your list. Your shift starts when you start it, with your PIN.`,
       tag: `vehicle-today:${p.driverDid}`,
       data: { plate: p.plate },
+      // Its shift starts on the home screen, with that vehicle.
+      link: '/?go=home',
     });
   }
 
@@ -1624,7 +1639,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'freight_delivered',
         title: `Delivered in ${payload.destZone}`,
         body: `${payload.company} handed over ${payload.description}${payload.receivedBy ? ` to ${payload.receivedBy}` : ''}.`,
-        link: '/',
+        link: runLink(payload.departureId),
         tag: `departure:${payload.departureId}:delivered`,
         data: { departureId: payload.departureId },
       });
@@ -1894,6 +1909,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           body: `${b.driverName ?? 'They'} ${b.driverName ? 'has' : 'have'} ${what} to take on. Go to them, and take them over with the six digits on their phone: the road that is left is yours, paid when you hand each bag in.`,
           tag: `takeover:${b.breakdownId}`,
           data: { breakdownId: b.breakdownId, lat: b.location.lat, lng: b.location.lng },
+          // Taken over from the home screen on shift, with the six digits.
+          link: '/?go=home',
         });
       }
     }
@@ -1909,7 +1926,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
               : `${p.carrier} reported it on the road, ${p.when}, before it collected your goods. You will be told when they are collected.`,
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
-        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : {}),
+        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : s.departureId ? { link: runLink(s.departureId) } : {}),
       });
     }
   }
@@ -1924,6 +1941,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'vehicle_breakdown',
         title: back ? `${p.plate} is back on the road` : `${p.plate} is going to the workshop`,
         body: `${b.resolvedBy}: “${b.resolutionNote ?? ''}”.`,
+        link: '/?go=home',
         tag: `breakdown:${b.breakdownId}`,
         data: { vehicleId: b.vehicleId, breakdownId: b.breakdownId },
       });
@@ -1942,7 +1960,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
             : `${p.carrier} will send another vehicle to collect your goods.`,
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:end`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
-        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : {}),
+        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : s.departureId ? { link: runLink(s.departureId) } : {}),
       });
     }
   }
@@ -1962,6 +1980,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'vehicle_breakdown',
         title: `Your bags and parcels went on with ${h.toDriverName}`,
         body: `${what}, taken over at ${p.fromPlate}${h.location ? ` (${h.location.lat.toFixed(5)}, ${h.location.lng.toFixed(5)})` : ''}. The road you drove with each bag is paid to you now; ${h.toDriverName} is paid the rest when they hand it in.`,
+        // What the road was worth is under Earnings.
+        link: '/?go=earnings',
         tag: `breakdown:${p.breakdownId}:handover`,
         data: { breakdownId: p.breakdownId },
       });
@@ -1978,6 +1998,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'vehicle_breakdown',
         title: `The loads of ${p.fromPlate} are yours now`,
         body: `${h.by} put them on ${h.toPlate}: ${what}.${h.location ? ` ${p.fromPlate} broke down at ${h.location.lat.toFixed(5)}, ${h.location.lng.toFixed(5)}.` : ''}`,
+        link: '/?go=loads',
         tag: `breakdown:${p.breakdownId}:handover`,
         data: { breakdownId: p.breakdownId, ...(h.location ? { lat: h.location.lat, lng: h.location.lng } : {}) },
       });
@@ -1985,6 +2006,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'vehicle_breakdown',
         title: `Your loads went to ${h.toDriverName}`,
         body: `${h.by} moved them from ${p.fromPlate} to ${h.toPlate}: ${what}. Hand them over when ${h.toDriverName} arrives.`,
+        link: '/?go=loads',
         tag: `breakdown:${p.breakdownId}:handover`,
         data: { breakdownId: p.breakdownId },
       });
@@ -1996,7 +2018,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         body: `${p.carrier} moved your goods to another of its vehicles after the breakdown${s.state === 'to_collect' ? ': that one will collect them' : ''}.`,
         tag: `breakdown:${p.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:moved`,
         data: { breakdownId: p.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
-        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : {}),
+        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : s.departureId ? { link: runLink(s.departureId) } : {}),
       });
     }
   }
@@ -2052,9 +2074,11 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         body: payload.approved
           ? `The network read your ID and licence${payload.companyName ? ` and ${payload.companyName} contracts you directly` : ''}. Your vehicle is on your list: start a shift when you are ready.`
           : `${payload.reason ?? ''} You are still in no fleet: ask again from “Your fleet”, or take a fleet's place when one is offered.`.trim(),
-        link: '/',
+        // 2026-11-02 — yes: a shift starts on the home screen. No: asked again in "Your fleet", a sheet the Driver app
+        // opens itself on a tap (it is named in `data`, as a sheet has no address).
+        link: payload.approved ? '/?go=home' : '/',
         tag: `ride-alone:${payload.did}:${Date.now()}`,
-        data: { did: payload.did },
+        data: { did: payload.did, about: 'ride_alone', approved: payload.approved },
       });
     } catch (err) {
       this.logger.warn(`ride-alone notice failed for ${payload.did}: ${(err as Error).message}`);
@@ -2212,7 +2236,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
             kind: 'load_nearby',
             title: 'A load is near you',
             body: where ? `A bag heading to ${where} is ready for pickup nearby.` : 'A bag is ready for pickup nearby.',
-            link: '/',
+            link: '/?go=route',
             // One notification per tote per driver — a re-publish collapses onto the same one.
             tag: `load:${tote.code}`,
             data: { code: tote.code },
