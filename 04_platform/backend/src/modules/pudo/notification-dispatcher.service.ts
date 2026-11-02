@@ -24,7 +24,7 @@ import { DispatchService } from './dispatch.service';
 import { haversineKm } from './geo';
 import { paperDay } from './papers';
 import { GeoPoint } from './pudo.types';
-import type { NotificationKind } from './notification.types';
+import { loadLink, type NotificationKind } from './notification.types';
 import { FINDING_WORDS, type TamperFinding } from './tamper.types';
 import { ROUTE_REASONS, RUN_REASON_SENTENCE, type GiveBackReason, type RunCancelReason } from './departure.types';
 
@@ -855,7 +855,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         body: refused
           ? `The driver was at ${payload.destLabel ?? 'the destination'} and the receiver refused it${payload.note ? ` — "${payload.note}"` : ''}. The driver keeps the goods until you say where they go: back to ${payload.pickupLabel}, to another place, or given up — you pay the way. With no answer ${byWords(payload.decideBy!)}, they go back to ${payload.pickupLabel}, at your cost.`
           : `The driver was at ${payload.destLabel ?? 'the destination'} and ${why}${payload.note ? ` — "${payload.note}"` : ''}. The driver still has the goods. Ring the receiver, or message the driver about where to take it.`,
-        link: '/',
+        // 2026-11-02 — the load itself (the owner: "wire it in"): refused, its answer comes first; otherwise its door.
+        link: refused ? loadLink(payload.freightId) : loadLink(payload.freightId, 'road'),
         tag: `freight:${payload.freightId}:attempt${payload.attempts}`,
         data: { freightId: payload.freightId },
       });
@@ -875,7 +876,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'freight_problem',
         title: `Load ${payload.ref} is held`,
         body: `Found ${payload.where}: ${FINDING_WORDS[payload.finding]}. It was photographed and SeeBuyGet operations has been told; the load does not change hands until operations releases it. What was found is on the consignment note.`,
-        link: '/',
+        link: loadLink(payload.unitId, 'road'),
         tag: `freight:${payload.unitId}:held`,
         data: { freightId: payload.unitId },
       });
@@ -891,7 +892,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'freight_problem',
         title: `Load ${payload.code ?? payload.ref} is released`,
         body: `SeeBuyGet operations released it: "${payload.reason}". It may change hands again; what was found stays on its consignment note.`,
-        link: '/',
+        link: loadLink(payload.unitId, 'road'),
         tag: `freight:${payload.unitId}:held`,
         data: { freightId: payload.unitId },
       });
@@ -915,7 +916,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       ? `It was held by ${by}${who} from ${utcWords(h.since)} until ${utcWords(h.letGoAt ?? h.since)}, as the driver said${h.letGoNote ? ` — "${h.letGoNote}"` : ''}. It is on its way again.`
       : `The driver said ${utcWords(h.since)} that ${by}${who} holds it${h.note ? ` — "${h.note}"` : ''}.${late} SeeBuyGet operations has been told. You are told again when it is let go.`;
     const tag = `freight:${p.freightId}:held`;
-    if (p.posterDid) await this.tell(p.posterDid, { kind: 'freight_problem', title, body, tag, data: { freightId: p.freightId } });
+    if (p.posterDid) await this.tell(p.posterDid, { kind: 'freight_problem', title, body, tag, data: { freightId: p.freightId }, link: loadLink(p.freightId, 'road') });
     if (p.carrierDid && p.carrierDid !== p.driverDid && p.carrierDid !== p.posterDid) {
       await this.tell(p.carrierDid, { kind: 'freight_problem', title, body: letGo ? body : `${body} Call the driver.`, tag, data: { freightId: p.freightId } });
     }
@@ -930,7 +931,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'freight_problem',
         title: `A seal on load ${payload.code} was broken`,
         body: `Seal ${payload.seal?.number ?? ''} was broken ${how}${payload.seal?.broken?.note ? ` — "${payload.seal.broken.note}"` : ''}. The driver photographed it, and any official paper. A copy of the consignment note is kept with it: if anything is missing at delivery, that is what a damage claim report is made from.`,
-        link: '/',
+        link: loadLink(payload.freightId, 'seals'),
         tag: `freight:${payload.freightId}:seal:${payload.seal?.number ?? ''}`,
         data: { freightId: payload.freightId },
       });
@@ -954,7 +955,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     const title = `The cold chain on load ${p.code} was broken`;
     const tag = `freight:${p.freightId}:cold_chain`;
     if (p.posterDid) {
-      await this.tell(p.posterDid, { kind: 'freight_problem', title, body: `${read}${late} The consignment note says so, and a copy of it is kept as it stands now: if the goods cannot be taken at delivery, that is what a damage claim report is made from.`, tag, data: { freightId: p.freightId } });
+      await this.tell(p.posterDid, { kind: 'freight_problem', title, body: `${read}${late} The consignment note says so, and a copy of it is kept as it stands now: if the goods cannot be taken at delivery, that is what a damage claim report is made from.`, tag, data: { freightId: p.freightId }, link: loadLink(p.freightId, 'road') });
     }
     if (p.carrierDid && p.carrierDid !== p.driverDid && p.carrierDid !== p.posterDid) {
       await this.tell(p.carrierDid, { kind: 'freight_problem', title, body: `${read}${late} The shipper has been told. Call the driver to check the cooling unit.`, tag, data: { freightId: p.freightId } });
@@ -974,7 +975,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         body: reportOnly
           ? 'Nobody of the network decides it or pays. The consignment note, frozen with your claim on it, is the report: open the load to read it, and to pass it on by a link to the carrier or an insurer.'
           : `${payload.award > 0 ? `${payload.award.toFixed(2)} is credited to your balance. ` : ''}${payload.note}`,
-        link: '/',
+        // The poster's own claim: the load, on its claim. A receiver who claimed reads it where it receives: home.
+        link: to === payload.posterDid ? loadLink(payload.freightId, 'claim') : '/',
         tag: `freight:${payload.freightId}:claim`,
         data: { freightId: payload.freightId },
       });
@@ -1007,7 +1009,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'freight_paid_direct',
         title: `Load ${p.code}: the driver says they were paid`,
         body: `${who} says you paid ${p.currency} ${p.amount.toLocaleString('en')} for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''}, the price agreed. It is on the load for you both. SeeBuyGet carries no money for this load.`,
-        link: '/',
+        link: loadLink(p.freightId),
         tag: `freight:${p.freightId}:paid-direct`,
         data: { freightId: p.freightId },
       });
@@ -1025,7 +1027,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'freight_paid_direct',
         title: `Load ${p.code}: the driver says they were not paid`,
         body: `${who} says the price agreed for ${p.code}${p.destLabel ? ` to ${p.destLabel}` : ''}, ${p.currency} ${p.amount.toLocaleString('en')}, has not been paid. You pay them directly; once you have, they say so and you see it on the load. SeeBuyGet carries no money for this load.`,
-        link: '/',
+        // Answered on the load: that it paid, with a reference.
+        link: loadLink(p.freightId),
         tag: `freight:${p.freightId}:not-paid`,
         data: { freightId: p.freightId },
       });
@@ -1068,7 +1071,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
     const body = `${payload.driverName ?? 'The driver'} could not take ${payload.code}${payload.destLabel ? ` to ${payload.destLabel}` : ''}: ${payload.reason}. It is back on the market for another driver; any charge has come back.`;
     for (const to of [payload.posterDid, payload.managerDid].filter((x): x is string => Boolean(x))) {
       try {
-        await this.notifications.notify(to, { kind: 'freight_problem', title: `Load ${payload.code} was handed back`, body, link: '/', tag: `freight:${payload.freightId}:handback`, data: { freightId: payload.freightId } });
+        await this.notifications.notify(to, { kind: 'freight_problem', title: `Load ${payload.code} was handed back`, body, link: to === payload.posterDid ? loadLink(payload.freightId) : '/', tag: `freight:${payload.freightId}:handback`, data: { freightId: payload.freightId } });
       } catch (err) {
         this.logger.warn(`freight-handed-back notify failed for ${payload.freightId}: ${(err as Error).message}`);
       }
@@ -1083,7 +1086,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         kind: 'freight_problem',
         title: `Load ${p.code}: the refused goods go back ${byWords(p.decideBy)}`,
         body: `The goods refused at ${p.destLabel ?? 'the door'} go back to ${p.pickupLabel} ${byWords(p.decideBy)}, at your cost — unless you say they go to another place, or that you give them up.`,
-        link: '/',
+        link: loadLink(p.freightId),
         tag: `freight:${p.freightId}:refusal-reminder`,
         data: { freightId: p.freightId },
       });
@@ -1116,7 +1119,8 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
           kind: 'freight_problem',
           title: `Load ${p.code}: the refused goods are going back`,
           body: `With no answer in 48 hours, the goods refused at the door go back to ${p.destLabel} as load ${p.returnCode}, at your cost.`,
-          link: '/',
+          // The load they were refused on, which says what became of them.
+          link: loadLink(p.freightId),
           tag: `freight:${p.freightId}:refusal`,
           data: { freightId: p.returnFreightId ?? p.freightId },
         });
@@ -1325,6 +1329,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
       body: `Handed over${when}${p.receivedBy ? ` to ${p.receivedBy}` : ''}${p.destLabel ? ` at ${p.destLabel}` : ''}${goods}.${againstWhatWasAsked(p.timing, p.orderedFor)}${found.length ? ` The receiver found ${exceptionsInWords(found)}: it is on the consignment note.` : ''}${refused}`,
       tag: `freight:${p.freightId}:delivered`,
       data: { freightId: p.freightId },
+      link: loadLink(p.freightId),
     });
   }
 
@@ -1904,6 +1909,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
               : `${p.carrier} reported it on the road, ${p.when}, before it collected your goods. You will be told when they are collected.`,
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
+        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : {}),
       });
     }
   }
@@ -1936,6 +1942,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
             : `${p.carrier} will send another vehicle to collect your goods.`,
         tag: `breakdown:${b.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:end`,
         data: { breakdownId: b.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
+        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : {}),
       });
     }
   }
@@ -1989,6 +1996,7 @@ export class NotificationDispatcher implements OnModuleInit, OnApplicationBootst
         body: `${p.carrier} moved your goods to another of its vehicles after the breakdown${s.state === 'to_collect' ? ': that one will collect them' : ''}.`,
         tag: `breakdown:${p.breakdownId}:${s.freightId ?? s.departureId ?? s.label}:moved`,
         data: { breakdownId: p.breakdownId, ...(s.freightId ? { freightId: s.freightId } : {}), ...(s.departureId ? { departureId: s.departureId } : {}) },
+        ...(s.freightId ? { link: loadLink(s.freightId, 'road') } : {}),
       });
     }
   }

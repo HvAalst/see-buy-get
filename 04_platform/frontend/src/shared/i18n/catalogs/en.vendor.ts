@@ -795,6 +795,8 @@ export const enVendor = {
   'vendor.hub.emptiesBack': '{units} handed back at the hub’s door',
   // Its heavy orders sent as freight, where each stands; refused at the door, the store's to say where the goods go (2026-10-27).
   'vendor.loads.title': 'Sent as freight',
+  // 2026-11-02 — a notice named a load this store's list does not hold.
+  'vendor.loads.notYours': 'The load this notice is about is not among this store’s loads.',
   'vendor.loads.lede': 'Orders too heavy or too big for the parcel network go as a load of their own — and a parcel you called off at a hub comes to your door as one.',
   'vendor.loads.line': '{status} · to {dest} · {kg} kg',
   'vendor.loads.status.scheduled': 'Booked for later',

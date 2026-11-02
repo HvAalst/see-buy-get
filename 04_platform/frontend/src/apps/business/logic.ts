@@ -1,6 +1,7 @@
 import type { BusinessActivity, BusinessView, CarriageContract, CheckState, Membership, MemberRole, NewBusiness, PostedLoad } from './api';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { arrivalWords, crossingWords, passageWords, type When } from '../../shared/passages';
+import type { LoadAbout } from '../../shared/launch';
 
 /** Where somebody is in the Business app. */
 export type Section = 'home' | 'loads' | 'runs' | 'parcels' | 'contracts' | 'clients' | 'exports' | 'imports' | 'yard' | 'inbound' | 'people' | 'details';
@@ -247,6 +248,16 @@ export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
     if (!form.hazardClass?.trim()) gaps.push('hazardClass');
   }
   return gaps;
+}
+
+/**
+ * 2026-11-02 — WHICH SECTION OF A LOAD A NOTICE OPENS (the owner: "wire it in"). The notice says what part of the load it
+ * is about (`about` on its link, backend loadLink): a problem on the road opens On the road; a seal broken, the papers,
+ * where each seal and what became of it is; a claim decided, Claim. Anything else — a refusal to answer, the driver
+ * saying paid or not paid, delivered, handed back — opens the Overview, where whatever waits for the business's answer is.
+ */
+export function loadSectionFor(about: LoadAbout | undefined): 'overview' | 'road' | 'papers' | 'claim' {
+  return about === 'road' ? 'road' : about === 'seals' ? 'papers' : about === 'claim' ? 'claim' : 'overview';
 }
 
 /**

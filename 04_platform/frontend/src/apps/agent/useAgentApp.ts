@@ -1,4 +1,6 @@
 import type { InstructionsView } from '../../shared/instructions';
+import { onLaunch } from '../../shared/launch';
+import { openLinkedLoad } from '../../shared/linkedLoad';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import {
   isMintSourced,
@@ -1037,6 +1039,49 @@ export function useAgentApp() {
     },
     [loadShopParcels, loadBagPlan, loadRates, loadAcceptPoints, loadTakeInTerms, loadConsignments, loadShelf, loadPosted],
   );
+
+  /**
+   * 2026-11-02 — A LOAD A NOTICE NAMES (`?load=<id>`, shared/launch.ts; the owner: "wire it in"): Open under the notice in
+   * the bell, or a tapped notification. The shop's freight, with that load open — read afresh, so a load posted a minute
+   * ago is in it. Not among this shop's loads, or asked by one of its people (the freight is the owner's), it says so in
+   * words and opens nothing. Held until the shop is signed in.
+   */
+  const linkedLoad = useRef<string | null>(null);
+  const openLoadFromLink = useCallback(async () => {
+    const id = linkedLoad.current;
+    if (!id || !client || stateRef.current.phase !== 'ready') return;
+    linkedLoad.current = null;
+    await openLinkedLoad<PostedFreight>(id, {
+      mayRead: !stateRef.current.staff,
+      fetch: async () => {
+        const r = await client.api.postedFreight();
+        if (r.error) {
+          fail(r.error);
+          return null;
+        }
+        return narrow<{ items?: PostedFreight[] }>(r.data).items ?? [];
+      },
+      // The freight screen, with or without the load asked for: the shop sees its loads either way.
+      keep: (posted) => setState((s) => ({ ...s, posted, postedState: 'ready', screen: 'freight', pricesFor: null, error: null })),
+      open: (f) => openPrices(f.freightId),
+      say: (why) =>
+        pushToast(why === 'not_read' ? { tone: 'info', icon: 'lock', title: t('agent.freight.ownerReads') } : { tone: 'warn', icon: 'warning', title: t('agent.freight.notYours') }),
+    });
+  }, [client, fail, pushToast, openPrices]);
+  const openLoadRef = useRef(openLoadFromLink);
+  openLoadRef.current = openLoadFromLink;
+  useEffect(
+    () =>
+      onLaunch('load', (l) => {
+        linkedLoad.current = l.id;
+        void openLoadRef.current();
+      }),
+    [],
+  );
+  // A link that came before the sign-in opens once the shop is in.
+  useEffect(() => {
+    if (state.phase === 'ready' && linkedLoad.current) void openLoadRef.current();
+  }, [state.phase, client]);
 
   /* ---------------------------------------------------------------- forms */
 

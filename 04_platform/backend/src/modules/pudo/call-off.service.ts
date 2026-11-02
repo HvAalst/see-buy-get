@@ -8,6 +8,7 @@ import { DispatchService } from './dispatch.service';
 import { DriverService } from './driver.service';
 import { MdpService } from './mdp.service';
 import { NotificationService } from './notification.service';
+import { loadLink } from './notification.types';
 import { ParcelService, parcelCurrency } from './parcel.service';
 import { coverFor, DOOR_LOAD_REMIND_H, measuredFactor } from './pudo.config';
 import type { Freight } from './dispatch.types';
@@ -283,7 +284,8 @@ export class CallOffService implements OnModuleInit {
           kind: 'freight_problem',
           title: `No driver has taken load ${f.code} yet`,
           body: `It brings parcel ${f.bringsBack.parcelId} back from ${f.bringsBack.hubName}. Raise the most you pay, or send it to a shop instead — under Sent as freight.`,
-          link: '/',
+          // 2026-11-02 — the store's own load, where both are done (the owner: "wire it in").
+          link: loadLink(f.freightId),
           tag: `door-load:${f.freightId}:remind`,
           data: { freightId: f.freightId },
         })

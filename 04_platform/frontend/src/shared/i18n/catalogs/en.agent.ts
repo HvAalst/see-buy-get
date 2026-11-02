@@ -589,6 +589,9 @@ export const enAgent = {
   'agent.offers.tookTitle': 'Space taken',
   'agent.offers.tookDetail': 'You are on {company}’s run.',
   'agent.freight.title': 'Freight you posted',
+  // 2026-11-02 — a notice named a load: not among this shop's, or a load the shop's people do not open.
+  'agent.freight.notYours': 'The load this notice is about is not among this shop’s loads.',
+  'agent.freight.ownerReads': 'This shop’s loads are read by its owner. Ask them to open it.',
   'agent.freight.lede': 'The loads this shop sent out, and the prices drivers have offered.',
   'agent.freight.emptyTitle': 'No freight posted',
   'agent.freight.emptyLede': 'Loads you book at the counter for a truck will appear here.',

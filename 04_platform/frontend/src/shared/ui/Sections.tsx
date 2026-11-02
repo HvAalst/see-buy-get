@@ -46,8 +46,12 @@ function ownGesture(target: EventTarget | null): boolean {
   return false;
 }
 
-export function Sections({ label, sections }: { label: string; sections: SectionSpec[] }) {
-  const [now, setNow] = useState(sections[0]?.key ?? '');
+/**
+ * `opensOn` — the section to open on, where the reader came for one part (2026-11-02: a notice about a load's road opens
+ * that load on its road). A section with nothing in it has no tab, and the first opens instead.
+ */
+export function Sections({ label, sections, opensOn }: { label: string; sections: SectionSpec[]; opensOn?: string }) {
+  const [now, setNow] = useState((opensOn && sections.some((s) => s.key === opensOn) ? opensOn : sections[0]?.key) ?? '');
   const [empty, setEmpty] = useState<string[]>([]);
   const [drag, setDrag] = useState(0);
   const panes = useRef<HTMLDivElement | null>(null);

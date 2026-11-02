@@ -12,7 +12,9 @@ import { ConsolePick } from '../../tower/ConsolePick';
 import { CurrencySelect } from '../../tower/screens/CurrencySelect';
 import { LoadReservations } from './LoadReservations';
 import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type LoadProposal, type PostedLoad } from '../api';
-import { isDangerousNature, deliverySays, loadGaps, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
+import { isDangerousNature, deliverySays, loadGaps, loadSectionFor, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
+import type { LoadAsked } from '../../../shared/launch';
+import { openLinkedLoad } from '../../../shared/linkedLoad';
 import { passageWords } from '../../../shared/passages';
 import { heldLine } from '../../../shared/tamper';
 import { heldByLine } from '../../../shared/heldByAuthority';
@@ -61,26 +63,64 @@ const EMPTY: Form = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo:
  * our books (the user, 2026-10-04). What we keep is the record: the price the two agreed, the carrier's quotation and
  * proforma, and whether it is paid as the business says so.
  */
-export function LoadsScreen({ business, client }: { business: BusinessView; actions: BusinessActions; client: BusinessClient | null }) {
+/** A load a notice names (shared/launch.ts), and which asking it is — the same load asked for twice opens twice. */
+export interface LoadAskedFor extends LoadAsked {
+  seq: number;
+}
+
+export function LoadsScreen({ business, client, asked, onAsked }: { business: BusinessView; actions: BusinessActions; client: BusinessClient | null; asked?: LoadAskedFor | null; onAsked?: () => void }) {
   const t = useT();
   const act = mayAct(business.you.role);
   const [rows, setRows] = useState<PostedLoad[] | null>(null);
   const [open, setOpen] = useState<PostedLoad | null>(null);
+  // The section a notice opened the load on, and which asking it was: a later tap on a row opens it as ever.
+  const [openOn, setOpenOn] = useState<{ section: string; seq: number } | null>(null);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!client) return;
+  const readLoads = useCallback(async (): Promise<PostedLoad[] | null> => {
+    if (!client) return null;
     const r = await client.shipping.postedFreight();
-    if (r.error) return setError(r.error.detail || r.error.title);
+    if (r.error) {
+      setError(r.error.detail || r.error.title);
+      return null;
+    }
     const items = ((r.data as unknown as { items?: PostedLoad[] })?.items ?? []) as PostedLoad[];
-    setRows(items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [client]);
+  const load = useCallback(async () => {
+    const items = await readLoads();
+    if (items) setRows(items);
+  }, [readLoads]);
 
+  // Read on arriving — unless a notice brought them here, which reads the list itself (once, not twice).
   useEffect(() => {
-    void load();
+    if (!asked) void load();
   }, [load]);
+
+  // 2026-11-02 — A LOAD A NOTICE NAMES (the owner: "wire it in"; shared/linkedLoad.ts): the list read afresh, so a load
+  // posted a minute ago is in it, then that load opened on the part the notice is about (loadSectionFor) — or, not
+  // among this business's loads, said so in words rather than a list with nothing open.
+  useEffect(() => {
+    if (!asked || !client) return;
+    const want = asked;
+    onAsked?.();
+    void openLinkedLoad<PostedLoad>(want.id, {
+      mayRead: true,
+      fetch: readLoads,
+      keep: (items) => {
+        setRows(items);
+        setOpen(null);
+        setError(null);
+      },
+      open: (row) => {
+        setOpenOn({ section: loadSectionFor(want.about), seq: want.seq });
+        setOpen(row);
+      },
+      say: () => setError(t('business.loads.notYours')),
+    });
+  }, [asked?.seq, client]);
 
   useEffect(() => {
     if (open) setOpen(rows?.find((r) => r.freightId === open.freightId) ?? null);
@@ -133,7 +173,15 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
               const handed = deliverySays(r, t);
               const road = roadSays(r, t, onRoad);
               return (
-                <button type="button" class="crow" key={r.freightId} onClick={() => setOpen(r)}>
+                <button
+                  type="button"
+                  class="crow"
+                  key={r.freightId}
+                  onClick={() => {
+                    setOpenOn(null);
+                    setOpen(r);
+                  }}
+                >
                   <span class="crow__body">
                     <span class="crow__top">
                       <span class="crow__name">
@@ -182,7 +230,10 @@ export function LoadsScreen({ business, client }: { business: BusinessView; acti
 
       {open ? (
         <LoadDetail
+          // Opened afresh for each notice that names it, on the section that notice is about.
+          key={openOn ? `${open.freightId}:${openOn.seq}` : open.freightId}
           row={open}
+          start={openOn?.section}
           business={business}
           client={client}
           act={act}
@@ -603,7 +654,7 @@ function NewLoadPanel({ business, client, onCancel, onPosted }: { business: Busi
   );
 }
 
-function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: PostedLoad; business: BusinessView; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message?: string) => void | Promise<void> }) {
+export function LoadDetail({ row, start, business, client, act, onClose, onChanged }: { row: PostedLoad; start?: string; business: BusinessView; client: BusinessClient | null; act: boolean; onClose: () => void; onChanged: (message?: string) => void | Promise<void> }) {
   const t = useT();
   const stage = loadStage(row);
   const says = planSays(row, t);
@@ -659,6 +710,7 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
           scrolling … a sticky but swipable subheader"). Whatever waits for this business's answer is in the first. */}
       <Sections
         label={t('business.loads.sections')}
+        opensOn={start}
         sections={[
           {
             key: 'overview',
@@ -847,15 +899,28 @@ function LoadDetail({ row, business, client, act, onClose, onChanged }: { row: P
           {
             key: 'road',
             label: t('business.loads.sec.road'),
-            attention: Boolean(row.coldChainBroken),
+            attention: Boolean(row.coldChainBroken || row.held || row.heldByAuthority),
             content: (
               <>
-                {row.passages?.length || road || row.coldChainBroken ? (
+                {row.passages?.length || road || row.coldChainBroken || row.held || row.heldByAuthority ? (
                   <section class="cons__panel">
                     <div class="cons__panelhead">
                       <span class="cons__panelt">{t('business.loads.fact.road')}</span>
                     </div>
                     <dl class="cons__facts">
+                        {/* 2026-11-02 — held on the road, said here as on its row: a notice that it is held opens this section. */}
+                        {row.heldByAuthority ? (
+                          <div class="cons__fact">
+                            <dt class="cons__factk">{t('common.held.short')}</dt>
+                            <dd class="cons__factv">{heldByLine(row.heldByAuthority, t)}</dd>
+                          </div>
+                        ) : null}
+                        {row.held ? (
+                          <div class="cons__fact">
+                            <dt class="cons__factk">{t('common.tamper.heldShort')}</dt>
+                            <dd class="cons__factv">{heldLine(row.held, t)}</dd>
+                          </div>
+                        ) : null}
                         {/* Round 14 — what its driver said on the road, in order; across a border, the allowance and when it is expected. */}
                         {row.passages?.length || road ? (
                           <div class="cons__fact">

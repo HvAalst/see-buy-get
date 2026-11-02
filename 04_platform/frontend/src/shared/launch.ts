@@ -34,6 +34,21 @@ export interface LaunchIntent {
   chat?: string;
   parcel?: string;
   offer?: string;
+  /**
+   * 2026-11-02 — A LOAD, told to whoever posted it (the owner: "wire it in"): `?load=<freightId>&about=<part>`, the same
+   * link for a shop, a store and a business — each opens that load where it reads its loads.
+   */
+  load?: LoadAsked;
+}
+
+/** The part of a load a notice is about, where plain (backend notification.types.ts, loadLink). None: where the answer waits. */
+export type LoadAbout = 'road' | 'seals' | 'claim';
+const LOAD_ABOUT: readonly LoadAbout[] = ['road', 'seals', 'claim'];
+
+/** A load a notice names, and what part of it the notice is about. */
+export interface LoadAsked {
+  id: string;
+  about?: LoadAbout;
 }
 
 /** What `share_files` says when the share reached the server instead of the app's own worker, or could not be read. */
@@ -67,14 +82,18 @@ export function intentOf(href: string): LaunchIntent | null {
   const named = p.get('share_files')?.trim();
   const files = named && /^[a-z0-9]{1,40}$/i.test(named) ? named : /\/share-target\/?$/.test(u.pathname) ? SHARE_LOST : undefined;
   // What a notice points at: a record's own id, and nothing a hand-made address could slip past it.
-  const id = (k: 'chat' | 'parcel' | 'offer') => {
+  const id = (k: 'chat' | 'parcel' | 'offer' | 'load') => {
     const v = p.get(k)?.trim();
     return v && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(v) ? v : undefined;
   };
   const chat = id('chat');
   const parcel = id('parcel');
   const offer = id('offer');
-  if (!go && !shared && !files && !chat && !parcel && !offer) return null;
+  const loadId = id('load');
+  // A part not one of the load's own is no part: the load opens where its answer waits.
+  const about = LOAD_ABOUT.find((a) => a === p.get('about'));
+  const load: LoadAsked | undefined = loadId ? { id: loadId, ...(about ? { about } : {}) } : undefined;
+  if (!go && !shared && !files && !chat && !parcel && !offer && !load) return null;
   return {
     ...(go ? { go } : {}),
     ...(shared ? { share: shared } : {}),
@@ -82,13 +101,16 @@ export function intentOf(href: string): LaunchIntent | null {
     ...(chat ? { chat } : {}),
     ...(parcel ? { parcel } : {}),
     ...(offer ? { offer } : {}),
+    ...(load ? { load } : {}),
   };
 }
 
 /** The address without what it asked for: the app's own address stays as it was. */
 export function withoutIntent(href: string): string {
   const u = new URL(href);
-  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url', 'share_files', 'chat', 'parcel', 'offer']) u.searchParams.delete(k);
+  // `about` is a load's part only beside a load: the front page's contact form reads an `about` of its own.
+  if (u.searchParams.has('load')) u.searchParams.delete('about');
+  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url', 'share_files', 'chat', 'parcel', 'offer', 'load']) u.searchParams.delete(k);
   const q = u.searchParams.toString();
   return `${u.pathname}${q ? `?${q}` : ''}${u.hash}`;
 }
@@ -101,6 +123,7 @@ export interface LaunchKinds {
   chat: string;
   parcel: string;
   offer: string;
+  load: LoadAsked;
 }
 type Kind = keyof LaunchKinds;
 type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
@@ -109,8 +132,8 @@ type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
  * Each kind waits for its own listener (the share helper's catch, 2026-11-02): a share made to a closed app arrives
  * before anybody listens, and must reach the share sheet when it mounts — not whichever listener came first.
  */
-const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set(), files: new Set(), chat: new Set(), parcel: new Set(), offer: new Set() };
-const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [], files: [], chat: [], parcel: [], offer: [] };
+const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set(), files: new Set(), chat: new Set(), parcel: new Set(), offer: new Set(), load: new Set() };
+const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [], files: [], chat: [], parcel: [], offer: [], load: [] };
 let started = false;
 
 function deliverKind<K extends Kind>(kind: K, value: LaunchKinds[K] | undefined): void {
@@ -129,6 +152,7 @@ function deliver(intent: LaunchIntent | null): void {
   deliverKind('chat', intent.chat);
   deliverKind('parcel', intent.parcel);
   deliverKind('offer', intent.offer);
+  deliverKind('load', intent.load);
 }
 
 /** Read the address the app was opened at, and the launch queue, once per page. */
@@ -170,10 +194,10 @@ export function onLaunch<K extends Kind>(kind: K, listener: Listener<K>): () => 
 }
 
 /**
- * 2026-11-02 — WHAT A NOTICE'S LINK CAN LEAD TO INSIDE THE APP: a chat, a parcel, an offer, a screen — never a share
- * or photos, which only another app hands over. A chat first: a message notice is answered there.
+ * 2026-11-02 — WHAT A NOTICE'S LINK CAN LEAD TO INSIDE THE APP: a chat, a parcel, an offer, a load, a screen — never a
+ * share or photos, which only another app hands over. A chat first: a message notice is answered there.
  */
-const LINK_KINDS = ['chat', 'parcel', 'offer', 'go'] as const;
+const LINK_KINDS = ['chat', 'parcel', 'offer', 'load', 'go'] as const;
 export type LinkKind = (typeof LINK_KINDS)[number];
 
 /**

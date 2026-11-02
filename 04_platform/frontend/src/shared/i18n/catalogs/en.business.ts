@@ -414,6 +414,8 @@ export const enBusiness = {
   'business.loads.listTitle': 'Your loads',
   'business.loads.count': '{n} in all',
   'business.loads.none': 'No loads yet.',
+  // 2026-11-02 — a notice named a load this business's list does not hold: said, rather than a list with nothing open.
+  'business.loads.notYours': 'The load this notice is about is not among this business’s loads.',
   'business.loads.rowSub': 'to {dest} · {kg} kg · posted {when}',
   'business.loads.carriedBy': 'carried by {who}',
   'business.loads.stage.ordered': 'With your carrier',

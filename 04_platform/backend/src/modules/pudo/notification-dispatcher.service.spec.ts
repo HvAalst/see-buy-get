@@ -997,3 +997,89 @@ describe('NotificationDispatcher — a notice that asks for an answer points at 
     for (const n of notifications.inboxFor('did:fleet:1')) expect(n.link === '/' || /^\/\?[a-z]+=[^/]+$/.test(n.link ?? '')).toBe(true);
   });
 });
+
+/*
+ * 2026-11-02 — A NOTICE TO WHOEVER POSTED A LOAD NAMES THE LOAD (the owner: "wire it in"). The poster may be a shop, a
+ * store or a business, so the link is one for all three — `/?load=<freightId>` — and each app opens that load where it
+ * reads its loads (frontend shared/launch.ts, kind `load`). `about` is the part of the load the notice concerns, where
+ * plain: its road, its seals, a claim; with none it opens where the poster's answer waits.
+ */
+describe('NotificationDispatcher — a notice to a load’s poster names the load', () => {
+  const P = 'did:biz:poster';
+  const linkOf = (notifications: NotificationService, did: string, title: RegExp) => notifications.inboxFor(did).find((n) => title.test(n.title))?.link;
+
+  it('refused at the door: the load, where the sender answers; nobody there: the load’s door, on its road', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: 'frt_1', code: 'FRT-1', posterDid: P, outcome: 'refused', destLabel: 'Gate 3', attempts: 1, decideBy: '2026-11-04T10:00:00.000Z', pickupLabel: 'Depot' });
+    await events.publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: 'frt_2', code: 'FRT-2', posterDid: P, outcome: 'absent', destLabel: 'Gate 3', attempts: 1 });
+    expect(linkOf(notifications, P, /FRT-1 was refused/)).toBe('/?load=frt_1');
+    expect(linkOf(notifications, P, /FRT-2 could not be delivered/)).toBe('/?load=frt_2&about=road');
+  });
+
+  it('the driver says paid, or not paid — the load, where the answer is given', async () => {
+    const { events, notifications } = harness({});
+    const paid = { freightId: 'frt_3', code: 'FRT-3', amount: 5000, currency: 'KES', by: 'driver', driverName: 'Amos K.', posterDid: P };
+    await events.publish(GlosEvent.Pudo.FreightPaidDirect, paid);
+    await events.publish(GlosEvent.Pudo.FreightNotPaidDirect, { ...paid, freightId: 'frt_4', code: 'FRT-4' });
+    expect(linkOf(notifications, P, /FRT-3: the driver says they were paid/)).toBe('/?load=frt_3');
+    expect(linkOf(notifications, P, /FRT-4: the driver says they were not paid/)).toBe('/?load=frt_4');
+  });
+
+  it('refused goods: the reminder and what the deadline decided name the load they were refused on', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightRefusalReminder, { freightId: 'frt_5', code: 'FRT-5', decideBy: '2026-11-04T10:00:00.000Z', pickupLabel: 'Depot', posterDid: P });
+    await events.publish(GlosEvent.Pudo.FreightRefusalDecided, { freightId: 'frt_5', code: 'FRT-5', choice: 'back', byDeadline: true, posterDid: P, destLabel: 'Depot', returnFreightId: 'frt_5r', returnCode: 'FRT-5R' });
+    expect(linkOf(notifications, P, /refused goods go back/)).toBe('/?load=frt_5');
+    expect(linkOf(notifications, P, /refused goods are going back/)).toBe('/?load=frt_5');
+  });
+
+  it('on the road: held by an authority, a seal broken, the cold chain broken — each to its part of the load', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightHeld, { freightId: 'frt_6', code: 'FRT-6', posterDid: P, carrierDid: 'did:fleet:1', held: { by: 'customs', since: '2026-11-02T08:00:00.000Z' } });
+    await events.publish(GlosEvent.Pudo.FreightSealBroken, { freightId: 'frt_7', code: 'FRT-7', posterDid: P, seal: { number: 'S-1', broken: { cause: 'customs' } } });
+    await events.publish(GlosEvent.Pudo.FreightTempBreach, { freightId: 'frt_8', code: 'FRT-8', posterDid: P, reading: { celsius: 12, at: '2026-11-02T08:00:00.000Z', band: { minC: 2, maxC: 8 } } });
+    await events.publish(GlosEvent.Pudo.UnitHeld, { unitType: 'load', unitId: 'frt_9', ref: 'FRT-9', finding: 'seal_broken', where: 'at the hub', posterDid: P });
+    expect(linkOf(notifications, P, /FRT-6 is held/)).toBe('/?load=frt_6&about=road');
+    expect(linkOf(notifications, P, /seal on load FRT-7/)).toBe('/?load=frt_7&about=seals');
+    expect(linkOf(notifications, P, /cold chain on load FRT-8/)).toBe('/?load=frt_8&about=road');
+    expect(linkOf(notifications, P, /FRT-9 is held/)).toBe('/?load=frt_9&about=road');
+    // The fleet that carries it reads it at home: a load's link means nothing in the Fleet app.
+    expect(linkOf(notifications, 'did:fleet:1', /FRT-6 is held/)).toBe('/');
+  });
+
+  it('its claim decided: the load, on its claim — a receiver who claimed is told at home', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: 'frt_10', code: 'FRT-10', decision: 'upheld', award: 0, note: 'Two cartons.', posterDid: P, claimantDid: P });
+    await events.publish(GlosEvent.Pudo.FreightClaimDecided, { freightId: 'frt_11', code: 'FRT-11', decision: 'rejected', award: 0, note: 'Whole.', posterDid: P, claimantDid: 'did:biz:receiver' });
+    expect(linkOf(notifications, P, /FRT-10/)).toBe('/?load=frt_10&about=claim');
+    expect(linkOf(notifications, 'did:biz:receiver', /FRT-11/)).toBe('/');
+  });
+
+  it('delivered, handed back, a breakdown: the load — and the office that put a driver on it is told at home', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightDelivered, { freightId: 'frt_12', code: 'FRT-12', posterDid: P, receivedBy: 'Wanjiru' });
+    await events.publish(GlosEvent.Pudo.FreightHandedBack, { freightId: 'frt_13', code: 'FRT-13', reason: 'Puncture', posterDid: P, managerDid: 'did:fleet:1' });
+    await events.publish(GlosEvent.Pudo.VehicleBrokeDown, {
+      plate: 'KDA 001A',
+      carrier: 'Kilima',
+      when: 'today at 10:00',
+      breakdown: { breakdownId: 'bd_1' },
+      tell: [
+        { shipperDid: P, kind: 'freight', state: 'aboard', label: 'FRT-14', freightId: 'frt_14' },
+        { shipperDid: 'did:biz:booked', kind: 'booking', state: 'aboard', label: 'BK-1', lineName: 'Nairobi–Mombasa', departureId: 'dep_1' },
+      ],
+    });
+    expect(linkOf(notifications, P, /FRT-12 was delivered/)).toBe('/?load=frt_12');
+    expect(linkOf(notifications, P, /FRT-13 was handed back/)).toBe('/?load=frt_13');
+    expect(linkOf(notifications, 'did:fleet:1', /FRT-13 was handed back/)).toBe('/');
+    expect(linkOf(notifications, P, /FRT-14: the vehicle carrying it broke down/)).toBe('/?load=frt_14&about=road');
+    // Space on a run is a booking, not a load: home, as before.
+    expect(linkOf(notifications, 'did:biz:booked', /broke down/)).toBe('/');
+  });
+
+  it('every load link is a query on the app root, and names the load', async () => {
+    const { events, notifications } = harness({});
+    await events.publish(GlosEvent.Pudo.FreightDeliveryFailed, { freightId: 'frt_1', code: 'FRT-1', posterDid: P, outcome: 'unreachable', attempts: 2 });
+    for (const n of notifications.inboxFor(P)) expect(n.link).toMatch(/^\/\?load=frt_1(&about=(road|seals|claim))?$/);
+  });
+});

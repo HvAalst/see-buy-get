@@ -54,10 +54,10 @@ const labelled = (made: VNode[], words: string) => actsOf(made).find((v) => v.pr
 const APP_LISTENS: Record<string, LinkKind[]> = {
   driver: ['go', 'offer', 'chat'],
   fleet: ['go', 'chat'],
-  agent: ['go', 'chat'],
-  vendor: ['go', 'chat'],
+  agent: ['go', 'chat', 'load'],
+  vendor: ['go', 'chat', 'load'],
   send: ['go', 'parcel', 'chat'],
-  business: ['go'],
+  business: ['go', 'load'],
   mdp: ['go'],
 };
 const asApp = (app: keyof typeof APP_LISTENS) => {
@@ -207,6 +207,18 @@ describe('what each kind of notice offers, in the app that reads it', () => {
     ['bus_inbound', '/', 'mdp', null],
     ['money_in', '/', 'agent', null],
     ['test', '/', 'vendor', null],
+    // 2026-11-02 — to whoever posted a load: the load itself, in the shop, the store and the business alike.
+    ['freight_paid_direct', '/?load=frt_1', 'agent', 'notify.open'],
+    ['freight_paid_direct', '/?load=frt_1', 'vendor', 'notify.open'],
+    ['freight_paid_direct', '/?load=frt_1', 'business', 'notify.open'],
+    ['freight_problem', '/?load=frt_1&about=road', 'business', 'notify.open'],
+    ['freight_problem', '/?load=frt_1&about=seals', 'agent', 'notify.open'],
+    ['claim_decided', '/?load=frt_1&about=claim', 'business', 'notify.open'],
+    ['freight_delivered', '/?load=frt_1', 'vendor', 'notify.open'],
+    ['load_assigned', '/?load=frt_1&about=road', 'agent', 'notify.open'],
+    // A load's link where no load of the reader's is opened (a fleet that carries it): nothing that would go nowhere.
+    ['freight_problem', '/?load=frt_1', 'fleet', null],
+    ['freight_problem', '/?load=frt_1', 'driver', null],
   ];
 
   it.each(TABLE)('%s (%s) in the %s app → %s', (kind, link, app, offers, data) => {

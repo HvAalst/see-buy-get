@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { isMintSourced, isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, type SbgError } from '../../lib/sbg';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
+import { onLaunch } from '../../shared/launch';
+import { openLinkedLoad } from '../../shared/linkedLoad';
 import { tabAtTheTap } from '../../shared/openPage';
 import { papersBody } from './papers';
 import { hubOriginOf, type HubOptionView } from './hubs';
@@ -201,6 +203,8 @@ export interface VendorState {
   returns: ReturnOfferView[];
   /** Its heavy orders sent as freight, and where each stands — refused at the door among them (the user, 2026-10-27). */
   loads: VendorLoad[];
+  /** 2026-11-02 — the load a notice named (`?load=<id>`): brought into sight on the list, and marked. */
+  soughtLoad: { id: string; seq: number } | null;
   quote: QuoteView | null;
   quoteState: 'idle' | 'loading' | 'ready' | 'error';
   minted: MintView | null;
@@ -253,6 +257,7 @@ const INITIAL: VendorState = {
   originState: 'idle',
   returns: [],
   loads: [],
+  soughtLoad: null,
   quote: null,
   quoteState: 'idle',
   minted: null,
@@ -724,6 +729,55 @@ export function useVendorApp() {
     },
     [loadStore, refresh, fetchLedgerWith, loadDock],
   );
+
+  /**
+   * 2026-11-02 — A LOAD A NOTICE NAMES (`?load=<id>`, shared/launch.ts; the owner: "wire it in"): Open under the notice in
+   * the bell, or a tapped notification. A store reads its loads under "Sent as freight" on its orders: the list read
+   * afresh, and that load brought into sight and marked — its refused goods' card with it. Not among this store's loads,
+   * it says so in words. Held until the store is signed in.
+   */
+  const linkedLoad = useRef<string | null>(null);
+  const soughtSeq = useRef(0);
+  const openLoadFromLink = useCallback(async () => {
+    const id = linkedLoad.current;
+    if (!id || !client || stateRef.current.phase !== 'ready') return;
+    linkedLoad.current = null;
+    await openLinkedLoad<VendorLoad>(id, {
+      mayRead: true,
+      fetch: async () => {
+        const r = await client.api.loads();
+        if (r.error) {
+          fail(r.error);
+          return null;
+        }
+        return narrow<{ items: VendorLoad[] }>(r.data)?.items ?? [];
+      },
+      keep: (loads) => {
+        setState((s) => ({ ...s, loads, soughtLoad: null }));
+        if (stateRef.current.screen !== 'orders') go('orders');
+      },
+      // Counted, so the same load asked for again is brought into sight again.
+      open: (l) => {
+        const seq = ++soughtSeq.current;
+        setState((s) => ({ ...s, soughtLoad: { id: l.freightId, seq } }));
+      },
+      say: () => pushToast({ tone: 'warn', icon: 'warning', title: t('vendor.loads.notYours') }),
+    });
+  }, [client, fail, go, pushToast]);
+  const openLoadRef = useRef(openLoadFromLink);
+  openLoadRef.current = openLoadFromLink;
+  useEffect(
+    () =>
+      onLaunch('load', (l) => {
+        linkedLoad.current = l.id;
+        void openLoadRef.current();
+      }),
+    [],
+  );
+  // A link that came before the sign-in opens once the store is in.
+  useEffect(() => {
+    if (state.phase === 'ready' && linkedLoad.current) void openLoadRef.current();
+  }, [state.phase, client]);
 
   /* ----------------------------------------------------------------- mint */
 

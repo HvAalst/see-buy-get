@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { onLaunch } from '../../shared/launch';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { HelpLink } from '../../shared/guide/HelpLink';
 import { BottomNav, BrandMark, Icon, NotificationBell, Sheet } from '../../shared/ui';
@@ -19,7 +20,7 @@ import { ChooseScreen } from './screens/ChooseScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { PeopleScreen } from './screens/PeopleScreen';
 import { DetailsScreen } from './screens/DetailsScreen';
-import { LoadsScreen } from './screens/LoadsScreen';
+import { LoadsScreen, type LoadAskedFor } from './screens/LoadsScreen';
 import { RunsScreen } from './screens/RunsScreen';
 import { ClientsScreen } from './screens/ClientsScreen';
 import { ContractsScreen } from './screens/ContractsScreen';
@@ -74,6 +75,27 @@ export function App() {
   // 2026-11-02 — Back, as an app means it (shared/nav.ts), on a phone as at a desk: every section is top-level — the
   // rail's or the tab bar's — so they swap in place, keep their place on the page, and Back from any of them is home.
   useScreenNav<Section>({ screen: state.section, home: 'home', tabs: SECTIONS, ready: state.phase === 'ready' && Boolean(state.business) && !state.settingUp, go: actions.go, launch: SECTIONS });
+
+  // 2026-11-02 — A LOAD A NOTICE NAMES (`?load=<id>`, shared/launch.ts; the owner: "wire it in"): Open under the notice
+  // in the bell, or a tapped notification on a closed app. The business's Loads, with that load open on the part the
+  // notice is about — once the business is open; a business with no Loads is told so, in words.
+  const [askedLoad, setAskedLoad] = useState<LoadAskedFor | null>(null);
+  const [loadSaid, setLoadSaid] = useState<string | null>(null);
+  const asks = useRef(0);
+  useEffect(() => onLaunch('load', (l) => setAskedLoad({ ...l, seq: ++asks.current })), []);
+  const open = state.phase === 'ready' && Boolean(state.business) && !state.settingUp;
+  useEffect(() => {
+    if (!askedLoad || !open || !state.business) return;
+    if (!sectionsFor(state.business.activities).includes('loads')) {
+      setAskedLoad(null);
+      setLoadSaid(t('business.loads.notYours'));
+      return;
+    }
+    setLoadSaid(null);
+    if (state.section !== 'loads') actions.go('loads');
+  }, [askedLoad, open]);
+  // Said once, where it was asked: gone with the next section.
+  useEffect(() => setLoadSaid(null), [state.section]);
 
   if (state.phase === 'boot') return <div class="twr-boot" aria-busy="true" />;
   if (state.phase === 'signin') return <SignInScreen state={state} actions={actions} />;
@@ -158,9 +180,15 @@ export function App() {
               <span>{state.note}</span>
             </p>
           ) : null}
+          {loadSaid ? (
+            <p class="cnote biz-note" role="status">
+              <Icon name="info" size={16} />
+              <span>{loadSaid}</span>
+            </p>
+          ) : null}
           {domesticTabs}
           {section === 'loads' ? (
-            <LoadsScreen business={business} actions={actions} client={client} />
+            <LoadsScreen business={business} actions={actions} client={client} asked={askedLoad} onAsked={() => setAskedLoad(null)} />
           ) : section === 'runs' ? (
             <RunsScreen business={business} actions={actions} client={client} />
           ) : section === 'parcels' ? (

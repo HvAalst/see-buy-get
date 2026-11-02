@@ -279,6 +279,12 @@
   cursor: default;
 }
 
+/* 2026-11-02 — the row a notice named (Open under it in the bell): brought into sight, and marked as the one asked for. */
+.row--sought {
+  border-color: var(--blue);
+  box-shadow: inset 4px 0 0 var(--blue), var(--sh-sm);
+}
+
 .row__ic {
   flex: none;
   width: 42px;

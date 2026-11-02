@@ -270,6 +270,21 @@ export interface NotificationRecord {
   readBy?: string;
 }
 
+/** What part of a load a notice to its poster is about, where that is plain: its road, its seals, or a claim on it. */
+export type LoadAbout = 'road' | 'seals' | 'claim';
+
+/**
+ * 2026-11-02 — THE LOAD A NOTICE TO ITS POSTER IS ABOUT (the owner: "wire it in"). Whoever posted a load may be a shop,
+ * a store or a business, so the link is the same for all three — `/?load=<freightId>` — and each app opens that load
+ * where it reads its loads; a tapped notification opens the app there, and Open under it in the bell goes to the same
+ * place. `about` names the part of the load the notice concerns, for an app that reads a load in parts (the Business
+ * app's sections); without it the load opens on its first part, where whatever waits for the poster's answer is.
+ * A query on the app root, as every deep link here is — never a path the build does not contain.
+ */
+export function loadLink(freightId: string, about?: LoadAbout): string {
+  return `/?load=${encodeURIComponent(freightId)}${about ? `&about=${about}` : ''}`;
+}
+
 /**
  * What the service worker renders. `title`/`body` are the visible lines; `link` is the app-relative
  * deep link opened on tap (notificationclick); `tag` lets the SW collapse a re-send of the same event

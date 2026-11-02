@@ -53,8 +53,9 @@ describe('sections swiped through', () => {
     // What waits for the business's answer is in the first section.
     const overview = src.slice(src.indexOf("key: 'overview'"), src.indexOf("key: 'road'"));
     for (const waits of ['<LoadRefusal', '<LoadPaidAnswer', "proposals.some((p) => p.status === 'open')", 'row.canCancel']) expect(overview).toContain(waits);
-    // Its tab carries a dot while offers wait for an answer; the road's while the cold chain is broken.
+    // Its tab carries a dot while offers wait for an answer; the road's while the cold chain is broken — or, since
+    // 2026-11-02, while the load is held (a notice that it is held opens this section, and the hold is said there).
     expect(overview).toMatch(/attention: Boolean\(proposals\?\.some\(\(p\) => p\.status === 'open'\)\)/);
-    expect(src.slice(src.indexOf("key: 'road'"), src.indexOf("key: 'papers'"))).toMatch(/attention: Boolean\(row\.coldChainBroken\)/);
+    expect(src.slice(src.indexOf("key: 'road'"), src.indexOf("key: 'papers'"))).toMatch(/attention: Boolean\(row\.coldChainBroken \|\| row\.held \|\| row\.heldByAuthority\)/);
   });
 });

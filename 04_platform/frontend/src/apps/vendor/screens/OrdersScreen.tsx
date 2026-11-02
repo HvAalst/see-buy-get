@@ -40,6 +40,39 @@ const SORT_OPTIONS: Array<{ value: OrderQuery['sort']; labelKey: MessageKey }> =
   { value: 'cost_asc', labelKey: 'vendor.sort.costAsc' },
 ];
 
+/**
+ * Its heavy orders sent as freight, where each stands. 2026-11-02 — the one a notice named (`?load=<id>`) is marked, and
+ * brought into sight by the screen (the owner: "wire it in").
+ */
+export function SentAsFreight({ state, actions }: Pick<OrdersScreenProps, 'state' | 'actions'>) {
+  const t = useT();
+  if (!state.loads.length) return null;
+  return (
+    <Card title={t('vendor.loads.title')} aside={<span class="row__count">{state.loads.length}</span>}>
+      <p class="card__note">{t('vendor.loads.lede')}</p>
+      <div class="rows" role="list">
+        {state.loads.map((l) => {
+          const sought = state.soughtLoad?.id === l.freightId;
+          return (
+            <div key={l.freightId} id={`load-${l.freightId}`} tabIndex={-1} class={`row row--static${sought ? ' row--sought' : ''}`} role="listitem" aria-current={sought ? 'true' : undefined}>
+              <span class="row__body">
+                <span class="row__t">
+                  <Abbreviated text={`${l.code} — ${l.description}`} />
+                </span>
+                <span class="row__s">{t('vendor.loads.line', { status: t(`vendor.loads.status.${l.status}` as never), dest: l.destLabel, kg: l.weightKg })}</span>
+                {l.canDecideRefusal && l.refusal ? <span class="row__s row__s--warn">{t('vendor.loads.refusedRow', { by: utcMoment(l.refusal.decideBy) })}</span> : null}
+                {l.returnOf ? <span class="row__s">{t('refusal.returnOf', { code: l.returnOf.code })}</span> : null}
+                {/* One of its own parcels, called off at a hub and coming to its door (2026-10-27). */}
+                {l.bringsBack ? <BringsBackLine load={l} state={state} actions={actions} /> : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
 export function OrdersScreen({ state, actions, client = null }: OrdersScreenProps) {
   const t = useT();
   const [topupOpen, setTopupOpen] = useState(false);
@@ -58,6 +91,14 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
   const statsKnown = state.orderStats != null;
   const unpaid = state.orderStats?.unpaid ?? 0;
   const moving = state.orderStats?.active ?? 0;
+
+  // 2026-11-02 — the load a notice named: brought into the middle of the screen, and the reader's place moved to it.
+  useEffect(() => {
+    if (!state.soughtLoad || typeof document === 'undefined') return;
+    const row = document.getElementById(`load-${state.soughtLoad.id}`);
+    row?.scrollIntoView?.({ block: 'center' });
+    row?.focus?.({ preventScroll: true });
+  }, [state.soughtLoad?.seq]);
 
   // Load the PUDO directory once so the per-PUDO filter has shop names to offer.
   useEffect(() => {
@@ -141,27 +182,7 @@ export function OrdersScreen({ state, actions, client = null }: OrdersScreenProp
           DECISION rather than on the network. Both numbers are shown, because "pay to bring it back" is
           not a question anybody can answer without what it is worth and what the trip costs. */}
       {/* Its heavy orders sent as freight: where each stands — and, refused at the door, the store's to say where the goods go. */}
-      {state.loads.length ? (
-        <Card title={t('vendor.loads.title')} aside={<span class="row__count">{state.loads.length}</span>}>
-          <p class="card__note">{t('vendor.loads.lede')}</p>
-          <div class="rows" role="list">
-            {state.loads.map((l) => (
-              <div key={l.freightId} class="row row--static" role="listitem">
-                <span class="row__body">
-                  <span class="row__t">
-                    <Abbreviated text={`${l.code} — ${l.description}`} />
-                  </span>
-                  <span class="row__s">{t('vendor.loads.line', { status: t(`vendor.loads.status.${l.status}` as never), dest: l.destLabel, kg: l.weightKg })}</span>
-                  {l.canDecideRefusal && l.refusal ? <span class="row__s row__s--warn">{t('vendor.loads.refusedRow', { by: utcMoment(l.refusal.decideBy) })}</span> : null}
-                  {l.returnOf ? <span class="row__s">{t('refusal.returnOf', { code: l.returnOf.code })}</span> : null}
-                  {/* One of its own parcels, called off at a hub and coming to its door (2026-10-27). */}
-                  {l.bringsBack ? <BringsBackLine load={l} state={state} actions={actions} /> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
+      <SentAsFreight state={state} actions={actions} />
       <SwitchToShopSheet state={state} actions={actions} />
       {state.loads
         .filter((l) => l.refusal)
