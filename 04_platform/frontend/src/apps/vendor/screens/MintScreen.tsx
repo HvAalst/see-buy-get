@@ -12,7 +12,7 @@ import type { NetworkPoint } from '../types';
 import { HUB_ORIGIN, hoursLine, receivingHours, receivingWords, type HubOptionView } from '../hubs';
 import type { VendorActions, VendorState } from '../useVendorApp';
 import { SizePriceNote } from '../../../shared/SizePriceNote';
-import { openSvg } from '../../../shared/openPage';
+import { labelGot, PaperSheet, usePaper } from '../../../shared/ui/PaperSheet';
 
 export interface MintScreenProps {
   state: VendorState;
@@ -590,14 +590,14 @@ function PriceStep({ state, actions }: MintScreenProps) {
 
 function LabelStep({ state, actions }: MintScreenProps) {
   const t = useT();
+  // 2026-11-02 — the label in the slide-up, on its page as it will print (the owner: "the print function in slide up").
+  const paper = usePaper();
   const m = state.minted;
   if (!m) return null;
   const svg = m.label?.svg ?? null;
 
-  // Drawn when the parcel was made: in hand, so it opens straight from the tap.
-  const openLabel = () => {
-    if (svg) openSvg(svg);
-  };
+  // Drawn when the parcel was made: in hand, so nothing is fetched.
+  const openLabel = () => paper.show(t('common.doc.label'), async () => labelGot(svg, `${t('common.doc.label')} — ${m.parcel.parcelId}`, t('common.doc.labelGone')));
 
   return (
     <div class="scr">
@@ -624,7 +624,7 @@ function LabelStep({ state, actions }: MintScreenProps) {
       {m.parcel.customs ? (
         <Card label={t('vendor.papers.title')}>
           <p class="card__note">{t('vendor.papers.printNote')}</p>
-          <Button variant="outline" busy={state.busy === `papers:${m.parcel.parcelId}`} onClick={() => void actions.printPapers(m.parcel.parcelId)}>
+          <Button variant="outline" onClick={() => void actions.printPapers(m.parcel.parcelId)}>
             {t('vendor.papers.print')}
           </Button>
         </Card>
@@ -698,6 +698,7 @@ function LabelStep({ state, actions }: MintScreenProps) {
           {t('vendor.backToOrders')}
         </Button>
       </div>
+      <PaperSheet state={paper} />
     </div>
   );
 }

@@ -108,6 +108,8 @@ export interface PostedFreight {
   trackingKey?: string;
   trackingUrl?: string;
   carrier?: { driverName?: string; plate?: string; vehicleClass?: string };
+  /** The note this shop's archive keeps for the load, once there is a copy it may read — what its links hang on (the server names it; no screen builds one). */
+  noteId?: string;
   rating?: { stars: number; issues: string[]; at: string };
   canRate: boolean;
   /** FP8 — the times a driver handed this load back before pickup, oldest first. Reason and time only. */

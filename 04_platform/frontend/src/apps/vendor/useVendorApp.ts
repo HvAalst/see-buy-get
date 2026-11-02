@@ -4,7 +4,7 @@ import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type Dev
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { onLaunch } from '../../shared/launch';
 import { openLinkedLoad } from '../../shared/linkedLoad';
-import { tabAtTheTap } from '../../shared/openPage';
+import { labelGot, pageGot, usePaper } from '../../shared/ui/PaperSheet';
 import { papersBody } from './papers';
 import { hubOriginOf, type HubOptionView } from './hubs';
 import { downloadZpl, triggerDownload } from '../../shared/download';
@@ -284,6 +284,10 @@ export function useVendorApp() {
   // WHICH STORE is open on this device — and nothing that could open it. The session holds the token a sign-in returned.
   const [creds, setCreds] = useState<{ vendorId: string } | null>(null);
   const client = useMemo(() => (creds ? createVendorClient(creds.vendorId) : null), [creds]);
+  // 2026-11-02 — the store's papers open in the slide-up, as they will print, never in the browser (the owner: "the
+  // print function in slide up"): one sheet for the app, drawn in app.tsx.
+  const paper = usePaper();
+  const showPaper = paper.show;
   const toastSeq = useRef(0);
   const toastTimers = useRef(new Set<number>());
 
@@ -832,23 +836,16 @@ export function useVendorApp() {
     setState((s) => ({ ...s, form: { ...s.form, ...p } }));
   }, []);
 
-  /** Round 13 — a crossing parcel's papers: three copies, opened to print with the label. */
+  /** Round 13 — a crossing parcel's papers: three copies, opened to print with the label — in the slide-up. */
   const printPapers = useCallback(
     async (parcelId: string) => {
       if (!client || !creds) return;
-      const tab = tabAtTheTap();
-      try {
-        await run(`papers:${parcelId}`, async () => {
-          const r = await client.api.papersPage(creds.vendorId, parcelId);
-          if (r.error || !r.data) return fail(r.error as never);
-          tab.show(r.data);
-        });
-      } finally {
-        tab.cancel();
-      }
+      showPaper(t('vendor.papers.title'), async () => {
+        const r = await client.api.papersPage(creds.vendorId, parcelId);
+        return r.error ? { error: r.error as SbgError } : pageGot(r, t('common.doc.gone'));
+      });
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [client, creds],
+    [client, creds, showPaper],
   );
 
   /** Derive the size tier live once all four measurements are in. */
@@ -1137,23 +1134,17 @@ export function useVendorApp() {
     [client],
   );
 
-  /** Round 27 — an order's label, opened to print again: the store's own, once paid. */
+  /** Round 27 — an order's label, opened to print again: the store's own, once paid — in the slide-up, on its page. */
   const printOrderLabel = useCallback(
     async (parcelId: string) => {
       if (!client || !creds) return;
-      const tab = tabAtTheTap();
-      try {
-        await run(`label:${parcelId}`, async () => {
-          const r = await client.api.orderLabel(creds.vendorId, parcelId);
-          if (r.error) return fail(r.error);
-          const svg = narrow<{ svg?: string }>(r.data)?.svg;
-          if (svg) tab.show(svg, 'image/svg+xml');
-        });
-      } finally {
-        tab.cancel();
-      }
+      showPaper(t('common.doc.label'), async () => {
+        const r = await client.api.orderLabel(creds.vendorId, parcelId);
+        if (r.error) return { error: r.error };
+        return labelGot(narrow<{ svg?: string }>(r.data)?.svg, `${t('common.doc.label')} — ${parcelId}`, t('common.doc.labelGone'));
+      });
     },
-    [client, creds, run, fail],
+    [client, creds, showPaper],
   );
 
   /** Round 27 — the same label as a file for the store's thermal label printer (ZPL). */
@@ -1584,6 +1575,8 @@ export function useVendorApp() {
     // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
     // is the same one every other app talks to and this app holds no opinion about it.
     sbg: client?.client.sbg ?? null,
+    /** The paper being shown in the slide-up: its papers abroad, an order's label. */
+    paper,
     actions: {
       refresh,
       /** CV1 — the conversations API for this store (null until signed in). */

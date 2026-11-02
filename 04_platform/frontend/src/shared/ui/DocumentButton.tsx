@@ -1,4 +1,5 @@
-import type { Result } from '../../lib/sbg';
+import type { Result, SbgClient } from '../../lib/sbg';
+import { useNoteLinks } from '../archive/useNoteLinks';
 import { Button } from './Button';
 import { Icon } from './Icon';
 import { fetchPaper, PaperSheet, usePaper, type KeptDocument, type PaperLook } from './PaperSheet';
@@ -14,9 +15,14 @@ export type { KeptDocument } from './PaperSheet';
  * consignment note? and the print function in slide up"): the pages as they will print, Print under them. The copy
  * kept on the phone for no signal is shown as before, saying when it was kept. `look="console"` dresses the button as
  * the Business app draws its own.
+ *
+ * `note` — where the server named the note this party's archive keeps for the load: then Share passes on a link to it,
+ * the same links its archive lists. They are read only while the sheet is open, so a list of fifty loads asks for none.
  */
-export function DocumentButton({ label, title, fetch, variant = 'link', kept, look = 'app' }: { label: string; title: string; fetch: () => Promise<Result<unknown>>; variant?: 'link' | 'outline'; kept?: KeptDocument; look?: PaperLook }) {
+export function DocumentButton({ label, title, fetch, variant = 'link', kept, look = 'app', note }: { label: string; title: string; fetch: () => Promise<Result<unknown>>; variant?: 'link' | 'outline'; kept?: KeptDocument; look?: PaperLook; note?: { client: SbgClient | null; noteId?: string; title: string } }) {
   const paper = usePaper();
+  const shares = Boolean(note?.client && note.noteId);
+  const links = useNoteLinks(paper.open && shares ? note!.client : null, paper.open && shares ? note!.noteId : undefined);
   const open = () => paper.show(title, () => fetchPaper(fetch, kept));
   return (
     <>
@@ -29,7 +35,7 @@ export function DocumentButton({ label, title, fetch, variant = 'link', kept, lo
           <Icon name="edit" size={18} /> {label}
         </Button>
       )}
-      <PaperSheet state={paper} look={look} />
+      <PaperSheet state={paper} look={look} share={shares ? { links, title: note!.title } : undefined} />
     </>
   );
 }

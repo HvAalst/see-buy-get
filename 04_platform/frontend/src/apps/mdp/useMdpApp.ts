@@ -11,7 +11,7 @@ import { downscaleImage } from '../../shared/media';
 import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
 import type { Uploaded } from '../../shared/upload';
 import { downloadZpl } from '../../shared/download';
-import { tabAtTheTap } from '../../shared/openPage';
+import { labelGot, usePaper } from '../../shared/ui/PaperSheet';
 import { holdPhoto } from '../../shared/heldPhotos';
 import { errorSentence } from '../../shared/ui';
 import type { UnitHold } from '../../shared/tamper';
@@ -125,6 +125,10 @@ export function useMdpApp() {
   const [state, setState] = useState<MdpState>(INITIAL);
   const [did, setDid] = useState<string | null>(null);
   const client = useMemo(() => (did ? createMdpClient(did) : null), [did]);
+  // 2026-11-02 — a new label opens in the slide-up, on its page as it will print, never in the browser (the owner: "the
+  // print function in slide up"): one sheet for the app, drawn in app.tsx.
+  const paper = usePaper();
+  const showPaper = paper.show;
   const toastSeq = useRef(0);
   const toastTimers = useRef(new Set<number>());
 
@@ -606,19 +610,13 @@ export function useMdpApp() {
     async (parcelId: string) => {
       const hub = stateRef.current.hub;
       if (!client || !hub) return;
-      const tab = tabAtTheTap();
-      try {
-        await run(`label:${parcelId}`, async () => {
-          const r = await client.api.hubLabel(hub.mdpId, parcelId);
-          if (r.error) return fail(r.error);
-          const svg = narrow<{ svg?: string }>(r.data)?.svg;
-          if (svg) tab.show(svg, 'image/svg+xml');
-        });
-      } finally {
-        tab.cancel();
-      }
+      showPaper(t('common.doc.label'), async () => {
+        const r = await client.api.hubLabel(hub.mdpId, parcelId);
+        if (r.error) return { error: r.error };
+        return labelGot(narrow<{ svg?: string }>(r.data)?.svg, `${t('common.doc.label')} — ${parcelId}`, t('common.doc.labelGone'));
+      });
     },
-    [client, run, fail],
+    [client, showPaper],
   );
 
   /** …and for a thermal label printer: sent to it as it is. */
@@ -969,6 +967,8 @@ export function useMdpApp() {
     sbg: client?.client.sbg ?? null,
     // 2026-11-02 — the hub's bell, as the shop's: what the network tells the hub had nowhere to show.
     notifications: client?.notifications ?? null,
+    /** The paper being shown in the slide-up: a called-off parcel's new label. */
+    paper,
     actions: {
       refresh,
       signIn,

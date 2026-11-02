@@ -6,6 +6,7 @@ import { InstructionsBlock } from '../../../shared/InstructionsBlock';
 import { hasInstructions } from '../../../shared/instructions';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
+import type { SbgClient } from '../../../lib/sbg';
 import { MyBookingsSection } from './MyBookingsSection';
 import { RefusalCard } from '../../../shared/RefusalCard';
 import { Abbreviated } from '../../../shared/ui/Abbr';
@@ -18,6 +19,8 @@ import { ownAnswerLine, shipperPaidLine } from '../../../shared/paidDirect';
 export interface FreightScreenProps {
   state: AgentState;
   actions: AgentActions;
+  /** The shop's client, for the links to a load's note: its Share in the note's slide-up (2026-11-02). */
+  sbg?: SbgClient | null;
 }
 
 /**
@@ -26,7 +29,7 @@ export interface FreightScreenProps {
  * Two views in one screen, because they are one task: the loads we sent out, and then the prices on the one
  * being decided. A shop clerk answering a driver's number does not need a second tab to get back.
  */
-export function FreightScreen({ state, actions }: FreightScreenProps) {
+export function FreightScreen({ state, actions, sbg }: FreightScreenProps) {
   const t = useT();
   const load = state.posted.find((p) => p.freightId === state.pricesFor) ?? null;
   // CV1 — the thread open in the sheet, and a counter that makes every list re-read after something changed.
@@ -34,7 +37,7 @@ export function FreightScreen({ state, actions }: FreightScreenProps) {
   const [chatTick, setChatTick] = useState(0);
   return (
     <div class="scr">
-      {load ? <Prices load={load} state={state} actions={actions} /> : <PostedList state={state} actions={actions} />}
+      {load ? <Prices load={load} state={state} actions={actions} sbg={sbg} /> : <PostedList state={state} actions={actions} />}
 
       {/* CV1 — the people asking about these loads. Before a match, on purpose: a question answered is how a
           load finds the right driver, and in a country we only match it is where the payment is agreed. */}
@@ -163,7 +166,7 @@ function PostedRow({ f, onOpen }: { f: PostedFreight; onOpen: () => void }) {
   );
 }
 
-function Prices({ load, state, actions }: { load: PostedFreight } & FreightScreenProps) {
+function Prices({ load, state, actions, sbg }: { load: PostedFreight } & FreightScreenProps) {
   const t = useT();
   const [confirm, setConfirm] = useState<FreightPrice | null>(null);
   const [withdraw, setWithdraw] = useState(false);
@@ -237,7 +240,8 @@ function Prices({ load, state, actions }: { load: PostedFreight } & FreightScree
       <InstructionsSheet load={load} open={instructing} onClose={() => setInstructing(false)} state={state} actions={actions} />
 
       <div class="btnrow">
-        <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(load.freightId)} />
+        {/* Once the shop's archive keeps the note, its slide-up shares a link to it — the same links Records › Notes lists. */}
+        <DocumentButton label={t('common.cmr.open')} title={t('common.cmr.title')} fetch={() => actions.freightNote(load.freightId)} note={{ client: sbg ?? null, noteId: load.noteId, title: `${load.code} · ${load.description}` }} />
         {/* FP3 — withdrawing is possible only until the goods are on a truck; the server says the same. A quiet
             link, not a button: it is the exception, and it is confirmed with a reason in a sheet. */}
         {load.canCancel ? (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Chip, Icon, Note, Pager, SearchInput, Sheet } from '../ui';
+import { Button, Card, Chip, Icon, Note, PaperSheet, Pager, SearchInput, Sheet } from '../ui';
 import { useT, type Translate } from '../i18n';
 import { useDebounced } from '../useDebounced';
 import { ARCHIVE_LIMIT, type ArchiveApiState } from './useArchive';
@@ -242,7 +242,7 @@ function NoteSheet({ archive }: { archive: ArchiveApiState }) {
                     {day(v.at)} · <span class="mono-t">{shortPrint(v.sha256)}</span>
                   </span>
                 </span>
-                <Button variant="link" full={false} busy={archive.busy === 'print'} onClick={() => void archive.printCopy(doc.docId, v.seq)}>
+                <Button variant="link" full={false} onClick={() => archive.printCopy(doc.docId, v.seq, `${doc.number} · ${stageWord(v.stage, t)}`)}>
                   {t('archive.openCopy')}
                 </Button>
               </div>
@@ -265,6 +265,9 @@ function NoteSheet({ archive }: { archive: ArchiveApiState }) {
           <p class="hint">{t(archive.canShareFiles ? 'archive.shareBundleHint' : 'archive.exportBundleHint')}</p>
 
           <NoteLinks archive={archive} />
+          {/* 2026-11-02 — a copy in the slide-up, as it will print (the owner: "the print function in slide up"); its
+              Share passes on a link to this note — the same links listed above, never the file. */}
+          <PaperSheet state={archive.paper} share={{ links: archive.noteLinks, title: doc.number }} />
         </>
       ) : null}
     </Sheet>

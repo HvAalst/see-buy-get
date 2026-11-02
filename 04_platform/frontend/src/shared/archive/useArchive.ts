@@ -3,10 +3,11 @@ import { narrow, type Result, type SbgClient, type SbgError } from '../../lib/sb
 import { createArchiveApi } from '../../lib/sbg/personas/archive';
 import type { ArchiveQuery, ArchivedNoteDoc, ArchivedNoteRow, ProofAnswer } from '../../lib/sbg/personas/archive';
 import { triggerDownload, triggerDownloadBlob } from '../download';
-import { tabAtTheTap } from '../openPage';
+import { pageGot, usePaper, type PaperState } from '../ui/PaperSheet';
+import { t } from '../i18n';
 import type { DocumentLinkRow, MadeLink } from './documentLink';
 import { canShareFiles as browserSharesFiles, fileNameFor, handOverFile } from './handOver';
-import { useNoteLinks } from './useNoteLinks';
+import { useNoteLinks, type NoteLinksState } from './useNoteLinks';
 
 export const ARCHIVE_LIMIT = 20;
 
@@ -44,7 +45,12 @@ export interface ArchiveApiState {
   exportAll: () => Promise<void>;
   /** True where the browser will hand a FILE to the OS share sheet — not merely a link. */
   canShareFiles: boolean;
-  printCopy: (docId: string, seq: number) => Promise<void>;
+  /** Open one frozen copy in the slide-up, as it will print; `title` names it there. */
+  printCopy: (docId: string, seq: number, title: string) => void;
+  /** The paper in the slide-up (2026-11-02): a frozen copy, as it will print. */
+  paper: PaperState;
+  /** The open note's links, whole — what the copy's Share passes on, the same list this sheet shows. */
+  noteLinks: NoteLinksState;
   /** Check a note somebody ELSE handed us. Null means the call failed, not that the note is unknown. */
   verifyNote: (sha256: string) => Promise<ProofAnswer | null>;
 }
@@ -67,6 +73,10 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
   // The links to the open document — listed, made and cancelled by the one hook every place a note is read uses.
   // They follow the document: opened with it, gone when the sheet shuts or another note is opened.
   const noteLinks = useNoteLinks(client, open?.docId);
+  // The copy in the slide-up (2026-11-02): it belongs to the open note, and shuts with it.
+  const paper = usePaper();
+  const showPaper = paper.show;
+  const closePaper = paper.close;
   const [busy, setBusy] = useState<ArchiveApiState['busy']>('');
 
   // The archive is not a persona of its own — every app already has one. Built here so the hook takes a
@@ -138,7 +148,9 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
     setOpen(null);
     // The address of a link just made goes with the sheet: it was only ever here (useNoteLinks drops it).
     setOpenPhase('idle');
-  }, []);
+    // …and the copy being shown of it.
+    closePaper();
+  }, [closePaper]);
 
   const exportCsv = useCallback(async () => {
     if (!api) return;
@@ -188,26 +200,19 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
    *
    * Fetched rather than linked: the route is bearer-gated, so a plain anchor would open a sign-in page
    * where the reader expected their consignment note. Same reason an <AuthImage> exists.
+   *
+   * 2026-11-02 — in the slide-up, as it will print, never in the browser (the owner: "the print function in slide up");
+   * its Share passes on a link to the note, from the links this sheet lists.
    */
   const printCopy = useCallback(
-    async (docId: string, seq: number) => {
+    (docId: string, seq: number, title: string) => {
       if (!api) return;
-      // The tab is opened at the tap: one opened after the fetch is blocked as a pop-up by some browsers. Where even
-      // this one is refused, the page comes as a download instead.
-      const tab = tabAtTheTap();
-      try {
-        setBusy('print');
+      showPaper(title, async () => {
         const r: Result<unknown> = await api.noteCopyHtml(docId, seq);
-        setBusy('');
-        if (r.error || r.data == null) return setError(r.error ?? null);
-        const html = narrow<string>(r.data);
-        if (tab.opened) tab.show(html);
-        else triggerDownload('consignment-note.html', html, 'text/html;charset=utf-8');
-      } finally {
-        tab.cancel();
-      }
+        return r.error ? { error: r.error } : pageGot(r, t('common.doc.gone'));
+      });
     },
-    [api],
+    [api, showPaper],
   );
 
   const verifyNote = useCallback(
@@ -226,5 +231,5 @@ export function useArchive(client: SbgClient | null, enabled = true): ArchiveApi
   const canShareFiles = useMemo(() => browserSharesFiles(), []);
 
   const { links, cancelling, cancelLink, made, making, makeLink, problem: makeProblem } = noteLinks;
-  return { rows, total, phase, error, query, open, openPhase, links, cancelling, cancelLink, made, making, makeProblem, makeLink, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, verifyNote, canShareFiles };
+  return { rows, total, phase, error, query, open, openPhase, links, cancelling, cancelLink, made, making, makeProblem, makeLink, busy, load, setQuery, openDoc, closeDoc, exportCsv, exportBundle, exportAll, printCopy, paper, noteLinks, verifyNote, canShareFiles };
 }

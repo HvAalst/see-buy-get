@@ -3,7 +3,7 @@ import { Abbreviated } from './ui/Abbr';
 import { Button, Card, Icon } from './ui';
 import { formatMoney, useT } from './i18n';
 import { fiscalStanding, fiscalTitle, printable, type FiscalInvoiceRow } from './fiscal';
-import { tabAtTheTap } from './openPage';
+import { pageGot, PaperSheet, usePaper } from './ui/PaperSheet';
 
 /** Whatever a persona's client answers: read here as the invoice rows and the page they are. */
 type Answer = Promise<{ data?: unknown; error?: unknown }>;
@@ -25,6 +25,9 @@ export function TaxInvoicesCard({ load, page, title, taxNumber }: { load: () => 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [numError, setNumError] = useState<string | null>(null);
+  // 2026-11-02 — an invoice in the slide-up, as it will print, never in the browser (the owner: "the print function in
+  // slide up"). Fetched once a tap, as before: the first opening is the original, every one after it a copy.
+  const paper = usePaper();
 
   useEffect(() => {
     void load().then((r) => setRows(r.error || !Array.isArray(r.data) ? [] : (r.data as FiscalInvoiceRow[])));
@@ -43,16 +46,12 @@ export function TaxInvoicesCard({ load, page, title, taxNumber }: { load: () => 
     setEditing(false);
   };
 
-  const print = async (invoiceId: string) => {
+  const print = (row: FiscalInvoiceRow) => {
     setError(null);
-    const tab = tabAtTheTap();
-    try {
-      const r = await page(invoiceId);
-      if (r.error || typeof r.data !== 'string') return setError(t('fiscal.gone'));
-      tab.show(r.data);
-    } finally {
-      tab.cancel();
-    }
+    paper.show(fiscalTitle(row, t), async () => {
+      const r = await page(row.invoiceId);
+      return typeof r.data !== 'string' ? { error: t('fiscal.gone') } : pageGot(r, t('fiscal.gone'));
+    });
   };
 
   return (
@@ -118,7 +117,7 @@ export function TaxInvoicesCard({ load, page, title, taxNumber }: { load: () => 
           <span class="row__end">
             <b>{formatMoney(row.line.gross, row.currency)}</b>
             {printable(row) ? (
-              <Button variant="link" full={false} onClick={() => void print(row.invoiceId)}>
+              <Button variant="link" full={false} onClick={() => print(row)}>
                 {t('fiscal.print')}
               </Button>
             ) : (
@@ -132,6 +131,7 @@ export function TaxInvoicesCard({ load, page, title, taxNumber }: { load: () => 
           {t('fiscal.showAll', { n: rows.length })}
         </Button>
       ) : null}
+      <PaperSheet state={paper} />
     </Card>
   );
 }

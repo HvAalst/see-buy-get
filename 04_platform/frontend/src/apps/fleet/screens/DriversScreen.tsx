@@ -9,7 +9,7 @@ import type { FleetActions, FleetOfferRow, FleetState, RemovalReason } from '../
 import { useEffect, useState } from 'preact/hooks';
 import { ConversationList, ConversationSheet } from '../../../shared/conversation/Conversations';
 import type { ChatThread } from '../../../shared/conversation/logic';
-import { tabAtTheTap } from '../../../shared/openPage';
+import { PaperSheet, usePaper } from '../../../shared/ui/PaperSheet';
 
 export interface DriversScreenProps {
   state: FleetState;
@@ -590,6 +590,9 @@ function DriverCard({ did, mediaId, name, actions, recorded }: { did: string; me
   const t = useT();
   const [gone, setGone] = useState(false);
   useEffect(() => setGone(false), [mediaId]);
+  // 2026-11-02 — the card at full size in the slide-up, never in the browser (the owner: "the print function in slide
+  // up"): a page with the photograph on it, "Actual size" to read the date off it, Print where it is wanted on paper.
+  const paper = usePaper();
   const load = (id: string) => actions.loadDriverCard(did, id) as Promise<{ data: Blob | null; error: unknown }>;
   // The card a date was ALREADY read from is history: if it cannot be shown, nothing is waiting on it.
   if (gone) return recorded ? null : <Note tone="warn" icon="warning" title={t('fleet.card.gone')} detail={t('fleet.card.goneDetail')} />;
@@ -601,18 +604,17 @@ function DriverCard({ did, mediaId, name, actions, recorded }: { did: string; me
         class="cardphoto"
         title={t('fleet.card.open')}
         aria-label={t('fleet.card.open')}
-        onClick={async () => {
-          const tab = tabAtTheTap();
-          try {
+        onClick={() =>
+          paper.show(t('fleet.card.alt', { name }), async () => {
             const r = await load(mediaId);
-            if (!r.error && r.data) tab.show(r.data);
-          } finally {
-            tab.cancel();
-          }
-        }}
+            // A photograph, whatever type the bytes say: it is shown by an <img>, which runs nothing.
+            return !r.error && r.data ? { paper: { kind: 'image', blob: r.data } } : { error: t('fleet.card.gone') };
+          })
+        }
       >
         <AuthImage mediaId={mediaId} load={load} alt={t('fleet.card.alt', { name })} class="cardphoto__img" onFailed={() => setGone(true)} />
       </button>
+      <PaperSheet state={paper} />
     </>
   );
 }

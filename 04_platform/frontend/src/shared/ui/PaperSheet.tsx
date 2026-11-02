@@ -15,6 +15,7 @@ import {
   isIos,
   mmToPx,
   pageOfImage,
+  pageOfSvg,
   paperLayoutOf,
   paperPageOf,
   previewDoc,
@@ -74,6 +75,14 @@ export async function fetchPaper(fetch: () => Promise<Result<unknown>>, kept?: K
 /** A page the server rendered, as the sheet shows it — or, where none came, the screen's own words for why. */
 export function pageGot(r: { data?: unknown; error?: unknown }, gone: string): PaperGot {
   return r.error || !r.data ? { error: gone } : { paper: { kind: 'page', html: String(r.data) } };
+}
+
+/**
+ * A label the server drew as a picture (an SVG) — in hand since the parcel was made, or just fetched — as the sheet
+ * shows it: on a page of its own, at its own size (2026-11-02: every app's labels, as the Business app's).
+ */
+export function labelGot(svg: string | null | undefined, title: string, gone: SbgError | string): PaperGot {
+  return svg ? { paper: { kind: 'page', html: pageOfSvg(svg, title) } } : { error: gone };
 }
 
 /** A file that came as bytes, as the paper it is: our own page, a photograph, a PDF — or a file to open on its own. */

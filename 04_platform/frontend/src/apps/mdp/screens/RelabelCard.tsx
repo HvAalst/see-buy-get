@@ -30,7 +30,7 @@ export function RelabelCard({ state, actions }: { state: MdpState; actions: MdpA
         {rows.map((r) => (
           <li key={r.newId}>
             <span class="mono relabel__ids">{t('mdp.relabel.row', { old: r.oldId, new: r.newId })}</span>
-            <Button variant="outline" full={false} chevron={false} busy={state.busy === `label:${r.newId}`} onClick={() => void actions.printNewLabel(r.newId)}>
+            <Button variant="outline" full={false} chevron={false} onClick={() => void actions.printNewLabel(r.newId)}>
               {t('mdp.relabel.print')}
             </Button>
             <Button variant="link" full={false} busy={state.busy === `thermal:${r.newId}`} onClick={() => void actions.thermalNewLabel(r.newId)}>

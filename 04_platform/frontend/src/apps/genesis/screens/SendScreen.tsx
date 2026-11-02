@@ -8,7 +8,7 @@ import { carriersLine, cleanPhone, coverLine, dimsBlocker, journeyLine, lockedPr
 import type { NetworkPoint } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 import { SizePriceNote } from '../../../shared/SizePriceNote';
-import { openSvg } from '../../../shared/openPage';
+import { labelGot, PaperSheet, usePaper } from '../../../shared/ui/PaperSheet';
 
 export interface SendScreenProps {
   state: SendState;
@@ -552,13 +552,14 @@ function DoneStep({ state, actions }: SendScreenProps) {
   const m = state.minted;
   // The shop the parcel was actually minted at — snapshotted at mint, immune to any later back-navigation.
   const fromName = state.mintedFromName ?? t('send.dropShop');
+  // 2026-11-02 — the label in the slide-up, on its page as it will print, never in the browser (the owner: "the print
+  // function in slide up").
+  const paper = usePaper();
   if (!m) return null;
   const svg = m.label?.svg ?? null;
 
-  // Drawn when the parcel was made: in hand, so it opens straight from the tap.
-  const openLabel = () => {
-    if (svg) openSvg(svg);
-  };
+  // Drawn when the parcel was made: in hand, so nothing is fetched.
+  const openLabel = () => paper.show(t('common.doc.label'), async () => labelGot(svg, `${t('common.doc.label')} — ${m.parcel.parcelId}`, t('common.doc.labelGone')));
 
   return (
     <div class="scr">
@@ -618,6 +619,7 @@ function DoneStep({ state, actions }: SendScreenProps) {
         </Button>
         <ReadAloud text={() => t('send.done.aloud', { shop: fromName, price: money(m.price.total, m.price.currency) })} label={t('send.readAloud')} />
       </div>
+      <PaperSheet state={paper} />
     </div>
   );
 }

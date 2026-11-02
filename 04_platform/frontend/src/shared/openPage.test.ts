@@ -82,14 +82,63 @@ describe('nothing opens a tab any other way', () => {
     expect(opening.sort()).toEqual(['shared/account/AccountMenu.tsx', 'shared/openPage.ts']);
   });
 
-  it('uses the in-hand openers only where nothing is awaited first', () => {
-    const files = [...sources(join('src', 'apps')), ...sources(join('src', 'shared'))];
-    const using = files
-      .filter((f) => !f.endsWith('openPage.ts'))
-      .filter((f) => /import \{[^}]*\bopen(Page|Svg)\b[^}]*\} from '[./]*shared\/openPage'|from '\.\/openPage'/.test(readFileSync(f, 'utf8')) && /\bopen(Page|Svg)\(/.test(readFileSync(f, 'utf8')))
-      .map((f) => f.split(/[\\/]/).slice(1).join('/'))
+});
+
+/*
+ * 2026-11-02 — NO INSTALLED APP SENDS A PERSON OUT TO THE BROWSER TO PRINT (the owner: "can we have a print preview of
+ * the consignment note? and the print function in slide up"). Every paper opens in the slide-up (shared/ui/PaperSheet.tsx).
+ * A tab is opened only by the sheet's own "Open to print", where a phone cannot print from the sheet, and by the staff
+ * console, a desk tool.
+ */
+describe('every paper prints from the slide-up', () => {
+  const rel = (f: string) => f.split(/[\\/]/).slice(1).join('/');
+  const files = [...sources(join('src', 'apps')), ...sources(join('src', 'shared'))];
+  const src = (path: string) => readFileSync(join('src', ...path.split('/')), 'utf8');
+  // The places that printed in a tab until today.
+  const MOVED = [
+    'apps/vendor/useVendorApp.ts',
+    'apps/vendor/screens/MintScreen.tsx',
+    'apps/mdp/useMdpApp.ts',
+    'shared/archive/useArchive.ts',
+    'shared/TaxInvoicesCard.tsx',
+    'apps/fleet/screens/DriversScreen.tsx',
+    'apps/agent/screens/TakenInLabel.tsx',
+    'apps/genesis/screens/SendScreen.tsx',
+  ];
+
+  it('opens a tab nowhere in the apps or the shared code but the sheet’s “Open to print” — the desk console aside', () => {
+    // The guard read something: hundreds of files, among them every place that used to open a tab.
+    expect(files.length).toBeGreaterThan(300);
+    for (const f of MOVED) expect(files.map(rel)).toContain(f);
+    const opening = files
+      .filter((f) => !rel(f).startsWith('apps/tower/'))
+      .filter((f) => /\btabAtTheTap\b|\bopen(Page|Svg)\b|window\.open\(/.test(readFileSync(f, 'utf8')))
+      .map(rel)
       .sort();
-    // Labels drawn when the parcel was made: in hand, opened straight from the tap.
-    expect(using).toEqual(['apps/agent/screens/TakenInLabel.tsx', 'apps/genesis/screens/SendScreen.tsx', 'apps/vendor/screens/MintScreen.tsx']);
+    // The opener itself; the sheet's fallback; and the account menu, which opens the person's own public page by its
+    // address — a web page, meant for the browser, not a paper.
+    expect(opening).toEqual(['shared/account/AccountMenu.tsx', 'shared/openPage.ts', 'shared/ui/PaperSheet.tsx']);
+  });
+
+  it('the sheet opens a tab once, from the button that says so; the account menu, only the person’s page', () => {
+    const sheet = src('shared/ui/PaperSheet.tsx');
+    expect((sheet.match(/\btabAtTheTap\(\)/g) ?? []).length).toBe(1);
+    expect(sheet).toMatch(/const openOwn = \(\) => \{\s*const tab = tabAtTheTap\(\);/);
+    const menu = src('shared/account/AccountMenu.tsx');
+    expect((menu.match(/window\.open\(/g) ?? []).length).toBe(1);
+    expect(menu).toMatch(/if \(handleHref\) window\.open\(handleHref, '_blank', 'noopener,noreferrer'\)/);
+    // The in-hand openers are gone, so nothing can reach for them.
+    expect(src('shared/openPage.ts')).not.toMatch(/export function open(Page|Svg)\b/);
+  });
+
+  it('each place that printed in a tab opens its paper in the sheet now', () => {
+    for (const f of MOVED) {
+      const text = src(f);
+      expect({ f, sheet: /\busePaper\(\)/.test(text), shown: /\b(paper\.show|showPaper)\(/.test(text) }).toEqual({ f, sheet: true, shown: true });
+    }
+    // Drawn where the sheet lives: the app for a hook's paper, the screen for its own.
+    expect(src('apps/vendor/app.tsx')).toMatch(/<PaperSheet state=\{paper\} \/>/);
+    expect(src('apps/mdp/app.tsx')).toMatch(/<PaperSheet state=\{paper\} \/>/);
+    expect(src('shared/archive/ArchiveSection.tsx')).toMatch(/<PaperSheet state=\{archive\.paper\} share=\{\{ links: archive\.noteLinks/);
   });
 });

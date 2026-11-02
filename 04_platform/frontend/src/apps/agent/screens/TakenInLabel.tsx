@@ -1,12 +1,6 @@
-import { Button, CodeCard, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, CodeCard, labelGot, PaperSheet, ReadAloud, Sheet, usePaper } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
-import { openSvg } from '../../../shared/openPage';
 import type { AgentActions, AgentState, TakenIn } from '../useAgentApp';
-
-/** Open the label SVG in a new tab so the agent can print it and stick it on the parcel. */
-export function openLabel(svg: string) {
-  openSvg(svg);
-}
 
 /**
  * What a take-in hands the counter: the label to print and stick on, the tracking key, and the pickup code for the
@@ -15,13 +9,18 @@ export function openLabel(svg: string) {
  */
 export function TakenInLabel({ label, onThermal, busy }: { label: TakenIn; onThermal?: (parcelId: string) => void; busy?: boolean }) {
   const t = useT();
+  // 2026-11-02 — the label in the slide-up, on its page as it will print, never in the browser (the owner: "the print
+  // function in slide up"). In hand since the take-in, so nothing is fetched.
+  const paper = usePaper();
+  const openLabel = () => paper.show(t('common.doc.label'), async () => labelGot(label.svg, `${t('common.doc.label')} — ${label.parcelId}`, t('common.doc.labelGone')));
   return (
     <>
+      <PaperSheet state={paper} />
       {label.svg ? (
         <>
           {/* Trusted markup: the SVG comes from OUR backend label builder, nothing user-authored. */}
           <div class="labelbox" dangerouslySetInnerHTML={{ __html: label.svg }} />
-          <Button chevron={false} onClick={() => label.svg && openLabel(label.svg)}>
+          <Button chevron={false} onClick={openLabel}>
             {t('agent.accept.openLabel')}
           </Button>
           {/* Round 27 — the same label for a thermal label printer (ZPL), 100 × 150 mm. */}

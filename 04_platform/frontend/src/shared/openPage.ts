@@ -50,19 +50,9 @@ export function tabAtTheTap(): WaitingTab {
   };
 }
 
-/**
- * A page or a label ALREADY IN HAND (nothing to wait for), in a tab of its own: the counter's label, a label drawn when
- * the parcel was made. Opened straight from the tap. Anything fetched first goes through `tabAtTheTap`.
+/*
+ * 2026-11-02 — what used to open a label or a page ALREADY IN HAND in a tab of its own (`openPage`, `openSvg`) is gone:
+ * every paper an app prints opens in the slide-up now (shared/ui/PaperSheet.tsx; the owner: "the print function in
+ * slide up"), as a tab throws the person out of an installed app into the browser. The tab above is left for the
+ * sheet's own "Open to print", where a phone cannot print from the sheet, and for the desk console.
  */
-export function openPage(html: string): void {
-  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-  window.open(url, '_blank', 'noopener');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
-/** A label the server drew (an SVG) and already in hand, in a tab of its own, to print and stick on. */
-export function openSvg(svg: string): void {
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-  window.open(url, '_blank', 'noopener');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}

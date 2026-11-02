@@ -450,6 +450,9 @@ export const en = {
   'common.doc.noBreaks': 'Shown as one long page: this browser does not show where the pages break.',
   'common.doc.actualSize': 'Actual size',
   'common.doc.fitPage': 'Whole page',
+  // The sheet's own title for a parcel's label, in every app that prints one.
+  'common.doc.label': 'The parcel’s label',
+  'common.doc.labelGone': 'The label could not be opened. Try again.',
   'common.doc.keptTitle': 'No signal: the copy kept on this phone',
   'common.doc.keptDetail': 'Kept {when}. It may have changed since; it is opened afresh once there is signal.',
   'common.cmr.open': 'Consignment note',

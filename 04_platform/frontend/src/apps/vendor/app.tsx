@@ -2,7 +2,7 @@ import { AppLayer } from '../../shared/ui/AppLayer';
 import { useState } from 'preact/hooks';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, Pill, TopBar, type NavItem } from '../../shared/ui';
+import { ConnectivityNote, BottomNav, Button, Checklist, Icon, NotificationBell, PaperSheet, Pill, TopBar, type NavItem } from '../../shared/ui';
 import { AccountMenu } from '../../shared/account/AccountMenu';
 import { ChangePasswordSheet } from '../../shared/account/ChangePasswordSheet';
 import { SettingsSheet } from '../../shared/account/SettingsSheet';
@@ -34,7 +34,7 @@ const LAUNCH = screensOf<Screen>({ orders: true, mint: true, books: true, dock: 
 
 export function App() {
   const t = useT();
-  const { state, actions, sbg } = useVendorApp();
+  const { state, actions, sbg, paper } = useVendorApp();
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where there is no
   // person behind the sign-in (a store's account is the store's, unless its operator gave their phone), rather than
   // opening onto a refusal. Such a store still has SETTINGS: its password, and who it contracts with.
@@ -145,6 +145,8 @@ export function App() {
       <AgreementGate sbg={state.phase === 'ready' ? sbg : null} onSignOut={actions.signOut} />
       <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} api={account} onSignOut={actions.signOut} onChangePassword={changePassword} devices={actions.storeDevices} />
       <ChangePasswordSheet open={passwordOpen} onClose={() => setPasswordOpen(false)} config={vendorConfig()} email={actions.readEmail()} onChanged={actions.adoptToken} />
+      {/* 2026-11-02 — its papers abroad and an order's label, as they will print (the owner: "the print function in slide up"). */}
+      <PaperSheet state={paper} />
     </div>
   );
 }

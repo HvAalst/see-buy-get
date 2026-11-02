@@ -201,7 +201,7 @@ function ScreenRouter({ screen, state, actions, archive, destination, fiscal, sb
     case 'shelf':
       return <ShelfScreen state={state} actions={actions} />;
     case 'freight':
-      return <FreightScreen state={state} actions={actions} />;
+      return <FreightScreen state={state} actions={actions} sbg={sbg} />;
     default:
       return <HomeScreen state={state} actions={actions} sbg={sbg} />;
   }

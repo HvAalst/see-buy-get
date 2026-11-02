@@ -5,7 +5,7 @@ import { renderToString } from 'preact-render-to-string';
 import { t } from '../i18n';
 import type { Result, SbgError } from '../../lib/sbg';
 import type { NoteLinksState } from '../archive/useNoteLinks';
-import { fetchPaper, pageGot, PaperSheet, paperOfBlob, sharePaper, type PaperGot, type PaperShare, type PaperState } from './PaperSheet';
+import { fetchPaper, labelGot, pageGot, PaperSheet, paperOfBlob, sharePaper, type PaperGot, type PaperShare, type PaperState } from './PaperSheet';
 import { columnBreaks, pageOfSvg, paperLayoutOf, paperPageOf, previewDoc, printedArea, printFrame, printRules, printsFromFrame, withoutPreview } from './paperPreview';
 import { ownTouch } from './sheetDrag';
 
@@ -314,6 +314,45 @@ describe('a pull on the paper’s sheet is that sheet’s alone', () => {
     expect(ownTouch(at(outer), outer)).toBe(true);
     expect(ownTouch(at(inner), outer)).toBe(false);
     expect(ownTouch(at(outer, true), outer)).toBe(false);
+  });
+});
+
+describe('every app’s papers in the sheet', () => {
+  const read = (path: string) => readFileSync(join('src', ...path.split('/')), 'utf8');
+
+  it('a label in hand, or fetched, is put on a page of its own; none is said in the screen’s words', () => {
+    const got = labelGot('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"></svg>', 'The parcel’s label — PCL-9', 'gone');
+    expect('paper' in got && got.paper.kind === 'page' ? got.paper.html : '').toContain('<title>The parcel’s label — PCL-9</title>');
+    expect(labelGot(undefined, 'x', 'The label could not be opened.')).toEqual({ error: 'The label could not be opened.' });
+  });
+
+  it('a store’s label, drawn in the sheet at a phone’s width, with Print under it', () => {
+    vi.stubGlobal('window', { innerWidth: 390 });
+    const got = labelGot('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"></svg>', 'The parcel’s label — PCL-9', 'gone');
+    const html = renderToString(<PaperSheet state={shown(got, { title: t('common.doc.label') })} />);
+    expect(html).toContain(t('common.doc.label'));
+    expect(html).toContain(`transform:scale(${(350 / 794).toFixed(4)})`);
+    expect(html).toContain(t('common.doc.print'));
+  });
+
+  it('the Shop’s note shares a link where the server named the note its archive keeps — read only while the sheet is open', () => {
+    const button = read('shared/ui/DocumentButton.tsx');
+    expect(button).toMatch(/const shares = Boolean\(note\?\.client && note\.noteId\);/);
+    expect(button).toMatch(/useNoteLinks\(paper\.open && shares \? note!\.client : null, paper\.open && shares \? note!\.noteId : undefined\)/);
+    expect(button).toMatch(/share=\{shares \? \{ links, title: note!\.title \} : undefined\}/);
+    expect(read('apps/agent/useAgentApp.ts')).toMatch(/\n {2}noteId\?: string;/);
+    expect(read('apps/agent/screens/FreightScreen.tsx')).toMatch(/note=\{\{ client: sbg \?\? null, noteId: load\.noteId,/);
+    expect(read('apps/agent/app.tsx')).toMatch(/<FreightScreen state=\{state\} actions=\{actions\} sbg=\{sbg\} \/>/);
+    // The fleet's register names no note (the server says none there), so its note has no Share: never a built id.
+    expect(read('apps/fleet/screens/EarningsScreen.tsx')).not.toMatch(/<DocumentButton[^\n]*note=/);
+  });
+
+  it('the archive’s copy shuts with its note, so it never reopens over the next one', () => {
+    expect(read('shared/archive/useArchive.ts')).toMatch(/const closeDoc = useCallback\(\(\) => \{[\s\S]*?closePaper\(\);\s*\}, \[closePaper\]\);/);
+  });
+
+  it('a driver’s card is shown as a photograph on a page — an <img>, which runs nothing', () => {
+    expect(read('apps/fleet/screens/DriversScreen.tsx')).toMatch(/\{ paper: \{ kind: 'image', blob: r\.data \} \}/);
   });
 });
 

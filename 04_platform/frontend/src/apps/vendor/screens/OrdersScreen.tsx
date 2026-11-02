@@ -695,7 +695,7 @@ function OrderSheet({ state, actions, client }: { state: VendorState; actions: V
           {/* Round 27 — its label, to print again once paid: on paper, or on a thermal label printer (ZPL). */}
           {d.paidStatus === 'ParcelPaid' ? (
             <div class="kv">
-              <Button variant="link" full={false} busy={state.busy === `label:${d.parcelId}`} onClick={() => void actions.printOrderLabel(d.parcelId)}>
+              <Button variant="link" full={false} onClick={() => void actions.printOrderLabel(d.parcelId)}>
                 {t('vendor.order.printLabel')}
               </Button>
               <Button variant="link" full={false} busy={state.busy === `thermal:${d.parcelId}`} onClick={() => void actions.thermalOrderLabel(d.parcelId)}>
