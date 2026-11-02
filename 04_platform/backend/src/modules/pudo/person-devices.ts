@@ -30,6 +30,12 @@ export interface KnownDevice {
    * goes with the device, by every path that forgets one, and there is no second place to forget it from. See passkeys.ts.
    */
   passkey?: DevicePasskey;
+  /**
+   * 2026-11-02 — A COLLEAGUE OPENED A COUNTER SESSION ON THIS PHONE, last when (the owner: "a 1 person shop could use
+   * fingerprint to unlock as you said"). Only ever on a shop's or a hub's own phone. From then on its fingerprint-or-face
+   * unlock is refused there: whoever can unlock a phone colleagues use could sign in as the shop.
+   */
+  counterAt?: string;
 }
 
 /** The least recently used goes when an eleventh is added: a phone, a tablet, the office computer, and room to replace each twice. */
@@ -108,10 +114,14 @@ export class DeviceBook {
     return this.store.get(hashOf(key as string))?.passkey;
   }
 
-  /** Turn it on here: replaces any passkey this device had. False when this is not a known device of this person's. */
+  /**
+   * Turn it on here: replaces any passkey this device had. False when this is not a known device of this person's — or
+   * a phone colleagues have opened counter sessions on (`counterAt`), where it is never kept.
+   */
   setPasskey(personDid: string, key: string, passkey: DevicePasskey, now: number = Date.now()): boolean {
     if (!this.knows(personDid, key, now)) return false;
     const hash = hashOf(key);
+    if (this.store.get(hash)?.counterAt) return false;
     this.store.set(hash, { ...(this.store.get(hash) as KnownDevice), passkey });
     return true;
   }
@@ -125,6 +135,25 @@ export class DeviceBook {
     const { passkey, ...rest } = d;
     this.store.set(hash, rest);
     return passkey;
+  }
+
+  /**
+   * 2026-11-02 — A COLLEAGUE OPENED A COUNTER SESSION ON THIS PHONE, one of the owner's own: noted, and any passkey on it
+   * taken off at once. What there was to say (when the phone was confirmed, and whether a passkey went), or undefined
+   * where the key is not one of this owner's phones.
+   */
+  noteCounter(owner: string, key: string, now: number = Date.now()): { addedAt: string; dropped?: DevicePasskey } | undefined {
+    if (!this.knows(owner, key, now)) return undefined;
+    const hash = hashOf(key);
+    const { passkey, ...rest } = this.store.get(hash) as KnownDevice;
+    this.store.set(hash, { ...rest, counterAt: new Date(now).toISOString() });
+    return { addedAt: rest.addedAt, ...(passkey ? { dropped: passkey } : {}) };
+  }
+
+  /** When a colleague last opened a counter session on this phone of the owner's, if ever. */
+  counterAtOf(owner: string, key: string | undefined, now: number = Date.now()): string | undefined {
+    if (!this.knows(owner, key, now)) return undefined;
+    return this.store.get(hashOf(key as string))?.counterAt;
   }
 
   /**

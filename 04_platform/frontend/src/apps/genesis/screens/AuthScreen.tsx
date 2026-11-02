@@ -1,14 +1,13 @@
-import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { AgreementBlock } from '../../../shared/documents/Agreement';
 import { countryOfNumber } from '../../../shared/phone/dial';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, ReadAloud, RefusalNote, PhoneField as CountryPhoneField } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Note, RefusalNote, PhoneField as CountryPhoneField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { canPickContact } from '../../../shared/device';
 import { codeReady, phoneReady, pinBlocker } from '../logic';
 import type { SendActions, SendState } from '../useSendApp';
 import { useState } from 'preact/hooks';
 import { EmailStep } from '../../../shared/account/EmailStep';
-import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/pin';
 import { recoveryApi } from '../../../shared/account/recovery';
@@ -45,20 +44,24 @@ export function AuthScreen({ state, actions }: AuthScreenProps) {
         <EnrollView state={state} actions={actions} busy={busy} />
       )}
 
-      <div class="scr__foot">
-        <ReadAloud
-          text={() =>
-            state.authMode === 'login'
-              ? t('send.auth.aloudLogin')
-              : state.authStep === 'phone'
-                ? t('send.auth.aloudPhone')
-                : state.authStep === 'code'
-                  ? t('send.auth.aloudCode')
-                  : t('send.auth.aloudPin')
-          }
-          label={t('send.readAloud')}
-        />
-      </div>
+      {/* 2026-11-02 — the bar every sign-in screen has (the owner: "that clutter would be better off in a sticky footer"):
+          Back from a code or a PIN to the number, Help — the cases a code to the number cannot solve, and how signing in
+          works — Read aloud and the other apps. In the page, not pinned: Send and Track are open to everybody, so the
+          bottom of this screen is already the app's own tab bar, and a second bar over it would take two bars' height. */}
+      <SignedOutBar
+        inline
+        onBack={state.authMode === 'enroll' && state.authStep !== 'phone' ? () => actions.authBack() : undefined}
+        help={{ app: 'send', api: recovery }}
+        aloud={() =>
+          state.authMode === 'login'
+            ? t('send.auth.aloudLogin')
+            : state.authStep === 'phone'
+              ? t('send.auth.aloudPhone')
+              : state.authStep === 'code'
+                ? t('send.auth.aloudCode')
+                : t('send.auth.aloudPin')
+        }
+      />
     </div>
   );
 }
@@ -109,6 +112,8 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
           <div class="field">
             <span class="field__label">{t('send.auth.pin')}</span>
             <CodeBoxes id="auth-pin" label={t('send.auth.pin')} length={PIN_LENGTH} value={state.authPin} onInput={actions.setAuthPin} disabled={busy} mask />
+            {/* 2026-11-02 — the PIN's own way round, under the PIN (it stood in the foot with the other links). */}
+            <Button variant="link" full={false} class="field__aside" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.forgot')}</Button>
           </div>
         </UnlockFirst>
       </Card>
@@ -121,15 +126,9 @@ function LoginView({ state, actions, busy }: { state: SendState; actions: SendAc
         </div>
       )}
 
-      {/* The same foot as every sign-in screen. Forgot-PIN and sign-up are the same step here — a code, then a PIN —
-          but they are two questions, so two links. */}
-      <div class="scr__foot">
-        <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.forgot')}</Button>
-        {/* The cases a code to the number cannot solve — the number is gone, somebody moved the account — and how signing in works. */}
-        <SignInHelp app="send" api={recovery} />
-        <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.newHere')}</Button>
-        <AllAppsLink />
-      </div>
+      {/* Forgot-PIN and sign-up are the same step here — a code, then a PIN — but they are two questions, so two links: the
+          first under the PIN, this one with the form, as the call it is for somebody with no account yet. */}
+      <Button variant="link" onClick={() => actions.setAuthMode('enroll')}>{t('send.auth.newHere')}</Button>
       <NewDeviceSheet
         open={confirming}
         onClose={() => setClosedFor(state.authError)}
@@ -156,6 +155,8 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
           <div class="field">
             <span class="field__label">{t('send.auth.codeLabel')}</span>
             <CodeBoxes id="auth-otp" label={t('send.auth.codeLabel')} length={6} value={state.authCode} onInput={actions.setAuthCode} disabled={busy} />
+            {/* 2026-11-02 — the code's own way round, under the code. Changing the number is Back, in the bar below. */}
+            <Button variant="link" full={false} class="field__aside" onClick={() => void actions.requestCode()}>{t('send.auth.newCode')}</Button>
           </div>
           {state.authDevCode ? <p class="hint">{t('send.auth.testCode', { code: state.authDevCode })}</p> : null}
         </Card>
@@ -163,10 +164,6 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
           <Button chevron={false} onClick={() => void actions.submitCode()} disabled={!codeReady(state.authCode, 6)} busy={busy}>
             {t('send.auth.checkCode')}
           </Button>
-        </div>
-        <div class="scr__foot">
-          <Button variant="link" onClick={() => void actions.requestCode()}>{t('send.auth.newCode')}</Button>
-          <Button variant="link" onClick={() => actions.authBack()}>{t('send.auth.changeNumber')}</Button>
         </div>
       </>
     );
@@ -187,9 +184,6 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
           <Button chevron={false} onClick={() => void actions.submitEnroll()} disabled={!state.authEmail.trim() || !codeReady(state.authEmailCode, 6)} busy={busy}>
             {t(state.authReset ? 'account.safety.resetCta' : 'account.safety.signupCta')}
           </Button>
-        </div>
-        <div class="scr__foot">
-          <Button variant="link" onClick={() => actions.authBack()}>{t('common.back')}</Button>
         </div>
       </>
     );
@@ -217,9 +211,6 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
           </Button>
           {!pinBlocker(state.authPin, t) && !state.authAgreement ? <p class="hint" style="margin-top:8px">{t('agreement.needed')}</p> : null}
         </div>
-        <div class="scr__foot">
-          <Button variant="link" onClick={() => actions.authBack()}>{t('common.back')}</Button>
-        </div>
       </>
     );
   }
@@ -238,14 +229,11 @@ function EnrollView({ state, actions, busy }: { state: SendState; actions: SendA
           {t('send.auth.sendCode')}
         </Button>
       </div>
+      {/* The other door, with the form it stands in for. */}
+      <Button variant="link" onClick={() => actions.setAuthMode('login')}>{t('send.auth.haveAccount')}</Button>
       <Card tone="soft">
         <Checklist items={[t('send.auth.perk1'), t('send.auth.perk2'), t('send.auth.perk3')]} />
       </Card>
-      <div class="scr__foot">
-        <Button variant="link" onClick={() => actions.setAuthMode('login')}>{t('send.auth.haveAccount')}</Button>
-        <SignInHelp app="send" api={recovery} />
-        <AllAppsLink />
-      </div>
     </>
   );
 }

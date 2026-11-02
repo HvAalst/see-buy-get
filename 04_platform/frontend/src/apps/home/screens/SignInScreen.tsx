@@ -1,5 +1,5 @@
-import { SignInHelp } from '../../../shared/account/TroubleSheet';
-import { Button, Icon, ReadAloud } from '../../../shared/ui';
+import { Button, Icon } from '../../../shared/ui';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { ROLES, roleMeta } from '../logic';
 import type { HomeActions } from '../useHomeApp';
@@ -65,14 +65,15 @@ export function SignInScreen({ actions }: SignInScreenProps) {
         </a>
       </div>
 
-      <div class="scr__foot">
-        {/* The same foot as every sign-in screen: "Trouble signing in?", then signing up. The top bar's arrow goes back. */}
-        <SignInHelp app="home" />
-        <Button variant="link" full={false} onClick={() => actions.go('roles')}>
-          {t('home.signin.noAccountYet')}
-        </Button>
-        <ReadAloud text={() => t('home.signin.aloud')} label={t('home.readAloud')} />
-      </div>
+      {/* Signing up is the call on this screen for somebody with no account: with the doors, not in the bar. */}
+      <Button variant="link" onClick={() => actions.go('roles')}>
+        {t('home.signin.noAccountYet')}
+      </Button>
+
+      {/* 2026-11-02 — what every sign-in screen has, pinned to the bottom (the owner: "a sticky footer for as long as the
+          page goes"): Help, which is "Trouble signing in?", and Read aloud. The top bar's arrow goes back; no All apps,
+          this is where it leads. */}
+      <SignedOutBar help={{ app: 'home' }} aloud={() => t('home.signin.aloud')} allApps={false} />
     </div>
   );
 }

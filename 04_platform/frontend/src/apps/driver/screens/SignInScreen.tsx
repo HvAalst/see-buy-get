@@ -1,11 +1,11 @@
-import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, Note, ReadAloud, RefusalNote, PhoneField } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, NeedsSignalNote, Note, RefusalNote, PhoneField } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
-import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { PIN_LENGTH, isNewDevice, pinGuessable } from '../../../shared/account/pin';
 import { PinGuessHint } from '../../../shared/account/PinGuessHint';
@@ -141,6 +141,10 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
             <div class="field">
               <span class="field__label">{t('driver.signin.pinLabel')}</span>
               <CodeBoxes id="drv-pin" label={t('driver.signin.pinLabel')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} mask />
+              {/* 2026-11-02 — the PIN's own way round, under the PIN (it stood in the foot with four other links). */}
+              <button type="button" class="btn btn--link field__aside" onClick={() => setStep('phone')} disabled={busy}>
+                {t('driver.signin.firstTime')}
+              </button>
             </div>
           </UnlockFirst>
         ) : null}
@@ -168,6 +172,8 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
           </Button>
         </div>
       )}
+      {/* The call for somebody with no account yet, with the form — not in the middle of choosing a PIN. */}
+      {step === 'pin' || step === 'phone' ? <SignUpLink role="driver" /> : null}
 
       {step === 'pin' ? (
         <Card title={t('driver.signin.whyTitle')} tone="soft">
@@ -175,22 +181,10 @@ export function SignInScreen({ onSignIn, onSendCode, onSetPin, error }: SignInSc
         </Card>
       ) : null}
 
-      <div class="scr__foot">
-        {step === 'pin' ? (
-          <button type="button" class="btn btn--link" onClick={() => setStep('phone')} disabled={busy}>
-            {t('driver.signin.firstTime')}
-          </button>
-        ) : (
-          <button type="button" class="btn btn--link" onClick={back} disabled={busy}>
-            {t('driver.signin.back')}
-          </button>
-        )}
-        {/* The cases a code to the number cannot solve — the number is gone, somebody moved the account — and how signing in works. */}
-        <SignInHelp app="driver" api={recovery} />
-        <SignUpLink role="driver" />
-        <AllAppsLink />
-        <ReadAloud text={() => t('driver.signin.aloud')} label={t('driver.readAloud')} />
-      </div>
+      {/* 2026-11-02 — pinned to the bottom until signed in (the owner: "that clutter would be better off in a sticky footer
+          for as long as the page goes. It changes after the sign in"): Back from choosing a PIN to the PIN, Help — the
+          cases a code to the number cannot solve, and how signing in works — Read aloud and the other apps. */}
+      <SignedOutBar onBack={step === 'pin' ? undefined : () => (busy ? undefined : back())} help={{ app: 'driver', api: recovery }} aloud={() => t('driver.signin.aloud')} />
     </form>
     {/* Outside the form: Enter in one of its fields must not submit the sign-in behind it. */}
     <NewDeviceSheet

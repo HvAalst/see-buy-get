@@ -17,7 +17,7 @@ export const TOPICS: ReadonlyArray<{ category: SupportCategory; label: MessageKe
   { category: 'parcel', label: 'help.contact.topic.parcel', answers: ['send-sign-in', 'follow-shop-order'] },
   { category: 'damage', label: 'help.contact.topic.damage', answers: ['parcel-problem'] },
   { category: 'money', label: 'help.contact.topic.money', answers: [] },
-  { category: 'joining', label: 'help.contact.topic.joining', answers: ['shop-papers', 'hub-papers', 'business-check'] },
+  { category: 'joining', label: 'help.contact.topic.joining', answers: ['sign-up', 'shop-papers', 'hub-papers', 'business-check'] },
   { category: 'business', label: 'help.contact.topic.business', answers: ['business-sign-in', 'business-check'] },
   { category: 'safety', label: 'help.contact.topic.safety', answers: ['parcel-problem', 'account-recovery'] },
   { category: 'privacy', label: 'help.contact.topic.privacy', answers: ['account-recovery'] },

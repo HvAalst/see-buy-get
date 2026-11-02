@@ -62,6 +62,8 @@ export function passkeyRowSub(state: Pick<PasskeyState, 'supported' | 'here' | '
   if (state.supported !== true) return null;
   if (state.unread) return say('account.passkey.unread');
   if (!state.here || state.here.which < 0) return null;
+  // A phone colleagues sign in on: off, and the row says why (2026-11-02).
+  if (!state.here.on && state.here.counter) return say('account.passkey.subCounter');
   return say(state.here.on ? 'account.passkey.subOn' : 'account.passkey.subOff', true);
 }
 
@@ -153,6 +155,17 @@ export function PasskeyForm({ api, state, initialStep = 'pin' }: { api: PasskeyA
         <Button variant="outline" chevron={false} busy={busy} onClick={() => void turnOff()}>
           {w('account.passkey.turnOff', true)}
         </Button>
+      </>
+    );
+  }
+
+  // 2026-11-02 — A PHONE COLLEAGUES SIGN IN ON (the owner: "a 1 person shop could use fingerprint to unlock as you said"):
+  // off here for good, and why — nothing to type, nothing to tap.
+  if (here.counter) {
+    return (
+      <>
+        <Note tone="info" icon="lock" title={w('account.passkey.counterTitle')} detail={w('account.passkey.counterBody', false, { when: when(here.counter) })} />
+        <p class="t-body">{w('account.passkey.counterElsewhere')}</p>
       </>
     );
   }

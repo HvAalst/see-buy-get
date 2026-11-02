@@ -1,8 +1,8 @@
-import { SignInHelp } from '../../../shared/account/TroubleSheet';
-import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, ErrorNote, Icon, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, NeedsSignalNote, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { MdpActions } from '../useMdpApp';
@@ -86,6 +86,10 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
               autocomplete="current-password"
               enterkeyhint="go"
             />
+            {/* 2026-11-02 — the password's own way round, under the password (it stood in the foot with four other links). */}
+            <Button variant="link" full={false} class="field__aside" onClick={() => setHelp(true)}>
+              {t('mdp.signin.forgot')}
+            </Button>
           </div>
         </UnlockFirst>
       </Card>
@@ -97,6 +101,8 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
           </Button>
         </div>
       )}
+      {/* The call for somebody with no account yet, with the form it stands beside. */}
+      <SignUpLink role="mdp" />
 
       {/* Not the hub's password: the people on its floor sign in as themselves — the same row as the shop's counter. */}
       <button type="button" class="row" onClick={() => setAsStaff(true)}>
@@ -118,15 +124,9 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
         />
       </Card>
 
-      <div class="scr__foot">
-        <Button variant="link" full={false} onClick={() => setHelp(true)}>
-          {t('mdp.signin.forgot')}
-        </Button>
-        <SignInHelp app="mdp" />
-        <SignUpLink role="mdp" />
-        <AllAppsLink />
-        <ReadAloud text={() => t('mdp.signin.spoken')} label={t('mdp.readAloud')} />
-      </div>
+      {/* 2026-11-02 — Help ("Trouble signing in?"), Read aloud and All apps, pinned to the bottom until signed in (the owner:
+          "that clutter would be better off in a sticky footer for as long as the page goes. It changes after the sign in"). */}
+      <SignedOutBar help={{ app: 'mdp' }} aloud={() => t('mdp.signin.spoken')} />
 
       <ForgotSheet open={help} onClose={() => setHelp(false)} actions={actions} email={email} />
     </form>

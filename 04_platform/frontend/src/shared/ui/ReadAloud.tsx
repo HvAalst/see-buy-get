@@ -37,12 +37,33 @@ export function stopSpeaking(): void {
  */
 export function ReadAloud({ text, label }: ReadAloudProps) {
   useLocale(); // re-render (and re-translate the label) when the language changes
+  const { supported, speaking, toggle } = useReadAloud(text);
+
+  if (!supported) return null;
+
+  return (
+    <button
+      type="button"
+      class={`readaloud${speaking ? ' readaloud--on' : ''}`}
+      onClick={toggle}
+      aria-pressed={speaking}
+    >
+      <Icon name={speaking ? 'speakerOff' : 'speaker'} size={22} class="readaloud__ic" />
+      <span>{speaking ? t('common.stop') : (label ?? t('common.readAloud'))}</span>
+    </button>
+  );
+}
+
+/**
+ * What a read-aloud control does, apart from how it is drawn — so the pill on a screen and the item in the signed-out bar
+ * (SignedOutBar.tsx, 2026-11-02) speak, stop and reset themselves the same way. `supported` is false where the phone
+ * cannot speak: a control drawn from this is then not drawn at all.
+ */
+export function useReadAloud(text: () => string): { supported: boolean; speaking: boolean; toggle: () => void } {
   const [supported] = useState(isSpeechSupported);
   const [speaking, setSpeaking] = useState(false);
 
   useEffect(() => () => stopSpeaking(), []);
-
-  if (!supported) return null;
 
   const toggle = () => {
     if (speaking) {
@@ -63,15 +84,5 @@ export function ReadAloud({ text, label }: ReadAloudProps) {
     }, 400);
   };
 
-  return (
-    <button
-      type="button"
-      class={`readaloud${speaking ? ' readaloud--on' : ''}`}
-      onClick={toggle}
-      aria-pressed={speaking}
-    >
-      <Icon name={speaking ? 'speakerOff' : 'speaker'} size={22} class="readaloud__ic" />
-      <span>{speaking ? t('common.stop') : (label ?? t('common.readAloud'))}</span>
-    </button>
-  );
+  return { supported, speaking, toggle };
 }

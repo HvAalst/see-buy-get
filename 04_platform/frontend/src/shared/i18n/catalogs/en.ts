@@ -360,6 +360,11 @@ export const en = {
   'common.back': 'Back',
   'common.allApps': 'All SeeBuyGet apps',
   'common.signUp': 'New here? Sign up',
+  // 2026-11-02 — the bar pinned to the bottom of every screen before signing in (SignedOutBar): a short word under each
+  // picture, as the tab bar has; the longer name stays the button's title. Back and Help are common.back and guide.link.
+  'common.bar.label': 'Help and more',
+  'common.bar.readAloud': 'Read aloud',
+  'common.bar.allApps': 'All apps',
   // Under every box an address is typed into to find shops (OsmCredit): OpenStreetMap's service, credited as it asks.
   'common.addressesByOsm': 'Addresses are found with OpenStreetMap.',
   // The country code beside every phone number box (PhoneField).
@@ -1073,6 +1078,12 @@ export const en = {
   'account.unlock.cancelledPassword': 'Your phone did not unlock. Tap to try again, or use the password.',
   'account.unlock.failedPassword': 'That did not go through. Tap to try again, or use the password.',
   'account.unlock.offBodyPassword': 'Type the password. You can turn it on again under Settings.',
+  // 2026-11-02 — a shop's or a hub's phone colleagues sign in on (the owner: "a 1 person shop could use fingerprint to unlock
+  // as you said"): off there, and why.
+  'account.passkey.subCounter': 'Off: colleagues sign in on this phone.',
+  'account.passkey.counterTitle': 'Not on a phone colleagues sign in on',
+  'account.passkey.counterBody': 'A colleague opened their own session on this phone ({when}), so a fingerprint or face cannot stand in for the {party}’s password here: whoever can unlock the phone could then sign in as the {party}.',
+  'account.passkey.counterElsewhere': 'It works on a phone that only you sign in on. Here, sign in with the password.',
   'account.contract.title': 'Who you contract with',
   'account.contract.none': 'No company of ours contracts with you where you work.',
   'account.contract.lede': 'You contract with {company}. These are the licences and insurance it trades on. Each number can be checked with whoever issued it.',

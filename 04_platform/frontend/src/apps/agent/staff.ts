@@ -1,6 +1,7 @@
 import { publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
 import type { Agreement } from '../../shared/documents/documents';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
+import { allShopDeviceKeys } from '../../shared/account/shopDevice';
 import type { Screen } from './useAgentApp';
 
 /*
@@ -82,7 +83,13 @@ export function counterPlaces(config: SbgConfig, signIn: PersonSignIn) {
     accept: (memberId: string) => post<CounterPlace>(`/v1/sbg/shop-invitations/${encodeURIComponent(memberId)}/accept`),
     decline: (memberId: string) => post<{ declined: true }>(`/v1/sbg/shop-invitations/${encodeURIComponent(memberId)}/decline`),
     open: async (shopDid: string, kind?: 'hub'): Promise<Result<StaffSession>> => {
-      const r = await post<StaffSession>(`/v1/sbg/${kind === 'hub' ? 'hubs' : 'shops'}/${encodeURIComponent(shopDid)}/staff-session`);
+      /*
+       * 2026-11-02 (the owner: "a 1 person shop could use fingerprint to unlock as you said") — WHICH PHONE THIS IS: the keys
+       * this browser holds for the shops' and hubs' own sign-ins. Where one is this place's own phone, the server notes it
+       * as a phone colleagues use, and the place's fingerprint-or-face unlock goes from it.
+       */
+      const path = `/v1/sbg/${kind === 'hub' ? 'hubs' : 'shops'}/${encodeURIComponent(shopDid)}/staff-session`;
+      const r: Result<StaffSession> = bearer ? await publicRequest<StaffSession>(config, path, { method: 'POST', bearer, body: { devices: allShopDeviceKeys() } }) : signedOut<StaffSession>();
       if (!r.error) forget();
       return r;
     },

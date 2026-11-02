@@ -3,11 +3,16 @@ import { Button, Card, CodeBoxes, ErrorNote, NeedsSignalNote, PhoneField } from 
 import { useT, type MessageKey } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import type { DeviceAsk } from './shopDevice';
+import type { GuideApp } from '../guide/articles';
+import { SignedOutBar } from '../ui/SignedOutBar';
 
 /** Whose sign-in it is: what the account is called on the screen. */
 export type BoundParty = 'shop' | 'hub' | 'store';
 
 export const PARTY_WORD: Record<BoundParty, MessageKey> = { shop: 'account.bound.party.shop', hub: 'account.bound.party.hub', store: 'account.bound.party.store' };
+
+/** Whose help it is: the app the account signs in to. */
+const PARTY_APP: Record<BoundParty, GuideApp> = { shop: 'agent', hub: 'mdp', store: 'vendor' };
 
 /**
  * Round 40 — A NEW PHONE OR BROWSER FOR A HUB OR A STORE (the user: "Hubs and stores now"), as a shop's already was. The
@@ -35,6 +40,9 @@ export function ConfirmDevice({
   const [code, setCode] = useState('');
   const [phone, setPhone] = useState('');
   const who = t(PARTY_WORD[party]);
+  // 2026-11-02 — still signed out, so the bar every sign-in screen has stays (the owner: "a sticky footer for as long as
+  // the page goes"): Back to the password, Help — the app's own "Trouble signing in?" — this screen read aloud, the apps.
+  const bar = (spoken: string) => <SignedOutBar onBack={onBack} help={{ app: PARTY_APP[party] }} aloud={() => spoken} />;
 
   if (ask.needsPhone) {
     const ok = /^\+?\d{7,15}$/.test(phone.replace(/[\s()-]/g, ''));
@@ -61,9 +69,7 @@ export function ConfirmDevice({
         <Button type="submit" chevron={false} busy={busy} disabled={busy || !ok}>
           {t('account.bound.sendCode')}
         </Button>
-        <Button variant="link" onClick={onBack}>
-          {t('common.back')}
-        </Button>
+        {bar(`${t('account.bound.needsPhoneTitle', { party: who })}. ${t('account.bound.needsPhoneLede', { party: who })}`)}
       </form>
     );
   }
@@ -91,9 +97,7 @@ export function ConfirmDevice({
       <Button type="submit" chevron={false} busy={busy} disabled={busy || code.length !== 6}>
         {t('account.bound.confirm')}
       </Button>
-      <Button variant="link" onClick={onBack}>
-        {t('common.back')}
-      </Button>
+      {bar(`${t('account.bound.title')}. ${t('account.bound.lede', { party: who, sentTo: ask.sentTo })}`)}
     </form>
   );
 }

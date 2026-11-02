@@ -69,41 +69,44 @@ export const GUIDE_APPS: Record<PublicApp, MessageKey> = {
 };
 
 export const ARTICLE_SPECS: ArticleSpec[] = [
-  { id: 'which-sign-in', apps: ['home'], group: 'start', site: true, steps: 6 },
-  { id: 'shop-sign-in', apps: ['agent', 'mdp'], group: 'start', site: true, steps: 7 },
+  { id: 'which-sign-in', apps: ['home'], group: 'start', site: true, steps: 6, notes: ['note'] },
+  // Signing up as a shop, a sort hub, a driver, a fleet or a store (the integrator, 2026-11-02): signing up IS getting
+  // started, which the owner kept for the public site on 2026-10-23 — so it is public, and help.test pins it.
+  { id: 'sign-up', apps: ['home', 'agent', 'mdp', 'driver', 'fleet', 'vendor'], group: 'start', site: true, steps: 6, notes: ['note', 'note', 'note', 'note', 'note', 'careful', 'note', 'why', 'rare'] },
+  { id: 'shop-sign-in', apps: ['agent', 'mdp'], group: 'start', site: true, steps: 7, notes: ['note'] },
   { id: 'people-at-work', apps: ['agent', 'mdp'], group: 'start', steps: 4, notes: ['careful'] },
   { id: 'risk-register', apps: ['agent', 'mdp', 'console'], group: 'daily', steps: 3, notes: ['note'] },
   { id: 'security-declaration', apps: ['agent', 'mdp', 'fleet', 'driver', 'console'], group: 'start', steps: 3, notes: ['note'] },
   { id: 'new-partner-limit', apps: ['agent', 'driver', 'console'], group: 'daily', steps: 4, notes: ['why'] },
-  { id: 'shop-papers', apps: ['agent'], group: 'start', site: true, steps: 5, notes: ['note', 'note'] },
-  { id: 'hub-papers', apps: ['mdp'], group: 'start', site: true, steps: 5, notes: ['note', 'note'] },
-  { id: 'change-password', apps: ['agent', 'mdp'], group: 'account', steps: 2, notes: ['careful', 'careful'] },
-  { id: 'fleet-sign-in', apps: ['fleet'], group: 'start', site: true, steps: 5, notes: ['careful', 'why'] },
+  { id: 'shop-papers', apps: ['agent'], group: 'start', site: true, steps: 5, notes: ['note', 'note', 'note'] },
+  { id: 'hub-papers', apps: ['mdp'], group: 'start', site: true, steps: 5, notes: ['note', 'note', 'note'] },
+  { id: 'change-password', apps: ['agent', 'mdp'], group: 'account', steps: 2, notes: ['careful', 'careful', 'note'] },
+  { id: 'fleet-sign-in', apps: ['fleet'], group: 'start', site: true, steps: 5, notes: ['careful', 'why', 'note'] },
   { id: 'fleet-code', apps: ['fleet', 'console'], group: 'start', steps: 3, notes: ['note'] },
   { id: 'fleet-roster', apps: ['fleet'], group: 'start', steps: 4, notes: ['note', 'note', 'why', 'note', 'note', 'note'] },
-  { id: 'driver-sign-in', apps: ['driver'], group: 'start', site: true, steps: 4, notes: ['careful', 'careful', 'why', 'why', 'rare', 'rare'] },
+  { id: 'driver-sign-in', apps: ['driver'], group: 'start', site: true, steps: 4, notes: ['careful', 'careful', 'why', 'why', 'rare', 'rare', 'note'] },
   { id: 'driver-fleet', apps: ['driver'], group: 'start', steps: 3, notes: ['note', 'why', 'note', 'note', 'note', 'note'] },
-  { id: 'change-pin', apps: ['fleet', 'driver', 'send'], group: 'account', steps: 3, notes: ['careful', 'note', 'careful', 'note', 'rare', 'careful', 'note'] },
+  { id: 'change-pin', apps: ['fleet', 'driver', 'send'], group: 'account', steps: 3, notes: ['careful', 'note', 'careful', 'note', 'rare', 'careful', 'note', 'note'] },
   { id: 'close-account', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'business'], group: 'account', steps: 3, notes: ['careful', 'note', 'note', 'why'] },
   { id: 'mute-account', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'business'], group: 'account', steps: 3, notes: ['note', 'note', 'why'] },
   { id: 'who-you-contract-with', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'business'], group: 'account', steps: 4, notes: ['note', 'why', 'rare'] },
   { id: 'account-recovery', apps: ['fleet', 'driver', 'send'], group: 'account', site: true, steps: 5, notes: ['note', 'why', 'note', 'note', 'careful', 'rare', 'rare', 'rare', 'careful', 'rare', 'rare', 'rare', 'rare', 'rare', 'note', 'why', 'note', 'rare', 'why', 'note', 'careful', 'rare', 'note'] },
-  { id: 'store-sign-in', apps: ['vendor'], group: 'start', site: true, steps: 10 },
+  { id: 'store-sign-in', apps: ['vendor'], group: 'start', site: true, steps: 10, notes: ['note'] },
   { id: 'store-secret', apps: ['vendor'], group: 'account', steps: 4, notes: ['note', 'note', 'careful'] },
   { id: 'api-keys', apps: ['vendor'], group: 'account', steps: 3, notes: ['note'] },
-  { id: 'send-sign-in', apps: ['send', 'home'], group: 'start', site: true, steps: 5 },
+  { id: 'send-sign-in', apps: ['send', 'home'], group: 'start', site: true, steps: 5, notes: ['note'] },
   { id: 'follow-shop-order', apps: ['send', 'vendor'], group: 'start', site: true, steps: 3, notes: ['note', 'note', 'why'] },
   // What a parcel is priced on: its size or its weight, whichever is more (the user, 2026-10-27: "build the help article").
   { id: 'size-price', apps: ['send', 'vendor', 'agent'], group: 'start', site: true, steps: 4, notes: ['note', 'note', 'note', 'why', 'rare'] },
-  { id: 'business-sign-in', apps: ['business', 'home'], group: 'start', site: true, steps: 5 },
+  { id: 'business-sign-in', apps: ['business', 'home'], group: 'start', site: true, steps: 5, notes: ['note', 'note'] },
   { id: 'business-people', apps: ['business'], group: 'start', steps: 4 },
-  { id: 'business-check', apps: ['business', 'console'], group: 'start', site: true, steps: 2, notes: ['note'] },
+  { id: 'business-check', apps: ['business', 'console'], group: 'start', site: true, steps: 2, notes: ['note', 'note'] },
   // The procedures every consignment note refers to (e-CMR Art. 5): public, because the note links here for whoever holds it.
   { id: 'electronic-note', apps: ['business', 'agent', 'driver', 'fleet', 'vendor'], group: 'freight', site: true, steps: 6, notes: ['why', 'note'] },
   { id: 'business-bell', apps: ['business'], group: 'daily', steps: 3, notes: ['note', 'rare', 'note'] },
   // A business's parcels (the user, 2026-10-29: "Billed to the business"; "A prepaid balance").
   { id: 'business-parcels', apps: ['business'], group: 'daily', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note'] },
-  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note'] },
+  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note'] },
   // Coming in (inbound, reading A): what suppliers send to the business's own places, never its price.
   { id: 'business-coming-in', apps: ['business'], group: 'freight', steps: 5, notes: ['note', 'note', 'why'] },
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.
@@ -115,16 +118,16 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'road-meets-rail', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 5, notes: ['why', 'why', 'note', 'note'] },
   // An export by air (the user, 2026-10-29: "we move on to air"): the road to the cargo terminal, timed to the airline's
   // latest acceptance time; read by whoever posts it, carries it, or runs the office.
-  { id: 'air-export', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful', 'note', 'careful', 'note', 'note', 'careful'] },
+  { id: 'air-export', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful', 'note', 'careful', 'note', 'note', 'careful', 'note'] },
   // An import by air: the road leg from the handler's shed waits for every release (2026-10-29).
-  { id: 'air-import', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful', 'why', 'note', 'careful', 'note', 'careful'] },
+  { id: 'air-import', apps: ['business', 'driver', 'fleet', 'console'], group: 'freight', steps: 4, notes: ['why', 'why', 'careful', 'note', 'careful', 'why', 'note', 'careful', 'note', 'careful', 'note'] },
   { id: 'business-note', apps: ['business'], group: 'freight', steps: 4, notes: ['note', 'note', 'note', 'note', 'why', 'rare', 'rare'] },
   { id: 'business-runs', apps: ['business'], group: 'freight', steps: 4 },
   { id: 'business-contracts', apps: ['business'], group: 'freight', steps: 3, notes: ['why', 'note', 'rare', 'note', 'note', 'why', 'note', 'note', 'rare'] },
   { id: 'business-clients', apps: ['business'], group: 'freight', steps: 4, notes: ['note'] },
   { id: 'quotations', apps: ['business', 'console'], group: 'freight', steps: 4, notes: ['why'] },
   { id: 'shop-shelves', apps: ['agent'], group: 'start', steps: 5, notes: ['note', 'note', 'why', 'note', 'note', 'note'] },
-  { id: 'message-shop', apps: ['send', 'agent'], group: 'daily', steps: 3, notes: ['careful'] },
+  { id: 'message-shop', apps: ['send', 'agent'], group: 'daily', steps: 3, notes: ['careful', 'note'] },
   { id: 'parcel-problem', apps: ['send', 'agent', 'vendor', 'console'], group: 'wrong', site: true, steps: 5, notes: ['why', 'why', 'why', 'note', 'note', 'note', 'why', 'note'] },
   { id: 'thermal-labels', apps: ['agent', 'vendor', 'business'], group: 'daily', steps: 4, notes: ['note', 'why'] },
   { id: 'bag-seals', apps: ['agent', 'mdp', 'driver', 'vendor', 'console'], group: 'daily', steps: 8, notes: ['note'] },
@@ -144,7 +147,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   // Goods coming back to a person, brought to their door instead of the shop (2026-10-27: "Mobile money first").
   { id: 'goods-coming-back', apps: ['send'], group: 'wrong', steps: 4, notes: ['note'] },
   { id: 'gs1-codes', apps: ['vendor', 'business'], group: 'start', steps: 4, notes: ['why', 'note'] },
-  { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 6, notes: ['careful', 'why'] },
+  { id: 'no-signal', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 6, notes: ['careful', 'why', 'note'] },
   { id: 'consignment-note', apps: ['agent', 'driver', 'fleet'], group: 'freight', steps: 4, notes: ['why', 'careful', 'note', 'note', 'note', 'note', 'rare', 'note', 'note'] },
   { id: 'freight-delivery', apps: ['agent', 'driver'], group: 'freight', steps: 5, notes: ['note', 'why', 'note', 'note'] },
   { id: 'sender-instructions', apps: ['agent', 'driver', 'fleet', 'business'], group: 'freight', steps: 5, notes: ['note'] },
@@ -159,6 +162,22 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'hand-back', apps: ['driver', 'agent', 'fleet'], group: 'freight', steps: 4, notes: ['note'] },
   { id: 'hours-of-service', apps: ['driver', 'fleet'], group: 'freight', steps: 6, notes: ['why'] },
   { id: 'when-to-change', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send', 'home', 'console'], group: 'account', site: true, steps: 2, notes: ['careful'] },
+  // 2026-11-01/02 — the apps feel native (the owner: "If needed, update the help pages too"). All inside the apps: none is
+  // about getting in or getting started on the public site, which keeps its own list (help.test).
+  // The call to install, pinned until the app is installed, and its guide to notifications; the shortcuts on its icon.
+  { id: 'install-app', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send'], group: 'start', steps: 6, notes: ['note', 'careful', 'note', 'note', 'why', 'note'] },
+  // Back, a sheet swiped down, pulling down to refresh, and a business load's record in sections.
+  { id: 'get-around', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'start', steps: 5, notes: ['note', 'note', 'rare', 'note'] },
+  // Share SeeBuyGet from every app's menu: one link of the person's own, counted to them.
+  { id: 'share-seebuyget', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'account', steps: 4, notes: ['note', 'note', 'note', 'note'] },
+  // Unlock with fingerprint or face, under Settings: on and off, this phone only, back to the PIN or password.
+  { id: 'fingerprint-unlock', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'account', steps: 4, notes: ['note', 'note', 'careful', 'careful', 'careful', 'rare'] },
+  // Words, a link or a photo shared into the app from another, sent into a chat (the five apps with chats).
+  { id: 'share-into-chat', apps: ['agent', 'driver', 'fleet', 'vendor', 'send'], group: 'daily', steps: 5, notes: ['note', 'note', 'note', 'rare', 'rare'] },
+  // A photo in a chat about a load or a parcel: filed first, then shown (the owner: "Damage claims should be fingerprinted").
+  { id: 'chat-photos', apps: ['agent', 'driver', 'vendor', 'send'], group: 'daily', steps: 5, notes: ['note', 'note', 'note', 'note', 'why', 'rare'] },
+  // No upload fails in silence: a photo made smaller, a file's limit said, every refusal with its size and what to do.
+  { id: 'upload-refused', apps: ['agent', 'mdp', 'driver', 'fleet', 'vendor', 'send', 'business'], group: 'wrong', steps: 6, notes: ['note', 'note', 'why'] },
 ];
 
 const key = (id: string, part: string) => `help.${id}.${part}` as MessageKey;

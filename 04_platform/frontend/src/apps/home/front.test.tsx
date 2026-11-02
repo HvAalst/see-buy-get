@@ -57,7 +57,8 @@ describe('the front page', () => {
   });
 
   it('tracks with a plain form that works before any script has run', () => {
-    expect(page()).toMatch(/<form class="fr__track" id="track" action="\/send\/" method="get">[\s\S]*name="track"/);
+    // Whatever order its attributes are in: preact/compat (the sheets' portal, 2026-11-02) puts `class` last.
+    expect(page()).toMatch(/<form (?=[^>]*class="fr__track")(?=[^>]*id="track")(?=[^>]*action="\/send\/")(?=[^>]*method="get")[^>]*>[\s\S]*name="track"/);
   });
 
   it('draws the marked phrase in orange without cutting it out of its sentence', () => {

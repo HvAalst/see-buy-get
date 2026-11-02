@@ -57,7 +57,9 @@ export type IconName =
   | 'ship'
   | 'plane'
   // A firm's website, in the logistics directory (2026-10-30).
-  | 'globe';
+  | 'globe'
+  // Help, in the bar a person sees before they are signed in (2026-11-02, SignedOutBar.tsx).
+  | 'help';
 
 const PATHS: Record<IconName, JSX.Element> = {
   chevronRight: <path d="m9 5 7 7-7 7" />,
@@ -188,6 +190,14 @@ const PATHS: Record<IconName, JSX.Element> = {
       <circle cx="12" cy="12" r="9" />
       <path d="M12 11v5.5" />
       <path d="M12 7.6v.1" />
+    </>
+  ),
+  // The info mark's circle, with a question in it: help, not a fact about the thing beside it.
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.6 9.4a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.1-2.5 3.9" />
+      <path d="M12 16.9v.1" />
     </>
   ),
   filter: <path d="M4 7h11m3 0h2M4 17h2m3 0h11M14 4.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8ZM7 14.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8Z" />,

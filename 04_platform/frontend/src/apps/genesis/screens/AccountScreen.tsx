@@ -8,6 +8,7 @@ import { useT } from '../../../shared/i18n';
 import { roleMeta } from '../logic';
 import { ROLE_APPS } from '../api';
 import { InviteSheet } from './InviteSheet';
+import { InstallGuideSheet } from '../../../shared/ui/InstallBar';
 import type { PersonView, RoleLinkView } from '../types';
 import type { SendActions, SendState } from '../useSendApp';
 
@@ -29,6 +30,7 @@ export function AccountScreen({ state, actions, account }: AccountScreenProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const avatarInput = useRef<HTMLInputElement>(null);
   const id = state.identity;
@@ -143,8 +145,19 @@ export function AccountScreen({ state, actions, account }: AccountScreenProps) {
             </span>
             <span class="row__end"><Icon name="chevronRight" size={22} /></span>
           </button>
+          {/* 2026-11-02 — the install guide, kept once the call to install has gone: notifications turned off or held back
+              by the battery long after the day it was installed (every other app has it in its account menu). */}
+          <button type="button" class="row" onClick={() => setGuideOpen(true)}>
+            <span class="row__ic"><Icon name="bell" size={24} /></span>
+            <span class="row__body">
+              <span class="row__t">{t('install.menu')}</span>
+              <span class="row__s">{t('install.menuSub')}</span>
+            </span>
+            <span class="row__end"><Icon name="chevronRight" size={22} /></span>
+          </button>
         </div>
       </Card>
+      <InstallGuideSheet open={guideOpen} onClose={() => setGuideOpen(false)} app="send" />
 
       <div class="scr__cta">
         <Button variant="outline" chevron={false} onClick={() => actions.signOut()}>

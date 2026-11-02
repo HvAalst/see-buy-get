@@ -32371,6 +32371,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffSessionDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -32400,6 +32410,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffSessionDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -75788,6 +75808,18 @@
           "state",
           "invitedAt"
         ]
+      },
+      "StaffSessionDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "description": "The shop and hub phone keys this browser holds.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "ShopStaffSession": {
         "type": "object",

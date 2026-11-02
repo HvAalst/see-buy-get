@@ -133,6 +133,14 @@
   gap: 8px;
 }
 
+/* 2026-11-02 — a field's own way round, right under the field it is about: "Forgot your PIN?" under the PIN, "Send a new
+   code" under the code. It stood in the screen's foot with four other links (the owner: "that clutter would be better off
+   in a sticky footer"), far from the box it was about. Its words line up with the field's edge; its full height to tap. */
+.field__aside {
+  align-self: flex-start;
+  margin: -6px 0 -8px -8px;
+}
+
 .field__label {
   font-size: 14px;
   font-weight: 700;

@@ -30,6 +30,26 @@ export function saveShopDeviceKey(email: string, key: string | undefined): void 
   }
 }
 
+/**
+ * EVERY SHOP'S AND HUB'S KEY THIS BROWSER HOLDS — one per address whose own sign-in was used on it. Sent when a colleague
+ * opens a counter session here (2026-11-02: the owner, "a 1 person shop could use fingerprint to unlock as you said"):
+ * the server notes the one that is that place's own phone as a phone colleagues use, and takes the place's fingerprint
+ * off it. A key alone opens nothing.
+ */
+export function allShopDeviceKeys(): string[] {
+  const found: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length && found.length < 20; i++) {
+      const name = localStorage.key(i);
+      const key = name?.startsWith('sbg-shop-device:') ? localStorage.getItem(name) : null;
+      if (key) found.push(key);
+    }
+  } catch {
+    /* storage unavailable — nothing to send */
+  }
+  return found;
+}
+
 export function dropShopDeviceKey(email: string | null | undefined): void {
   if (!email) return;
   try {

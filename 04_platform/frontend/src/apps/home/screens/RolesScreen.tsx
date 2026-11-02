@@ -1,7 +1,10 @@
-import { Icon, ReadAloud } from '../../../shared/ui';
+import { useState } from 'preact/hooks';
+import { Icon } from '../../../shared/ui';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useT } from '../../../shared/i18n';
 import { ROLES, roleMeta } from '../logic';
 import type { HomeActions } from '../useHomeApp';
+import { JoinHelp } from './JoinHelp';
 
 export interface RolesScreenProps {
   actions: HomeActions;
@@ -17,6 +20,7 @@ const BUSINESS_APP = '/business/';
  */
 export function RolesScreen({ actions }: RolesScreenProps) {
   const t = useT();
+  const [helping, setHelping] = useState(false);
   return (
     <div class="scr">
       <h1 class="scr__title">{t('home.roles.title')}</h1>
@@ -58,20 +62,22 @@ export function RolesScreen({ actions }: RolesScreenProps) {
         </a>
       </div>
 
-      <div class="scr__foot">
-        <ReadAloud
-          text={() =>
-            `${t('home.roles.aloudLead')} ${[
-              ...ROLES.map((r) => {
-                const m = roleMeta(r, t);
-                return t('home.roles.aloudRole', { label: m.label, promise: m.promise });
-              }),
-              t('home.roles.aloudRole', { label: t('home.role.business.label'), promise: t('home.role.business.promise') }),
-            ].join(' ')}`
-          }
-          label={t('home.roles.aloudLabel')}
-        />
-      </div>
+      {/* 2026-11-02 — the sign-up's first page has the bar its steps have (the owner: "a sticky footer for as long as the
+          page goes"): Help — which app is whose — and Read aloud. The top bar's arrow goes back to the front page. */}
+      <SignedOutBar
+        help={{ open: () => setHelping(true) }}
+        aloud={() =>
+          `${t('home.roles.aloudLead')} ${[
+            ...ROLES.map((r) => {
+              const m = roleMeta(r, t);
+              return t('home.roles.aloudRole', { label: m.label, promise: m.promise });
+            }),
+            t('home.roles.aloudRole', { label: t('home.role.business.label'), promise: t('home.role.business.promise') }),
+          ].join(' ')}`
+        }
+        allApps={false}
+      />
+      <JoinHelp open={helping} onClose={() => setHelping(false)} roleId={null} />
     </div>
   );
 }

@@ -98,9 +98,10 @@ describe('the help centre', () => {
 
   // The user, 2026-10-23: "was wondering if we need all the help pages outside the app. Just the info to get started
   // should be enough, and the operational issues could live in the apps" — chosen: getting in and getting started.
-  it('holds getting in and getting started only: which app, signing in, getting back in, papers, a parcel', () => {
+  // Signing up is getting started (the integrator, 2026-11-02): 'sign-up' joined the list.
+  it('holds getting in and getting started only: which app, signing up, signing in, getting back in, papers, a parcel', () => {
     expect(all.map((a) => a.id).sort()).toEqual(
-      ['which-sign-in', 'shop-sign-in', 'driver-sign-in', 'fleet-sign-in', 'store-sign-in', 'send-sign-in', 'business-sign-in', 'account-recovery', 'when-to-change', 'shop-papers', 'hub-papers', 'business-check', 'follow-shop-order', 'parcel-problem', 'size-price', 'electronic-note'].sort(),
+      ['which-sign-in', 'sign-up', 'shop-sign-in', 'driver-sign-in', 'fleet-sign-in', 'store-sign-in', 'send-sign-in', 'business-sign-in', 'account-recovery', 'when-to-change', 'shop-papers', 'hub-papers', 'business-check', 'follow-shop-order', 'parcel-problem', 'size-price', 'electronic-note'].sort(),
     );
     // One more, not about getting started: the procedures every consignment note refers to (e-CMR Art. 5(2): 'referred to in
     // the electronic consignment note and readily ascertainable') — read by whoever holds the note, with or without an app.

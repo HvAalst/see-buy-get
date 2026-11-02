@@ -967,6 +967,8 @@ export function useMdpApp() {
     // The raw client, for the shared account menu — the account is the PERSON, so the surface behind it
     // is the same one every other app talks to and this app holds no opinion about it.
     sbg: client?.client.sbg ?? null,
+    // 2026-11-02 — the hub's bell, as the shop's: what the network tells the hub had nowhere to show.
+    notifications: client?.notifications ?? null,
     actions: {
       refresh,
       signIn,

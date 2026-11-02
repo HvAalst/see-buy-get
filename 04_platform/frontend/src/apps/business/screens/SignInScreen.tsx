@@ -133,6 +133,12 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
               <div class="cfield">
                 <span class="cfield__label">{t('business.signIn.pin')}</span>
                 <CodeBoxes id="biz-pin" label={t('business.signIn.pin')} length={PIN_LENGTH} value={state.pin} onInput={(v) => actions.set({ pin: v })} disabled={busy} mask />
+                {/* 2026-11-02 — the PIN's own way round, under the PIN, as the phone apps now have it. */}
+                <p class="twr-signin__alt">
+                  <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
+                    {t('business.signIn.forgot')}
+                  </button>
+                </p>
               </div>
             </UnlockFirst>
           ) : step === 'pin' ? (
@@ -150,6 +156,12 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
               <span class="cfield__label">{t('business.signIn.code')}</span>
               <CodeBoxes id="biz-code" label={t('business.signIn.code')} length={6} value={state.code} onInput={(v) => actions.set({ code: v })} disabled={busy} />
               {state.devCode ? <span class="chint">{t('business.signIn.testCode', { code: state.devCode })}</span> : null}
+              {/* 2026-11-02 — the code's own way round, under the code. */}
+              <p class="twr-signin__alt">
+                <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void actions.requestCode()}>
+                  {t('business.signIn.newCode')}
+                </button>
+              </p>
             </div>
           ) : null}
 
@@ -174,42 +186,41 @@ export function SignInScreen({ state, actions }: { state: BusinessState; actions
               {t(CTA[step])}
             </button>
           )}
-        </form>
-
-        {/* The same foot as every sign-in screen, in this app's own buttons: the PIN's way back, "Trouble signing in?",
-            signing up, the other apps. Forgot-PIN and sign-up are the same step here — a code to the phone, then a PIN —
-            but they are two questions, so two links. */}
-        <p class="twr-signin__foot">
+          {/* Under the button, with the form: signing up, the call for somebody with no account yet — or, on the phone
+              step, the other door. Forgot-PIN and sign-up are the same step here — a code to the phone, then a PIN — but
+              they are two questions, so two links: the first is under the PIN. */}
           {step === 'login' ? (
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
-              {t('business.signIn.forgot')}
-            </button>
+            <p class="twr-signin__alt">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
+                {t('common.signUp')}
+              </button>
+            </p>
           ) : step === 'phone' ? (
             // Always: a browser that remembers no number opens on this step, and somebody who already has a PIN —
             // from this app or any other SeeBuyGet app — must see the way to use it before typing anything.
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('login')}>
-              {t('business.signIn.havePin')}
+            <p class="twr-signin__alt">
+              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('login')}>
+                {t('business.signIn.havePin')}
+              </button>
+            </p>
+          ) : null}
+        </form>
+
+        {/* 2026-11-02 — what the phone apps pin to the bottom of the screen before signing in (the owner: "that clutter
+            would be better off in a sticky footer"), kept here in the card: a desk's card is the whole screen, its foot
+            always in sight. The same things as the phone apps' bar — the way back where a step has one, "Trouble signing
+            in?", the other apps — and nothing else, in this app's own buttons. */}
+        <p class="twr-signin__foot">
+          {step === 'code' ? (
+            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
+              {t('business.signIn.changeNumber')}
             </button>
-          ) : step === 'code' ? (
-            <>
-              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => void actions.requestCode()}>
-                {t('business.signIn.newCode')}
-              </button>
-              <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
-                {t('business.signIn.changeNumber')}
-              </button>
-            </>
-          ) : (
+          ) : step === 'pin' || step === 'email' ? (
             <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep(step === 'email' ? 'pin' : 'phone')}>
               {t('common.back')}
             </button>
-          )}
-          <SignInHelp app="business" api={recovery} buttonClass="cbtn cbtn--ghost cbtn--sm" />
-          {step === 'login' ? (
-            <button type="button" class="cbtn cbtn--ghost cbtn--sm" onClick={() => actions.setStep('phone')}>
-              {t('common.signUp')}
-            </button>
           ) : null}
+          <SignInHelp app="business" api={recovery} buttonClass="cbtn cbtn--ghost cbtn--sm" />
           <AllAppsLink buttonClass="cbtn cbtn--ghost cbtn--sm" />
         </p>
         <p class="chint biz-signin__same">{t('business.signIn.samePin')}</p>

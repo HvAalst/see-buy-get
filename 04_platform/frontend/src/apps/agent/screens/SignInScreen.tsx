@@ -1,8 +1,8 @@
-import { SignInHelp } from '../../../shared/account/TroubleSheet';
-import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, NeedsSignalNote, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { AgentActions, AgentState } from '../useAgentApp';
@@ -64,9 +64,8 @@ function ConfirmPhone({ actions, error, busy, ask }: { actions: AgentActions; er
       <Button type="submit" chevron={false} busy={busy} disabled={busy || code.length !== 6}>
         {t('agent.signin.deviceConfirm')}
       </Button>
-      <Button variant="link" onClick={() => actions.cancelDeviceAsk()}>
-        {t('common.back')}
-      </Button>
+      {/* 2026-11-02 — still signed out, so the bar stays: Back to the password, Help, this screen read aloud, the apps. */}
+      <SignedOutBar onBack={() => actions.cancelDeviceAsk()} help={{ app: 'agent' }} aloud={() => `${t('agent.signin.deviceTitle')}. ${t('agent.signin.deviceLede', { sentTo: ask.sentTo })}`} />
     </form>
   );
 }
@@ -127,6 +126,10 @@ function EmailAndPassword({ actions, error, busy, onStaff }: { actions: AgentAct
               autocomplete="current-password"
               enterkeyhint="go"
             />
+            {/* 2026-11-02 — the password's own way round, under the password (it stood in the foot with four other links). */}
+            <Button variant="link" full={false} class="field__aside" onClick={() => setHelp(true)}>
+              {t('agent.signin.forgot')}
+            </Button>
           </div>
         </UnlockFirst>
       </Card>
@@ -138,6 +141,8 @@ function EmailAndPassword({ actions, error, busy, onStaff }: { actions: AgentAct
           </Button>
         </div>
       )}
+      {/* The call for somebody with no account yet, with the form it stands beside. */}
+      <SignUpLink role="pudo" />
 
       {/* Not the shop's password: the people at its counter sign in as themselves. */}
       <button type="button" class="row" onClick={onStaff}>
@@ -159,15 +164,9 @@ function EmailAndPassword({ actions, error, busy, onStaff }: { actions: AgentAct
         />
       </Card>
 
-      <div class="scr__foot">
-        <Button variant="link" full={false} onClick={() => setHelp(true)}>
-          {t('agent.signin.forgot')}
-        </Button>
-        <SignInHelp app="agent" />
-        <SignUpLink role="pudo" />
-        <AllAppsLink />
-        <ReadAloud text={() => t('agent.signin.spoken')} label={t('agent.readAloud')} />
-      </div>
+      {/* 2026-11-02 — Help ("Trouble signing in?"), Read aloud and All apps, pinned to the bottom until signed in (the owner:
+          "that clutter would be better off in a sticky footer for as long as the page goes. It changes after the sign in"). */}
+      <SignedOutBar help={{ app: 'agent' }} aloud={() => t('agent.signin.spoken')} />
 
       <ForgotSheet open={help} onClose={() => setHelp(false)} actions={actions} email={email} />
     </form>

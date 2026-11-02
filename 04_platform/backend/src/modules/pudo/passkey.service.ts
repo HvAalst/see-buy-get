@@ -28,7 +28,15 @@ export interface PasskeyHere {
   /** Where it was turned off just now: the site it belonged to, so the phone can be told to forget it too. */
   rpId?: string;
   dropped?: string;
+  /**
+   * 2026-11-02 — a shop's or a hub's phone colleagues have opened counter sessions on, last when: it cannot be turned on
+   * there (the owner: "a 1 person shop could use fingerprint to unlock as you said"). Settings says so.
+   */
+  counter?: string;
 }
+
+/** Said where an account's fingerprint is refused on a phone its colleagues sign in on. */
+const COUNTER_PHONE = 'A colleague has opened their own session at the counter on this phone, so a fingerprint or face cannot stand in for the password here: whoever can unlock the phone could then sign in as the account. It works on a phone that only you sign in on.';
 
 /** A challenge as the library takes it: the bytes. Given a string, it would send the string's own bytes, re-encoded. */
 const bytesOf = (challenge: string) => Uint8Array.from(Buffer.from(challenge, 'base64url'));
@@ -238,8 +246,8 @@ export class PasskeyService {
    * keeps it under the account's address), so `which` is 0 for one of the account's own phones and -1 for any other.
    */
   accountHere(did: string, device: string | undefined): PasskeyHere {
-    const { known, passkey } = this.accounts.passkeyHere(did, device);
-    return { on: Boolean(passkey), which: known ? 0 : -1, ...(passkey ? { id: passkey.id, addedAt: passkey.addedAt } : {}) };
+    const { known, passkey, counterAt } = this.accounts.passkeyHere(did, device);
+    return { on: Boolean(passkey), which: known ? 0 : -1, ...(passkey ? { id: passkey.id, addedAt: passkey.addedAt } : {}), ...(counterAt ? { counter: counterAt } : {}) };
   }
 
   /**
@@ -247,8 +255,10 @@ export class PasskeyService {
    * password again, through the sign-in's own count and lock.
    */
   async accountTurnOnOptions(did: string, device: string | undefined, password: string): Promise<{ options: PublicKeyCredentialCreationOptionsJSON; which: number }> {
-    const { known, passkey, accountId } = this.accounts.passkeyHere(did, device);
+    const { known, passkey, accountId, counterAt } = this.accounts.passkeyHere(did, device);
     if (!known || !device) throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser is not one of the account’s own yet, so a fingerprint or face cannot stand in for its password here. Sign in here with the password first.');
+    // A phone colleagues sign in on is never one for the account's fingerprint — refused before the password is looked at.
+    if (counterAt) throw new GlosError('FORBIDDEN', COUNTER_PHONE, { why: 'counter', since: counterAt });
     this.accounts.confirmPassword(did, password);
     const challenge = this.challenges.issue({ purpose: 'register', holder: 'account', owner: accountId, deviceHash: deviceHashOf(device) });
     return { options: await this.registrationOptions(`passkey-account:${accountId}`, challenge, passkey), which: 0 };
@@ -256,8 +266,10 @@ export class PasskeyService {
 
   /** …step two: the phone's answer, for this account on this phone. Kept on the phone's own record. */
   async accountTurnOn(did: string, device: string | undefined, response: RegistrationResponseJSON): Promise<PasskeyHere> {
-    const { known, accountId } = this.accounts.passkeyHere(did, device);
+    const { known, accountId, counterAt } = this.accounts.passkeyHere(did, device);
     if (!known || !device) throw new GlosError('DEVICE_NOT_KNOWN', 'This phone or browser is not one of the account’s own yet. Sign in here with the password first.');
+    // …and asked again here: a colleague may have opened a session on it between the two steps.
+    if (counterAt) throw new GlosError('FORBIDDEN', COUNTER_PHONE, { why: 'counter', since: counterAt });
     if (!answers(this.challenges.take(challengeOf(response)), { purpose: 'register', holder: 'account', owner: accountId, deviceHash: deviceHashOf(device) })) {
       throw new GlosError('INVALID_STATE', 'That took too long, or it was asked on another phone. Start again.');
     }

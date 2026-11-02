@@ -1180,6 +1180,45 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------------------------------------------------- the signed-out bar -- */
+
+/* 2026-11-02 — the bar before signing in (shared/ui/SignedOutBar.tsx; the owner: "that clutter would be better off in a
+   sticky footer for as long as the page goes. It changes after the sign in"). It IS the tab bar (.bnav) — fixed, the
+   safe area under it, an icon over a short word — with items that do something rather than go somewhere, so none is
+   marked as where you are; Read aloud turns blue while it speaks. Two items (the front door's) stay close together
+   rather than at the two edges of a wide screen. */
+.sobar {
+  justify-content: center;
+}
+
+.sobar .bnav__item {
+  max-width: 132px;
+}
+
+/* Its room at the end of the screen it is drawn on: the last field or link scrolls clear of the bar. */
+.sobar__room {
+  flex: none;
+  height: var(--bottomnav-h);
+}
+
+/* The on-screen keyboard is up: the bar steps aside, never over the field being typed in or the keyboard's Go. */
+.sobar--away {
+  display: none;
+}
+
+/* In the page's flow, where the bottom of the screen is already the app's own tab bar (the Send app). */
+.sobar--inline {
+  display: flex;
+  margin-top: 4px;
+  border-top: 1px solid var(--bd-soft);
+}
+
+/* A toast on a screen with the bar rises above it, as it does above the tab bar. A browser without :has() lets the toast
+   cover the bar for its few seconds, nothing worse. */
+.app:has(.sobar:not(.sobar--inline):not(.sobar--away)) .toasts--nonav {
+  bottom: calc(var(--bottomnav-h) + var(--sa-b) + 10px);
+}
+
 /* ----------------------------------------------------------- ReadAloud -- */
 
 .readaloud {

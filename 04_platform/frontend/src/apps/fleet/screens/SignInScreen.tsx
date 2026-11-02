@@ -1,11 +1,11 @@
-import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, Checklist, ErrorNote, ReadAloud, PhoneField } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, PhoneField } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { FleetActions } from '../useFleetApp';
-import { SignInHelp } from '../../../shared/account/TroubleSheet';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
 import { ChoosePinSheet } from '../../../shared/account/ChoosePinSheet';
 import { PIN_LENGTH, isNewDevice } from '../../../shared/account/pin';
@@ -98,8 +98,9 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
     if (mode === 'phone') attempt(() => open(p, n));
     else if (company) attempt(() => void actions.signIn(p, n));
   };
+  // 2026-11-02 — the PIN's own way round, under the PIN wherever the PIN is asked (it stood in the foot with four other links).
   const choosePin = (
-    <Button variant="link" onClick={() => setChoosing(true)}>
+    <Button variant="link" full={false} class="field__aside" onClick={() => setChoosing(true)}>
       {t('account.choosePin.link')}
     </Button>
   );
@@ -176,6 +177,7 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
             autocomplete="current-password"
             enterkeyhint="go"
           />
+          {choosePin}
         </div>
       </UnlockFirst>
     </>
@@ -221,6 +223,8 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
             </Button>
           </div>
         ) : null}
+        {/* The call for somebody with no account yet, with the form it stands beside. */}
+        <SignUpLink role="fleet" />
         <Button
           variant="link"
           onClick={() => {
@@ -237,14 +241,10 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           </Card>
         ) : null}
 
-        {/* The same foot as every sign-in screen: the PIN's own way back, then the rest. */}
-        <div class="scr__foot">
-          {fleets === null ? choosePin : null}
-          <SignInHelp app="fleet" api={recovery} />
-          <SignUpLink role="fleet" />
-          <AllAppsLink />
-          <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />
-        </div>
+        {/* 2026-11-02 — pinned to the bottom until signed in (the owner: "that clutter would be better off in a sticky footer
+            for as long as the page goes. It changes after the sign in"): Back from the list of fleets to the phone and
+            PIN, Help — a lost number or a moved account is a manager's to mend here too — Read aloud, the other apps. */}
+        <SignedOutBar onBack={fleets === null ? undefined : () => setFleets(null)} help={{ app: 'fleet', api: recovery }} aloud={() => t('fleet.signin.aloud')} />
       </form>
       {sheets}
       </>
@@ -296,6 +296,8 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
           </Button>
         </div>
       )}
+      {/* The call for somebody with no account yet, with the form it stands beside. */}
+      <SignUpLink role="fleet" />
       {company ? (
         <Button variant="link" onClick={() => actions.clearCompany()}>
           {t('fleet.signin.otherCompany')}
@@ -316,15 +318,9 @@ export function SignInScreen({ actions, error, busy, company }: SignInScreenProp
         <Checklist items={[t('fleet.signin.can1'), t('fleet.signin.can2'), t('fleet.signin.can3')]} />
       </Card>
 
-      <div class="scr__foot">
-        {/* The PIN is asked once the fleet is named: its way back is offered from then. */}
-        {company ? choosePin : null}
-        {/* A manager signs in with their own phone and PIN, so a lost number or a moved account is theirs to mend here too. */}
-        <SignInHelp app="fleet" api={recovery} />
-        <SignUpLink role="fleet" />
-        <AllAppsLink />
-        <ReadAloud text={() => t('fleet.signin.aloud')} label={t('fleet.readAloud')} />
-      </div>
+      {/* 2026-11-02 — the same bar, pinned: Help, Read aloud, the other apps. The PIN's way round is under the PIN, once
+          the fleet is named and the PIN asked; "Another company" stays with the company it changes. */}
+      <SignedOutBar help={{ app: 'fleet', api: recovery }} aloud={() => t('fleet.signin.aloud')} />
     </form>
     {sheets}
     </>

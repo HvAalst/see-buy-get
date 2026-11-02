@@ -11,6 +11,8 @@ import { recoveryApi } from '../../../shared/account/recovery';
 import { geocode, homeConfig, myAgreement } from '../api';
 import { countryNameIn } from '../../../shared/documents/documents';
 import { pageNameFor } from '../../../shared/handle';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
+import { JoinHelp } from './JoinHelp';
 
 import { readyLine, stepName, driverSendsPapers, ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
@@ -28,6 +30,7 @@ export interface JoinScreenProps {
  */
 export function JoinScreen({ state, actions }: JoinScreenProps) {
   const t = useT();
+  const [helping, setHelping] = useState(false);
   const role = state.role;
   if (!role) return null;
 
@@ -56,14 +59,16 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
       {state.step === 'login' ? <LoginStep state={state} actions={actions} /> : null}
       {state.step === 'done' ? fleet ? <FleetDone state={state} actions={actions} /> : <DoneStep state={state} actions={actions} /> : null}
 
-      {state.step !== 'done' ? (
-        <div class="scr__foot">
-          <Button variant="link" full={false} onClick={actions.back}>
-            {t('home.goBack')}
-          </Button>
-          <ReadAloud text={() => `${joinSpoken(role, state.step, t)} ${blocker ?? ''}`} label={t('home.readAloud')} />
-        </div>
-      ) : null}
+      {/* 2026-11-02 — Back, Help and Read aloud, pinned to the bottom for as long as the sign-up takes (the owner: "that
+          clutter would be better off in a sticky footer for as long as the page goes"). No Back once the account is made:
+          the steps behind it are spent. No All apps: this is where it leads. */}
+      <SignedOutBar
+        onBack={state.step !== 'done' ? actions.back : undefined}
+        help={{ open: () => setHelping(true) }}
+        aloud={() => `${joinSpoken(role, state.step, t)} ${blocker ?? ''}`}
+        allApps={false}
+      />
+      <JoinHelp open={helping} onClose={() => setHelping(false)} roleId={role.id} role={roleMeta(role, t).labelLower} />
     </div>
   );
 }

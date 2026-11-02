@@ -1,6 +1,8 @@
-import { Body, CallHandler, Controller, ExecutionContext, Get, Injectable, NestInterceptor, Param, Post } from '@nestjs/common';
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MaxLength } from 'class-validator';
+import { Body, CallHandler, Controller, ExecutionContext, Get, Injectable, NestInterceptor, Optional, Param, Post } from '@nestjs/common';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, MaxLength } from 'class-validator';
+import { AccountService } from './account.service';
+import { NotificationService } from './notification.service';
 import type { Request } from 'express';
 import { Observable, tap } from 'rxjs';
 import { Actor } from '../../foundation/auth/actor.decorator';
@@ -23,13 +25,34 @@ export class ShopStaffInviteDto {
 }
 
 /**
+ * 2026-11-02 — opening a session at a counter (or on a hub's floor): the keys this browser holds for the shops and hubs
+ * whose own sign-in was used on it. The one that is this place's own phone is noted as a phone colleagues use, and the
+ * place's fingerprint-or-face unlock is never kept there (the owner: "a 1 person shop could use fingerprint to unlock as
+ * you said"). A key alone opens nothing; the others are compared and dropped.
+ */
+export class StaffSessionDto {
+  @ApiPropertyOptional({ type: [String], description: 'The shop and hub phone keys this browser holds.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  devices?: string[];
+}
+
+/**
  * THE PEOPLE AT A SHOP'S COUNTER (shop-staff.types.ts). The owner — the shop's own sign-in — adds and takes out; a person
  * answers their invitation and opens a session from their own phone + PIN sign-in. SeeBuyGet's staff pass every role
  * check and are refused by name: a shop's people are the shop's own.
  */
 @Controller('sbg')
 export class ShopStaffController {
-  constructor(private readonly staff: ShopStaffService) {}
+  constructor(
+    private readonly staff: ShopStaffService,
+    // 2026-11-02 — the place's own phones, and its bell: a colleague's session on one of them takes its fingerprint off.
+    @Optional() private readonly accounts?: AccountService,
+    @Optional() private readonly notifications?: NotificationService,
+  ) {}
 
   @Roles('agent')
   @Get('shop/staff')
@@ -104,15 +127,43 @@ export class ShopStaffController {
   /** A session at this shop's counter, under my name. */
   @Roles('consumer')
   @Post('shops/:shopDid/staff-session')
-  session(@Param('shopDid') shopDid: string, @Actor() actor: IntrospectionResult): ShopStaffSession {
-    return this.staff.session(byPin(actor), shopDid);
+  session(@Param('shopDid') shopDid: string, @Body() dto: StaffSessionDto, @Actor() actor: IntrospectionResult): ShopStaffSession {
+    const session = this.staff.session(byPin(actor), shopDid);
+    this.colleagueOn(shopDid, dto?.devices);
+    return session;
   }
 
   /** A session on this hub's floor, under my name. */
   @Roles('consumer')
   @Post('hubs/:hubDid/staff-session')
-  hubSession(@Param('hubDid') hubDid: string, @Actor() actor: IntrospectionResult): ShopStaffSession {
-    return this.staff.session(byPin(actor), hubDid);
+  hubSession(@Param('hubDid') hubDid: string, @Body() dto: StaffSessionDto, @Actor() actor: IntrospectionResult): ShopStaffSession {
+    const session = this.staff.session(byPin(actor), hubDid);
+    this.colleagueOn(hubDid, dto?.devices);
+    return session;
+  }
+
+  /**
+   * A COLLEAGUE'S SESSION WAS OPENED ON THIS BROWSER (the owner, 2026-11-02: "a 1 person shop could use fingerprint to
+   * unlock as you said"). Asked only once the session was granted. Where the browser is one of the place's own phones, it
+   * is noted as one colleagues use; a fingerprint-or-face unlock on it goes at once, and the place is told in its bell —
+   * never by text: texts carry only codes.
+   */
+  private colleagueOn(placeDid: string, devices: string[] | undefined): void {
+    const seen = this.accounts?.counterSessionOn(placeDid, devices);
+    if (!seen) return;
+    const hub = seen.role === 'mdp';
+    for (const addedAt of seen.dropped) {
+      const day = new Date(addedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+      void this.notifications
+        ?.notify(placeDid, {
+          kind: 'security',
+          title: 'Fingerprint unlock turned off on one of your phones',
+          body: `Fingerprint unlock was turned off on the phone or browser confirmed on ${day} because a colleague signed in ${hub ? 'on the hub’s floor' : 'at the counter'} on it: whoever can unlock that phone could otherwise sign in as the ${hub ? 'hub' : 'shop'}. The password works there as before.`,
+          link: '/',
+          tag: `passkey:${placeDid}:counter:${addedAt}`,
+        })
+        .catch(() => undefined);
+    }
   }
 }
 

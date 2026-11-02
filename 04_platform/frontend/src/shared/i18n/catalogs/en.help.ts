@@ -21,7 +21,7 @@ export const enHelp = {
   // The help centre (/help/ on the front door).
   'help.ui.title': 'Help',
   'help.ui.home': 'SeeBuyGet front page',
-  'help.ui.lede': 'Getting started with SeeBuyGet: which app is yours, signing in, getting back in, and a parcel you are waiting for. The help for working in an app is inside that app, under “Help”.',
+  'help.ui.lede': 'Getting started with SeeBuyGet: which app is yours, signing up, signing in, getting back in, and a parcel you are waiting for. The help for working in an app is inside that app, under “Help”.',
   'help.ui.searchLabel': 'Search the help',
   'help.ui.searchPlaceholder': 'Search the help',
   'help.ui.rolesLabel': 'Help for',
@@ -51,7 +51,7 @@ export const enHelp = {
   'help.ui.stuckBody': 'Write to us. Choose what it is about, and a member of SeeBuyGet staff answers you by email.',
   'help.ui.stuckCta': 'Write to us',
   'help.ui.metaTitle': 'Help — SeeBuyGet',
-  'help.ui.metaDescription': 'Getting started with SeeBuyGet: which app to use, how to sign in or get back in, the papers a shop, hub or business sends, and following or reporting a parcel — and how to write to us.',
+  'help.ui.metaDescription': 'Getting started with SeeBuyGet: which app to use, how to sign up, sign in or get back in, the papers a shop, hub or business sends, and following or reporting a parcel — and how to write to us.',
   'help.ui.articleMetaTitle': '{title} — SeeBuyGet help',
   'help.ui.contactMetaTitle': 'Write to us — SeeBuyGet',
   'help.ui.group.start': 'Getting started',
@@ -112,6 +112,26 @@ export const enHelp = {
   'help.which-sign-in.step4': 'A store: the email and password you created the store with. On a phone or browser new to it, also a code sent to its number, once.',
   'help.which-sign-in.step5': 'Sending or collecting a parcel: your phone number and a PIN you choose.',
   'help.which-sign-in.step6': 'A business — a shipper, importer, expeditor, clearing agent or yard: the Business app, with your own phone number and PIN.',
+  // 2026-11-01/02 — the sign-up's steps, by name, in a bar pinned at the top.
+  'help.which-sign-in.note1': 'Signing up on the front page, a bar pinned at the top says what you are signing up as, which step you are on of how many, and the next step by name. Tap the bar to see every step. The first step says what to have ready. In the bar at the bottom of the screen, “Back” returns to the step before, and “Help” opens the help about joining.',
+  // sign-up (2026-11-02): signing up as a shop, a sort hub, a driver, a fleet or a store, on the front page.
+  'help.sign-up.title': 'Sign up as a shop, a sort hub, a driver, a fleet or a store',
+  'help.sign-up.summary': 'Signing up takes a few minutes on the front page, from your own phone. You choose what you are, confirm your phone number with a code, and answer a few questions. How your app signs in afterwards depends on what you are.',
+  'help.sign-up.step1': 'On the front page, tap “Sign up” and choose what you are: “A shop”, “A sort hub”, “A driver”, “An online store” or “A fleet office”.',
+  'help.sign-up.step2': 'A bar pinned at the top says what you are signing up as, which step you are on of how many, and the next step by name. Tap the bar to see every step. The first step says what to have ready.',
+  'help.sign-up.step3': 'Type the phone number you use every day, and tap “Send me the code”. Type the code that comes to that phone, to show the number is yours.',
+  'help.sign-up.step4': 'Say who you are, or what your place is called, and where it is: a shop or a sort hub drops a pin on the map, a driver chooses the area they start from, and a fleet pins its depot. A store has no map to fill in.',
+  'help.sign-up.step5': 'Say how you will sign in. A shop, a sort hub and a store choose an email address and a password: their app signs in with those, and the phone number confirms each new phone or browser with a code. A driver and a fleet choose a 5-digit PIN, and add a recovery email the first time: their app opens with the phone number and that PIN.',
+  'help.sign-up.step6': 'At “You are signed up”, the screen says what happens next, with a button that opens your app.',
+  'help.sign-up.note1': 'A shop: have your ID number, the shop’s trading licence number and its opening hours, and an email address and password for the shop’s account. Once signed up, send the shop’s papers from the Shop app — your ID, the trading licence and a photo of the shop — before it takes its first parcel.',
+  'help.sign-up.note2': 'A sort hub: have an email address and a password for the hub’s account, and know where the hub is. Once signed up, send its papers from the Hub app — an ID, the trading licence and a photo of the hub — before it takes its first bag.',
+  'help.sign-up.note3': 'A driver: have your ID number. On a motorcycle or anything larger, also your driving licence — its number, its expiry date and a photo of it — and a photo of your ID card: staff check them before your first load, and the photos are deleted once they have decided. A bicycle rider sends no papers.',
+  'help.sign-up.note4': 'A fleet office: sign up with the phone of the person who runs the fleet. Have the company’s registration, operator’s licence and tax numbers, and a photo of four papers: the certificate of registration, the operator’s licence, the owner’s ID and a proof of address. The fleet opens once SeeBuyGet has checked its papers and recorded its bond.',
+  'help.sign-up.note5': 'An online store: have an email address and a password for the store’s account, and the store’s phone number. Once it is signed up, the store’s ID and its signing secret are shown once: the secret is for your shop system, and signs nobody in.',
+  'help.sign-up.note6': 'Choose the country you are really in: its SeeBuyGet company is the one that pays you. Where SeeBuyGet is not open yet, the sign-up says so, and you can leave a message instead.',
+  'help.sign-up.note7': 'In the bar at the bottom of the screen, “Back” returns to the step before, “Help” opens the help about joining, and Read aloud reads the step out where the phone can speak.',
+  'help.sign-up.note8': 'Why a code to your phone first: it shows the number is yours before anything is made with it. A shop, a sort hub and a store are later confirmed on each new phone or browser by a code to the same number.',
+  'help.sign-up.note9': 'Sending or collecting a parcel needs no sign-up here: the Send app asks for your phone number and a PIN. A business — a shipper, importer, expeditor, clearing agent or yard — sets itself up in the Business app.',
   // shop-sign-in
   'help.shop-sign-in.title': 'Sign in to the Shop or Hub app',
   'help.shop-sign-in.summary': 'Sign in with the email and password you chose when you signed up.',
@@ -122,6 +142,8 @@ export const enHelp = {
   'help.shop-sign-in.step5': 'The sign-in works only on the shop’s or the hub’s own phones and browsers. On a new one, a code goes to its number: type it there once, and that phone or browser is the shop’s or the hub’s from then on. A password that is passed round opens nothing anywhere else.',
   'help.shop-sign-in.step6': 'A hub made before hubs were tied to their phones is asked for its number at its next sign-in. The code goes to that number first, and the number is kept only once the code has been typed.',
   'help.shop-sign-in.step7': 'To see the phones and browsers it works on, or to forget all the others: the round button at the top, then “Settings › Phones and browsers”. Forgetting them asks for the password.',
+  // 2026-11-02 — unlock with fingerprint or face, in the password's place.
+  'help.shop-sign-in.note1': 'Turned on “Unlock with fingerprint or face” on this phone? The sign-in screen offers it first, and “Use my password instead” is one tap away. Changing the password turns it off on every phone.',
   // shop-papers
   'help.shop-papers.title': 'Send your shop’s papers for approval',
   'help.shop-papers.summary': 'A new shop cannot take parcels until SeeBuyGet has seen three things: your ID, your trading licence and a photo of your shop. You send them from the Shop app, and it tells you where you stand.',
@@ -132,6 +154,8 @@ export const enHelp = {
   'help.shop-papers.step5': 'When your shop is approved the screen says so. Pay in to your float, and you can take your first parcel.',
   'help.shop-papers.note1': 'Only SeeBuyGet staff see these photographs.',
   'help.shop-papers.note2': 'A photograph must be one you take or pick in the app at that moment. Papers cannot be sent for you by anybody else.',
+  // 2026-11-01 — a person's ID photo is deleted the moment staff decide.
+  'help.shop-papers.note3': 'The photo of your ID is deleted the moment SeeBuyGet staff approve or refuse your shop. The trading licence and the photo of your shop are kept: they are the shop’s record.',
   // hub-papers
   'help.hub-papers.title': 'Send your hub’s papers for approval',
   'help.hub-papers.summary': 'A hub that signs itself up takes no bags in and sorts nothing, and nothing is routed to it, until SeeBuyGet has seen three things: the ID of the person who answers for the hub, its trading licence and a photo of the premises. You send them from the Hub app, and it tells you where you stand.',
@@ -142,6 +166,7 @@ export const enHelp = {
   'help.hub-papers.step5': 'When the hub is approved you are told, and the floor opens: drop a bag, sort, bags out.',
   'help.hub-papers.note1': 'Only SeeBuyGet staff see these photographs.',
   'help.hub-papers.note2': 'The owner sends them, signed in as the hub. The people who work its floor cannot send them, and nobody can send them for you.',
+  'help.hub-papers.note3': 'The photo of the ID is deleted the moment SeeBuyGet staff approve or refuse the hub. The trading licence and the photo of the premises are kept: they are the hub’s record.',
   // fleet-sign-in
   'help.fleet-sign-in.title': 'Sign in to the Fleet app',
   'help.fleet-sign-in.summary': 'Your own phone number and PIN open the Fleet app. If you manage more than one fleet, you choose which to open.',
@@ -152,6 +177,7 @@ export const enHelp = {
   'help.fleet-sign-in.step5': 'Have your company’s sign-in code (it looks like FM-1A2B3C)? Tap “Have a fleet code? Use it” and type it: the app shows the company name, then asks for your phone and PIN.',
   'help.fleet-sign-in.note1': 'Five wrong PINs lock the PIN until you verify your phone by code and choose a new one. Anybody who manages the fleet can see the code in the app.',
   'help.fleet-sign-in.note2': 'Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else.',
+  'help.fleet-sign-in.note3': 'Turned on “Unlock with fingerprint or face” on this phone? The sign-in screen offers it first, and “Use my PIN instead” is one tap away. Changing your PIN turns it off on every phone.',
   // driver-sign-in
   'help.driver-sign-in.title': 'Sign in to the Driver app',
   'help.driver-sign-in.summary': 'Use the phone number you signed up with, or the one your fleet registered for you, and your 5-digit PIN. Your driver ID alone does not sign you in.',
@@ -165,24 +191,25 @@ export const enHelp = {
   'help.driver-sign-in.note4': 'Your PIN opens your account only on a phone or browser that has shown it holds your number. Nobody can try your PIN from anywhere else.',
   'help.driver-sign-in.note5': 'Replacing a forgotten PIN on a phone or browser you have not signed in on before asks for two codes: the one to your number, and one to the recovery email on your account. Type that email address and we send it a code. On a phone you have signed in on before, the code to your number is enough.',
   'help.driver-sign-in.note6': 'If the app says it could not send the code, nothing is wrong with your number and nothing was counted against you. Wait a little and ask for the code again.',
+  'help.driver-sign-in.note7': 'Turned on “Unlock with fingerprint or face” on this phone? The sign-in screen offers it first, and “Use my PIN instead” is one tap away. Changing your PIN turns it off on every phone.',
   // account-recovery
   'help.account-recovery.title': 'Get back in, or change your phone number',
-  'help.account-recovery.summary': 'Your account is your phone number. Settings is where you keep your recovery email and move the account to a new number. “Trouble signing in?” is the way back when the number is gone.',
+  'help.account-recovery.summary': 'Your account is your phone number. Settings is where you keep your recovery email and move the account to a new number. “Help”, at the bottom of the sign-in screen, opens “Trouble signing in?”: the way back when the number is gone.',
   'help.account-recovery.step1': 'Open Settings. Driver and Fleet app: tap your picture, then Settings. Send app: “Account › Settings”.',
   'help.account-recovery.step2': 'Recovery email: type the address and tap “Send a code to this address”. Type the code from the email, then your PIN.',
   'help.account-recovery.step3': 'New phone number, and you know your PIN: “Settings › Phone number”. Type the new number, type the code we text to it, then your PIN. You are signed out everywhere; sign in with the new number and the same PIN.',
-  'help.account-recovery.step4': 'Lost your number and forgot your PIN: on the sign-in screen tap “Trouble signing in? › I no longer have my number”. A code goes to your recovery email. Type your new number and choose a new PIN.',
-  'help.account-recovery.step5': 'Somebody changed your number and it was not you: within 24 hours tap “Trouble signing in? › Undo a number change”. Use the old number with the PIN as it was, or a code to your email.',
+  'help.account-recovery.step4': 'Lost your number and forgot your PIN: on the sign-in screen tap “Help › I no longer have my number”. A code goes to your recovery email. Type your new number and choose a new PIN.',
+  'help.account-recovery.step5': 'Somebody changed your number and it was not you: within 24 hours, on the sign-in screen, tap “Help › Undo a number change”. Use the old number with the PIN as it was, or a code to your email.',
   'help.account-recovery.note1': 'Lost only the handset? Nothing is lost. Put your number in the new phone and sign in with the same number and PIN: the new phone asks for a code to your number once, and then your PIN works on it.',
   'help.account-recovery.note2': 'A first PIN cannot be chosen without a recovery email. We write to it when your PIN is locked and when your phone number changes.',
   'help.account-recovery.note3': 'Drivers and shops are also asked for the national ID number they registered with when they get back in by email.',
   'help.account-recovery.note4': 'After a number change the old number is kept for you for 24 hours. After that it is free for a new person.',
   'help.account-recovery.note5': 'Undoing a number change locks the PIN. Use the forgot-PIN link on the sign-in screen to choose a new one.',
   'help.account-recovery.note6': 'If email to your recovery address comes back undelivered, Settings says so under Recovery email, and we stop writing to that address. To keep the same address, open Recovery email, enter it, send the code and type in the code you receive: that proves it works again. Or enter another address.',
-  'help.account-recovery.note7': 'No number, no PIN and no recovery email you can read? Two members of SeeBuyGet staff can move your account. On the sign-in screen choose “Trouble signing in › Ask SeeBuyGet staff to move my account”. Enter the number your account is on, confirm your new number with the code sent to it, and write down the reference you are given. Then speak to staff and give them the reference: they check who you are.',
-  'help.account-recovery.note8': 'To see what became of it, choose “Trouble signing in › I already asked staff”, and enter your reference. When it says your account was moved, sign in with the new number: choose “Forgot your PIN?”, enter the code, and choose a new PIN. A request waits two weeks, then lapses.',
+  'help.account-recovery.note7': 'No number, no PIN and no recovery email you can read? Two members of SeeBuyGet staff can move your account. On the sign-in screen choose “Help › Ask SeeBuyGet staff to move my account”. Enter the number your account is on, confirm your new number with the code sent to it, and write down the reference you are given. Then speak to staff and give them the reference: they check who you are.',
+  'help.account-recovery.note8': 'To see what became of it, choose “Help › I already asked staff” on the sign-in screen, and enter your reference. When it says your account was moved, sign in with the new number: choose “Forgot your PIN?”, enter the code, and choose a new PIN. A request waits two weeks, then lapses.',
   'help.account-recovery.note9': 'If somebody asks staff to move YOUR account, you are told at once, in the app and by email, and Settings shows it with a button: It was not me: stop it. Signing in with your PIN stops it too. Then change your PIN. If an account is moved all the same, it can be undone for 24 hours with the old number and the PIN as it was.',
-  'help.account-recovery.note10': 'Could not register as a driver or a shop because your national ID is already registered? Check the number first: one wrong digit is the usual reason. If it is right, somebody else is using your number. On any sign-in screen choose “Trouble signing in › Somebody else registered with my national ID”. Confirm your phone number, and you are given a reference.',
+  'help.account-recovery.note10': 'Could not register as a driver or a shop because your national ID is already registered? Check the number first: one wrong digit is the usual reason. If it is right, somebody else is using your number. On any sign-in screen choose “Help › Somebody else registered with my national ID” — in the Business app, “Trouble signing in?” instead of Help. Confirm your phone number, and you are given a reference.',
   'help.account-recovery.note11': 'Write the reference on paper. Take three photographs: yourself holding your ID card under your chin with the paper beside it, then the front of the card close up, then the back. Somebody else may take them for you. Look at each one before you send it: if you cannot read the number, staff cannot either. Only the two members of staff who decide see them, and they are deleted 30 days after the decision.',
   'help.account-recovery.note12': 'If somebody says the ID on YOUR registration is theirs, you are told in the app and by email, and Settings shows it. You have a week. Either send the same three photographs with your own reference, or, if the number on your record was simply mistyped, put the right one there: that ends it at once and nothing else changes for you.',
   'help.account-recovery.note13': 'Two members of staff decide from the photographs. If the ID goes to the other person, your account is not removed: your driver or shop registration is held. You finish what you have in hand and start nothing new until you put the number of your own ID card on record, in Settings. If you do not accept the decision, you have two weeks to choose a day to come in, from the days the office for your country receives visitors. Where the office gives each visitor an hour, you choose the hour too; an hour that is full is not offered. You are given a ticket that says where, when and what to bring.',
@@ -209,6 +236,7 @@ export const enHelp = {
   'help.store-sign-in.step8': 'A password is 8 characters or more, and cannot be one that is easy to guess: a common word with a number on the end, your own name or email address, only digits, or a run like 12345678.',
   'help.store-sign-in.step9': 'A store created before stores had an email and password: choose “My store has no email and password yet”, and sign in with the store ID and signing secret one last time. The app then asks you to set them up, on every screen until you have.',
   'help.store-sign-in.step10': 'Once your store has an email and password, the signing secret no longer signs anybody in. It is only for your shop system.',
+  'help.store-sign-in.note1': 'Turned on “Unlock with fingerprint or face” on this phone? The sign-in screen offers it first, and “Use my password instead” is one tap away. Changing the password turns it off on every phone.',
   // send-sign-in
   'help.send-sign-in.title': 'Sign in to the Send app',
   'help.send-sign-in.summary': 'You do not need to sign in to get a price or track a parcel. To send, sign in with your phone and a PIN you choose.',
@@ -217,6 +245,7 @@ export const enHelp = {
   'help.send-sign-in.step3': 'A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.',
   'help.send-sign-in.step4': 'Forgot your PIN? Sign in with a code again, and choose a new PIN. On a phone or browser that is new to your account we also ask for your recovery email, and send it a code.',
   'help.send-sign-in.step5': 'If the app says it could not send the code, nothing is wrong with your number and nothing was counted against you. Wait a little and ask for the code again.',
+  'help.send-sign-in.note1': 'Turned on “Unlock with fingerprint or face” on this phone? The sign-in screen offers it first, and “Use my PIN instead” is one tap away. Changing your PIN turns it off on every phone.',
   // follow-shop-order
   'help.follow-shop-order.title': 'Follow a parcel you bought from a shop',
   'help.follow-shop-order.summary': 'We do not text you about a parcel. Sign up with the phone number you gave the shop, and the parcel shows in your account.',
@@ -234,6 +263,9 @@ export const enHelp = {
   'help.business-sign-in.step3': 'A phone or browser you have not signed in on before, or have not used for 90 days, asks for a code first: we send it to your number, you type it once, and from then on your PIN works there. Your PIN is not changed by it.',
   'help.business-sign-in.step4': 'The first time, set up your business: its registered name, country, registration number and what it does. You become its owner.',
   'help.business-sign-in.step5': 'In more than one business? Pick one. Switch business, in the menu under your name, takes you back to the list.',
+  // 2026-11-01 — the steps of setting up a sign-in, by name; 2026-11-02 — unlock with fingerprint or face.
+  'help.business-sign-in.note1': 'New here? Have this phone with you, and an email address you can open now: the first time, a code is sent to it too. The steps are listed by name as you go — your phone number, the code, your PIN, and your email address.',
+  'help.business-sign-in.note2': 'Turned on “Unlock with fingerprint or face” on this phone? The sign-in screen offers it first, and “Use my PIN instead” is one tap away. Changing your PIN turns it off on every phone.',
   // business-check
   'help.business-check.title': 'How SeeBuyGet checks a business',
   'help.business-check.summary': 'A business works from the moment it is set up. It is shown to others — a public page, a place in the agent finder — once two members of SeeBuyGet staff have checked it.',
@@ -251,6 +283,8 @@ export const enHelp = {
   'help.electronic-note.note1': 'Which law: the note says which law the carriage is under, from where the goods are taken over and where they are delivered — the CMR when either country is a party to it, the Northern Corridor’s road protocol between its member states, and otherwise its contract and the national law that governs it.',
   'help.electronic-note.note2': 'An electronic note stands as the CMR note only between countries that are parties to the e-CMR Protocol of 2008 — today mostly in Europe, none in Africa. Elsewhere it is the record the parties agreed, and a printed note signed by hand is made from it where one is asked for.',
   'help.business-check.note1': 'Changing the business’s name or registration number puts it back to not checked: those are what was checked.',
+  // 2026-11-01 — a person's ID is deleted the moment staff verify or refuse it; the company's papers are kept.
+  'help.business-check.note2': 'The ID of the person speaking for the business is deleted the moment staff verify or refuse it. The registration certificate is kept: it is the business’s record.',
   // parcel-problem
   'help.parcel-problem.title': 'Report a problem with a parcel',
   'help.parcel-problem.summary': 'Broken, opened or wrong goods are reported with a photograph: by the receiver from the Send app, or by the shop at its counter. SeeBuyGet does not judge a claim or pay one. It makes a damage claim report on the spot — the record of who held the parcel and when, with the photographs — for the claimant to hand to an insurer.',

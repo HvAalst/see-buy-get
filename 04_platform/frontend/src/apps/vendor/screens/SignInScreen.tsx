@@ -1,8 +1,8 @@
-import { SignInHelp } from '../../../shared/account/TroubleSheet';
-import { AllAppsLink, SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignUpLink } from '../../../shared/ui/AllAppsLink';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Button, Card, ErrorNote, ReadAloud, Sheet } from '../../../shared/ui';
+import { Button, Card, ErrorNote, Sheet } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { VendorState, VendorActions } from '../useVendorApp';
@@ -89,6 +89,10 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
                 {t('vendor.signin.password')}
               </label>
               <input id="vpass" class="input" type="password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} autocomplete="current-password" enterkeyhint="go" />
+              {/* 2026-11-02 — the password's own way round, under the password (it stood in the foot with four other links). */}
+              <Button variant="link" full={false} class="field__aside" onClick={() => setForgetting(true)}>
+                {t('vendor.signin.forgot')}
+              </Button>
             </div>
           </UnlockFirst>
         </Card>
@@ -101,24 +105,17 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
           </Button>
         </div>
       )}
+      {/* One form makes a store: the front page's, like every other sign-up (the user, 2026-10-23) — the call for somebody
+          with no account yet, with the form it stands beside. */}
+      <SignUpLink role="vendor" />
       {/* The other door, with the form it stands in for: a store registered before stores had an email and password. */}
       <Button variant="link" onClick={() => setBySecret(!bySecret)}>
         {t(bySecret ? 'vendor.signin.byEmail' : 'vendor.signin.bySecret')}
       </Button>
 
-      {/* The same foot as every sign-in screen. */}
-      <div class="scr__foot">
-        {bySecret ? null : (
-          <Button variant="link" full={false} onClick={() => setForgetting(true)}>
-            {t('vendor.signin.forgot')}
-          </Button>
-        )}
-        <SignInHelp app="vendor" />
-        {/* One form makes a store: the front page's, like every other sign-up (the user, 2026-10-23). */}
-        <SignUpLink role="vendor" />
-        <AllAppsLink />
-        <ReadAloud text={() => t('vendor.signin.spoken')} label={t('vendor.readAloud')} />
-      </div>
+      {/* 2026-11-02 — Help ("Trouble signing in?"), Read aloud and All apps, pinned to the bottom until signed in (the owner:
+          "that clutter would be better off in a sticky footer for as long as the page goes. It changes after the sign in"). */}
+      <SignedOutBar help={{ app: 'vendor' }} aloud={() => t('vendor.signin.spoken')} />
 
       <ForgotSheet open={forgetting} onClose={() => setForgetting(false)} actions={actions} email={email} />
     </form>

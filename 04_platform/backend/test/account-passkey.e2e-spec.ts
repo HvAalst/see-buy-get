@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { AGREED } from './agreed';
 import { SoftAuthenticator } from './soft-authenticator';
+import { OutboxSmsSender } from '../src/foundation/sms/outbox-sms.sender';
 
 /**
  * UNLOCK WITH FINGERPRINT OR FACE IN PLACE OF A SHOP'S, A HUB'S OR A STORE'S OWN PASSWORD — over the wire (the owner,
@@ -220,5 +221,84 @@ describe('unlock with fingerprint or face, for a shop, a hub and a store, over t
     expect((await http().post('/v1/sbg/account/shop-passkey').set(bearer(session.token.access_token)).send({ device: shop.device })).status).toBe(403);
     expect((await http().post('/v1/sbg/account/shop-passkey/off').set(bearer(session.token.access_token)).send({ device: shop.device })).status).toBe(403);
     expect((await http().post('/v1/sbg/account/shop-passkey').set(bearer(operator)).send({ device: shop.device })).status).toBe(403);
+  });
+
+  /**
+   * THE OWNER, 2026-11-02: "a 1 person shop could use fingerprint to unlock as you said". A phone nobody else signs in on
+   * keeps it; a phone a colleague opened a counter session on refuses it — and if it was already on there, it goes at
+   * once, and the shop is told in its bell (never by text).
+   */
+  describe('a phone colleagues sign in on', () => {
+    /** Somebody added to the place, who has said yes, signed in by PIN — a counter's colleague. */
+    const aColleague = async (owner: string, invite: '/v1/sbg/shop/staff' | '/v1/sbg/hub/staff') => {
+      const phone = await verified(`+2547${digits()}2`);
+      const email = `kaunta${digits()}@example.com`;
+      const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
+      const me = (await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201)).body as { token: { access_token: string } };
+      const added = (await http().post(invite).set(bearer(owner)).send({ phone, name: 'Wanjiru' }).expect(201)).body;
+      await http().post(`/v1/sbg/shop-invitations/${added.memberId}/accept`).set(bearer(me.token.access_token)).expect(201);
+      return me.token.access_token;
+    };
+    const bell = async (token: string) => (await http().get('/v1/sbg/notifications/inbox').set(bearer(token)).expect(200)).body.items as Array<{ title: string; body: string; kind: string }>;
+
+    it('a one-person shop keeps it; a colleague’s session on its phone takes it off at once, and the shop’s bell says so', async () => {
+      const shop = await aShop();
+      // A one-person shop: on, and it stays on — a colleague's session on some other browser changes nothing here.
+      const phoneApp = await turnOn(shop.token, shop.device, shop.password);
+      const colleague = await aColleague(shop.token, '/v1/sbg/shop/staff');
+      await http().post(`/v1/sbg/shops/${shop.did}/staff-session`).set(bearer(colleague)).send({ devices: ['dvc_their-own-phone'] }).expect(201);
+      expect((await http().post('/v1/sbg/account/shop-passkey').set(bearer(shop.token)).send({ device: shop.device }).expect(201)).body).toMatchObject({ on: true });
+      expect((await bell(shop.token)).filter((n) => /Fingerprint/.test(n.title))).toEqual([]);
+      const held = await ticket(shop.email, shop.device, phoneApp);
+
+      // The colleague opens their session on THIS phone, the shop's own: the fingerprint goes from it at once.
+      await http().post(`/v1/sbg/shops/${shop.did}/staff-session`).set(bearer(colleague)).send({ devices: ['dvc_another-shop', shop.device] }).expect(201);
+      const here = (await http().post('/v1/sbg/account/shop-passkey').set(bearer(shop.token)).send({ device: shop.device }).expect(201)).body;
+      expect(here).toMatchObject({ on: false, which: 0, counter: expect.any(String) });
+      expect((await options(shop.email, shop.device)).allowCredentials).toEqual([]);
+      expect(await said(unlock(shop.email, shop.device, phoneApp))).toBe('403 UNLOCK_OFF');
+      expect(await said(login({ email: shop.email, unlock: held, device: shop.device }))).toBe('401 UNLOCK_FAILED');
+      // Told in its bell — the shop's own, a matter of its safety — and never by text.
+      const told = (await bell(shop.token)).filter((n) => /Fingerprint/.test(n.title));
+      expect(told).toHaveLength(1);
+      expect(told[0]).toMatchObject({ kind: 'security', title: 'Fingerprint unlock turned off on one of your phones' });
+      expect(told[0].body).toMatch(/^Fingerprint unlock was turned off on the phone or browser confirmed on .+ because a colleague signed in at the counter on it/);
+      expect(app.get(OutboxSmsSender).recent(shop.phone).some((m) => /fingerprint/i.test(m.body))).toBe(false);
+      // The password works there as before.
+      await login({ email: shop.email, password: shop.password, device: shop.device }).expect(201);
+    });
+
+    it('turning it on is refused on a phone colleagues sign in on, with why — and allowed on the shop’s phone nobody else uses', async () => {
+      const shop = await aShop();
+      const colleague = await aColleague(shop.token, '/v1/sbg/shop/staff');
+      await http().post(`/v1/sbg/shops/${shop.did}/staff-session`).set(bearer(colleague)).send({ devices: [shop.device] }).expect(201);
+      const refused = await http().post('/v1/sbg/account/shop-passkey/options').set(bearer(shop.token)).send({ device: shop.device, password: shop.password });
+      expect(refused.status).toBe(403);
+      expect(refused.body).toMatchObject({ code: 'FORBIDDEN', params: { why: 'counter' } });
+      expect(refused.body.detail).toMatch(/A colleague has opened their own session at the counter on this phone/);
+      // Refused before the password was looked at: a wrong one there counts for nothing.
+      for (let i = 0; i < 5; i++) await http().post('/v1/sbg/account/shop-passkey/options').set(bearer(shop.token)).send({ device: shop.device, password: 'not-the-password' }).expect(403);
+      await login({ email: shop.email, password: shop.password, device: shop.device }).expect(201);
+
+      // The shop's other phone — confirmed by the code to its number, and used by nobody else — takes it.
+      const elsewhere = (await login({ email: shop.email, password: shop.password }).expect(403)).body.params as { challenge: string; code: string };
+      const own = (await http().post('/v1/sbg/auth/device').send(elsewhere).expect(201)).body as { device: string; token: { access_token: string } };
+      const ownApp = await turnOn(own.token.access_token, own.device, shop.password);
+      await login({ email: shop.email, unlock: await ticket(shop.email, own.device, ownApp), device: own.device }).expect(201);
+    });
+
+    it('a hub: the same rule, said for its floor', async () => {
+      const u = digits();
+      const hubPhone = await verified(`+2547${u}4`);
+      const hub = { email: `sort.${u}@hub.example`, password: 'kituo-cha-kupanga-9' };
+      const made = (await http().post('/v1/sbg/auth/signup').send({ ...AGREED, role: 'mdp', email: hub.email, password: hub.password, phone: hubPhone, profile: { mdp: { name: `Kati Sort ${u}`, zones: [`HZ${u}`], country: 'KE', location: { lat: -1.25, lng: 36.85 } } } }).expect(201)).body;
+      await turnOn(made.token.access_token, made.device, hub.password);
+      const colleague = await aColleague(made.token.access_token, '/v1/sbg/hub/staff');
+      await http().post(`/v1/sbg/hubs/${made.did}/staff-session`).set(bearer(colleague)).send({ devices: [made.device] }).expect(201);
+      expect((await http().post('/v1/sbg/account/shop-passkey').set(bearer(made.token.access_token)).send({ device: made.device }).expect(201)).body).toMatchObject({ on: false, counter: expect.any(String) });
+      const told = (await bell(made.token.access_token)).filter((n) => /Fingerprint/.test(n.title));
+      expect(told).toHaveLength(1);
+      expect(told[0].body).toMatch(/because a colleague signed in on the hub’s floor on it: whoever can unlock that phone could otherwise sign in as the hub/);
+    });
   });
 });

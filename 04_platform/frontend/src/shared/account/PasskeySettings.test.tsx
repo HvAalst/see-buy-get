@@ -64,6 +64,18 @@ describe('behind the row', () => {
     expect(on).toContain('The store signs in here with your fingerprint or face');
   });
 
+  it('a shop’s phone colleagues sign in on: off, and said why — in the row and behind it, with nothing to type', () => {
+    const shop = { ...api, secret: 'password' as const, party: 'shop' as const };
+    const here = { on: false, which: 0, counter: '2026-11-02T09:00:00Z' };
+    expect(passkeyRowSub(state({ here }), say, shop)).toBe('Off: colleagues sign in on this phone.');
+    const html = renderToString(<PasskeyForm api={shop} state={state({ here })} />);
+    expect(html).toContain('Not on a phone colleagues sign in on');
+    expect(html).toContain('could then sign in as the shop');
+    expect(html).toContain('It works on a phone that only you sign in on');
+    expect(html).not.toContain('acct-passkey-password');
+    expect(html).not.toContain('Turn it on');
+  });
+
   it('…then the phone’s own prompt, on a tap', () => {
     const html = renderToString(<PasskeyForm api={api} state={state({ here: { on: false, which: 0 } })} initialStep="now" />);
     expect(html).toContain('Now your fingerprint or face');

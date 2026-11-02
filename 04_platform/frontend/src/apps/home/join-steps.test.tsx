@@ -34,7 +34,8 @@ describe('a sign-up says every step by name', () => {
     const html = render('mdp', 'about');
     expect(html).toContain('Signing up as a sort hub');
     expect(html).toContain('step 3 of 5');
-    expect((html.match(/<li class="steps__item/g) ?? []).length).toBe(5);
+    // Whatever order its attributes are in: preact/compat (the sheets' portal, 2026-11-02) puts `class` last.
+    expect((html.match(/<li [^>]*class="steps__item/g) ?? []).length).toBe(5);
     expect(item(html, 'done', 'Your phone number')).toContain('Your phone number: done');
     expect(item(html, 'now', 'About your hub')).toContain('aria-current="step"');
     expect(item(html, 'next', 'Your email and password')).not.toBe('');
@@ -83,7 +84,7 @@ describe('the steps stay in sight while the form scrolls (the owner, 2026-11-02)
     expect(html).toContain('<span class="steps__now">The code we text you</span>');
     expect(html).toContain('Next: About your shop');
     expect((html.match(/class="steps__seg /g) ?? []).length).toBe(5);
-    expect(html).toMatch(/<ol class="steps__list" id="steps-all" hidden/);
+    expect(html).toMatch(/<ol (?=[^>]*class="steps__list")(?=[^>]*id="steps-all")(?=[^>]*\bhidden\b)[^>]*>/);
     expect(html).toContain('aria-expanded="false"');
   });
 

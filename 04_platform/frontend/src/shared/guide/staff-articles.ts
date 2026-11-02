@@ -28,6 +28,28 @@ export const STAFF_ARTICLES: GuideArticle[] = [
       "A screen that is not for your roles is not in your menu, and the server refuses what it would read. The first account the setup key makes holds every role, because that person sets the network up."
     ]
   },
+  // 2026-11-01 — staff separated by country (the owner: "everything needs to be separated by country").
+  {
+    id: "staff-countries",
+    apps: [
+      "console"
+    ],
+    title: "Staff countries: which country’s records each member of staff sees",
+    summary: "Every member of staff works in named countries, or in every country. They see the records and lists of their own countries and nothing of any other: a record of another country answers as one that does not exist.",
+    steps: [
+      "To see who works where: At a glance, then Network staff. The Countries column lists each person’s countries, or Every country.",
+      "A new colleague is asked for in named countries, under The countries they work in. Only countries you work in yourself are offered, and Every country only to somebody who works in every country. A second member of staff approves the account with its countries.",
+      "To change somebody’s countries: press Change countries beside them, add or take away countries, and press Ask for this change. Nothing changes until a second member of staff approves it; the person is then signed out, and signs in again to work in the new countries.",
+      "Working in more than one country? Country, beside your name, narrows your lists to one of them. A record of another of your countries still opens. The choice is kept on this computer until you sign out."
+    ],
+    notes: [
+      "A change that only takes countries away from somebody they may approve themselves: fewer countries is never a way in. A change that adds a country is always somebody else’s to approve.",
+      "A load across a border belongs to both its countries, and staff of either see it.",
+      "Figures across every country, settings that bind every country, and screens not yet split by country open only for somebody who works in every country.",
+      "What staff opened is noted with the country of what was opened.",
+      "An account from before countries works in every country, as one from before roles holds all four. The first account the setup key makes works in every country."
+    ]
+  },
   {
     id: "console-staff",
     apps: [
@@ -247,7 +269,7 @@ export const STAFF_ARTICLES: GuideArticle[] = [
       "console"
     ],
     title: "Decisions that need two people",
-    summary: "Switching a country on and verifying a company’s documents each need a second, different person.",
+    summary: "Switching a country on, verifying a company’s documents, and a new staff account or a change of a colleague’s roles or countries each need a second, different person.",
     notes: [
       "The console compares the names your sign-ins carry, so both people must sign in as themselves."
     ]

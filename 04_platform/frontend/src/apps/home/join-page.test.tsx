@@ -43,7 +43,8 @@ describe('signing up: the page the name will give', () => {
     expect(html).toContain('id="driver-licence');
     expect(html).toContain('Sign up and send them');
     // Six steps before the end, each by name: the papers step counts, and is the one now.
-    expect((html.match(/<li class="steps__item/g) ?? []).length).toBe(6);
+    // Whatever order its attributes are in: preact/compat (the sheets' portal, 2026-11-02) puts `class` last.
+    expect((html.match(/<li [^>]*class="steps__item/g) ?? []).length).toBe(6);
     expect(item(html, 'now', 'Your ID and licence')).toContain('aria-current="step"');
   });
 

@@ -7,8 +7,7 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import type { SbgConfig, SbgError } from '../../../lib/sbg';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { NewDeviceSheet } from '../../../shared/account/NewDeviceSheet';
-import { SignInHelp } from '../../../shared/account/TroubleSheet';
-import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
+import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { PIN_LENGTH, isNewDevice, pinGuessable, pinReady } from '../../../shared/account/pin';
 import { PinGuessHint } from '../../../shared/account/PinGuessHint';
 import { asksForEmail, isPinReset, recoveryApi } from '../../../shared/account/recovery';
@@ -239,12 +238,12 @@ export function StaffSignIn({
     );
   }
 
+  const title = t(step === 'email' && emailReset ? 'account.safety.resetTitle' : TITLE[step]);
+  const lede = step === 'code' ? t('agent.staff.codeLede', { phone: phone.trim() }) : step === 'email' && emailReset ? t('account.safety.resetLede') : t(`agent.staff.${step}Lede` as MessageKey);
   return (
     <form class="scr" onSubmit={submit}>
-      <h1 class="scr__title">{t(step === 'email' && emailReset ? 'account.safety.resetTitle' : TITLE[step])}</h1>
-      <p class="scr__lede">
-        {step === 'code' ? t('agent.staff.codeLede', { phone: phone.trim() }) : step === 'email' && emailReset ? t('account.safety.resetLede') : t(`agent.staff.${step}Lede` as MessageKey)}
-      </p>
+      <h1 class="scr__title">{title}</h1>
+      <p class="scr__lede">{lede}</p>
       <NeedsSignalNote title={t('common.needsSignal.signInTitle')} detail={t('common.needsSignal.signInDetail')} />
       {error && !confirming ? <ErrorNote error={error} /> : null}
 
@@ -262,6 +261,12 @@ export function StaffSignIn({
             <span class="field__label">{t(step === 'pin' ? 'agent.staff.newPin' : 'agent.staff.pin')}</span>
             <CodeBoxes id="staff-pin" label={t('agent.staff.pin')} length={PIN_LENGTH} value={pin} onInput={setPin} disabled={busy} mask={step === 'login'} />
             {step === 'pin' ? <PinGuessHint pin={pin} /> : null}
+            {/* 2026-11-02 — the PIN's own way round, under the PIN (it stood in the foot with the other links). */}
+            {step === 'login' ? (
+              <Button variant="link" full={false} class="field__aside" onClick={() => go('phone')}>
+                {t('agent.staff.firstTime')}
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {step === 'pin' ? <AgreementBlock agreed={agreement} onChange={setAgreement} countries={[countryOfNumber(phone)]} /> : null}
@@ -270,6 +275,9 @@ export function StaffSignIn({
             <span class="field__label">{t('agent.staff.code')}</span>
             <CodeBoxes id="staff-phone-code" label={t('agent.staff.code')} length={6} value={code} onInput={setCode} disabled={busy} />
             {testCode ? <p class="hint">{t('account.safety.testCode', { code: testCode })}</p> : null}
+            <Button variant="link" full={false} class="field__aside" onClick={() => void sendCode()}>
+              {t('agent.staff.newCode')}
+            </Button>
           </div>
         ) : null}
         {step === 'email' ? <EmailStep id="staff" email={email} code={emailCode} onEmail={setEmail} onCode={setEmailCode} send={recovery.emailCode} disabled={busy} /> : null}
@@ -285,24 +293,14 @@ export function StaffSignIn({
         {t('agent.staff.ownerInstead')}
       </Button>
 
-      {/* The same foot as every sign-in screen: the PIN's own way back, "Trouble signing in?", the other apps. */}
-      <div class="scr__foot">
-        {step === 'login' ? (
-          <Button variant="link" full={false} onClick={() => go('phone')}>
-            {t('agent.staff.firstTime')}
-          </Button>
-        ) : step === 'code' ? (
-          <Button variant="link" full={false} onClick={() => void sendCode()}>
-            {t('agent.staff.newCode')}
-          </Button>
-        ) : (
-          <Button variant="link" full={false} onClick={() => go(step === 'email' ? 'pin' : 'login')}>
-            {t('common.back')}
-          </Button>
-        )}
-        <SignInHelp app={place === 'hub' ? 'mdp' : 'agent'} api={recovery} />
-        <AllAppsLink />
-      </div>
+      {/* 2026-11-02 — the bar every sign-in screen has, pinned to the bottom until signed in (the owner: "a sticky footer
+          for as long as the page goes"): Back where a step has one, Help ("Trouble signing in?"), this screen's title and
+          lede read aloud, and the other apps. */}
+      <SignedOutBar
+        onBack={step === 'phone' || step === 'pin' || step === 'email' ? () => go(step === 'email' ? 'pin' : 'login') : undefined}
+        help={{ app: place === 'hub' ? 'mdp' : 'agent', api: recovery }}
+        aloud={() => `${title}. ${lede}`}
+      />
 
       <NewDeviceSheet
         open={confirming}

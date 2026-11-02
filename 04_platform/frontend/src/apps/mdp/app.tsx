@@ -2,7 +2,7 @@ import { AppLayer } from '../../shared/ui/AppLayer';
 import type { SbgClient } from '../../lib/sbg';
 import { AgreementGate } from '../../shared/documents/Agreement';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
-import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
+import { OutboxNote, ConnectivityNote, BottomNav, Button, Checklist, FeedbackFlash, Icon, NotificationBell, Pill, Sheet, TopBar, type NavItem } from '../../shared/ui';
 import type { StaffAtCounter } from '../agent/staff';
 import { useMemo, useState } from 'preact/hooks';
 import { ParcelFinderContext, parcelFinderFor } from '../../shared/parcelFinder';
@@ -37,7 +37,7 @@ const LAUNCH = screensOf<Screen>({ home: true, drop: true, sort: true, load: tru
 
 export function App() {
   const t = useT();
-  const { state, actions , sbg } = useMdpApp();
+  const { state, actions , sbg, notifications } = useMdpApp();
   // The person behind this account — their photo, PIN, address and page. The menu is ABSENT where the
   // sign-in is not a person at all (a store's shared secret), rather than opening onto a refusal.
   // A hub's people sign in as the hub: there is no account of theirs behind the hub's menu.
@@ -110,6 +110,8 @@ export function App() {
         backLabel={nav.backTo === 'arrivals' ? t('mdp.backToArrivals') : nav.backTo && nav.backTo !== 'home' ? t('common.back') : t('mdp.backToHub')}
         end={
           <>
+            {/* 2026-11-02 — the hub's bell: first in the bar, as the shop's is. */}
+            <NotificationBell api={notifications} />
             {needRefresh ? (
               <button
                 type="button"

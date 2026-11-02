@@ -152,6 +152,9 @@ export const enHome = {
   // Shared within Home (reused across screens).
   'home.readAloud': 'Read this aloud',
   'home.goBack': 'Go back',
+  // 2026-11-02 — Help in the bar pinned under the sign-up (JoinHelp.tsx): the help there is about joining.
+  'home.join.help.lede': 'Help with joining as {role}, and with signing in once your account is made.',
+  'home.join.help.ledeAny': 'Which app is yours, and what you sign in with.',
   'home.continue': 'Continue',
   'home.zone': 'Zone {zone}',
   'home.openNow': 'Open now',

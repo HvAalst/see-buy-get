@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sbgLogin } from '../../lib/sbg';
 import { vendorSession } from '../../apps/vendor/api';
-import { saveShopDeviceKey, shopDeviceKey, shopDevicesApi } from './shopDevice';
+import { allShopDeviceKeys, saveShopDeviceKey, shopDeviceKey, shopDevicesApi } from './shopDevice';
+import { counterPlaces } from '../../apps/agent/staff';
 import { dropAccountUnlockMark, hasAccountUnlockHere, markAccountUnlock, secretBody } from './unlock';
 
 /**
@@ -79,6 +80,25 @@ describe('the ticket goes to the account’s own door as `unlock`, in the passwo
     serve({ token: { access_token: 't' } });
     await vendorSession('soko@store.example', TICKET, 'dvc_store-phone');
     expect(last()).toEqual({ path: '/v1/sbg/vendors/session', body: { email: 'soko@store.example', unlock: TICKET, device: 'dvc_store-phone' } });
+  });
+});
+
+/**
+ * 2026-11-02 (the owner: "a 1 person shop could use fingerprint to unlock as you said") — a colleague opening a session
+ * at a counter says which phone it is on: the keys this browser holds for the shops' and hubs' own sign-ins, and no other.
+ */
+describe('a colleague’s session at a counter carries this phone’s shop and hub keys', () => {
+  it('sends every shop and hub key this browser holds — and no person’s key', async () => {
+    saveShopDeviceKey(SHOP, 'dvc_shop-phone');
+    saveShopDeviceKey('sort@hub.example', 'dvc_hub-phone');
+    globalThis.localStorage.setItem('sbg-device:712345678', 'dvc_a-persons-key');
+    expect(allShopDeviceKeys().sort()).toEqual(['dvc_hub-phone', 'dvc_shop-phone']);
+    serve({ shopDid: 'did:glos:shop', shopName: 'Kona', name: 'Wanjiru', memberId: 'm1', token: { access_token: 't' } });
+    await counterPlaces(config, { personId: 'did:glos:p', token: { access_token: 'person' } }).open('did:glos:shop');
+    expect(last().path).toBe('/v1/sbg/shops/did%3Aglos%3Ashop/staff-session');
+    expect((last().body.devices as string[]).sort()).toEqual(['dvc_hub-phone', 'dvc_shop-phone']);
+    await counterPlaces(config, { personId: 'did:glos:p', token: { access_token: 'person' } }).open('did:glos:hub', 'hub');
+    expect(last().path).toBe('/v1/sbg/hubs/did%3Aglos%3Ahub/staff-session');
   });
 });
 

@@ -1,10 +1,12 @@
 import {
   createMdpApi,
+  createNotificationsApi,
   createSeededClient,
   makeConfig,
   purgeTokens,
   tokenKeyFor,
   type MdpApi,
+  type NotificationsApi,
   type SbgConfig,
   type SeededAppClient,
 } from '../../lib/sbg';
@@ -21,6 +23,8 @@ export function mdpConfig(): SbgConfig {
 export interface MdpClient {
   api: MdpApi;
   client: SeededAppClient;
+  /** 2026-11-02 — the hub's own bell: its notices (a colleague at the counter, a fingerprint turned off) had no screen. */
+  notifications: NotificationsApi;
 }
 
 /**
@@ -30,7 +34,7 @@ export interface MdpClient {
  */
 export function createMdpClient(did: string): MdpClient {
   const client = createSeededClient(mdpConfig(), tokenKeyFor(TOKEN_PREFIX, did));
-  return { api: createMdpApi(client.sbg), client };
+  return { api: createMdpApi(client.sbg), client, notifications: createNotificationsApi(client.sbg) };
 }
 
 export function purgeMdpTokens(keepDid: string | null): void {

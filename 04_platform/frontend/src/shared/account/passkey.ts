@@ -54,6 +54,11 @@ export interface PasskeyHere {
   addedAt?: string;
   dropped?: string;
   rpId?: string;
+  /**
+   * 2026-11-02 — a shop's or a hub's phone colleagues have opened counter sessions on, last when: it cannot be turned on
+   * here (the owner: "a 1 person shop could use fingerprint to unlock as you said"). Settings says why.
+   */
+  counter?: string;
 }
 
 type Post = <T>(path: string, body: unknown) => Promise<Result<T>>;

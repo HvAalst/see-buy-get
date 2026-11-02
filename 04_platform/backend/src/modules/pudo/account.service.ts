@@ -723,11 +723,33 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** Settings: the signed-in shop, hub or store — is this phone one of its own, and is a passkey on it? */
-  passkeyHere(did: string, device: string | undefined): { known: boolean; passkey?: DevicePasskey; accountId: string } {
+  passkeyHere(did: string, device: string | undefined): { known: boolean; passkey?: DevicePasskey; accountId: string; counterAt?: string } {
     const account = this.boundAccountOf(did);
     const known = this.devices.knows(account.accountId, device);
     const passkey = known ? this.devices.passkeyOf(account.accountId, device) : undefined;
-    return { known, accountId: account.accountId, ...(passkey ? { passkey } : {}) };
+    // 2026-11-02 — colleagues have opened counter sessions on this phone: it is not one for the account's fingerprint.
+    const counterAt = known ? this.devices.counterAtOf(account.accountId, device) : undefined;
+    return { known, accountId: account.accountId, ...(passkey ? { passkey } : {}), ...(counterAt ? { counterAt } : {}) };
+  }
+
+  /**
+   * A COLLEAGUE OPENED A COUNTER SESSION — at a shop's counter or on a hub's floor — on a browser holding these keys (the
+   * owner, 2026-11-02: "a 1 person shop could use fingerprint to unlock as you said"). Each of them that is one of the
+   * place's own phones is noted as a phone colleagues use, and any fingerprint-or-face unlock on it is taken off at once,
+   * with every ticket it handed out: whoever can unlock that phone could otherwise sign in as the shop. What was taken
+   * off, by when each phone was confirmed, for the caller to tell the account. Nothing at all for a place with no
+   * account of its own, or keys that are none of its phones.
+   */
+  counterSessionOn(did: string, keys: string[] | undefined, now: number = Date.now()): { role: AccountRole; dropped: string[] } | undefined {
+    const account = [...this.accounts.values()].find((a) => a.did === did);
+    if (!account || !this.isBound(account)) return undefined;
+    const dropped: string[] = [];
+    for (const key of (keys ?? []).slice(0, 20)) {
+      const seen = this.devices.noteCounter(account.accountId, key, now);
+      if (seen?.dropped) dropped.push(seen.addedAt);
+    }
+    if (dropped.length) this.unlocks.dropFor(account.accountId);
+    return { role: account.role, dropped };
   }
 
   /**
