@@ -12,7 +12,7 @@ const ALL: Record<string, string> = { ...en, ...enApps, ...enTowerAll };
  */
 const PLAIN: Record<string, string> = {
   // Everybody reads these without thinking.
-  ID: 'everyday', PIN: 'everyday', QR: 'everyday', OK: 'everyday', PDF: 'everyday', PNG: 'everyday', JPEG: 'everyday', SMS: 'everyday', MB: 'everyday', GPS: 'everyday', AI: 'everyday', EU: 'everyday',
+  ID: 'everyday', PIN: 'everyday', QR: 'everyday', OK: 'everyday', PDF: 'everyday', PNG: 'everyday', JPEG: 'everyday', SMS: 'everyday', MB: 'everyday', KB: 'everyday', GPS: 'everyday', AI: 'everyday', EU: 'everyday',
   // A currency or a country by its code, beside an amount or in a list of them.
   KES: 'money', USD: 'money', US: 'money', UGX: 'money', TZS: 'money', ETB: 'money', KE: 'country',
   // How a date or a time is to be written.

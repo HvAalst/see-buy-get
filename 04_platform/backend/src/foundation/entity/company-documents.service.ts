@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { UPLOAD_LIMITS } from '../media/upload-limits';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../http/glos-error';
@@ -51,7 +52,7 @@ export const DOCUMENT_STATUSES = ['awaiting_verification', 'verified', 'rejected
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
 
 /** A certificate scan is a few hundred kilobytes; eight megabytes is a generous ceiling, not a target. */
-export const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
+export const MAX_DOCUMENT_BYTES = UPLOAD_LIMITS.document;
 
 export class CompanyDocument {
   @ApiProperty() documentId: string;

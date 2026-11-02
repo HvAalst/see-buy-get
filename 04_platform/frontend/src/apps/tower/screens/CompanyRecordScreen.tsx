@@ -5,6 +5,9 @@ import { Icon } from '../../../shared/ui';
 import { ConsolePick } from '../ConsolePick';
 import { ConsoleFold } from '../ConsoleFold';
 import { useT } from '../../../shared/i18n';
+import { paperForUpload } from '../../../shared/media';
+import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
+import { UPLOAD_LIMITS, refusalWords, uploadHint } from '../../../shared/upload';
 import { tabAtTheTap } from '../../../shared/openPage';
 import {
   DOCUMENT_KINDS,
@@ -105,7 +108,8 @@ export function CompanyRecordScreen({ state, actions }: { state: TowerState; act
     const r = await write();
     setBusy(null);
     if (r.error) {
-      setError(r.error.detail || r.error.title || '');
+      // A file refused by the server is said in words, with its size and the most (2026-11-02).
+      setError(refusalWords(r.error) ?? (r.error.detail || r.error.title || ''));
       return false;
     }
     setDone(message);
@@ -510,6 +514,7 @@ function PaperBoundEditor({
   const reference = (item: Record<string, unknown>) => String(item[REFERENCE_FIELD[section]] ?? '');
   const [form, setForm] = useState<{ was?: string; row: EditRow } | null>(null);
   const [paper, setPaper] = useState<{ dataUrl: string; name: string } | null>(null);
+  const [fileSaid, setFileSaid] = useState<string | null>(null);
   const [paperKind, setPaperKind] = useState<DocumentKind>(PAPER_KINDS_FOR[section][0]);
   const [removing, setRemoving] = useState<string | null>(null);
   const blocker = form ? declareBlocker(section, form.row, Boolean(paper)) : null;
@@ -615,15 +620,26 @@ function PaperBoundEditor({
               <input
                 class="cinput"
                 type="file"
-                accept="application/pdf,image/png,image/jpeg"
-                onChange={(e) => {
-                  const file = e.currentTarget.files?.[0];
+                data-upload="document"
+                accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
+                onChange={async (e) => {
+                  const input = e.currentTarget;
+                  const file = input.files?.[0];
+                  setFileSaid(null);
                   if (!file) return setPaper(null);
-                  const reader = new FileReader();
-                  reader.onload = () => setPaper({ dataUrl: String(reader.result ?? ''), name: file.name });
-                  reader.readAsDataURL(file);
+                  // Checked here first, and said beside the picker (2026-11-02): a PDF over the most, a photo this
+                  // computer could not open. A photo of the paper is made smaller to fit.
+                  try {
+                    const dataUrl = await paperForUpload(file);
+                    setPaper({ dataUrl, name: file.name });
+                  } catch (err) {
+                    setPaper(null);
+                    setFileSaid(uploadFailureSentence(err));
+                    input.value = '';
+                  }
                 }}
               />
+              {fileSaid ? <span class="cerr">{fileSaid}</span> : <span class="chint">{uploadHint('document')}</span>}
             </label>
           </div>
           <div class="twr-corridorsave">
@@ -796,6 +812,7 @@ function PutOnRecord({
   const t = useT();
   const empty = { kind: 'certificate_of_incorporation', relatesTo: '', title: '', expiresAt: '', dataUrl: '', fileName: '' };
   const [form, setForm] = useState(empty);
+  const [fileSaid, setFileSaid] = useState<string | null>(null);
   const blocker = uploadBlocker(form);
   const choices = relatesToChoices(form.kind, view.record, view.obligations);
 
@@ -824,15 +841,26 @@ function PutOnRecord({
           <input
             class="cinput"
             type="file"
-            accept="application/pdf,image/png,image/jpeg"
-            onChange={(e) => {
-              const file = e.currentTarget.files?.[0];
+            data-upload="document"
+            accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
+            onChange={async (e) => {
+              const input = e.currentTarget;
+              const file = input.files?.[0];
+              setFileSaid(null);
               if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () => setForm((f) => ({ ...f, dataUrl: String(reader.result ?? ''), fileName: file.name, title: f.title || file.name }));
-              reader.readAsDataURL(file);
+              // Checked here first, and said beside the picker (2026-11-02): a PDF over the most, a photo this
+              // computer could not open. A photo of the paper is made smaller to fit.
+              try {
+                const dataUrl = await paperForUpload(file);
+                setForm((f) => ({ ...f, dataUrl, fileName: file.name, title: f.title || file.name }));
+              } catch (err) {
+                setForm((f) => ({ ...f, dataUrl: '', fileName: '' }));
+                setFileSaid(uploadFailureSentence(err));
+                input.value = '';
+              }
             }}
           />
+          {fileSaid ? <span class="cerr">{fileSaid}</span> : <span class="chint">{uploadHint('document')}</span>}
         </label>
       </div>
       <div class="twr-corridorsave">
@@ -1037,6 +1065,7 @@ function SayForm({ kind, busy, onSend, onCancel }: { kind: 'report' | 'answer'; 
   const [category, setCategory] = useState<ReportCategory>('expired');
   const [note, setNote] = useState('');
   const [file, setFile] = useState<{ dataUrl: string; name: string } | null>(null);
+  const [fileSaid, setFileSaid] = useState<string | null>(null);
   const blocker = kind === 'report' ? reportBlocker({ note, hasEvidence: Boolean(file) }) : note.trim() ? null : ('tower.paperReport.needAnswer' as const);
 
   return (
@@ -1060,15 +1089,26 @@ function SayForm({ kind, busy, onSend, onCancel }: { kind: 'report' | 'answer'; 
           <input
             class="cinput"
             type="file"
-            accept="image/png,image/jpeg,application/pdf"
-            onChange={(e) => {
-              const picked = e.currentTarget.files?.[0];
-              if (!picked) return setFile(null);
-              const reader = new FileReader();
-              reader.onload = () => setFile({ dataUrl: String(reader.result ?? ''), name: picked.name });
-              reader.readAsDataURL(picked);
+            data-upload="document"
+            accept="image/png,image/jpeg,image/webp,image/heic,image/heif,application/pdf"
+            onChange={async (e) => {
+              const input = e.currentTarget;
+              const file = input.files?.[0];
+              setFileSaid(null);
+              if (!file) return setFile(null);
+              // Checked here first, and said beside the picker (2026-11-02): a PDF over the most, a photo this
+              // computer could not open. A photo of the paper is made smaller to fit.
+              try {
+                const dataUrl = await paperForUpload(file, UPLOAD_LIMITS.evidence);
+                setFile({ dataUrl, name: file.name });
+              } catch (err) {
+                setFile(null);
+                setFileSaid(uploadFailureSentence(err));
+                input.value = '';
+              }
             }}
           />
+          {fileSaid ? <span class="cerr">{fileSaid}</span> : <span class="chint">{uploadHint('document', UPLOAD_LIMITS.evidence)}</span>}
         </label>
       </div>
       <div class="twr-corridorsave">

@@ -8,6 +8,8 @@ import { clearDid, createMdpClient, mdpConfig, purgeMdpTokens, readDid, readEmai
 import { addToQueue, dropFromQueue, findMyHub, floorOpen, money, unsortedAt } from './logic';
 import { onIt, replaceArrival, unitsLine, type HubArrival, type HubArrivalScan, type HubArrivalsView, type HubBulk } from './arrivals';
 import { downscaleImage } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import type { Uploaded } from '../../shared/upload';
 import { downloadZpl } from '../../shared/download';
 import { tabAtTheTap } from '../../shared/openPage';
 import { holdPhoto } from '../../shared/heldPhotos';
@@ -665,8 +667,9 @@ export function useMdpApp() {
 
   /** Round 35 — a photograph for the tamper report: prepared on the phone; with no signal it waits here and goes with the report. */
   const uploadPhoto = useCallback(
-    async (file: File, kind: 'tamper' | 'seal' | 'kyc_id' | 'kyc_licence' | 'shop' = 'tamper'): Promise<string | null> => {
-      if (!client) return null;
+    async (file: File, kind: 'tamper' | 'seal' | 'kyc_id' | 'kyc_licence' | 'shop' = 'tamper'): Promise<Uploaded> => {
+      if (!client) return { failed: t('upload.failed') };
+      // Why it did not go, in words for under the photo (2026-11-02, the owner: "It silently refused").
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
@@ -675,12 +678,13 @@ export function useMdpApp() {
           const held = isOffline(r.error) && (kind === 'tamper' || kind === 'seal') ? holdPhoto(kind, dataUrl, thumbDataUrl) : null;
           if (held) return held;
           pushToast({ tone: 'danger', icon: 'camera', title: t('mdp.tamper.photoFail'), detail: errorSentence(r.error) });
-          return null;
+          return { failed: uploadFailureSentence(r.error, 'photo') };
         }
-        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
-      } catch {
-        pushToast({ tone: 'danger', icon: 'camera', title: t('mdp.tamper.photoFail') });
-        return null;
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? { failed: t('upload.failed') };
+      } catch (e) {
+        const said = uploadFailureSentence(e, 'photo');
+        pushToast({ tone: 'danger', icon: 'camera', title: t('mdp.tamper.photoFail'), detail: said });
+        return { failed: said };
       }
     },
     [client, pushToast],

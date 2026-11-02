@@ -41,6 +41,8 @@ import { pinAfterRename, type GeoPoint, type PinSource } from '../../shared/geo'
 import { askEvery, currentPosition, watchPosition } from '../../shared/position';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import type { Uploaded } from '../../shared/upload';
 import { triggerDownload } from '../../shared/download';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { DeclaredLegBody } from '../../lib/sbg/personas/driver';
@@ -1761,8 +1763,9 @@ export function useDriverApp() {
 
   /** S26/S33 — downscale + EXIF-strip + upload a captured securement photo → its mediaId (null on failure). */
   const uploadPhoto = useCallback(
-    async (kind: MediaKind, file: File): Promise<string | null> => {
-      if (!client) return null;
+    async (kind: MediaKind, file: File): Promise<Uploaded> => {
+      if (!client) return { failed: t('upload.failed') };
+      // Why it did not go, in words for under the photo (2026-11-02, the owner: "It silently refused").
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
@@ -1773,13 +1776,15 @@ export function useDriverApp() {
             pushToast({ tone: 'info', icon: 'camera', title: t('driver.toast.photoHeld'), detail: t('driver.toast.photoHeldDetail') });
             return held;
           }
-          pushToast({ tone: 'danger', icon: 'camera', title: t('driver.toast.photoFailed'), detail: t('driver.toast.photoFailedDetail') });
-          return null;
+          const said = uploadFailureSentence(r.error, 'photo');
+          pushToast({ tone: 'danger', icon: 'camera', title: t('driver.toast.photoFailed'), detail: said });
+          return { failed: said };
         }
-        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
-      } catch {
-        pushToast({ tone: 'danger', icon: 'camera', title: t('driver.toast.photoUnreadable') });
-        return null;
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? { failed: t('upload.failed') };
+      } catch (e) {
+        const said = uploadFailureSentence(e, 'photo');
+        pushToast({ tone: 'danger', icon: 'camera', title: t('driver.toast.photoUnreadable'), detail: said });
+        return { failed: said };
       }
     },
     [client, pushToast],

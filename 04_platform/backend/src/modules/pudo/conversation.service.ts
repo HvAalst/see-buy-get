@@ -1,4 +1,5 @@
 import { PersonService } from './person.service';
+import { UPLOAD_LIMITS } from '../../foundation/media/upload-limits';
 import { ParcelService } from './parcel.service';
 import { accountFor, isFor } from './addressed-to';
 import { AgentService } from './agent.service';
@@ -11,6 +12,8 @@ import { DispatchService, commitModeOf } from './dispatch.service';
 import { DriverService } from './driver.service';
 import { NotificationService } from './notification.service';
 import { VendorService } from './vendor.service';
+import { FiledPhotoService } from './filed-photo.service';
+import type { FiledPhotoView, FileInput } from './filed-photo.types';
 import { ConversationSubject,
   QUICK_REPLIES,
   REPORT_REASONS,
@@ -30,7 +33,7 @@ import { ConversationSubject,
 } from './conversation.types';
 
 /** CV4 — a voice message is a message, not a recording session: about two minutes at a phone's bitrate. */
-export const MAX_VOICE_BYTES = 900_000;
+export const MAX_VOICE_BYTES = UPLOAD_LIMITS.voice;
 export const MAX_VOICE_SECONDS = 120;
 
 /** A message is a message, not a document. */
@@ -78,6 +81,8 @@ export class ConversationService {
     @Optional() private readonly parcels?: ParcelService,
     @Optional() private readonly persons?: PersonService,
     @Optional() private readonly agents?: AgentService,
+    // 2026-11-02 — the record's photo file: a photo enters a thread only by being filed to its load or parcel.
+    @Optional() private readonly filed?: FiledPhotoService,
   ) {}
 
   /**
@@ -335,6 +340,60 @@ export class ConversationService {
   }
 
   /**
+   * 2026-11-02 — A PHOTO, FILED TO THE THREAD'S LOAD OR PARCEL, THEN SHOWN (the owner: "I want to avoid that images are
+   * shared rather than attached to the right file path. Damage claims should be fingerprinted and just sharing blurs
+   * this"). The photo goes into the record's photo file as damage, a paper or proof, with its fingerprint, where it came
+   * from and when; the thread gets a card that points at it.
+   *
+   * Every refusal comes before anything is written (lesson: refuse before you write): a stranger to the thread, a closed
+   * thread, a party to the thread who has no part in the record (a driver who only asked), a record that is closed, a
+   * photo that is not theirs or not ours, a label that is not one — and the hourly cap, which `append` asks first.
+   */
+  filePhoto(conversationId: string, did: string, input: FileInput, now = Date.now()): MessageView {
+    if (!this.filed) throw new GlosError('INVALID_STATE', 'Photos cannot be filed here');
+    const thread = this.requireParty(conversationId, did);
+    this.requireOpen(thread, did);
+    const written = writtenEarlier(input.writtenAt, now);
+    const filing = this.filed.prepare(
+      { ...(thread.freightId ? { freightId: thread.freightId } : { parcelId: thread.parcelId }) },
+      did,
+      { ...input, ...(written ? { writtenAt: written } : { writtenAt: undefined }) },
+      { conversationId },
+      now,
+    );
+    const { conversationId: _c, byDid: _b, ...photo } = filing;
+    const view = this.append(thread, did, { kind: 'photo', photo, ...(written ? { writtenAt: written } : {}) }, now, 'A photo was filed on');
+    // Kept only once the card is in the thread: a filing the hourly cap refused leaves nothing behind.
+    this.filed.keep(filing, now);
+    return view;
+  }
+
+  /**
+   * 2026-11-02 — THE RECORD'S PHOTO FILE, through this thread: every photo filed to the load or parcel, to a reader of the
+   * record (filed-photo.service.ts: isRecordReader); the ones filed in this thread alone, to anybody else who may read it.
+   */
+  recordPhotos(conversationId: string, did: string): { code: string; subject: ConversationSubject; items: FiledPhotoView[] } {
+    const thread = this.requireReader(conversationId, did);
+    if (!this.filed) return { code: this.codeOf(thread), subject: subjectOf(thread), items: [] };
+    return { code: this.codeOf(thread), subject: subjectOf(thread), items: this.filed.visibleThrough(conversationId, subjectRef(thread), did) };
+  }
+
+  /** 2026-11-02 — a filed photo's bytes, for whoever may see it through this thread. Never cached; another's is absent. */
+  photoFor(conversationId: string, filingId: string, did: string, variant: 'full' | 'thumb' = 'full'): { contentType: string; bytes: Buffer } {
+    const thread = this.requireReader(conversationId, did);
+    const visible = this.filed?.visibleThrough(conversationId, subjectRef(thread), did).some((f) => f.filingId === filingId);
+    if (!visible) throw new GlosError('NOT_FOUND', 'Photo not found');
+    return this.filed!.bytes(filingId, variant);
+  }
+
+  /** 2026-11-02 — the operator opens a filed photo a party put in a shared report. That one, and no other. */
+  photoForReport(reportId: string, filingId: string, variant: 'full' | 'thumb' = 'full'): { contentType: string; bytes: Buffer } {
+    const report = this.disputeReports.get(reportId);
+    if (!report || !report.messages.some((m) => m.photo?.filingId === filingId) || !this.filed) throw new GlosError('NOT_FOUND', 'Photo not found in that report');
+    return this.filed.bytes(filingId, variant);
+  }
+
+  /**
    * CV3 — THE DRIVER SHARES THIS CONVERSATION WITH THEIR FLEET MANAGER, or stops sharing it.
    *
    * The driver's decision alone (user, 2026-09-13): the poster cannot share the driver's words onward, and a
@@ -394,6 +453,8 @@ export class ConversationService {
       ...(m.settlement ? { settlement: { ...m.settlement } } : {}),
       ...(m.refSeq !== undefined ? { refSeq: m.refSeq } : {}),
       ...(m.voiceId ? { voiceId: m.voiceId, durationSec: m.durationSec } : {}),
+      // 2026-11-02 — a filed photo goes in as its reference and labels; the operator opens exactly that photo (photoForReport).
+      ...(m.photo ? { photo: { ...m.photo } } : {}),
       at: m.at,
     }));
     const report: DisputeReport = {
@@ -487,6 +548,10 @@ export class ConversationService {
    * next sequence number, the sender's own read marker, and a discreet push to the other party.
    */
   private append(thread: Conversation, fromDid: string, message: Omit<ConversationMessage, 'seq' | 'fromDid' | 'at'>, now: number, pushTitle: string): MessageView {
+    // 2026-11-02 — NO MESSAGE CARRIES A PICTURE (the owner: "just sharing blurs this"): a photo is filed to the record and
+    // the thread holds its reference; a recording is kept apart (CV4). A message with a data URL in it, or the size of a
+    // picture, is refused here, whatever door it came in by — before the cap counts it, and before anything is kept.
+    if (carriesBytes(message)) throw new GlosError('INVALID_INPUT', 'A photo is filed to the load or parcel, never sent inside a message');
     const recent = (this.sentAt.get(fromDid) ?? []).filter((t) => now - t < HOUR_MS);
     if (recent.length >= MESSAGES_PER_HOUR) throw new GlosError('FORBIDDEN', 'That is a lot of messages in one hour — wait a little before sending more');
     this.sentAt.set(fromDid, [...recent, now]);
@@ -571,6 +636,7 @@ export class ConversationService {
     if (m.refSeq !== undefined) view.refSeq = m.refSeq;
     if (m.kind === 'report_shared' && m.seqCount !== undefined) view.seqCount = m.seqCount;
     if (m.kind === 'voice' && m.voiceId) view.voice = { voiceId: m.voiceId, durationSec: m.durationSec ?? 0 };
+    if (m.kind === 'photo' && m.photo) view.photo = { ...m.photo };
     if (m.writtenAt) view.writtenAt = m.writtenAt;
     return view;
   }
@@ -592,6 +658,7 @@ export class ConversationService {
       negotiable: Boolean(thread.freightId) && this.negotiable(thread.freightId!),
       settlesOffPlatform: Boolean(thread.freightId) && this.settlesOffPlatform(thread.freightId!),
       ...this.moneyOfThread(thread),
+      canFilePhotos: role !== 'manager' && !thread.blockedBy && Boolean(this.filed?.canFile(subjectRef(thread), did)),
       shareable: Boolean(this.managerOf(thread.askerDid)),
       sharedWithManager: Boolean(thread.sharedWithManagerDid) && thread.sharedWithManagerDid === this.managerOf(thread.askerDid),
       lastSeq: thread.lastSeq,
@@ -685,6 +752,30 @@ export class ConversationService {
 
 function subjectOf(thread: Pick<Conversation, 'parcelId'>): ConversationSubject {
   return thread.parcelId ? 'parcel' : 'freight';
+}
+
+/** The record a thread is about, as the photo file names it. */
+function subjectRef(thread: Pick<Conversation, 'freightId' | 'parcelId'>): { freightId?: string; parcelId?: string } {
+  return thread.freightId ? { freightId: thread.freightId } : { parcelId: thread.parcelId };
+}
+
+/** The largest a message is ever kept: a thousand characters of words, or a photo's card, with room to spare. */
+export const MAX_MESSAGE_BYTES = 8 * 1024;
+
+/**
+ * 2026-11-02 — whether a message carries a picture, or anything the size of one: a data URL in any of its values, or more
+ * than MAX_MESSAGE_BYTES in all. Exported for the guard that walks every kind (conversation.photo.spec.ts).
+ */
+export function carriesBytes(message: unknown): boolean {
+  const walk = (v: unknown): boolean => {
+    // A data URL's own shape (`data:image/jpeg;base64,…`) — never words that happen to start "Data: 5 pallets".
+    // An image's data URL anywhere in words is a picture too.
+    if (typeof v === 'string') return /^\s*data:[a-z]+\/[a-z0-9.+-]+[;,]/i.test(v) || /data:image\/[a-z0-9.+-]+[;,]/i.test(v);
+    if (Array.isArray(v)) return v.some(walk);
+    if (v && typeof v === 'object') return Object.values(v).some(walk);
+    return false;
+  };
+  return walk(message) || JSON.stringify(message ?? null).length > MAX_MESSAGE_BYTES;
 }
 
 /** The load a deal is about — a parcel thread has none, and says so in the caller's words. */

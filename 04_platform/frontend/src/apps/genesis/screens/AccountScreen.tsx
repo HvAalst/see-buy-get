@@ -175,6 +175,7 @@ export function AccountScreen({ state, actions, account }: AccountScreenProps) {
               ref={avatarInput}
               class="photo__input"
               type="file"
+              data-upload="photo"
               accept="image/*"
               capture="user"
               disabled={state.avatarBusy}
@@ -190,6 +191,7 @@ export function AccountScreen({ state, actions, account }: AccountScreenProps) {
             <p class="hint" style="margin-top:6px">{t('send.account.photoHelps')}</p>
           </div>
         </div>
+        {state.avatarSaid ? <Note tone="warn" icon="camera" title={state.avatarSaid} /> : null}
 
         <div class="field">
           <label class="field__label" for="profile-name">{t('send.account.yourName')}</label>

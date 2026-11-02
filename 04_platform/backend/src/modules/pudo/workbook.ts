@@ -1,4 +1,5 @@
 import { inflateRawSync } from 'node:zlib';
+import { UPLOAD_LIMITS } from '../../foundation/media/upload-limits';
 
 /**
  * AN EXCEL WORKBOOK, READ — the first sheet of an .xlsx file, as rows of cells in the words a person sees.
@@ -19,7 +20,7 @@ import { inflateRawSync } from 'node:zlib';
  */
 
 /** The largest workbook file read. A sheet of a few hundred orders is tens of kilobytes. */
-export const MAX_WORKBOOK_BYTES = 1_000_000;
+export const MAX_WORKBOOK_BYTES = UPLOAD_LIMITS.workbook;
 /** The most one part of the workbook may unpack to — a small file can be made to unpack to a very large one. */
 const MAX_PART_BYTES = 24_000_000;
 /** More rows or columns than this is not a sheet of orders; the sheet reader has its own, smaller, limit on orders. */

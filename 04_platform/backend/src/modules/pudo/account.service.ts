@@ -7,6 +7,7 @@ import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'crypto';
 import { isSandbox } from '../../foundation/runtime/sandbox';
 import { SmsService, notSentWords } from '../../foundation/sms/sms.service';
 import { DEVICE_UNUSED_DAYS, DeviceBook, type DeviceSeen, type KnownDevice } from './person-devices';
+import { UNLOCK_TTL_MS, UnlockTickets, deviceHashOf, type DevicePasskey } from './passkeys';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { RestingAccounts } from '../../foundation/auth/resting-accounts';
@@ -14,7 +15,7 @@ import { PASSWORD_WORDS, PasswordTries, keptLocks, spendTime } from '../../found
 import { assertPassword, newResetCode, readResetCode } from '../../foundation/auth/password-rules';
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { DidService } from '../../foundation/did/did.service';
-import { hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
+import { hashEmail, hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
 import { AgentService } from './agent.service';
 import { DriverService } from './driver.service';
@@ -104,6 +105,11 @@ export class AccountService implements OnApplicationBootstrap {
   private readonly tries = new PasswordTries(PASSWORD_WORDS, keptLocks('accounts'));
   /** The phones and browsers each bound account confirmed, by the hash of their key. Durable, as a person's are. */
   private readonly devices = new DeviceBook(new PersistentMap<string, KnownDevice>('account-devices'));
+  /**
+   * 2026-11-02 — what a fingerprint or face on one of the account's own phones unlocked: one use, two minutes, redeemed
+   * where the password is checked (passkeys.ts). In memory: a ticket nobody used in two minutes is worth nothing.
+   */
+  private readonly unlocks = new UnlockTickets();
   /** A code texted for a browser asking to be confirmed: ten minutes, five tries. In memory, like every code here. */
   private readonly deviceCodes = new Map<string, { email: string; code: string; sentAt: number; expires: number; attempts: number; needsPhone?: boolean; phone?: string }>();
 
@@ -318,8 +324,9 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
-  async login(email: string, password: string, device?: string, now: number = Date.now()): Promise<AccountSignIn> {
-    const account = this.passwordRight(email, password);
+  async login(email: string, password: string | undefined, device?: string, now: number = Date.now(), unlock?: string): Promise<AccountSignIn> {
+    // The password — or, 2026-11-02, the ticket a fingerprint or face on this phone was just checked for, in its place.
+    const account = this.passwordRight(email, password, { unlock, device });
     // A store signs in at its own door (storeLogin): one answer there for every account that is not a store's, and here the same.
     // The password was right, and is not enough on a phone or browser this shop never confirmed: a code goes to its number.
     if (this.isBound(account) && !this.devices.knows(account.accountId, device, now)) throw await this.deviceUnknown(account, now);
@@ -327,13 +334,35 @@ export class AccountService implements OnApplicationBootstrap {
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
   }
 
-  /** The password checked, wrong ones counted and locked — the first half of every door that takes one. */
-  private passwordRight(email: string, password: string): Account {
+  /**
+   * The password checked, wrong ones counted and locked — the first half of every door that takes one. `role`: a door
+   * for one kind of account only (a store's), refused AFTER the password, exactly as a wrong one is, so an address of
+   * another kind takes as long to refuse and is answered the same.
+   *
+   * 2026-11-02 — OR AN UNLOCK TICKET IN THE PASSWORD'S PLACE (`unlock`, with the device key it was made on): what a
+   * fingerprint or face on one of this account's own phones was just checked for (PasskeyService). Taken here, so every
+   * door keeps its own token, limits and lock: a locked sign-in answers a ticket as it answers a password; the ticket
+   * opens only this account, at this address, on this device, with the passkey it was made with; the right one starts
+   * the count of wrong passwords again, as the right password does. A ticket is long and random — nothing to guess, so
+   * a wrong one is refused without being counted, and in the same words whether the address is anybody's or not.
+   */
+  private passwordRight(email: string, password: string | undefined, opts: { unlock?: string; device?: string; role?: AccountRole } = {}): Account {
     const key = (email || '').trim().toLowerCase();
     // A locked sign-in answers nobody — asked before the password is looked at, so the right one learns nothing either.
     this.tries.check(key);
     const account = this.accounts.get(key);
-    if (!account || !this.verify(password, account)) throw this.wrongPassword(key, account, password);
+    if (opts.unlock) {
+      const grant = this.unlocks.take(opts.unlock);
+      if (!account || !grant || !opts.device || grant.owner !== account.accountId || grant.address !== hashEmail(key) || grant.deviceHash !== deviceHashOf(opts.device) || (opts.role && account.role !== opts.role)) {
+        throw new GlosError('UNLOCK_FAILED', 'That unlock has run out, or was used already. Unlock again, or use the password.');
+      }
+      if (this.devices.passkeyOf(account.accountId, opts.device)?.id !== grant.credentialId) {
+        throw new GlosError('UNLOCK_OFF', 'Unlocking with fingerprint or face is off on this phone or browser. Use the password.');
+      }
+      this.tries.forget(key);
+      return account;
+    }
+    if (!account || !this.verify(password ?? '', account) || (opts.role && account.role !== opts.role)) throw this.wrongPassword(key, account, password ?? '');
     this.tries.forget(key);
     return account;
   }
@@ -581,15 +610,11 @@ export class AccountService implements OnApplicationBootstrap {
    * SIGN A STORE IN by its account. One answer for a wrong password, an email nobody holds, and an email that is a
    * shop's or a courier's: this door tells nobody which accounts exist, or what kind they are.
    */
-  async storeLogin(email: string, password: string, device?: string, now: number = Date.now()): Promise<{ accountId: string; role: AccountRole; did: string; email: string; token: AccessToken }> {
-    const key = (email || '').trim().toLowerCase();
-    this.tries.check(key);
-    const account = this.accounts.get(key);
+  async storeLogin(email: string, password: string | undefined, device?: string, now: number = Date.now(), unlock?: string): Promise<{ accountId: string; role: AccountRole; did: string; email: string; token: AccessToken }> {
     // The password is checked BEFORE the kind of account is looked at: a shop's address must take as long to refuse
-    // as a wrong password does. It is the same count as the shops' own door — one address, one set of tries.
-    const right = account ? this.verify(password, account) : false;
-    if (!account || !right || account.role !== 'vendor') throw this.wrongPassword(key, account, password);
-    this.tries.forget(key);
+    // as a wrong password does. It is the same count as the shops' own door — one address, one set of tries. And it is
+    // the same check (2026-11-02): the password, or the ticket a fingerprint or face on this device unlocked.
+    const account = this.passwordRight(email, password, { unlock, device, role: 'vendor' });
     // Round 40 — the password was right, and is not enough on a phone or browser this store never confirmed.
     if (!this.devices.knows(account.accountId, device, now)) throw await this.deviceUnknown(account, now);
     if (device) this.devices.used(account.accountId, device, now);
@@ -654,6 +679,7 @@ export class AccountService implements OnApplicationBootstrap {
     account.resetExpires = undefined;
     this.accounts.set(account.email, account);
     this.auth.revokeAll(account.did);
+    this.dropPasskeys(account);
     this.tellPasswordChanged(account);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
   }
@@ -671,8 +697,10 @@ export class AccountService implements OnApplicationBootstrap {
     account.resetExpires = undefined;
     account.passwordChangedAt = new Date().toISOString();
     this.accounts.set(account.email, account); // persist the new password hash
-    // Whoever had the old password — which is presumably why it was reset — is signed out everywhere.
+    // Whoever had the old password — which is presumably why it was reset — is signed out everywhere, and no fingerprint
+    // they may have turned on with it opens the account any more.
     this.auth.revokeAll(account.did);
+    this.dropPasskeys(account);
     // THE HOLDER'S OWN WAY BACK: a code that reached the address opens a locked sign-in at once, and the count of
     // wrong tries starts again. Nobody who is only guessing can do this.
     this.tries.forget(account.email);
@@ -680,6 +708,90 @@ export class AccountService implements OnApplicationBootstrap {
     this.mail?.addressWorks(account.email);
     this.tellPasswordChanged(account);
     return { ok: true };
+  }
+
+  /* ------------------------------ 2026-11-02: unlock with fingerprint or face, on the account's own phones -- */
+
+  /**
+   * A PASSWORD CHANGED OR RESET takes every passkey made with the old one off every phone (passkeys.ts): a password
+   * somebody else may have learnt must not outlive being changed by way of a fingerprint it let them turn on. The phones
+   * stay the account's own; turning it on again takes the new password.
+   */
+  private dropPasskeys(account: Account): void {
+    this.devices.dropAllPasskeys(account.accountId);
+    this.unlocks.dropFor(account.accountId);
+  }
+
+  /** Settings: the signed-in shop, hub or store — is this phone one of its own, and is a passkey on it? */
+  passkeyHere(did: string, device: string | undefined): { known: boolean; passkey?: DevicePasskey; accountId: string } {
+    const account = this.boundAccountOf(did);
+    const known = this.devices.knows(account.accountId, device);
+    const passkey = known ? this.devices.passkeyOf(account.accountId, device) : undefined;
+    return { known, accountId: account.accountId, ...(passkey ? { passkey } : {}) };
+  }
+
+  /**
+   * Settings: the password again, from somebody already signed in — a phone left open at a counter is not proof of who
+   * holds the account. The sign-in's count and lock; a wrong one is PASSWORD_WRONG (403), never a sign-out.
+   */
+  confirmPassword(did: string, password: string): void {
+    if (!this.passwordOpens(did, password)) throw new GlosError('PASSWORD_WRONG', 'That is not the password');
+  }
+
+  /** Turn it on, on one of the account's own phones. The caller checked the password and the phone's answer. */
+  setPasskey(did: string, device: string, passkey: DevicePasskey): boolean {
+    return this.devices.setPasskey(this.boundAccountOf(did).accountId, device, passkey);
+  }
+
+  /** Turn it off on this phone — and every unlock it handed out goes too. The phone stays one of the account's. */
+  dropPasskey(did: string, device: string | undefined): DevicePasskey | undefined {
+    const account = this.boundAccountOf(did);
+    const dropped = this.devices.dropPasskey(account.accountId, device);
+    if (dropped) this.unlocks.dropFor(account.accountId);
+    return dropped;
+  }
+
+  /**
+   * A sign-in screen: the passkey a fingerprint or face would answer for — only for an account whose phones are its own,
+   * only on one of them, only where one was turned on. Anything else is undefined, whichever of those it was: the caller
+   * answers them all alike, and so says nothing about whether the address is anybody's.
+   */
+  unlockTarget(email: string, device: string | undefined): { accountId: string; passkey: DevicePasskey } | undefined {
+    const account = this.accounts.get((email || '').trim().toLowerCase());
+    if (!account || !this.isBound(account)) return undefined;
+    const passkey = this.devices.passkeyOf(account.accountId, device);
+    return passkey ? { accountId: account.accountId, passkey } : undefined;
+  }
+
+  /** Is this address's sign-in locked by wrong passwords? Asked of any address, an account's or not, as the sign-in asks. */
+  assertNotLocked(email: string): void {
+    this.tries.check((email || '').trim().toLowerCase());
+  }
+
+  /**
+   * AN UNLOCK THAT DID NOT CHECK OUT, on one of the account's own phones: counted with the wrong passwords, against the
+   * same lock — the fifth locks it, and its holder is told, as for a password.
+   */
+  failedUnlock(email: string): never {
+    const key = (email || '').trim().toLowerCase();
+    const { error, locked } = this.tries.wrong(key);
+    const account = this.accounts.get(key);
+    if (locked && account) {
+      void this.mail?.send('password-locked', { address: account.email }, { email: account.email, app: ACCOUNT_APP[account.role], when: new Date().toISOString(), until: new Date(locked.until).toISOString(), recovery: 'self-reset' });
+    }
+    if (locked) throw error;
+    throw new GlosError('UNLOCK_FAILED', 'The fingerprint or face unlock did not check out. Try again, or use the password.');
+  }
+
+  /** It unlocked: the phone's counter as it now stands, and the day. */
+  passkeyUsed(accountId: string, device: string, counter: number): void {
+    this.devices.passkeyUsed(accountId, device, counter);
+  }
+
+  /** The phone's fingerprint or face checked out: a ticket for the sign-in door, two minutes, one use. */
+  issueUnlock(email: string, accountId: string, device: string, credentialId: string, now: number = Date.now()): string {
+    const key = (email || '').trim().toLowerCase();
+    return this.unlocks.issue({ owner: accountId, address: hashEmail(key), deviceHash: deviceHashOf(device), credentialId, expiresAt: now + UNLOCK_TTL_MS }, now);
   }
 
   // --- internals ---

@@ -1,6 +1,7 @@
 import type { Result } from '../../lib/sbg';
 import { allDeviceKeys, dropDeviceKey } from './pin';
 import { dropUnlockMarkBySlot } from './unlock';
+import type { PasskeyApi } from './passkey';
 
 /**
  * THE PHONES AND BROWSERS A PIN WORKS ON, as their owner sees them in Settings.
@@ -38,6 +39,11 @@ export interface PinDevicesApi {
   forgetOthers: (secret: string) => Promise<Result<{ forgotten: number; kept: boolean }>>;
   /** This device's key is forgotten by the server and dropped here. The caller signs the person out. */
   forgetThis: () => Promise<Result<{ forgotten: boolean; which: number }>>;
+  /**
+   * 2026-11-02 — where these phones are an account's own (a shop's, a hub's, a store's): unlocking with fingerprint or face
+   * on them, in place of its password. Settings offers it from here; a person's PIN has its own (useAccount).
+   */
+  passkey?: PasskeyApi;
 }
 
 /**

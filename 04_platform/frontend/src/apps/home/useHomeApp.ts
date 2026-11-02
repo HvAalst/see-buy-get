@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { joinRestored, joinSnapshot, readJoinMemory, writeJoinMemory } from './joinMemory';
 import { t } from '../../shared/i18n';
+import type { Uploaded } from '../../shared/upload';
 import type { SbgError } from '../../lib/sbg';
 import {
   deviceMarker,
@@ -609,9 +610,9 @@ export function useHomeApp() {
   }, [run, makeDriver]);
 
   /** A paper photographed and uploaded as the person: one of a fleet's four, or a driver's ID card or licence. */
-  const uploadFleetPaper = useCallback(async (kind: string, file: File): Promise<string | null> => {
+  const uploadFleetPaper = useCallback(async (kind: string, file: File): Promise<Uploaded> => {
     const person = stateRef.current.person;
-    return person ? uploadPaper(person, kind, file) : null;
+    return person ? uploadPaper(person, kind, file) : { failed: t('upload.failed') };
   }, []);
 
   /** A driver on a motorcycle or larger: the sign-up, with the photographs of their ID and licence taken on the papers step. */

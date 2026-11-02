@@ -17,6 +17,7 @@ import {
   type VendorApi,
 } from '../../lib/sbg';
 import type { NetworkPoint, PlaceFound, VendorLoginView } from './types';
+import { secretBody } from '../../shared/account/unlock';
 import { createHubsApi, type HubsApi } from './hubs';
 
 const APP_VERSION = '1.0.0';
@@ -33,7 +34,8 @@ export function vendorConfig(): SbgConfig {
 /** @Public vendors/session — the store's ACCOUNT: an email and a password. How a store signs in. */
 export function vendorSession(email: string, password: string, device?: string): Promise<Result<VendorLoginView>> {
   // Round 40 — a store's sign-in works only on its own phones and browsers: this one's key goes with it, when it has one.
-  return publicRequest<VendorLoginView>(vendorConfig(), '/v1/sbg/vendors/session', { body: { email, password, ...(device ? { device } : {}) } });
+  // `secretBody`: the password, or (2026-11-02) a fingerprint-or-face unlock ticket sent as `unlock` in its place.
+  return publicRequest<VendorLoginView>(vendorConfig(), '/v1/sbg/vendors/session', { body: { email, ...secretBody(password, 'password'), ...(device ? { device } : {}) } });
 }
 
 /**

@@ -49,6 +49,21 @@ describe('behind the row', () => {
     expect(html).not.toContain('Turn it off');
   });
 
+  it('a shop’s, a hub’s or a store’s: said by its password, the password asked, and who else could sign in said first', () => {
+    const store = { ...api, secret: 'password' as const, party: 'store' as const };
+    expect(passkeyRowSub(state({ here: { on: true, which: 0, id: 'cred-1' } }), say, store)).toBe('On for this phone. The password works too.');
+    expect(passkeyRowSub(state({ here: { on: false, which: 0 } }), say, store)).toBe('Off. You sign in with the password.');
+    expect(passkeyRowSub(state({ here: { on: false, which: -1 } }), say, store)).toBeNull();
+    const off = renderToString(<PasskeyForm api={store} state={state({ here: { on: false, which: 0 } })} />);
+    expect(off).toContain('acct-passkey-password');
+    expect(off).not.toContain('acct-passkey-pin');
+    expect(off).toContain('The store’s password, to turn it on');
+    expect(off).toContain('can then sign in as the store without the password');
+    const on = renderToString(<PasskeyForm api={store} state={state({ here: { on: true, which: 0, id: 'cred-1', addedAt: '2026-11-02T09:00:00Z' } })} />);
+    expect(on).toContain('Turn it off, use the password');
+    expect(on).toContain('The store signs in here with your fingerprint or face');
+  });
+
   it('…then the phone’s own prompt, on a tap', () => {
     const html = renderToString(<PasskeyForm api={api} state={state({ here: { on: false, which: 0 } })} initialStep="now" />);
     expect(html).toContain('Now your fingerprint or face');

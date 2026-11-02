@@ -58,6 +58,18 @@ export class ProblemFilter implements ExceptionFilter {
       detail = norm.detail;
       params = norm.params;
       retryable = isRetryable(code);
+    } else if (isClientHttpError(exception)) {
+      /*
+       * THE BODY PARSER'S OWN REFUSALS (2026-11-02): a body too large, a charset it cannot read. They are not Nest's, so
+       * they fell through to the line below and left as a 500 marked retryable: the phone was told to send the same
+       * too-large body again, and the person was told nothing true (the owner: "It silently refused"). A refusal its
+       * maker meant the caller to see keeps its status, takes the code for it, and is never "send the same again".
+       * A body over a route's limit is said with the file's size and the most before it gets here (body-limits.ts).
+       */
+      status = exception.status;
+      code = codeForStatus(status);
+      detail = exception.message || ERROR_CODES[code].title;
+      retryable = false;
     } else {
       // A non-HTTP exception is a real bug: log it with the trace id, but never leak internals.
       this.logger.error(`Unhandled exception [${traceId}]`, exception instanceof Error ? exception.stack : String(exception));
@@ -78,6 +90,13 @@ export class ProblemFilter implements ExceptionFilter {
 
     res.status(status).json(problem);
   }
+}
+
+/** An http-errors refusal meant for the caller (body-parser, raw-body): a 4xx with `expose` set by whoever made it. */
+function isClientHttpError(e: unknown): e is { status: number; message: string } {
+  if (!e || typeof e !== 'object') return false;
+  const r = e as { status?: unknown; expose?: unknown };
+  return typeof r.status === 'number' && r.status >= 400 && r.status < 500 && r.expose === true;
 }
 
 /** Extract a code + detail from a plain Nest HttpException body (string, `{message}`, or ValidationPipe's `{message: string[]}`). */

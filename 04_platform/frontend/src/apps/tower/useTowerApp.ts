@@ -12,6 +12,8 @@ import type { MoversView } from './movers';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { narrow, type SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import { UPLOAD_LIMITS } from '../../shared/upload';
 import { t } from '../../shared/i18n'; // plain t(): these strings are built at action time
 import { changeCompanyPassword, changeStaffPassword, clearCreds, companyLogin, createTowerClient, mintOperatorToken, myCompanyAccount, myStaffAccount, readCreds, saveCreds, staffLogin, towerConfig, type TowerClient, type TowerCreds, type TwoStepSetup } from './api';
 import { LIVE_READ_GAP_MS, openLive, throttleReads, type LiveState } from '../../shared/live';
@@ -1794,7 +1796,7 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
           const up = await client.api.uploadMedia(kind, pictures[key]);
           const mediaId = narrow<{ mediaId: string }>(up.data)?.mediaId;
           if (up.error || !mediaId) {
-            setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'err', text: up.error ? up.error.detail || up.error.title : t('tower.fleets.uploadFailed') } }));
+            setState((s) => ({ ...s, busyId: null, fleetNote: { tone: 'err', text: up.error ? uploadFailureSentence(up.error, 'photo') : t('tower.fleets.uploadFailed') } }));
             return false;
           }
           refs[key] = mediaId;
@@ -2035,15 +2037,16 @@ export function useTowerApp(): { state: TowerState; actions: TowerActions } {
         if (!client) return;
         setState((s) => ({ ...s, busyId: `${topic}:${key}`, queueError: null, done: null }));
         try {
-          const { dataUrl } = await downscaleImage(file, { maxEdge: 512, quality: 0.8 });
+          // Made to fit the help picture's own most (150 KB), not a photo's: a busy drawing at 512 pixels can be over it.
+          const { dataUrl } = await downscaleImage(file, { maxEdge: 512, quality: 0.8, thumbEdge: 0, maxBytes: UPLOAD_LIMITS.helpPicture });
           const { error } = await client.api.setHelpImage(topic, key, dataUrl);
           if (error) {
-            setState((s) => ({ ...s, busyId: null, queueError: error.detail || error.title }));
+            setState((s) => ({ ...s, busyId: null, queueError: uploadFailureSentence(error, 'photo') }));
             return;
           }
         } catch (e) {
-          // A file that is not an image at all, or one the browser cannot decode.
-          setState((s) => ({ ...s, busyId: null, queueError: t('tower.pictures.notAnImage') }));
+          // A file that is not an image at all, or one the browser cannot decode — said as which (2026-11-02).
+          setState((s) => ({ ...s, busyId: null, queueError: uploadFailureSentence(e, 'photo') }));
           return;
         }
         setState((s) => ({ ...s, busyId: null, done: t('tower.pictures.saved', { key }) }));

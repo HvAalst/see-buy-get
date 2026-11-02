@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { SEAL_CLASSES, sealOver, sealStory, sealWhat, type SealClass } from '../../../shared/seals';
 import type { BusinessClient, PostedLoad } from '../api';
+import { failedWords, mediaIdOf } from '../../../shared/upload';
 import { EMPTY_SEAL, SEAL_PHOTOS, sealBody, sealGaps, type SealForm, type SealPhoto, type SealsView } from '../seals';
 import { ConsolePick } from '../../tower/ConsolePick';
 
@@ -43,9 +44,11 @@ export function LoadSeals({ row, client, act }: { row: PostedLoad; client: Busin
     if (!client || !file || !form) return;
     setSending(which);
     setError(null);
-    const id = await client.sealPhoto(file);
+    const up = await client.sealPhoto(file);
     setSending(null);
-    if (!id) return setError(t('business.seals.photoFailed'));
+    const id = mediaIdOf(up);
+    // It used to blame the signal whatever the reason (2026-11-02): now it says the reason.
+    if (!id) return setError(failedWords(up) ?? t('business.seals.photoFailed'));
     setForm((f) => (f ? { ...f, [which]: id } : f));
   };
 
@@ -154,7 +157,7 @@ export function LoadSeals({ row, client, act }: { row: PostedLoad; client: Busin
             {SEAL_PHOTOS.map((p) => (
               <label class="cfield" key={p}>
                 <span class="cfield__label">{t(PHOTO_LABEL[p])}</span>
-                <input id={`seal-${p}`} class="cinput" type="file" accept="image/*" capture="environment" disabled={sending !== null} onChange={(e) => void photo(p, (e.currentTarget as HTMLInputElement).files?.[0])} />
+                <input id={`seal-${p}`} class="cinput" type="file" data-upload="photo" accept="image/*" capture="environment" disabled={sending !== null} onChange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; (e.currentTarget as HTMLInputElement).value = ''; void photo(p, f); }} />
                 <span class="chint">{sending === p ? t('business.seals.sending') : form[p] ? t('business.seals.photoKept') : ''}</span>
               </label>
             ))}

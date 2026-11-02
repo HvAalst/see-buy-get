@@ -3417,6 +3417,113 @@ a.btn {
   margin-bottom: 12px;
 }
 
+/* 2026-11-02 — A PHOTO IS FILED, THEN SHOWN (shared/conversation/FiledPhoto.tsx): the card a filed photo leaves in a chat —
+   words that point at the record, never the picture — the photo before it is filed, and the photo opened from its card. */
+.filedphoto {
+  display: grid;
+  gap: 2px;
+}
+.filedphoto__t {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.filedphoto__s {
+  font-size: 13px;
+  color: var(--tx2);
+  overflow-wrap: anywhere;
+}
+.filedphoto__open {
+  justify-self: start;
+  margin-top: 2px;
+}
+.filedphoto__panel {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--bd-soft);
+  background: var(--panel);
+}
+.filedphoto__preview {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--bd-soft);
+  object-fit: contain;
+}
+.filedphoto__full {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: var(--r-ctl);
+}
+.filedphoto__thumb {
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+.filedphoto__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.filedphoto__prints {
+  margin: 10px 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.filedphoto__prints dt {
+  color: var(--tx2);
+}
+.filedphoto__prints dd {
+  margin: 0 0 6px;
+}
+.filedphoto__prints code {
+  word-break: break-all;
+  font-size: 12px;
+}
+.filedphoto__shared {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.filedphoto__fig {
+  margin: 0;
+}
+
+/* The app's own camera (shared/ui/CameraCapture.tsx), on the scanner's full screen: one round shutter under the thumb. */
+.camera__shutter {
+  position: absolute;
+  bottom: calc(32px + var(--sa-b));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  width: 76px;
+  height: 76px;
+  border-radius: 999px;
+  border: 4px solid #fff;
+  background: #ffffff33;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.camera__shutter-dot {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: #fff;
+}
+.camera__shutter:active .camera__shutter-dot {
+  transform: scale(0.92);
+}
+
 /* ------------------------------------------- a long record in sections -- */
 
 /* 2026-11-02 — shared/ui/Sections.tsx (the owner: "a sticky but swipable subheader"): the names pinned to the top of the

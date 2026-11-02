@@ -2,6 +2,9 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
+import { downscaleImage, paperForUpload } from '../../../shared/media';
+import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
+import { refusalWords, uploadHint } from '../../../shared/upload';
 import { useWideScreen } from '../../../shared/useWideScreen';
 import { ConsoleAction } from '../ConsoleAction';
 import { ConsoleDetail } from '../ConsoleDetail';
@@ -131,6 +134,9 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
   const [lines, setLines] = useState<Array<{ label: string; copies: string; note: string }>>([{ label: '', copies: '', note: '' }]);
   const [pick, setPick] = useState<Record<string, string>>({});
   const [upload, setUpload] = useState({ kind: 'commercial_invoice', title: '', dataUrl: '', expiresAt: '', belongs: 'consignment' });
+  // Why the paper or the gate photograph picked last cannot go, beside its picker (2026-11-02).
+  const [fileSaid, setFileSaid] = useState<string | null>(null);
+  const [shotSaid, setShotSaid] = useState<string | null>(null);
   const uploadRef = useRef<HTMLElement | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -182,7 +188,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
    */
   const [depotOptions, setDepotOptions] = useState<Array<{ entityId: string; placeLabel: string; country: string }>>([]);
   /** Y3 — which gate a party is speaking about, and what they are saying. Empty side = the form is shut. */
-  const [gateForm, setGateForm] = useState({ side: '', stance: 'damaged', note: '', dataUrl: '' });
+  const [gateForm, setGateForm] = useState({ side: '', stance: 'damaged', note: '', dataUrl: '', thumbDataUrl: '' });
   /** One photo open at a time: a thumbnail strip, and a deliberate tap for the full frame. */
   const [bigShot, setBigShot] = useState<string | null>(null);
   /** Refs whose bytes could not be fetched — said in words rather than shown as a grey tile. */
@@ -237,7 +243,8 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
     const r = await write();
     setBusy(null);
     if (r.error) {
-      setError(r.error.detail || r.error.title || '');
+      // A file refused by the server is said in words, with its size and the most (2026-11-02).
+      setError(refusalWords(r.error) ?? (r.error.detail || r.error.title || ''));
       return false;
     }
     setDone(message);
@@ -327,20 +334,31 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
    * Read straight to a data URL and uploaded as their own media; the server adopts it onto the box, and a
    * ref it cannot adopt is dropped rather than cited.
    */
-  const readShot = (file: File | null) => {
+  const readShot = async (file: File | null) => {
+    setShotSaid(null);
     if (!file) return;
-    const reader = new FileReader();
-    reader.onerror = () => setError(t('tower.imports.notAFile'));
-    reader.onload = () => setGateForm((g) => ({ ...g, dataUrl: String(reader.result ?? '') }));
-    reader.readAsDataURL(file);
+    // Made smaller here, as every photograph is (2026-11-02): read raw, nearly every real photo was over what the server
+    // takes, and the record was then saved WITHOUT it while saying it was saved.
+    try {
+      const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+      setGateForm((g) => ({ ...g, dataUrl, thumbDataUrl }));
+    } catch (e) {
+      setGateForm((g) => ({ ...g, dataUrl: '', thumbDataUrl: '' }));
+      setShotSaid(uploadFailureSentence(e, 'photo'));
+    }
   };
 
-  const readFile = (file: File | null) => {
+  const readFile = async (file: File | null) => {
+    setFileSaid(null);
     if (!file) return;
-    const reader = new FileReader();
-    reader.onerror = () => setError(t('tower.imports.notAFile'));
-    reader.onload = () => setUpload((u) => ({ ...u, dataUrl: String(reader.result ?? ''), title: u.title || file.name.replace(/\.[^.]+$/, '') }));
-    reader.readAsDataURL(file);
+    // Checked here first (2026-11-02): a PDF over the most is refused before it is sent; a photo of the paper made to fit.
+    try {
+      const dataUrl = await paperForUpload(file);
+      setUpload((u) => ({ ...u, dataUrl, title: u.title || file.name.replace(/\.[^.]+$/, '') }));
+    } catch (e) {
+      setUpload((u) => ({ ...u, dataUrl: '' }));
+      setFileSaid(uploadFailureSentence(e));
+    }
   };
 
   return (
@@ -881,7 +899,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                     upload: async (file: File, kind: 'bill_of_lading' | 'other', title: string) => {
                       const r = await client.api.uploadCompanyDocument(state.who!.entityId!, { kind, title, dataUrl: await fileAsDataUrl(file), relatesTo: `${detail.code}:fbl` });
                       const documentId = (r.data as { documentId?: string } | undefined)?.documentId;
-                      return documentId ? { documentId } : { error: (r.error as { detail?: string } | undefined)?.detail ?? '' };
+                      return documentId ? { documentId } : { error: r.error ? uploadFailureSentence(r.error) : '' };
                     },
                   }
                 : {})}
@@ -1023,7 +1041,8 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                   </label>
                   <label class="twr-knob cfield">
                     <span class="cfield__label">{t('tower.imports.f.file')}</span>
-                    <input class="cinput" type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => readFile((e.target as HTMLInputElement).files?.[0] ?? null)} />
+                    <input class="cinput" type="file" data-upload="document" accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif" onChange={(e) => void readFile((e.target as HTMLInputElement).files?.[0] ?? null)} />
+                    {fileSaid ? <span class="cerr">{fileSaid}</span> : <span class="chint">{uploadHint('document')}</span>}
                   </label>
                 </div>
                 <div class="twr-panelend">
@@ -1688,7 +1707,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
 
                       {!detail.box!.ending || g.side === 'in' ? (
                         <div class="twr-panelend">
-                          <button type="button" class="cbtn cbtn--ghost" disabled={busy === `gate-${g.side}`} onClick={() => setGateForm({ side: g.side, stance: 'damaged', note: '', dataUrl: '' })}>
+                          <button type="button" class="cbtn cbtn--ghost" disabled={busy === `gate-${g.side}`} onClick={() => setGateForm({ side: g.side, stance: 'damaged', note: '', dataUrl: '', thumbDataUrl: '' })}>
                             {t('tower.imports.gateSay')}
                           </button>
                         </div>
@@ -1717,7 +1736,8 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                       </label>
                       <label class="twr-knob cfield">
                         <span class="cfield__label">{t('tower.imports.f.gatePhoto')}</span>
-                        <input class="cinput" type="file" accept="image/*" onChange={(e) => readShot((e.target as HTMLInputElement).files?.[0] ?? null)} />
+                        <input class="cinput" type="file" data-upload="photo" accept="image/*" onChange={(e) => void readShot((e.target as HTMLInputElement).files?.[0] ?? null)} />
+                        {shotSaid ? <span class="cerr">{shotSaid}</span> : null}
                       </label>
                     </div>
                     <div class="twr-panelend">
@@ -1733,9 +1753,12 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                               // adopts it. A ref it cannot adopt is dropped rather than cited.
                               let photoIds: string[] = [];
                               if (gateForm.dataUrl) {
-                                const up = await client!.api.uploadMedia('interchange', gateForm.dataUrl);
+                                const up = await client!.api.uploadMedia('interchange', gateForm.dataUrl, gateForm.thumbDataUrl || undefined);
                                 const id = (up.data as { mediaId?: string } | null)?.mediaId;
-                                if (id) photoIds = [id];
+                                // A photograph that did not go stops the record and says why: it used to be dropped,
+                                // and the record saved without it while saying it was saved (2026-11-02).
+                                if (!id) return { error: { title: uploadFailureSentence(up.error, 'photo') } };
+                                photoIds = [id];
                               }
                               return client!.api.recordInterchange(detail.importId, {
                                 side: gateForm.side as 'out' | 'in',
@@ -1746,7 +1769,7 @@ export function ImportsScreen({ state, actions }: { state: Pick<TowerState, 'who
                               });
                             },
                             t('tower.imports.gateSaid'),
-                            () => setGateForm({ side: '', stance: 'damaged', note: '', dataUrl: '' }),
+                            () => setGateForm({ side: '', stance: 'damaged', note: '', dataUrl: '', thumbDataUrl: '' }),
                           )
                         }
                       >

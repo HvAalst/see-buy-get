@@ -127,6 +127,21 @@ export class DeviceBook {
     return passkey;
   }
 
+  /**
+   * Every passkey of this owner's off every device — the PIN or the password was changed or replaced. The devices stay
+   * ones it works on. How many there were.
+   */
+  dropAllPasskeys(owner: string): number {
+    let dropped = 0;
+    for (const [hash, d] of [...this.store]) {
+      if (d.personDid !== owner || !d.passkey) continue;
+      const { passkey: _gone, ...rest } = d;
+      this.store.set(hash, rest);
+      dropped += 1;
+    }
+    return dropped;
+  }
+
   /** It unlocked: the phone's counter as it now stands, and the day (written once a day at most, like `used`). */
   passkeyUsed(personDid: string, key: string, counter: number, now: number = Date.now()): void {
     const hash = hashOf(key);

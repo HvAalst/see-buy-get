@@ -23,8 +23,10 @@ export const HELD_PREFIX = 'local:';
  * found broken on the road, where the signal is worst.
  * Round 35 adds what was found under the tamper protocol: the outbox carries those reports too. Round 40 adds the seven
  * points of the inspection at pickup, done at a depot before a border where the signal is no better.
+ * 2026-11-02 adds a photo FILED from a chat to its load or parcel (shared/conversation/photoFiling.ts): the outbox carries
+ * the filing, and a damage photo is taken where it happened — on the road, at a counter in a dead spot.
  */
-export const HELD_KINDS = ['dropoff', 'defect', 'hazard', 'securement', 'pod', 'seal', 'tamper', 'inspection'] as const;
+export const HELD_KINDS = ['dropoff', 'defect', 'hazard', 'securement', 'pod', 'seal', 'tamper', 'inspection', 'filed'] as const;
 export type HeldKind = (typeof HELD_KINDS)[number];
 
 export interface HeldPhoto {

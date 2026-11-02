@@ -69,6 +69,42 @@ export function dropUnlockMark(phone: string): void {
   if (nine(phone)) dropUnlockMarkBySlot(`${DEVICE_SLOT}${nine(phone)}`);
 }
 
+/*
+ * 2026-11-02, later (the owner: "ok go ahead with the fingerprint") — A SHOP'S, A HUB'S OR A STORE'S OWN SIGN-IN. Its
+ * phone keeps one key for the account, under the account's address (shopDevice.ts); the note sits beside it, by the same
+ * address, and names the key it was made under — so it goes quiet whenever the key does. The key is handed in by the
+ * caller: this file knows nothing of where a shop's key is kept.
+ */
+const ACCOUNT_MARK = 'sbg-shop-unlock:';
+const addressOf = (email: string | null | undefined): string => (email ?? '').trim().toLowerCase();
+
+/** Is the fingerprint or face turned on here for the account at this address, on the key this phone holds for it? */
+export function hasAccountUnlockHere(email: string | null | undefined, deviceKey: string | undefined): boolean {
+  if (!addressOf(email) || !deviceKey) return false;
+  const mark = readMark(`${ACCOUNT_MARK}${addressOf(email)}`);
+  return Boolean(mark && mark.d === deviceKey);
+}
+
+/** Note it for the account at this address, under the key this phone holds for it. */
+export function markAccountUnlock(email: string | null | undefined, deviceKey: string | undefined, id: string | undefined): void {
+  if (!addressOf(email) || !deviceKey || !id) return;
+  try {
+    globalThis.localStorage?.setItem(`${ACCOUNT_MARK}${addressOf(email)}`, JSON.stringify({ d: deviceKey, id } satisfies Mark));
+  } catch {
+    /* storage unavailable — the sign-in screen asks for the password, which always works */
+  }
+}
+
+/** Forget it for the account at this address — turned off, or the server says there is none. */
+export function dropAccountUnlockMark(email: string | null | undefined): void {
+  if (!addressOf(email)) return;
+  try {
+    globalThis.localStorage?.removeItem(`${ACCOUNT_MARK}${addressOf(email)}`);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /* --------------------------------------------------------------------- the ticket, on the wire -- */
 
 /** What an unlock ticket starts with (the server's UNLOCK_PREFIX). A PIN is digits, and never looks like one. */
@@ -90,8 +126,11 @@ export function relayUnlock(spent: string | undefined, next: string | undefined)
  * as `unlock`, in the PIN's place — one door, two keys. A screen hands either to its app's own sign-in, which never
  * needs to know which it was given.
  */
-export function secretBody(secret: string): { pin: string } | { unlock: string } {
-  if (!isUnlockTicket(secret)) return { pin: secret };
+export function secretBody(secret: string): { pin: string } | { unlock: string };
+/** …and at a door that takes a PASSWORD (a shop's, a hub's, a store's): the password as `password`, a ticket as `unlock`. */
+export function secretBody(secret: string, as: 'password'): { password: string } | { unlock: string };
+export function secretBody(secret: string, as: 'pin' | 'password' = 'pin'): { pin: string } | { password: string } | { unlock: string } {
+  if (!isUnlockTicket(secret)) return as === 'password' ? { password: secret } : { pin: secret };
   const next = relayed.get(secret);
   if (next) relayed.delete(secret);
   return { unlock: next ?? secret };

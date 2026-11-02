@@ -129,6 +129,15 @@ http://127.0.0.1:9180 {
 		@bare path_regexp ^/(driver|agent|send|fleet|mdp|vendor|business)$
 		redir @bare {path}/ 308
 
+		# 2026-11-02 — A SHARE THAT REACHED THE SERVER. An app's share target is a POST its own service worker answers on the
+		# phone (frontend/scripts/push-sw.js); one that arrives here found no worker to catch it — a phone that cleared it, or
+		# a worker older than the app's manifest. The app is opened saying what was shared did not arrive, never "405".
+		@sharePost {
+			method POST
+			path_regexp share ^/(driver|agent|send|fleet|vendor)/share-target$
+		}
+		redir @sharePost /{re.share.1}/?share_files=lost 303
+
 		# A FILE ASKED FOR BY NAME THAT IS NOT THERE IS A 404 — never an app's page with a 200. After a release an
 		# open app may still ask for a script the release replaced: handed a page, it fails on the first character;
 		# told "not found", its service worker knows to fetch the new one.

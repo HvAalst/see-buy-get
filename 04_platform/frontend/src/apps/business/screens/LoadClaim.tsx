@@ -2,6 +2,7 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { BusinessClient } from '../api';
+import { failedWords, mediaIdOf } from '../../../shared/upload';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { CLAIM_KINDS, CLAIM_KIND_KEYS, claimLine, claimReady, claimStanding, type ClaimKind, type ClaimSide, type LoadClaim } from '../claim';
 
@@ -44,9 +45,12 @@ export function LoadClaimPanel({ row, client, act, onChanged, side = 'sender' }:
   const photo = async (file: File | undefined) => {
     if (!file || !client) return;
     setBusy(true);
-    const id = await client.claimPhoto(file);
+    setError(null);
+    const up = await client.claimPhoto(file);
     setBusy(false);
-    if (!id) return setError(t('business.claim.photoFailed'));
+    const id = mediaIdOf(up);
+    // Why, where it can be read (2026-11-02): the photo this phone could not open, the server's refusal, no signal.
+    if (!id) return setError(failedWords(up) ?? t('business.claim.photoFailed'));
     setForm((f) => ({ ...f, photo: id }));
   };
 
@@ -92,8 +96,8 @@ export function LoadClaimPanel({ row, client, act, onChanged, side = 'sender' }:
             />
             <label class="cfield">
               <span class="cfield__label">{t('business.claim.photoLabel')}</span>
-              <input class="cinput" type="file" accept="image/*" onChange={(e) => void photo((e.target as HTMLInputElement).files?.[0])} />
-              {form.photo ? <span class="chint">{t('business.claim.photoKept')}</span> : null}
+              <input class="cinput" type="file" data-upload="photo" accept="image/*" disabled={busy} onChange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; (e.currentTarget as HTMLInputElement).value = ''; void photo(f); }} />
+              {busy ? <span class="chint">{t('photo.uploading')}</span> : form.photo ? <span class="chint">{t('business.claim.photoKept')}</span> : null}
             </label>
           </div>
           <label class="cfield">

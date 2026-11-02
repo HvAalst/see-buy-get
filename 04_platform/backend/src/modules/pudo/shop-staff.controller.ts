@@ -105,14 +105,14 @@ export class ShopStaffController {
   @Roles('consumer')
   @Post('shops/:shopDid/staff-session')
   session(@Param('shopDid') shopDid: string, @Actor() actor: IntrospectionResult): ShopStaffSession {
-    return this.staff.session(personOf(actor), shopDid);
+    return this.staff.session(byPin(actor), shopDid);
   }
 
   /** A session on this hub's floor, under my name. */
   @Roles('consumer')
   @Post('hubs/:hubDid/staff-session')
   hubSession(@Param('hubDid') hubDid: string, @Actor() actor: IntrospectionResult): ShopStaffSession {
-    return this.staff.session(personOf(actor), hubDid);
+    return this.staff.session(byPin(actor), hubDid);
   }
 }
 
@@ -171,4 +171,17 @@ function personOf(actor: IntrospectionResult | undefined): string {
   const did = actor?.personDid ?? actor?.did;
   if (!did) throw new GlosError('FORBIDDEN', 'Sign in first');
   return did;
+}
+
+/**
+ * A SESSION AT A COUNTER IS OPENED WITH THE PIN — never with a fingerprint or face (2026-11-02). The counter's phone is the
+ * shop's or the hub's, not the person's: it unlocks for whoever can unlock it — their finger, a colleague's, the phone's own
+ * PIN — and what is done there is kept under one person's name. A sign-in a passkey opened says so (`openedBy`), and is
+ * turned away here, refused before anything is minted.
+ */
+function byPin(actor: IntrospectionResult | undefined): string {
+  if (actor?.openedBy === 'passkey') {
+    throw new GlosError('FORBIDDEN', 'At a counter, sign in with your PIN: this phone is the shop’s, and what you do here is kept under your name.');
+  }
+  return personOf(actor);
 }

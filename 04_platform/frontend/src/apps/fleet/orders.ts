@@ -1,6 +1,7 @@
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { components } from '../../lib/sbg/schema';
 import type { MessageKey, Translate } from '../../shared/i18n';
+import { UPLOAD_LIMITS } from '../../shared/upload';
 
 export type FleetOrder = components['schemas']['FleetOrderRow'];
 export type Contract = components['schemas']['CarriageContractView'];
@@ -308,7 +309,7 @@ export function lendLine(l: Pick<PlanLend, 'siteName' | 'orders' | 'weightKg' | 
 }
 
 /** The largest workbook sent. The server holds the same line; said here so a big file is refused before it is read. */
-export const MAX_WORKBOOK_BYTES = 1_000_000;
+export const MAX_WORKBOOK_BYTES = UPLOAD_LIMITS.workbook;
 
 /** An Excel workbook the server reads as it is (.xlsx, and .xlsm — the same file with macros, which are not run). */
 export function isWorkbook(fileName: string): boolean {

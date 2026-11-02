@@ -233,8 +233,10 @@ export const ERROR_CODES = {
   // --- 410 / 413 / 415: media upload + retention -----------------------------------------------
   MEDIA_EXPIRED: { status: 410, title: 'This media has passed its retention window' },
   API_VERSION_RETIRED: { status: 410, title: 'This version of the API has stopped' },
-  MEDIA_TOO_LARGE: { status: 413, title: 'The image is too large' },
-  UNSUPPORTED_MEDIA: { status: 415, title: 'Unsupported image type' },
+  // A FILE, not only an image (2026-11-02): a paper, a recording and a sheet are refused with these too. `params` carries
+  // `bytes` and `maxBytes` where the size is known, `accepts` where the kind was wrong: what an app needs to say it.
+  MEDIA_TOO_LARGE: { status: 413, title: 'The file is too large' },
+  UNSUPPORTED_MEDIA: { status: 415, title: 'That kind of file is not taken here' },
 
   // --- 429 / 5xx: transport --------------------------------------------------------------------
   RATE_LIMITED: { status: 429, title: 'Too many requests', retryable: true },
@@ -262,6 +264,11 @@ export function codeForStatus(status: number): GlosErrorCode {
       return 'NOT_FOUND';
     case 409:
       return 'CONFLICT';
+    // A body too large, or of a kind not read — said by the body parser before any route runs (2026-11-02).
+    case 413:
+      return 'MEDIA_TOO_LARGE';
+    case 415:
+      return 'UNSUPPORTED_MEDIA';
     case 429:
       return 'RATE_LIMITED';
     default:

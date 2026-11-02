@@ -55,12 +55,23 @@ export class DamageReportEvent {
 
 /** A photograph that belongs to the parcel. `mediaId` absent where only a reference was recorded and no picture is held. */
 export class DamageReportPhoto {
-  /** drop_off · contents · handed_over · received · problem */
+  /** drop_off · contents · handed_over · received · problem — and, 2026-11-02, filed_damage · filed_paper · filed_proof */
   what: string;
   reference: string;
   @ApiPropertyOptional() mediaId?: string;
   @ApiPropertyOptional() takenAt?: string;
   @ApiPropertyOptional() sha256?: string;
+  /**
+   * 2026-11-02 — A PHOTO FILED TO THE PARCEL from a conversation (filed-photo.types.ts): who filed it, where it came from
+   * as their app said (app_camera · gallery · unknown), the date a gallery photo carried, proof of which moment, when it
+   * was filed, and the filing's own fingerprint. Said, never judged.
+   */
+  @ApiPropertyOptional({ enum: ['sender', 'driver', 'shop', 'receiver'] }) by?: string;
+  @ApiPropertyOptional({ enum: ['app_camera', 'gallery', 'unknown'] }) source?: string;
+  @ApiPropertyOptional() phoneDate?: string;
+  @ApiPropertyOptional({ enum: ['loading', 'handover', 'delivery'] }) proofOf?: string;
+  @ApiPropertyOptional() filedAt?: string;
+  @ApiPropertyOptional() fingerprint?: string;
 }
 
 export class DamageReportParcel {
@@ -171,6 +182,11 @@ export class DamageReportView {
   @ApiPropertyOptional({ type: DamageReportSentTo }) insurer?: DamageReportSentTo;
   /** What the receiver found after handover, oldest first — beside the body, each with a fingerprint of its own. */
   @ApiPropertyOptional({ type: [DamageReportNote] }) notes?: DamageReportNote[];
+  /**
+   * 2026-11-02 — photos FILED to the parcel after the report was made, oldest first: beside the body, never in it (the
+   * report is the record as it stood when the problem was reported), each with the filing's own fingerprint.
+   */
+  @ApiPropertyOptional({ type: [DamageReportPhoto] }) filedAfter?: DamageReportPhoto[];
 }
 
 /** A row of the list staff read: every problem reported, newest first. Nothing in it is decided by them. */

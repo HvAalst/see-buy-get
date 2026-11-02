@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { useBackLayer } from '../nav';
 import { AuthImage } from '../ui/AuthImage';
 import { Button } from '../ui/Button';
-import { ErrorNote } from '../ui/ErrorNote';
+import { ErrorNote, Note, uploadFailureSentence } from '../ui/ErrorNote';
+import { downscaleImage } from '../media';
 import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { ExplainerReset } from '../ui/Explainer';
@@ -245,11 +246,21 @@ function ProfileSheet({ open, onClose, api }: { open: boolean; onClose: () => vo
     if (open) setName(api.account?.displayName ?? '');
   }, [open, api.account?.displayName]);
 
+  // Why the photo did not go, said here under the button that chose it (the owner, 2026-11-02: "It silently refused").
+  const [photoSaid, setPhotoSaid] = useState<string | null>(null);
+  const [shrinking, setShrinking] = useState(false);
+  useEffect(() => {
+    if (open) setPhotoSaid(null);
+  }, [open]);
+
   const pick = async (f: File) => {
-    // Downscaled in the browser before it leaves: the cheapest phone in this network is also the one on
-    // the worst connection, and a 4MB camera original is a minute of somebody's data for a 64px circle.
-    const dataUrl = await shrink(f);
-    if (dataUrl) await api.saveAvatar(dataUrl);
+    setPhotoSaid(null);
+    setShrinking(true);
+    try {
+      setPhotoSaid(await pickAvatar(f, api.saveAvatar));
+    } finally {
+      setShrinking(false);
+    }
   };
 
   return (
@@ -264,18 +275,21 @@ function ProfileSheet({ open, onClose, api }: { open: boolean; onClose: () => vo
             type="file"
             accept="image/*"
             hidden
-            disabled={api.busy}
+            data-upload="photo"
+            disabled={api.busy || shrinking}
             onChange={(e) => {
               const f = e.currentTarget.files?.[0];
               e.currentTarget.value = ''; // so picking the same file twice still fires
               if (f) void pick(f);
             }}
           />
-          <Button variant="outline" chevron={false} busy={api.busy} onClick={() => file.current?.click()}>
+          <Button variant="outline" chevron={false} busy={api.busy || shrinking} onClick={() => file.current?.click()}>
             {api.account?.avatarMediaId ? t('account.menu.changePhoto') : t('account.menu.addPhoto')}
           </Button>
+          <p class="hint">{t('account.menu.photoHint')}</p>
         </div>
       </div>
+      {photoSaid ? <Note tone="warn" icon="camera" title={photoSaid} /> : null}
 
       <div class="field">
         <label class="field__label" for="acct-name">
@@ -348,24 +362,23 @@ function AddressSheet({ open, onClose, api }: { open: boolean; onClose: () => vo
 }
 
 /**
- * Downscale a picked photo to a 512px square-ish JPEG before upload.
+ * A PHOTO PICKED FOR THE PROFILE: made smaller on this phone and sent — or the reason it cannot be, in words.
  *
- * Resolves null rather than throwing on anything unreadable — a HEIC the browser cannot decode, a file
- * that is not really an image — so the caller shows nothing rather than a stack trace.
+ * It used to be made smaller by createImageBitmap alone, and ANY failure resolved null "so the caller shows nothing rather
+ * than a stack trace" — and the caller then did nothing at all (the owner, 2026-11-02: "I wanted to upload a profile
+ * image that was large. It silently refused."). A phone fails to open exactly the largest photos, and the kinds its
+ * browser does not read. Now the shared preparation opens it by every way the browser has, makes it fit what the server
+ * takes, and refuses only what this phone truly cannot open — with a sentence that says so. Resolves the words to show
+ * under the button, or null: sent, or refused by the server (that is the account's error, shown in the sheet).
  */
-async function shrink(file: File, max = 512): Promise<string | null> {
+export async function pickAvatar(f: File, saveAvatar: (dataUrl: string) => Promise<string | null>): Promise<string | null> {
+  let dataUrl: string;
   try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    bitmap.close?.();
-    return canvas.toDataURL('image/jpeg', 0.82);
-  } catch {
-    return null;
+    // A 64-pixel circle: 512 on the long side is plenty, and is a few dozen kilobytes on the worst connection.
+    ({ dataUrl } = await downscaleImage(f, { maxEdge: 512, quality: 0.82, thumbEdge: 0 }));
+  } catch (e) {
+    return uploadFailureSentence(e, 'photo');
   }
+  await saveAvatar(dataUrl);
+  return null;
 }

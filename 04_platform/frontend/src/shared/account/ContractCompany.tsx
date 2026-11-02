@@ -3,6 +3,7 @@ import { Button, ErrorNote, Note } from '../ui';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../media';
+import { uploadFailureSentence } from '../ui/ErrorNote';
 import {
   CONTRACT_CATEGORY_LABEL,
   CONTRACT_REPORT_CATEGORIES,
@@ -88,7 +89,8 @@ function ReportForm({ paper, api, onSent, onCancel }: { paper: ContractPaper; ap
   const [note, setNote] = useState('');
   const [evidence, setEvidence] = useState<{ dataUrl: string; name: string } | null>(null);
   const [reading, setReading] = useState(false);
-  const [unreadable, setUnreadable] = useState(false);
+  // Why the picture chosen cannot go, in words (2026-11-02): "could not be read" was said whatever the reason.
+  const [unreadable, setUnreadable] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
   const blocker = contractReportBlocker({ note, hasEvidence: Boolean(evidence) });
@@ -96,14 +98,16 @@ function ReportForm({ paper, api, onSent, onCancel }: { paper: ContractPaper; ap
 
   const pick = async (file: File) => {
     setReading(true);
-    setUnreadable(false);
-    const img = await downscaleImage(file, { maxEdge: 1600, quality: 0.8 }).catch(() => null);
-    setReading(false);
-    if (!img) {
+    setUnreadable(null);
+    try {
+      const img = await downscaleImage(file, { maxEdge: 1600, quality: 0.8, thumbEdge: 0 });
+      setEvidence({ dataUrl: img.dataUrl, name: file.name });
+    } catch (e) {
       setEvidence(null);
-      return setUnreadable(true);
+      setUnreadable(uploadFailureSentence(e, 'photo'));
+    } finally {
+      setReading(false);
     }
-    setEvidence({ dataUrl: img.dataUrl, name: file.name });
   };
   const send = async () => {
     if (!evidence) return;
@@ -145,6 +149,7 @@ function ReportForm({ paper, api, onSent, onCancel }: { paper: ContractPaper; ap
           id={`${id}-shot`}
           class="input"
           type="file"
+          data-upload="photo"
           accept="image/*"
           disabled={busy || reading}
           onChange={(e) => {
@@ -155,7 +160,7 @@ function ReportForm({ paper, api, onSent, onCancel }: { paper: ContractPaper; ap
         />
         {evidence ? <span class="t-sub">{t('account.contract.form.attached', { name: evidence.name })}</span> : null}
       </div>
-      {unreadable ? <Note tone="warn" icon="warning" title={t('account.contract.form.unreadable')} /> : null}
+      {unreadable ? <Note tone="warn" icon="warning" title={unreadable} /> : null}
       {/* The server's own sentence: "you have already reported this paper" is not something an icon can say. */}
       {error ? <ErrorNote error={error} showDetail /> : null}
       {blocker && !reading ? <p class="t-sub">{t(blocker)}</p> : null}

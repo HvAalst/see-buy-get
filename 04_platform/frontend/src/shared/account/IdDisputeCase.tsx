@@ -3,6 +3,7 @@ import { Button, CodeCard, Icon, Note, RefusalNote } from '../ui';
 import { useT } from '../i18n';
 import type { Result, SbgError } from '../../lib/sbg';
 import { downscaleImage } from '../media';
+import { uploadFailureSentence } from '../ui/ErrorNote';
 import { slotLabel } from '../visitHours';
 import { DISPUTE_PHOTOS, appointmentDays, bringLines, dayChoices, dayLabel, hoursOn, idActions, idStatusSays, readyToAppoint, reminderLine, ticketLines, visitingWords, type DisputePhoto, type DisputeStatus, type IdDisputeApi } from './idDispute';
 
@@ -95,9 +96,16 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
               done={status.photos.includes(which)}
               disabled={busy !== null}
               upload={async (file) => {
-                const img = await downscaleImage(file, { maxEdge: 1600, quality: 0.8 }).catch(() => null);
-                if (!img) return false;
-                return take(await api.photo(status.reference, which, img.dataUrl, img.thumbDataUrl));
+                // Why it did not go, said under the photograph (2026-11-02): it was "that did not go through", whatever
+                // the reason — a photo this phone could not open read the same as no signal.
+                let img: { dataUrl: string; thumbDataUrl: string };
+                try {
+                  img = await downscaleImage(file, { maxEdge: 1600, quality: 0.8 });
+                } catch (e) {
+                  return { failed: uploadFailureSentence(e, 'photo') };
+                }
+                const r = await api.photo(status.reference, which, img.dataUrl, img.thumbDataUrl);
+                return take(r) ? true : { failed: uploadFailureSentence(r.error, 'photo') };
               }}
             />
           ))}
@@ -261,26 +269,26 @@ export function IdDisputeCase({ api, reference, initial, ownId, onChanged }: IdD
  * ignore, and that somebody taking the picture FOR them simply flips. What was just taken is shown, large enough
  * to see whether the number can be read: that is the check the person is asked to make before sending.
  */
-function Shot({ which, done, disabled, upload }: { which: DisputePhoto; done: boolean; disabled: boolean; upload: (file: File) => Promise<boolean> }) {
+function Shot({ which, done, disabled, upload }: { which: DisputePhoto; done: boolean; disabled: boolean; upload: (file: File) => Promise<true | { failed: string }> }) {
   const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   const pick = async (file: File) => {
-    setFailed(false);
+    setFailed(null);
     setBusy(true);
     setPreview(URL.createObjectURL(file));
-    const ok = await upload(file);
+    const out = await upload(file).catch((e: unknown) => ({ failed: uploadFailureSentence(e, 'photo') }));
     setBusy(false);
-    if (!ok) {
-      setFailed(true);
+    if (out !== true) {
+      setFailed(out.failed);
       setPreview(null);
     }
   };
-  const taken = done && !busy && !failed;
+  const taken = done && !busy && failed === null;
 
   return (
     <div class="idshot">
@@ -289,6 +297,7 @@ function Shot({ which, done, disabled, upload }: { which: DisputePhoto; done: bo
         id={`id-shot-${which}`}
         class="idshot__input"
         type="file"
+        data-upload="photo"
         accept="image/*"
         capture={which === 'face' ? 'user' : 'environment'}
         disabled={disabled || busy}
@@ -303,9 +312,10 @@ function Shot({ which, done, disabled, upload }: { which: DisputePhoto; done: bo
         <Icon name={busy ? 'clock' : taken ? 'check' : 'camera'} size={24} />
         <span class="idshot__words">
           <span class="idshot__t">{t(`account.id.shot.${which}` as never)}</span>
-          <span class="idshot__s">{t(busy ? 'account.id.shot.sending' : failed ? 'account.id.shot.failed' : taken ? 'account.id.shot.retake' : (`account.id.shot.${which}Hint` as never))}</span>
+          <span class="idshot__s">{t(busy ? 'account.id.shot.sending' : failed !== null ? 'account.id.shot.failed' : taken ? 'account.id.shot.retake' : (`account.id.shot.${which}Hint` as never))}</span>
         </span>
       </button>
+      {failed ? <Note tone="warn" icon="camera" title={failed} /> : null}
     </div>
   );
 }

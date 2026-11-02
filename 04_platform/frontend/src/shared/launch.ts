@@ -19,7 +19,16 @@ export interface LaunchIntent {
   go?: string;
   /** Text or a link shared to this app from another. */
   share?: SharedIn;
+  /**
+   * 2026-11-02 — PHOTOS shared to this app from the phone's gallery: the name they wait under on this phone (the service
+   * worker received them — scripts/push-sw.js — and kept them in the app's cache, shared/sharedFiles.ts), or SHARE_LOST
+   * when what was shared never reached the app. Filed to a load or parcel, never sent loose (the owner, 2026-11-02).
+   */
+  files?: string;
 }
+
+/** What `share_files` says when the share reached the server instead of the app's own worker, or could not be read. */
+export const SHARE_LOST = 'lost';
 
 const clean = (v: string | null): string | undefined => {
   const s = v?.trim();
@@ -43,22 +52,28 @@ export function intentOf(href: string): LaunchIntent | null {
   const share: SharedIn = { title: field('title'), text: field('text'), url: field('url') };
   for (const k of ['title', 'text', 'url'] as const) if (share[k] === undefined) delete share[k];
   const shared = share.title || share.text || share.url ? share : undefined;
-  if (!go && !shared) return null;
-  return { ...(go ? { go } : {}), ...(shared ? { share: shared } : {}) };
+  // A name the worker made (letters and digits), or SHARE_LOST — nothing else is a place photos wait. The share target's
+  // own address with nothing after it is a share that arrived without what was shared (an open app handed the address,
+  // not the photos): said, rather than nothing happening.
+  const named = p.get('share_files')?.trim();
+  const files = named && /^[a-z0-9]{1,40}$/i.test(named) ? named : /\/share-target\/?$/.test(u.pathname) ? SHARE_LOST : undefined;
+  if (!go && !shared && !files) return null;
+  return { ...(go ? { go } : {}), ...(shared ? { share: shared } : {}), ...(files ? { files } : {}) };
 }
 
 /** The address without what it asked for: the app's own address stays as it was. */
 export function withoutIntent(href: string): string {
   const u = new URL(href);
-  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url']) u.searchParams.delete(k);
+  for (const k of ['go', 'share', 'title', 'text', 'url', 'share_title', 'share_text', 'share_url', 'share_files']) u.searchParams.delete(k);
   const q = u.searchParams.toString();
   return `${u.pathname}${q ? `?${q}` : ''}${u.hash}`;
 }
 
-/** What each kind of launch carries: a screen's key, or what was shared. */
+/** What each kind of launch carries: a screen's key, what was shared, or where shared photos wait. */
 export interface LaunchKinds {
   go: string;
   share: SharedIn;
+  files: string;
 }
 type Kind = keyof LaunchKinds;
 type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
@@ -67,8 +82,8 @@ type Listener<K extends Kind> = (value: LaunchKinds[K]) => void;
  * Each kind waits for its own listener (the share helper's catch, 2026-11-02): a share made to a closed app arrives
  * before anybody listens, and must reach the share sheet when it mounts — not whichever listener came first.
  */
-const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set() };
-const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [] };
+const listeners: { [K in Kind]: Set<Listener<K>> } = { go: new Set(), share: new Set(), files: new Set() };
+const pending: { [K in Kind]: Array<LaunchKinds[K]> } = { go: [], share: [], files: [] };
 let started = false;
 
 function deliverKind<K extends Kind>(kind: K, value: LaunchKinds[K] | undefined): void {
@@ -83,6 +98,7 @@ function deliver(intent: LaunchIntent | null): void {
   if (!intent) return;
   deliverKind('go', intent.go);
   deliverKind('share', intent.share);
+  deliverKind('files', intent.files);
 }
 
 /** Read the address the app was opened at, and the launch queue, once per page. */
@@ -127,7 +143,9 @@ export function onLaunch<K extends Kind>(kind: K, listener: Listener<K>): () => 
 export function resetLaunchForTests(): void {
   listeners.go.clear();
   listeners.share.clear();
+  listeners.files.clear();
   pending.go.length = 0;
   pending.share.length = 0;
+  pending.files.length = 0;
   started = false;
 }

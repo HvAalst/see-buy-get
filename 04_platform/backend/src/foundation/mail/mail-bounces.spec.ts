@@ -359,9 +359,13 @@ describe('an email that came back', () => {
     const main = readFileSync(join(__dirname, '..', '..', 'main.ts'), 'utf8');
     const raw = main.indexOf('readProviderEventsRaw(app);');
     expect(raw).toBeGreaterThan(0);
-    // Before every other body parser the server puts in.
-    expect(raw).toBeLessThan(main.indexOf('app.use('));
-    expect(main.indexOf('json(', raw)).toBeGreaterThan(raw);
+    // Before every other body parser the server puts in. Since 2026-11-02 every one of those is put in by
+    // applyBodyLimits (body-limits.ts, sized route by route): it must come after the raw reader, and nothing before it parses.
+    const limits = main.indexOf('applyBodyLimits(app);');
+    expect(limits).toBeGreaterThan(raw);
+    expect(main.slice(0, raw)).not.toMatch(/\bjson\(|urlencoded\(|bodyParser|app\.use\(/);
+    const parsers = readFileSync(join(__dirname, '..', '..', 'body-limits.ts'), 'utf8');
+    expect(parsers).toMatch(/app\.use\([^\n]*json\(/);
     expect(PROVIDER_EVENTS_PATH).toBe('/v1/mail/provider/events');
   });
 });

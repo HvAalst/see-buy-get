@@ -2115,7 +2115,9 @@ export class RotateSecretDto {
 
 export class LoginDto {
   @IsString() email!: string;
-  @IsString() password!: string;
+  /** Or the unlock ticket in its place, which a fingerprint or face on this phone was just checked for (passkeys.ts, 2026-11-02). */
+  @ValidateIf((o: { unlock?: string }) => !o.unlock) @IsString() password?: string;
+  @IsOptional() @IsString() @MaxLength(80) unlock?: string;
   /** The key this phone or browser was given when it was confirmed — a shop's sign-in works only on those. */
   @IsOptional() @IsString() @MaxLength(80) device?: string;
 }

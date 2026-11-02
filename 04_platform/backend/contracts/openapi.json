@@ -8353,6 +8353,59 @@
         }
       }
     },
+    "/v1/sbg/auth/unlock/options": {
+      "post": {
+        "operationId": "Sbg.accountUnlockOptions",
+        "summary": "",
+        "description": "UNLOCK WITH FINGERPRINT OR FACE, IN PLACE OF A SHOP'S, A HUB'S OR A STORE'S PASSWORD (the owner, 2026-11-02: \"ok go\nahead with the fingerprint\"), step one: what the phone needs to sign — asked by the address and this phone's key.\nThe same shape for every address there is or is not. Limited as the sign-in is.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountUnlockOptionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/auth/unlock": {
+      "post": {
+        "operationId": "Sbg.accountUnlock",
+        "summary": "",
+        "description": "…step two: the phone's answer, for a TICKET — one use, two minutes — that the account's own door (auth/login,\nvendors/session) takes in place of the password. The password's lock is asked first; a bad answer counts with the\nwrong passwords. Limited as the sign-in is.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountUnlockDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/device": {
       "post": {
         "operationId": "Sbg.confirmAccountDevice",
@@ -25374,6 +25427,119 @@
         }
       }
     },
+    "/v1/sbg/account/shop-passkey": {
+      "post": {
+        "operationId": "Account.shopPasskey",
+        "summary": "",
+        "description": "2026-11-02 (the owner: \"ok go ahead with the fingerprint\") — UNLOCK WITH FINGERPRINT OR FACE, IN PLACE OF THE SHOP'S,\nTHE HUB'S OR THE STORE'S OWN PASSWORD, on one of its own phones. Signed in as the account itself: its people at the\ncounter are refused at the guard (no `@AtTheCounter`), and staff by `shopOf`. Is it on, on this phone?",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/shop-passkey/options": {
+      "post": {
+        "operationId": "Account.shopPasskeyOptions",
+        "summary": "",
+        "description": "Turn it on, step one: on one of the account's own phones, with the password again (the sign-in's count and lock).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountPasskeyOptionsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/shop-passkey/on": {
+      "post": {
+        "operationId": "Account.shopPasskeyOn",
+        "summary": "",
+        "description": "…step two: the phone's answer, kept on this phone's own record — and gone with it, whenever it goes.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountPasskeyOnDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/shop-passkey/off": {
+      "post": {
+        "operationId": "Account.shopPasskeyOff",
+        "summary": "",
+        "description": "Turn it off on this phone: the password is the way in here again. Nothing asked to turn it off.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShopDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/account/shop-devices/forget-this": {
       "post": {
         "operationId": "Account.forgetThisShopDevice",
@@ -27660,6 +27826,125 @@
           },
           {
             "name": "voiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/dispute-reports/{reportId}/photos/{filingId}": {
+      "get": {
+        "operationId": "Conversation.disputePhoto",
+        "summary": "",
+        "description": "2026-11-02 — the operator opens a filed photo a party chose to include in a shared report. That one, and no other.",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filingId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/photos": {
+      "post": {
+        "operationId": "Conversation.filePhoto",
+        "summary": "",
+        "description": "2026-11-02 — FILE A PHOTO to this thread's load or parcel — as damage, a paper or proof — and show its card here (the\nowner: \"Damage claims should be fingerprinted and just sharing blurs this\"). A photo enters a thread no other way.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilePhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "Conversation.recordPhotos",
+        "summary": "",
+        "description": "2026-11-02 — the record's photo file, as this reader may see it through this thread. References and labels only.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/conversations/{id}/photos/{filingId}": {
+      "get": {
+        "operationId": "Conversation.photo",
+        "summary": "",
+        "description": "2026-11-02 — one filed photo (or ?variant=thumb), for whoever may see it through this thread. Never cached.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filingId",
             "required": true,
             "in": "path",
             "schema": {
@@ -47983,7 +48268,12 @@
             "type": "string"
           },
           "password": {
-            "type": "string"
+            "type": "string",
+            "description": "Or the unlock ticket in its place, which a fingerprint or face on this phone was just checked for (passkeys.ts, 2026-11-02)."
+          },
+          "unlock": {
+            "type": "string",
+            "maxLength": 80
           },
           "device": {
             "type": "string",
@@ -47992,8 +48282,44 @@
           }
         },
         "required": [
+          "email"
+        ]
+      },
+      "AccountUnlockOptionsDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "device": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "AccountUnlockDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "device": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "response": {
+            "type": "object",
+            "description": "The browser's `PublicKeyCredential` as JSON (an authentication response)."
+          }
+        },
+        "required": [
           "email",
-          "password"
+          "response"
         ]
       },
       "AccountDeviceDto": {
@@ -68151,6 +68477,38 @@
           "device"
         ]
       },
+      "AccountPasskeyOptionsDto": {
+        "type": "object",
+        "properties": {
+          "device": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "AccountPasskeyOnDto": {
+        "type": "object",
+        "properties": {
+          "device": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "response": {
+            "type": "object",
+            "description": "The browser's `PublicKeyCredential` as JSON (a registration response)."
+          }
+        },
+        "required": [
+          "response"
+        ]
+      },
       "PasskeyOnOptionsDto": {
         "type": "object",
         "properties": {
@@ -69936,7 +70294,8 @@
               "defect",
               "job_card",
               "gs1_licence",
-              "tamper"
+              "tamper",
+              "filed"
             ]
           },
           "dataUrl": {
@@ -70391,6 +70750,65 @@
             "type": "string"
           }
         }
+      },
+      "FilePhotoDto": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string",
+            "description": "The uploaded photo — the caller's own, not yet anybody else's evidence."
+          },
+          "as": {
+            "type": "string",
+            "description": "What it is: damage, a paper, or proof.",
+            "enum": [
+              "damage",
+              "paper",
+              "proof"
+            ]
+          },
+          "proofOf": {
+            "type": "string",
+            "description": "Proof of which moment — loading (a load only), handover or delivery. Only with `as: proof`.",
+            "enum": [
+              "loading",
+              "handover",
+              "delivery"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "description": "Where it came from: the app's own live camera, the phone's gallery, or not known.",
+            "enum": [
+              "app_camera",
+              "gallery",
+              "unknown"
+            ]
+          },
+          "takenAt": {
+            "type": "string",
+            "description": "app_camera — when it was taken, by the phone's clock."
+          },
+          "phoneDate": {
+            "type": "string",
+            "description": "gallery — the date the phone wrote into the photo (EXIF DateTimeOriginal), as written there: 2026-10-30T14:22:05.",
+            "pattern": "/^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}(:\\d{2})?)?(Z|[+-]\\d{2}:\\d{2})?$/"
+          },
+          "originalSha256": {
+            "type": "string",
+            "description": "SHA-256 of the file as it was on the phone, before it was made smaller to send.",
+            "pattern": "/^[0-9a-f]{64}$/"
+          },
+          "writtenAt": {
+            "type": "string",
+            "description": "When Send was pressed, by the phone's clock — said beside the card if it waited for a signal."
+          }
+        },
+        "required": [
+          "mediaId",
+          "as",
+          "source"
+        ]
       },
       "VoiceMessageDto": {
         "type": "object",
@@ -79684,9 +80102,44 @@
           "sha256": {
             "type": "string"
           },
+          "by": {
+            "type": "string",
+            "description": "2026-11-02 — A PHOTO FILED TO THE PARCEL from a conversation (filed-photo.types.ts): who filed it, where it came from\nas their app said (app_camera · gallery · unknown), the date a gallery photo carried, proof of which moment, when it\nwas filed, and the filing's own fingerprint. Said, never judged.",
+            "enum": [
+              "sender",
+              "driver",
+              "shop",
+              "receiver"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "app_camera",
+              "gallery",
+              "unknown"
+            ]
+          },
+          "phoneDate": {
+            "type": "string"
+          },
+          "proofOf": {
+            "type": "string",
+            "enum": [
+              "loading",
+              "handover",
+              "delivery"
+            ]
+          },
+          "filedAt": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
           "what": {
             "type": "string",
-            "description": "drop_off · contents · handed_over · received · problem"
+            "description": "drop_off · contents · handed_over · received · problem — and, 2026-11-02, filed_damage · filed_paper · filed_proof"
           },
           "reference": {
             "type": "string"
@@ -79807,6 +80260,13 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DamageReportNote"
+            }
+          },
+          "filedAfter": {
+            "description": "2026-11-02 — photos FILED to the parcel after the report was made, oldest first: beside the body, never in it (the\nreport is the record as it stood when the problem was reported), each with the filing's own fingerprint.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DamageReportPhoto"
             }
           },
           "parcelId": {

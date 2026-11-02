@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { BusinessClient, BusinessView } from '../api';
+import { failedWords, mediaIdOf } from '../../../shared/upload';
 import { PREFIX_TAKEN, disputeLine, maySendLicence, mayTakeBack, stillWorthShowing, type Gs1DisputeView } from '../gs1Dispute';
 import { cleanPrefix, gs1Line } from '../papers';
 import type { BusinessActions } from '../useBusinessApp';
@@ -165,9 +166,10 @@ export function ClaimPrefix({ client, prefix, digit, onOpened, forClient }: { cl
     if (!file) return;
     setBusy(true);
     setError(null);
-    const id = await client.licencePhoto(file);
+    const up = await client.licencePhoto(file);
     setBusy(false);
-    if (!id) return setError(t('business.gs1.photoFailed'));
+    const id = mediaIdOf(up);
+    if (!id) return setError(failedWords(up) ?? t('business.gs1.photoFailed'));
     setLicence(id);
   };
   const send = async () => {
@@ -184,7 +186,7 @@ export function ClaimPrefix({ client, prefix, digit, onOpened, forClient }: { cl
       <p class="chint"><Abbreviated text={forClient ? t('business.gs1.claimLedeClient', { prefix, name: forClient.name }) : t('business.gs1.claimLede', { prefix })} /></p>
       <label class="cfield">
         <span class="cfield__label">{t('business.gs1.licence')}</span>
-        <input id="gs1-licence" class="cinput" type="file" accept="image/*" disabled={busy} onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
+        <input id="gs1-licence" class="cinput" type="file" data-upload="photo" accept="image/*" disabled={busy} onChange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; (e.currentTarget as HTMLInputElement).value = ''; void photo(f); }} />
         <span class="chint">{licence ? t('business.gs1.licenceReady') : t('business.gs1.licenceHint')}</span>
       </label>
       <label class="cfield">
@@ -222,9 +224,10 @@ function DisputeLine({ d, client, owner, onChanged }: { d: Gs1DisputeView; clien
   const answer = async (file: File | undefined) => {
     if (!file || !client) return;
     setBusy(true);
-    const id = await client.licencePhoto(file);
+    const up = await client.licencePhoto(file);
     setBusy(false);
-    if (!id) return setError(t('business.gs1.photoFailed'));
+    const id = mediaIdOf(up);
+    if (!id) return setError(failedWords(up) ?? t('business.gs1.photoFailed'));
     await run(() => client.sendGs1Licence(d.disputeId, id));
   };
   return (
@@ -236,7 +239,7 @@ function DisputeLine({ d, client, owner, onChanged }: { d: Gs1DisputeView; clien
       {owner && client && maySendLicence(d) ? (
         <label class="cfield">
           <span class="cfield__label">{t(d.licenceSent ? 'business.gs1.answerAgain' : 'business.gs1.answer')}</span>
-          <input id={`gs1-answer-${d.disputeId}`} class="cinput" type="file" accept="image/*" disabled={busy} onChange={(e) => void answer((e.currentTarget as HTMLInputElement).files?.[0])} />
+          <input id={`gs1-answer-${d.disputeId}`} class="cinput" type="file" data-upload="photo" accept="image/*" disabled={busy} onChange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; (e.currentTarget as HTMLInputElement).value = ''; void answer(f); }} />
         </label>
       ) : null}
       {owner && client && mayTakeBack(d) ? (

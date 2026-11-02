@@ -350,20 +350,22 @@ export function manifestFor(id: AppId): Partial<ManifestOptions> {
      */
     launch_handler: { client_mode: ['focus-existing', 'auto'] },
     /*
-     * 2026-11-02 — IN THE SHARE LIST, for the apps with conversations: a text or a link shared from another app opens this
-     * one at ?share=1&title=…&text=…&url=… (shared/launch.ts), which offers it to a conversation. Text and links only for
-     * now — a file would need a POST the service worker answers.
+     * 2026-11-02 — IN THE SHARE LIST, for the apps with conversations: a text, a link, or PHOTOS shared from another app.
+     * Photos cannot ride in an address, so the share is a POST — answered on the phone by the app's own service worker
+     * (scripts/push-sw.js), never by the server: it keeps the photos in the app's cache and opens the app at
+     * `?share_files=<name>`, or, for words and a link alone, at `?share_title=…&share_text=…&share_url=…` exactly as the
+     * GET share used to (shared/launch.ts reads both). A photo is then filed to a load or a parcel, never sent loose (the
+     * owner: "Damage claims should be fingerprinted and just sharing blurs this"). Android puts a shared link in `text`.
+     * Should a POST ever reach the server instead (a phone that cleared the worker), the edge sends it back to the app at
+     * `?share_files=lost`, which says so (Caddyfile).
      */
     ...(spec.chats
       ? {
           share_target: {
-            // A GET share REPLACES the action's query with these fields (Web Share Target), so the fields carry their
-            // own unmistakable names rather than a marker beside them; shared/launch.ts reads them. Android puts a
-            // shared link in `text`, not `url`.
-            action: './',
-            method: 'GET' as const,
-            enctype: 'application/x-www-form-urlencoded',
-            params: { title: 'share_title', text: 'share_text', url: 'share_url' },
+            action: './share-target',
+            method: 'POST' as const,
+            enctype: 'multipart/form-data' as const,
+            params: { title: 'share_title', text: 'share_text', url: 'share_url', files: [{ name: 'share_files', accept: ['image/*'] }] },
           },
         }
       : {}),

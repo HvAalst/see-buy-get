@@ -20,6 +20,9 @@ import { ExportByRail } from './ExportByRail';
 import { AirWaybillPanel, RegisterAirExport } from './ExportByAir';
 import { exportJourney, JourneyStrip, ModeFilter, modesPresent, type LegMode } from '../../tower/screens/JourneyStrip';
 import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from '../../tower/screens/FblPanel';
+import { paperForUpload } from '../../../shared/media';
+import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
+import { uploadHint } from '../../../shared/upload';
 
 type Problem = { detail?: string; title: string } | null | undefined;
 
@@ -391,18 +394,23 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
    * A FILE OF ITS OWN, uploaded right on the line: filed among the exporter's documents under this export's code and the
    * line (so two papers of one kind never replace each other), then attached. Never a loose upload.
    */
-  const upload = (p: ExportDetail['papers'][number], file: File) => {
-    const reader = new FileReader();
-    reader.onload = () =>
-      void act(async () => {
-        const up = await client.api.uploadCompanyDocument(business.entityId, { kind: paperKindFor(p.key), title: paperName(p), dataUrl: String(reader.result), relatesTo: `${c.code}:${p.key}` });
-        const documentId = (up.data as { documentId?: string } | undefined)?.documentId;
-        if (up.error || !documentId) return { error: (up.error as Problem) ?? { title: t('business.exports.papers.uploadFailed') } };
-        const draft = paper[p.key];
-        return client.exports.paper(c.exportId, { key: p.key, documentId, ...(draft?.reference.trim() ? { reference: draft.reference.trim() } : {}) });
-      }, t('business.exports.papers.uploaded')).then(() => setChanging({ ...changing, [p.key]: false }));
-    reader.readAsDataURL(file);
-  };
+  const upload = (p: ExportDetail['papers'][number], file: File) =>
+    // Checked here first, and said in words whatever stops it (2026-11-02): a PDF over the most, a photo this phone could
+    // not open, the server's refusal with the size and the most, no signal. A photo of the paper is made smaller to fit.
+    void act(async () => {
+      let dataUrl: string;
+      try {
+        dataUrl = await paperForUpload(file);
+      } catch (e) {
+        return { error: { title: uploadFailureSentence(e) } };
+      }
+      const up = await client.api.uploadCompanyDocument(business.entityId, { kind: paperKindFor(p.key), title: paperName(p), dataUrl, relatesTo: `${c.code}:${p.key}` });
+      const documentId = (up.data as { documentId?: string } | undefined)?.documentId;
+      if (up.error) return { error: { title: uploadFailureSentence(up.error) } };
+      if (!documentId) return { error: { title: t('business.exports.papers.uploadFailed') } };
+      const draft = paper[p.key];
+      return client.exports.paper(c.exportId, { key: p.key, documentId, ...(draft?.reference.trim() ? { reference: draft.reference.trim() } : {}) });
+    }, t('business.exports.papers.uploaded')).then(() => setChanging({ ...changing, [p.key]: false }));
 
   const paperRow = (p: ExportDetail['papers'][number]) => {
     const draft = paper[p.key] ?? { documentId: '', reference: '' };
@@ -452,7 +460,8 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
                   {t('business.exports.papers.upload')}
                   <input
                     type="file"
-                    accept="application/pdf,image/png,image/jpeg"
+                    data-upload="document"
+                    accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
                     disabled={busy}
                     onChange={(e) => {
                       const file = (e.target as HTMLInputElement).files?.[0];
@@ -537,7 +546,8 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
                   {t('business.exports.papers.upload')}
                   <input
                     type="file"
-                    accept="application/pdf,image/png,image/jpeg"
+                    data-upload="document"
+                    accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
                     disabled={busy}
                     onChange={(e) => {
                       const file = (e.target as HTMLInputElement).files?.[0];
@@ -942,6 +952,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
           <span class="cons__panelt">{t('business.exports.papers.title')}</span>
         </div>
         <p class="chint">{t(d.you === 'agent' ? 'business.exports.papers.hintAgent' : 'business.exports.papers.hint')}</p>
+        <p class="chint">{uploadHint('document')}</p>
         {PAPER_GROUPS.map((group) => {
           const lines = d.papers.filter((p) => p.group === group);
           if (!lines.length && group !== 'asked') return null;
@@ -1105,7 +1116,7 @@ export function ExportPanel({ exportId, business, client, works, onChanged, init
               upload: async (file: File, kind: 'bill_of_lading' | 'other', title: string) => {
                 const r = await client.api.uploadCompanyDocument(business.entityId, { kind, title, dataUrl: await fileAsDataUrl(file), relatesTo: `${c.code}:fbl` });
                 const documentId = (r.data as { documentId?: string } | undefined)?.documentId;
-                return documentId ? { documentId } : { error: (r.error as { detail?: string } | undefined)?.detail ?? '' };
+                return documentId ? { documentId } : { error: r.error ? uploadFailureSentence(r.error) : '' };
               },
             }
           : {})}

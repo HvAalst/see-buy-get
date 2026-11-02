@@ -33,11 +33,11 @@ export function decodeAudio(dataUrl: string, maxBytes: number): { contentType: A
   if (!m) throw new GlosError('INVALID_INPUT', 'Expected a base64 audio recording');
   const contentType = m[1].toLowerCase();
   if (!AUDIO_CONTENT_TYPES.includes(contentType as AudioContentType)) {
-    throw new GlosError('UNSUPPORTED_MEDIA', `Unsupported recording type ${contentType} — use WebM, Ogg, MP4 or MP3 audio`);
+    throw new GlosError('UNSUPPORTED_MEDIA', `Unsupported recording type ${contentType} — use WebM, Ogg, MP4 or MP3 audio`, { contentType, accepts: [...AUDIO_CONTENT_TYPES] });
   }
   const bytes = Buffer.from(m[2], 'base64');
   if (bytes.length === 0) throw new GlosError('INVALID_INPUT', 'The recording is empty');
-  if (bytes.length > maxBytes) throw new GlosError('MEDIA_TOO_LARGE', 'That recording is too long to send — keep a voice message short');
-  if (!audioSignatureMatches(contentType, bytes)) throw new GlosError('UNSUPPORTED_MEDIA', 'That is not a real recording in that format');
+  if (bytes.length > maxBytes) throw new GlosError('MEDIA_TOO_LARGE', 'That recording is too long to send — keep a voice message short', { bytes: bytes.length, maxBytes });
+  if (!audioSignatureMatches(contentType, bytes)) throw new GlosError('UNSUPPORTED_MEDIA', 'That is not a real recording in that format', { contentType, accepts: [...AUDIO_CONTENT_TYPES] });
   return { contentType: contentType as AudioContentType, bytes };
 }

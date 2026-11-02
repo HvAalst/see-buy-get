@@ -115,6 +115,7 @@ export class AuthService {
       ...(input.staffCountries ? { staffCountries: input.staffCountries } : {}),
       tier: input.tier,
       personDid: input.personDid,
+      ...(input.openedBy ? { openedBy: input.openedBy } : {}),
       tokenVersion: input.tokenVersion,
       revocationKey: input.revocationKey,
       revocationVersion: input.revocationVersion,
@@ -188,7 +189,7 @@ export class AuthService {
    * replacement for the ?agent=<did> URL-param "session" — the token now carries who you are and
    * what you may do, verifiably. The DID must already be registered (issueToken enforces it).
    */
-  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier; actorName?: string; revocationKey?: string; personDid?: string }): AccessToken {
+  mintActorToken(input: { role: ActorRole; did: string; tenant?: string; tier?: Tier; actorName?: string; revocationKey?: string; personDid?: string; openedBy?: 'passkey' }): AccessToken {
     const profile = this.profiles.get(input.did);
     // A PERSON SIGNED IN — at a PIN, a code, a password, or switching to one of their roles. Every one of those doors
     // ends here, so this is where it is noted once rather than at fifteen doors (it starts the 48 months after which
@@ -212,6 +213,7 @@ export class AuthService {
       actorName: input.actorName,
       tier: input.tier ?? profile?.tier,
       personDid: input.personDid,
+      ...(input.openedBy ? { openedBy: input.openedBy } : {}),
       tokenVersion: this.versionOf(input.did),
       ...(input.revocationKey ? { revocationKey: input.revocationKey, revocationVersion: this.revocations.get(input.revocationKey) ?? 0 } : {}),
       ttlSeconds: SHIFT_TTL_SECONDS,
@@ -268,6 +270,8 @@ export class AuthService {
       ...(claims.staffCountries ? { staffCountries: claims.staffCountries } : {}),
       tier: claims.tier,
       personDid: claims.personDid,
+      // 2026-11-02 — opened by a fingerprint or face (IssueTokenInput.openedBy): a counter's staff door refuses it.
+      ...(claims.openedBy ? { openedBy: claims.openedBy } : {}),
       // Which sign-out key this token answers to — for a staff session, which staff ACCOUNT it is (`operator:<id>`).
       ...(claims.revocationKey ? { revocationKey: claims.revocationKey } : {}),
     };

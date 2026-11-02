@@ -450,6 +450,10 @@ export class PersonService {
     person.pinLockedUntil = undefined;
     person.pinChangedAt = new Date().toISOString();
     this.save(person);
+    // 2026-11-02 — every fingerprint-or-face unlock made with the PIN before goes with it, from every device (passkeys.ts):
+    // a PIN somebody else may have learnt must not outlive being changed by way of a passkey it let them make.
+    this.devices.dropAllPasskeys(personDid);
+    this.unlocks.dropFor(personDid);
   }
 
   /**
@@ -480,7 +484,8 @@ export class PersonService {
     if (!unlocked) this.checkPin(person, pin ?? '', 'AUTH_FAILED', 'Wrong phone or PIN');
     // The right PIN, on this device, today: what its owner is shown, and what its ninety days are counted from.
     this.devices.used(person.personDid, device);
-    return { person, token: this.mintConsumerToken(person), ...(unlocked ? { unlocked } : {}) };
+    // Opened by a fingerprint or face: the token says so, and a shop's counter will not take it (shop-staff.controller.ts).
+    return { person, token: this.mintConsumerToken(person, unlocked ? 'passkey' : undefined), ...(unlocked ? { unlocked } : {}) };
   }
 
   /* ------------------------------------------- 2026-11-02: unlock with fingerprint or face (passkeys.ts) -- */
@@ -494,7 +499,7 @@ export class PersonService {
   private redeemUnlock(person: Person, device: string, ticket: string): UnlockGrant {
     if (pinLocked(person)) throw new GlosError('PIN_LOCKED', PIN_LOCKED_SENTENCE);
     const grant = this.unlocks.take(ticket);
-    if (!grant || grant.personDid !== person.personDid || grant.phoneHash !== person.phoneHash || grant.deviceHash !== deviceHashOf(device)) {
+    if (!grant || grant.owner !== person.personDid || grant.address !== person.phoneHash || grant.deviceHash !== deviceHashOf(device)) {
       throw new GlosError('UNLOCK_FAILED', 'That unlock has run out, or was used already. Unlock again, or use your PIN.');
     }
     if (this.devices.passkeyOf(person.personDid, device)?.id !== grant.credentialId) {
@@ -545,7 +550,7 @@ export class PersonService {
   /** The phone's fingerprint or face checked out: a ticket for the door, two minutes, one use. */
   issueUnlock(person: Person, device: string, credentialId: string, now: number = Date.now()): { ticket: string; expiresAt: number } {
     const expiresAt = now + UNLOCK_TTL_MS;
-    return { ticket: this.unlocks.issue({ personDid: person.personDid, phoneHash: person.phoneHash, deviceHash: deviceHashOf(device), credentialId, expiresAt }, now), expiresAt };
+    return { ticket: this.unlocks.issue({ owner: person.personDid, address: person.phoneHash, deviceHash: deviceHashOf(device), credentialId, expiresAt }, now), expiresAt };
   }
 
   /**
@@ -931,11 +936,11 @@ export class PersonService {
   // --- role switching ---
 
   /** The person's default identity token — acting as themselves (the consumer surface). */
-  mintConsumerToken(person: Person): AccessToken {
+  mintConsumerToken(person: Person, openedBy?: 'passkey'): AccessToken {
     // `did` and `personDid` are the same string here — a consumer acts as themselves — and it is still
     // stated, so the account surface can ask one question ("who is the person?") of every token it sees
     // rather than special-casing the one role where the answer happens to sit in another field.
-    return this.auth.mintActorToken({ role: 'consumer', did: person.personDid, personDid: person.personDid });
+    return this.auth.mintActorToken({ role: 'consumer', did: person.personDid, personDid: person.personDid, ...(openedBy ? { openedBy } : {}) });
   }
 
   /**

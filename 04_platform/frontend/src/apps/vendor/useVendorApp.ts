@@ -8,6 +8,8 @@ import { hubOriginOf, type HubOptionView } from './hubs';
 import { downloadZpl, triggerDownload } from '../../shared/download';
 import { topUpTermsOf, type TopUpTerms } from '../../shared/topup-fee';
 import { downscaleImage } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import type { Uploaded } from '../../shared/upload';
 import type { Gs1DisputeView } from '../../shared/gs1';
 import type { StoreGs1Api } from './gs1';
 import type { IconName } from '../../shared/ui/Icon';
@@ -945,19 +947,30 @@ export function useVendorApp() {
     [client, creds, run, fail, loadDock, pushToast, t],
   );
 
-  /** Round 36 — the photograph of a bag closed for the road, its coded seal in view: the store's own. */
-  const uploadSealPhoto = useCallback(
-    async (file: File): Promise<string | null> => {
-      if (!client) return null;
+  /**
+   * A PHOTOGRAPH THE STORE TAKES — a bag's seal, what is in a box, a GS1 licence: made smaller on this phone, its location
+   * stripped, uploaded as the store's own. Its id, or why it did not go in words for under the photo: every failure here
+   * used to be a bare null, shown as nothing but "did not go" (2026-11-02, the owner: "It silently refused").
+   */
+  const storePhoto = useCallback(
+    async (kind: 'seal' | 'content' | 'gs1_licence', file: File): Promise<Uploaded> => {
+      if (!client) return { failed: t('upload.failed') };
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-        const r = await client.api.uploadMedia('seal', dataUrl, thumbDataUrl);
-        return r.error ? null : (narrow<{ mediaId?: string }>(r.data)?.mediaId ?? null);
-      } catch {
-        return null;
+        const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
+        if (r.error) return { failed: uploadFailureSentence(r.error, 'photo') };
+        return narrow<{ mediaId?: string }>(r.data)?.mediaId ?? { failed: t('upload.failed') };
+      } catch (e) {
+        return { failed: uploadFailureSentence(e, 'photo') };
       }
     },
     [client],
+  );
+
+  /** Round 36 — the photograph of a bag closed for the road, its coded seal in view: the store's own. */
+  const uploadSealPhoto = useCallback(
+    async (file: File): Promise<Uploaded> => storePhoto('seal', file),
+    [storePhoto],
   );
 
   const submitMint = useCallback(async () => {
@@ -1469,17 +1482,8 @@ export function useVendorApp() {
    * downscaled, its location data stripped, and uploaded as the store's own: the order names the id we hold.
    */
   const uploadContentPhoto = useCallback(
-    async (file: File): Promise<string | null> => {
-      if (!client) return null;
-      try {
-        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-        const r = await client.api.uploadMedia('content', dataUrl, thumbDataUrl);
-        return r.error ? null : (narrow<{ mediaId?: string }>(r.data)?.mediaId ?? null);
-      } catch {
-        return null;
-      }
-    },
-    [client],
+    async (file: File): Promise<Uploaded> => storePhoto('content', file),
+    [storePhoto],
   );
 
   /** A photo the store holds, for the order that shows it: its bytes, fetched with the store's own sign-in. */
@@ -1511,17 +1515,9 @@ export function useVendorApp() {
       open: (body) => api.openGs1Dispute(id, body),
       sendLicence: (disputeId, licenceRef) => api.sendGs1Licence(id, disputeId, licenceRef),
       withdraw: (disputeId) => api.withdrawGs1Dispute(id, disputeId),
-      licencePhoto: async (file) => {
-        try {
-          const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-          const r = await api.uploadMedia('gs1_licence', dataUrl, thumbDataUrl);
-          return r.error ? null : (narrow<{ mediaId?: string }>(r.data)?.mediaId ?? null);
-        } catch {
-          return null;
-        }
-      },
+      licencePhoto: (file) => storePhoto('gs1_licence', file),
     };
-  }, [client, creds, refresh]);
+  }, [client, creds, refresh, storePhoto]);
 
   /** Round 40 — the store's own phones and browsers, in Settings: read and forgotten as a shop's are. */
   const storeDevices = useMemo(

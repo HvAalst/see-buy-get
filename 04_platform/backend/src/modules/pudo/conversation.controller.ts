@@ -8,6 +8,7 @@ import { ConversationService } from './conversation.service';
 // an empty request body to the contract (the gate caught exactly that).
 import {
   DisputeReportDto,
+  FilePhotoDto,
   OpenConversationDto,
   ProposePriceInThreadDto,
   ReadMarkerDto,
@@ -75,6 +76,46 @@ export class ConversationController {
   @Header('X-Content-Type-Options', 'nosniff')
   disputeVoice(@Param('reportId') reportId: string, @Param('voiceId') voiceId: string): StreamableFile {
     const { contentType, bytes } = this.conversations.voiceForReport(reportId, voiceId);
+    return new StreamableFile(bytes, { type: contentType });
+  }
+
+  /** 2026-11-02 — the operator opens a filed photo a party chose to include in a shared report. That one, and no other. */
+  @Roles('operator')
+  @Get('dispute-reports/:reportId/photos/:filingId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  disputePhoto(@Param('reportId') reportId: string, @Param('filingId') filingId: string, @Query('variant') variant: string | undefined): StreamableFile {
+    const { contentType, bytes } = this.conversations.photoForReport(reportId, filingId, variant === 'thumb' ? 'thumb' : 'full');
+    return new StreamableFile(bytes, { type: contentType });
+  }
+
+  /**
+   * 2026-11-02 — FILE A PHOTO to this thread's load or parcel — as damage, a paper or proof — and show its card here (the
+   * owner: "Damage claims should be fingerprinted and just sharing blurs this"). A photo enters a thread no other way.
+   */
+  @SignedIn()
+  @Post(':id/photos')
+  @AtTheCounter()
+  filePhoto(@Param('id') id: string, @Body() dto: FilePhotoDto, @Actor() actor: IntrospectionResult) {
+    return this.conversations.filePhoto(id, didOf(actor), dto);
+  }
+
+  /** 2026-11-02 — the record's photo file, as this reader may see it through this thread. References and labels only. */
+  @SignedIn()
+  @Get(':id/photos')
+  @AtTheCounter()
+  recordPhotos(@Param('id') id: string, @Actor() actor: IntrospectionResult) {
+    return this.conversations.recordPhotos(id, didOf(actor));
+  }
+
+  /** 2026-11-02 — one filed photo (or ?variant=thumb), for whoever may see it through this thread. Never cached. */
+  @SignedIn()
+  @Get(':id/photos/:filingId')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  @AtTheCounter()
+  photo(@Param('id') id: string, @Param('filingId') filingId: string, @Query('variant') variant: string | undefined, @Actor() actor: IntrospectionResult): StreamableFile {
+    const { contentType, bytes } = this.conversations.photoFor(id, filingId, didOf(actor), variant === 'thumb' ? 'thumb' : 'full');
     return new StreamableFile(bytes, { type: contentType });
   }
 

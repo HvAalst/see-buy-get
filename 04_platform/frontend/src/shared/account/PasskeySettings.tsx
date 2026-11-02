@@ -13,6 +13,10 @@ import { passkeySupported, type PasskeyApi, type PasskeyHere } from './passkey';
  * sign-in is a PIN. It says which is on. ON takes the PIN once more (a phone left signed in is not proof of who holds
  * it), then the phone's own prompt; OFF takes one tap and nothing else — the PIN, which never stopped working, is the
  * way in again.
+ *
+ * 2026-11-02, later (the owner: "ok go ahead with the fingerprint") — in the Shop, Hub and Store apps it stands in for the
+ * account's own PASSWORD, on one of the account's own phones (`api.secret === 'password'`): turned on with the password,
+ * and said plainly first that whoever can unlock the phone can then sign in as the account.
  */
 export interface PasskeyState {
   /** The browser's answer: null until it has given one. */
@@ -53,23 +57,36 @@ export function usePasskeyHere(api: PasskeyApi, enabled: boolean): PasskeyState 
  * The row's second line — which is on — or null where there is no row: the phone cannot do it, it is not known yet,
  * or this browser holds no device key of this person's (their PIN does not work here, so nothing could stand in for it).
  */
-export function passkeyRowSub(state: Pick<PasskeyState, 'supported' | 'here' | 'unread'>, t: (key: never) => string): string | null {
-  const say = t as (key: string) => string;
+export function passkeyRowSub(state: Pick<PasskeyState, 'supported' | 'here' | 'unread'>, t: (key: never, vars?: Record<string, string | number>) => string, api?: Pick<PasskeyApi, 'secret' | 'party'>): string | null {
+  const say = wordsFor(t, api);
   if (state.supported !== true) return null;
   if (state.unread) return say('account.passkey.unread');
   if (!state.here || state.here.which < 0) return null;
-  return say(state.here.on ? 'account.passkey.subOn' : 'account.passkey.subOff');
+  return say(state.here.on ? 'account.passkey.subOn' : 'account.passkey.subOff', true);
 }
 
-/** A wrong or locked PIN is said in the shared words; anything else is the server's own sentence. */
+/**
+ * 2026-11-02, later — THE WORDS FOR WHAT IT STANDS IN FOR. A person's PIN, or a shop's, a hub's or a store's password: where
+ * a sentence says which, the password's own has the same key with `Password` after it, and names whose account it is.
+ */
+function wordsFor(t: (key: never, vars?: Record<string, string | number>) => string, api?: Pick<PasskeyApi, 'secret' | 'party'>) {
+  const say = t as (key: string, vars?: Record<string, string | number>) => string;
+  const byPassword = api?.secret === 'password';
+  const party = byPassword ? say(`account.bound.party.${api?.party ?? 'shop'}`) : '';
+  return (key: string, differs = false, vars: Record<string, string | number> = {}) => say(byPassword && differs ? `${key}Password` : key, { party, ...vars });
+}
+
+/** A wrong or locked PIN (or password) is said in the shared words; anything else is the server's own sentence. */
 function Refused({ error }: { error: SbgError | null }) {
   if (!error) return null;
-  return error.code === 'PIN_WRONG' || error.code === 'PIN_LOCKED' ? <ErrorNote error={error} /> : <RefusalNote error={error} />;
+  return error.code === 'PIN_WRONG' || error.code === 'PIN_LOCKED' || error.code === 'PASSWORD_WRONG' ? <ErrorNote error={error} /> : <RefusalNote error={error} />;
 }
 
 /** The view behind the row: which is on, and the one thing to do about it. */
 export function PasskeyForm({ api, state, initialStep = 'pin' }: { api: PasskeyApi; state: PasskeyState; initialStep?: 'pin' | 'now' }) {
   const t = useT();
+  const w = wordsFor(t as never, api);
+  const byPassword = api.secret === 'password';
   const [step, setStep] = useState<'pin' | 'now'>(initialStep);
   const [pin, setPin] = useState('');
   const [prepared, setPrepared] = useState<Parameters<PasskeyApi['create']>[0] | null>(null);
@@ -129,12 +146,12 @@ export function PasskeyForm({ api, state, initialStep = 'pin' }: { api: PasskeyA
   if (here.on) {
     return (
       <>
-        {said === 'on' ? <Note tone="ok" icon="check" title={t('account.passkey.turnedOn')} /> : null}
-        <Note tone="ok" icon="key" title={t('account.passkey.onTitle')} detail={t('account.passkey.onBody', { when: when(here.addedAt) })} />
+        {said === 'on' ? <Note tone="ok" icon="check" title={w('account.passkey.turnedOn')} /> : null}
+        <Note tone="ok" icon="key" title={t('account.passkey.onTitle')} detail={w('account.passkey.onBody', true, { when: when(here.addedAt) })} />
         <p class="t-body">{t('account.passkey.privacy')}</p>
         <Refused error={error} />
         <Button variant="outline" chevron={false} busy={busy} onClick={() => void turnOff()}>
-          {t('account.passkey.turnOff')}
+          {w('account.passkey.turnOff', true)}
         </Button>
       </>
     );
@@ -142,11 +159,11 @@ export function PasskeyForm({ api, state, initialStep = 'pin' }: { api: PasskeyA
 
   return (
     <>
-      {said === 'off' ? <Note tone="ok" icon="check" title={t('account.passkey.turnedOff')} /> : null}
+      {said === 'off' ? <Note tone="ok" icon="check" title={w('account.passkey.turnedOff', true)} /> : null}
       {step === 'now' ? (
         <>
           <Note tone="info" icon="key" title={t('account.passkey.nowTitle')} detail={t('account.passkey.nowBody')} />
-          {said === 'cancelled' ? <Note tone="warn" icon="lock" title={t('account.passkey.cancelled')} /> : null}
+          {said === 'cancelled' ? <Note tone="warn" icon="lock" title={w('account.passkey.cancelled', true)} /> : null}
           <Refused error={error} />
           <Button chevron={false} busy={busy} onClick={() => void turnOn()}>
             {t('account.passkey.turnOn')}
@@ -154,14 +171,25 @@ export function PasskeyForm({ api, state, initialStep = 'pin' }: { api: PasskeyA
         </>
       ) : (
         <>
-          <p class="t-body">{t('account.passkey.offBody')}</p>
+          <p class="t-body">{w('account.passkey.offBody', true)}</p>
           <p class="t-body">{t('account.passkey.privacy')}</p>
-          <div class="field">
-            <span class="field__label">{t('account.passkey.pinToTurnOn')}</span>
-            <CodeBoxes id="acct-passkey-pin" label={t('account.passkey.pinToTurnOn')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
-          </div>
+          {/* An account's phone is often one several people unlock: whoever can, could then sign in as the account. Said first. */}
+          {byPassword ? <Note tone="warn" icon="warning" title={w('account.passkey.sharedTitle')} detail={w('account.passkey.sharedBody')} /> : null}
+          {byPassword ? (
+            <div class="field">
+              <label class="field__label" for="acct-passkey-password">
+                {w('account.passkey.passwordToTurnOn')}
+              </label>
+              <input id="acct-passkey-password" class="input" type="password" autocomplete="current-password" value={pin} disabled={busy} onInput={(e) => { setPin(e.currentTarget.value); setError(null); }} />
+            </div>
+          ) : (
+            <div class="field">
+              <span class="field__label">{t('account.passkey.pinToTurnOn')}</span>
+              <CodeBoxes id="acct-passkey-pin" label={t('account.passkey.pinToTurnOn')} length={PIN_LENGTH} value={pin} onInput={(v) => { setPin(v); setError(null); }} disabled={busy} mask />
+            </div>
+          )}
           <Refused error={error} />
-          <Button chevron={false} busy={busy} disabled={pin.length !== PIN_LENGTH} onClick={() => void next()}>
+          <Button chevron={false} busy={busy} disabled={byPassword ? !pin : pin.length !== PIN_LENGTH} onClick={() => void next()}>
             {t('account.passkey.next')}
           </Button>
         </>

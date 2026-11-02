@@ -1,5 +1,7 @@
 import type { Result, SbgError } from '../../lib/sbg';
 import type { PinDevices, PinDevicesApi } from './devices';
+import { accountPasskeyApi } from './passkey';
+import { dropAccountUnlockMark } from './unlock';
 
 /*
  * A SHOP'S OWN PHONES (the user, 2026-10-18: "who is at the counter"). A shop's email and password work only on a phone
@@ -70,8 +72,14 @@ export function shopDevicesApi(post: Post, email: () => string | null, party: 's
     forgetOthers: (password) => post<{ forgotten: number; kept: boolean }>('/v1/sbg/account/shop-devices/forget-others', { password, device: key() }),
     forgetThis: async () => {
       const r = await post<{ forgotten: boolean; which: number }>('/v1/sbg/account/shop-devices/forget-this', { device: key() });
-      if (!r.error && r.data?.forgotten) dropShopDeviceKey(email());
+      if (!r.error && r.data?.forgotten) {
+        dropShopDeviceKey(email());
+        // Its fingerprint-or-face note with it (2026-11-02): the server dropped that passkey with the phone.
+        dropAccountUnlockMark(email());
+      }
       return r;
     },
+    // 2026-11-02 (the owner: "ok go ahead with the fingerprint") — on these phones, a fingerprint or face in place of the password.
+    passkey: accountPasskeyApi(post, email, key, party),
   };
 }

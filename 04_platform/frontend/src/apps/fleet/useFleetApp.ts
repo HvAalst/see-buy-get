@@ -6,6 +6,8 @@ import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { MarketSeriesView } from '../../shared/market';
 import { t } from '../../shared/i18n';
 import { downscaleImage } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import type { Uploaded } from '../../shared/upload';
 import { perKmText } from '../../shared/money';
 import type { IconName } from '../../shared/ui/Icon';
 import { clearManager, createFleetClient, fleetConfig, managerLookup, managerSession, managerChoices, managerSessionByFleet, changeManagerPin, purgeFleetTokens, readManager, saveManager } from './api';
@@ -687,19 +689,22 @@ export function useFleetApp() {
 
   /** S26: downscale + EXIF-strip + upload a captured vehicle/trailer/registration photo → its mediaId. */
   const uploadPhoto = useCallback(
-    async (kind: MediaKind, file: File): Promise<string | null> => {
-      if (!client) return null;
+    async (kind: MediaKind, file: File): Promise<Uploaded> => {
+      if (!client) return { failed: t('upload.failed') };
+      // Why it did not go, in words for under the photo (2026-11-02, the owner: "It silently refused").
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
-          pushToast({ tone: 'danger', icon: 'camera', title: t('fleet.toast.photoUploadFailed'), detail: t('fleet.toast.photoUploadFailedDetail') });
-          return null;
+          const said = uploadFailureSentence(r.error, 'photo');
+          pushToast({ tone: 'danger', icon: 'camera', title: t('fleet.toast.photoUploadFailed'), detail: said });
+          return { failed: said };
         }
-        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
-      } catch {
-        pushToast({ tone: 'danger', icon: 'camera', title: t('fleet.toast.photoUnreadable') });
-        return null;
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? { failed: t('upload.failed') };
+      } catch (e) {
+        const said = uploadFailureSentence(e, 'photo');
+        pushToast({ tone: 'danger', icon: 'camera', title: t('fleet.toast.photoUnreadable'), detail: said });
+        return { failed: said };
       }
     },
     [client, pushToast],

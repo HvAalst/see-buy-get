@@ -103,6 +103,7 @@ function Picture({ option, topic, state, actions }: { option: HelpOption; topic:
         <input
           ref={picker}
           type="file"
+          data-upload="photo"
           accept="image/*"
           hidden
           onChange={(e) => {

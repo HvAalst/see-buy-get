@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { Note, uploadFailureSentence } from '../../../shared/ui/ErrorNote';
+import { failedWords, mediaIdOf, type Uploaded } from '../../../shared/upload';
 import { Icon } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 
@@ -6,8 +8,8 @@ export interface PhotoFieldProps {
   /** The uploaded mediaId, '' while empty. */
   value: string;
   onCapture: (mediaId: string) => void;
-  /** Downscale + strip the location + upload the file → resolves the mediaId (or null when it did not go). */
-  upload: (file: File) => Promise<string | null>;
+  /** Downscale + strip the location + upload the file → resolves the mediaId, or why it did not go ({ failed: words }). */
+  upload: (file: File) => Promise<Uploaded>;
   /** Big-target label while empty. */
   label: string;
   id: string;
@@ -25,27 +27,34 @@ export function PhotoField({ value, onCapture, upload, label, id, disabled }: Ph
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  /*
+   * WHY IT DID NOT GO, SAID UNDER THE BUTTON (the owner, 2026-11-02: "It silently refused"). `upload` answers the
+   * media id, or { failed: words } — the photo this phone could not open, the server's refusal, no signal — and those
+   * words are shown here, where the photo was taken. A handler that throws is a failure like any other: the button never
+   * stays "sending". Null (no words) still says the photo did not go.
+   */
 
   useEffect(() => () => {
     if (preview) URL.revokeObjectURL(preview);
   }, [preview]);
 
   const pick = async (file: File) => {
-    setFailed(false);
+    setFailed(null);
     setBusy(true);
     setPreview(URL.createObjectURL(file));
-    const mediaId = await upload(file);
+    const result: Uploaded = await upload(file).catch((e: unknown) => ({ failed: uploadFailureSentence(e, 'photo') }));
     setBusy(false);
+    const mediaId = mediaIdOf(result);
     if (!mediaId) {
-      setFailed(true);
+      setFailed(failedWords(result) ?? '');
       setPreview(null);
       return;
     }
     onCapture(mediaId);
   };
 
-  const done = Boolean(value) && !busy && !failed;
+  const done = Boolean(value) && !busy && failed === null;
   return (
     <div class="photo">
       <input
@@ -53,6 +62,7 @@ export function PhotoField({ value, onCapture, upload, label, id, disabled }: Ph
         id={id}
         class="photo__input"
         type="file"
+        data-upload="photo"
         accept="image/*"
         capture="environment"
         disabled={disabled || busy}
@@ -65,8 +75,9 @@ export function PhotoField({ value, onCapture, upload, label, id, disabled }: Ph
       {preview ? <img class="photo__preview" src={preview} alt="" /> : null}
       <button type="button" class={`photo__btn${done ? ' photo__btn--done' : ''}`} disabled={disabled || busy} onClick={() => input.current?.click()}>
         <Icon name={busy ? 'clock' : done ? 'check' : 'camera'} size={24} />
-        <span>{busy ? t('vendor.photo.uploading') : done ? t('vendor.photo.captured') : failed ? t('vendor.photo.failed') : label}</span>
+        <span>{busy ? t('vendor.photo.uploading') : done ? t('vendor.photo.captured') : failed !== null ? t('vendor.photo.failed') : label}</span>
       </button>
+      {failed ? <Note tone="warn" icon="camera" title={failed} /> : null}
     </div>
   );
 }

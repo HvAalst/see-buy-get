@@ -4,6 +4,7 @@ import { useT } from '../../../shared/i18n';
 import { qrPayload } from '../../../shared/qr';
 import { cash, perKmText } from '../../../shared/money';
 import type { MediaKind } from '../../../lib/sbg/personas/media';
+import { failedWords, mediaIdOf } from '../../../shared/upload';
 import { fleetConfig } from '../api';
 import { bodyPickerOptions, equipmentHelp, equipmentOptions, paperLine, paperLineClass, papersToShow, subtypeLine, vehicleMissing } from '../logic';
 import { VEHICLE_CLASSES, type VehicleRow } from '../types';
@@ -37,13 +38,18 @@ function PhotoPad({
   const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  // Why the last photo did not go, under the pad (2026-11-02, the owner: "It silently refused").
+  const [failed, setFailed] = useState<string | null>(null);
   const canAdd = multi || refs.length === 0;
 
   const pick = async (file: File) => {
     setBusy(true);
-    const mediaId = await actions.uploadPhoto(kind, file);
+    setFailed(null);
+    const up = await actions.uploadPhoto(kind, file);
     setBusy(false);
+    const mediaId = mediaIdOf(up);
     if (mediaId) onChange([...refs, mediaId]);
+    else setFailed(failedWords(up) ?? t('upload.failed'));
   };
   const remove = (id: string) => {
     onChange(refs.filter((r) => r !== id));
@@ -73,6 +79,7 @@ function PhotoPad({
         ref={input}
         class="photo__input"
         type="file"
+        data-upload="photo"
         accept="image/*"
         capture="environment"
         onChange={(e) => {
@@ -81,6 +88,7 @@ function PhotoPad({
           if (file) void pick(file);
         }}
       />
+      {failed ? <Note tone="warn" icon="camera" title={failed} /> : null}
     </div>
   );
 }

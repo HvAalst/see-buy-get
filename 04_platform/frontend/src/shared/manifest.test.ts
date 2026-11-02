@@ -12,7 +12,8 @@ import { readDeepLink } from '../apps/home/logic';
  *   from its source here; the front page's, the deep links it already follows). Each has its picture, at the size it says.
  * - THE INSTALL WINDOW's pictures of the real app: there, at the size the manifest says, a phone's shape, small enough.
  * - ONE WINDOW: every app brings the open one forward rather than opening a second copy.
- * - THE SHARE LIST: the apps with conversations take a text or a link, at the address shared/launch.ts reads.
+ * - THE SHARE LIST: the apps with conversations take a text, a link or photos (2026-11-02), answered by the app's own worker
+ *   and handed on at the address shared/launch.ts reads.
  */
 
 type Icon = { src: string; sizes: string; type?: string };
@@ -21,7 +22,7 @@ type Manifest = {
   shortcuts?: Array<{ name: string; short_name?: string; description?: string; url: string; icons?: Icon[] }>;
   screenshots?: Array<Icon & { form_factor?: string; label?: string }>;
   launch_handler?: { client_mode: string | string[] };
-  share_target?: { action: string; method?: string; enctype?: string; params: Record<string, string> };
+  share_target?: { action: string; method?: string; enctype?: string; params: Record<string, string | Array<{ name: string; accept: string[] }>> };
 };
 
 /** The apps that install: every app's folder but the two that do not (vite.config.ts: installable false). */
@@ -148,16 +149,28 @@ describe.each(INSTALLABLE)('the %s app', (app) => {
     expect(Array.isArray(mode) ? mode[0] : mode).toBe('focus-existing');
   });
 
-  it(CHATS.includes(app) ? 'is in the phone’s share list, for a text or a link' : 'is not in the share list: it has no conversations', () => {
+  it(CHATS.includes(app) ? 'is in the phone’s share list, for a text, a link or photos' : 'is not in the share list: it has no conversations', () => {
     const target = manifests[app].share_target;
     if (!CHATS.includes(app)) {
       expect(target).toBeUndefined();
       return;
     }
-    expect(target).toEqual({ action: './', method: 'GET', enctype: 'application/x-www-form-urlencoded', params: { title: 'share_title', text: 'share_text', url: 'share_url' } });
-    // What the phone opens — a GET share REPLACES the action's query with the fields — read the way the app reads it.
-    const q = Object.entries(target!.params).map(([k, name]) => `${name}=${encodeURIComponent(`a ${k}`)}`).join('&');
-    expect(intentOf(`${target!.action.split('?')[0]}?${q}`)?.share).toEqual({ title: 'a title', text: 'a text', url: 'a url' });
+    // 2026-11-02 — photos too: a POST the app's own worker answers on the phone (scripts/push-sw.js), at an address of its own.
+    expect(target).toEqual({
+      action: './share-target',
+      method: 'POST',
+      enctype: 'multipart/form-data',
+      params: { title: 'share_title', text: 'share_text', url: 'share_url', files: [{ name: 'share_files', accept: ['image/*'] }] },
+    });
+    // The worker reads the fields by these names, and opens the app where shared/launch.ts reads them: the words as the GET
+    // share left them, the photos by the name they wait under.
+    const worker = readFileSync(join('scripts', 'push-sw.js'), 'utf8');
+    for (const name of ['share_title', 'share_text', 'share_url', 'share_files']) expect(worker).toContain(`'${name}'`);
+    expect(worker).toContain(`var SHARE_ACTION = '${target!.action.replace('./', '')}'`);
+    const words = Object.entries(target!.params as Record<string, unknown>).filter(([, name]) => typeof name === 'string');
+    const q = words.map(([k, name]) => `${name}=${encodeURIComponent(`a ${k}`)}`).join('&');
+    expect(intentOf(`./?${q}`)?.share).toEqual({ title: 'a title', text: 'a text', url: 'a url' });
+    expect(intentOf('./?share_files=k3x9a1')?.files).toBe('k3x9a1');
   });
 });
 

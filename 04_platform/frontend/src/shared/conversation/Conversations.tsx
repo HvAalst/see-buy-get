@@ -3,6 +3,11 @@ import { narrow, type ConversationsApi } from '../../lib/sbg';
 import { formatDate, formatMoney, useT } from '../i18n';
 import { discard, onOutboxChange, onOutboxSent, outboxItems } from '../outbox';
 import { Button, Card, Chip, ErrorNote, Icon, Note, Pill, Sheet } from '../ui';
+import { FiledPhotoCard, FiledPhotoSheet, PhotoFilingView, PhotoPicker } from './FiledPhoto';
+import { isPhotoIn, waitingPhotosIn, whatKey, type FiledPhotoRef, type FilingChoice, type PhotoSource, type PreparedPhoto, type WaitingPhoto } from './filedPhotoLogic';
+import { fileTo, photoRefusal, preparePhoto } from './photoFiling';
+import { uploadFailureSentence } from '../ui/ErrorNote';
+import { UPLOAD_LIMITS, UploadRefusal, refusalWords } from '../upload';
 import {
   MAX_MESSAGE_CHARS,
   REPORT_REASONS,
@@ -112,6 +117,14 @@ export function ConversationSheet({
   // never be deleted deserves a listen first (user, 2026-09-13 — as BondBridge does).
   const [draft, setDraft] = useState<{ blob: Blob; url: string; seconds: number } | null>(null);
   const draftRef = useRef<{ url: string } | null>(null);
+  // 2026-11-02 — a photo being filed to the chat's load or parcel: made ready, waiting for "What is this?" and File it.
+  const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
+  const [choice, setChoice] = useState<FilingChoice | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [photoFailed, setPhotoFailed] = useState<string | null>(null);
+  // A filed photo opened from its card, and the photos filed with no signal that wait on this phone.
+  const [viewing, setViewing] = useState<FiledPhotoRef | null>(null);
+  const [waitingPhotos, setWaitingPhotos] = useState<WaitingPhoto[]>([]);
   const canRecord =
     typeof window !== 'undefined' && typeof (window as { MediaRecorder?: unknown }).MediaRecorder !== 'undefined' && Boolean(globalThis.navigator?.mediaDevices?.getUserMedia);
 
@@ -165,6 +178,11 @@ export function ConversationSheet({
     setSelecting(false);
     setPicked([]);
     setDone(null);
+    // Another chat never opens with this one's photo half-filed.
+    setPhoto(null);
+    setChoice(null);
+    setPhotoFailed(null);
+    setViewing(null);
     if (!id) return undefined;
     void catchUp();
     const timer = window.setInterval(() => void catchUp(), POLL_MS);
@@ -184,13 +202,18 @@ export function ConversationSheet({
   useEffect(() => {
     if (!id) {
       setWaiting([]);
+      setWaitingPhotos([]);
       return undefined;
     }
-    const look = () => setWaiting(waitingIn(outboxItems(), id));
+    const look = () => {
+      const items = outboxItems();
+      setWaiting(waitingIn(items, id));
+      setWaitingPhotos(waitingPhotosIn(items, id));
+    };
     look();
     const offChange = onOutboxChange(look);
     const offSent = onOutboxSent((item) => {
-      if (isMessageIn(item.path, id)) void catchUp();
+      if (isMessageIn(item.path, id) || isPhotoIn(item.path, id)) void catchUp();
     });
     return () => {
       offChange();
@@ -282,7 +305,16 @@ export function ConversationSheet({
       return;
     }
     const mime = pickAudioMime((type) => MediaRecorder.isTypeSupported(type));
-    const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    let recorder: MediaRecorder;
+    try {
+      recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch {
+      // A phone whose recorder will not start in any kind we can send: said, and the microphone let go (2026-11-02) —
+      // it used to throw here with the microphone left on and nothing on the screen.
+      for (const track of stream.getTracks()) track.stop();
+      setFailed(t('upload.wrongType.voice'));
+      return;
+    }
     const startedAt = Date.now();
     chunksRef.current = [];
     discardRef.current = false;
@@ -325,12 +357,58 @@ export function ConversationSheet({
   const sendDraft = () => {
     if (!api || !id || !draft) return;
     const { blob, seconds } = draft;
+    // Its size, checked before it is sent, with the most (2026-11-02, the owner: "it needs to show or tell"): the recorder
+    // stops itself at its time limit, but a phone that records richly can still pass what the server takes.
+    if (blob.size > UPLOAD_LIMITS.voice) {
+      setFailed(refusalWords(new UploadRefusal('too-big', { kind: 'voice', bytes: blob.size, maxBytes: UPLOAD_LIMITS.voice }), 'voice'));
+      return;
+    }
     const reader = new FileReader();
+    reader.onerror = () => setFailed(refusalWords(new UploadRefusal('not-read', { kind: 'voice' }), 'voice'));
     reader.onload = () => {
       const dataUrl = String(reader.result ?? '');
-      void act('voice', () => api.sendVoice(id, { dataUrl, durationSec: seconds }), discardDraft);
+      void act('voice', async () => {
+        const r = await api.sendVoice(id, { dataUrl, durationSec: seconds });
+        // The server's refusal of the recording, or no signal, in words rather than its own developer English.
+        return r.error ? { ...r, error: { title: uploadFailureSentence(r.error, 'voice') } } : r;
+      }, discardDraft);
     };
     reader.readAsDataURL(blob);
+  };
+
+  /**
+   * 2026-11-02 — a photo came in, from the app's own camera or the gallery: made ready (its date and fingerprint read off
+   * the original first), then held here for "What is this?". Nothing has left the phone yet.
+   */
+  const pickPhoto = async (file: Blob, source: PhotoSource, takenAt?: string) => {
+    setPhotoFailed(null);
+    setDone(null);
+    setPreparing(true);
+    try {
+      setPhoto(await preparePhoto(file, source, takenAt));
+      setChoice(null);
+    } catch (e) {
+      // Said in the words every photo field uses (shared/upload.ts): a picture this phone cannot open, and why.
+      setPhotoFailed(photoRefusal(e, t('common.chat.photo.unreadable')));
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  /** 2026-11-02 — file it to the chat's load or parcel; with no signal it waits on the phone and goes by itself. */
+  const filePhoto = async () => {
+    if (!api || !id || !photo || !choice) return;
+    setBusy('photo');
+    // A refusal of the photo itself said as one (its size and the most); a refusal of the filing, the server's own words.
+    const outcome = await fileTo(api, id, photo, choice, (e) => uploadFailureSentence(e, 'photo'), t('common.chat.photo.noRoom'));
+    setBusy(null);
+    if (outcome.state === 'refused') return setPhotoFailed(outcome.why);
+    setPhoto(null);
+    setChoice(null);
+    setPhotoFailed(null);
+    if (outcome.state === 'queued') return setDone(t('common.chat.photo.held'));
+    await catchUp(true);
+    onChanged?.();
   };
 
   const setBlocked = async (block: boolean) => {
@@ -399,10 +477,13 @@ export function ConversationSheet({
     if (m.kind === 'settlement_agreed') return <b>{t('common.chat.deal.agreedLine')}</b>;
     if (m.kind === 'report_shared') return <b>{t('common.chat.dispute.sharedLine', { n: m.seqCount ?? 0 })}</b>;
     if (m.kind === 'voice' && m.voice && id) return <VoicePlayer api={api} conversationId={id} voiceId={m.voice.voiceId} durationSec={m.voice.durationSec} />;
+    // 2026-11-02 — a filed photo: the card, never the picture; the picture opens from it, through this chat.
+    if (m.kind === 'photo' && m.photo) return <FiledPhotoCard photo={m.photo} who={authorOf(m)} onOpen={() => setViewing(m.photo!)} />;
     return m.body;
   };
 
   return (
+    <>
     <Sheet open={Boolean(thread)} onClose={onClose} title={thread ? t('common.chat.title', { code: thread.freightCode }) : ''}>
       {thread ? (
         <>
@@ -537,6 +618,31 @@ export function ConversationSheet({
                 </div>
               </div>
             ))}
+            {/* 2026-11-02 — a photo filed with no signal: waiting on this phone with its filing, and filed by itself when the
+                signal comes back. Said as what it was filed as — the picture stays on the phone until then. */}
+            {waitingPhotos.map((w) => (
+              <div
+                key={w.id}
+                style="align-self:flex-end; max-width:85%; padding:8px 12px; border-radius:14px; background:var(--brand-50, #eef0ff); border:1px dashed var(--line, #dcdce4)"
+              >
+                <div class="t-body">
+                  <Icon name="camera" size={18} /> <b>{t('common.chat.photo.waitingTitle', { code: current?.freightCode ?? '', what: t(whatKey({ as: w.as, proofOf: w.proofOf })) })}</b>
+                </div>
+                <div class="hint" style="margin-top:2px; font-size:12px">
+                  {w.refused ? (
+                    <>
+                      {t('common.chat.unsent', { why: w.refused })}
+                      {' · '}
+                      <button type="button" class="linkbtn" onClick={() => discard(w.id)}>
+                        {t('common.chat.unsentRemove')}
+                      </button>
+                    </>
+                  ) : (
+                    t('common.chat.photo.waiting', { time: whenSent(w.writtenAt) })
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
 
           {readOnly ? null : selecting ? (
@@ -571,6 +677,36 @@ export function ConversationSheet({
                   <Chip key={q} label={t(`common.chat.quick.${q}` as 'common.chat.quick.loaded')} active={false} onClick={() => send({ quick: q })} />
                 ))}
               </div>
+              {/* 2026-11-02 — A PHOTO IS FILED, THEN SHOWN (the owner: "Damage claims should be fingerprinted and just sharing
+                  blurs this"). Offered to whoever may file to this load or parcel; a photo comes into the chat no other way. */}
+              {current?.canFilePhotos ? (
+                photo ? (
+                  <PhotoFilingView
+                    photo={photo}
+                    subject={current.subject ?? 'freight'}
+                    code={current.freightCode}
+                    choice={choice}
+                    busy={busy === 'photo'}
+                    failed={photoFailed}
+                    onChoose={setChoice}
+                    onFile={() => void filePhoto()}
+                    onCancel={() => {
+                      setPhoto(null);
+                      setChoice(null);
+                      setPhotoFailed(null);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <PhotoPicker busy={preparing} onPicked={(file, source, takenAt) => void pickPhoto(file, source, takenAt)} />
+                    {photoFailed ? (
+                      <p class="hint" role="alert">
+                        {photoFailed}
+                      </p>
+                    ) : null}
+                  </>
+                )
+              ) : null}
               {/* CV4 — a voice message, for a driver with a load in both hands or anybody for whom writing is the
                   hard part. Offered only where the browser can record; the microphone is asked for on the tap. */}
               {canRecord ? (
@@ -756,6 +892,9 @@ export function ConversationSheet({
         </>
       ) : null}
     </Sheet>
+    {/* 2026-11-02 — a filed photo opened from its card, over the chat: the picture, its labels and fingerprints, the record. */}
+    <FiledPhotoSheet api={api} conversationId={id} photo={viewing} onClose={() => setViewing(null)} />
+    </>
   );
 }
 
@@ -874,6 +1013,7 @@ export function ConversationList({
     if (m.kind === 'settlement_agreed') return t('common.chat.deal.agreedLine');
     if (m.kind === 'report_shared') return t('common.chat.dispute.sharedLine', { n: m.seqCount ?? 0 });
     if (m.kind === 'voice' && m.voice) return t('common.chat.voice.preview', { duration: formatDuration(m.voice.durationSec) });
+    if (m.kind === 'photo' && m.photo) return t('common.chat.photo.listPreview', { code: m.photo.code, what: t(whatKey(m.photo)) });
     return m.body ?? '';
   };
 

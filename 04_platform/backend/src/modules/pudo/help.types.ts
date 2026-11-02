@@ -18,6 +18,7 @@
 // this product is a translatable key (the i18n epic) and a database column is not translatable.
 
 import { PACKAGING } from './packaging';
+import { UPLOAD_LIMITS } from '../../foundation/media/upload-limits';
 import { TRUCK_SUBTYPES } from './fleet.config';
 import { CARGO_NATURES, EQUIPMENT } from './cargo.types';
 
@@ -101,4 +102,4 @@ export interface HelpTopicView {
  * photo is allowed, because this one is fetched by every clerk on every booking over a phone connection
  * somebody is paying for by the megabyte.
  */
-export const HELP_IMAGE_MAX_BYTES = 150 * 1024;
+export const HELP_IMAGE_MAX_BYTES = UPLOAD_LIMITS.helpPicture;

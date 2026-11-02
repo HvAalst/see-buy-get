@@ -1,6 +1,8 @@
 import { useState } from 'preact/hooks';
 import { Icon } from '../../../shared/ui';
 import { useT, type MessageKey } from '../../../shared/i18n';
+import { downscaleImage } from '../../../shared/media';
+import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
 import { ConsoleFold } from '../ConsoleFold';
 import { CountrySelect } from './CountrySelect';
 import { DocumentStrip } from './DocumentStrip';
@@ -166,13 +168,25 @@ function FleetRow({ row, state, actions }: { row: FleetSetupRow; state: TowerSta
   const busy = state.busyId === row.did;
   const [pictures, setPictures] = useState<Partial<Record<FleetPaperKey, string>>>({});
   const [why, setWhy] = useState<string | null>(null);
+  // Why a picture just chosen cannot go, under the four pickers (2026-11-02).
+  const [pickSaid, setPickSaid] = useState<string | null>(null);
   const allFour = FLEET_PAPERS.every(([key]) => Boolean(pictures[key]));
 
-  const pick = (key: FleetPaperKey, file: File | null) => {
+  /*
+   * MADE SMALLER HERE, as every photograph is (2026-11-02). Read raw, a scan or a phone photo of a paper was nearly always
+   * over the 500 KB the server takes, refused only after all four had been chosen, in the server's words. 1600 pixels on
+   * the long side keeps an ID card's print readable, as the identity check does.
+   */
+  const pick = async (key: FleetPaperKey, file: File | null) => {
+    setPickSaid(null);
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPictures((p) => ({ ...p, [key]: String(reader.result ?? '') }));
-    reader.readAsDataURL(file);
+    try {
+      const { dataUrl } = await downscaleImage(file, { maxEdge: 1600, quality: 0.8, thumbEdge: 0 });
+      setPictures((p) => ({ ...p, [key]: dataUrl }));
+    } catch (e) {
+      setPictures((p) => ({ ...p, [key]: undefined }));
+      setPickSaid(uploadFailureSentence(e, 'photo'));
+    }
   };
 
   return (
@@ -215,10 +229,11 @@ function FleetRow({ row, state, actions }: { row: FleetSetupRow; state: TowerSta
                       {t(PAPER_LABEL[key])}
                       {pictures[key] ? ` · ${t('tower.fleets.chosen')}` : ''}
                     </span>
-                    <input id={`fleet-${key}-${row.did}`} class="cinput" type="file" accept="image/*" disabled={busy} onChange={(e) => pick(key, (e.target as HTMLInputElement).files?.[0] ?? null)} />
+                    <input id={`fleet-${key}-${row.did}`} class="cinput" type="file" data-upload="photo" accept="image/*" disabled={busy} onChange={(e) => void pick(key, (e.target as HTMLInputElement).files?.[0] ?? null)} />
                   </label>
                 ))}
               </div>
+              {pickSaid ? <p class="cerr" role="alert">{pickSaid}</p> : null}
               <div class="twr-panelend">
                 <button
                   type="button"

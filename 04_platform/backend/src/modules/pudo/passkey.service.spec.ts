@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { PersonService } from './person.service';
 import { PasskeyService } from './passkey.service';
+import { AccountService } from './account.service';
 import { MediaService } from './media.service';
 import { AuthService } from '../../foundation/auth/auth.service';
 import { DidService } from '../../foundation/did/did.service';
@@ -38,6 +39,8 @@ describe('unlock with fingerprint or face', () => {
         PersonService, PasskeyService, MediaService, IdentityVault, FieldEncryption,
         AuthService, DidService, OperationalStore, LedgerService, EventBus,
         { provide: LEDGER_ADAPTER, useClass: InMemoryLedgerAdapter },
+        // The person's side only: a shop's, a hub's and a store's are proved over the wire (test/account-passkey.e2e-spec.ts).
+        { provide: AccountService, useValue: {} },
       ],
     }).compile();
     persons = moduleRef.get(PersonService);
@@ -286,6 +289,16 @@ describe('unlock with fingerprint or face', () => {
       persons.movePhone(me.personDid, moved, 'self');
       expect(await offered(moved, me.device)).toBe(0);
       expect(await offered(me.number, me.device)).toBe(0);
+    });
+
+    it('a PIN changed with the current one: the device stays, every passkey made with the old PIN goes', async () => {
+      const me = signedUp();
+      const phoneApp = await turnedOn(me);
+      const held = await unlocked(me.number, me.device, phoneApp);
+      persons.changePinForPerson(me.personDid, PIN, '73914');
+      expect(await offered(me.number, me.device)).toBe(0);
+      expect(await codeOf(() => persons.loginWithPin(me.number, undefined, me.device, held.unlock))).toBe('UNLOCK_FAILED');
+      expect(persons.loginWithPin(me.number, '73914', me.device).person.personDid).toBe(me.personDid);
     });
 
     it('the account closed', async () => {

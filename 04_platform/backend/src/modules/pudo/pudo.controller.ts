@@ -117,6 +117,8 @@ import type { BusinessGs1View } from './business.types';
 import { ContactCardView, DepotListResponse, DepotRegisterView } from './depot.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { AccountService } from './account.service';
+import { PasskeyService } from './passkey.service';
+import { AccountUnlockDto, AccountUnlockOptionsDto } from './passkey.dto';
 import { OTP_TTL_MINUTES, OtpService } from './otp.service';
 import { PersonService } from './person.service';
 import { TRUCK_SUBTYPE_CATALOG } from './fleet.config';
@@ -343,6 +345,8 @@ export class SbgController {
     @Optional() private readonly hubContacts?: HubContactService,
     // The payout run the system raises every morning (the user, 2026-10-27: "Morning run, one approves").
     @Optional() private readonly morningRun?: MorningPayoutRun,
+    // 2026-11-02 — a fingerprint or face in place of a shop's, a hub's or a store's password, on its own phones.
+    @Optional() private readonly passkeys?: PasskeyService,
   ) {}
 
   /**
@@ -466,7 +470,39 @@ export class SbgController {
   @RateLimit(60, 15 * 60)
   @Post('auth/login')
   authLogin(@Body() dto: LoginDto) {
-    return this.accounts.login(dto.email, dto.password, dto.device);
+    // The password — or, 2026-11-02, the ticket a fingerprint or face on this phone was just checked for, in its place.
+    return this.accounts.login(dto.email, dto.password, dto.device, Date.now(), dto.unlock);
+  }
+
+  /**
+   * UNLOCK WITH FINGERPRINT OR FACE, IN PLACE OF A SHOP'S, A HUB'S OR A STORE'S PASSWORD (the owner, 2026-11-02: "ok go
+   * ahead with the fingerprint"), step one: what the phone needs to sign — asked by the address and this phone's key.
+   * The same shape for every address there is or is not. Limited as the sign-in is.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60)
+  @Post('auth/unlock/options')
+  accountUnlockOptions(@Body() dto: AccountUnlockOptionsDto) {
+    return this.passkeyDoor().accountUnlockOptions(dto.email, dto.device);
+  }
+
+  /**
+   * …step two: the phone's answer, for a TICKET — one use, two minutes — that the account's own door (auth/login,
+   * vendors/session) takes in place of the password. The password's lock is asked first; a bad answer counts with the
+   * wrong passwords. Limited as the sign-in is.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(60, 15 * 60)
+  @Post('auth/unlock')
+  accountUnlock(@Body() dto: AccountUnlockDto) {
+    return this.passkeyDoor().accountUnlock(dto.email, dto.device, dto.response as never);
+  }
+
+  private passkeyDoor(): PasskeyService {
+    if (!this.passkeys) throw new GlosError('INVALID_STATE', 'Unlocking with fingerprint or face is not open here. Use the password.');
+    return this.passkeys;
   }
 
   /**
@@ -3463,7 +3499,8 @@ export class SbgController {
   @Post('vendors/session')
   async vendorSession(@Body() dto: LoginDto) {
     // Round 40 — the store's sign-in works only on its own phones and browsers: this one's key goes with it.
-    const account = await this.accounts.storeLogin(dto.email, dto.password, dto.device);
+    // The password — or, 2026-11-02, the ticket a fingerprint or face on this phone was just checked for, in its place.
+    const account = await this.accounts.storeLogin(dto.email, dto.password, dto.device, Date.now(), dto.unlock);
     const vendor = this.vendors.byDid(account.did);
     if (!vendor) throw new GlosError('AUTH_FAILED', 'Wrong email or password');
     return { ...VendorService.publicView(vendor), email: account.email, hasAccount: true, token: account.token };

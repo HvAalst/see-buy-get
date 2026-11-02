@@ -1,6 +1,9 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
+import { paperForUpload } from '../../../shared/media';
+import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
+import { refusalWords, uploadHint } from '../../../shared/upload';
 import { quoteFigure, type QuoteView } from '../../../shared/quote';
 import { ConsoleFold } from '../ConsoleFold';
 import { tabAtTheTap } from '../../../shared/openPage';
@@ -32,16 +35,26 @@ export function QuotePanel({ quote, api, canChange, onChanged }: { quote: QuoteV
     setError(null);
     const r = await fn();
     setBusy(false);
-    if (r.error) return setError(r.error.detail || r.error.title || '');
+    if (r.error) return setError(refusalWords(r.error) ?? (r.error.detail || r.error.title || ''));
     setReference('');
     await onChanged();
   };
 
-  const attach = (file: File) => {
+  /*
+   * THE PROFORMA, CHECKED HERE FIRST (2026-11-02, the owner: "if we put a filesize limit, it needs to show or tell"): a PDF
+   * over the most is refused before it is sent, with its size and the most; a photo of it is made smaller to fit. It used to
+   * be read raw, and a read that failed said nothing at all.
+   */
+  const attach = async (file: File) => {
     if (!api) return;
-    const reader = new FileReader();
-    reader.onload = () => void act(() => api.attachProforma(quote.quoteId, { dataUrl: String(reader.result), fileName: file.name }));
-    reader.readAsDataURL(file);
+    setError(null);
+    let dataUrl: string;
+    try {
+      dataUrl = await paperForUpload(file);
+    } catch (e) {
+      return setError(uploadFailureSentence(e));
+    }
+    await act(() => api.attachProforma(quote.quoteId, { dataUrl, fileName: file.name }));
   };
 
   const open = async () => {
@@ -94,16 +107,18 @@ export function QuotePanel({ quote, api, canChange, onChanged }: { quote: QuoteV
                 {quote.proforma ? t('quote.replaceProforma') : t('quote.addProforma')}
                 <input
                   type="file"
-                  accept="application/pdf,image/png,image/jpeg"
+                  data-upload="document"
+                  accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
                   disabled={busy}
                   onChange={(e) => {
                     const file = (e.target as HTMLInputElement).files?.[0];
-                    if (file) attach(file);
+                    if (file) void attach(file);
                     (e.target as HTMLInputElement).value = '';
                   }}
                 />
               </label>
             ) : null}
+            {canChange ? <span class="chint">{uploadHint('document')}</span> : null}
           </dd>
         </div>
         <div class="cons__fact">

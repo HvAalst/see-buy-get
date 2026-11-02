@@ -24,11 +24,11 @@ export function documentSignatureMatches(contentType: string, b: Buffer): boolea
 /** Decode a `data:<type>;base64,<…>` URL into validated bytes, or throw. `maxBytes` is the caller's. */
 export function decodeDocument(dataUrl: string, maxBytes: number): { contentType: DocumentContentType; bytes: Buffer } {
   const m = DOCUMENT_DATA_URL_RE.exec((dataUrl ?? '').trim());
-  if (!m) throw new GlosError('UNSUPPORTED_MEDIA', 'Upload a PDF, PNG or JPEG document');
+  if (!m) throw new GlosError('UNSUPPORTED_MEDIA', 'Upload a PDF, PNG or JPEG document', { accepts: [...DOCUMENT_CONTENT_TYPES] });
   const contentType = m[1].toLowerCase() as DocumentContentType;
   const bytes = Buffer.from(m[2], 'base64');
   if (bytes.length === 0) throw new GlosError('INVALID_INPUT', 'The document is empty');
-  if (bytes.length > maxBytes) throw new GlosError('MEDIA_TOO_LARGE', `That document is larger than ${Math.round(maxBytes / 1024 / 1024)} MB`);
-  if (!documentSignatureMatches(contentType, bytes)) throw new GlosError('UNSUPPORTED_MEDIA', 'That file is not really a document of that type');
+  if (bytes.length > maxBytes) throw new GlosError('MEDIA_TOO_LARGE', `That document is larger than ${Math.round(maxBytes / 1024 / 1024)} MB`, { bytes: bytes.length, maxBytes });
+  if (!documentSignatureMatches(contentType, bytes)) throw new GlosError('UNSUPPORTED_MEDIA', 'That file is not really a document of that type', { contentType, accepts: [...DOCUMENT_CONTENT_TYPES] });
   return { contentType, bytes };
 }

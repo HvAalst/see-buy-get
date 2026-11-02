@@ -24,7 +24,9 @@ export type MediaKind =
   | 'tamper' // round 35 — what was found under the tamper protocol: the seal as it is, the cut wrap
   | 'gs1_licence' // round 18 — the GS1 licence a business, a forwarder's client or (round 29) a store sends in a prefix dispute
   // CL5 — a photograph of an OFFICIAL DOCUMENT, behind two gates: the country's and the person's.
-  | 'field_evidence';
+  | 'field_evidence'
+  // 2026-11-02 — a photo FILED to a load or a parcel from a chat, as damage, a paper or proof (shared/conversation/filedPhotoLogic.ts).
+  | 'filed';
 
 /**
  * Media facade (S26) — the operations any authenticated app shares for real image upload + display.

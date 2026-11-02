@@ -236,7 +236,9 @@ export interface LoginView {
 
 /** Email + password; for a shop, this phone's key with it (a shop's sign-in works only on its own phones). */
 export function sbgLogin(config: SbgConfig, email: string, password: string, f?: typeof fetch, device?: string): Promise<Result<LoginView>> {
-  return publicRequest<LoginView>(config, '/v1/sbg/auth/login', { body: { email, password, ...(device ? { device } : {}) }, fetch: f });
+  // 2026-11-02 — a fingerprint-or-face unlock ticket (`unl_…`, shared/account/unlock.ts) goes as `unlock`, in the password's place.
+  const secret = password.startsWith('unl_') ? { unlock: password } : { password };
+  return publicRequest<LoginView>(config, '/v1/sbg/auth/login', { body: { email, ...secret, ...(device ? { device } : {}) }, fetch: f });
 }
 
 /** The code texted to the shop's number, typed on this phone: it is one of the shop's from now, and signed in. */

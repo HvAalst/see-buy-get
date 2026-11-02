@@ -5,6 +5,8 @@ import { onLaunch, type SharedIn } from '../launch';
 import { Button, ErrorNote, Icon, Note, Pill, Sheet, refusalSentence } from '../ui';
 import type { InstallApp } from '../ui/InstallBar';
 import { ConversationSheet } from './Conversations';
+import { SharedPhotosSheet } from './SharedPhotos';
+import { forgetSharedFiles, heldFiles, holdFiles, letGoFiles } from '../sharedFiles';
 import { MAX_MESSAGE_CHARS, counterpartKey, type ChatThread } from './logic';
 import { hold, held, letGo, linkOf, messageBlocker, messageOf, newestFirst, sendShared, writable, type SendOutcome } from './sharedInLogic';
 
@@ -23,6 +25,8 @@ import { hold, held, letGo, linkOf, messageBlocker, messageOf, newestFirst, send
 export function SharedInLayer({ app, chats, onSignIn }: { app: InstallApp; chats: ConversationsApi | null | undefined; onSignIn?: () => void }) {
   const t = useT();
   const [shared, setShared] = useState<SharedIn | null>(() => held(app));
+  // 2026-11-02 — photos shared from the gallery: the name they wait under on this phone (shared/sharedFiles.ts).
+  const [photos, setPhotos] = useState<string | null>(() => heldFiles(app));
   // The chat a message was just sent into, opened from the confirmation.
   const [chat, setChat] = useState<ChatThread | null>(null);
 
@@ -36,9 +40,26 @@ export function SharedInLayer({ app, chats, onSignIn }: { app: InstallApp; chats
     [app],
   );
 
+  // Photos are their own kind (shared/launch.ts): they wait for this listener, and are filed, never sent loose.
+  useEffect(
+    () =>
+      onLaunch('files', (id) => {
+        holdFiles(app, id);
+        setPhotos(id);
+      }),
+    [app],
+  );
+
   const close = () => {
     letGo(app);
     setShared(null);
+  };
+
+  /** Put away: filed, or not wanted. Nothing of them stays on the phone. */
+  const closePhotos = () => {
+    if (photos) void forgetSharedFiles(photos);
+    letGoFiles(app);
+    setPhotos(null);
   };
 
   return (
@@ -60,8 +81,32 @@ export function SharedInLayer({ app, chats, onSignIn }: { app: InstallApp; chats
           </div>
         </div>
       ) : null}
+      {photos && chats === null ? (
+        <div class="sharedin__held">
+          <Note tone="info" icon="camera" title={t('sharedIn.photos.held.title')} detail={t('sharedIn.photos.held.detail')} />
+          <div class="sharedin__heldacts">
+            {onSignIn ? (
+              <Button variant="outline" full={false} chevron={false} onClick={onSignIn}>
+                {t('sharedIn.held.signIn')}
+              </Button>
+            ) : null}
+            <Button variant="link" full={false} onClick={closePhotos}>
+              {t('sharedIn.held.forget')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {chats ? (
         <>
+          <SharedPhotosSheet
+            api={chats}
+            id={photos}
+            onClose={closePhotos}
+            onOpenChat={(x) => {
+              closePhotos();
+              setChat(x);
+            }}
+          />
           <SharedInSheet
             key={shared ? messageOf(shared) : ''}
             app={app}

@@ -4,6 +4,7 @@ import { Button, ErrorNote, Note, PlacePicker, Sheet, type PlaceNote } from '../
 import { useT, type Translate } from '../../../shared/i18n';
 import { pinAfterRename, type GeoPoint, type PinSource } from '../../../shared/geo';
 import { MAX_WORKBOOK_BYTES, base64Of, importVerdictLine, isWorkbook, notASheet, type Contract, type ImportResult, type ordersApi } from '../orders';
+import { UPLOAD_LIMITS, UploadRefusal, refusalWords, uploadHint } from '../../../shared/upload';
 
 /** What a placed (or unplaced) collection point means here: every line without its own is collected from it. */
 function pickupNote(t: Translate, note: PlaceNote): string {
@@ -59,23 +60,37 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
       setFileName(null);
       return;
     }
-    if (isWorkbook(file.name)) {
-      if (file.size > MAX_WORKBOOK_BYTES) {
-        setRefused(t('fleet.upload.tooBig'));
-        setFileName(null);
-        setWorkbook(null);
-        return;
-      }
-      setRefused(null);
-      setFileName(file.name);
-      setText('');
-      setWorkbook(base64Of(new Uint8Array(await file.arrayBuffer())));
+    /*
+     * ITS SIZE, SAID WITH THE MOST (2026-11-02, the owner: "if we put a filesize limit, it needs to show or tell"): a
+     * workbook up to what the server reads, a text file up to the characters the route takes — checked before it is read,
+     * and a phone that cannot read it says so rather than leaving the sheet waiting.
+     */
+    const most = isWorkbook(file.name) ? MAX_WORKBOOK_BYTES : UPLOAD_LIMITS.orderSheetText;
+    if (!file.size || file.size > most) {
+      setRefused(refusalWords(new UploadRefusal(file.size ? 'too-big' : 'empty', { kind: 'sheet', bytes: file.size, maxBytes: most }), 'sheet'));
+      setFileName(null);
+      setWorkbook(null);
       return;
     }
-    setRefused(null);
-    setFileName(file.name);
-    setWorkbook(null);
-    setText(await file.text());
+    try {
+      if (isWorkbook(file.name)) {
+        const bytes = base64Of(new Uint8Array(await file.arrayBuffer()));
+        setRefused(null);
+        setFileName(file.name);
+        setText('');
+        setWorkbook(bytes);
+        return;
+      }
+      const words = await file.text();
+      setRefused(null);
+      setFileName(file.name);
+      setWorkbook(null);
+      setText(words);
+    } catch {
+      setRefused(refusalWords(new UploadRefusal('not-read', { kind: 'sheet' }), 'sheet'));
+      setFileName(null);
+      setWorkbook(null);
+    }
   };
 
   const send = async (dryRun: boolean) => {
@@ -141,10 +156,11 @@ export function OrderUpload({ contract, api, onClose, onImported }: { contract: 
           ref={fileInput}
           class="input"
           type="file"
+          data-upload="sheet"
           accept=".xlsx,.xlsm,.csv,.tsv,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={(e) => void pick(e.currentTarget.files?.[0])}
         />
-        {refused ? <p class="hint upload__refused"><Abbreviated text={refused} /></p> : null}
+        {refused ? <p class="hint upload__refused" role="alert"><Abbreviated text={refused} /></p> : <p class="hint">{uploadHint('sheet')}</p>}
       </div>
       <div class="field" style="margin-top:12px">
         <label class="field__label" for="up-text">

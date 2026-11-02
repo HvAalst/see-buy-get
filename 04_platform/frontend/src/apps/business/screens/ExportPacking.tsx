@@ -5,6 +5,7 @@ import { ConsolePick } from '../../tower/ConsolePick';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import type { BusinessClient } from '../api';
+import { UPLOAD_LIMITS, refusalWords, typeOf, uploadHint, UploadRefusal } from '../../../shared/upload';
 import { PACKING_FIELDS, packingTotalsLine, utcWords, type ExportDetail, type PackingCheck, type PackingColumnUse, type PackingInput, type PackingTotals } from '../exports';
 
 type Problem = { detail?: string; title: string } | null | undefined;
@@ -82,8 +83,23 @@ export function ExportPacking({ d, client, mine, signatory, onDetail }: { d: Exp
     setCheck(r.data ?? null);
   };
   const choose = (file: File) => {
-    const reader = new FileReader();
     const workbook = /\.xlsx$/i.test(file.name);
+    /*
+     * Its size, checked here before it is read (2026-11-02, the owner: "if we put a filesize limit, it needs to show or
+     * tell"): a workbook up to the most the server reads, a text file up to the characters the route takes. Said with the
+     * file's size and the most, and what to do.
+     */
+    const most = workbook ? UPLOAD_LIMITS.workbook : UPLOAD_LIMITS.packingText;
+    if (!file.size || file.size > most) {
+      setDone(null);
+      return setError(refusalWords(new UploadRefusal(file.size ? 'too-big' : 'empty', { kind: 'sheet', bytes: file.size, maxBytes: most }), 'sheet'));
+    }
+    if (!workbook && /^(image|audio|video)\/|pdf$/.test(typeOf(file))) {
+      setDone(null);
+      return setError(refusalWords(new UploadRefusal('wrong-type', { kind: 'sheet' }), 'sheet'));
+    }
+    const reader = new FileReader();
+    reader.onerror = () => setError(refusalWords(new UploadRefusal('not-read'), 'sheet'));
     reader.onload = () => {
       setMapping({});
       void runCheck(workbook ? { workbook: base64Of(reader.result as ArrayBuffer), sourceName: file.name } : { text: String(reader.result), sourceName: file.name });
@@ -215,6 +231,7 @@ export function ExportPacking({ d, client, mine, signatory, onDetail }: { d: Exp
               {t('business.exports.packing.upload')}
               <input
                 type="file"
+                data-upload="sheet"
                 accept=".xlsx,.csv,.txt,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 disabled={busy}
                 onChange={(e) => {
@@ -228,6 +245,7 @@ export function ExportPacking({ d, client, mine, signatory, onDetail }: { d: Exp
               {t('business.exports.packing.paste')}
             </button>
           </div>
+          <p class="chint">{uploadHint('sheet')}</p>
           {pasting ? (
             <>
               <label class="cfield">

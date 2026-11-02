@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { allDeviceKeys, saveDeviceKey } from './pin';
-import { markUnlock } from './unlock';
+import { markAccountUnlock, markUnlock } from './unlock';
+import { saveShopDeviceKey, shopDeviceKey } from './shopDevice';
 import { UnlockFirst, useUnlockFirst } from './UnlockFirst';
 import { SignInScreen as DriverSignIn } from '../../apps/driver/screens/SignInScreen';
 
@@ -67,6 +68,30 @@ describe('the sign-in button', () => {
     turnedOnHere();
     saveDeviceKey(PHONE, 'dvc_after-the-code');
     expect(renderToString(<Screen phone={PHONE} />)).not.toContain('Unlock with fingerprint or face');
+  });
+
+  it('a shop’s, a hub’s or a store’s sign-in: by its address and its phone’s key, with the password one tap away', () => {
+    const SHOP = 'kona@shop.example';
+    const account = { keyOf: (email: string) => shopDeviceKey(email) };
+    function AccountScreen({ email }: { email: string }) {
+      const state = useUnlockFirst(email, account);
+      return (
+        <UnlockFirst state={state} phone={email} config={config} onTicket={() => undefined}>
+          <p id="the-password-box">password</p>
+        </UnlockFirst>
+      );
+    }
+    expect(renderToString(<AccountScreen email={SHOP} />)).toContain('the-password-box');
+    saveShopDeviceKey(SHOP, 'dvc_shop-phone');
+    markAccountUnlock(SHOP, 'dvc_shop-phone', 'cred-1');
+    const html = renderToString(<AccountScreen email={SHOP} />);
+    expect(html).toContain('Unlock with fingerprint or face');
+    expect(html).toContain('Use my password instead');
+    expect(html).not.toContain('the-password-box');
+    // A person's note for a number is nothing to an account's sign-in, and the other way round.
+    expect(renderToString(<Screen phone={SHOP} />)).not.toContain('Unlock with fingerprint or face');
+    saveShopDeviceKey(SHOP, 'dvc_confirmed-again');
+    expect(renderToString(<AccountScreen email={SHOP} />)).not.toContain('Unlock with fingerprint or face');
   });
 
   it('in the Driver app, where nothing was turned on, the PIN screen is as it was', () => {

@@ -3812,7 +3812,9 @@ export class DispatchService {
       // No cover stated is no award at all: the queue shows the stated cover, or that there is nothing to award.
       awardCap: cover,
       capBasis: cover > 0 ? 'free-limit' : 'none',
-      evidence: [f.loadSafety?.securementPhotoRef, ...(f.inspection?.points.map((p) => p.photoRef) ?? []), f.proofOfDelivery?.photoRef, ...(f.proofOfDelivery?.exceptions?.flatMap((x) => x.photoRefs ?? []) ?? []), c.photoRef].filter((x): x is string => Boolean(x)),
+      // …and, 2026-11-02, the photos either side FILED to the load from a conversation (damage, a paper, proof), each kept
+      // with its own fingerprint (filed-photo.types.ts) — read here because a claim is where staff read a load's evidence.
+      evidence: [f.loadSafety?.securementPhotoRef, ...(f.inspection?.points.map((p) => p.photoRef) ?? []), f.proofOfDelivery?.photoRef, ...(f.proofOfDelivery?.exceptions?.flatMap((x) => x.photoRefs ?? []) ?? []), c.photoRef, ...this.media.linkedTo({ type: 'freight', id: f.freightId }, 'filed')].filter((x): x is string => Boolean(x)),
       attempts: f.deliveryAttempts?.length ?? 0,
       ...(f.proofOfDelivery ? { receiverName: f.proofOfDelivery.receiverName } : {}),
     };

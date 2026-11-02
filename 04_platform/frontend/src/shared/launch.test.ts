@@ -59,6 +59,27 @@ describe('how the app was opened', () => {
     expect(shared).toEqual(['Gate 3']);
   });
 
+  it('reads photos shared from the gallery as their own kind, waiting for their own listener (2026-11-02)', () => {
+    // What the app's worker opens after it kept the photos: their name, and nothing a hand-made address could slip in.
+    expect(intentOf('https://x.test/driver/?share_files=k3x9a1')).toEqual({ files: 'k3x9a1' });
+    expect(intentOf('https://x.test/driver/?share_files=lost')).toEqual({ files: 'lost' });
+    expect(intentOf('https://x.test/driver/?share_files=..%2F..%2Fetc')).toBeNull();
+    // The share target's own address with nothing after it: a share that arrived without its photos, said as lost.
+    expect(intentOf('https://x.test/driver/share-target')).toEqual({ files: 'lost' });
+    expect(withoutIntent('https://x.test/send/?share_files=k3x9a1&invite=abc')).toBe('/send/?invite=abc');
+
+    const replaced = page('https://x.test/agent/?share_files=k3x9a1');
+    const shared: string[] = [];
+    const files: string[] = [];
+    onLaunch('share', (s) => shared.push(s.text ?? ''));
+    expect(files).toEqual([]);
+    // The photo sheet mounts after the sign-in: the photos waited for it, and the text sheet was handed nothing.
+    onLaunch('files', (id) => files.push(id));
+    expect(files).toEqual(['k3x9a1']);
+    expect(shared).toEqual([]);
+    expect(replaced).toEqual(['/agent/']);
+  });
+
   it('gives what waited to the first listener of its kind only, once', () => {
     page('https://x.test/driver/?share=1&text=hello');
     const first: string[] = [];

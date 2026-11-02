@@ -3,6 +3,7 @@ import { AuthImage, Button, ErrorNote, Note, Pill, Sheet } from '../ui';
 import { useT } from '../i18n';
 import type { Result, SbgClient } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
+import type { Uploaded } from '../upload';
 import { DEFECT_WORD, OFF_ROAD_REASONS, REASON_WORD, SOURCE_WORD, careApi, kmWords, localDay, spellBegun, spellSpan, type OffRoadReason, type VehicleCare } from './care';
 import { formatDate } from '../i18n';
 import { ServiceSection } from './ServiceSection';
@@ -28,7 +29,7 @@ export function VehicleCareSheet({
   onClose: () => void;
   onChanged: () => Promise<void> | void;
   /** For a job card's photograph. */
-  uploadPhoto?: (kind: MediaKind, file: File) => Promise<string | null>;
+  uploadPhoto?: (kind: MediaKind, file: File) => Promise<Uploaded>;
   /** A fleet's office (the default). False for a courier's own vehicle: nobody else's loads to move. */
   office?: boolean;
 }) {

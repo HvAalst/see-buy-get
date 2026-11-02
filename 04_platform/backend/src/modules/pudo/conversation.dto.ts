@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsNumber, IsOptional, IsString, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { QUICK_REPLIES, REPORT_REASONS, SETTLE_METHODS, SETTLE_WHEN } from './conversation.types';
+import { FILED_AS, PHOTO_SOURCES, PROOF_OF } from './filed-photo.types';
 
 /** Where the driver is when naming a price. Declared here: pudo.dto's own GeoDto is not exported. */
 export class ThreadPositionDto {
@@ -49,6 +50,30 @@ export class ProposePriceInThreadDto {
 export class VoiceMessageDto {
   @IsString() dataUrl!: string;
   @IsNumber() @Min(1) @Max(120) durationSec!: number;
+}
+
+/**
+ * 2026-11-02 — FILE A PHOTO to the thread's load or parcel, then show it (filed-photo.types.ts). The photo was uploaded
+ * first (POST sbg/media, kind `filed`); this names it, says what it is, and where it came from — every label checked by
+ * the service before anything is kept.
+ */
+export class FilePhotoDto {
+  /** The uploaded photo — the caller's own, not yet anybody else's evidence. */
+  @IsString() mediaId!: string;
+  /** What it is: damage, a paper, or proof. */
+  @IsIn([...FILED_AS]) as!: string;
+  /** Proof of which moment — loading (a load only), handover or delivery. Only with `as: proof`. */
+  @IsOptional() @IsIn([...PROOF_OF]) proofOf?: string;
+  /** Where it came from: the app's own live camera, the phone's gallery, or not known. */
+  @IsIn([...PHOTO_SOURCES]) source!: string;
+  /** app_camera — when it was taken, by the phone's clock. */
+  @IsOptional() @IsISO8601() takenAt?: string;
+  /** gallery — the date the phone wrote into the photo (EXIF DateTimeOriginal), as written there: 2026-10-30T14:22:05. */
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?(Z|[+-]\d{2}:\d{2})?$/) phoneDate?: string;
+  /** SHA-256 of the file as it was on the phone, before it was made smaller to send. */
+  @IsOptional() @IsString() @Matches(/^[0-9a-f]{64}$/) originalSha256?: string;
+  /** When Send was pressed, by the phone's clock — said beside the card if it waited for a signal. */
+  @IsOptional() @IsISO8601() writtenAt?: string;
 }
 
 /** CV3 — the driver shares this conversation with their fleet manager, or stops. */

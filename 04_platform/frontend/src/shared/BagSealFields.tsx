@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Note, PhotoField, Sheet } from './ui';
 import { useT, type MessageKey } from './i18n';
+import type { Uploaded } from './upload';
 import { bagFindings, reportBody, reportReady, type BagClosedWith, type BagCloseForm, type BagFinding, type BagReceiptForm, type BagReportForm } from './bagSeal';
 
 /*
@@ -9,7 +10,7 @@ import { bagFindings, reportBody, reportReady, type BagClosedWith, type BagClose
  * it was closed.
  */
 
-type Upload = (file: File) => Promise<string | null>;
+type Upload = (file: File) => Promise<Uploaded>;
 
 /** The seal's number: digits on the seals we suggest, so the number pad — letters when the seal carries them. */
 function SealInput({ id, label, hint, value, onInput, disabled }: { id: string; label: string; hint?: string; value: string; onInput: (v: string) => void; disabled?: boolean }) {

@@ -1,5 +1,6 @@
 import type { SbgError } from '../../lib/sbg';
 import type { Translate } from '../../shared/i18n';
+import type { Uploaded } from '../../shared/upload';
 import { ssccSpaced, type DisputeTone, type Gs1DisputeView, type Gs1View } from '../../shared/gs1';
 
 /**
@@ -18,7 +19,7 @@ export interface StoreGs1Api {
   sendLicence(disputeId: string, licenceRef: string): Promise<{ error: SbgError | null }>;
   withdraw(disputeId: string): Promise<{ error: SbgError | null }>;
   /** The licence photographed or a screenshot, uploaded as the store's own media: its id, or null when it did not go. */
-  licencePhoto(file: File): Promise<string | null>;
+  licencePhoto(file: File): Promise<Uploaded>;
 }
 
 /** "Prefix 6161234, extension digit 3 · 999,999,997 codes left". */

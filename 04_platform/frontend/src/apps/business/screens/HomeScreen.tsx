@@ -5,6 +5,9 @@ import { useT, type MessageKey } from '../../../shared/i18n';
 import { publicPageUrl } from '../../../lib/sbg/config';
 import { DOCUMENT_LABEL, type CompanyDocument } from '../../tower/company';
 import type { BusinessClient, BusinessView } from '../api';
+import { paperForUpload } from '../../../shared/media';
+import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
+import { uploadHint } from '../../../shared/upload';
 import { checkStep, mayManage, sectionsFor, type Section } from '../logic';
 import type { BusinessActions } from '../useBusinessApp';
 import { CHECK_LABEL } from './ChooseScreen';
@@ -56,19 +59,26 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
     void load();
   }, [load]);
 
-  const upload = (kind: (typeof CHECK_PAPERS)[number], file: File) => {
+  /*
+   * A PAPER, CHECKED HERE FIRST (2026-11-02, the owner: "if we put a filesize limit, it needs to show or tell"): a PDF over
+   * the most is refused before it is sent, with its size and the most; a photo of the paper is made smaller to fit; and
+   * whatever stops it — this phone, the server, the signal — is said in words.
+   */
+  const upload = async (kind: (typeof CHECK_PAPERS)[number], file: File) => {
     if (!client) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      setBusy(kind);
-      setError(null);
-      const r = await client.api.uploadCompanyDocument(business.entityId, { kind, title: `${t(DOCUMENT_LABEL[kind])} — ${file.name}`, dataUrl: String(reader.result) });
-      setBusy(null);
-      if (r.error) return setError(r.error.detail || r.error.title);
+    setBusy(kind);
+    setError(null);
+    try {
+      const dataUrl = await paperForUpload(file);
+      const r = await client.api.uploadCompanyDocument(business.entityId, { kind, title: `${t(DOCUMENT_LABEL[kind])} — ${file.name}`, dataUrl });
+      if (r.error) return setError(uploadFailureSentence(r.error));
       await load();
       await actions.reloadBusiness();
-    };
-    reader.readAsDataURL(file);
+    } catch (e) {
+      setError(uploadFailureSentence(e));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const ask = async () => {
@@ -138,12 +148,13 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
                         {busy === kind ? t('business.paper.uploading') : doc ? t('business.paper.replace') : t('business.paper.add')}
                         <input
                           type="file"
-                          accept="application/pdf,image/png,image/jpeg"
+                          data-upload="document"
+                          accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
                           class="biz-file"
                           disabled={busy !== null}
                           onChange={(e) => {
                             const file = (e.target as HTMLInputElement).files?.[0];
-                            if (file) upload(kind, file);
+                            if (file) void upload(kind, file);
                             (e.target as HTMLInputElement).value = '';
                           }}
                         />
@@ -156,6 +167,7 @@ export function HomeScreen({ business, actions, client }: { business: BusinessVi
           </div>
         ) : null}
 
+        {step !== 'done' && owner ? <p class="chint">{uploadHint('document')}</p> : null}
         {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
         {(step === 'ask' || step === 'refused') && owner ? (
           <div class="twr-panelend">

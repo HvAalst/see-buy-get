@@ -7,6 +7,7 @@
  */
 
 import type { OutboxItem } from '../outbox';
+import type { FiledPhotoRef } from './filedPhotoLogic';
 
 /** Mirrored from backend conversation.types.ts — keep the two lists identical. */
 export const QUICK_REPLIES = ['on_my_way', 'loaded', 'arrived', 'delivered', 'paid', 'running_late', 'coming_today', 'coming_tomorrow', 'cannot_make_it', 'still_here', 'closing_soon'] as const;
@@ -45,7 +46,8 @@ export type SettleWhen = (typeof SETTLE_WHEN)[number];
 
 export const MAX_MESSAGE_CHARS = 1000;
 
-export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared' | 'voice';
+/** `photo` (2026-11-02) — a photo FILED to the chat's load or parcel: the card that points at it (filedPhotoLogic.ts). */
+export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared' | 'voice' | 'photo';
 
 /** CV4 — the longest voice message the app records. The server allows a little more; this is the one people see. */
 export const MAX_VOICE_SECONDS = 60;
@@ -87,6 +89,8 @@ export interface ChatMessage {
   seqCount?: number;
   /** CV4 — a voice message, fetched separately when somebody presses play. */
   voice?: { voiceId: string; durationSec: number };
+  /** 2026-11-02 — a filed photo's card: its reference and labels, never the picture (fetched through the chat when opened). */
+  photo?: FiledPhotoRef;
   at: string;
   /** Written with no signal and sent when it came back (2026-11-01): when it was written. */
   writtenAt?: string;
@@ -157,6 +161,8 @@ export interface ChatThread {
   settlesOffPlatform?: boolean;
   /** The money every price in the thread is named in: the load's poster's (2026-10-25). Absent for a parcel's thread. */
   currency?: string;
+  /** 2026-11-02 — this reader may file a photo to the load or parcel now (a party to it, the record open): the camera is offered. */
+  canFilePhotos?: boolean;
   lastSeq: number;
   unread: number;
   lastMessage?: ChatMessage;

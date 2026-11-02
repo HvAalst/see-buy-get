@@ -3,6 +3,7 @@ import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BlobStore, FsBlobStore } from '../../foundation/media/blob-store';
 import { decodeImage } from '../../foundation/media/decode-image';
+import { UPLOAD_LIMITS } from '../../foundation/media/upload-limits';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import {
   KIND_RETENTION,
@@ -60,7 +61,7 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     // Decode + validate BOTH parts BEFORE writing any bytes: a bad thumb must not leave the full image
     // orphaned on disk with no MediaRef (invisible to the retention sweep — an unreclaimable leak).
     const { contentType, bytes } = this.decode(input.dataUrl);
-    const thumb = input.thumbDataUrl ? this.decode(input.thumbDataUrl, { maxBytes: 64 * 1024 }) : undefined;
+    const thumb = input.thumbDataUrl ? this.decode(input.thumbDataUrl, { maxBytes: UPLOAD_LIMITS.photoThumb }) : undefined;
 
     const mediaId = `med_${randomBytes(12).toString('hex')}`;
     this.blobs.put(mediaId, bytes);
@@ -312,6 +313,17 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
       if (ref.retentionClass === 'shipment-proof') ref.retentionClass = 'dispute-evidence'; // onto the case clock
       this.refs.set(ref.mediaId, ref);
     }
+  }
+
+  /**
+   * 2026-11-02 — the photos of one kind attached to one record, oldest first: what a load's claim reads among its
+   * evidence of the photos FILED to the load from a conversation (filed-photo.types.ts). Ids only; the gate is unchanged.
+   */
+  linkedTo(link: MediaLink, kind: MediaKind): string[] {
+    return [...this.refs.values()]
+      .filter((r) => r.kind === kind && r.link?.type === link.type && r.link.id === link.id)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((r) => r.mediaId);
   }
 
   /** Set expiresAt for every active, not-yet-anchored media attached to `link` in a given bin. Idempotent. */

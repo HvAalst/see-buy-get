@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
 import { CodeCard } from '../../../shared/ui/CodeCard';
 import { downscaleImage } from '../../../shared/media';
+import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
+import { failedWords, mediaIdOf, type Uploaded } from '../../../shared/upload';
 import { tabAtTheTap } from '../../../shared/openPage';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { SitePicker } from '../../tower/screens/SitePicker';
@@ -294,6 +296,8 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
   const [closing, setClosing] = useState<string | null>(null);
   const [seal, setSeal] = useState('');
   const [photoRef, setPhotoRef] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoSaid, setPhotoSaid] = useState<string | null>(null);
 
   const loadDock = useCallback(async () => {
     if (!collection) return setDock(null);
@@ -317,10 +321,12 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
 
   const photo = async (file: File | undefined) => {
     if (!file) return;
-    const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-    const id = await uploadContent(api, dataUrl, thumbDataUrl);
-    setPhotoRef(id ?? '');
-    if (!id) setError(t('business.parcels.photoFailed'));
+    setPhotoBusy(true);
+    setPhotoSaid(null);
+    const up = await uploadContent(api, file);
+    setPhotoBusy(false);
+    setPhotoRef(mediaIdOf(up) ?? '');
+    setPhotoSaid(failedWords(up));
   };
 
   return (
@@ -413,8 +419,8 @@ function CollectPanel({ api, siteApi, business, works, collection, onChanged }: 
                 </label>
                 <label class="cfield">
                   <span class="cfield__label">{t('business.parcels.bagPhoto')}</span>
-                  <input class="cinput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
-                  {photoRef ? <span class="chint">{t('business.parcels.f.photoKept')}</span> : null}
+                  <input class="cinput" type="file" data-upload="photo" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photoBusy} onChange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; (e.currentTarget as HTMLInputElement).value = ''; void photo(f); }} />
+                  {photoSaid ? <span class="cerr">{photoSaid}</span> : photoBusy ? <span class="chint">{t('photo.uploading')}</span> : photoRef ? <span class="chint">{t('business.parcels.f.photoKept')}</span> : null}
                 </label>
               </div>
               <div class="twr-panelend">
@@ -510,6 +516,7 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
   const [quote, setQuote] = useState<{ flexible: number; currency: string; door?: { via: string; suggestedMax: number } } | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoSaid, setPhotoSaid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<ParcelForm>) => setForm((f) => ({ ...f, ...patch }));
@@ -546,14 +553,11 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
   const photo = async (file: File | undefined) => {
     if (!file) return;
     setPhotoBusy(true);
-    try {
-      const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-      const r = await uploadContent(api, dataUrl, thumbDataUrl);
-      set({ photoRef: r ?? '' });
-      if (!r) setError(t('business.parcels.photoFailed'));
-    } finally {
-      setPhotoBusy(false);
-    }
+    setPhotoSaid(null);
+    const up = await uploadContent(api, file);
+    setPhotoBusy(false);
+    set({ photoRef: mediaIdOf(up) ?? '' });
+    setPhotoSaid(failedWords(up));
   };
 
   const send = async () => {
@@ -606,8 +610,8 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
       </label>
       <label class="cfield">
         <span class="cfield__label">{t('business.parcels.f.photo')}</span>
-        <input class="cinput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photoBusy} onChange={(e) => void photo((e.currentTarget as HTMLInputElement).files?.[0])} />
-        <span class="chint">{form.photoRef ? t('business.parcels.f.photoKept') : t('business.parcels.f.photoHint')}</span>
+        <input class="cinput" type="file" data-upload="photo" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photoBusy} onChange={(e) => { const f = (e.currentTarget as HTMLInputElement).files?.[0]; (e.currentTarget as HTMLInputElement).value = ''; void photo(f); }} />
+        {photoSaid ? <span class="cerr">{photoSaid}</span> : <span class="chint">{photoBusy ? t('photo.uploading') : form.photoRef ? t('business.parcels.f.photoKept') : t('business.parcels.f.photoHint')}</span>}
       </label>
 
       {toPlace && quote?.door ? (
@@ -637,10 +641,19 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
   );
 }
 
-/** A photograph of what is inside, kept with us as the business's own. */
-async function uploadContent(api: ReturnType<typeof parcelsApi>, dataUrl: string, thumbDataUrl?: string): Promise<string | null> {
-  const r = await api.upload(dataUrl, thumbDataUrl);
-  return r.error ? null : (r.data?.mediaId ?? null);
+/**
+ * A photograph of what is inside, made smaller here and kept with us as the business's own — or why it did not go, in
+ * words for under the picker (2026-11-02). A photo of any size or kind the phone can open is taken: it is made to fit.
+ */
+async function uploadContent(api: ReturnType<typeof parcelsApi>, file: File): Promise<Uploaded> {
+  try {
+    const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+    const r = await api.upload(dataUrl, thumbDataUrl);
+    if (r.error) return { failed: uploadFailureSentence(r.error, 'photo') };
+    return r.data?.mediaId ?? { failed: uploadFailureSentence(undefined, 'photo') };
+  } catch (e) {
+    return { failed: uploadFailureSentence(e, 'photo') };
+  }
 }
 
 /* --------------------------------------------------------- its own door -- */

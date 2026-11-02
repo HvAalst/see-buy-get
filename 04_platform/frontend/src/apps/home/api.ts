@@ -7,6 +7,8 @@ import type { HubOpenNow, HubWeek } from '../../shared/hubReach';
 import type { VisitPlace } from '../../shared/visitHours';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
 import { downscaleImage } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import type { Uploaded } from '../../shared/upload';
 import { dropInvite, inviteBody } from '../../shared/invite';
 import type { FleetSignupStatus } from './logic';
 
@@ -122,14 +124,18 @@ export async function enrollPerson(phone: string, pin: string, recovery?: { emai
   return { data: { token: r.data.token.access_token }, error: null, status: r.status };
 }
 
-/** One paper, downscaled and stripped on this device, uploaded as the person: its id. Null when it did not go. */
-export async function uploadPaper(session: PersonSession, kind: string, file: File): Promise<string | null> {
+/**
+ * One paper, downscaled and stripped on this device, uploaded as the person: its id — or why it did not go, in words for
+ * under the photo (2026-11-02: it used to be null, shown as nothing but "upload failed", whatever the reason).
+ */
+export async function uploadPaper(session: PersonSession, kind: string, file: File): Promise<Uploaded> {
   try {
     const { dataUrl, thumbDataUrl } = await downscaleImage(file);
     const r = await publicRequest<{ mediaId: string }>(homeConfig(), '/v1/sbg/media', { body: { kind, dataUrl, thumbDataUrl }, bearer: session.token });
-    return r.error ? null : (r.data?.mediaId ?? null);
-  } catch {
-    return null;
+    if (r.error) return { failed: uploadFailureSentence(r.error, 'photo') };
+    return r.data?.mediaId ?? { failed: uploadFailureSentence(undefined, 'photo') };
+  } catch (e) {
+    return { failed: uploadFailureSentence(e, 'photo') };
   }
 }
 

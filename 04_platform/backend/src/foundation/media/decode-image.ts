@@ -39,15 +39,17 @@ export function decodeImage(dataUrl: string, maxBytes: number): { contentType: I
   if (!m) throw new GlosError('INVALID_INPUT', 'Expected a base64 image data URL');
   const contentType = m[1].toLowerCase();
   if (!IMAGE_CONTENT_TYPES.includes(contentType as ImageContentType)) {
-    throw new GlosError('UNSUPPORTED_MEDIA', `Unsupported image type ${contentType} — use JPEG, PNG or WebP`);
+    throw new GlosError('UNSUPPORTED_MEDIA', `Unsupported image type ${contentType} — use JPEG, PNG or WebP`, { contentType, accepts: [...IMAGE_CONTENT_TYPES] });
   }
   const bytes = Buffer.from(m[2], 'base64');
   if (bytes.length === 0) throw new GlosError('INVALID_INPUT', 'The image is empty');
   if (bytes.length > maxBytes) {
-    throw new GlosError('MEDIA_TOO_LARGE', 'The image is too large — it should be downscaled before upload');
+    // The size and the most, in params (2026-11-02): an app says both in words — "This photo is 2 MB; the most is 500 KB" —
+    // rather than a refusal the person cannot act on.
+    throw new GlosError('MEDIA_TOO_LARGE', 'The image is too large — it should be downscaled before upload', { bytes: bytes.length, maxBytes });
   }
   if (!signatureMatches(contentType, bytes)) {
-    throw new GlosError('UNSUPPORTED_MEDIA', 'That is not a real JPEG, PNG or WebP image');
+    throw new GlosError('UNSUPPORTED_MEDIA', 'That is not a real JPEG, PNG or WebP image', { contentType, accepts: [...IMAGE_CONTENT_TYPES] });
   }
   return { contentType: contentType as ImageContentType, bytes };
 }

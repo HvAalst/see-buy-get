@@ -26,6 +26,8 @@ import {
 } from './damage-report.types';
 import { LINK_DAYS, LINK_MAX_LIVE, LINK_MAX_OPENS } from './document-link.service';
 import { DriverService } from './driver.service';
+import { FiledPhotoService } from './filed-photo.service';
+import type { FiledPhotoRef } from './filed-photo.types';
 import { FleetManagerService } from './fleet-manager.service';
 import { MdpService } from './mdp.service';
 import { MediaService } from './media.service';
@@ -97,6 +99,8 @@ export class DamageReportService implements OnModuleInit {
     @Optional() private readonly events?: EventBus,
     // The trail: the report and each note anchored as they are made, beside them (their own bytes are fingerprinted).
     @Optional() private readonly anchors?: AnchorBook,
+    // 2026-11-02 — the parcel's photo file: photos filed to it from a conversation, each with its own fingerprint.
+    @Optional() private readonly filed?: FiledPhotoService,
   ) {}
 
   onModuleInit(): void {
@@ -170,9 +174,19 @@ export class DamageReportService implements OnModuleInit {
     if (kept) this.reports.set(parcel.parcelId, { ...kept, insurer: { insurer: insurer.name, sentTo: maskAddress(insurer.email), at: new Date(now).toISOString() } });
   }
 
-  /** The report, for whoever may read it. A stranger is told nothing — not even that there is one. */
+  /**
+   * The report, for whoever may read it. A stranger is told nothing — not even that there is one. With it, beside the
+   * body, the photos filed to the parcel after it was made (2026-11-02): each its own record, read as it was kept.
+   */
   read(parcelId: string, actor: IntrospectionResult | undefined): DamageReportView {
-    return this.reading(parcelId, actor).report;
+    const report = this.reading(parcelId, actor).report;
+    const later = this.filedAfter(report);
+    return later.length ? { ...report, filedAfter: later } : report;
+  }
+
+  /** 2026-11-02 — the photos filed to the parcel after the report was made, oldest first: beside it, never in it. */
+  private filedAfter(report: DamageReportView): DamageReportPhoto[] {
+    return (this.filed?.forParcel(report.parcelId) ?? []).filter((f) => f.filedAt > report.madeAt).map(filedPhoto);
   }
 
   /**
@@ -421,7 +435,10 @@ export class DamageReportService implements OnModuleInit {
     )
       .filter((x): x is [string, string] => Boolean(x[1]))
       .map(([what, reference]) => this.photo(what, reference))
-      .filter((photo) => photo.what === 'problem' || !photo.takenAt || photo.takenAt <= at);
+      .filter((photo) => photo.what === 'problem' || !photo.takenAt || photo.takenAt <= at)
+      // 2026-11-02 — and the photos filed to the parcel from a conversation up to the report, each with where it came from
+      // and its own fingerprint (the owner: "Damage claims should be fingerprinted"). Later ones go beside the report.
+      .concat((this.filed?.forParcel(p.parcelId) ?? []).filter((f) => f.filedAt <= at).map(filedPhoto));
 
     const terms = this.termsOf(p);
     return {
@@ -522,7 +539,10 @@ export class DamageReportService implements OnModuleInit {
     const entries: ZipEntry[] = [];
     const files = new Map<string, string>();
     const missing = new Map<string, string>();
-    for (const photo of [...report.body.photographs, ...(report.notes ?? []).flatMap((n) => n.photographs)]) {
+    // 2026-11-02 — the photos filed after the report, in the same file and beside it, each with the bytes its fingerprint covers.
+    const later = this.filedAfter(report);
+    const laterRefs = (this.filed?.forParcel(report.parcelId) ?? []).filter((f) => f.filedAt > report.madeAt);
+    for (const photo of [...report.body.photographs, ...(report.notes ?? []).flatMap((n) => n.photographs), ...later]) {
       if (!photo.mediaId) continue;
       try {
         const { bytes, contentType } = this.media.blob(photo.mediaId);
@@ -535,11 +555,13 @@ export class DamageReportService implements OnModuleInit {
       }
     }
     entries.unshift(
-      { name: 'damage-claim-report.html', bytes: Buffer.from(reportHtml(report, files, missing), 'utf8'), at: new Date(report.madeAt) },
+      { name: 'damage-claim-report.html', bytes: Buffer.from(reportHtml(report, files, missing, later), 'utf8'), at: new Date(report.madeAt) },
       { name: 'report.json', bytes: Buffer.from(canonicalJson(report.body), 'utf8'), at: new Date(report.madeAt) },
-      { name: 'README.txt', bytes: Buffer.from(readme(report), 'utf8') },
+      { name: 'README.txt', bytes: Buffer.from(readme(report, later.length), 'utf8') },
       // Each note as the bytes its own fingerprint was taken over (without the fingerprint itself).
       ...(report.notes ?? []).map((n) => ({ name: `notes/${n.noteId}.json`, bytes: Buffer.from(canonicalJson(unsignedNote(n)), 'utf8'), at: new Date(n.at) })),
+      // Each photo filed afterwards as the bytes ITS fingerprint was taken over: the filing, without the fingerprint.
+      ...laterRefs.map((f) => ({ name: `filed/${f.filingId}.json`, bytes: Buffer.from(canonicalJson(unsignedFiling(f)), 'utf8'), at: new Date(f.filedAt) })),
     );
     return { filename: `damage-claim-report-${safe(report.parcelId)}.zip`, bytes: zip(entries) };
   }
@@ -643,7 +665,55 @@ const PHOTO_WORDS: Record<string, string> = {
   handed_over: 'The parcel at the counter, when it was handed to the receiver',
   received: 'The receiver’s own photograph of what they received',
   problem: 'The problem, as it was reported',
+  // 2026-11-02 — filed to the parcel from a conversation (filed-photo.types.ts).
+  filed_damage: 'Damage, filed to the parcel',
+  filed_paper: 'A paper, filed to the parcel',
+  filed_proof: 'Proof, filed to the parcel',
 };
+
+const FILED_BY_WORDS: Record<string, string> = { sender: 'the sender', driver: 'the driver', shop: 'the collection shop', receiver: 'the receiver' };
+const PROOF_WORDS: Record<string, string> = { loading: 'of loading', handover: 'of handover', delivery: 'of delivery' };
+
+/** 2026-11-02 — a photo filed to the parcel, as the report lists it: what it is, who filed it, where it came from, both fingerprints. */
+function filedPhoto(f: FiledPhotoRef): DamageReportPhoto {
+  return {
+    what: `filed_${f.as}`,
+    reference: f.filingId,
+    mediaId: f.mediaId,
+    ...(f.takenAt ? { takenAt: f.takenAt } : {}),
+    sha256: f.sha256,
+    by: f.by,
+    source: f.source,
+    ...(f.phoneDate ? { phoneDate: f.phoneDate } : {}),
+    ...(f.proofOf ? { proofOf: f.proofOf } : {}),
+    filedAt: f.filedAt,
+    fingerprint: f.fingerprint,
+  };
+}
+
+/** A filing without its fingerprint: the bytes its fingerprint is taken over (filed-photo.service.ts fingerprintOf). */
+function unsignedFiling(f: FiledPhotoRef): Omit<FiledPhotoRef, 'fingerprint'> {
+  const { fingerprint: _f, ...unsigned } = f;
+  return unsigned;
+}
+
+/**
+ * Where a filed photo came from, in the words the report prints — said, never judged (the owner, 2026-11-02: gallery photos
+ * "accepted, labelled"). Nothing for a photo the network took itself.
+ */
+export function sourceWords(p: Pick<DamageReportPhoto, 'source' | 'phoneDate' | 'by' | 'proofOf' | 'filedAt'>): string {
+  if (!p.source) return '';
+  const where =
+    p.source === 'app_camera'
+      ? 'taken in the app, at the time'
+      : p.source === 'gallery'
+        ? p.phoneDate
+          ? `from the gallery, taken ${p.phoneDate.slice(0, 10)} (the phone’s date)`
+          : 'from the gallery, no date on it'
+        : 'where it came from is not known';
+  const proof = p.proofOf ? ` ${PROOF_WORDS[p.proofOf] ?? ''}` : '';
+  return `${proof ? `Proof${proof} · ` : ''}${where}${p.by ? ` · filed by ${FILED_BY_WORDS[p.by] ?? p.by}` : ''}${p.filedAt ? `, ${when(p.filedAt)}` : ''}`;
+}
 const HANDS_WORDS: Record<CustodyKind, string> = { sender: 'Sender', shop: 'Shop', driver: 'Carrier', hub: 'Sorting hub', receiver: 'Receiver' };
 const THROUGH_WORDS: Record<string, string> = { store: 'A store’s order', counter: 'Handed in at a shop’s counter', app: 'Sent from the sender’s own phone' };
 
@@ -673,18 +743,24 @@ export function termsSentence(terms: DamageReportBody['terms']): string {
     : `${who} has stated no cover: it pays nothing from its own books. A claim is for the claimant’s insurer, the store’s, or whoever answers by law.`;
 }
 
-function reportHtml(report: DamageReportView, files: Map<string, string>, missing: Map<string, string>): string {
+function reportHtml(report: DamageReportView, files: Map<string, string>, missing: Map<string, string>, later: DamageReportPhoto[] = []): string {
   const b = report.body;
   const row = (label: string, value: unknown) => (value === undefined || value === '' ? '' : `<tr><th>${esc(label)}</th><td>${esc(value)}</td></tr>`);
-  const photos = b.photographs
-    .map((p) => {
-      const file = p.mediaId ? files.get(p.mediaId) : undefined;
-      const said = file
-        ? `<a href="${esc(file)}"><img src="${esc(file)}" alt="${esc(PHOTO_WORDS[p.what] ?? p.what)}"></a>`
-        : `<p class="none">${esc(p.mediaId ? (missing.get(p.mediaId) ?? 'Not available') : `Recorded by reference only: ${p.reference}`)}</p>`;
-      return `<figure>${said}<figcaption>${esc(PHOTO_WORDS[p.what] ?? p.what)}${p.takenAt ? ` · ${esc(when(p.takenAt))}` : ''}${p.sha256 ? `<br><code>${esc(p.sha256)}</code>` : ''}</figcaption></figure>`;
-    })
-    .join('\n');
+  const figure = (p: DamageReportPhoto) => {
+    const file = p.mediaId ? files.get(p.mediaId) : undefined;
+    const said = file
+      ? `<a href="${esc(file)}"><img src="${esc(file)}" alt="${esc(PHOTO_WORDS[p.what] ?? p.what)}"></a>`
+      : `<p class="none">${esc(p.mediaId ? (missing.get(p.mediaId) ?? 'Not available') : `Recorded by reference only: ${p.reference}`)}</p>`;
+    // A filed photo says where it came from and carries the filing's own fingerprint beside the photo's (2026-11-02).
+    const source = sourceWords(p);
+    return `<figure>${said}<figcaption>${esc(PHOTO_WORDS[p.what] ?? p.what)}${p.takenAt ? ` · ${esc(when(p.takenAt))}` : ''}${source ? `<br>${esc(source)}` : ''}${p.sha256 ? `<br><code>${esc(p.sha256)}</code>` : ''}${p.fingerprint ? `<br>Filing: <code>${esc(p.fingerprint)}</code>` : ''}</figcaption></figure>`;
+  };
+  const photos = b.photographs.map(figure).join('\n');
+  const filedLater = later.length
+    ? `<h2>Photos filed after it was reported</h2>
+<p class="statement">Filed to the parcel after this report was made. The report above is the record as it stood when the problem was reported, and it does not change; each photo below carries the fingerprint of its own filing, over <code>filed/&lt;filing&gt;.json</code>.</p>
+${later.map(figure).join('\n')}`
+    : '';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Damage claim report ${esc(b.number)}</title>
@@ -745,6 +821,7 @@ ${photos || '<p class="none">No photograph belongs to this parcel.</p>'}
 <h2>The fingerprint of this report</h2>
 <p class="fp"><code>${esc(report.sha256)}</code><br>SHA-256 over <code>report.json</code>, which is in the same file as this page. Two copies with the same fingerprint say the same thing.</p>
 ${notesHtml(report, files, missing)}
+${filedLater}
 </body></html>
 `;
 }
@@ -770,7 +847,7 @@ ${pics}
 ${notes.map(one).join('\n')}`;
 }
 
-function readme(report: DamageReportView): string {
+function readme(report: DamageReportView, filedLater = 0): string {
   const notes = report.notes ?? [];
   return [
     `DAMAGE CLAIM REPORT ${report.body.number}`,
@@ -782,6 +859,7 @@ function readme(report: DamageReportView): string {
     '  report.json                The same facts for a machine. The fingerprint is taken over exactly these bytes.',
     '  photographs/               Every photograph that belongs to the parcel and is still kept.',
     ...(notes.length ? ['  notes/                     What the receiver added after the parcel was handed over, one file a note.'] : []),
+    ...(filedLater ? ['  filed/                     Photos filed to the parcel after the report was made, one file a filing; the fingerprint of', '                             each filing is the SHA-256 of its file there.'] : []),
     '',
     'THE FINGERPRINT',
     `  ${report.sha256}`,

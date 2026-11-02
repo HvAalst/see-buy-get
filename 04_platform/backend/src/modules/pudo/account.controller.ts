@@ -15,7 +15,7 @@ import { IdDisputeService } from './id-dispute.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { AccountClosingService } from './account-closing.service';
 import { PasskeyService, type PasskeyHere } from './passkey.service';
-import { PasskeyOnDto, PasskeyOnOptionsDto } from './passkey.dto';
+import { AccountPasskeyOnDto, AccountPasskeyOptionsDto, PasskeyOnDto, PasskeyOnOptionsDto } from './passkey.dto';
 
 /**
  * THE ACCOUNT — one surface, every app.
@@ -205,6 +205,38 @@ export class AccountController {
   @Post('shop-devices/forget-others')
   forgetOtherShopDevices(@Body() dto: ShopForgetOthersDto, @Actor() actor: IntrospectionResult) {
     return { ...this.accounts.forgetOtherDevices(shopOf(actor), dto.password, dto.device), signedOutEverywhere: true };
+  }
+
+  /**
+   * 2026-11-02 (the owner: "ok go ahead with the fingerprint") — UNLOCK WITH FINGERPRINT OR FACE, IN PLACE OF THE SHOP'S,
+   * THE HUB'S OR THE STORE'S OWN PASSWORD, on one of its own phones. Signed in as the account itself: its people at the
+   * counter are refused at the guard (no `@AtTheCounter`), and staff by `shopOf`. Is it on, on this phone?
+   */
+  @Roles('agent', 'mdp', 'genesis')
+  @Post('shop-passkey')
+  shopPasskey(@Body() dto: ShopDevicesDto, @Actor() actor: IntrospectionResult): PasskeyHere {
+    return this.passkeys.accountHere(shopOf(actor), dto.device);
+  }
+
+  /** Turn it on, step one: on one of the account's own phones, with the password again (the sign-in's count and lock). */
+  @Roles('agent', 'mdp', 'genesis')
+  @Post('shop-passkey/options')
+  shopPasskeyOptions(@Body() dto: AccountPasskeyOptionsDto, @Actor() actor: IntrospectionResult) {
+    return this.passkeys.accountTurnOnOptions(shopOf(actor), dto.device, dto.password);
+  }
+
+  /** …step two: the phone's answer, kept on this phone's own record — and gone with it, whenever it goes. */
+  @Roles('agent', 'mdp', 'genesis')
+  @Post('shop-passkey/on')
+  shopPasskeyOn(@Body() dto: AccountPasskeyOnDto, @Actor() actor: IntrospectionResult): Promise<PasskeyHere> {
+    return this.passkeys.accountTurnOn(shopOf(actor), dto.device, dto.response as never);
+  }
+
+  /** Turn it off on this phone: the password is the way in here again. Nothing asked to turn it off. */
+  @Roles('agent', 'mdp', 'genesis')
+  @Post('shop-passkey/off')
+  shopPasskeyOff(@Body() dto: ShopDevicesDto, @Actor() actor: IntrospectionResult): PasskeyHere {
+    return this.passkeys.accountTurnOff(shopOf(actor), dto.device);
   }
 
   /** This phone forgotten — a phone the shop lent, or sold. Signing in on it asks for the code again. */

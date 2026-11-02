@@ -3,6 +3,8 @@ import type { ComponentChildren } from 'preact';
 import { presentationFor, type SbgError } from '../../lib/sbg';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
+import { isUploadRefusal, refusalWords, type UploadKind } from '../upload';
+import { t } from '../i18n';
 
 /**
  * The read-aloud key → plain-language sentence table.
@@ -116,6 +118,9 @@ const OVERRIDE: Record<string, string> = {
 const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED', 'PARCEL_LOST', 'COUNTRY_NOT_OPEN', 'AGREEMENT_REQUIRED', 'NEW_LABEL', 'SET_ASIDE']);
 
 export function errorSentence(error: SbgError): string {
+  // A FILE refused for its size or its kind: said with the size and the most where the server gave them (2026-11-02).
+  const file = refusalWords(error);
+  if (file) return file;
   if (SERVER_SAYS.has(error.code) && error.detail?.trim()) return error.detail.trim();
   return OVERRIDE[error.code] ?? SAY[presentationFor(error.code).say] ?? SAY['error.generic'];
 }
@@ -161,8 +166,23 @@ export function ErrorNote({ error, onRetry, retryLabel = 'Try again', showDetail
  * the client made up (no signal, a timeout) or the server broke on (5xx) keeps the shared wording.
  */
 export function refusalSentence(error: SbgError): string {
+  const file = refusalWords(error);
+  if (file) return file;
   const written = error.status >= 400 && error.status < 500 && error.status !== 401 && error.status !== 426 ? error.detail?.trim() : '';
   return written || errorSentence(error);
+}
+
+/**
+ * WHY A FILE DID NOT GO, IN WORDS (the owner, 2026-11-02: "if we put a filesize limit, it needs to show or tell"). One
+ * sentence for anything an upload can end in: a refusal on this phone (too large, a kind the server does not read, a
+ * picture the phone cannot open), the server's (with the size and the most), no signal, or anything else the server
+ * said. `kind` says what to do: a paper can be photographed instead, a recording made shorter.
+ */
+export function uploadFailureSentence(error: unknown, kind: UploadKind = 'document'): string {
+  const file = refusalWords(error, kind);
+  if (file) return file;
+  if (!isUploadRefusal(error) && error && typeof error === 'object' && 'code' in error && 'status' in error) return refusalSentence(error as SbgError);
+  return t('upload.failed');
 }
 
 /** A by-name refusal, shown where the person acted — one sentence, the server's. See `refusalSentence`. */

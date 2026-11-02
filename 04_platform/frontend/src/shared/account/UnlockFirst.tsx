@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { Button, ErrorNote, Note, errorSentence } from '../ui';
 import { useT } from '../i18n';
 import type { SbgConfig, SbgError } from '../../lib/sbg';
-import { hasUnlockHere } from './unlock';
+import { hasAccountUnlockHere, hasUnlockHere } from './unlock';
 import { unlockCeremony, type UnlockCeremony } from './passkey';
 
 /**
@@ -14,6 +14,9 @@ import { unlockCeremony, type UnlockCeremony } from './passkey';
  * phone's fingerprint prompt may only be started by a tap (Safari) — and the PIN is one tap away, "Use my PIN instead".
  * Everywhere else the screen is what it was. The ticket that comes back is handed to the app's own sign-in in the
  * PIN's place, so each app signs in exactly as it does with a PIN.
+ *
+ * 2026-11-02, later (the owner: "ok go ahead with the fingerprint") — the Shop, Hub and Store apps' sign-in too: by the
+ * account's email and the key this phone holds for it (`account.keyOf`, shopDevice.ts), with "Use my password instead".
  */
 export interface UnlockFirstState {
   /** The fingerprint is the choice on show; the screen hides its own PIN button meanwhile. */
@@ -25,13 +28,18 @@ export interface UnlockFirstState {
   usePin: () => void;
   useFace: () => void;
   off: () => void;
+  /** An account's sign-in (a shop's, a hub's, a store's): where this phone keeps its key for the address. Absent: a person's. */
+  account?: { keyOf: (email: string) => string | undefined };
 }
 
-/** For one sign-in screen: is the fingerprint offered for the number in its phone field. Read on every draw — a number typed in full may be one. */
-export function useUnlockFirst(phone: string): UnlockFirstState {
+/**
+ * For one sign-in screen: is the fingerprint offered for the number in its phone field — or, with `account`, for the address
+ * in its email field. Read on every draw: a number typed in full may be one.
+ */
+export function useUnlockFirst(phone: string, account?: { keyOf: (email: string) => string | undefined }): UnlockFirstState {
   const [chosePin, setChosePin] = useState(false);
   const [offFor, setOffFor] = useState<string | null>(null);
-  const available = hasUnlockHere(phone);
+  const available = account ? hasAccountUnlockHere(phone, account.keyOf(phone)) : hasUnlockHere(phone);
   return {
     offered: available && !chosePin,
     available,
@@ -39,6 +47,7 @@ export function useUnlockFirst(phone: string): UnlockFirstState {
     usePin: () => setChosePin(true),
     useFace: () => setChosePin(false),
     off: () => setOffFor(phone),
+    ...(account ? { account } : {}),
   };
 }
 
@@ -60,7 +69,9 @@ export interface UnlockFirstProps {
 export function UnlockFirst({ state, phone, config, onTicket, busy, look = 'app', children }: UnlockFirstProps) {
   const t = useT();
   const ceremony = useRef<UnlockCeremony | null>(null);
-  ceremony.current ??= unlockCeremony(config);
+  ceremony.current ??= unlockCeremony(config, state.account);
+  // What it stands in for, in the words: the PIN, or the account's password.
+  const pw = state.account ? 'Password' : '';
   const [working, setWorking] = useState(false);
   const [said, setSaid] = useState<'cancelled' | 'failed' | null>(null);
   const [error, setError] = useState<SbgError | null>(null);
@@ -100,15 +111,15 @@ export function UnlockFirst({ state, phone, config, onTicket, busy, look = 'app'
   };
 
   const consoleLook = look === 'console';
-  const saidLine = said ? t(said === 'cancelled' ? 'account.unlock.cancelled' : 'account.unlock.failed') : '';
+  const saidLine = said ? t(`account.unlock.${said}${pw}` as never) : '';
   if (!state.offered) {
     return (
       <>
         {state.wentOff ? (
           consoleLook ? (
-            <p class="chint">{`${t('account.unlock.offTitle')}. ${t('account.unlock.offBody')}`}</p>
+            <p class="chint">{`${t('account.unlock.offTitle')}. ${t(`account.unlock.offBody${pw}` as never)}`}</p>
           ) : (
-            <Note tone="info" icon="lock" title={t('account.unlock.offTitle')} detail={t('account.unlock.offBody')} />
+            <Note tone="info" icon="lock" title={t('account.unlock.offTitle')} detail={t(`account.unlock.offBody${pw}` as never)} />
           )
         ) : null}
         {children}
@@ -147,11 +158,11 @@ export function UnlockFirst({ state, phone, config, onTicket, busy, look = 'app'
       ) : null}
       {consoleLook ? (
         <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={working} onClick={state.usePin}>
-          {t('account.unlock.usePin')}
+          {t(state.account ? 'account.unlock.usePassword' : 'account.unlock.usePin')}
         </button>
       ) : (
         <Button variant="link" disabled={working} onClick={state.usePin}>
-          {t('account.unlock.usePin')}
+          {t(state.account ? 'account.unlock.usePassword' : 'account.unlock.usePin')}
         </Button>
       )}
     </div>

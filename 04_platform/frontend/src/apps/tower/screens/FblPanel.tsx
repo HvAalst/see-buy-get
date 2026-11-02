@@ -2,6 +2,9 @@ import { useState } from 'preact/hooks';
 import type { components } from '../../../lib/sbg/schema';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { Abbreviated } from '../../../shared/ui/Abbr';
+import { paperForUpload } from '../../../shared/media';
+import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
+import { uploadHint } from '../../../shared/upload';
 import { ConsoleFold } from '../ConsoleFold';
 import { ConsolePick } from '../ConsolePick';
 
@@ -80,7 +83,9 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, upload, def
     if (!file || !upload) return;
     setBusy(true);
     setError(null);
-    const r = await upload(file, kind, title);
+    // A file refused before it is sent (too large, a photo that could not be opened) is said, and the panel freed: it
+    // used to stay busy for ever, every button greyed, when the read failed (2026-11-02).
+    const r = await upload(file, kind, title).catch((e: unknown) => ({ documentId: undefined, error: uploadFailureSentence(e) }));
     setBusy(false);
     if (!r.documentId) return setError(r.error || t('tower.fbl.uploadFailed'));
     setAdded((list) => [...list, { documentId: r.documentId!, title }]);
@@ -183,7 +188,8 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, upload, def
               {upload ? (
                 <label class="cfield">
                   <span class="cfield__label">{t('tower.fbl.f.uploadProof')}</span>
-                  <input class="cinput" type="file" accept="image/*,application/pdf" disabled={busy} onChange={(e) => void send((e.target as HTMLInputElement).files?.[0], 'other', t('tower.fbl.proofTitle', { number: fbl.number }), (proof) => setCheck((c0) => ({ ...c0, proof })))} />
+                  <input class="cinput" type="file" data-upload="document" accept="image/*,application/pdf" disabled={busy} onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; (e.target as HTMLInputElement).value = ''; void send(f, 'other', t('tower.fbl.proofTitle', { number: fbl.number }), (proof) => setCheck((c0) => ({ ...c0, proof }))); }} />
+                  <span class="chint">{uploadHint('document')}</span>
                 </label>
               ) : null}
               <div class="twr-panelend">
@@ -256,7 +262,8 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, upload, def
           {upload ? (
             <label class="cfield">
               <span class="cfield__label">{t('tower.fbl.f.uploadCopy')}</span>
-              <input class="cinput" type="file" accept="image/*,application/pdf" disabled={busy} onChange={(e) => void send((e.target as HTMLInputElement).files?.[0], 'bill_of_lading', t('tower.fbl.copyTitle', { number: form.number.trim() || code }), (documentId) => setForm((f0) => ({ ...f0, documentId })))} />
+              <input class="cinput" type="file" data-upload="document" accept="image/*,application/pdf" disabled={busy} onChange={(e) => { const f = (e.target as HTMLInputElement).files?.[0]; (e.target as HTMLInputElement).value = ''; void send(f, 'bill_of_lading', t('tower.fbl.copyTitle', { number: form.number.trim() || code }), (documentId) => setForm((f0) => ({ ...f0, documentId }))); }} />
+              <span class="chint">{uploadHint('document')}</span>
             </label>
           ) : null}
           <div class="cfield">
@@ -332,14 +339,12 @@ export function FblPanel({ code, fbl, canKeep, canVerify, documents, upload, def
   );
 }
 
-/** A picked file as a data URL, for an upload among the company's papers. */
-export const fileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+/**
+ * A picked file as a data URL, for an upload among the company's papers — checked first and made ready the one way every
+ * paper is (2026-11-02): a PDF over the most refused before it is sent, a photo of the paper made smaller to fit. Rejects
+ * with an UploadRefusal, which uploadFailureSentence says in words.
+ */
+export const fileAsDataUrl = (file: File) => paperForUpload(file);
 
 /** Where anybody can look up whether a forwarder or agent is a FIATA member — we check nobody's (2026-10-29). */
 export function FiataDirectoryHint() {

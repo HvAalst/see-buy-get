@@ -216,6 +216,10 @@ function codeForStatus(status: number): SbgErrorCode {
     case 403: return 'FORBIDDEN';
     case 404: return 'NOT_FOUND';
     case 409: return 'CONFLICT';
+    // A body too large, or of a kind not read — whoever said it (a proxy in front, or the server), it is about the
+    // file, and is said as such (2026-11-02, the owner: "it needs to show or tell").
+    case 413: return 'MEDIA_TOO_LARGE';
+    case 415: return 'UNSUPPORTED_MEDIA';
     case 429: return 'RATE_LIMITED';
     default: return status >= 500 ? 'INTERNAL' : 'BAD_REQUEST';
   }

@@ -167,6 +167,10 @@ const QUEUEABLE: Array<{ method: string; test: RegExp; label: string }> = [
   // "On my way" dated as new; the same message sent again is the one already sent, by its key. A price, an agreement and a
   // voice message stay online: the first two are decisions, and a recording is too big to keep here.
   { method: 'POST', test: /^\/v1\/sbg\/conversations\/[^/]+\/messages$/, label: 'Message written' },
+  // A PHOTO FILED from a chat to its load or parcel (2026-11-02): damage is photographed where it happened, which is where
+  // the signal is worst. It says what is in front of the person and asks for no decision; its photo waits on the phone
+  // with it (heldPhotos.ts, kind `filed`) and goes first. The same filing sent again is the one already sent, by its key.
+  { method: 'POST', test: /^\/v1\/sbg\/conversations\/[^/]+\/photos$/, label: 'Photo filed' },
 ];
 
 /**

@@ -136,3 +136,97 @@ function iconUrl(path) {
     return path;
   }
 }
+
+/*
+ * 2026-11-02 — WHAT ANOTHER APP SHARES TO THIS ONE, photos included (the owner: a photo shared into the app from the
+ * phone's gallery "is asked the same 'What is this?' and filed the same way"). The manifest's share target
+ * (vite.config.ts, manifestFor) is a POST to `<app>/share-target`, multipart, because a photo cannot ride in an address.
+ * It is answered HERE, on the phone, and never reaches the server:
+ *   - photos are kept in this app's own cache (`sbg-shared-in`), untouched — the date the phone wrote into each is read
+ *     from these very bytes before the app makes them smaller — and the app is opened at `?share_files=<name>`
+ *     (shared/launch.ts), which offers them to be filed to a load or a parcel (shared/conversation/SharedPhotos.tsx);
+ *   - words and a link alone are handed on in the address as before (`?share_title=…&share_text=…&share_url=…`), so a
+ *     text or a link shared to the app reads exactly as it did when the share was a GET;
+ *   - what cannot be read opens the app at `?share_files=lost`, which says so, rather than a blank window.
+ * Kept an hour at most, like a share waiting for a sign-in; anything older is cleared when the next share arrives.
+ * A POST is never Workbox's (it routes reads only), so this answers it whatever the precache does.
+ */
+var SHARE_ACTION = 'share-target';
+var SHARED_CACHE = 'sbg-shared-in';
+var SHARED_KEEP_MS = 60 * 60 * 1000;
+var SHARED_MAX_FILES = 4;
+var SHARED_MAX_BYTES = 25 * 1024 * 1024;
+
+self.addEventListener('fetch', function (event) {
+  var req = event.request;
+  if (req.method !== 'POST') return;
+  var scope;
+  var url;
+  try {
+    scope = new URL(self.registration.scope);
+    url = new URL(req.url);
+  } catch (_e) {
+    return;
+  }
+  if (url.origin !== scope.origin || url.pathname !== scope.pathname + SHARE_ACTION) return;
+  event.respondWith(receiveShare(req, scope));
+});
+
+function sharedWords(form, name) {
+  var v = form.get(name);
+  return typeof v === 'string' && v.trim() ? v.trim().slice(0, 4000) : '';
+}
+
+async function receiveShare(req, scope) {
+  var back = new URL(scope.href);
+  try {
+    var form = await req.formData();
+    var words = { title: sharedWords(form, 'share_title'), text: sharedWords(form, 'share_text'), url: sharedWords(form, 'share_url') };
+    var files = form.getAll('share_files').filter(function (f) {
+      return f && typeof f === 'object' && typeof f.size === 'number' && f.size > 0 && f.size <= SHARED_MAX_BYTES && /^image\//.test(f.type || '');
+    });
+    if (files.length) {
+      var id = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      var cache = await caches.open(SHARED_CACHE);
+      await forgetOldShares(cache);
+      var base = scope.href + '__shared/' + id + '/';
+      var kept = [];
+      for (var i = 0; i < Math.min(files.length, SHARED_MAX_FILES); i += 1) {
+        var f = files[i];
+        await cache.put(base + i, new Response(f, { headers: { 'content-type': f.type } }));
+        kept.push({ key: base + i, type: f.type, name: String(f.name || '').slice(0, 200), size: f.size, lastModified: f.lastModified || 0 });
+      }
+      await cache.put(base + 'meta', new Response(JSON.stringify({ at: Date.now(), files: kept, title: words.title, text: words.text, url: words.url }), { headers: { 'content-type': 'application/json' } }));
+      back.searchParams.set('share_files', id);
+    } else if (words.title || words.text || words.url) {
+      if (words.title) back.searchParams.set('share_title', words.title);
+      if (words.text) back.searchParams.set('share_text', words.text);
+      if (words.url) back.searchParams.set('share_url', words.url);
+    } else {
+      back.searchParams.set('share_files', 'lost');
+    }
+  } catch (_e) {
+    back.searchParams.set('share_files', 'lost');
+  }
+  // 303: the app opens with a plain read of its own address, never a second POST.
+  return Response.redirect(back.href, 303);
+}
+
+/** Clear shares older than an hour: a photo nobody filed is not kept on the phone for ever. */
+async function forgetOldShares(cache) {
+  try {
+    var keys = await cache.keys();
+    var now = Date.now();
+    for (var i = 0; i < keys.length; i += 1) {
+      var key = keys[i].url;
+      if (!/\/meta$/.test(key)) continue;
+      var res = await cache.match(keys[i]);
+      var meta = res ? await res.json().catch(function () { return null; }) : null;
+      if (meta && typeof meta.at === 'number' && now - meta.at <= SHARED_KEEP_MS) continue;
+      var prefix = key.slice(0, -'meta'.length);
+      for (var k = 0; k < keys.length; k += 1) if (keys[k].url.indexOf(prefix) === 0) await cache.delete(keys[k]);
+    }
+  } catch (_e) {
+    /* a cache that cannot be read is cleared by the browser in its own time */
+  }
+}

@@ -283,14 +283,20 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
       // Uploaded AS an avatar: the server refuses to re-kind an evidence photo onto a profile, because a
       // later avatar replace purges the old bytes and that would hard-delete locked evidence mid-case.
       const up: Result<unknown> = await client.request((raw) => raw.POST('/v1/sbg/media' as never, { body: { kind: 'avatar', dataUrl } } as never) as never);
+      // Never null with nothing to show (2026-11-02, the owner: "It silently refused"): whatever stopped it is put where
+      // the sheet shows it — the server's refusal (with the photo's size and the most), or that no photo came back.
+      const nothing: SbgError = { code: 'INTERNAL', status: 0, title: 'error.generic', detail: '', retryable: true };
       if (up.error || !up.data) {
         setBusy(false);
-        setError(up.error ?? null);
+        setError(up.error ?? nothing);
         return null;
       }
       const mediaId = narrow<{ mediaId?: string; id?: string }>(up.data).mediaId ?? narrow<{ id?: string }>(up.data).id ?? null;
       setBusy(false);
-      if (!mediaId) return null;
+      if (!mediaId) {
+        setError(nothing);
+        return null;
+      }
       return (await save({ avatarMediaId: mediaId })) ? mediaId : null;
     },
     [client, save],

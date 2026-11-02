@@ -7,6 +7,12 @@ import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { VendorState, VendorActions } from '../useVendorApp';
 import { ConfirmDevice } from '../../../shared/account/ConfirmDevice';
+import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
+import { shopDeviceKey } from '../../../shared/account/shopDevice';
+import { vendorConfig } from '../api';
+
+/** 2026-11-02 — the store's own fingerprint or face: by its address, with the key this phone holds for it. */
+const STORE_PHONE = { keyOf: (email: string) => shopDeviceKey(email) };
 
 export interface SignInScreenProps {
   state: VendorState;
@@ -33,11 +39,15 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
   const [vendorId, setVendorId] = useState('');
   const [secret, setSecret] = useState('');
   const [forgetting, setForgetting] = useState(false);
+  // 2026-11-02 (the owner: "ok go ahead with the fingerprint") — where it was turned on for this store on this phone, the
+  // first choice; the password one tap away.
+  const unlock = useUnlockFirst(email, STORE_PHONE);
+  const faceFirst = !bySecret && unlock.offered;
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (bySecret) void actions.signInWithSecret(vendorId, secret);
-    else void actions.signIn(email, password);
+    else if (!faceFirst) void actions.signIn(email, password);
   };
 
   // Round 40 — a browser new to the store: the code to its number, or first a number to send it to.
@@ -73,20 +83,24 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
             </label>
             <input id="vemail" class="input" type="email" value={email} onInput={(e) => setEmail(e.currentTarget.value)} placeholder="orders@yourstore.com" autocapitalize="none" autocomplete="username" spellcheck={false} enterkeyhint="next" />
           </div>
-          <div class="field" style="margin-top:12px">
-            <label class="field__label" for="vpass">
-              {t('vendor.signin.password')}
-            </label>
-            <input id="vpass" class="input" type="password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} autocomplete="current-password" enterkeyhint="go" />
-          </div>
+          <UnlockFirst state={unlock} phone={email} config={vendorConfig()} busy={state.busy === 'signin'} onTicket={(ticket) => actions.signIn(email, ticket)}>
+            <div class="field" style="margin-top:12px">
+              <label class="field__label" for="vpass">
+                {t('vendor.signin.password')}
+              </label>
+              <input id="vpass" class="input" type="password" value={password} onInput={(e) => setPassword(e.currentTarget.value)} autocomplete="current-password" enterkeyhint="go" />
+            </div>
+          </UnlockFirst>
         </Card>
       )}
 
-      <div class="scr__cta">
-        <Button type="submit" disabled={bySecret ? !vendorId.trim() || !secret.trim() : !email.trim() || !password} busy={state.busy === 'signin'}>
-          {t('vendor.signin.signIn')}
-        </Button>
-      </div>
+      {faceFirst ? null : (
+        <div class="scr__cta">
+          <Button type="submit" disabled={bySecret ? !vendorId.trim() || !secret.trim() : !email.trim() || !password} busy={state.busy === 'signin'}>
+            {t('vendor.signin.signIn')}
+          </Button>
+        </div>
+      )}
       {/* The other door, with the form it stands in for: a store registered before stores had an email and password. */}
       <Button variant="link" onClick={() => setBySecret(!bySecret)}>
         {t(bySecret ? 'vendor.signin.byEmail' : 'vendor.signin.bySecret')}

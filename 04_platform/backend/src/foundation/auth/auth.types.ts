@@ -67,6 +67,12 @@ export interface IssueTokenInput {
    * acting as. Absent on a machine credential and on the shared operator key — neither is anybody.
    */
   personDid?: string;
+  /**
+   * 2026-11-02 — HOW THE PERSON SIGNED IN, where it was not the usual way: 'passkey' when a fingerprint or face on their
+   * phone opened it in the PIN's place (modules/pudo/passkeys.ts). Read by a door that must know WHO is at a phone that
+   * is not theirs alone — a shop's counter — where whoever can unlock the phone could have been the one.
+   */
+  openedBy?: 'passkey';
   /** Revocation counter, copied from the actor's profile at mint; compared on introspect. */
   tokenVersion?: number;
   /**
@@ -111,6 +117,8 @@ export interface IntrospectionResult {
   tier?: Tier;
   /** The person who signed in, when a person did. See IssueTokenInput.personDid. */
   personDid?: string;
+  /** 'passkey' when a fingerprint or face opened it. See IssueTokenInput.openedBy. */
+  openedBy?: 'passkey';
   /** The sign-out key the token answers to; for a staff session `operator:<id>`, which says WHICH member of staff. */
   revocationKey?: string;
 }
@@ -133,6 +141,8 @@ export interface TokenClaims {
   tier?: Tier;
   /** The person who signed in. See IssueTokenInput.personDid. */
   personDid?: string;
+  /** See IssueTokenInput.openedBy. */
+  openedBy?: 'passkey';
   tokenVersion?: number;
   revocationKey?: string;
   revocationVersion?: number;

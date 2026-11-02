@@ -430,6 +430,7 @@ function PhotoSheet({ open, onClose, state, actions }: { open: boolean; onClose:
         ref={input}
         class="photo__input"
         type="file"
+        data-upload="photo"
         accept="image/*"
         capture="environment"
         disabled={state.busy === 'shopfront'}

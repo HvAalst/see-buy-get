@@ -8,6 +8,8 @@ import { PIN_LENGTH } from '../../shared/account/pin';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import type { MerchantTag } from '../../lib/sbg/personas/consumer';
 import { downscaleImage, type MediaView } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import { failedWords, mediaIdOf, type Uploaded } from '../../shared/upload';
 import { openChannel, pickContacts, type PickedContact, type ShareChannel } from '../../shared/device';
 import {
   clearDid,
@@ -139,6 +141,8 @@ export interface SendState {
   /* --- profile (S29): the person's own name + avatar --- */
   savingProfile: boolean; // a display-name save is in flight
   avatarBusy: boolean; // an avatar image is being uploaded + saved
+  /** Why the last profile photo did not go, in words — shown in the profile sheet, under its button (2026-11-02). */
+  avatarSaid: string | null;
 
   /* --- invites (S24) --- */
   invites: InviteSummary | null;
@@ -222,6 +226,7 @@ const INITIAL: SendState = {
   accountNote: null,
   savingProfile: false,
   avatarBusy: false,
+  avatarSaid: null,
   invites: null,
   invitesState: 'idle',
   inviteBusy: false,
@@ -570,6 +575,7 @@ export function useSendApp() {
       authStep: 'phone',
       savingProfile: false, // a prior person's in-flight profile save must not leave a stuck spinner
       avatarBusy: false,
+      avatarSaid: null,
       accountError: null,
       accountNote: null,
       parcels: null,
@@ -720,6 +726,7 @@ export function useSendApp() {
         openParcelId: null,
         savingProfile: false, // drop any in-flight profile-save spinner from the signed-out person
         avatarBusy: false,
+        avatarSaid: null,
         accountError: null,
         accountNote: null,
         media: [], // clear the signed-out person's media (bytes are owner-gated, but don't show stale cells)
@@ -848,20 +855,22 @@ export function useSendApp() {
     setState((s) => ({ ...s, openParcelId: null, openParcelDetail: null, openParcelState: 'idle', openParcelError: null, disputeError: null }));
   }, []);
 
-  /** S26: downscale + EXIF-strip + upload a captured photo → its mediaId (null on failure). */
+  /** S26: downscale + EXIF-strip + upload a captured photo → its mediaId, or why it did not go in words. */
   const uploadPhoto = useCallback(
-    async (kind: MediaKind, file: File): Promise<string | null> => {
-      if (!client) return null;
+    async (kind: MediaKind, file: File): Promise<Uploaded> => {
+      if (!client) return { failed: t('upload.failed') };
+      // Every failure used to come back null and be shown as nothing but "upload failed" — the photo this phone could not
+      // open, the server's refusal, no signal alike (2026-11-02, the owner: "It silently refused"). Now each is said.
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
         if (r.error) {
           if (isSignInRequired(r.error)) signOutRef.current(r.error);
-          return null;
+          return { failed: uploadFailureSentence(r.error, 'photo') };
         }
-        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
-      } catch {
-        return null;
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? { failed: t('upload.failed') };
+      } catch (e) {
+        return { failed: uploadFailureSentence(e, 'photo') };
       }
     },
     [client],
@@ -1109,25 +1118,28 @@ export function useSendApp() {
     async (file: File) => {
       if (!client) return;
       const startDid = readDid(); // guard: if the person signs out / switches mid-upload, drop the result
-      setState((s) => ({ ...s, avatarBusy: true, accountError: null, accountNote: null }));
-      const mediaId = await uploadPhoto('avatar', file);
+      setState((s) => ({ ...s, avatarBusy: true, avatarSaid: null, accountError: null, accountNote: null }));
+      const up = await uploadPhoto('avatar', file);
       if (readDid() !== startDid) return; // a different (or no) person now
+      const mediaId = mediaIdOf(up);
       if (!mediaId) {
-        const err: SbgError = { code: 'INVALID_INPUT', status: 0, title: t('send.toast.photoNotSavedTitle'), detail: t('send.toast.photoNotSavedDetail'), retryable: true };
-        setState((s) => ({ ...s, avatarBusy: false, accountError: err }));
+        // WHY, IN THE SHEET (the owner, 2026-11-02: "It silently refused"). It used to be an error with no code of its
+        // own, read out as "Something went wrong" on the screen BEHIND the open sheet.
+        setState((s) => ({ ...s, avatarBusy: false, avatarSaid: failedWords(up) ?? t('send.toast.photoNotSavedDetail') }));
         return;
       }
       const r = await client.api.setProfile({ avatarMediaId: mediaId });
       if (readDid() !== startDid) return; // person changed mid-save — never splice A's avatar onto B
       if (r.error) {
         if (isSignInRequired(r.error)) return signOutRef.current(r.error);
-        setState((s) => ({ ...s, avatarBusy: false, accountError: r.error }));
+        setState((s) => ({ ...s, avatarBusy: false, accountError: r.error, avatarSaid: refusalSentence(r.error) }));
         return;
       }
       const view = narrow<PersonView>(r.data);
       setState((s) => ({
         ...s,
         avatarBusy: false,
+        avatarSaid: null,
         accountNote: t('send.toast.photoUpdated'),
         identity: s.identity ? { ...s.identity, avatarMediaId: view?.avatarMediaId } : s.identity,
         mediaState: 'idle', // the new avatar (and the purge of the old) → refresh the library next visit

@@ -16,6 +16,13 @@ import { ownOrigins } from '../../foundation/http/cors';
  * two minutes, bound to the number, the person and the device key. Every door that takes a PIN takes the ticket in
  * its place through the one place they all check the PIN (`PersonService.loginWithPin`), so each door keeps its own
  * token, roles, limits and lockouts — a second path onto the act, carrying the first's protections.
+ *
+ * 2026-11-02, later (the owner: "ok go ahead with the fingerprint") — THE SAME FOR A SHOP'S, A HUB'S AND A STORE'S OWN
+ * PASSWORD: a passkey on the account's own device record, a ticket redeemed in the one password check every such door
+ * makes (`AccountService.passwordRight`), the password's own lock counting a bad signature.
+ *
+ * A PIN or a password CHANGED, or replaced, takes every passkey made with the old one off every device: a credential
+ * somebody else may have learnt must not outlive being changed by way of a fingerprint it let them register.
  */
 
 /** The public half of one device's passkey. Never the fingerprint or the face: those never leave the phone. */
@@ -68,13 +75,21 @@ export function relyingParty(env: Record<string, string | undefined> = process.e
   return { rpID, rpName: 'SeeBuyGet', origins: [...new Set([...ownOrigins(env), ...local])] };
 }
 
+/**
+ * WHOSE SIGN-IN A PASSKEY STANDS IN FOR. A PERSON's PIN (found by their number), or — 2026-11-02, the owner: "ok go ahead
+ * with the fingerprint" — a shop's, a hub's or a store's own PASSWORD (its account, found by the email it signs in
+ * with). The two never mix: a challenge or a ticket made for one kind is refused by the other.
+ */
+export type PasskeyHolder = 'person' | 'account';
+
 /** What a challenge was handed out for, and to whom: the answer must come back for the same. */
 export interface Challenge {
   purpose: 'register' | 'unlock';
-  /** Turning it on: the signed-in person. */
-  personDid?: string;
-  /** Unlocking: the number it was asked for (hashed), whoever it belongs to. */
-  phoneHash?: string;
+  holder: PasskeyHolder;
+  /** Turning it on: the signed-in person, or the account. */
+  owner?: string;
+  /** Unlocking: the number (or the sign-in email) it was asked for, hashed — whoever it belongs to, or nobody. */
+  address?: string;
   /** The device key it was asked from (hashed). */
   deviceHash: string;
   expiresAt: number;
@@ -108,10 +123,15 @@ export class Challenges {
   }
 }
 
-/** What an unlock ticket opens: this person, on this number, on this device, with this passkey, until then. */
+/**
+ * What an unlock ticket opens: this person on this number — or this account at this email — on this device, with this
+ * passkey, until then. Each kind keeps its own tickets (PersonService, AccountService): one is nothing at the other's door.
+ */
 export interface UnlockGrant {
-  personDid: string;
-  phoneHash: string;
+  /** The person's DID, or the account's id. */
+  owner: string;
+  /** The number's hash, or the sign-in email's. */
+  address: string;
   deviceHash: string;
   credentialId: string;
   expiresAt: number;
@@ -141,8 +161,8 @@ export class UnlockTickets {
     return grant && grant.expiresAt > now ? grant : undefined;
   }
 
-  /** Every ticket of one person's, gone: their passkey was turned off, or their device forgotten. */
-  dropFor(personDid: string): void {
-    for (const [k, g] of this.open) if (g.personDid === personDid) this.open.delete(k);
+  /** Every ticket of one person's (or one account's), gone: a passkey turned off, or the PIN or password changed. */
+  dropFor(owner: string): void {
+    for (const [k, g] of this.open) if (g.owner === owner) this.open.delete(k);
   }
 }

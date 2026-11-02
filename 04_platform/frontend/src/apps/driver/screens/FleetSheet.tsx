@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Note, PhotoField, RefusalNote, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
+import type { Uploaded } from '../../../shared/upload';
 import { removalWords, removedLine, rosterDayName, rideAloneCompany, rideAloneMissing, rideAloneStart, type RideAloneForm } from '../logic';
 import type { RideAloneTerms } from '../types';
 import { vehicleWord } from '../vehicle-words';
@@ -185,7 +186,7 @@ function RideAloneCard({
 }: {
   terms: RideAloneTerms;
   busy: boolean;
-  upload: (kind: 'kyc_id' | 'kyc_licence', file: File) => Promise<string | null>;
+  upload: (kind: 'kyc_id' | 'kyc_licence', file: File) => Promise<Uploaded>;
   onSubmit: (form: RideAloneForm) => void;
 }) {
   const t = useT();

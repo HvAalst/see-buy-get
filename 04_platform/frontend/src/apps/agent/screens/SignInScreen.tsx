@@ -7,6 +7,12 @@ import { useT } from '../../../shared/i18n';
 import type { SbgError } from '../../../lib/sbg';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { StaffSignIn } from './StaffSignIn';
+import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
+import { shopDeviceKey } from '../../../shared/account/shopDevice';
+import { agentConfig } from '../api';
+
+/** 2026-11-02 — the shop's own fingerprint or face: by its address, with the key this phone holds for it. */
+const SHOP_PHONE = { keyOf: (email: string) => shopDeviceKey(email) };
 
 export interface SignInScreenProps {
   actions: AgentActions;
@@ -70,9 +76,13 @@ function EmailAndPassword({ actions, error, busy, onStaff }: { actions: AgentAct
   const [email, setEmail] = useState(actions.readEmail() ?? '');
   const [password, setPassword] = useState('');
   const [help, setHelp] = useState(false);
+  // 2026-11-02 (the owner: "ok go ahead with the fingerprint") — where it was turned on for this shop on this phone, the
+  // first choice; the password one tap away. Never for the people at the counter: they sign in as themselves, by PIN.
+  const unlock = useUnlockFirst(email, SHOP_PHONE);
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (unlock.offered) return;
     void actions.signIn(email, password);
   };
 
@@ -102,28 +112,32 @@ function EmailAndPassword({ actions, error, busy, onStaff }: { actions: AgentAct
             enterkeyhint="next"
           />
         </div>
-        <div class="field" style="margin-top:12px">
-          <label class="field__label" for="password">
-            {t('agent.signin.password')}
-          </label>
-          <input
-            id="password"
-            class="input"
-            type="password"
-            value={password}
-            onInput={(e) => setPassword(e.currentTarget.value)}
-            placeholder={t('agent.signin.passwordPh')}
-            autocomplete="current-password"
-            enterkeyhint="go"
-          />
-        </div>
+        <UnlockFirst state={unlock} phone={email} config={agentConfig()} busy={busy} onTicket={(ticket) => actions.signIn(email, ticket)}>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="password">
+              {t('agent.signin.password')}
+            </label>
+            <input
+              id="password"
+              class="input"
+              type="password"
+              value={password}
+              onInput={(e) => setPassword(e.currentTarget.value)}
+              placeholder={t('agent.signin.passwordPh')}
+              autocomplete="current-password"
+              enterkeyhint="go"
+            />
+          </div>
+        </UnlockFirst>
       </Card>
 
-      <div class="scr__cta">
-        <Button type="submit" disabled={!email.trim() || !password} busy={busy}>
-          {t('agent.signin.signIn')}
-        </Button>
-      </div>
+      {unlock.offered ? null : (
+        <div class="scr__cta">
+          <Button type="submit" disabled={!email.trim() || !password} busy={busy}>
+            {t('agent.signin.signIn')}
+          </Button>
+        </div>
+      )}
 
       {/* Not the shop's password: the people at its counter sign in as themselves. */}
       <button type="button" class="row" onClick={onStaff}>

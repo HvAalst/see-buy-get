@@ -61,6 +61,31 @@ export function createConversationsApi(sbg: SbgClient) {
     voiceBlob: (id: string, voiceId: string) =>
       sbg.request((c) => c.GET('/v1/sbg/conversations/{id}/voice/{voiceId}', { params: { path: { id, voiceId } }, parseAs: 'blob' })),
 
+    /**
+     * 2026-11-02 — upload a photo to be FILED from this chat (kind `filed`): made smaller first, on the phone. The chat is
+     * where a photo is taken now, so its own upload lives here too.
+     */
+    upload: (dataUrl: string, thumbDataUrl?: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/media', { body: { kind: 'filed', dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } as never })),
+
+    /**
+     * 2026-11-02 — FILE a photo to this chat's load or parcel — damage, a paper or proof — and show its card in the chat (the
+     * owner: "Damage claims should be fingerprinted and just sharing blurs this"). With no signal it waits on the phone.
+     */
+    filePhoto: (
+      id: string,
+      filing: { mediaId: string; as: string; proofOf?: string; source: string; takenAt?: string; phoneDate?: string; originalSha256?: string; writtenAt?: string },
+    ) => sbg.request((c) => c.POST('/v1/sbg/conversations/{id}/photos', { params: { path: { id } }, body: filing as never })),
+
+    /** 2026-11-02 — the record's photo file, as this reader may see it through this chat. References and labels only. */
+    recordPhotos: (id: string) => sbg.request((c) => c.GET('/v1/sbg/conversations/{id}/photos', { params: { path: { id } } })),
+
+    /** 2026-11-02 — one filed photo's bytes (or its thumbnail), through this chat. Shown from an object URL: an <img> carries no token. */
+    photoBlob: (id: string, filingId: string, variant?: 'full' | 'thumb') =>
+      sbg.request((c) =>
+        c.GET('/v1/sbg/conversations/{id}/photos/{filingId}', { params: { path: { id, filingId }, query: variant ? { variant } : {} }, parseAs: 'blob' } as never),
+      ),
+
     /** CV3 — a fleet manager's view: the conversations their drivers chose to share. Read-only. */
     shared: () => sbg.request((c) => c.GET('/v1/sbg/conversations/shared', {})),
 

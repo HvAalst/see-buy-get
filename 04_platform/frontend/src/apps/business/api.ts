@@ -18,6 +18,8 @@ import type { SealView } from '../../shared/seals';
 import type { UnitHold } from '../../shared/tamper';
 import type { HeldByAuthorityView } from '../../shared/heldByAuthority';
 import { downscaleImage } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import type { Uploaded } from '../../shared/upload';
 import type { SealsView } from './seals';
 
 const APP_VERSION = '1.0.0';
@@ -420,8 +422,8 @@ export interface BusinessClient {
   openGs1Dispute(body: { companyPrefix: string; extensionDigit: number; licenceRef: string; note?: string; forClientId?: string }): Promise<Result<Gs1DisputeView>>;
   sendGs1Licence(disputeId: string, licenceRef: string, note?: string): Promise<Result<Gs1DisputeView>>;
   withdrawGs1Dispute(disputeId: string): Promise<Result<Gs1DisputeView>>;
-  /** A photograph or screenshot of its GS1 licence, uploaded: the media id, or null when it did not go. */
-  licencePhoto(file: File): Promise<string | null>;
+  /** A photograph or screenshot of its GS1 licence, uploaded: the media id, or why it did not go in words. */
+  licencePhoto(file: File): Promise<Uploaded>;
   /** Round 10 — its own system, told of its loads: what it hears, and what became of each message. */
   system(): Promise<Result<SystemView>>;
   setSystemAddress(url: string): Promise<Result<SystemView>>;
@@ -447,10 +449,10 @@ export interface BusinessClient {
   seals(freightId: string): Promise<Result<SealsView>>;
   writeSeal(freightId: string, body: Record<string, unknown>): Promise<Result<SealView>>;
   removeSeal(freightId: string, sealId: string): Promise<Result<{ removed: true }>>;
-  /** A photograph for a seal, taken here: its id, or null when it could not be sent. */
-  sealPhoto(file: File): Promise<string | null>;
-  /** A photo of a problem with goods delivered, sent with a claim on them. */
-  claimPhoto(file: File): Promise<string | null>;
+  /** A photograph for a seal, taken here: its id, or why it could not be sent in words. */
+  sealPhoto(file: File): Promise<Uploaded>;
+  /** A photo of a problem with goods delivered, sent with a claim on them: its id, or why it did not go. */
+  claimPhoto(file: File): Promise<Uploaded>;
   /** CMR Art. 8(2): agree to, or dispute in its own words, what the driver noted at taking over — once. */
   answerReservations(freightId: string, body: { agreed: boolean; note?: string }): Promise<Result<unknown>>;
 }
@@ -458,6 +460,7 @@ export interface BusinessClient {
 export function createBusinessClient(): BusinessClient {
   const client = createSeededClient(businessConfig(), BUSINESS_TOKEN);
   const call = <T>(fn: Parameters<typeof client.sbg.request>[0]) => client.sbg.request(fn) as unknown as Promise<Result<T>>;
+  const photo = (kind: 'gs1_licence' | 'dispute' | 'seal', file: File) => businessPhoto(client, kind, file);
   return {
     api: createOperatorApi(client.sbg),
     shipping: createAgentApi(client.sbg),
@@ -505,15 +508,7 @@ export function createBusinessClient(): BusinessClient {
     sendGs1Licence: (disputeId, licenceRef, note) =>
       call((c) => c.POST(`/v1/sbg/business/me/gs1/disputes/${encodeURIComponent(disputeId)}/licence` as never, { body: { licenceRef, ...(note?.trim() ? { note: note.trim() } : {}) } } as never) as never),
     withdrawGs1Dispute: (disputeId) => call((c) => c.POST(`/v1/sbg/business/me/gs1/disputes/${encodeURIComponent(disputeId)}/withdraw` as never, {} as never) as never),
-    licencePhoto: async (file) => {
-      try {
-        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-        const r = await createOperatorApi(client.sbg).uploadMedia('gs1_licence', dataUrl, thumbDataUrl);
-        return r.error ? null : ((r.data as { mediaId?: string } | undefined)?.mediaId ?? null);
-      } catch {
-        return null;
-      }
-    },
+    licencePhoto: (file) => photo('gs1_licence', file),
     system: () => call((c) => c.GET('/v1/sbg/business/me/system' as never, {} as never) as never),
     setSystemAddress: (url) => call((c) => c.PUT('/v1/sbg/business/me/system' as never, { body: { url } } as never) as never),
     turnSystemSecret: () => call((c) => c.POST('/v1/sbg/business/me/system/secret' as never, {} as never) as never),
@@ -533,25 +528,26 @@ export function createBusinessClient(): BusinessClient {
     writeSeal: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals` as never, { body } as never) as never),
     removeSeal: (freightId, sealId) => call((c) => c.DELETE(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/seals/${encodeURIComponent(sealId)}` as never, {} as never) as never),
     answerReservations: (freightId, body) => call((c) => c.POST(`/v1/sbg/dispatch/freight/${encodeURIComponent(freightId)}/reservations/answer` as never, { body } as never) as never),
-    claimPhoto: async (file) => {
-      try {
-        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-        const r = await createOperatorApi(client.sbg).uploadMedia('dispute', dataUrl, thumbDataUrl);
-        return r.error ? null : ((r.data as { mediaId?: string } | undefined)?.mediaId ?? null);
-      } catch {
-        return null;
-      }
-    },
-    sealPhoto: async (file) => {
-      try {
-        const { dataUrl, thumbDataUrl } = await downscaleImage(file);
-        const r = await createOperatorApi(client.sbg).uploadMedia('seal', dataUrl, thumbDataUrl);
-        return r.error ? null : ((r.data as { mediaId?: string } | undefined)?.mediaId ?? null);
-      } catch {
-        return null;
-      }
-    },
+    claimPhoto: (file) => photo('dispute', file),
+    sealPhoto: (file) => photo('seal', file),
   };
+}
+
+/**
+ * A PHOTOGRAPH THE BUSINESS TAKES — a GS1 licence, a seal, what is wrong with goods delivered: made smaller on this phone
+ * (or computer), its location stripped, uploaded as the business's own. Its id, or why it did not go in words for where it
+ * was taken: each of these used to be a bare null, read as "it did not go" whatever the reason (2026-11-02, the owner:
+ * "It silently refused").
+ */
+async function businessPhoto(client: SeededAppClient, kind: 'gs1_licence' | 'dispute' | 'seal', file: File): Promise<Uploaded> {
+  try {
+    const { dataUrl, thumbDataUrl } = await downscaleImage(file);
+    const r = await createOperatorApi(client.sbg).uploadMedia(kind, dataUrl, thumbDataUrl);
+    if (r.error) return { failed: uploadFailureSentence(r.error, 'photo') };
+    return (r.data as { mediaId?: string } | undefined)?.mediaId ?? { failed: uploadFailureSentence(undefined, 'photo') };
+  } catch (e) {
+    return { failed: uploadFailureSentence(e, 'photo') };
+  }
 }
 
 /** Sign-out drops both sessions. Either one left behind is a way back in. */

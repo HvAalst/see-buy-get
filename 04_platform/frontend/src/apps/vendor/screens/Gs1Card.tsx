@@ -5,6 +5,7 @@ import { formatDate, useT } from '../../../shared/i18n';
 import { PREFIX_TAKEN, cleanPrefix, maySendLicence, mayTakeBack, stillWorthShowing, type Gs1DisputeView } from '../../../shared/gs1';
 import { Button, Card, Choice, Note, Pill, RefusalNote, Sheet } from '../../../shared/ui';
 import { storeDisputeLine, storeGs1Line, type StoreGs1Api } from '../gs1';
+import { failedWords, mediaIdOf } from '../../../shared/upload';
 import type { VendorState } from '../useVendorApp';
 
 /**
@@ -150,15 +151,17 @@ function ClaimPrefix({ api, prefix, digit, onOpened }: { api: StoreGs1Api; prefi
   const [licence, setLicence] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  // Why the licence photo did not go, in words (2026-11-02, the owner: "It silently refused").
+  const [failed, setFailed] = useState<string | null>(null);
   const [refused, setRefused] = useState<SbgError | null>(null);
   const photo = async (file: File | undefined) => {
     if (!file) return;
     setBusy(true);
-    setFailed(false);
-    const id = await api.licencePhoto(file);
+    setFailed(null);
+    const up = await api.licencePhoto(file);
     setBusy(false);
-    if (!id) return setFailed(true);
+    const id = mediaIdOf(up);
+    if (!id) return setFailed(failedWords(up) ?? t('vendor.gs1.photoFailed'));
     setLicence(id);
   };
   const send = async () => {
@@ -177,8 +180,8 @@ function ClaimPrefix({ api, prefix, digit, onOpened }: { api: StoreGs1Api; prefi
         <label class="field__label" for="gs1-licence">
           {t('vendor.gs1.licence')}
         </label>
-        <input id="gs1-licence" class="input" type="file" accept="image/*" disabled={busy} onChange={(e) => void photo(e.currentTarget.files?.[0])} />
-        <p class="hint">{failed ? t('vendor.gs1.photoFailed') : licence ? t('vendor.gs1.licenceReady') : t('vendor.gs1.licenceHint')}</p>
+        <input id="gs1-licence" class="input" type="file" data-upload="photo" accept="image/*" disabled={busy} onChange={(e) => { const f = e.currentTarget.files?.[0]; e.currentTarget.value = ''; void photo(f); }} />
+        {failed ? <Note tone="warn" icon="camera" title={failed} /> : <p class="hint">{licence ? t('vendor.gs1.licenceReady') : t('vendor.gs1.licenceHint')}</p>}
       </div>
       <div class="field" style="margin-top:10px">
         <label class="field__label" for="gs1-note">
@@ -198,7 +201,7 @@ function ClaimPrefix({ api, prefix, digit, onOpened }: { api: StoreGs1Api; prefi
 function DisputeLine({ d, api, onChanged }: { d: Gs1DisputeView; api: StoreGs1Api | null; onChanged: () => void }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const [refused, setRefused] = useState<SbgError | null>(null);
   const line = storeDisputeLine(d, t, (iso) => formatDate(iso, { day: 'numeric', month: 'long' }));
   const after = async (r: Promise<{ error: SbgError | null }>) => {
@@ -212,10 +215,11 @@ function DisputeLine({ d, api, onChanged }: { d: Gs1DisputeView; api: StoreGs1Ap
   const answer = async (file: File | undefined) => {
     if (!file || !api) return;
     setBusy(true);
-    setFailed(false);
-    const id = await api.licencePhoto(file);
+    setFailed(null);
+    const up = await api.licencePhoto(file);
     setBusy(false);
-    if (!id) return setFailed(true);
+    const id = mediaIdOf(up);
+    if (!id) return setFailed(failedWords(up) ?? t('vendor.gs1.photoFailed'));
     await after(api.sendLicence(d.disputeId, id));
   };
   return (
@@ -227,8 +231,8 @@ function DisputeLine({ d, api, onChanged }: { d: Gs1DisputeView; api: StoreGs1Ap
           <label class="field__label" for={`gs1-answer-${d.disputeId}`}>
             {t(d.licenceSent ? 'vendor.gs1.answerAgain' : 'vendor.gs1.answer')}
           </label>
-          <input id={`gs1-answer-${d.disputeId}`} class="input" type="file" accept="image/*" disabled={busy} onChange={(e) => void answer(e.currentTarget.files?.[0])} />
-          {failed ? <p class="hint">{t('vendor.gs1.photoFailed')}</p> : null}
+          <input id={`gs1-answer-${d.disputeId}`} class="input" type="file" data-upload="photo" accept="image/*" disabled={busy} onChange={(e) => { const f = e.currentTarget.files?.[0]; e.currentTarget.value = ''; void answer(f); }} />
+          {failed ? <Note tone="warn" icon="camera" title={failed} /> : null}
         </div>
       ) : null}
       {api && mayTakeBack(d) ? (

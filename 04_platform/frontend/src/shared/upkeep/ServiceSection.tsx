@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import { AuthImage, Button, PhotoField, Pill } from '../ui';
 import { useT } from '../i18n';
+import type { Uploaded } from '../upload';
 import type { Result } from '../../lib/sbg';
 import { SERVICE_KINDS, SERVICE_STATE, SERVICE_WORD, dayLabel, kmWords, planWords, type CareApi, type ServiceKind, type VehicleCare } from './care';
 
@@ -9,7 +10,7 @@ import { SERVICE_KINDS, SERVICE_STATE, SERVICE_WORD, dayLabel, kmWords, planWord
  * its kind, or the office's own), and what was done to it with the workshop's job card — and recording one. Never a
  * price, never a part: what was done, when, and where.
  */
-export function ServiceSection({ care, api, act, busy, uploadPhoto }: { care: VehicleCare; api: CareApi; act: (call: () => Promise<Result<VehicleCare>>) => Promise<void>; busy: boolean; uploadPhoto?: (file: File) => Promise<string | null> }) {
+export function ServiceSection({ care, api, act, busy, uploadPhoto }: { care: VehicleCare; api: CareApi; act: (call: () => Promise<Result<VehicleCare>>) => Promise<void>; busy: boolean; uploadPhoto?: (file: File) => Promise<Uploaded> }) {
   const t = useT();
   const today = care.today; // the fleet's, as the server judges the day of a service
   const due = care.service;

@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
-import { json } from 'express';
 import { AppModule } from './app.module';
+import { applyBodyLimits } from './body-limits';
 import { isSandbox } from './foundation/runtime/sandbox';
 import { reviewCodeState } from './foundation/runtime/review-code';
 import { standInState } from './foundation/runtime/standin-code';
@@ -43,16 +43,13 @@ async function bootstrap() {
     (app.getHttpAdapter().getInstance() as { set: (k: string, v: unknown) => void }).set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy === 'true' ? true : trustProxy);
   }
 
-  // S26 media upload: a base64 image data URL (client-downscaled to <200 KB) inflates ~33%, so the
-  // default 100 KB JSON limit is too small. 2 MB gives headroom without inviting large payloads (the
-  // MediaService still hard-caps decoded bytes at MEDIA_MAX_BYTES).
-  // CA4 — a company document (a certificate scan, a licence) arrives as base64 and may run to 8 MB of bytes. Only that
-  // route gets the larger body; it is registered first, so the global parser below leaves an already-parsed body alone.
   // The mail provider's notices (a bounce) are believed by a signature over their BYTES: that one address is read
   // raw, before any parser below turns a body into an object and throws the bytes away.
   readProviderEventsRaw(app);
-  app.use(/^\/v1\/sbg\/entities\/[^/]+\/documents$/, json({ limit: '12mb' }));
-  app.use(json({ limit: '2mb' }));
+  // How large a request may be, route by route, worked out from the files each route takes — a company paper of 8 MB
+  // gets the body it needs, everything else 2 MB — and a body over it is refused in our own shape, MEDIA_TOO_LARGE with
+  // the size and the most, so the phone can say it (2026-11-02, the owner: "it needs to show or tell"). See body-limits.ts.
+  applyBodyLimits(app);
 
   // Global input validation — every DTO is validated at the edge.
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

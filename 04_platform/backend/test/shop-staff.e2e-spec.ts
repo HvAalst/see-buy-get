@@ -246,6 +246,8 @@ describe('the people at a shop’s counter, over the wire', () => {
         'POST sbg/parcels/:id/damage-report/links/:linkId/cancel', 'POST sbg/parcels/:id/damage-report/notes',
         'GET sbg/conversations//', 'POST sbg/conversations//', 'GET sbg/conversations/:id/messages', 'POST sbg/conversations/:id/messages', 'GET sbg/conversations/:id/voice/:voiceId',
         'POST sbg/conversations/:id/voice', 'POST sbg/conversations/:id/read', 'POST sbg/conversations/:id/messages/:seq/report', 'POST sbg/conversations/:id/dispute-reports',
+        // 2026-11-02 — a photo filed to the parcel a chat is about, as a voice note is sent: under the colleague's own name
+        'POST sbg/conversations/:id/photos', 'GET sbg/conversations/:id/photos', 'GET sbg/conversations/:id/photos/:filingId',
         'GET sbg/notifications/inbox', 'POST sbg/notifications/inbox/:id/read', 'POST sbg/notifications/inbox/read-all', 'POST sbg/notifications/subscribe', 'DELETE sbg/notifications/subscribe', 'POST sbg/notifications/test',
         // 2026-10-25 — what a colleague at the counter agreed to is their own, read and agreed to under their own name
         'GET sbg/agreement/mine', 'POST sbg/agreement/mine',

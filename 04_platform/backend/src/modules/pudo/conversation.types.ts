@@ -10,6 +10,8 @@
  * people we have no recourse against, and what they agreed is the one thing we can later show.
  */
 
+import type { FiledPhotoRef } from './filed-photo.types';
+
 /**
  * Quick replies — the words a driver needs with one thumb, in their own language. Stored as a KEY, rendered by
  * the reader's app in the reader's language, so "Loaded" sent in Swahili arrives in Amharic. Mirrored in
@@ -35,8 +37,18 @@ export type SettleWhen = (typeof SETTLE_WHEN)[number];
  *   decision            CV2 — the poster accepting (which claims the load) or declining that price
  *   settlement          CV2 — a written-down arrangement for paying off-platform: a RECORD, never a posting
  *   settlement_agreed   CV2 — the other party agreeing to it
+ *   photo               2026-11-02 — a photo FILED to the thread's load or parcel (filed-photo.types.ts): the card that
+ *                       points at it. The message carries the reference and the labels — never the picture.
  */
-export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared' | 'voice';
+export type MessageKind = 'text' | 'quick' | 'proposal' | 'decision' | 'settlement' | 'settlement_agreed' | 'report_shared' | 'voice' | 'photo';
+
+/**
+ * Every kind of message, as a runtime list — so a guard can walk them all (conversation.photo.spec.ts: no kind carries a
+ * picture's bytes). Keep in step with MessageKind; the type below fails to compile when the two part.
+ */
+export const MESSAGE_KINDS = ['text', 'quick', 'proposal', 'decision', 'settlement', 'settlement_agreed', 'report_shared', 'voice', 'photo'] as const satisfies readonly MessageKind[];
+type _EveryKindListed = Exclude<MessageKind, (typeof MESSAGE_KINDS)[number]> extends never ? true : never;
+export const EVERY_KIND_LISTED: _EveryKindListed = true;
 
 /**
  * CV4 — A VOICE MESSAGE'S RECORDING, kept apart from the thread's messages so a thread's list stays small.
@@ -89,6 +101,8 @@ export interface DisputeReport {
     /** A voice message the party chose to include — the operator may play exactly this one. */
     voiceId?: string;
     durationSec?: number;
+    /** 2026-11-02 — a filed photo the party chose to include: its reference and labels; the operator may open exactly this one. */
+    photo?: FiledPhotoRef;
     at: string;
   }>;
   /**
@@ -153,6 +167,8 @@ export interface ConversationMessage {
   /** voice: the recording, and how long it runs. */
   voiceId?: string;
   durationSec?: number;
+  /** photo: the filed photo's reference — the record, what it is, the media id, the fingerprints and the labels. */
+  photo?: FiledPhotoRef;
   at: string;
   /** Written on the phone before it had a signal, and sent when it did (2026-11-01): when it was written, by the phone. */
   writtenAt?: string;
@@ -189,6 +205,8 @@ export interface MessageView {
   seqCount?: number;
   /** CV4 — a voice message: fetched separately, by those who may read the thread. */
   voice?: { voiceId: string; durationSec: number };
+  /** 2026-11-02 — a filed photo's card: fetched separately, through the thread, by those who may read it. */
+  photo?: FiledPhotoRef;
   at: string;
   /** Written with no signal and sent later: when it was written. Absent when it went as it was written. */
   writtenAt?: string;
@@ -222,6 +240,12 @@ export interface ConversationView {
   settlesOffPlatform: boolean;
   /** The money every price in the thread is named in: the load's poster's. Absent for a parcel's thread. */
   currency?: string;
+  /**
+   * 2026-11-02 — whether this reader may file a photo to the thread's load or parcel now: a party to the record (the poster,
+   * or the driver carrying it; the shop or the person collecting), the record open, the thread open. The camera is offered
+   * only then.
+   */
+  canFilePhotos: boolean;
   lastSeq: number;
   unread: number;
   lastMessage?: MessageView;

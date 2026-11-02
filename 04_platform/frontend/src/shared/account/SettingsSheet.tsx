@@ -91,10 +91,12 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
   };
 
   const me = api.account;
-  // 2026-11-02 — UNLOCK WITH FINGERPRINT OR FACE: for somebody whose sign-in here is their PIN (not a shop's, hub's or
-  // store's password), where this phone can check a fingerprint or face itself. Asked when Settings opens.
-  const passkey = usePasskeyHere(api.passkey, open && Boolean(me?.hasPin) && !onChangePassword && !devices);
-  const passkeySub = passkeyRowSub(passkey, t as never);
+  // 2026-11-02 — UNLOCK WITH FINGERPRINT OR FACE, in place of the sign-in this app has: a person's PIN, or — where its
+  // phones are an account's own (a shop's, a hub's, a store's) — the account's password (`devices.passkey`). Only where
+  // this phone can check a fingerprint or face itself. Asked when Settings opens.
+  const passkeyApi = devices?.passkey ?? api.passkey;
+  const passkey = usePasskeyHere(passkeyApi, open && (devices ? Boolean(devices.passkey) : Boolean(me?.hasPin) && !onChangePassword));
+  const passkeySub = passkeyRowSub(passkey, t as never, passkeyApi);
   // Once the number has moved the token is dead: every way out of the sheet is the sign-in screen.
   const close = view === 'phone-done' || view === 'closed' ? () => { onClose(); onSignOut(); } : onClose;
   const title = view === 'close' || view === 'closed' ? t('account.close.title') : view === 'mute' ? t('account.mute.title') : view === 'payout' ? t('account.payout.title') : view === 'devices' ? t('account.devices.title') : view === 'passkey' ? t('account.passkey.title') : view === 'contract' ? t('account.contract.title') : view === 'old-number' ? t('account.settings.oldNumber.title') : view === 'id' ? t('account.settings.id.viewTitle') : view === 'pin' ? t('account.menu.pin') : view === 'email' ? t('account.settings.email') : view === 'phone' || view === 'phone-done' ? t('account.settings.phone') : t('account.settings.title');
@@ -203,7 +205,7 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
       {view === 'contract' ? <ContractCompany api={api} /> : null}
       {view === 'payout' ? <PayoutForm api={api} onDone={(saved) => { setPayoutSaved(saved); setView('list'); }} /> : null}
       {view === 'devices' ? <DevicesForm devices={devices ?? api.devices} onSignedOut={() => { onClose(); onSignOut(); }} /> : null}
-      {view === 'passkey' ? <PasskeyForm api={api.passkey} state={passkey} /> : null}
+      {view === 'passkey' ? <PasskeyForm api={passkeyApi} state={passkey} /> : null}
       {view === 'old-number' ? <OldNumberForm api={api} onDone={() => { setBlocked(true); setView('list'); }} /> : null}
       {view === 'mute' ? <MuteForm api={api} onDone={() => setView('list')} /> : null}
       {view === 'close' ? <CloseForm api={api} onClosed={() => setView('closed')} /> : null}

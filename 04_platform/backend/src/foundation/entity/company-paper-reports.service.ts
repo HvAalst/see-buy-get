@@ -1,4 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { UPLOAD_LIMITS } from '../media/upload-limits';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../http/glos-error';
@@ -47,7 +48,7 @@ export const REPORT_CATEGORY_WORDS: Record<ReportCategory, string> = {
 /** How long a company has to answer before a strike can be decided without it. */
 export const REPORT_ANSWER_DAYS = 7;
 /** A screenshot or a photograph; a scan at most. */
-export const MAX_EVIDENCE_BYTES = 6 * 1024 * 1024;
+export const MAX_EVIDENCE_BYTES = UPLOAD_LIMITS.evidence;
 
 export type PaperCaseState = 'open' | 'dismissed' | 'struck';
 

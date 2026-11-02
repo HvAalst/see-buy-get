@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { allDeviceKeys, saveDeviceKey } from './pin';
-import { hasUnlockHere, markUnlock } from './unlock';
+import { hasAccountUnlockHere, hasUnlockHere, markAccountUnlock, markUnlock } from './unlock';
 import { forgetPasskeySupport, passkeyApi, passkeySupported, unlockCeremony } from './passkey';
 
 /**
@@ -163,6 +163,25 @@ describe('a sign-in screen: the phone’s prompt, then a ticket', () => {
     const out = await unlockCeremony(config).unlock(PHONE);
     expect(out).toEqual({ cancelled: true });
     expect(sent.map((s) => s.path)).toEqual(['/v1/sbg/identity/unlock/options']);
+    expect(hasUnlockHere(PHONE)).toBe(true);
+  });
+
+  /** 2026-11-02, later — a shop's, a hub's or a store's sign-in asks the account's own doors, by its address and its phone's key. */
+  it('an account’s sign-in: by email and the key this phone holds for it, at the account’s doors', async () => {
+    const SHOP = 'kona@shop.example';
+    markAccountUnlock(SHOP, 'dvc_shop-phone', 'cred-1');
+    answers['/v1/sbg/auth/unlock/options'] = { body: { challenge: 'c', allowCredentials: [{ id: 'cred-1', type: 'public-key' }] } };
+    answers['/v1/sbg/auth/unlock'] = { body: { unlock: 'unl_ticket', expiresIn: 120 } };
+    const out = await unlockCeremony(config, { keyOf: () => 'dvc_shop-phone' }).unlock(SHOP);
+    expect(out).toEqual({ ticket: 'unl_ticket' });
+    expect(sent).toEqual([
+      { path: '/v1/sbg/auth/unlock/options', body: { email: SHOP, device: 'dvc_shop-phone' } },
+      { path: '/v1/sbg/auth/unlock', body: { email: SHOP, device: 'dvc_shop-phone', response: { id: 'cred-1', response: { signature: 'x' } } } },
+    ]);
+    // Nothing offered for this phone any more: the account's note goes, and the person's is untouched.
+    answers['/v1/sbg/auth/unlock/options'] = { body: { challenge: 'c', allowCredentials: [] } };
+    expect(await unlockCeremony(config, { keyOf: () => 'dvc_shop-phone' }).prepare(SHOP)).toBe('off');
+    expect(hasAccountUnlockHere(SHOP, 'dvc_shop-phone')).toBe(false);
     expect(hasUnlockHere(PHONE)).toBe(true);
   });
 });

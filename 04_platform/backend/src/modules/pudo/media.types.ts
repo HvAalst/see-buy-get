@@ -1,3 +1,5 @@
+import { UPLOAD_LIMITS } from '../../foundation/media/upload-limits';
+
 // Media (S26) — real image UPLOAD + retention. Every "photo" in the system was a filename ref; now the
 // bytes live in a BlobStore behind a MediaRef, and every ref lands in a retention BIN so nothing is kept
 // forever. The nuance that makes retention correct: the TTL clock starts at a LIFECYCLE event (a parcel
@@ -64,6 +66,12 @@ export const MEDIA_KINDS = [
   'gs1_licence',
   /** Round 35 — what was found under the tamper protocol: the seal as it is, the cut wrap. On the unit's clock. */
   'tamper',
+  /**
+   * 2026-11-02 — a photo FILED to a load or a parcel from a conversation, as damage, a paper or proof (filed-photo.types.ts;
+   * the owner: "Damage claims should be fingerprinted and just sharing blurs this"). Kept with the record's other proof,
+   * and onto the dispute clock with them when a claim or a problem is reported.
+   */
+  'filed',
 ] as const;
 
 export type MediaKind = (typeof MEDIA_KINDS)[number];
@@ -176,10 +184,11 @@ export const KIND_RETENTION: Record<MediaKind, RetentionClass> = {
   job_card: 'vehicle-record',
   gs1_licence: 'dispute-evidence',
   tamper: 'shipment-proof', // round 35 — what was found under the tamper protocol, kept with the unit's other proof
+  filed: 'shipment-proof', // 2026-11-02 — filed from a conversation: on the record's clock, moved to the dispute clock with the rest
 };
 
 /** Only real raster image types — no SVG (it can carry script), no arbitrary bytes. */
 export const MEDIA_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
 /** Server backstop — the client downscales to <200 KB; anything over this is rejected, not stored. */
-export const MEDIA_MAX_BYTES = 500 * 1024;
+export const MEDIA_MAX_BYTES = UPLOAD_LIMITS.photo;

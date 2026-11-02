@@ -11,6 +11,11 @@ import { mdpConfig } from '../api';
 import { HUB_STAFF_WORDS } from '../staffWords';
 import { ConfirmDevice } from '../../../shared/account/ConfirmDevice';
 import type { MdpState } from '../useMdpApp';
+import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
+import { shopDeviceKey } from '../../../shared/account/shopDevice';
+
+/** 2026-11-02 — the hub's own fingerprint or face: by its address, with the key this phone holds for it. */
+const HUB_PHONE = { keyOf: (email: string) => shopDeviceKey(email) };
 
 export interface SignInScreenProps {
   actions: MdpActions;
@@ -28,11 +33,15 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
   const [help, setHelp] = useState(false);
   // One of the hub's people, signing in as themselves (the ISO 28000 check: "a hub's own people by name").
   const [asStaff, setAsStaff] = useState(false);
+  // 2026-11-02 (the owner: "ok go ahead with the fingerprint") — where it was turned on for this hub on this phone, the
+  // first choice; the password one tap away. Never for the hub's people: they sign in as themselves, by PIN.
+  const unlock = useUnlockFirst(email, HUB_PHONE);
   if (deviceAsk) return <ConfirmDevice ask={deviceAsk} party="hub" busy={busy} error={error} onConfirm={(code) => void actions.confirmDevice(code)} onGivePhone={(phone) => void actions.giveDevicePhone(phone)} onBack={actions.cancelDeviceAsk} />;
   if (asStaff) return <StaffSignIn place="hub" config={mdpConfig()} words={HUB_STAFF_WORDS} onBack={() => setAsStaff(false)} onSession={actions.enterAsStaff} />;
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (unlock.offered) return;
     void actions.signIn(email, password);
   };
 
@@ -62,28 +71,32 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
             enterkeyhint="next"
           />
         </div>
-        <div class="field" style="margin-top:12px">
-          <label class="field__label" for="password">
-            {t('mdp.signin.password')}
-          </label>
-          <input
-            id="password"
-            class="input"
-            type="password"
-            value={password}
-            onInput={(e) => setPassword(e.currentTarget.value)}
-            placeholder={t('mdp.signin.passwordPh')}
-            autocomplete="current-password"
-            enterkeyhint="go"
-          />
-        </div>
+        <UnlockFirst state={unlock} phone={email} config={mdpConfig()} busy={busy} onTicket={(ticket) => actions.signIn(email, ticket)}>
+          <div class="field" style="margin-top:12px">
+            <label class="field__label" for="password">
+              {t('mdp.signin.password')}
+            </label>
+            <input
+              id="password"
+              class="input"
+              type="password"
+              value={password}
+              onInput={(e) => setPassword(e.currentTarget.value)}
+              placeholder={t('mdp.signin.passwordPh')}
+              autocomplete="current-password"
+              enterkeyhint="go"
+            />
+          </div>
+        </UnlockFirst>
       </Card>
 
-      <div class="scr__cta">
-        <Button type="submit" disabled={!email.trim() || !password} busy={busy}>
-          {t('mdp.signin.submit')}
-        </Button>
-      </div>
+      {unlock.offered ? null : (
+        <div class="scr__cta">
+          <Button type="submit" disabled={!email.trim() || !password} busy={busy}>
+            {t('mdp.signin.submit')}
+          </Button>
+        </div>
+      )}
 
       {/* Not the hub's password: the people on its floor sign in as themselves — the same row as the shop's counter. */}
       <button type="button" class="row" onClick={() => setAsStaff(true)}>

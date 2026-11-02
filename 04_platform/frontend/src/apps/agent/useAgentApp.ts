@@ -12,6 +12,8 @@ import {
 } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
 import { downscaleImage } from '../../shared/media';
+import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
+import { failedWords, mediaIdOf, type Uploaded } from '../../shared/upload';
 import { holdPhoto, mayHold } from '../../shared/heldPhotos';
 import { onOutboxSent } from '../../shared/outbox';
 import type { TamperUnit, UnitHold } from '../../shared/tamper';
@@ -769,8 +771,9 @@ export function useAgentApp() {
    * The downscale/EXIF-strip happens on-device; the contract field then holds this mediaId, not a filename.
    */
   const uploadPhoto = useCallback(
-    async (kind: MediaKind, file: File): Promise<string | null> => {
-      if (!client) return null;
+    async (kind: MediaKind, file: File): Promise<Uploaded> => {
+      if (!client) return { failed: t('upload.failed') };
+      // Why it did not go, in words for under the photo (2026-11-02, the owner: "It silently refused").
       try {
         const { dataUrl, thumbDataUrl } = await downscaleImage(file);
         const r = await client.api.uploadMedia(kind, dataUrl, thumbDataUrl);
@@ -782,12 +785,13 @@ export function useAgentApp() {
             return held;
           }
           pushToast({ tone: 'danger', icon: 'camera', title: t('agent.toast.photoUploadFail'), detail: errorSentence(r.error) });
-          return null;
+          return { failed: uploadFailureSentence(r.error, 'photo') };
         }
-        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? null;
-      } catch {
-        pushToast({ tone: 'danger', icon: 'camera', title: t('agent.toast.photoReadFail'), detail: t('agent.toast.photoReadFailDetail') });
-        return null;
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? { failed: t('upload.failed') };
+      } catch (e) {
+        const said = uploadFailureSentence(e, 'photo');
+        pushToast({ tone: 'danger', icon: 'camera', title: t('agent.toast.photoReadFail'), detail: said });
+        return { failed: said };
       }
     },
     [client, pushToast],
@@ -1462,9 +1466,11 @@ export function useAgentApp() {
     async (file: File) => {
       if (!client || !did) return;
       await run('shopfront', async () => {
-        const mediaId = await uploadPhoto('avatar', file);
+        const up = await uploadPhoto('avatar', file);
+        const mediaId = mediaIdOf(up);
         if (!mediaId) {
-          pushToast({ tone: 'danger', icon: 'warning', title: t('agent.toast.photoUploadFail') });
+          // Said once, with why (2026-11-02): uploadPhoto's own toast names the reason; this one adds it where it had none.
+          if (!failedWords(up)) pushToast({ tone: 'danger', icon: 'warning', title: t('agent.toast.photoUploadFail') });
           return;
         }
         const r = await client.api.setShopfront(did, mediaId);

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'preact/hooks';
 import type { SbgClient } from '../../lib/sbg';
 import { Button, Card, Note, PhotoField } from '../ui';
 import { useT } from '../i18n';
+import type { Uploaded } from '../upload';
 import { day } from '../archive/words';
 import { canShareFiles, handOverFile, passOnLink, waysToPassOn, type HandedOver, type PassedOn } from '../archive/handOver';
 import { reportFileName, reportLinkRowSays, reportSections } from './damageReport';
@@ -15,7 +16,7 @@ export interface DamageReportCardProps {
   /** The receiver, once the parcel is handed over to them: they may add what they found as a note beside the report. */
   canAddNote?: boolean;
   /** Their own photograph for a note. */
-  uploadPhoto?: (file: File) => Promise<string | null>;
+  uploadPhoto?: (file: File) => Promise<Uploaded>;
 }
 
 /**
