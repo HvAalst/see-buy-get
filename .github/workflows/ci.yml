@@ -80,12 +80,14 @@ jobs:
       - name: The contract in the repository is the one this code makes
         run: git diff --exit-code -- contracts/openapi.json
 
+      # A failing test is written on the run as a note (the github-actions reporter): readable by anyone, where the
+      # log itself is only for the repository's admins.
       - name: Unit tests
-        run: npm test
+        run: npm test -- --reporters=default --reporters=github-actions
         env:
           GLOS_TEST_DATABASE_URL: postgres://glos:glos-test@localhost:5432/glos
       - name: End-to-end tests
-        run: npm run test:e2e
+        run: npm run test:e2e -- --reporters=default --reporters=github-actions
 
   frontend:
     name: Frontend
