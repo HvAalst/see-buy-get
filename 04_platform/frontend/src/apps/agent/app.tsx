@@ -137,7 +137,7 @@ export function App() {
             {state.staff ? (
               <StaffChip who={state.staff} onSignOut={actions.signOut} />
             ) : (
-              <AccountMenu api={account} app="agent" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} devices={actions.shopDevices} />
+              <AccountMenu api={account} app="agent" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} devices={actions.shopDevices} myApps={state.staff ? undefined : actions.myApps} />
             )}
           </>
         }

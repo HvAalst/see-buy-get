@@ -107,5 +107,9 @@ export function slotWords(slot: TerminalSlot): string {
   const day = slot.from.slice(0, 10);
   const hm = (iso: string) => iso.slice(11, 16);
   const sameDay = slot.to.slice(0, 10) === day;
-  return `${hm(slot.from)}–${sameDay ? hm(slot.to) : `${slot.to.slice(0, 10)} ${hm(slot.to)}`} UTC on ${day}${slot.reference ? ` (slot ${slot.reference})` : ''}`;
+  const ref = slot.reference ? ` (slot ${slot.reference})` : '';
+  // 2026-11-03 — a slot across midnight (night slots are common at a cargo terminal) says each end with its own day: it
+  // read "23:00–2026-11-03 01:00 UTC on 2026-11-02", the day of the end before the day of the start.
+  if (!sameDay) return `${hm(slot.from)} UTC on ${day} to ${hm(slot.to)} UTC on ${slot.to.slice(0, 10)}${ref}`;
+  return `${hm(slot.from)}–${hm(slot.to)} UTC on ${day}${ref}`;
 }

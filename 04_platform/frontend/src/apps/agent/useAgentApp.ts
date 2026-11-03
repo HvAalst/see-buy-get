@@ -36,6 +36,8 @@ import { clearStaff, ownerOnlyScreen, readStaff, saveStaff, type StaffAtCounter,
 import { setOutboxActor } from '../../shared/outbox';
 import type { NotPaidView, PaidAnswerView, PaidDirectView } from '../../shared/paidDirect';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
+import { myAppsApi, readHandOver, takeHandOverFromAddress } from '../../shared/account/myApps';
+import type { LoginView } from '../../lib/sbg/appclient';
 import type {
   AgentLedgerRow,
   AgentParcelRow,
@@ -619,6 +621,8 @@ export function useAgentApp() {
   /* ------------------------------------------------------------- identity */
 
   useEffect(() => {
+    // Opened from another app's "Your SeeBuyGet apps": the hand-over signs in (below), not the shop kept from before.
+    if (readHandOver(globalThis.location?.hash)) return;
     const stored = readDid();
     if (stored) {
       setDid(stored);
@@ -708,6 +712,18 @@ export function useAgentApp() {
     [],
   );
 
+  /** 2026-11-03 — opened from "Your SeeBuyGet apps" in another app on this phone: its one-time hand-over signs the shop in. */
+  useEffect(() => {
+    const taking = takeHandOverFromAddress<LoginView>(agentConfig());
+    if (!taking) return;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    void taking.then(async (r) => {
+      if (r.error) return setState((s) => ({ ...s, phase: 'signin', busy: null, error: r.error }));
+      saveShopDeviceKey(r.data.email, r.data.device, 'shop');
+      await enter(r.data, r.data.email);
+    });
+  }, [enter]);
+
   /**
    * ONE OF THE SHOP'S PEOPLE, signed in as themselves and now at this counter (staff.ts): their session acts as the shop
    * under their name. Everything of the last sign-in on this phone is dropped first, the shop's own included.
@@ -722,6 +738,9 @@ export function useAgentApp() {
     setState((s) => ({ ...INITIAL, phase: 'boot', staff: who, toasts: s.toasts }));
     setDid(session.shopDid);
   }, []);
+
+  /** 2026-11-03 — "Your SeeBuyGet apps" in the picture menu: the hub or the store this email signs in to, opened here. */
+  const myApps = useMemo(() => (client ? myAppsApi((path) => client.client.sbg.request((raw) => raw.GET(path as never) as never), (path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'shop') : undefined), [client]);
 
   /** The shop's own phones, in Settings: read and forgotten by the shop, with its password. */
   const shopDevices = useMemo(
@@ -2615,6 +2634,7 @@ export function useAgentApp() {
       cancelDeviceAsk,
       enterAsStaff,
       shopDevices,
+      myApps,
       people,
       signOut,
       adoptToken,

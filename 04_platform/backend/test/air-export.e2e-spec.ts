@@ -257,7 +257,8 @@ describe('an export by air, over the wire', () => {
     expect(detail.timing.handover.cutoffAt).toBe(new Date(slotTo).toISOString());
     const svc = app.get(ExportService);
     const leg = app.get(DispatchService).requireFreightPublic(svc.mintLadenLeg(made.exportId, g.entityId, {}, 'test').ladenLeg!.freightId);
-    expect(leg.instructions?.text).toMatch(/Your slot at the terminal: \d{2}:\d{2}–\d{2}:\d{2} UTC on \d{4}-\d{2}-\d{2} \(slot SWP-T-44\)\. Arrive inside it/);
+    // The slot is a day from now: run late in the evening (UTC), it runs past midnight and says each end with its day.
+    expect(leg.instructions?.text).toMatch(/Your slot at the terminal: (\d{2}:\d{2}–\d{2}:\d{2} UTC on \d{4}-\d{2}-\d{2}|\d{2}:\d{2} UTC on \d{4}-\d{2}-\d{2} to \d{2}:\d{2} UTC on \d{4}-\d{2}-\d{2}) \(slot SWP-T-44\)\. Arrive inside it/);
     expect(leg.instructions?.deliveryWindow).toMatch(/in the slot .*\(slot SWP-T-44\)/);
     // An earlier latest acceptance time cannot leave the slot after it; clearing the slot times the truck to the latest acceptance time again.
     const change = (b: object) => http().post(`${path}/air/booking`).set(bearer(g.token)).send(b);

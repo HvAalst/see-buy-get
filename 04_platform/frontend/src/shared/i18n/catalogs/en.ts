@@ -735,6 +735,17 @@ export const en = {
   'install.result.unavailable': 'This browser cannot install it from here. Use its menu, as above.',
   'install.menu': 'Get the most out of the app',
   'install.menuSub': 'Home screen, notifications, battery',
+  // 2026-11-03 — "Your SeeBuyGet apps": the other kinds of account one email signs in to, in the picture menu.
+  'account.apps.title': 'Your SeeBuyGet apps',
+  'account.apps.open.pudo': 'Open your shop',
+  'account.apps.open.mdp': 'Open your hub',
+  'account.apps.open.vendor': 'Open your store',
+  'account.apps.sub': 'Signed in with this email, on this phone',
+  'account.apps.opening': 'Opening…',
+  'account.apps.waiting.pudo': 'Your shop waits for “Yes, it is me”',
+  'account.apps.waiting.mdp': 'Your hub waits for “Yes, it is me”',
+  'account.apps.waiting.vendor': 'Your store waits for “Yes, it is me”',
+  'account.apps.waitingSub': 'Tap it in the email “Is this you?” we sent to this address. Then it opens from here.',
   // 2026-11-01 — share SeeBuyGet, from every app's settings.
   'account.share.title': 'Share SeeBuyGet',
   'account.share.sub': 'Send your own link to the people you work with',

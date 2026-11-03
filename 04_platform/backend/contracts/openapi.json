@@ -8525,6 +8525,36 @@
         }
       }
     },
+    "/v1/sbg/auth/hand-over": {
+      "post": {
+        "operationId": "Sbg.takeHandOver",
+        "summary": "",
+        "description": "2026-11-03 — A HAND-OVER TAKEN: the app of the other kind, opened from \"Your SeeBuyGet apps\" on the same phone, signs in\nwith the one-time code the first app was given. Answered as a confirmed phone is, so each app enters as it always does.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeHandOverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/device/phone": {
       "post": {
         "operationId": "Sbg.addAccountDevicePhone",
@@ -25482,6 +25512,42 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ShopDevicesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/my-apps": {
+      "get": {
+        "operationId": "Account.myApps",
+        "summary": "",
+        "description": "2026-11-03 — \"YOUR SEEBUYGET APPS\": the other kinds of account this one's email signs in to, for the picture menu. The\naccount's own; staff see nobody's.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/my-apps/hand-over": {
+      "post": {
+        "operationId": "Account.handOver",
+        "summary": "",
+        "description": "One of them opened in its app on this phone: a one-time hand-over, two minutes.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HandOverDto"
               }
             }
           }
@@ -48979,6 +49045,18 @@
           "code"
         ]
       },
+      "TakeHandOverDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
       "AccountDevicePhoneDto": {
         "type": "object",
         "properties": {
@@ -69263,6 +69341,18 @@
           }
         }
       },
+      "HandOverDto": {
+        "type": "object",
+        "properties": {
+          "toDriverDid": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "toDriverDid"
+        ]
+      },
       "ShopForgetOthersDto": {
         "type": "object",
         "properties": {
@@ -79698,18 +79788,6 @@
           "vehicleId",
           "plate",
           "roomKg"
-        ]
-      },
-      "HandOverDto": {
-        "type": "object",
-        "properties": {
-          "toDriverDid": {
-            "type": "string",
-            "maxLength": 80
-          }
-        },
-        "required": [
-          "toDriverDid"
         ]
       },
       "CheckItemView": {

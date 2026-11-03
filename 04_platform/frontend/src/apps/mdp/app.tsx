@@ -127,7 +127,7 @@ export function App() {
               {state.hub ? (state.hub.zones.length === 1 ? t('mdp.zoneOne', { count: state.hub.zones.length }) : t('mdp.zoneMany', { count: state.hub.zones.length })) : '…'}
             </Pill>
             {/* Last in the bar: live state first, the place you visit last. */}
-            {state.staff ? <StaffChip who={state.staff} onSignOut={actions.signOut} /> : <AccountMenu api={account} app="mdp" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} devices={actions.hubDevices} />}
+            {state.staff ? <StaffChip who={state.staff} onSignOut={actions.signOut} /> : <AccountMenu api={account} app="mdp" onSignOut={actions.signOut} onChangePassword={() => setPasswordOpen(true)} devices={actions.hubDevices} myApps={actions.myApps} />}
           </>
         }
       />

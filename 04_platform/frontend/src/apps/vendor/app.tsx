@@ -115,7 +115,7 @@ export function App() {
               </Pill>
             )}
             {/* Last in the bar: live state first, the place you visit last. */}
-            <AccountMenu api={account} app="vendor" onSignOut={actions.signOut} onChangePassword={changePassword} devices={actions.storeDevices} />
+            <AccountMenu api={account} app="vendor" onSignOut={actions.signOut} onChangePassword={changePassword} devices={actions.storeDevices} myApps={actions.myApps} />
             {noPerson ? (
               <button type="button" class="topbar__lead" onClick={() => setSettingsOpen(true)} aria-label={t('account.settings.title')} title={t('account.settings.title')}>
                 <Icon name="settings" size={24} />

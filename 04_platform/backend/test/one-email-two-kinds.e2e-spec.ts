@@ -74,6 +74,11 @@ describe('one email, a shop and a hub, over the wire', () => {
     expect((await login('kituo-cha-amani-2026', shop.device, 'pudo')).body.code).toBe('AUTH_FAILED');
     expect((await login('duka-la-kona-2026', hub.device, 'mdp')).body.code).toBe('AUTH_FAILED');
 
+    // "Your SeeBuyGet apps", in the shop: the hub is there, waiting — and nothing hands over to it yet.
+    const shopBearer = { authorization: `Bearer ${(await login('duka-la-kona-2026', shop.device, 'pudo').expect(201)).body.token.access_token}` };
+    expect((await http().get('/v1/sbg/account/my-apps').set(shopBearer).expect(200)).body).toEqual({ apps: [{ role: 'mdp', kind: 'hub', linked: false }] });
+    await http().post('/v1/sbg/account/my-apps/hand-over').set(shopBearer).send({ role: 'mdp', device: shop.device }).expect(404);
+
     // "Yes, it is me": once. Then the hub signs in, and is welcomed.
     await http().post('/v1/sbg/auth/link/confirm').send({ token: 'not-one-of-ours-at-all' }).expect(404);
     expect((await http().post('/v1/sbg/auth/link/confirm').send({ token }).expect(201)).body).toEqual({ email, kind: 'hub', role: 'mdp' });
@@ -85,6 +90,19 @@ describe('one email, a shop and a hub, over the wire', () => {
     await http().post('/v1/sbg/account/shop-devices/forget-others').set(hubBearer).send({ password: 'duka-la-kona-2026', device: hub.device }).expect(401);
     await http().post('/v1/sbg/account/shop-devices/forget-others').set(hubBearer).send({ password: 'kituo-cha-amani-2026', device: hub.device }).expect(201);
     expect(outbox.recent(email).filter((m) => m.template === 'welcome')).toHaveLength(2);
+
+    // Linked: the shop opens the hub on this phone with a one-time hand-over — no password, no code to the hub's number.
+    expect((await http().get('/v1/sbg/account/my-apps').set(shopBearer).expect(200)).body.apps).toEqual([{ role: 'mdp', kind: 'hub', linked: true }]);
+    // From a phone that is not the shop's, nothing is handed over; nor to a kind the address has not.
+    await http().post('/v1/sbg/account/my-apps/hand-over').set(shopBearer).send({ role: 'mdp', device: 'dvc_not-one-of-the-shops' }).expect(403);
+    await http().post('/v1/sbg/account/my-apps/hand-over').set(shopBearer).send({ role: 'vendor', device: shop.device }).expect(404);
+    const { code } = (await http().post('/v1/sbg/account/my-apps/hand-over').set(shopBearer).send({ role: 'mdp', device: shop.device, targetDevice: hub.device }).expect(201)).body;
+    expect(code).toMatch(/^ho_/);
+    const taken = (await http().post('/v1/sbg/auth/hand-over').send({ code }).expect(201)).body;
+    expect(taken).toMatchObject({ role: 'mdp', did: hub.did, email, device: hub.device, token: { access_token: expect.any(String) } });
+    await http().get('/v1/sbg/account/my-apps').set({ authorization: `Bearer ${taken.token.access_token}` }).expect(200);
+    // Once.
+    expect((await http().post('/v1/sbg/auth/hand-over').send({ code }).expect(400)).body.code).toBe('OTP_INVALID');
 
     // A forgotten password is the kind's own: the hub's code resets the hub's, and the shop's stays.
     const forgot = (await http().post('/v1/sbg/auth/forgot').send({ email, role: 'mdp' }).expect(201)).body;

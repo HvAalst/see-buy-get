@@ -19,7 +19,7 @@ describe('a truck’s slot at the cargo terminal', () => {
 
   it('says it in the driver’s words', () => {
     expect(slotWords({ from: '2026-11-02T10:00:00.000Z', to: '2026-11-02T11:00:00.000Z', reference: 'S-120' })).toBe('10:00–11:00 UTC on 2026-11-02 (slot S-120)');
-    expect(slotWords({ from: '2026-11-02T23:00:00.000Z', to: '2026-11-03T01:00:00.000Z' })).toBe('23:00–2026-11-03 01:00 UTC on 2026-11-02');
+    expect(slotWords({ from: '2026-11-02T23:00:00.000Z', to: '2026-11-03T01:00:00.000Z' })).toBe('23:00 UTC on 2026-11-02 to 01:00 UTC on 2026-11-03');
   });
 
   it('takes a truck run as a flight with its waybill checked, and says it is carried under road law, the waybill a reference only (2026-11-01)', () => {

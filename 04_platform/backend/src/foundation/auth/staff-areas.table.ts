@@ -564,6 +564,9 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/account/car/off': 'none',
   'POST sbg/account/pin/change': 'none',
   'POST sbg/account/shop-devices': 'none',
+  // 2026-11-03 — "Your SeeBuyGet apps": an account's own other kinds, and the hand-over to one. Staff open nobody's.
+  'GET sbg/account/my-apps': 'none',
+  'POST sbg/account/my-apps/hand-over': 'none',
   'POST sbg/account/shop-devices/forget-others': 'none',
   'POST sbg/account/shop-devices/forget-this': 'none',
   'POST sbg/agents': 'vetting',

@@ -2185,6 +2185,20 @@ export class ShopDevicesDto {
   @IsOptional() @IsString() @MaxLength(80) device?: string;
 }
 
+/** 2026-11-03 — open another kind of account under the same email, in its app on this phone (AccountService.handOver). */
+export class HandOverDto {
+  @IsIn(['pudo', 'mdp', 'vendor']) @ApiProperty({ enum: ['pudo', 'mdp', 'vendor'] }) role!: 'pudo' | 'mdp' | 'vendor';
+  /** This phone's key for the account asking. */
+  @IsOptional() @IsString() @MaxLength(80) device?: string;
+  /** This phone's key for the other kind, if it holds one already. */
+  @IsOptional() @IsString() @MaxLength(80) targetDevice?: string;
+}
+
+/** The hand-over, taken by the other app. */
+export class TakeHandOverDto {
+  @IsString() @MaxLength(80) @ApiProperty() code!: string;
+}
+
 /** Every other phone forgotten: the password again, and this one's key so it stays. */
 export class ShopForgetOthersDto {
   @IsString() @MaxLength(200) password!: string;

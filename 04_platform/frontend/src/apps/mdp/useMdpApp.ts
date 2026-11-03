@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, sbgForgot, sbgLogin, sbgReset, type SbgError } from '../../lib/sbg';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
+import { myAppsApi, readHandOver, takeHandOverFromAddress } from '../../shared/account/myApps';
+import type { LoginView } from '../../lib/sbg/appclient';
 import type { IconName } from '../../shared/ui/Icon';
 import { signal } from '../../shared/feedback';
 import { t } from '../../shared/i18n';
@@ -285,6 +287,8 @@ export function useMdpApp() {
   /* ------------------------------------------------------------- identity */
 
   useEffect(() => {
+    // Opened from another app's "Your SeeBuyGet apps": the hand-over signs in (below), not the hub kept from before.
+    if (readHandOver(globalThis.location?.hash)) return;
     const stored = readDid();
     if (stored) setDid(stored);
     else setState((s) => ({ ...s, phase: 'signin' }));
@@ -362,6 +366,18 @@ export function useMdpApp() {
     setState((s) => ({ ...INITIAL, phase: 'boot', toasts: s.toasts }));
     setDid(login.did);
   }, []);
+
+  /** 2026-11-03 — opened from "Your SeeBuyGet apps" in another app on this phone: its one-time hand-over signs the hub in. */
+  useEffect(() => {
+    const taking = takeHandOverFromAddress<LoginView>(mdpConfig());
+    if (!taking) return;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    void taking.then(async (r) => {
+      if (r.error) return setState((s) => ({ ...s, phase: 'signin', busy: null, error: r.error }));
+      saveShopDeviceKey(r.data.email, r.data.device, 'hub');
+      await enter(r.data, r.data.email);
+    });
+  }, [enter]);
 
   /**
    * ONE OF THE HUB'S PEOPLE, signed in as themselves and now on its floor (the ISO 28000 check: "a hub's own people by
@@ -955,6 +971,9 @@ export function useMdpApp() {
   );
 
   /** Round 40 — the hub's own phones and browsers, in Settings: read and forgotten as the shop's are. */
+  /** 2026-11-03 — "Your SeeBuyGet apps" in the picture menu: the shop or the store this email signs in to, opened here. */
+  const myApps = useMemo(() => (client ? myAppsApi((path) => client.client.sbg.request((raw) => raw.GET(path as never) as never), (path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'hub') : undefined), [client]);
+
   const hubDevices = useMemo(
     () => (client ? shopDevicesApi((path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'hub') : undefined),
     [client],
@@ -976,6 +995,7 @@ export function useMdpApp() {
       giveDevicePhone,
       cancelDeviceAsk,
       hubDevices,
+      myApps,
       signOut,
       enterAsStaff,
       people,

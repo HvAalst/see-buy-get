@@ -18,9 +18,11 @@ import { AllAppsLink } from '../ui/AllAppsLink';
 import type { GuideApp } from '../guide/articles';
 import { SettingsSheet, hasSettings } from './SettingsSheet';
 import type { PinDevicesApi } from './devices';
-import { useT } from '../i18n';
+import { useT, type MessageKey } from '../i18n';
 import { publicPageUrl } from '../../lib/sbg/config';
 import type { AccountApi } from './useAccount';
+import { goToApp, type AppRole, type MyApp, type MyAppsApi } from './myApps';
+import type { SbgError } from '../../lib/sbg';
 
 export interface AccountMenuProps {
   api: AccountApi;
@@ -48,6 +50,8 @@ export interface AccountMenuProps {
   onChangePassword?: () => void;
   /** The phones an app's own sign-in works on — a shop's (shown in Settings, forgotten with the password). */
   devices?: PinDevicesApi;
+  /** 2026-11-03 — "Your SeeBuyGet apps": the other kinds this email signs in to, opened here by a hand-over (myApps.ts). */
+  myApps?: MyAppsApi;
   /** Anything the app wants at the foot of the menu — a read-aloud control, a shift-specific link. */
   extra?: ComponentChildren;
   /**
@@ -73,7 +77,7 @@ export interface AccountMenuProps {
  * them — not a greyed one. An app with no invite flow shows no invite row. A disabled row is a promise
  * the product is not keeping, and a menu of them reads as a list of things you are not allowed to do.
  */
-export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra, rows, devices }: AccountMenuProps) {
+export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra, rows, devices, myApps }: AccountMenuProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState<'profile' | 'settings' | 'address' | 'share' | 'install' | null>(null);
@@ -188,6 +192,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
           {(rows ?? []).map((r) => (
             <MenuRow key={r.key} icon={r.icon} label={r.label} sub={r.sub} onClick={() => { setOpen(false); r.onClick(); }} />
           ))}
+          {myApps ? <MyAppsRows api={myApps} /> : null}
 
           <div class="acct__foot">
             <HelpLink app={app} />
@@ -221,6 +226,51 @@ function Face({ api }: { api: AccountApi }) {
   if (me?.avatarMediaId) return <AuthImage mediaId={me.avatarMediaId} load={api.loadMedia} alt={t('account.menu.photoAlt')} />;
   const initial = me?.displayName?.trim()?.[0]?.toUpperCase();
   return initial ? <span class="avatar__initial">{initial}</span> : <Icon name="person" size={20} />;
+}
+
+const APP_ICON: Record<AppRole, Parameters<typeof Icon>[0]['name']> = { pudo: 'home', mdp: 'grid', vendor: 'bag' };
+
+/**
+ * 2026-11-03 — "YOUR SEEBUYGET APPS": the other kinds of account this email signs in to. Each linked one opens in its app on
+ * this phone, signed in; one still waiting for "Yes, it is me" is said as waiting — a fact, not a greyed row. Nothing at all
+ * for an address with one kind, which is almost every one: no heading over nothing.
+ */
+function MyAppsRows({ api }: { api: MyAppsApi }) {
+  const t = useT();
+  const [apps, setApps] = useState<MyApp[]>([]);
+  const [busy, setBusy] = useState<AppRole | null>(null);
+  const [failed, setFailed] = useState<SbgError | null>(null);
+  useEffect(() => {
+    let live = true;
+    void api.list().then((r) => {
+      if (live && r.data) setApps(r.data.apps);
+    });
+    return () => {
+      live = false;
+    };
+  }, [api]);
+  if (!apps.length) return null;
+  const open = async (role: AppRole) => {
+    setBusy(role);
+    setFailed(null);
+    const r = await api.open(role);
+    setBusy(null);
+    if (r.error) return setFailed(r.error);
+    goToApp(r.data.href);
+  };
+  return (
+    <>
+      <p class="t-label acct__section">{t('account.apps.title')}</p>
+      {apps.map((a) =>
+        a.linked ? (
+          <MenuRow key={a.role} icon={APP_ICON[a.role]} label={t(`account.apps.open.${a.role}` as MessageKey)} sub={busy === a.role ? t('account.apps.opening') : t('account.apps.sub')} onClick={() => void open(a.role)} />
+        ) : (
+          <Note key={a.role} tone="info" icon="clock" title={t(`account.apps.waiting.${a.role}` as MessageKey)} detail={t('account.apps.waitingSub')} />
+        ),
+      )}
+      {failed ? <ErrorNote error={failed} /> : null}
+    </>
+  );
 }
 
 function MenuRow({ icon, label, sub, onClick, children }: { icon: Parameters<typeof Icon>[0]['name']; label: string; sub?: string; onClick: () => void; children?: ComponentChildren }) {

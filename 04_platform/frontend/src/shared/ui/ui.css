@@ -3137,6 +3137,13 @@ a.nitem {
   white-space: nowrap;
 }
 
+/* 2026-11-03 — "Your SeeBuyGet apps": a heading over the other kinds this email signs in to, set apart from the person's rows. */
+.acct__section {
+  margin: 10px 6px 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line, #e4e6ef);
+}
+
 /* The links that are not rows: help, restore-teaching, sign out. Wraps, because three of them do not
    fit on one 300px line and a clipped "Sign out" is the worst one to lose. */
 .acct__foot {

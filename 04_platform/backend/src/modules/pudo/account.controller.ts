@@ -9,7 +9,7 @@ import { addressFormatFor } from '../../foundation/countries/address-format';
 import { AddressFormatView } from './pudo.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto } from './pudo.dto';
+import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto, HandOverDto } from './pudo.dto';
 import { AccountService } from './account.service';
 import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
@@ -206,6 +206,23 @@ export class AccountController {
   @Post('shop-devices')
   shopDevices(@Body() dto: ShopDevicesDto, @Actor() actor: IntrospectionResult) {
     return this.accounts.devicesOf(shopOf(actor), dto.device);
+  }
+
+  /**
+   * 2026-11-03 — "YOUR SEEBUYGET APPS": the other kinds of account this one's email signs in to, for the picture menu. The
+   * account's own; staff see nobody's.
+   */
+  @Roles('agent', 'mdp', 'genesis')
+  @Get('my-apps')
+  myApps(@Actor() actor: IntrospectionResult) {
+    return { apps: this.accounts.kindsOf(shopOf(actor)) };
+  }
+
+  /** One of them opened in its app on this phone: a one-time hand-over, two minutes. */
+  @Roles('agent', 'mdp', 'genesis')
+  @Post('my-apps/hand-over')
+  handOver(@Body() dto: HandOverDto, @Actor() actor: IntrospectionResult) {
+    return this.accounts.handOver(shopOf(actor), dto.role, dto.device, dto.targetDevice);
   }
 
   /** Every other phone forgotten, with the password: each needs the code to the shop's number again, its sign-in ended. */

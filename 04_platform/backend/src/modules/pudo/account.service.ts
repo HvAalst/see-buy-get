@@ -72,6 +72,8 @@ const RESET_TTL_MS = 30 * 60 * 1000;
 const LINK_TTL_MS = 7 * 24 * 3_600_000;
 /** Signing in before the click sends the email again, at most once an hour: a lost or late email is not a dead end. */
 const LINK_RESEND_MS = 3_600_000;
+/** A hand-over from one app to another on the same phone: long enough to open the other app, and once. */
+const HANDOVER_TTL_MS = 2 * 60_000;
 
 /**
  * THE ACCOUNTS WHOSE SIGN-IN WORKS ONLY ON A PHONE OR BROWSER THEY CONFIRMED (the user, 2026-10-18: "who is at the
@@ -537,6 +539,49 @@ export class AccountService implements OnApplicationBootstrap {
       this.accounts.set(storeKeyOf(account), account);
     }
     const device = this.devices.add(account.accountId, now);
+    return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), device };
+  }
+
+  /**
+   * 2026-11-03 — "YOUR SEEBUYGET APPS" (the owner: "From within that account you should be able to switch to other sbg apps
+   * that you sign up to"). The other kinds of account this one's address signs in to, each said with whether its owner has
+   * tapped "Yes, it is me" for it yet. Nothing for an account that is itself still waiting for that tap.
+   */
+  kindsOf(did: string): Array<{ role: AccountRole; kind: string; linked: boolean }> {
+    const account = this.boundAccountOf(did);
+    if (account.linkPending) return [];
+    return this.allAt(account.email)
+      .filter((a) => a.accountId !== account.accountId && this.isBound(a))
+      .map((a) => ({ role: a.role, kind: PARTY[a.role], linked: !a.linkPending }));
+  }
+
+  /**
+   * A HAND-OVER to another kind under the address, for that kind's app on this phone: two minutes, one use. Asked from one
+   * of this account's own phones (`device`), as its sign-in is — a sign-in carried to another phone hands nothing over.
+   * `targetDevice`: the key this phone already holds for the other kind, if any, so it is not counted as a new phone.
+   */
+  handOver(did: string, role: AccountRole, device: string | undefined, targetDevice?: string, now: number = Date.now()): { code: string; expiresIn: number } {
+    const account = this.boundAccountOf(did);
+    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `This phone or browser is not one of the ${PARTY[account.role]}’s: sign in on it first.`);
+    const target = account.linkPending ? undefined : this.find(account.email, role);
+    if (!target || target.accountId === account.accountId || target.linkPending || !this.isBound(target)) {
+      throw new GlosError('NOT_FOUND', `No ${PARTY[role] ?? 'account'} signs in with this email yet — or its owner has not tapped “Yes, it is me” for it.`);
+    }
+    for (const [code, held] of this.handovers) if (held.expires < now) this.handovers.delete(code);
+    const code = `ho_${randomBytes(24).toString('base64url')}`;
+    this.handovers.set(code, { key: storeKeyOf(target), ...(targetDevice ? { device: targetDevice } : {}), expires: now + HANDOVER_TTL_MS });
+    return { code, expiresIn: HANDOVER_TTL_MS / 1000 };
+  }
+  private readonly handovers = new Map<string, { key: string; device?: string; expires: number }>();
+
+  /** The hand-over taken by the other app: signed in there, and this phone one of that account's from now. */
+  takeHandOver(code: string, now: number = Date.now()): AccountSignIn {
+    const held = this.handovers.get(code);
+    this.handovers.delete(code);
+    const account = held && held.expires >= now ? this.accounts.get(held.key) : undefined;
+    if (!account || account.linkPending) throw new GlosError('OTP_INVALID', 'This hand-over ran out or was used. Open the app again from your picture menu.');
+    const device = held?.device && this.devices.knows(account.accountId, held.device, now) ? held.device : this.devices.add(account.accountId, now);
+    this.devices.used(account.accountId, device, now);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), device };
   }
 

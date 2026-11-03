@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isMintSourced, isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, type SbgError } from '../../lib/sbg';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
+import { myAppsApi, readHandOver, takeHandOverFromAddress } from '../../shared/account/myApps';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { onLaunch } from '../../shared/launch';
 import { openLinkedLoad } from '../../shared/linkedLoad';
@@ -535,6 +536,8 @@ export function useVendorApp() {
   /* ------------------------------------------------------------- identity */
 
   useEffect(() => {
+    // Opened from another app's "Your SeeBuyGet apps": the hand-over signs in (below), not the store kept from before.
+    if (readHandOver(globalThis.location?.hash)) return;
     const stored = readCreds();
     if (stored) setCreds(stored);
     else setState((s) => ({ ...s, phase: 'signin' }));
@@ -559,6 +562,18 @@ export function useVendorApp() {
     setState((s) => ({ ...INITIAL, phase: 'boot', toasts: s.toasts }));
     setCreds({ vendorId });
   }, []);
+
+  /** 2026-11-03 — opened from "Your SeeBuyGet apps" in another app on this phone: its one-time hand-over signs the store in. */
+  useEffect(() => {
+    const taking = takeHandOverFromAddress<VendorLoginView>(vendorConfig());
+    if (!taking) return;
+    setState((s) => ({ ...s, busy: 'signin', error: null }));
+    void taking.then(async (r) => {
+      if (r.error || !r.data.vendorId) return setState((s) => ({ ...s, phase: 'signin', busy: null, error: r.error }));
+      if (r.data.email) saveShopDeviceKey(r.data.email, r.data.device, 'store');
+      await enter(r.data.vendorId, r.data.token, r.data.email);
+    });
+  }, [enter]);
 
   /** HOW A STORE SIGNS IN: its account's email and password. */
   const signIn = useCallback(
@@ -1569,6 +1584,9 @@ export function useVendorApp() {
   }, [client, creds, refresh, storePhoto]);
 
   /** Round 40 — the store's own phones and browsers, in Settings: read and forgotten as a shop's are. */
+  /** 2026-11-03 — "Your SeeBuyGet apps" in the picture menu: the shop or the hub this email signs in to, opened here. */
+  const myApps = useMemo(() => (client ? myAppsApi((path) => client.client.sbg.request((raw) => raw.GET(path as never) as never), (path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'store') : undefined), [client]);
+
   const storeDevices = useMemo(
     () => (client ? shopDevicesApi((path, body) => client.client.sbg.request((raw) => raw.POST(path as never, { body } as never) as never), readEmail, 'store') : undefined),
     [client],
@@ -1604,6 +1622,7 @@ export function useVendorApp() {
       giveDevicePhone,
       cancelDeviceAsk,
       storeDevices,
+      myApps,
       signInWithSecret,
       setUpAccount,
       adoptToken,
