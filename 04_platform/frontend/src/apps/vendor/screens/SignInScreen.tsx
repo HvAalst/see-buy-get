@@ -12,7 +12,7 @@ import { shopDeviceKey } from '../../../shared/account/shopDevice';
 import { vendorConfig } from '../api';
 
 /** 2026-11-02 — the store's own fingerprint or face: by its address, with the key this phone holds for it. */
-const STORE_PHONE = { keyOf: (email: string) => shopDeviceKey(email) };
+const STORE_PHONE = { keyOf: (email: string) => shopDeviceKey(email, 'store') };
 
 export interface SignInScreenProps {
   state: VendorState;

@@ -15,7 +15,7 @@ import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst
 import { shopDeviceKey } from '../../../shared/account/shopDevice';
 
 /** 2026-11-02 — the hub's own fingerprint or face: by its address, with the key this phone holds for it. */
-const HUB_PHONE = { keyOf: (email: string) => shopDeviceKey(email) };
+const HUB_PHONE = { keyOf: (email: string) => shopDeviceKey(email, 'hub') };
 
 export interface SignInScreenProps {
   actions: MdpActions;

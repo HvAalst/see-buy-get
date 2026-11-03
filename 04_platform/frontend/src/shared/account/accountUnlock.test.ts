@@ -45,10 +45,10 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('where the fingerprint or face is offered for an account', () => {
   it('for the address it was turned on for, however it is written, on the key it was made under', () => {
-    saveShopDeviceKey(SHOP, 'dvc_shop-phone');
+    saveShopDeviceKey(SHOP, 'dvc_shop-phone', 'shop');
     markAccountUnlock(SHOP, 'dvc_shop-phone', 'cred-1');
-    expect(hasAccountUnlockHere(' Kona@Shop.example ', shopDeviceKey(SHOP))).toBe(true);
-    expect(hasAccountUnlockHere('other@shop.example', shopDeviceKey('other@shop.example'))).toBe(false);
+    expect(hasAccountUnlockHere(' Kona@Shop.example ', shopDeviceKey(SHOP, 'shop'))).toBe(true);
+    expect(hasAccountUnlockHere('other@shop.example', shopDeviceKey('other@shop.example', 'shop'))).toBe(false);
     // The phone was confirmed again, or forgotten: another key, or none — and the note goes quiet.
     expect(hasAccountUnlockHere(SHOP, 'dvc_after-the-code')).toBe(false);
     expect(hasAccountUnlockHere(SHOP, undefined)).toBe(false);
@@ -89,8 +89,8 @@ describe('the ticket goes to the account’s own door as `unlock`, in the passwo
  */
 describe('a colleague’s session at a counter carries this phone’s shop and hub keys', () => {
   it('sends every shop and hub key this browser holds — and no person’s key', async () => {
-    saveShopDeviceKey(SHOP, 'dvc_shop-phone');
-    saveShopDeviceKey('sort@hub.example', 'dvc_hub-phone');
+    saveShopDeviceKey(SHOP, 'dvc_shop-phone', 'shop');
+    saveShopDeviceKey('sort@hub.example', 'dvc_hub-phone', 'hub');
     globalThis.localStorage.setItem('sbg-device:712345678', 'dvc_a-persons-key');
     expect(allShopDeviceKeys().sort()).toEqual(['dvc_hub-phone', 'dvc_shop-phone']);
     serve({ shopDid: 'did:glos:shop', shopName: 'Kona', name: 'Wanjiru', memberId: 'm1', token: { access_token: 't' } });
@@ -104,7 +104,7 @@ describe('a colleague’s session at a counter carries this phone’s shop and h
 
 describe('Settings, on the account’s own phones', () => {
   it('offers it beside the phones, asks with the password and this phone’s key — and forgetting the phone takes the note', async () => {
-    saveShopDeviceKey(SHOP, 'dvc_shop-phone');
+    saveShopDeviceKey(SHOP, 'dvc_shop-phone', 'hub');
     const posted: Array<{ path: string; body: Record<string, unknown> }> = [];
     let answer: unknown = { on: true, which: 0, id: 'cred-1' };
     const api = shopDevicesApi((async (path: string, body: Record<string, unknown>) => {
@@ -121,7 +121,7 @@ describe('Settings, on the account’s own phones', () => {
 
     answer = { forgotten: true, which: 0 };
     await api.forgetThis();
-    expect(shopDeviceKey(SHOP)).toBeUndefined();
+    expect(shopDeviceKey(SHOP, 'hub')).toBeUndefined();
     expect(hasAccountUnlockHere(SHOP, 'dvc_shop-phone')).toBe(false);
   });
 });

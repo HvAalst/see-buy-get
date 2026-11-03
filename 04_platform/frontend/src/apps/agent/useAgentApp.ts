@@ -647,7 +647,7 @@ export function useAgentApp() {
       if (!mail || !password) return;
       setState((s) => ({ ...s, busy: 'signin', error: null }));
       // A shop's sign-in works only on its own phones: this one's key goes with it, when it has one.
-      const r = await sbgLogin(agentConfig(), mail, password, undefined, shopDeviceKey(mail));
+      const r = await sbgLogin(agentConfig(), mail, password, undefined, shopDeviceKey(mail, 'shop'));
       if (r.error) {
         // The password was right and this phone is new to the shop: a code went to the shop's number.
         const ask = deviceAskOf(r.error);
@@ -670,7 +670,7 @@ export function useAgentApp() {
       setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
       return;
     }
-    saveShopDeviceKey(ask.email, r.data.device);
+    saveShopDeviceKey(ask.email, r.data.device, 'shop');
     await enter(r.data, ask.email);
   }, []);
 

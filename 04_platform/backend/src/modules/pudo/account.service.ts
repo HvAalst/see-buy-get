@@ -422,6 +422,14 @@ export class AccountService implements OnApplicationBootstrap {
     return gone;
   }
 
+  /** Every account an address signs in to: the first, then each other kind kept beside it. */
+  private allAt(email: string): Account[] {
+    const key = (email || '').trim().toLowerCase();
+    const first = this.accounts.get(key);
+    const others = (['pudo', 'mdp', 'vendor', 'driver'] as const).map((role) => this.accounts.get(`${key}#${role}`));
+    return [first, ...others].filter((a): a is Account => Boolean(a));
+  }
+
   /** The account an address signs in to — of this kind, where a door is one kind's (2026-11-03: one address, several kinds). */
   private find(email: string, role?: AccountRole): Account | undefined {
     const key = (email || '').trim().toLowerCase();
@@ -545,7 +553,7 @@ export class AccountService implements OnApplicationBootstrap {
    */
   forgetOtherDevices(did: string, password: string, device: string, now: number = Date.now()): AccountSignIn & { forgotten: number; kept: boolean } {
     const account = this.boundAccountOf(did);
-    this.passwordRight(account.email, password);
+    this.passwordRight(account.email, password, { role: account.role });
     if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `This phone or browser is not one of the ${PARTY[account.role]}’s: sign in on it first.`);
     const forgotten = this.devices.forgetAll(account.accountId, device);
     this.auth.revokeAll(account.did);
@@ -870,10 +878,13 @@ export class AccountService implements OnApplicationBootstrap {
    * answers them all alike, and so says nothing about whether the address is anybody's.
    */
   unlockTarget(email: string, device: string | undefined): { accountId: string; passkey: DevicePasskey } | undefined {
-    const account = this.accounts.get((email || '').trim().toLowerCase());
-    if (!account || !this.isBound(account)) return undefined;
-    const passkey = this.devices.passkeyOf(account.accountId, device);
-    return passkey ? { accountId: account.accountId, passkey } : undefined;
+    // 2026-11-03 — of whichever kind under the address this phone holds a key for: each kind's phones have their own.
+    for (const account of this.allAt(email)) {
+      if (!this.isBound(account)) continue;
+      const passkey = this.devices.passkeyOf(account.accountId, device);
+      if (passkey) return { accountId: account.accountId, passkey };
+    }
+    return undefined;
   }
 
   /** Is this address's sign-in locked by wrong passwords? Asked of any address, an account's or not, as the sign-in asks. */

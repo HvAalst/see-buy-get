@@ -302,7 +302,7 @@ export function useMdpApp() {
     if (!mail || !password) return;
     setState((s) => ({ ...s, busy: 'signin', error: null }));
     // Round 40 — a hub's sign-in works only on its own phones: this one's key goes with it, when it has one.
-    const r = await sbgLogin(mdpConfig(), mail, password, undefined, shopDeviceKey(mail));
+    const r = await sbgLogin(mdpConfig(), mail, password, undefined, shopDeviceKey(mail, 'hub'));
     if (r.error) {
       const ask = deviceAskOf(r.error);
       if (ask) return setState((s) => ({ ...s, busy: null, error: null, deviceAsk: { ...ask, email: mail } }));
@@ -319,7 +319,7 @@ export function useMdpApp() {
     setState((s) => ({ ...s, busy: 'signin', error: null }));
     const r = await sbgConfirmDevice(mdpConfig(), ask.challenge, code.trim());
     if (r.error || !r.data) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
-    saveShopDeviceKey(ask.email, r.data.device);
+    saveShopDeviceKey(ask.email, r.data.device, 'hub');
     await enter(r.data, ask.email);
   }, []);
 

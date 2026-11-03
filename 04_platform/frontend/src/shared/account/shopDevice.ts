@@ -9,22 +9,30 @@ import { dropAccountUnlockMark } from './unlock';
  * shop address, and sent with every sign-in from this phone.
  */
 
-const slot = (email: string) => `sbg-shop-device:${email.trim().toLowerCase()}`;
+/**
+ * 2026-11-03 — ONE KEY PER KIND OF ACCOUNT. One email may sign in to a shop, a hub and a store (account.service secondKind),
+ * and their apps share this browser's storage: a key kept by the address alone was overwritten by the next kind's, and each
+ * sign-in asked for a code again. The key is kept by kind and address; the slot of before (by address alone) is still read,
+ * so a phone confirmed before this asks for nothing new.
+ */
+export type DeviceParty = 'shop' | 'hub' | 'store';
+const slot = (email: string, party: DeviceParty) => `sbg-shop-device:${party}:${email.trim().toLowerCase()}`;
+const before = (email: string) => `sbg-shop-device:${email.trim().toLowerCase()}`;
 
-/** This phone's key for the shop at this address, if it was confirmed here. */
-export function shopDeviceKey(email: string | null | undefined): string | undefined {
+/** This phone's key for the account of this kind at this address, if it was confirmed here. */
+export function shopDeviceKey(email: string | null | undefined, party: DeviceParty): string | undefined {
   if (!email) return undefined;
   try {
-    return localStorage.getItem(slot(email)) ?? undefined;
+    return localStorage.getItem(slot(email, party)) ?? localStorage.getItem(before(email)) ?? undefined;
   } catch {
     return undefined;
   }
 }
 
-export function saveShopDeviceKey(email: string, key: string | undefined): void {
+export function saveShopDeviceKey(email: string, key: string | undefined, party: DeviceParty): void {
   if (!key) return;
   try {
-    localStorage.setItem(slot(email), key);
+    localStorage.setItem(slot(email, party), key);
   } catch {
     /* a phone that keeps nothing asks for the code again next time: said, not hidden */
   }
@@ -50,10 +58,13 @@ export function allShopDeviceKeys(): string[] {
   return found;
 }
 
-export function dropShopDeviceKey(email: string | null | undefined): void {
+export function dropShopDeviceKey(email: string | null | undefined, party: DeviceParty): void {
   if (!email) return;
   try {
-    localStorage.removeItem(slot(email));
+    const key = shopDeviceKey(email, party);
+    localStorage.removeItem(slot(email, party));
+    // The slot of before, only where it held this kind's key — another kind's stays.
+    if (key && localStorage.getItem(before(email)) === key) localStorage.removeItem(before(email));
   } catch {
     /* nothing kept, nothing to drop */
   }
@@ -83,8 +94,8 @@ type Post = <T>(path: string, body: unknown) => Promise<Result<T>>;
  * The shop's phones in Settings, in the shape the PIN's list has — and asked with the PASSWORD where the PIN's are asked
  * with the PIN. Forgetting this phone drops its key here too.
  */
-export function shopDevicesApi(post: Post, email: () => string | null, party: 'shop' | 'hub' | 'store' = 'shop'): PinDevicesApi {
-  const key = () => shopDeviceKey(email());
+export function shopDevicesApi(post: Post, email: () => string | null, party: DeviceParty = 'shop'): PinDevicesApi {
+  const key = () => shopDeviceKey(email(), party);
   return {
     secret: 'password',
     party,
@@ -93,7 +104,7 @@ export function shopDevicesApi(post: Post, email: () => string | null, party: 's
     forgetThis: async () => {
       const r = await post<{ forgotten: boolean; which: number }>('/v1/sbg/account/shop-devices/forget-this', { device: key() });
       if (!r.error && r.data?.forgotten) {
-        dropShopDeviceKey(email());
+        dropShopDeviceKey(email(), party);
         // Its fingerprint-or-face note with it (2026-11-02): the server dropped that passkey with the phone.
         dropAccountUnlockMark(email());
       }

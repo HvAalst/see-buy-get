@@ -72,7 +72,7 @@ describe('the sign-in button', () => {
 
   it('a shop’s, a hub’s or a store’s sign-in: by its address and its phone’s key, with the password one tap away', () => {
     const SHOP = 'kona@shop.example';
-    const account = { keyOf: (email: string) => shopDeviceKey(email) };
+    const account = { keyOf: (email: string) => shopDeviceKey(email, 'shop') };
     function AccountScreen({ email }: { email: string }) {
       const state = useUnlockFirst(email, account);
       return (
@@ -82,7 +82,7 @@ describe('the sign-in button', () => {
       );
     }
     expect(renderToString(<AccountScreen email={SHOP} />)).toContain('the-password-box');
-    saveShopDeviceKey(SHOP, 'dvc_shop-phone');
+    saveShopDeviceKey(SHOP, 'dvc_shop-phone', 'shop');
     markAccountUnlock(SHOP, 'dvc_shop-phone', 'cred-1');
     const html = renderToString(<AccountScreen email={SHOP} />);
     expect(html).toContain('Unlock with fingerprint or face');
@@ -90,7 +90,7 @@ describe('the sign-in button', () => {
     expect(html).not.toContain('the-password-box');
     // A person's note for a number is nothing to an account's sign-in, and the other way round.
     expect(renderToString(<Screen phone={SHOP} />)).not.toContain('Unlock with fingerprint or face');
-    saveShopDeviceKey(SHOP, 'dvc_confirmed-again');
+    saveShopDeviceKey(SHOP, 'dvc_confirmed-again', 'shop');
     expect(renderToString(<AccountScreen email={SHOP} />)).not.toContain('Unlock with fingerprint or face');
   });
 

@@ -4,6 +4,7 @@ import { useT } from '../i18n';
 import { sbgChangePassword, type SbgConfig, type SbgError } from '../../lib/sbg';
 import { passwordChangeBlocker } from './password';
 import { shopDeviceKey } from './shopDevice';
+import { accountRoleOf } from '../../lib/sbg/appclient';
 
 /**
  * Change the password this shop, hub or courier account signs in with.
@@ -50,7 +51,10 @@ export function ChangePasswordSheet({
     setBusy(true);
     setError(null);
     // A shop changes its password only on one of its own phones: this one's key goes with it.
-    const r = await sbgChangePassword(config, mail.trim().toLowerCase(), current, next, undefined, shopDeviceKey(mail));
+    // 2026-11-03 — the key of this app's kind of account, where one address signs in to several.
+    const kind = accountRoleOf(config);
+    const party = 'role' in kind ? (kind.role === 'mdp' ? 'hub' : kind.role === 'vendor' ? 'store' : 'shop') : 'shop';
+    const r = await sbgChangePassword(config, mail.trim().toLowerCase(), current, next, undefined, shopDeviceKey(mail, party));
     if (r.error || !r.data) {
       setBusy(false);
       setError(r.error ?? null);

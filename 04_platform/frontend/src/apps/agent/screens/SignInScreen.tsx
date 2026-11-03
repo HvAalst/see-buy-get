@@ -12,7 +12,7 @@ import { shopDeviceKey } from '../../../shared/account/shopDevice';
 import { agentConfig } from '../api';
 
 /** 2026-11-02 — the shop's own fingerprint or face: by its address, with the key this phone holds for it. */
-const SHOP_PHONE = { keyOf: (email: string) => shopDeviceKey(email) };
+const SHOP_PHONE = { keyOf: (email: string) => shopDeviceKey(email, 'shop') };
 
 export interface SignInScreenProps {
   actions: AgentActions;

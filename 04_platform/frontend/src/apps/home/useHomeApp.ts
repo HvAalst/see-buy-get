@@ -727,7 +727,7 @@ export function useHomeApp() {
         // The Store app finds the address already filled in: the store signs in with it and the password just chosen —
         // and this browser, the one it was made on, is already the store's.
         handOffStore(email);
-        saveShopDeviceKey(email, r.data?.device);
+        saveShopDeviceKey(email, r.data?.device, 'store');
         setState((s) => ({ ...s, store: r.data, step: 'done' }));
       });
       return;
@@ -747,7 +747,7 @@ export function useHomeApp() {
       // Same-origin handoff: the role's app finds its identity already stored — and a shop, the phone it signed up on,
       // which is its first (its sign-in works only on its own phones).
       handOff(account.role, account.did, account.email ?? '');
-      if (account.email) saveShopDeviceKey(account.email, account.device);
+      if (account.email) saveShopDeviceKey(account.email, account.device, account.role === 'mdp' ? 'hub' : 'shop');
       // 2026-11-03 — a shop goes on to its papers, with the sign-in its account was just made with.
       const shopSession = account.role === 'pudo' && account.token?.access_token ? { token: account.token.access_token } : null;
       setState((s) => ({ ...s, account, shopSession, step: shopSession ? 'papers' : 'done' }));

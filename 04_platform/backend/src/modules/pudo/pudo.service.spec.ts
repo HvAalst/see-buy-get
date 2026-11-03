@@ -5756,7 +5756,7 @@ describe('PUDO Light', () => {
       (accounts as unknown as { sms: unknown }).sms = undefined;
     }
     const p2 = '+254700556'; otp.verify(p2, otp.request(p2).code);
-    expect(() => accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'mkate-na-chai-1', phone: p2, profile: { agent: agentProfile } })).toThrow(/already exists/);
+    expect(() => accounts.signup({ role: 'pudo', email: 'shop@store.test', password: 'mkate-na-chai-1', phone: p2, profile: { agent: agentProfile } })).toThrow(/already signs in to a SeeBuyGet shop/);
 
     // forgot → reset → login with the new password
     const { resetToken } = accounts.forgot('shop@store.test');

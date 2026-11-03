@@ -78,7 +78,12 @@ describe('one email, a shop and a hub, over the wire', () => {
     await http().post('/v1/sbg/auth/link/confirm').send({ token: 'not-one-of-ours-at-all' }).expect(404);
     expect((await http().post('/v1/sbg/auth/link/confirm').send({ token }).expect(201)).body).toEqual({ email, kind: 'hub', role: 'mdp' });
     await http().post('/v1/sbg/auth/link/confirm').send({ token }).expect(404);
-    expect((await login('kituo-cha-amani-2026', hub.device, 'mdp').expect(201)).body.did).toBe(hub.did);
+    const signedIn = (await login('kituo-cha-amani-2026', hub.device, 'mdp').expect(201)).body;
+    expect(signedIn.did).toBe(hub.did);
+    // Inside the hub, its own password is the one asked: the shop's opens nothing there.
+    const hubBearer = { authorization: `Bearer ${signedIn.token.access_token}` };
+    await http().post('/v1/sbg/account/shop-devices/forget-others').set(hubBearer).send({ password: 'duka-la-kona-2026', device: hub.device }).expect(401);
+    await http().post('/v1/sbg/account/shop-devices/forget-others').set(hubBearer).send({ password: 'kituo-cha-amani-2026', device: hub.device }).expect(201);
     expect(outbox.recent(email).filter((m) => m.template === 'welcome')).toHaveLength(2);
 
     // A forgotten password is the kind's own: the hub's code resets the hub's, and the shop's stays.

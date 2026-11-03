@@ -22,11 +22,33 @@ describe('a shop’s own phones', () => {
   });
 
   it('keeps this phone’s key per shop address, whatever its case, and drops it', () => {
-    saveShopDeviceKey('Kona@Shop.example ', 'dvc_1');
-    expect(shopDeviceKey('kona@shop.example')).toBe('dvc_1');
-    expect(shopDeviceKey('other@shop.example')).toBeUndefined();
-    dropShopDeviceKey('KONA@shop.example');
-    expect(shopDeviceKey('kona@shop.example')).toBeUndefined();
+    saveShopDeviceKey('Kona@Shop.example ', 'dvc_1', 'shop');
+    expect(shopDeviceKey('kona@shop.example', 'shop')).toBe('dvc_1');
+    expect(shopDeviceKey('other@shop.example', 'shop')).toBeUndefined();
+    dropShopDeviceKey('KONA@shop.example', 'shop');
+    expect(shopDeviceKey('kona@shop.example', 'shop')).toBeUndefined();
+  });
+
+  it('2026-11-03 — keeps one key per kind under one address: the hub’s does not overwrite the shop’s', () => {
+    saveShopDeviceKey('amani@example.com', 'dvc_shop', 'shop');
+    saveShopDeviceKey('amani@example.com', 'dvc_hub', 'hub');
+    expect(shopDeviceKey('amani@example.com', 'shop')).toBe('dvc_shop');
+    expect(shopDeviceKey('amani@example.com', 'hub')).toBe('dvc_hub');
+    expect(shopDeviceKey('amani@example.com', 'store')).toBeUndefined();
+    dropShopDeviceKey('amani@example.com', 'hub');
+    expect(shopDeviceKey('amani@example.com', 'hub')).toBeUndefined();
+    expect(shopDeviceKey('amani@example.com', 'shop')).toBe('dvc_shop');
+  });
+
+  it('2026-11-03 — still reads the key a phone kept before, by the address alone, and drops it only for its own kind', () => {
+    localStorage.setItem('sbg-shop-device:kona@shop.example', 'dvc_before');
+    expect(shopDeviceKey('kona@shop.example', 'shop')).toBe('dvc_before');
+    // A hub under the same address, confirmed on this phone since: its own key, and the shop’s of before stays.
+    saveShopDeviceKey('kona@shop.example', 'dvc_hub', 'hub');
+    dropShopDeviceKey('kona@shop.example', 'hub');
+    expect(shopDeviceKey('kona@shop.example', 'shop')).toBe('dvc_before');
+    dropShopDeviceKey('kona@shop.example', 'shop');
+    expect(shopDeviceKey('kona@shop.example', 'shop')).toBeUndefined();
   });
 
   it('reads the sign-in’s "this phone is new" — and nothing else — as a code to ask for', () => {
@@ -49,7 +71,7 @@ describe('a shop’s own phones', () => {
   });
 
   it('asks the server with this phone’s key, by password, and forgets this phone’s key once the server has', async () => {
-    saveShopDeviceKey('kona@shop.example', 'dvc_here');
+    saveShopDeviceKey('kona@shop.example', 'dvc_here', 'shop');
     const sent: Array<[string, unknown]> = [];
     const post = (async (path: string, body: unknown) => {
       sent.push([path, body]);
@@ -63,6 +85,6 @@ describe('a shop’s own phones', () => {
       ['/v1/sbg/account/shop-devices/forget-others', { password: 'duka-la-kona', device: 'dvc_here' }],
       ['/v1/sbg/account/shop-devices/forget-this', { device: 'dvc_here' }],
     ]);
-    expect(shopDeviceKey('kona@shop.example')).toBeUndefined();
+    expect(shopDeviceKey('kona@shop.example', 'shop')).toBeUndefined();
   });
 });

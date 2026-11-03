@@ -566,7 +566,7 @@ export function useVendorApp() {
       const mail = email.trim().toLowerCase();
       if (!mail || !password) return;
       setState((s) => ({ ...s, busy: 'signin', error: null }));
-      const r = await vendorSession(mail, password, shopDeviceKey(mail));
+      const r = await vendorSession(mail, password, shopDeviceKey(mail, 'store'));
       if (r.error || !r.data) {
         // Round 40 — the store's sign-in works only on its own phones and browsers: a new one is confirmed by a code.
         const ask = r.error ? deviceAskOf(r.error) : null;
@@ -588,7 +588,7 @@ export function useVendorApp() {
       const r = await sbgConfirmDevice(vendorConfig(), ask.challenge, code.trim());
       const data = r.data as unknown as VendorLoginView | undefined;
       if (r.error || !data?.vendorId) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
-      saveShopDeviceKey(ask.email, data.device);
+      saveShopDeviceKey(ask.email, data.device, 'store');
       await enter(data.vendorId, data.token, ask.email);
     },
     [enter],
