@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Optional, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import { COUNTRY_PICKED_HEADER, pickedScope } from '../../foundation/auth/staff-country.interceptor';
 import { StaffCountryRegistry } from '../../foundation/auth/staff-country.registry';
 import { EVERY_COUNTRY, reaches } from '../../foundation/auth/staff-countries';
@@ -23,7 +23,9 @@ export class FlagCaseController {
 
   @Roles('operator')
   @Get('flag-cases')
-  list(@Query('which') which?: string, @Query('kind') kind?: string, @Actor() actor?: IntrospectionResult, @Headers(COUNTRY_PICKED_HEADER) picked?: string): FlagCaseList {
+  list(@Query('which') which?: string, @Query('kind') kind?: string, @Actor() actor?: IntrospectionResult, @Req() req?: { header(name: string): string | undefined }): FlagCaseList {
+    // The console's country picker, read off the request (not a parameter of the contract: nobody is asked to send it).
+    const picked = req?.header(COUNTRY_PICKED_HEADER);
     // 2026-11-03 — a colleague in some countries only counts the cases of theirs (the rows are kept to them as well, by the
     // staff-country interceptor); somebody who works everywhere, and picked nothing, counts them all.
     const scope = actor?.staffCountries && this.countries ? pickedScope(picked, actor.staffCountries) : null;
