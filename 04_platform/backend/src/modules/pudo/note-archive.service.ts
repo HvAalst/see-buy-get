@@ -490,6 +490,12 @@ export class NoteArchiveService implements OnModuleInit, OnModuleDestroy {
    * Countries that require transport documents to be kept require them to be FINDABLE; a folder nobody can
    * search is a folder nobody can produce. Newest first, because the question is almost always recent.
    */
+  /** 2026-11-03 — which load or departure a note is of, for the console's separation by country (staff-country.resolvers.ts). */
+  noteOf(docId: string): Pick<ArchivedNote, 'freightId' | 'departureId'> | undefined {
+    const doc = this.docs.get(docId);
+    return doc ? { freightId: doc.freightId, departureId: doc.departureId } : undefined;
+  }
+
   register(actor: IntrospectionResult | undefined, q: ArchiveQuery = {}): Page<ArchivedNoteRow> {
     return paginate(this.filtered(actor, q), q.limit, q.offset);
   }

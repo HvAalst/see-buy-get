@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Optional, Param, Post, Query } from '@nestjs/common';
+import { COUNTRY_PICKED_HEADER, pickedScope } from '../../foundation/auth/staff-country.interceptor';
+import { StaffCountryRegistry } from '../../foundation/auth/staff-country.registry';
+import { EVERY_COUNTRY, reaches } from '../../foundation/auth/staff-countries';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles } from '../../foundation/auth/scopes.decorator';
@@ -13,12 +16,24 @@ import { staffOf } from './staff-of';
  */
 @Controller('sbg')
 export class FlagCaseController {
-  constructor(private readonly cases: FlagCaseService) {}
+  constructor(
+    private readonly cases: FlagCaseService,
+    @Optional() private readonly countries?: StaffCountryRegistry,
+  ) {}
 
   @Roles('operator')
   @Get('flag-cases')
-  list(@Query('which') which?: string, @Query('kind') kind?: string): FlagCaseList {
-    return this.cases.board(which === 'closed' || which === 'taken' ? which : 'live', kind || undefined);
+  list(@Query('which') which?: string, @Query('kind') kind?: string, @Actor() actor?: IntrospectionResult, @Headers(COUNTRY_PICKED_HEADER) picked?: string): FlagCaseList {
+    // 2026-11-03 — a colleague in some countries only counts the cases of theirs (the rows are kept to them as well, by the
+    // staff-country interceptor); somebody who works everywhere, and picked nothing, counts them all.
+    const scope = actor?.staffCountries && this.countries ? pickedScope(picked, actor.staffCountries) : null;
+    const inScope = scope
+      ? (c: FlagCase) => {
+          const touched = this.countries!.countriesOf('flag-subject', c.subject);
+          return touched !== null && (touched.includes(EVERY_COUNTRY) || reaches(scope, touched));
+        }
+      : undefined;
+    return this.cases.board(which === 'closed' || which === 'taken' ? which : 'live', kind || undefined, Date.now(), inScope);
   }
 
   @Roles('operator')

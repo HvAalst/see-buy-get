@@ -1354,7 +1354,7 @@ export const enTowerCompanies = {
   'tower.custodyCaps.current': 'New shops: {shop} · new independent riders: {rider}',
   'tower.custodyCaps.said': '{start}, lifted after {lift}',
   'tower.custodyCaps.none': 'no cap',
-  'tower.custodyCaps.hint': 'How many parcels a new shop holds, and a new rider in no fleet carries, at once. Each limit grows by one with every parcel handed on and lifts after the number you set. Leave both boxes empty for no cap. A fleet’s drivers are not capped here: their fleet answers for them.',
+  'tower.custodyCaps.hint': 'How many parcels a new shop holds, and a new rider in no fleet carries, at once. Each limit grows by one with every parcel handed on and lifts after the number you set. Leave both boxes empty for no cap. A fleet’s drivers are not capped here: their fleet answers for them. Start low — a rider at 3, lifted after 50 — and raise it as your country learns who delivers.',
   'tower.custodyCaps.shops': 'New shops',
   'tower.custodyCaps.riders': 'New independent riders',
   'tower.custodyCaps.start': 'Holds at most, to start',

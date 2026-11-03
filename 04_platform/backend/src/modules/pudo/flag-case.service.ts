@@ -133,11 +133,15 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
    * The live list puts what nobody has first, so with thousands open a case somebody takes leaves its first page; the
    * taken list is where it is found again, with whose it is.
    */
-  board(which: CaseList = 'live', kind?: string, now: number = Date.now()): FlagCaseList {
+  /**
+   * `inScope` (2026-11-03, the owner: "Daily screens now"): for a colleague who works in some countries only, the cases of
+   * theirs — so the counts and the badge are theirs too, not the network's beside a shorter list.
+   */
+  board(which: CaseList = 'live', kind?: string, now: number = Date.now(), inScope: (c: FlagCase) => boolean = () => true): FlagCaseList {
     this.sync(now);
     const rank = (c: FlagCase) => CASE_SEVERITIES.indexOf(c.severity);
-    const all = [...this.cases.values()].filter((c) =>
-      which === 'live' ? c.state === 'open' || c.state === 'taken' : which === 'taken' ? c.state === 'taken' : c.state === 'done' || c.state === 'cleared',
+    const all = [...this.cases.values()].filter(
+      (c) => (which === 'live' ? c.state === 'open' || c.state === 'taken' : which === 'taken' ? c.state === 'taken' : c.state === 'done' || c.state === 'cleared') && inScope(c),
     );
     const kinds = new Map<FlagKind, FlagCaseKindCount>();
     for (const c of all) {
@@ -151,7 +155,7 @@ export class FlagCaseService implements OnApplicationBootstrap, OnModuleDestroy 
     }
     // What the menu's badge counts, whichever list is read: the live cases nobody has taken.
     let waiting = 0;
-    for (const c of this.cases.values()) if (c.state === 'open') waiting += 1;
+    for (const c of this.cases.values()) if (c.state === 'open' && inScope(c)) waiting += 1;
     const shown = kind ? all.filter((c) => c.kind === kind) : all;
     // Escalated and still nobody's first, then nobody's before somebody's, then the most severe, then the oldest.
     const unowned = (c: FlagCase) => c.state === 'open';

@@ -87,6 +87,24 @@ describe('staff separated by country, over the wire', () => {
     expect((await http().get('/v1/sbg/dashboard').set(bearer(zara.token)).expect(403)).body.detail).toMatch(/work in every country/);
     await http().get('/v1/sbg/dashboard').set(bearer(firstToken)).expect(200);
 
+    // 2026-11-03 — the console's daily screens, split (the owner: "Daily screens now"): she opens each, and sees her
+    // country's rows only; a record of no country she can tell answers as one that does not exist.
+    for (const path of ['/v1/sbg/totes', '/v1/sbg/flags', '/v1/sbg/flag-cases', '/v1/sbg/paper-reports', '/v1/sbg/consignment-notes', '/v1/sbg/documents', '/v1/sbg/fleet/assignments']) {
+      const res = await http().get(path).set(bearer(zara.token));
+      expect({ path, status: res.status }).toEqual({ path, status: 200 });
+    }
+    const texts = (await http().get('/v1/sbg/documents').set(bearer(zara.token)).expect(200)).body.items as Array<{ country?: string }>;
+    expect(texts.every((line) => line.country === 'ZM')).toBe(true);
+    const textsEverywhere = (await http().get('/v1/sbg/documents').set(bearer(firstToken)).expect(200)).body.items as Array<{ country?: string }>;
+    expect(textsEverywhere.some((line) => line.country !== 'ZM')).toBe(true);
+    const cases = (await http().get('/v1/sbg/flag-cases').set(bearer(zara.token)).expect(200)).body as { items: unknown[]; waiting: number };
+    expect(cases.waiting).toBeLessThanOrEqual((await http().get('/v1/sbg/flag-cases').set(bearer(firstToken)).expect(200)).body.waiting);
+    await http().get('/v1/sbg/totes/NO-SUCH-BAG').set(bearer(zara.token)).expect(404);
+    // A country's texts: her own country's draft, and no other.
+    await http().get('/v1/sbg/documents/terms/draft').query({ country: 'MW' }).set(bearer(zara.token)).expect(404);
+    // A file of every country's notes stays with somebody who works in every country.
+    await http().get('/v1/sbg/consignment-notes/export').set(bearer(zara.token)).expect(403);
+
     // Colleagues: she sees those who work in Zambia, and those who work everywhere — and gives only Zambia.
     const staff = (await http().get('/v1/sbg/operators').set(bearer(zara.token)).expect(200)).body.items as Array<{ operatorId: string; countries: string[] }>;
     expect(staff.every((a) => a.countries.includes('ZM') || a.countries.includes('*'))).toBe(true);

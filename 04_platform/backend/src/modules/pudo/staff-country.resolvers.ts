@@ -18,6 +18,10 @@ import { MdpService } from './mdp.service';
 import { ParcelService } from './parcel.service';
 import { VehicleService } from './vehicle.service';
 import { VendorService } from './vendor.service';
+import { ToteService } from './tote.service';
+import { FlagCaseService } from './flag-case.service';
+import { NoteArchiveService } from './note-archive.service';
+import { CompanyPaperReportService } from '../../foundation/entity/company-paper-reports.service';
 
 /**
  * 2026-11-01 — WHICH COUNTRIES EACH KIND OF RECORD TOUCHES, answered by the service that keeps it, for staff separated by
@@ -46,6 +50,10 @@ export class StaffCountryResolvers implements OnModuleInit {
     private readonly presence: PresenceService,
     private readonly idDisputes: IdDisputeService,
     private readonly moves: AccountMoveService,
+    private readonly totes: ToteService,
+    private readonly flagCases: FlagCaseService,
+    private readonly paperReports: CompanyPaperReportService,
+    private readonly notes: NoteArchiveService,
   ) {}
 
   onModuleInit(): void {
@@ -87,6 +95,46 @@ export class StaffCountryResolvers implements OnModuleInit {
     r.register('presence-proposal', (id) => this.presence.proposalCountries(id));
     r.register('id-dispute', (id) => this.idDisputes.countriesOf(id));
     r.register('account-move', (id) => this.moves.countriesOf(id));
+    // 2026-11-03 — the console's daily screens, split by country (the owner: "Daily screens now"): bags, flags and their
+    // cases, paper reports, consignment notes. A record whose country cannot be told answers no country ([]), which only a
+    // colleague who works in every country reaches; null is kept for a record that does not exist.
+    r.register('tote', (code) => this.toteCountries(code));
+    r.register('flag-subject', (subject) => this.flagSubjectCountries(subject));
+    r.register('flag-case', (caseId) => this.flagSubjectCountries(this.flagCases.get(caseId).subject) ?? []);
+    r.register('paper-report', (caseId) => this.entityCountries(this.paperReports.entityOf(caseId)));
+    r.register('consignment-note', (docId) => {
+      const note = this.notes.noteOf(docId);
+      if (!note) return null;
+      if (!note.freightId) return []; // a departure's note: every country's staff only, for now
+      const f = this.dispatch.requireFreightPublic(note.freightId);
+      return [...some(f.pickupCountry), ...some(f.destCountry), ...some(f.bondCountry)];
+    });
+  }
+
+  /** A bag's countries: where it stands (a hub or a shop), and where it is bound. */
+  private toteCountries(code: string): string[] | null {
+    const t = this.totes.byCodeMaybe(code);
+    if (!t) return null;
+    return [...this.placeCountries(t.locationId), ...this.placeCountries(t.destinationNodeId), ...this.placeCountries(t.toHubId)];
+  }
+
+  /**
+   * What a flag is about, named as the monitor names it: a parcel by its id, a load or a bag by its code, a shop by its name.
+   * Null when nothing of that name is on record (a corridor, or one gone).
+   */
+  private flagSubjectCountries(subject: string): string[] | null {
+    try {
+      const p = this.parcels.get(subject);
+      return [...this.placeCountries(p.originAgentDid), ...this.placeCountries(p.destAgentDid), ...this.vendorCountries(p.vendorId)];
+    } catch {
+      // not a parcel
+    }
+    const f = this.dispatch.freightByCode(subject);
+    if (f) return [...some(f.pickupCountry), ...some(f.destCountry), ...some(f.bondCountry)];
+    const bag = this.toteCountries(subject);
+    if (bag) return bag;
+    const shop = this.agents.list().find((a) => a.shopName === subject);
+    return shop ? some(shop.country) : null;
   }
 
   /** A fleet's country: its own, or its company's. */

@@ -38,6 +38,12 @@ export const RECORD_KINDS = [
   'presence-proposal',
   'id-dispute',
   'account-move',
+  // 2026-11-03 — the console's daily screens (the owner: "Daily screens now").
+  'tote',
+  'flag-subject',
+  'flag-case',
+  'paper-report',
+  'consignment-note',
 ] as const;
 export type RecordKind = (typeof RECORD_KINDS)[number];
 
@@ -156,6 +162,22 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'DELETE sbg/help/:topic/:key/image': every('help pictures are read in every country'),
   'POST sbg/fleet/papers/sweep': every('the papers check runs for every country at once'),
   'GET sbg/fleet/papers': every(NOT_YET),
+  // 2026-11-03 — THE CONSOLE'S DAILY SCREENS, SPLIT (the owner: "Daily screens now"): the bags, the flags and their cases
+  // (counted within the reader's countries too: FlagCaseController), the paper reports, the consignment notes, the
+  // country texts, the shifts list. Each row by the record it is about.
+  'GET sbg/totes': list({ row: { of: 'tote', id: 'code' } }),
+  'GET sbg/flags': list({ row: { of: 'flag-subject', id: 'subject' } }),
+  'GET sbg/flag-cases': list({ at: 'items', row: { of: 'flag-subject', id: 'subject' } }),
+  'GET sbg/paper-reports': list({ at: 'items', row: { of: 'entity', id: 'entityId' } }),
+  'GET sbg/consignment-notes': list({ at: 'items', row: { of: 'consignment-note', id: 'docId' } }),
+  'GET sbg/consignment-notes/export': every('a file of every country’s notes — not yet split by country'),
+  'GET sbg/consignment-notes/bundle.zip': every('a file of every country’s notes — not yet split by country'),
+  'GET sbg/documents': list({ at: 'items', row: { field: 'country' } }),
+  'GET sbg/documents/terms/draft': { country: 'query', name: 'country' },
+  'POST sbg/documents/:kind/versions': { country: 'body', name: 'country' },
+  'POST sbg/documents/versions/:versionId/publish': every('publishing a text: not yet split by country'),
+  'POST sbg/documents/versions/:versionId/decline': every('publishing a text: not yet split by country'),
+  'GET sbg/fleet/assignments': list({ row: { of: 'driver', id: 'driverDid' } }),
 };
 
 /**
@@ -185,6 +207,11 @@ export const COUNTRY_RULES: ReadonlyArray<readonly [RegExp, CountrySource]> = [
   [/^[A-Z]+ sbg\/operators\/:operatorId(\/|$)/, record('operator', 'operatorId')],
   [/^[A-Z]+ sbg\/id-disputes\/:disputeId(\/|$)/, record('id-dispute', 'disputeId')],
   [/^[A-Z]+ sbg\/account-moves\/:moveId(\/|$)/, record('account-move', 'moveId')],
+  // 2026-11-03 — the daily screens' own records.
+  [/^[A-Z]+ sbg\/totes\/:code(\/|$)/, record('tote', 'code')],
+  [/^[A-Z]+ sbg\/flag-cases\/:caseId(\/|$)/, record('flag-case', 'caseId')],
+  [/^[A-Z]+ sbg\/paper-reports\/:caseId(\/|$)/, record('paper-report', 'caseId')],
+  [/^[A-Z]+ sbg\/consignment-notes\/:docId(\/|$)/, record('consignment-note', 'docId')],
   // a country named in the path
   [/^[A-Z]+ sbg\/presence\/:jurisdiction(\/|$)/, { country: 'param', name: 'jurisdiction' }],
   // families not yet split by country
