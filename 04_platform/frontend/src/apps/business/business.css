@@ -554,3 +554,172 @@
 .biz .cons__main:has(> .installbar) {
   overflow-x: clip;
 }
+
+/* ------------------------------------------------ posting a load, one step per screen (2026-11-03) -- */
+
+/* screens/PostLoad.tsx (the owner: "chunk it up similar to the sign up process … That would enable us to use a slightly
+   larger font size and more white space"). Inside the wizard only, the console's own scale a step up — what is typed at
+   16px, a field's name at 15px, a control a thumb's height — and more air between the fields, at a desk as on a phone.
+   Nothing else in the console changes size. A column no wider than a form is read in: the larger type wants it. */
+.biz-post {
+  --c-fs: 16px;
+  --c-fs-sm: 14px;
+  --c-ctl-h: 44px;
+  max-width: 680px;
+  font-size: var(--c-fs);
+}
+@media (pointer: coarse) {
+  .biz-post {
+    --c-ctl-h: 48px;
+  }
+}
+.biz-post .cons__title {
+  font-size: 24px;
+  line-height: 1.25;
+}
+.biz-post .cons__lede {
+  margin: 8px 0 26px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.biz-post .cfield {
+  margin-bottom: 24px;
+}
+.biz-post .cfield__label {
+  margin-bottom: 6px;
+  font-size: 15px;
+}
+.biz-post .chint {
+  margin-top: 6px;
+  line-height: 1.45;
+}
+.biz-post .cerr {
+  font-size: 14px;
+}
+.biz-post > .cerr {
+  margin: 0 0 22px;
+}
+.biz-post .cfield--check {
+  gap: 12px;
+  margin-bottom: 20px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.biz-post .cfield--check input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+.biz-post .biz-two {
+  gap: 0 18px;
+}
+.biz-post .biz-acts {
+  margin-bottom: 24px;
+}
+.biz-post .biz-act + .biz-act {
+  margin-top: 6px;
+}
+/* A field drawn inside a field (a picker that brings its own) and the last of a choice's options: the air is the outer one's. */
+.biz-post .cfield > .cfield,
+.biz-post .biz-acts > .cfield--check:last-child {
+  margin-bottom: 0;
+}
+.biz-post > .cnote {
+  margin: 0 0 24px;
+}
+/* A hint for the pair of fields above it, read as theirs rather than as the next field's. */
+.biz-post__under {
+  margin: -14px 0 24px;
+}
+/* What only some loads are asked — dangerous goods, a trucked flight: set in from the step, so it reads as one more part. */
+.biz-post__more {
+  margin: -4px 0 24px;
+  padding: 14px 0 2px 16px;
+  border-left: 3px solid var(--bd);
+}
+.biz-post__more .cons__panelt {
+  display: block;
+  font-size: 17px;
+}
+.biz-post__more > .chint {
+  margin: 4px 0 16px;
+}
+.biz-post__kept {
+  margin-top: 4px;
+}
+.biz-post .biz-wiz__end {
+  margin-top: 30px;
+}
+
+/* The check: each part under its name, with Change beside it; then who will see it, before the one button that sends it. */
+.biz-post__group {
+  margin: 0 0 24px;
+}
+.biz-post__grouphead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.biz-post__group .cons__fact {
+  padding: 12px 14px;
+}
+.biz-post__group .cons__factv {
+  margin: 0;
+}
+.biz-post__group > .cerr {
+  margin-top: 8px;
+}
+.biz-post__who {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--bd);
+}
+.biz-post__who p {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+.biz-post__who .cnote {
+  margin: 14px 0 0;
+}
+/* The load's code once posted: read out on the phone, typed into a message — set like a code, and large. */
+.biz-post__codek {
+  margin: 18px 0 0;
+  color: var(--tx3);
+  font-size: var(--c-fs-sm);
+}
+.biz-post__code {
+  margin: 2px 0 10px;
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--navy);
+}
+
+/* The step bar pinned under the console's mast while the steps scroll, across the main area's own padding — 24px at a
+   desk, 16px below 1100px, 12px on a phone — in the app's grey, so a step slides cleanly under it. The main area is the
+   box a sticky bar sticks to while it scrolls sideways, so while the wizard is there it clips sideways instead (as the
+   install bar has it above). */
+.biz-post .steps--pinned {
+  top: var(--c-mast-h);
+  margin: 0 -24px 20px;
+  padding: 0 24px;
+  background: var(--appbg);
+}
+.biz .cons__main:has(.biz-post) {
+  overflow-x: clip;
+}
+@media (max-width: 1100px) {
+  .biz-post .steps--pinned {
+    margin: 0 -16px 20px;
+    padding: 0 16px;
+  }
+}
+@media (max-width: 640px) {
+  .biz-post .steps--pinned {
+    margin: 0 -12px 18px;
+    padding: 0 12px;
+  }
+}

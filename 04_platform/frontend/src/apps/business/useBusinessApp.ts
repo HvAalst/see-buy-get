@@ -26,6 +26,7 @@ import {
   type PersonClient,
 } from './api';
 import { openOnArrival, sectionsFor, type Section } from './logic';
+import { dropLoadDrafts } from './postLoad';
 
 /**
  * `login` phone + PIN · `phone` → `code` → `pin` (→ `email` the first time a PIN is chosen): a new device, a new
@@ -307,6 +308,8 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
     signOut: () => {
       clearSessions();
       signedOutHere();
+      // 2026-11-03 — a load half posted names its goods, its receiver and a phone number: not left for whoever signs in next.
+      dropLoadDrafts();
       person.current = createPersonClient();
       biz.current = createBusinessClient();
       setBusinessOpen(false);

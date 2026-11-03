@@ -1,19 +1,17 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
-import { pageGot, PaperSheet, PhoneField, Sections, usePaper } from '../../../shared/ui';
+import { pageGot, PaperSheet, Sections, usePaper } from '../../../shared/ui';
 import { useNoteLinks } from '../../../shared/archive/useNoteLinks';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { foundWords } from '../../../shared/found';
 import { quoteFigure, quoteTone, type QuoteView } from '../../../shared/quote';
 import { ConsoleDetail } from '../../tower/ConsoleDetail';
-import { SitePicker, type SiteView } from '../../tower/screens/SitePicker';
 import { QuotePanel } from '../../tower/screens/QuotePanel';
-import { NATURES, PACKAGING_HELP } from '../../agent/logic';
-import { ConsolePick } from '../../tower/ConsolePick';
-import { CurrencySelect } from '../../tower/screens/CurrencySelect';
 import { LoadReservations } from './LoadReservations';
-import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type LoadProposal, type PostedLoad } from '../api';
-import { isDangerousNature, deliverySays, loadGaps, loadSectionFor, loadStage, mayAct, nextDay, noteKept, orderableContracts, planDo, planSays, roadSays, type LoadForm, type LoadStage } from '../logic';
+import type { BusinessClient, BusinessView, LoadProposal, PostedLoad } from '../api';
+import { deliverySays, loadSectionFor, loadStage, mayAct, noteKept, planDo, planSays, roadSays, type LoadStage } from '../logic';
+import { draftOwner, dropLoadDraft, keptLoadDraft, type LoadDraft } from '../postLoad';
+import { PostLoad } from './PostLoad';
 import type { LoadAsked } from '../../../shared/launch';
 import { openLinkedLoad } from '../../../shared/linkedLoad';
 import { passageWords } from '../../../shared/passages';
@@ -29,13 +27,9 @@ import { LoadSeals } from './LoadSeals';
 import { LoadRefusal } from './LoadRefusal';
 import { LoadPaidAnswer } from './LoadPaidAnswer';
 import { LoadDoor } from './LoadDoor';
-import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelect';
-import { publicRequest } from '../../../lib/sbg';
 
 /** A price on a load, in the money the load was posted in — the figure alone only where no company of ours names one. */
 const priced = (amount: number, currency?: string): string => (currency ? quoteFigure({ amount, currency }) : amount.toLocaleString());
-import { SentFor } from './SentFor';
-import { codeOf, type ReceivingPointNamed } from '../inbound';
 import type { BusinessActions } from '../useBusinessApp';
 import { shipperPaidLine } from '../../../shared/paidDirect';
 
@@ -49,11 +43,6 @@ const STAGE: Record<LoadStage, { label: MessageKey; tone: string }> = {
   refused: { label: 'refusal.status', tone: 'warn' },
   cancelled: { label: 'business.loads.stage.cancelled', tone: 'quiet' },
 };
-
-const atlasApi = { countryCatalogue: () => publicRequest(businessConfig(), '/v1/sbg/country-catalogue') };
-
-type Form = LoadForm & { volumeM3: string; truckFlight: boolean; flightAwb: string; flightNo: string; flightAirline: string; declaredValue: string; specialInterest: string; valueCurrency: string; noTranshipment: boolean; coverRequired: boolean; consigneeName: string; consigneeAddress: string; unNumber: string; properShippingName: string; hazardClass: string; packingGroup: string; customsInstructions: string; receiverRef: string; packaging: string; packages: string; destCountry: string; natureCode: string; fragile: boolean; commitMode: 'negotiate' | 'instant'; instructions: string; contactName: string; contactPhone: string; deliveryWindow: string; pickupOn: string; forClientId: string; contractId: string; deliverOn: string; orderRef: string };
-const EMPTY: Form = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
 
 /**
  * B2 — A BUSINESS'S OWN LOADS: post one, and follow it to the door.
@@ -75,7 +64,12 @@ export function LoadsScreen({ business, client, asked, onAsked }: { business: Bu
   const [open, setOpen] = useState<PostedLoad | null>(null);
   // The section a notice opened the load on, and which asking it was: a later tap on a row opens it as ever.
   const [openOn, setOpenOn] = useState<{ section: string; seq: number } | null>(null);
-  const [posting, setPosting] = useState(false);
+  // 2026-11-03 — posting a load is a wizard of its own screens (PostLoad.tsx): open afresh, or carrying on the load kept
+  // on this phone. `n` draws a new one for "Post another".
+  const owner = draftOwner(business.entityId, business.you.memberId);
+  const [posting, setPosting] = useState<{ resume: LoadDraft | null; n: number } | null>(null);
+  const [kept, setKept] = useState<LoadDraft | null>(() => (act ? keptLoadDraft(owner) : null));
+  const startPosting = (resume: LoadDraft | null) => setPosting((p) => ({ resume, n: (p?.n ?? 0) + 1 }));
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
@@ -115,6 +109,8 @@ export function LoadsScreen({ business, client, asked, onAsked }: { business: Bu
         setError(null);
       },
       open: (row) => {
+        // A load being posted stays kept on the phone; the load the notice is about is what is wanted now.
+        setPosting(null);
         setOpenOn({ section: loadSectionFor(want.about), seq: want.seq });
         setOpen(row);
       },
@@ -126,6 +122,36 @@ export function LoadsScreen({ business, client, asked, onAsked }: { business: Bu
     if (open) setOpen(rows?.find((r) => r.freightId === open.freightId) ?? null);
   }, [rows]);
 
+  // Posting is the whole screen, one step at a time, until it is posted or left for now.
+  if (act && posting) {
+    return (
+      <PostLoad
+        key={posting.n}
+        business={business}
+        client={client}
+        resume={posting.resume}
+        onLeave={() => {
+          setPosting(null);
+          setKept(keptLoadDraft(owner));
+        }}
+        onPosted={load}
+        onOpen={async (freightId) => {
+          setPosting(null);
+          setKept(null);
+          const items = await readLoads();
+          if (!items) return;
+          setRows(items);
+          setOpenOn(null);
+          setOpen(items.find((r) => r.freightId === freightId) ?? null);
+        }}
+        onAnother={() => {
+          setKept(null);
+          startPosting(null);
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <header class="cons__head">
@@ -136,20 +162,35 @@ export function LoadsScreen({ business, client, asked, onAsked }: { business: Bu
       {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
 
       {act ? (
-        posting ? (
-          <NewLoadPanel
-            business={business}
-            client={client}
-            onCancel={() => setPosting(false)}
-            onPosted={async (code, ordered) => {
-              setPosting(false);
-              setDone(ordered ? t('business.loads.ordered', { code, fleet: ordered.fleet, day: ordered.day }) : t('business.loads.posted', { code }));
-              await load();
-            }}
-          />
+        kept ? (
+          // A load started on this phone and not posted — a phone call, or "Leave it for now": carried on, or begun afresh.
+          <section class="cons__panel biz-loads__kept" aria-labelledby="biz-loads-kept">
+            <div class="cons__panelhead">
+              <span class="cons__panelt" id="biz-loads-kept">
+                {t('business.post.keptTitle')}
+              </span>
+            </div>
+            <p class="cons__lede">{t('business.post.keptLine', { when: onRoad(new Date(kept.savedAt).toISOString()), what: kept.form.description.trim() || t('business.post.keptNothing') })}</p>
+            <div class="twr-panelend">
+              <button type="button" class="cbtn cbtn--primary" onClick={() => startPosting(kept)}>
+                {t('business.post.carryOn')}
+              </button>
+              <button
+                type="button"
+                class="cbtn cbtn--ghost"
+                onClick={() => {
+                  dropLoadDraft(owner);
+                  setKept(null);
+                  startPosting(null);
+                }}
+              >
+                {t('business.post.startAgain')}
+              </button>
+            </div>
+          </section>
         ) : (
           <div class="twr-panelend biz-loads__new">
-            <button type="button" class="cbtn cbtn--primary" onClick={() => setPosting(true)}>
+            <button type="button" class="cbtn cbtn--primary" onClick={() => startPosting(null)}>
               {t('business.loads.newCta')}
             </button>
           </div>
@@ -245,412 +286,6 @@ export function LoadsScreen({ business, client, asked, onAsked }: { business: Bu
         />
       ) : null}
     </>
-  );
-}
-
-function NewLoadPanel({ business, client, onCancel, onPosted }: { business: BusinessView; client: BusinessClient | null; onCancel: () => void; onPosted: (code: string, ordered?: { fleet: string; day: string }) => void | Promise<void> }) {
-  const t = useT();
-  const [form, setForm] = useState<Form>({ ...EMPTY, destCountry: business.country, deliverOn: nextDay() });
-  const countries = useCountryAtlas(atlasApi);
-  const packages = Number(form.packages);
-  const counted = Number.isInteger(packages) && packages >= 1 && packages <= 500 ? packages : undefined;
-  const [contracts, setContracts] = useState<CarriageContract[]>([]);
-  const [tried, setTried] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Across a border the consignment note asks more of the form (the CMR check, 2026-10-28).
-  const crossing = Boolean(form.destCountry && form.destCountry !== business.country);
-  const dangerous = isDangerousNature(form.natureCode);
-  const gaps = loadGaps({ ...form, crossing });
-  const gap = (f: keyof LoadForm) => (tried && gaps.includes(f) ? <span class="cerr">{t(`business.loads.need.${f}` as MessageKey)}</span> : null);
-  const siteApi = client ? (client.api as never) : null;
-  // P1 — the carriers this business has a standing contract with. An order with one goes to its queue, not the board.
-  useEffect(() => {
-    if (!client) return;
-    void client.contracts().then((r) => setContracts(r.data?.items ?? []));
-  }, [client]);
-  const offered = orderableContracts(contracts, form.deliverOn || nextDay());
-  const contract = offered.find((c) => c.contractId === form.contractId) ?? null;
-  // Inbound, reading A: to another business's receiving point, by the code it gave — looked up before it is posted.
-  const [toReceiver, setToReceiver] = useState(false);
-  const [typedCode, setTypedCode] = useState('');
-  const [receiving, setReceiving] = useState<(ReceivingPointNamed & { code: string }) | null>(null);
-  const [lookupError, setLookupError] = useState<string | null>(null);
-  const lookUp = async () => {
-    const code = codeOf(typedCode);
-    setLookupError(null);
-    setReceiving(null);
-    setForm((prev) => ({ ...prev, receivingPoint: '' }));
-    if (!code) return setLookupError(t('business.loads.f.codeShape'));
-    if (!client) return;
-    const r = await client.inbound.named(code);
-    if (r.error || !r.data) return setLookupError(r.error?.detail || r.error?.title || null);
-    setReceiving({ ...r.data, code });
-    setForm((prev) => ({ ...prev, receivingPoint: code }));
-  };
-
-  const submit = async (e: Event) => {
-    e.preventDefault();
-    setTried(true);
-    if (gaps.length || !client) return;
-    setBusy(true);
-    setError(null);
-    // The two ends are saved places: their name and point are what the board and the consignment note carry.
-    const r = (await client.api.sites(business.entityId)) as unknown as { data?: { sites?: SiteView[] }; error?: { detail?: string; title?: string } };
-    const sites = r.data?.sites ?? [];
-    const from = sites.find((s) => s.siteId === form.fromSiteId);
-    const to = receiving ? { name: `${receiving.name} — ${receiving.siteName}`, location: receiving.location } : sites.find((s) => s.siteId === form.toSiteId);
-    if (!from || !to) {
-      setBusy(false);
-      return setError(t('business.loads.placeGone'));
-    }
-    const posted = await client.postLoad({
-      description: form.description.trim(),
-      pickupLabel: from.name,
-      pickupLocation: from.location,
-      destLabel: to.name,
-      destLocation: to.location,
-      // A business sends from its own country; where the goods go is its choice, and a crossing is asked of a known one.
-      pickupCountry: business.country,
-      destCountry: form.destCountry || business.country,
-      weightKg: Number(form.weightKg),
-      ...(form.packaging ? { packaging: form.packaging } : {}),
-      ...(counted ? { packages: counted } : {}),
-      natureCode: form.natureCode,
-      ...(form.consigneeName.trim() && !receiving ? { consignee: { name: form.consigneeName.trim(), ...(form.consigneeAddress.trim() ? { address: form.consigneeAddress.trim() } : {}) } } : {}),
-      ...(dangerous ? { dangerousGoods: { unNumber: form.unNumber.trim(), properShippingName: form.properShippingName.trim(), hazardClass: form.hazardClass.trim(), ...(form.packingGroup ? { packingGroup: form.packingGroup } : {}) } } : {}),
-      ...(crossing && form.customsInstructions.trim() ? { customsInstructions: form.customsInstructions.trim() } : {}),
-      fragile: form.fragile,
-      ...(form.coverRequired ? { coverRequired: true } : {}),
-      ...(Number(form.declaredValue) > 0 && form.valueCurrency ? { declaredValue: { amount: Number(form.declaredValue), currency: form.valueCurrency } } : {}),
-      ...(Number(form.specialInterest) > 0 && form.valueCurrency ? { specialInterest: { amount: Number(form.specialInterest), currency: form.valueCurrency } } : {}),
-      ...(form.noTranshipment ? { noTranshipment: true } : {}),
-      ...(Number(form.volumeM3) > 0 ? { volumeM3: Number(form.volumeM3) } : {}),
-      ...(form.truckFlight && form.flightAwb.trim() && form.flightNo.trim() ? { truckFlight: { awb: form.flightAwb.trim(), flight: form.flightNo.trim(), ...(form.flightAirline.trim() ? { airline: form.flightAirline.trim() } : {}) } } : {}),
-      commitMode: form.commitMode,
-      ...(form.instructions.trim() ? { instructions: form.instructions.trim() } : {}),
-      ...(form.contactName.trim() ? { contactName: form.contactName.trim() } : {}),
-      ...(form.contactPhone.trim() ? { contactPhone: form.contactPhone.trim() } : {}),
-      ...(form.deliveryWindow.trim() ? { deliveryWindow: form.deliveryWindow.trim() } : {}),
-      ...(form.pickupOn && !contract ? { scheduledPickupAt: new Date(`${form.pickupOn}T08:00:00`).toISOString() } : {}),
-      ...(form.forClientId ? { forClientId: form.forClientId } : {}),
-      // To another business's receiving point: it sees the load coming in, and its own number for the order with it.
-      ...(receiving ? { receivingPoint: receiving.code, ...(form.receiverRef.trim() ? { receiverRef: form.receiverRef.trim() } : {}) } : {}),
-      // Under a contract: the day it must arrive, and no pickup date of our own — the fleet plans when it collects.
-      ...(contract ? { contractId: contract.contractId, deliverOn: form.deliverOn, ...(form.orderRef.trim() ? { orderRef: form.orderRef.trim() } : {}) } : {}),
-    });
-    setBusy(false);
-    if (posted.error || !posted.data) return setError(posted.error?.detail || posted.error?.title || null);
-    await onPosted(posted.data.code, contract ? { fleet: contract.fleetName, day: form.deliverOn } : undefined);
-  };
-
-  return (
-    <section class="cons__panel">
-      <div class="cons__panelhead">
-        <span class="cons__panelt">{t('business.loads.newTitle')}</span>
-      </div>
-      <p class="cons__lede">{t(contract ? 'business.loads.newLedeContract' : 'business.loads.newLede')}</p>
-      <form onSubmit={(e) => void submit(e)}>
-        <SentFor client={client} expeditor={business.activities.includes('expeditor')} value={form.forClientId} onChange={(id) => setForm((prev) => ({ ...prev, forClientId: id }))} />
-        {offered.length ? (
-          <fieldset class="cfield biz-acts">
-            <legend class="cfield__label">{t('business.loads.f.carrier')}</legend>
-            <label class="cfield--check biz-act">
-              <input type="radio" name="biz-carrier" checked={!contract} onChange={() => setForm((prev) => ({ ...prev, contractId: '' }))} />
-              <span>
-                <strong>{t('business.loads.f.board')}</strong>
-                <span class="chint">{t('business.loads.f.boardSub')}</span>
-              </span>
-            </label>
-            {offered.map((c) => (
-              <label class="cfield--check biz-act" key={c.contractId}>
-                <input type="radio" name="biz-carrier" checked={contract?.contractId === c.contractId} onChange={() => setForm((prev) => ({ ...prev, contractId: c.contractId }))} />
-                <span>
-                  <strong>{c.reference ? `${c.fleetName} · ${c.reference}` : c.fleetName}</strong>
-                  <span class="chint">{t('business.loads.f.contractSub')}</span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-        ) : null}
-        {contract ? (
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.deliverOn')}</span>
-            <input class="cinput" type="date" min={new Date().toISOString().slice(0, 10)} value={form.deliverOn} onInput={(e) => setForm((prev) => ({ ...prev, deliverOn: (e.target as HTMLInputElement).value }))} />
-            <span class="chint">{t('business.loads.f.deliverOnHint', { fleet: contract.fleetName })}</span>
-          </label>
-        ) : null}
-        {contract ? (
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.orderRef')}</span>
-            <input class="cinput" maxLength={60} value={form.orderRef} onInput={(e) => setForm((prev) => ({ ...prev, orderRef: (e.target as HTMLInputElement).value }))} />
-            <span class="chint">{t('business.loads.f.orderRefHint')}</span>
-          </label>
-        ) : null}
-        <label class="cfield">
-          <span class="cfield__label">{t('business.loads.f.description')}</span>
-          <input class="cinput" maxLength={160} value={form.description} onInput={(e) => setForm((prev) => ({ ...prev, description: (e.target as HTMLInputElement).value }))} />
-          {gap('description')}
-        </label>
-        <div class="biz-two">
-          <div>
-            <SitePicker kind="delivery" entityId={business.entityId} api={siteApi} value={form.fromSiteId} onChange={(id) => setForm((prev) => ({ ...prev, fromSiteId: id }))} label={t('business.loads.f.from')} addLabel={t('business.loads.f.addPlace')} />
-            {gap('fromSiteId')}
-          </div>
-          <div>
-            {toReceiver ? (
-              <div class="cfield">
-                <span class="cfield__label">{t('business.loads.f.deliverTo')}</span>
-                <span class="biz-deliverto">
-                  <input class="cinput biz-code" maxLength={12} autocomplete="off" spellcheck={false} placeholder="7KQ3-PX9M" value={typedCode} onInput={(e) => setTypedCode((e.target as HTMLInputElement).value)} />
-                  <button type="button" class="cbtn cbtn--ghost cbtn--sm" disabled={!typedCode.trim()} onClick={() => void lookUp()}>
-                    {t('business.loads.f.findCode')}
-                  </button>
-                </span>
-                {receiving ? <span class="cnote">{t('business.loads.f.deliverToFound', { name: receiving.name, place: receiving.siteName })}</span> : <span class="chint">{t('business.loads.f.deliverToHint')}</span>}
-                {lookupError ? <span class="cerr">{lookupError}</span> : null}
-                {gap('toSiteId')}
-                {receiving ? (
-                  <label class="cfield">
-                    <span class="cfield__label">{t('business.loads.f.receiverRef', { name: receiving.name })}</span>
-                    <input class="cinput" maxLength={60} value={form.receiverRef} onInput={(e) => setForm((prev) => ({ ...prev, receiverRef: (e.target as HTMLInputElement).value }))} />
-                    <span class="chint">{t('business.loads.f.receiverRefHint')}</span>
-                  </label>
-                ) : null}
-              </div>
-            ) : (
-              <>
-                <SitePicker kind="delivery" entityId={business.entityId} api={siteApi} value={form.toSiteId} onChange={(id) => setForm((prev) => ({ ...prev, toSiteId: id }))} label={t('business.loads.f.to')} addLabel={t('business.loads.f.addPlace')} />
-                {gap('toSiteId')}
-              </>
-            )}
-            <label class="cfield--check">
-              <input
-                type="checkbox"
-                checked={toReceiver}
-                onChange={() => {
-                  setToReceiver((on) => !on);
-                  setReceiving(null);
-                  setLookupError(null);
-                  setForm((prev) => ({ ...prev, receivingPoint: '' }));
-                }}
-              />
-              <span>{t('business.loads.f.toReceiver')}</span>
-            </label>
-          </div>
-        </div>
-        <div class="biz-two">
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.weight')}</span>
-            <input class="cinput" type="number" min={1} value={form.weightKg} onInput={(e) => setForm((prev) => ({ ...prev, weightKg: (e.target as HTMLInputElement).value }))} />
-            {gap('weightKg')}
-          </label>
-          {/* Each packaging said with what it means for the truck, as the counter's help sheet says it. */}
-          <ConsolePick
-            label={t('business.loads.f.packaging')}
-            value={form.packaging}
-            placeholder={t('agent.accept.packagingChoose')}
-            options={PACKAGING_HELP.map((p) => ({ value: p.value, label: t(p.labelKey as MessageKey), sub: t(p.detailKey as MessageKey) }))}
-            onChange={(packaging) => setForm((prev) => ({ ...prev, packaging }))}
-          />
-        </div>
-        <div class="biz-two">
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.packages')}</span>
-            <input id="load-packages" class="cinput" inputMode="numeric" maxLength={3} value={form.packages} onInput={(e) => setForm((prev) => ({ ...prev, packages: (e.target as HTMLInputElement).value }))} />
-            <span class="chint">{t(form.forClientId ? 'business.loads.f.packagesHintClient' : business.gs1 ? 'business.loads.f.packagesHintGs1' : 'business.loads.f.packagesHint')}</span>
-            {gap('packages')}
-          </label>
-          <div class="cfield">
-            <CountrySelect value={form.destCountry} onChange={(destCountry) => setForm((prev) => ({ ...prev, destCountry }))} label={t('business.loads.f.destCountry')} options={countries} />
-            {form.destCountry && form.destCountry !== business.country ? <span class="chint">{t('business.loads.f.crossing')}</span> : null}
-          </div>
-        </div>
-        {/* Box 2 of the consignment note: who receives the goods. A receiving point is its own consignee. */}
-        {receiving ? null : (
-          <>
-            <div class="biz-two">
-              <label class="cfield">
-                <span class="cfield__label">{t('business.loads.f.consigneeName')}</span>
-                <input class="cinput" maxLength={120} value={form.consigneeName} onInput={(e) => setForm((prev) => ({ ...prev, consigneeName: (e.target as HTMLInputElement).value }))} />
-                {gap('consigneeName')}
-              </label>
-              <label class="cfield">
-                <span class="cfield__label">{t('business.loads.f.consigneeAddress')}</span>
-                <input class="cinput" maxLength={300} value={form.consigneeAddress} onInput={(e) => setForm((prev) => ({ ...prev, consigneeAddress: (e.target as HTMLInputElement).value }))} />
-                {gap('consigneeAddress')}
-              </label>
-            </div>
-            <p class="chint">{t(crossing ? 'business.loads.f.consigneeHintCrossing' : 'business.loads.f.consigneeHint')}</p>
-          </>
-        )}
-        <div class="biz-two">
-          <ConsolePick
-            label={t('business.loads.f.nature')}
-            value={form.natureCode}
-            options={NATURES.map((n) => ({ value: n.key, label: t(n.labelKey), sub: t(n.detailKey) }))}
-            onChange={(natureCode) => setForm((prev) => ({ ...prev, natureCode }))}
-          />
-          {contract ? null : (
-            <label class="cfield">
-              <span class="cfield__label">{t('business.loads.f.pickupOn')}</span>
-              <input class="cinput" type="date" value={form.pickupOn} onInput={(e) => setForm((prev) => ({ ...prev, pickupOn: (e.target as HTMLInputElement).value }))} />
-              <span class="chint">{t('business.loads.f.pickupOnHint')}</span>
-            </label>
-          )}
-        </div>
-        <label class="cfield--check">
-          <input type="checkbox" checked={form.fragile} onChange={() => setForm((prev) => ({ ...prev, fragile: !prev.fragile }))} />
-          <span>{t('business.loads.f.fragile')}</span>
-        </label>
-        {/* Cover asked for (2026-10-28): only a carrier whose insurance SeeBuyGet has checked, and which still runs, may take it. */}
-        <label class="cfield--check">
-          <input type="checkbox" checked={form.coverRequired} onChange={() => setForm((prev) => ({ ...prev, coverRequired: !prev.coverRequired }))} />
-          <span>
-            {t('business.loads.f.cover')}
-            <span class="chint">{t('business.loads.f.coverHint')}</span>
-          </span>
-        </label>
-        {/* 2026-11-01 — the space the load takes: light, bulky goods fill a truck before they weigh it down. */}
-        <label class="cfield">
-          <span class="cfield__label">{t('business.loads.f.volume')}</span>
-          <input class="cinput" type="number" inputMode="decimal" min="0.01" max="150" step="0.1" value={form.volumeM3} onInput={(e) => setForm((prev) => ({ ...prev, volumeM3: (e.target as HTMLInputElement).value }))} />
-          <span class="chint">{t('business.loads.f.volumeHint')}</span>
-        </label>
-        {/* 2026-11-01 — a truck run as a flight: carried as a road load under road law, the waybill and flight a reference only. */}
-        <label class="cfield--check">
-          <input type="checkbox" checked={form.truckFlight} onChange={() => setForm((prev) => ({ ...prev, truckFlight: !prev.truckFlight }))} />
-          <span>
-            {t('business.loads.f.truckFlight')}
-            <span class="chint">{t('business.loads.f.truckFlightHint')}</span>
-          </span>
-        </label>
-        {form.truckFlight ? (
-          <div class="biz-two">
-            <label class="cfield">
-              <span class="cfield__label">{t('business.loads.f.flightAwb')}</span>
-              <input class="cinput" maxLength={20} value={form.flightAwb} onInput={(e) => setForm((prev) => ({ ...prev, flightAwb: (e.target as HTMLInputElement).value }))} />
-            </label>
-            <label class="cfield">
-              <span class="cfield__label">{t('business.loads.f.flightNo')}</span>
-              <input class="cinput" maxLength={10} value={form.flightNo} onInput={(e) => setForm((prev) => ({ ...prev, flightNo: (e.target as HTMLInputElement).value }))} />
-            </label>
-            <label class="cfield">
-              <span class="cfield__label">{t('business.loads.f.flightAirline')}</span>
-              <input class="cinput" maxLength={80} value={form.flightAirline} onInput={(e) => setForm((prev) => ({ ...prev, flightAirline: (e.target as HTMLInputElement).value }))} />
-            </label>
-          </div>
-        ) : null}
-        {/* CMR Art. 6(2)(a) and (d): no transhipment, a declared value, a special interest in delivery — each the sender's own. */}
-        <label class="cfield--check">
-          <input type="checkbox" checked={form.noTranshipment} onChange={() => setForm((prev) => ({ ...prev, noTranshipment: !prev.noTranshipment }))} />
-          <span>
-            {t('business.loads.f.noTranshipment')}
-            <span class="chint">{t('business.loads.f.noTranshipmentHint')}</span>
-          </span>
-        </label>
-        <div class="biz-two">
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.declaredValue')}</span>
-            <input class="cinput" type="number" min={1} value={form.declaredValue} onInput={(e) => setForm((prev) => ({ ...prev, declaredValue: (e.target as HTMLInputElement).value }))} />
-          </label>
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.specialInterest')}</span>
-            <input class="cinput" type="number" min={1} value={form.specialInterest} onInput={(e) => setForm((prev) => ({ ...prev, specialInterest: (e.target as HTMLInputElement).value }))} />
-          </label>
-        </div>
-        {form.declaredValue.trim() || form.specialInterest.trim() ? (
-          <CurrencySelect api={client ? (client.api as never) : null} value={form.valueCurrency} onChange={(valueCurrency) => setForm((prev) => ({ ...prev, valueCurrency }))} label={t('business.loads.f.valueCurrency')} near={[business.country, form.destCountry]} />
-        ) : null}
-        {gap('valueCurrency')}
-        <p class="chint">{t('business.loads.f.declaredHint')}</p>
-        <fieldset class="cfield biz-acts" style={contract ? 'display:none' : undefined}>
-          <legend class="cfield__label">{t('business.loads.f.price')}</legend>
-          {(['negotiate', 'instant'] as const).map((m) => (
-            <label class="cfield--check biz-act" key={m}>
-              <input type="radio" name="biz-commit" checked={form.commitMode === m} onChange={() => setForm((prev) => ({ ...prev, commitMode: m }))} />
-              <span>
-                <strong>{t(m === 'negotiate' ? 'business.loads.f.negotiate' : 'business.loads.f.instant')}</strong>
-                <span class="chint">{t(m === 'negotiate' ? 'business.loads.f.negotiateSub' : 'business.loads.f.instantSub')}</span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-        <label class="cfield">
-          <span class="cfield__label">{t('business.loads.f.instructions')}</span>
-          <input class="cinput" maxLength={500} value={form.instructions} onInput={(e) => setForm((prev) => ({ ...prev, instructions: (e.target as HTMLInputElement).value }))} />
-        </label>
-        <div class="biz-two">
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.contactName')}</span>
-            <input class="cinput" maxLength={80} value={form.contactName} onInput={(e) => setForm((prev) => ({ ...prev, contactName: (e.target as HTMLInputElement).value }))} />
-          </label>
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.contactPhone')}</span>
-            <PhoneField
-              id="load-contact-phone"
-              value={form.contactPhone}
-              onInput={(v) => setForm((prev) => ({ ...prev, contactPhone: v }))}
-              autoComplete="off"
-              inputClass="cinput"
-            />
-          </label>
-        </div>
-        {/* Box 9: dangerous goods by their generally recognised description — the sender's own, as on the safety data sheet. */}
-        {dangerous ? (
-          <>
-            <h3 class="cons__sub">{t('business.exports.sli.dangerous')}</h3>
-            <p class="chint"><Abbreviated text={t('business.loads.f.dangerousHint')} /></p>
-            <div class="biz-two">
-              <label class="cfield">
-                <span class="cfield__label">{t('business.exports.sli.unNumber')}</span>
-                <input class="cinput" maxLength={8} placeholder="UN1263" value={form.unNumber} onInput={(e) => setForm((prev) => ({ ...prev, unNumber: (e.target as HTMLInputElement).value }))} />
-                {gap('unNumber')}
-              </label>
-              <label class="cfield">
-                <span class="cfield__label">{t('business.exports.sli.hazardClass')}</span>
-                <input class="cinput" maxLength={8} placeholder="3" value={form.hazardClass} onInput={(e) => setForm((prev) => ({ ...prev, hazardClass: (e.target as HTMLInputElement).value }))} />
-                {gap('hazardClass')}
-              </label>
-            </div>
-            <div class="biz-two">
-              <label class="cfield">
-                <span class="cfield__label">{t('business.exports.sli.shippingName')}</span>
-                <input class="cinput" maxLength={200} value={form.properShippingName} onInput={(e) => setForm((prev) => ({ ...prev, properShippingName: (e.target as HTMLInputElement).value }))} />
-                {gap('properShippingName')}
-              </label>
-              <ConsolePick
-                label={t('business.exports.sli.packingGroup')}
-                value={form.packingGroup}
-                options={[{ value: '', label: t('business.loads.f.packingGroupNone') }, ...(['I', 'II', 'III'] as const).map((g) => ({ value: g, label: g }))]}
-                onChange={(packingGroup) => setForm((prev) => ({ ...prev, packingGroup }))}
-              />
-            </div>
-          </>
-        ) : null}
-        {/* Box 13, for customs: where it is cleared and by whom — asked only of a load that crosses a border. */}
-        {crossing ? (
-          <label class="cfield">
-            <span class="cfield__label">{t('business.loads.f.customs')}</span>
-            <input class="cinput" maxLength={500} placeholder={t('business.loads.f.customsPlaceholder')} value={form.customsInstructions} onInput={(e) => setForm((prev) => ({ ...prev, customsInstructions: (e.target as HTMLInputElement).value }))} />
-          </label>
-        ) : null}
-        <label class="cfield">
-          <span class="cfield__label">{t('business.loads.f.window')}</span>
-          <input class="cinput" maxLength={80} value={form.deliveryWindow} placeholder={t('business.loads.f.windowPlaceholder')} onInput={(e) => setForm((prev) => ({ ...prev, deliveryWindow: (e.target as HTMLInputElement).value }))} />
-        </label>
-        <p class="cnote">{t(contract ? 'business.loads.contractNote' : 'business.loads.settleNote')}</p>
-        {error ? <p class="cerr"><Abbreviated text={error} /></p> : null}
-        <div class="twr-panelend">
-          <button type="button" class="cbtn cbtn--ghost" onClick={onCancel}>
-            {t('common.cancel')}
-          </button>
-          <button type="submit" class="cbtn cbtn--primary" disabled={busy}>
-            {t(contract ? 'business.loads.orderCta' : 'business.loads.postCta')}
-          </button>
-        </div>
-      </form>
-    </section>
   );
 }
 

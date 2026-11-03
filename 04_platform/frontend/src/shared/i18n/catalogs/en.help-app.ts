@@ -163,10 +163,14 @@ export const enHelpApp = {
   // business-loads
   'help.business-loads.title': 'Post a load for carriers',
   'help.business-loads.summary': 'Post a load for carriers on the open board, agree a price, and follow it to the door. You pay the carrier yourself.',
-  'help.business-loads.step1': '“Domestic › Loads › Post a load”. Choose where it is collected and where it goes from your saved places — Save a new place adds one.',
-  'help.business-loads.step2': 'Say what it is, its weight, how it is packed and what kind of goods, and who receives it. Carriers read exactly this, and it goes on the consignment note. Dangerous goods are named as their safety data sheet names them: the UN number, the proper shipping name, the class and the packing group.',
-  'help.business-loads.step3': 'Choose how the price is set: carriers name their price and you accept one, or the first carrier at the board price takes it.',
-  'help.business-loads.step4': 'Open the load. Its record is in parts — “Overview”, “On the road”, “Papers”, “Payment” and “Claim” — tap a name, or swipe sideways. “Overview” has the prices offered, who is carrying it, the tracking link to share and the consignment note; “Papers” has the links to the note.',
+  // 2026-11-03 — one part per screen (the owner: "chunk it up similar to the sign up process").
+  'help.business-loads.step1': '“Domestic › Loads › Post a load”. It asks one part at a time. The bar at the top says which part you are on and what comes next, and that nothing goes public before the last step; Back takes you to the part before.',
+  'help.business-loads.step2': 'Who carries it, where there is a choice: the open board, or a carrier you have a contract with. Under a contract, say the day it must arrive, your order number and when it can be delivered — the carrier plans when it collects.',
+  'help.business-loads.step3': 'From and to: choose where it is collected and where it goes from your saved places — Save a new place adds one — or deliver to another business by the code it gave you. Say which country it goes to; across a border, who receives it and their address.',
+  'help.business-loads.step4': 'What it is: say what it is, what kind of goods, its weight, how it is packed and how many packages. Carriers read exactly this, and it goes on the consignment note. Dangerous goods are named as their safety data sheet names them: the UN number, the proper shipping name, the class and the packing group.',
+  'help.business-loads.step5': 'When it is collected — empty means as soon as a carrier can — then its value and how the price is set: carriers name their price and you accept one, or the first carrier at the board price takes it. Last, what the driver is told on the day, and who to ask for.',
+  'help.business-loads.step6': '“Check and post” shows every part, and “Change” takes you back to one. It says who will see the load once it goes. “Post the load” puts it out — under a contract the button sends the order to your carrier — and shows you its code, with “Open the load” and “Post another”.',
+  'help.business-loads.step7': 'Open the load. Its record is in parts — “Overview”, “On the road”, “Papers”, “Payment” and “Claim” — tap a name, or swipe sideways. “Overview” has the prices offered, who is carrying it, the tracking link to share and the consignment note; “Papers” has the links to the note.',
   'help.business-loads.note1': 'SeeBuyGet does not take, hold or send the money for your loads. You pay the carrier directly, or through your own payment system.',
   'help.business-loads.note2': 'You are told under the bell when a load is delivered, with who received it.',
   'help.business-exports.title': 'Send a container out through a port',
@@ -260,6 +264,7 @@ export const enHelpApp = {
   // 2026-11-01 — where road meets air: the space a light load takes, and a truck run as a flight.
   'help.business-loads.note11': 'Goods that fill a truck before they weigh it down — flowers, foam, empty crates — can say the space they take, under “Space it takes (m³), if it is light for its size”. A vehicle whose fleet recorded a smaller load space is not offered the load, and the board says by how much.',
   'help.business-loads.note12': 'Moving an airline’s cargo by road under its air waybill and a flight number? Tick “Moved for an airline under its air waybill (a trucked flight)”, and give the waybill and the flight. It is carried as an ordinary road load under the law of the road: the waybill and the flight are a reference only, on the consignment note and told to the driver, and nobody on SeeBuyGet acts for the airline. Whether the air convention applies instead is not settled.',
+  'help.business-loads.note13': 'A load you have started is kept on this phone as you go, for three days, so a phone call does not lose it: Loads then offers “Carry on with the load you started” or “Start again”. It is gone from the phone once it is posted, and when you sign out.',
   // business-coming-in
   'help.business-coming-in.title': 'Receive goods at your own places',
   'help.business-coming-in.summary': 'Business app, “Coming in”: what your suppliers send to your places, as it moves — your own order number, who it is from, how much, where it is now and who is bringing it. Never its price: that stays between you and your supplier.',
@@ -468,7 +473,7 @@ export const enHelpApp = {
   // sender-instructions
   'help.sender-instructions.title': 'Leave instructions for the driver',
   'help.sender-instructions.summary': 'Every load has a box for what the sender wants the driver to know at the door — the consignment note calls it box 13. A free note, a contact the driver can call, and a delivery window. It goes on the note and to the driver who takes the load.',
-  'help.sender-instructions.step1': 'Shop app, at the counter: when a load is booked as freight, take down the contact at delivery and their phone, when it should be delivered (“before 10:00”, “second trip”), and anything else the driver needs (“gate on the north side”). All optional.',
+  'help.sender-instructions.step1': 'Shop app, at the counter: when a load is booked as freight — “Book it as freight”, one part at a time, nothing going out before “Book the freight” on its last — take down the contact at delivery and their phone under “Who to call”, and under “On the day” when it should be delivered (“before 10:00”, “second trip”) and anything else the driver needs (“gate on the north side”). All optional.',
   'help.sender-instructions.step2': 'Shop app, Freight you posted: open the load to read or change the instructions. Until the goods are taken over you can rewrite them. Once the load is on the road you can only add an instruction; it is added with the time, and what the driver was already told stays on the note.',
   'help.sender-instructions.step3': 'Driver app, My loads: the instructions are on the load card and again at the gate. The phone is a button — tap to call.',
   'help.sender-instructions.step4': 'Fleet app, Dispatch: the delivery window shows on the load, so the office can choose who to put it on. The contact does not; only the driver holding the load sees a phone number.',

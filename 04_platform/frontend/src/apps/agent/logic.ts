@@ -641,6 +641,43 @@ export function bookFreightMissing(f: AcceptForm, now: number, t: Translate): st
   return null;
 }
 
+/**
+ * 2026-11-03 — BOOKING IT AS FREIGHT, ONE PART PER SCREEN (the owner, of the Business app's long form: "chunk it up
+ * similar to the sign up process"; the counter's freight card was as long). The steps after the take-in's own measuring
+ * and destination, in the card's own order: the cash budget and when; the load — how it is packed, dangerous goods
+ * beside it, the truck; who to call; what the driver is told; then the check.
+ */
+export type FreightStep = 'price' | 'load' | 'people' | 'day' | 'check';
+export const FREIGHT_STEPS: readonly FreightStep[] = ['price', 'load', 'people', 'day', 'check'];
+
+/**
+ * What stops a step: bookFreightMissing's own rules and words, each on the step that asks for it — `goods` being the
+ * take-in's part before the steps (measured, and a shop to go to), and `check` all of them, in bookFreightMissing's
+ * order. A step never stops on another step's answer.
+ */
+export function freightStepMissing(step: FreightStep | 'goods', f: AcceptForm, now: number, t: Translate): string | null {
+  if (step === 'check') return bookFreightMissing(f, now, t);
+  if (step === 'goods') {
+    if (!parseDims(f.dims)) return t('agent.logic.freightMeasure');
+    if (!f.destPudoDid) return t('agent.logic.acceptPickDest');
+    return null;
+  }
+  if (step === 'price') {
+    if (parseBudget(f.budgetCap) == null) return t('agent.logic.freightBudget');
+    if (f.freightWhen === 'planned') {
+      const at = Date.parse(f.freightDate);
+      if (!f.freightDate || Number.isNaN(at)) return t('agent.logic.freightPlannedDate');
+      if (at <= now) return t('agent.logic.freightFutureDate');
+    }
+    return null;
+  }
+  if (step === 'load') {
+    if (!packagingValue(f.packaging)) return t('agent.logic.freightPackaging');
+    if (isDangerousNature(f.natureCode) && !dangerousGoodsValue(f)) return t('agent.logic.freightDangerous');
+  }
+  return null;
+}
+
 /* ---------------------------------------------------------------- release -- */
 
 export type ReleaseStage = 'arrive' | 'otp' | 'rate' | 'blocked';

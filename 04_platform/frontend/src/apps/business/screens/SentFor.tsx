@@ -10,13 +10,16 @@ import { ConsolePick } from '../../tower/ConsolePick';
  * Shown only where there is a choice to make — an expeditor, or a business that keeps clients. Choosing a client puts
  * THEM on the consignment note as the sender, with this business named as the one who booked it.
  */
-export function SentFor({ client, expeditor, value, onChange }: { client: BusinessClient | null; expeditor: boolean; value: string; onChange: (clientId: string) => void }) {
+export function SentFor({ client, expeditor, value, onChange, items }: { client: BusinessClient | null; expeditor: boolean; value: string; onChange: (clientId: string) => void; items?: Client[] | null }) {
   const t = useT();
-  const [clients, setClients] = useState<Client[] | null>(null);
+  const [read, setRead] = useState<Client[] | null>(null);
+  // 2026-11-03 — the clients read already, where the screen had to know first whether there is a choice to ask (posting
+  // a load leaves its first step out when there is none): not asked for twice.
+  const clients = items !== undefined ? items : read;
 
   useEffect(() => {
-    if (!client) return;
-    void client.clients().then((r) => setClients(r.data?.items ?? []));
+    if (!client || items !== undefined) return;
+    void client.clients().then((r) => setRead(r.data?.items ?? []));
   }, [client]);
 
   if (!clients || (!expeditor && clients.length === 0)) return null;

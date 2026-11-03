@@ -1,11 +1,10 @@
-const INCOTERM_OPTIONS = ['EXW', 'FCA', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP', 'FAS', 'FOB', 'CFR', 'CIF'];
-
 import { Abbreviated } from '../../../shared/ui/Abbr';
-import { useState } from 'preact/hooks';
-import { Button, Card, CheckGate, Chip, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField } from '../../../shared/ui';
+import { useEffect, useState } from 'preact/hooks';
+import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
-import { BODY_HINTS, EXCLUDABLE_BODIES, NATURES, PACKAGING_HELP, acceptMissing, bookFreightMissing, chooseBodyHint, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling, toggleExcludedBody, type BodyHint, type PackagingChoice, isDangerousNature } from '../logic';
+import { BODY_HINTS, NATURES, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling } from '../logic';
+import { FreightBooking } from './FreightBooking';
 import type { NetworkPoint, TakeInTerms } from '../types';
 import type { AgentActions, AgentState } from '../useAgentApp';
 import { PhotoField } from './PhotoField';
@@ -54,7 +53,9 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   const blockReason = acceptMissing(f, t) ?? termsBlock(state.takeInTerms, state.takeInTermsState, state.termsTold, t);
   const terms = state.takeInTermsState === 'ready' ? state.takeInTerms : null;
   const termsAloud = terms ? `${takeInTermsNotice(terms, t).title}. ${takeInTermsNotice(terms, t).detail} ` : '';
-  const freightBlock = bookFreightMissing(f, Date.now(), t);
+  // A walk-up too big for the bus is booked as freight once it is measured and has a shop to go to.
+  const entryBlock = freightStepMissing('goods', f, Date.now(), t);
+  const [booking, setBooking] = useState(false);
   // Only a SETTLED preview drives the confirm card — never a stale one still resolving under a new scan.
   const pm = state.preMintState === 'ready' ? state.preMint : null;
   // Round 13 — which parcel's papers the counter saw in the pouch: a tick belongs to one parcel, never the next one scanned.
@@ -63,6 +64,21 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   // The walk-up form applies to a FRESH sticker (idle) or when a preview blipped (error, so a plain
   // walk-up is never blocked by a network hiccup). While a code is resolving, neither shows.
   const walkUp = state.preMintState === 'idle' || state.preMintState === 'error';
+
+  // Booked (the take-in is cleared) or no longer too big: the next walk-up starts at the take-in again.
+  useEffect(() => {
+    if (!isDedicated) setBooking(false);
+  }, [isDedicated]);
+
+  // Booking it as freight is the whole screen, one part at a time, until it is booked or taken back to the take-in.
+  if (booking && isDedicated && walkUp && !entryBlock) {
+    return (
+      <div class="scr">
+        {state.error ? <ErrorNote error={state.error} /> : null}
+        <FreightBooking state={state} actions={actions} onTakeIn={() => setBooking(false)} />
+      </div>
+    );
+  }
 
   return (
     <div class="scr">
@@ -221,15 +237,15 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
       {isDedicated ? (
         <>
           <Note tone="info" icon="truck" title={t('agent.accept.tooBigTitle')} detail={t('agent.accept.tooBigDetail')} />
-          <FreightBookingCard state={state} actions={actions} />
+          {/* 2026-11-03 — measured and its shop chosen, the booking itself is one part per screen (FreightBooking.tsx). */}
           <div class="scr__cta">
-            <Button onClick={() => void actions.submitBookFreight()} disabled={Boolean(freightBlock)} busy={state.busy === 'book-freight'}>
-              {t('agent.accept.bookFreight')}
+            <Button onClick={() => setBooking(true)} disabled={Boolean(entryBlock)}>
+              {t('agent.freightSteps.open')}
             </Button>
-            {freightBlock ? <p class="hint" style="margin-top:8px"><Abbreviated text={freightBlock} /></p> : null}
+            {entryBlock ? <p class="hint" style="margin-top:8px"><Abbreviated text={entryBlock} /></p> : null}
           </div>
           <div class="scr__foot">
-            <ReadAloud text={() => freightBlock ?? t('agent.accept.freightReady')} label={t('agent.accept.whatMissing')} />
+            <ReadAloud text={() => entryBlock ?? t('agent.freightSteps.openReady')} label={t('agent.accept.whatMissing')} />
           </div>
         </>
       ) : (
@@ -437,245 +453,6 @@ function DestinationCard({ state, actions }: { state: AgentState; actions: Agent
       ) : null}
 
       {f.destShopName ? <p class="card__note">{t('agent.accept.goingTo')} <b>{f.destShopName}</b>.</p> : null}
-    </Card>
-  );
-}
-
-/**
- * F2 — the counter-freight booking card (shown only for a dedicated/P4+ walk-up). The cash budget cap (the
- * most the customer will pay → the freight's ceiling), immediate vs planned pickup (a future day, with the
- * F1 early-reservation choice), and an optional customer phone. No sticker, no proof photo — freight isn't
- * shelved; the printed tracking code is the artefact.
- */
-function FreightBookingCard({ state, actions }: { state: AgentState; actions: AgentActions }) {
-  const t = useT();
-  const f = state.accept;
-  return (
-    <Card label={t('agent.accept.bookAsFreight')}>
-      <div class="field">
-        <label class="field__label" for="freight-budget">
-          {t('agent.accept.budgetLabel')}
-        </label>
-        <input
-          id="freight-budget"
-          class="input"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          step="0.5"
-          value={f.budgetCap}
-          onInput={(e) => actions.setAccept({ budgetCap: e.currentTarget.value })}
-          placeholder={t('agent.accept.budgetPh')}
-        />
-      </div>
-      <p class="card__note">{t('agent.accept.budgetNote')}</p>
-
-      <div class="seg" role="group" aria-label={t('agent.accept.whenAria')} style="margin-top:12px">
-        <button type="button" class={`seg__btn${f.freightWhen === 'now' ? ' seg__btn--on' : ''}`} aria-pressed={f.freightWhen === 'now'} onClick={() => actions.setAccept({ freightWhen: 'now' })}>
-          <Icon name="truck" size={18} /> {t('agent.accept.shipNow')}
-        </button>
-        <button type="button" class={`seg__btn${f.freightWhen === 'planned' ? ' seg__btn--on' : ''}`} aria-pressed={f.freightWhen === 'planned'} onClick={() => actions.setAccept({ freightWhen: 'planned' })}>
-          <Icon name="clock" size={18} /> {t('agent.accept.planned')}
-        </button>
-      </div>
-
-      {f.freightWhen === 'planned' ? (
-        <>
-          <div class="field" style="margin-top:12px">
-            <label class="field__label" for="freight-date">
-              {t('agent.accept.pickupWhen')}
-            </label>
-            <input id="freight-date" class="input" type="datetime-local" value={f.freightDate} onInput={(e) => actions.setAccept({ freightDate: e.currentTarget.value })} />
-          </div>
-          <label class="checkline" style="margin-top:12px">
-            <input type="checkbox" checked={f.allowEarlyClaim} onChange={(e) => actions.setAccept({ allowEarlyClaim: e.currentTarget.checked })} />
-            <span>{t('agent.accept.earlyClaim')}</span>
-          </label>
-        </>
-      ) : null}
-
-      {/* FB5 — how it is PACKED, asked FIRST because it is the only one of these the clerk can simply see,
-          and because the two questions below read differently once it is answered. Sacks and pallets are the
-          same goods and not the same job: one is worked on and off an open deck, the other is forklifted into
-          something that shuts, and only one of them needs nothing at all to lift it. */}
-      <div class="field" style="margin-top:12px">
-        <span class="field__label" id="freight-packaging-label">
-          {t('agent.accept.packaging')}
-        </span>
-        {/* Chosen by LOOKING. The sheet shows all seven with their pictures, the chosen one ticked — which is
-            both halves of the rule at once: everything side by side while you decide, your own answer marked
-            once you have. The cast is safe by construction: every key is a PACKAGING_OPTIONS value, and that
-            list is the literal set the API's own enum is matched against. */}
-        <OptionPicker
-          id="freight-packaging"
-          labelledBy="freight-packaging-label"
-          topic="packaging"
-          title={t('agent.accept.packaging')}
-          options={PACKAGING_HELP.map((p) => ({ key: p.value, label: t(p.labelKey as 'agent.accept.packBagged'), detail: t(p.detailKey as 'agent.accept.packBaggedWhy') }))}
-          value={f.packaging}
-          onChange={(key) => actions.setAccept({ packaging: key as PackagingChoice })}
-          placeholder={t('agent.accept.packagingChoose')}
-          config={agentConfig()}
-        />
-      </div>
-      <p class="card__note">{t('agent.accept.packagingNote')}</p>
-
-      {/* FB2c — the two facts a tape measure cannot supply, asked of the one person standing at the load.
-          `indivisible` is not cosmetic: at this weight it is the difference between two ordinary trips on an
-          open deck and a low-loader with a permit. */}
-      <label class="checkline" style="margin-top:12px">
-        <input type="checkbox" checked={f.indivisible} onChange={(e) => actions.setAccept({ indivisible: e.currentTarget.checked })} />
-        <span>{t('agent.accept.indivisible')}</span>
-      </label>
-      <p class="card__note">{t('agent.accept.indivisibleNote')}</p>
-
-      <div class="field" style="margin-top:12px">
-        <span class="field__label" id="freight-body-label">
-          {t('agent.accept.bodyHint')}
-        </span>
-        {/* Bodies are the case the pictures were made for: a clerk who could not name a curtain-side knows one
-            on sight. Note this list keeps "I don't know" as a ROW rather than as the placeholder — here it is
-            a real and often correct answer (the hint is advisory, and no opinion is the honest one), not the
-            absence of one. The cast is safe by construction: every key is a BODY_HINTS value, and BODY_HINTS
-            is the literal list the API's own enum is matched against. */}
-        <OptionPicker
-          id="freight-body"
-          labelledBy="freight-body-label"
-          topic="body"
-          title={t('agent.accept.bodyHint')}
-          options={BODY_HINTS.map((b) => ({ key: b.value, label: t(b.labelKey as 'agent.accept.bodyAny'), detail: t(b.detailKey as 'agent.accept.bodyFlatbedWhy') }))}
-          value={f.bodyHint}
-          onChange={(key) => actions.setAccept(chooseBodyHint(f, key as BodyHint))}
-          placeholder={t('agent.accept.bodyAny')}
-          config={agentConfig()}
-        />
-      </div>
-      <p class="card__note">{t('agent.accept.bodyHintNote')}</p>
-
-      {/* FB2d — the shipper's own refusals, which is a different question from the one above and asked of a
-          different person: the clerk GUESSES what would work, the customer DECIDES what they will not have.
-          This one binds a claim, so it is worth the row of chips rather than being folded into the hint. */}
-      <div class="field" style="margin-top:12px">
-        <span class="field__label" id="freight-exclude">
-          {t('agent.accept.excludedBodies')}
-        </span>
-        <div class="chiprow" role="group" aria-labelledby="freight-exclude">
-          {EXCLUDABLE_BODIES.map((b) => (
-            <Chip key={b.value} label={t(b.labelKey as 'agent.accept.bodyAny')} active={f.excludedBodies.includes(b.value)} onClick={() => actions.setAccept(toggleExcludedBody(f, b.value))} />
-          ))}
-        </div>
-      </div>
-      <p class="card__note">{t('agent.accept.excludedBodiesNote')}</p>
-
-      {/* FB2b — how the load is TAKEN, as against when it is picked up. An awkward walk-up is exactly the
-          case where the formula's price is worst and a driver's own number is best. */}
-      <label class="checkline" style="margin-top:12px">
-        <input type="checkbox" checked={f.negotiate} onChange={(e) => actions.setAccept({ negotiate: e.currentTarget.checked })} />
-        <span>{t('agent.accept.negotiate')}</span>
-      </label>
-      <p class="card__note">{t('agent.accept.negotiateNote')}</p>
-
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="freight-phone">
-          {t('agent.accept.customerPhone')}
-        </label>
-        <PhoneField id="freight-phone" value={f.customerMobile} onInput={(v) => actions.setAccept({ customerMobile: v })} autoComplete="off" />
-      </div>
-      <p class="card__note">{t('agent.accept.customerPhoneNote')}</p>
-
-      {/* CMR box 2 (the gaps check, 2026-10-29): who receives it at the other shop, printed on the note as the consignee. */}
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="freight-consignee">
-          {t('agent.accept.consignee')}
-        </label>
-        <input id="freight-consignee" class="input" maxLength={120} value={f.consigneeName} onInput={(e) => actions.setAccept({ consigneeName: e.currentTarget.value })} autocomplete="off" />
-      </div>
-      <p class="card__note">{t('agent.accept.consigneeNote')}</p>
-
-      {/* CMR box 9: dangerous goods by their UN number, name and class — asked only of goods declared dangerous. */}
-      {isDangerousNature(f.natureCode) ? (
-        <>
-          <p class="field__label" style="margin-top:12px">{t('agent.accept.dangerousTitle')}</p>
-          <p class="card__note">{t('agent.accept.dangerousNote')}</p>
-          <div class="grid2">
-            <div class="field">
-              <label class="field__label" for="freight-un">{t('agent.accept.dgUn')}</label>
-              <input id="freight-un" class="input" maxLength={8} inputMode="numeric" value={f.dgUn} onInput={(e) => actions.setAccept({ dgUn: e.currentTarget.value })} placeholder="1075" autocomplete="off" />
-            </div>
-            <div class="field">
-              <label class="field__label" for="freight-class">{t('agent.accept.dgClass')}</label>
-              <input id="freight-class" class="input" maxLength={8} value={f.dgClass} onInput={(e) => actions.setAccept({ dgClass: e.currentTarget.value })} placeholder="2.1" autocomplete="off" />
-            </div>
-          </div>
-          <div class="field">
-            <label class="field__label" for="freight-psn">{t('agent.accept.dgName')}</label>
-            <input id="freight-psn" class="input" maxLength={200} value={f.dgName} onInput={(e) => actions.setAccept({ dgName: e.currentTarget.value })} autocomplete="off" />
-          </div>
-          <div class="field">
-            <label class="field__label" for="freight-pg">{t('agent.accept.dgGroup')}</label>
-            <select id="freight-pg" class="input" value={f.dgGroup} onChange={(e) => actions.setAccept({ dgGroup: e.currentTarget.value as never })}>
-              <option value="">{t('agent.accept.dgGroupNone')}</option>
-              <option value="I">I</option>
-              <option value="II">II</option>
-              <option value="III">III</option>
-            </select>
-          </div>
-        </>
-      ) : null}
-
-      {/* FP7 — CMR box 13, taken down at the counter. The contact is a FIELD, not a line in the note: the driver
-          dials it, and the public tracking page must be able to leave it out. */}
-      <div class="grid2" style="margin-top:12px">
-        <div class="field">
-          <label class="field__label" for="freight-contact">
-            {t('agent.accept.contactName')}
-          </label>
-          <input id="freight-contact" class="input" value={f.contactName} onInput={(e) => actions.setAccept({ contactName: e.currentTarget.value })} autocomplete="off" />
-        </div>
-        <div class="field">
-          <label class="field__label" for="freight-contact-phone">
-            {t('agent.accept.contactPhone')}
-          </label>
-          <PhoneField id="freight-contact-phone" value={f.contactPhone} onInput={(v) => actions.setAccept({ contactPhone: v })} autoComplete="off" />
-        </div>
-      </div>
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="freight-window">
-          {t('agent.accept.deliveryWindow')}
-        </label>
-        {/* CL1 — the trade term, if the customer agreed one with their buyer. Optional on purpose: most
-            walk-ups have not, and a load with no term behaves exactly as it always has. */}
-        <div class="field">
-          <label class="field__label" for="freight-term">
-            {t('agent.accept.incoterm')}
-          </label>
-          <select id="freight-term" class="input" value={f.incoterm} onChange={(e) => actions.setAccept({ incoterm: e.currentTarget.value as never })}>
-            <option value="">{t('agent.accept.incotermNone')}</option>
-            {INCOTERM_OPTIONS.map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
-          <p class="hint">{t('agent.accept.incotermHint')}</p>
-        </div>
-        {f.incoterm ? (
-          <div class="field">
-            <label class="field__label" for="freight-place">
-              {t('agent.accept.namedPlace')}
-            </label>
-            <input id="freight-place" class="input" value={f.namedPlace} onInput={(e) => actions.setAccept({ namedPlace: e.currentTarget.value })} placeholder={t('agent.accept.namedPlacePh')} autocomplete="off" />
-          </div>
-        ) : null}
-        <input id="freight-window" class="input" value={f.deliveryWindow} onInput={(e) => actions.setAccept({ deliveryWindow: e.currentTarget.value })} placeholder={t('agent.accept.deliveryWindowPh')} autocomplete="off" />
-      </div>
-      <div class="field" style="margin-top:12px">
-        <label class="field__label" for="freight-instructions">
-          {t('agent.accept.instructions')}
-        </label>
-        <textarea id="freight-instructions" class="input" rows={2} maxLength={500} value={f.instructions} onInput={(e) => actions.setAccept({ instructions: e.currentTarget.value })} placeholder={t('agent.accept.instructionsPh')} />
-      </div>
-      <p class="card__note">{t('agent.accept.instructionsNote')}</p>
     </Card>
   );
 }
