@@ -158,7 +158,11 @@ export function PlaceMap(props: PlaceMapProps) {
   useEffect(() => {
     if (!wantMap || MapComp) return;
     let live = true;
-    void import('./PlaceMapLeaflet')
+    // 2026-11-03 — asked once more before giving up (the owner: "the map is unavailable"): a blip in the signal, or a page
+    // opened before the last release asking for the map as that release had it. Still not there: the note offers a reload.
+    const load = () => import('./PlaceMapLeaflet');
+    void load()
+      .catch(() => new Promise<Awaited<ReturnType<typeof load>>>((resolve, reject) => setTimeout(() => load().then(resolve, reject), 1500)))
       .then((m) => {
         if (live) setMapComp(() => m.PlaceMapLeaflet);
       })
@@ -196,7 +200,12 @@ export function PlaceMap(props: PlaceMapProps) {
       {mode === 'map' && !online ? (
         <p class="pmap-note">Map needs a connection — showing the simple view.</p>
       ) : mapError ? (
-        <p class="pmap-note">Map unavailable — showing the simple view.</p>
+        <p class="pmap-note">
+          Map unavailable — showing the simple view.{' '}
+          <button type="button" class="linkbtn" onClick={() => globalThis.location?.reload()}>
+            Reload to try the map again
+          </button>
+        </p>
       ) : null}
     </div>
   );

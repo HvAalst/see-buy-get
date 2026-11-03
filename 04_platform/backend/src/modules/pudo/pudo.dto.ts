@@ -276,6 +276,12 @@ export class UploadMediaDto {
   @IsOptional() @IsString() thumbDataUrl?: string; // a small thumbnail for the media grid
 }
 
+/** 2026-11-03 — a person's ID or licence as a photo or a PDF (MediaController.uploadPaper). */
+export class UploadPaperDto {
+  @IsIn(['kyc_id', 'kyc_licence']) @ApiProperty({ enum: ['kyc_id', 'kyc_licence'] }) kind!: 'kyc_id' | 'kyc_licence';
+  @IsString() @ApiProperty() dataUrl!: string; // data:application/pdf;base64,… or an image
+}
+
 /** The illustration an SBG admin curates for one option of a choosable vocabulary. Topic and key ride in the
  *  path (and are validated against the canonical lists), so the body carries only the picture. */
 export class PutHelpImageDto {

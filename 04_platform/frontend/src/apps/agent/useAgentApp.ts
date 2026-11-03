@@ -13,7 +13,7 @@ import {
   type SbgError,
 } from '../../lib/sbg';
 import type { MediaKind } from '../../lib/sbg/personas/media';
-import { downscaleImage } from '../../shared/media';
+import { downscaleImage, paperForUpload } from '../../shared/media';
 import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
 import { failedWords, mediaIdOf, type Uploaded } from '../../shared/upload';
 import { holdPhoto, mayHold } from '../../shared/heldPhotos';
@@ -803,6 +803,21 @@ export function useAgentApp() {
       }
     },
     [client, pushToast],
+  );
+
+  /** 2026-11-03 — the shop's ID or trading licence as a photo or a PDF (the owner: "photo or pdf for both docs"). */
+  const uploadPaper = useCallback(
+    async (kind: 'kyc_id' | 'kyc_licence', file: File): Promise<Uploaded> => {
+      if (!client) return { failed: t('upload.failed') };
+      try {
+        const r = await client.api.uploadPaper(kind, await paperForUpload(file));
+        if (r.error) return { failed: uploadFailureSentence(r.error, 'photo') };
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? { failed: t('upload.failed') };
+      } catch (e) {
+        return { failed: uploadFailureSentence(e, 'photo') };
+      }
+    },
+    [client],
   );
 
   const loadShopParcels = useCallback(async () => {
@@ -2641,6 +2656,7 @@ export function useAgentApp() {
       setLocationPin,
       saveHours,
       sendPapers,
+      uploadPaper,
       sendLicenceRenewal,
       saveShopfront,
       submitAccept,

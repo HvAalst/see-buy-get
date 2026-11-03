@@ -27249,6 +27249,29 @@
         }
       }
     },
+    "/v1/sbg/media/paper": {
+      "post": {
+        "operationId": "Media.uploadPaper",
+        "summary": "",
+        "description": "2026-11-03 — A PAPER, AS A PHOTO OR A PDF (the owner: \"photo or pdf for both docs\", of a shop's ID and trading licence):\na person's ID or licence, up to a company paper's size. Kept as the photo upload keeps its photos — owned by the caller,\nadopted by the record it is sent with — so staff see it where they decide.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadPaperDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/media/{id}": {
       "get": {
         "operationId": "Media.fetch",
@@ -71121,6 +71144,25 @@
             "type": "string"
           },
           "thumbDataUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "dataUrl"
+        ]
+      },
+      "UploadPaperDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "kyc_id",
+              "kyc_licence"
+            ]
+          },
+          "dataUrl": {
             "type": "string"
           }
         },

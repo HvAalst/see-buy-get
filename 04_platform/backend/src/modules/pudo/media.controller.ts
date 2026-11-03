@@ -5,7 +5,7 @@ import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { SignedIn } from '../../foundation/auth/scopes.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { MediaService } from './media.service';
-import { UploadMediaDto } from './pudo.dto';
+import { UploadMediaDto, UploadPaperDto } from './pudo.dto';
 import { AtTheCounter } from '../../foundation/auth/at-the-counter';
 
 /**
@@ -39,6 +39,18 @@ export class MediaController {
   @AtTheCounter()
   upload(@Body() dto: UploadMediaDto, @Actor() actor: IntrospectionResult) {
     return this.media.upload({ ownerDid: this.owner(actor), kind: dto.kind, dataUrl: dto.dataUrl, thumbDataUrl: dto.thumbDataUrl });
+  }
+
+  /**
+   * 2026-11-03 — A PAPER, AS A PHOTO OR A PDF (the owner: "photo or pdf for both docs", of a shop's ID and trading licence):
+   * a person's ID or licence, up to a company paper's size. Kept as the photo upload keeps its photos — owned by the caller,
+   * adopted by the record it is sent with — so staff see it where they decide.
+   */
+  @SignedIn()
+  @Post('paper')
+  @AtTheCounter()
+  uploadPaper(@Body() dto: UploadPaperDto, @Actor() actor: IntrospectionResult) {
+    return this.media.uploadPaper({ ownerDid: this.owner(actor), kind: dto.kind, dataUrl: dto.dataUrl });
   }
 
   /** The caller's own media — the source for the media library (S27). PII-free projection. */

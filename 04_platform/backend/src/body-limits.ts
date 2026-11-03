@@ -48,7 +48,7 @@ export const BODY_LIMITS: BodyLimit[] = [
   file('a photograph', ['/v1/sbg/media', '/v1/sbg/shipping/photos', '/v1/sbg/api/business/photos', '/v1/sbg/api/business/parcels/photos', '/v1/sbg/identity/id-disputes/photo'], UPLOAD_LIMITS.photo, UPLOAD_LIMITS.photoThumb),
   file('a help picture', ['/v1/sbg/help/:id/:id/image'], UPLOAD_LIMITS.helpPicture),
   file('a voice message', ['/v1/sbg/conversations/:id/voice'], UPLOAD_LIMITS.voice),
-  file('a company paper', ['/v1/sbg/entities/:id/documents', '/v1/sbg/entities/:id/record/declare', '/v1/sbg/quotes/:id/proforma'], UPLOAD_LIMITS.document),
+  file('a company paper', ['/v1/sbg/entities/:id/documents', '/v1/sbg/entities/:id/record/declare', '/v1/sbg/quotes/:id/proforma', '/v1/sbg/media/paper'], UPLOAD_LIMITS.document),
   file('what shows a paper is wrong', ['/v1/sbg/entities/:id/documents/:id/report', '/v1/sbg/contract/company/papers/report', '/v1/sbg/paper-reports/:id/answer'], UPLOAD_LIMITS.evidence),
   text('a sheet of orders', ['/v1/sbg/fleet/managers/:id/contracts/:id/orders/import'], UPLOAD_LIMITS.orderSheetText),
   text('a packing list', ['/v1/sbg/exports/:id/packing-list/check', '/v1/sbg/exports/:id/packing-list', '/v1/sbg/api/business/exports/:id/packing-list'], UPLOAD_LIMITS.packingText),

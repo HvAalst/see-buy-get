@@ -3,6 +3,7 @@ import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingPerson } from '../../foundation/auth/acting';
 import { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { Roles, SignedIn } from '../../foundation/auth/scopes.decorator';
+import { Public } from '../../foundation/auth/public.decorator';
 import { GlosError } from '../../foundation/http/glos-error';
 import { addressFormatFor } from '../../foundation/countries/address-format';
 import { AddressFormatView } from './pudo.types';
@@ -135,7 +136,9 @@ export class AccountController {
    * The fields an address in this country has, in the order a form asks them, which are required, and what its postcode
    * looks like (2026-10-30). Only the shape of an address: nothing about anybody's.
    */
-  @SignedIn()
+  // 2026-11-03 — before sign-in too: a shop's sign-up asks its address in the country's own parts (the owner: "An address
+  // would be better"). Only the shape of an address, the same for everybody.
+  @Public()
   @Get('address-format/:country')
   addressFormat(@Param('country') country: string): AddressFormatView {
     if (!/^[A-Za-z]{2}$/.test(country ?? '')) throw new GlosError('VALIDATION_FAILED', 'A country is two letters', { field: 'country' });

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, PlaceWords, Sheet, ShopDetailSheet, PhoneField, StepList } from '../../../shared/ui';
+import { AddressFields } from '../../../shared/account/AddressFields';
+import { addressFormatOf } from '../api';
 import { EmailStep } from '../../../shared/account/EmailStep';
 import { AgreementBlock, AgreementCheck } from '../../../shared/documents/Agreement';
 import { countryOfNumber } from '../../../shared/phone/dial';
@@ -13,7 +15,7 @@ import { pageNameFor } from '../../../shared/handle';
 import { SignedOutBar } from '../../../shared/ui/SignedOutBar';
 import { JoinHelp } from './JoinHelp';
 
-import { readyLine, stepName, driverSendsPapers, ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
+import { addressCountry, readyLine, stepName, driverSendsPapers, ANDROID_CHOICES, DRIVER_CLASSES, FLEET_PAPERS, fleetSignupWords, joinSpoken, joiningCountry, needsLicence, pickedClasses, pickedVehicle, roleMeta, stepBlocker, stepsFor, vehicleClassFor, type FleetPaper } from '../logic';
 import { INTEREST_KINDS, MAX_INTEREST_MESSAGE, leaveInterest, type OperatingCountry } from '../api';
 import type { HomeActions, HomeState } from '../useHomeApp';
 
@@ -33,7 +35,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
   const role = state.role;
   if (!role) return null;
 
-  const steps = stepsFor(role.kind, driverSendsPapers(role.kind, state.form));
+  const steps = stepsFor(role.kind, driverSendsPapers(role.kind, state.form), role.id === 'pudo');
   const fleet = role.kind === 'fleet';
   // Somebody coming back to a fleet they signed up is shown it, not an empty form for a second one.
   const showSignups = fleet && state.step === 'about' && Boolean(state.fleetSignups?.length) && !state.fleetAnother;
@@ -54,7 +56,7 @@ export function JoinScreen({ state, actions }: JoinScreenProps) {
       {state.step === 'pin' ? <PinStep state={state} actions={actions} /> : null}
       {state.step === 'about' ? showSignups ? <FleetSignups state={state} actions={actions} /> : fleet ? <FleetAboutStep state={state} actions={actions} /> : <AboutStep state={state} actions={actions} /> : null}
       {state.step === 'where' ? <WhereStep state={state} actions={actions} /> : null}
-      {state.step === 'papers' ? fleet ? <PapersStep state={state} actions={actions} /> : <DriverPapersStep state={state} actions={actions} /> : null}
+      {state.step === 'papers' ? fleet ? <PapersStep state={state} actions={actions} /> : role.id === 'pudo' ? <ShopPapersStep state={state} actions={actions} /> : <DriverPapersStep state={state} actions={actions} /> : null}
       {state.step === 'login' ? <LoginStep state={state} actions={actions} /> : null}
       {state.step === 'done' ? fleet ? <FleetDone state={state} actions={actions} /> : <DoneStep state={state} actions={actions} /> : null}
 
@@ -611,6 +613,49 @@ function DriverPapersStep({ state, actions }: JoinScreenProps) {
   );
 }
 
+/**
+ * 2026-11-03 — A SHOP'S PAPERS, THE MOMENT ITS ACCOUNT IS MADE (the owner: "the shop sign up is asking for id number, but not
+ * yet the upload. same for trading license … we should take the same measures as business, skip, but pending. photo or pdf
+ * for both docs"). Its owner's ID and its trading licence, each a photo or a PDF, and a photo of its front; sent to staff,
+ * or skipped — the shop then waits, pending, and sends them from the Shop app.
+ */
+function ShopPapersStep({ state, actions }: JoinScreenProps) {
+  const t = useT();
+  const role = state.role!;
+  const f = state.form;
+  const blocker = stepBlocker(role, 'papers', f, t);
+  const set = (key: 'idCopyRef' | 'tradingLicenceRef' | 'shopPhotoRef', mediaId: string) => actions.setForm({ shopPapers: { ...state.form.shopPapers, [key]: mediaId } });
+  return (
+    <>
+      <h1 class="scr__title">{t('home.join.shopPapers.title')}</h1>
+      <p class="scr__lede">{t('home.join.shopPapers.lede')}</p>
+      {state.error ? <ErrorNote error={state.error} /> : null}
+      <Card label={t('home.join.shopPapers.id')}>
+        <p class="t-label">{t('home.join.shopPapers.id')}</p>
+        <PhotoField id="shop-id" document value={f.shopPapers.idCopyRef} label={t('home.fleet.papers.take')} upload={(file) => actions.uploadShopPaper('kyc_id', file)} onCapture={(mediaId) => set('idCopyRef', mediaId)} />
+      </Card>
+      <Card label={t('home.join.shopPapers.licence')}>
+        <p class="t-label">{t('home.join.shopPapers.licence')}</p>
+        <PhotoField id="shop-licence-paper" document value={f.shopPapers.tradingLicenceRef} label={t('home.fleet.papers.take')} upload={(file) => actions.uploadShopPaper('kyc_licence', file)} onCapture={(mediaId) => set('tradingLicenceRef', mediaId)} />
+      </Card>
+      <Card label={t('home.join.shopPapers.front')}>
+        <p class="t-label">{t('home.join.shopPapers.front')}</p>
+        <PhotoField id="shop-front" value={f.shopPapers.shopPhotoRef} label={t('home.fleet.papers.take')} upload={(file) => actions.uploadShopPaper('shop', file)} onCapture={(mediaId) => set('shopPhotoRef', mediaId)} />
+      </Card>
+      <div class="scr__cta">
+        <Button onClick={() => void actions.sendShopPapers()} disabled={Boolean(blocker)} busy={state.busy === 'submit'}>
+          {t('home.join.shopPapers.send')}
+        </Button>
+        {blocker ? <p class="hint" style="margin-top:8px">{blocker}</p> : null}
+        <Button variant="link" onClick={() => void actions.sendShopPapers(true)}>
+          {t('home.join.shopPapers.skip')}
+        </Button>
+        <p class="card__note">{t('home.join.shopPapers.skipNote')}</p>
+      </div>
+    </>
+  );
+}
+
 /* ------------------------------------------------------------- fleet: done -- */
 
 function FleetDone({ state, actions }: JoinScreenProps) {
@@ -1013,7 +1058,21 @@ function WhereStep({ state, actions }: JoinScreenProps) {
             ))}
           </datalist>
         ) : null}
-        {role.kind !== 'fleet' ? <p class="card__note">{t('home.join.where.areaHint')}</p> : null}
+        {role.kind !== 'fleet' ? <p class="card__note">{t(addressCountry(f.addressFormat) && (role.id === 'pudo' || role.id === 'mdp') ? 'home.join.where.areaOptional' : 'home.join.where.areaHint')}</p> : null}
+        {/* 2026-11-03 — the owner: "A country like the Netherlands should be checked at first step … It would trigger the address
+            field besides the map": the address in the country's own parts, asked where the country writes them with a postcode. */}
+        {(role.id === 'pudo' || role.id === 'mdp') && f.country ? (
+          <div style="margin-top:12px">
+            <AddressFields
+              id="join-address"
+              value={{ ...f.address, country: f.country }}
+              onChange={(address) => actions.setForm({ address })}
+              loadFormat={(country) => addressFormatOf(country)}
+              loadCountries={async () => ({ data: [{ country: f.country, name: state.countries.find((c) => c.country === f.country)?.name ?? f.country }], error: null, status: 200 })}
+              onFormat={(addressFormat) => actions.setForm({ addressFormat })}
+            />
+          </div>
+        ) : null}
         {role.id !== 'driver' && role.kind !== 'fleet' ? (
           <div class="field" style="margin-top:12px">
             <label class="field__label" for="landmark">
@@ -1142,7 +1201,7 @@ function DoneStep({ state, actions }: JoinScreenProps) {
                     [t('home.join.done.signInPlace', { app: roleMeta(role, t).appNoun }), t('home.join.done.hubPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
                   : role.id === 'pudo'
                     ? // …and so does a shop, from the Shop app: this list said "we check your details" and never what to send.
-                      [t('home.join.done.signInPlace', { app: roleMeta(role, t).appNoun }), t('home.join.done.shopPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
+                      [t('home.join.done.signInPlace', { app: roleMeta(role, t).appNoun }), t(state.shopPapersSent ? 'home.join.done.shopPapersSent' : 'home.join.done.shopPapers'), t('home.join.done.pending1'), t('home.join.done.pending3')]
                     : [t('home.join.done.pending1'), t('home.join.done.pending2'), t('home.join.done.pending3')]
             }
           />

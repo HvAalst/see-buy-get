@@ -1,3 +1,4 @@
+import type { AddressFormat } from '../../shared/account/address';
 import { makeConfig, publicDownload, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
 import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { DocumentLinkView, LinkAnswer } from '../../shared/archive/documentLink';
@@ -6,7 +7,7 @@ import type { ProofAnswer } from '../../lib/sbg/personas/archive';
 import type { HubOpenNow, HubWeek } from '../../shared/hubReach';
 import type { VisitPlace } from '../../shared/visitHours';
 import { readDeviceKey, saveDeviceKey } from '../../shared/account/pin';
-import { downscaleImage } from '../../shared/media';
+import { downscaleImage, paperForUpload } from '../../shared/media';
 import { uploadFailureSentence } from '../../shared/ui/ErrorNote';
 import type { Uploaded } from '../../shared/upload';
 import { dropInvite, inviteBody } from '../../shared/invite';
@@ -137,6 +138,33 @@ export async function uploadPaper(session: PersonSession, kind: string, file: Fi
   } catch (e) {
     return { failed: uploadFailureSentence(e, 'photo') };
   }
+}
+
+/**
+ * 2026-11-03 — A SHOP'S PAPER, a photo or a PDF (the owner: "photo or pdf for both docs"), uploaded with the shop's own
+ * sign-in the moment its account is made. A photo is made smaller on this phone, as every photo is; a PDF goes as it is,
+ * to the door that takes a company paper's size.
+ */
+export async function uploadShopPaper(session: PersonSession, kind: 'kyc_id' | 'kyc_licence', file: File): Promise<Uploaded> {
+  try {
+    // The one checked path for a paper: a PDF as it is, a photo made smaller where it must be (shared/media.ts).
+    const dataUrl = await paperForUpload(file);
+    const r = await publicRequest<{ mediaId: string }>(homeConfig(), '/v1/sbg/media/paper', { body: { kind, dataUrl }, bearer: session.token });
+    if (r.error) return { failed: uploadFailureSentence(r.error, 'photo') };
+    return r.data?.mediaId ?? { failed: uploadFailureSentence(undefined, 'photo') };
+  } catch (e) {
+    return { failed: uploadFailureSentence(e, 'photo') };
+  }
+}
+
+/** The shop's papers, sent for staff to check, with the shop's own sign-in (the Shop app's "Send your papers" door). */
+export function sendShopPapers(session: PersonSession, did: string, papers: { idCopyRef: string; tradingLicenceRef: string; shopPhotoRefs: string[] }): Promise<Result<unknown>> {
+  return publicRequest<unknown>(homeConfig(), `/v1/sbg/agents/${encodeURIComponent(did)}/submit-kyc`, { body: papers, bearer: session.token });
+}
+
+/** 2026-11-03 — the parts an address has in a country, before sign-in: a shop's sign-up asks its address in them. */
+export function addressFormatOf(country: string): Promise<Result<AddressFormat>> {
+  return publicRequest<AddressFormat>(homeConfig(), `/v1/sbg/account/address-format/${encodeURIComponent(country)}`);
 }
 
 /** A fleet's sign-up as its person reads it back: where it stands and, sent back, why. */

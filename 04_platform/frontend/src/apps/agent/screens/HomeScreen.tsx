@@ -5,6 +5,8 @@ import { formatDate, useT, type MessageKey } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { canAccept, gateNotice, homeSummary, licenceNotice, licenceReady, money, papersReady, papersStep } from '../logic';
 import { PhotoField } from './PhotoField';
+// 2026-11-03 — the shop's ID and trading licence: a photo, or a photo or PDF from the phone (the shared field).
+import { PhotoField as PaperField } from '../../../shared/ui/PhotoField';
 import { PeopleSheet } from './PeopleSheet';
 import type { AgentActions, AgentState, Screen } from '../useAgentApp';
 import type { GeoPoint } from '../../../shared/geo';
@@ -664,8 +666,8 @@ function Papers({ state, actions }: HomeScreenProps) {
       {open ? (
         <Sheet open onClose={() => setOpen(false)} title={t('agent.papers.send')}>
           <p class="t-body">{t('agent.papers.sheetBody')}</p>
-          <PhotoField id="papers-id" value={idCopy} label={t('agent.papers.idPhoto')} upload={(file) => actions.uploadPhoto('kyc_id', file)} onCapture={setIdCopy} />
-          <PhotoField id="papers-licence" value={licence} label={t('agent.papers.licencePhoto')} upload={(file) => actions.uploadPhoto('kyc_licence', file)} onCapture={setLicence} />
+          <PaperField id="papers-id" document value={idCopy} label={t('agent.papers.idPhoto')} upload={(file) => actions.uploadPaper('kyc_id', file)} onCapture={setIdCopy} />
+          <PaperField id="papers-licence" document value={licence} label={t('agent.papers.licencePhoto')} upload={(file) => actions.uploadPaper('kyc_licence', file)} onCapture={setLicence} />
           <PhotoField id="papers-shop" value={shopFront} label={t('agent.papers.shopPhoto')} upload={(file) => actions.uploadPhoto('shop', file)} onCapture={setShopFront} />
           <Button
             chevron={false}

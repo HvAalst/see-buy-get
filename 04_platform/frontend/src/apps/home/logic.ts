@@ -1,3 +1,4 @@
+import { anyPart, missingPart, type AddressFormat, type AddressParts } from '../../shared/account/address';
 /**
  * Pure front-door logic — no DOM, no fetch, no Preact. Deterministic and unit-tested.
  *
@@ -252,6 +253,11 @@ export interface JoinForm {
   papers: Record<FleetPaper, string>;
   /** A driver on a motorcycle or larger: the photographs of their ID card and their driving licence (2026-10-30). */
   driverPapers: { idCopyRef: string; licenceCopyRef: string };
+  /** 2026-11-03 — a shop's papers, uploaded after its account is made: its owner's ID, its trading licence, its front. */
+  shopPapers: { idCopyRef: string; tradingLicenceRef: string; shopPhotoRef: string };
+  /** 2026-11-03 — a shop's or a hub's address in its country's own parts, where the country writes addresses so. */
+  address: AddressParts;
+  addressFormat: AddressFormat | null;
   /** The versions of the terms of use, the data notice and the cookie statement agreed to, as on screen (2026-10-25). */
   agreement: Agreement | null;
   /**
@@ -335,6 +341,9 @@ export const EMPTY_JOIN: JoinForm = {
   taxId: '',
   papers: { businessRegCertRef: '', operatorLicenceRef: '', ownerIdRef: '', proofOfAddressRef: '' },
   driverPapers: { idCopyRef: '', licenceCopyRef: '' },
+  shopPapers: { idCopyRef: '', tradingLicenceRef: '', shopPhotoRef: '' },
+  address: { country: '' },
+  addressFormat: null,
   agreement: null,
   agreementHere: null,
 };
@@ -354,7 +363,7 @@ export function driverSendsPapers(kind: JoinKind, form: Pick<JoinForm, 'licenceC
   return kind === 'driver' && needsLicence(form.licenceClasses);
 }
 
-export function stepsFor(kind: JoinKind, papers = false): JoinStep[] {
+export function stepsFor(kind: JoinKind, papers = false, shop = false): JoinStep[] {
   // Round 40 — a store's sign-in works only on its own phones and browsers, each confirmed by a code to its number:
   // the number is checked first, as a shop's and a hub's are. It has no 'where' (its country is asked in 'about').
   if (kind === 'vendor') return ['phone', 'code', 'about', 'login', 'done'];
@@ -364,6 +373,9 @@ export function stepsFor(kind: JoinKind, papers = false): JoinStep[] {
   // A driver says how they sign in last, as everybody else does — with the PIN the Driver app opens with — and one who
   // drives on a licence photographs their ID and licence after it, under that sign-in, before the sign-up is sent.
   if (kind === 'driver') return papers ? ['phone', 'code', 'about', 'where', 'pin', 'papers', 'done'] : ['phone', 'code', 'about', 'where', 'pin', 'done'];
+  // 2026-11-03 — a shop photographs its ID, its trading licence and its front (a photo or a PDF) the moment its account is
+  // made, under its own sign-in — or skips, and stays pending until it has (the owner: "skip, but pending").
+  if (shop) return ['phone', 'code', 'about', 'where', 'login', 'papers', 'done'];
   return ['phone', 'code', 'about', 'where', 'login', 'done'];
 }
 
@@ -386,7 +398,7 @@ export function stepName(role: RoleSpec, step: JoinStep, t: Translate): string {
     case 'where':
       return kind === 'driver' ? t('home.join.steps.whereStart') : kind === 'fleet' ? t('home.join.steps.whereDepot') : t('home.join.steps.wherePlace');
     case 'papers':
-      return kind === 'driver' ? t('home.join.steps.driverPapers') : t('home.join.steps.fleetPapers');
+      return kind === 'driver' ? t('home.join.steps.driverPapers') : kind === 'signup' ? t('home.join.steps.shopPapers') : t('home.join.steps.fleetPapers');
     case 'login':
       return t('home.join.steps.login');
     default:
@@ -400,13 +412,13 @@ export function readyLine(role: RoleSpec, t: Translate): string {
   return t(key[role.id]);
 }
 
-export function nextStep(kind: JoinKind, step: JoinStep, papers = false): JoinStep {
-  const steps = stepsFor(kind, papers);
+export function nextStep(kind: JoinKind, step: JoinStep, papers = false, shop = false): JoinStep {
+  const steps = stepsFor(kind, papers, shop);
   return steps[Math.min(steps.indexOf(step) + 1, steps.length - 1)];
 }
 
-export function prevStep(kind: JoinKind, step: JoinStep, papers = false): JoinStep {
-  const steps = stepsFor(kind, papers);
+export function prevStep(kind: JoinKind, step: JoinStep, papers = false, shop = false): JoinStep {
+  const steps = stepsFor(kind, papers, shop);
   return steps[Math.max(steps.indexOf(step) - 1, 0)];
 }
 
@@ -431,6 +443,7 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       // The PIN is where a person's account is made: every sign-up agrees first (2026-10-25).
       return f.agreement ? null : t('agreement.needed');
     case 'papers':
+      if (role.id === 'pudo') return f.shopPapers.idCopyRef && f.shopPapers.tradingLicenceRef && f.shopPapers.shopPhotoRef ? null : t('home.block.shopPapers');
       if (role.kind === 'driver') return f.driverPapers.idCopyRef && f.driverPapers.licenceCopyRef ? null : t('home.block.driverPapers');
       return FLEET_PAPERS.every(([key]) => f.papers[key]) ? null : t('home.block.papers');
     case 'about':
@@ -490,6 +503,9 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
       if (!f.location && role.kind !== 'driver') return t('home.block.location');
       // A fleet's depot is a pin and an address; the network's delivery areas are a shop's and a courier's question.
       if (role.kind === 'fleet') return null;
+      // 2026-11-03 — the owner: "An address would be better in that case": where the country writes its addresses with a
+      // postcode (the Netherlands), the address in its parts, and the network's area is not asked.
+      if (addressCountry(f.addressFormat) && (role.id === 'pudo' || role.id === 'mdp')) return missingPart(f.address, f.addressFormat) ? t('home.block.address') : null;
       if (!f.zone.trim()) return t('home.block.zone');
       return null;
     case 'login':
@@ -532,9 +548,10 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
           mobile: phone,
           deviceImei: deviceMarker,
           country: f.country.trim().toUpperCase(), // which sister contracts this shop — refused if we have none there
-          zone: f.zone.trim(),
+          zone: f.zone.trim() || zoneFromAddress(f.address),
           landmark: f.landmark.trim() || 'Pin dropped on the map',
           location: f.location,
+          ...(addressCountry(f.addressFormat) && anyPart(f.address) ? { physicalAddress: addressLine(f.address, f.addressFormat) } : {}),
           // No fee from here: the shop starts at its country's company's figure and sets its own (2026-11-01 audit).
           shelf: { rows: 4, cols: 5 },
           openingHours: everyDay(f.openFrom, f.openTo),
@@ -653,7 +670,7 @@ export function joinSpoken(role: RoleSpec, step: JoinStep, t: Translate): string
     case 'pin':
       return t('home.join.spoken.pin');
     case 'papers':
-      return role.id === 'driver' ? t('home.join.spoken.driverPapers') : t('home.join.spoken.papers');
+      return role.id === 'driver' ? t('home.join.spoken.driverPapers') : role.id === 'pudo' ? t('home.join.spoken.shopPapers') : t('home.join.spoken.papers');
     case 'about':
       return role.id === 'driver' ? t('home.join.spoken.aboutDriver') : t('home.join.spoken.aboutPlace');
     case 'where':
@@ -881,4 +898,22 @@ export function readDeepLink(search: string): DeepLink {
   const go = q.get('go');
   if (go === 'market' || go === 'agents' || go === 'verify' || go === 'signin' || go === 'roles') return { go };
   return null;
+}
+
+/** 2026-11-03 — a country that writes its addresses with a postcode: there an address is asked, not the network's area. */
+export function addressCountry(format: AddressFormat | null): boolean {
+  return Boolean(format?.fields.some((f) => f.key === 'postcode' && f.required));
+}
+
+/** The address on one line, in the order the country writes it. */
+export function addressLine(address: AddressParts, format: AddressFormat | null): string {
+  const order = format?.fields.map((f) => f.key) ?? [];
+  return order.map((k) => (address[k] ?? '').trim()).filter(Boolean).join(', ');
+}
+
+/** The area the network sorts by, where none was typed: the postcode's first part, else the town. */
+export function zoneFromAddress(address: AddressParts): string {
+  const postcode = (address.postcode ?? '').trim().toUpperCase();
+  const first = /^[A-Z0-9]+/.exec(postcode)?.[0];
+  return first ? first.slice(0, 4) : (address.town ?? '').trim();
 }

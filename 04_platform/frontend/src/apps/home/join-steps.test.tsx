@@ -83,12 +83,14 @@ describe('the steps stay in sight while the form scrolls (the owner, 2026-11-02)
     expect(html.indexOf('class="scr__title"')).toBeGreaterThan(bar);
     expect(html).toContain('<span class="steps__now">The code we text you</span>');
     expect(html).toContain('Next: About your shop');
-    expect((html.match(/class="steps__seg /g) ?? []).length).toBe(5);
+    // 2026-11-03 — a shop's papers are a step of their own after its email and password: six.
+    expect((html.match(/class="steps__seg /g) ?? []).length).toBe(6);
     expect(html).toMatch(/<ol (?=[^>]*class="steps__list")(?=[^>]*id="steps-all")(?=[^>]*\bhidden\b)[^>]*>/);
     expect(html).toContain('aria-expanded="false"');
   });
 
   it('says the last step is the last', () => {
-    expect(render('pudo', 'login')).toContain('Last step');
+    expect(render('pudo', 'papers')).toContain('Last step');
+    expect(render('pudo', 'login')).not.toContain('Last step');
   });
 });

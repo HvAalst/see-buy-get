@@ -373,6 +373,7 @@ export const enHome = {
   'home.join.steps.whereDepot': 'Where your depot is',
   'home.join.steps.driverPapers': 'Your ID and licence',
   'home.join.steps.fleetPapers': 'Your four papers',
+  'home.join.steps.shopPapers': 'Your papers',
   'home.join.steps.login': 'Your email and password',
   'home.join.steps.done': 'Done',
   // What to have ready, on the first step: the sign-ups are not alike (2026-11-01).
@@ -394,6 +395,7 @@ export const enHome = {
   'home.join.spoken.done': 'You are signed up.',
   'home.join.spoken.pin': 'Choose a five-digit PIN. You open your app with your phone number and this PIN.',
   'home.join.spoken.papers': 'Take a photograph of each of the four papers.',
+  'home.join.spoken.shopPapers': 'Take a photo of your ID and of the trading licence, or choose them from the phone as a photo or a PDF, and a photo of the shop. Or skip for now: the shop waits until they are sent.',
 
   // Join wizard — the step blockers (logic.ts stepBlocker; the CTA hint that says the next thing to do).
   'home.block.phone': 'Type the phone number you use every day.',
@@ -420,6 +422,8 @@ export const enHome = {
   'home.block.location': 'Tap the map to drop a pin where you are.',
   'home.block.country': 'Pick the country you are signing up in.',
   'home.block.zone': 'Pick the area you serve.',
+  'home.block.shopPapers': 'Add your ID, the trading licence and a photo of the shop — or skip for now.',
+  'home.block.address': 'Give the shop’s address: every part it asks for.',
   'home.block.email': 'Type an email you can open.',
   'home.block.password': 'Use at least 8 characters.',
   'home.block.pin': 'Choose five digits.',
@@ -608,6 +612,7 @@ export const enHome = {
   'home.join.where.areaTitle': 'Which area do you serve?',
   'home.join.where.areaLabel': 'Area',
   'home.join.where.areaHint': 'Pick your area from the list, or type a new one.',
+  'home.join.where.areaOptional': 'Optional here: the address below says where the shop is, and the area is worked out from its postcode.',
   'home.join.where.landmarkLabel': 'Nearest landmark (optional)',
   'home.join.where.landmarkPh': 'Blue gate, next to the market',
   'home.join.where.shopFallback': 'Shop',
@@ -640,6 +645,7 @@ export const enHome = {
   'home.join.done.signInPlace': 'Sign in to the {app} app with your email and password; a new phone or browser asks for a code sent to this number',
   'home.join.done.hubPapers': 'Open the Hub app and send its papers: an ID, the trading licence and a photo of the hub',
   'home.join.done.shopPapers': 'Open the Shop app and send its papers: your ID, the trading licence and a photo of the shop',
+  'home.join.done.shopPapersSent': 'Your papers are with SeeBuyGet staff: the shop opens once they have checked them, and you are told in the Shop app',
   'home.join.done.openApp': 'Open the {name} app',
   'home.join.done.restart': 'Back to the start',
 
@@ -793,4 +799,13 @@ export const enHome = {
   'home.block.tradingLicence': 'Add your trading licence number',
   'home.block.hours': 'A shop is open at least 10 hours a day',
   'home.block.record': 'Shops on the network declare a clean criminal record',
+  // 2026-11-03 — a shop's papers, the moment its account is made: a photo or a PDF, or skipped and pending.
+  'home.join.shopPapers.title': 'Your papers',
+  'home.join.shopPapers.lede': 'SeeBuyGet staff check these before your shop takes parcels in. A photo, or a PDF from the phone.',
+  'home.join.shopPapers.id': 'Your ID',
+  'home.join.shopPapers.licence': 'The trading licence',
+  'home.join.shopPapers.front': 'A photo of the shop, from the front',
+  'home.join.shopPapers.send': 'Send them to be checked',
+  'home.join.shopPapers.skip': 'Skip for now',
+  'home.join.shopPapers.skipNote': 'Your shop is made either way. Skipped, it waits until you send them from the Shop app’s home screen.',
 };

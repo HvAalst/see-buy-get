@@ -40,7 +40,7 @@ import { driverSendsPapers, EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink,
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 import { isPinReset } from '../../shared/account/recovery';
 import { captureInvite } from '../../shared/invite';
-import { enrollPerson, mySignups, sendPapersAgain, signUpDriver, signUpFleet, uploadPaper, type FleetSignupView, type PersonSession } from './api';
+import { enrollPerson, mySignups, sendPapersAgain, sendShopPapers as sendShopPapersApi, signUpDriver, signUpFleet, uploadPaper, uploadShopPaper as uploadShopPaperApi, type FleetSignupView, type PersonSession } from './api';
 
 export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help' | 'info' | 'directory';
 
@@ -115,6 +115,10 @@ export interface HomeState {
   /* --- a fleet signs itself up --- */
   /** The person, signed in after the PIN step: in memory only, for the papers and the sign-up. */
   person: PersonSession | null;
+  /** 2026-11-03 — a shop's own sign-in, the moment its account is made: its papers are uploaded and sent with it. Memory only. */
+  shopSession: PersonSession | null;
+  /** Whether the shop sent its papers on the papers step (false: it skipped, and stays pending). */
+  shopPapersSent: boolean;
   /** The PIN step asks for a recovery email too: a first PIN (`first`), or a PIN replaced on a new device (`reset`). */
   pinEmail: 'first' | 'reset' | null;
   /** The fleets this person signed up before, read after the PIN. Null until then. */
@@ -168,6 +172,8 @@ const INITIAL: HomeState = {
   series: null,
   seriesState: 'idle',
   person: null,
+  shopSession: null,
+  shopPapersSent: false,
   pinEmail: null,
   fleetSignups: null,
   fleetAnother: false,
@@ -490,7 +496,9 @@ export function useHomeApp() {
         if (s.resendFor) return { ...s, resendFor: null, step: 'about', error: null };
         if (s.step === 'about') return s.fleetAnother && s.fleetSignups?.length ? { ...s, fleetAnother: false, error: null } : { ...s, screen: 'roles', error: null };
       }
-      return { ...s, step: prevStep(s.role.kind, s.step, driverSendsPapers(s.role.kind, s.form)), error: null };
+      // A shop's account is made by now: its papers step goes forward, to done, never back into a sign-up already sent.
+      if (s.role.id === 'pudo' && s.step === 'papers') return s;
+      return { ...s, step: prevStep(s.role.kind, s.step, driverSendsPapers(s.role.kind, s.form), s.role.id === 'pudo'), error: null };
     });
   }, []);
 
@@ -616,6 +624,29 @@ export function useHomeApp() {
   }, []);
 
   /** A driver on a motorcycle or larger: the sign-up, with the photographs of their ID and licence taken on the papers step. */
+  /** 2026-11-03 — one of a shop's papers, a photo or a PDF, uploaded with its own sign-in. */
+  const uploadShopPaper = useCallback(async (kind: 'kyc_id' | 'kyc_licence' | 'shop', file: File): Promise<Uploaded> => {
+    const session = stateRef.current.shopSession;
+    if (!session) return { failed: t('upload.failed') };
+    return kind === 'shop' ? uploadPaper(session, 'shop', file) : uploadShopPaperApi(session, kind, file);
+  }, []);
+
+  /** The shop's papers to staff — or, skipped, the done screen saying the shop waits for them. */
+  const sendShopPapers = useCallback(async (skip = false) => {
+    const { role, form, shopSession, account } = stateRef.current;
+    if (!role || !account) return;
+    if (skip || !shopSession) {
+      setState((s) => ({ ...s, shopPapersSent: false, step: 'done', error: null }));
+      return;
+    }
+    if (stepBlocker(role, 'papers', form, t)) return;
+    await run('submit', async () => {
+      const r = await sendShopPapersApi(shopSession, account.did, { idCopyRef: form.shopPapers.idCopyRef, tradingLicenceRef: form.shopPapers.tradingLicenceRef, shopPhotoRefs: [form.shopPapers.shopPhotoRef] });
+      if (r.error) return setState((s) => ({ ...s, error: r.error }));
+      setState((s) => ({ ...s, shopPapersSent: true, step: 'done', error: null }));
+    });
+  }, [run]);
+
   const sendDriverPapers = useCallback(async () => {
     const { role, form, person } = stateRef.current;
     if (!role || !person || stepBlocker(role, 'papers', form, t)) return;
@@ -654,7 +685,7 @@ export function useHomeApp() {
       if (!s.role) return s;
       const blocker = stepBlocker(s.role, s.step, s.form, t);
       if (blocker) return s;
-      return { ...s, step: nextStep(s.role.kind, s.step, driverSendsPapers(s.role.kind, s.form)), error: null };
+      return { ...s, step: nextStep(s.role.kind, s.step, driverSendsPapers(s.role.kind, s.form), s.role.id === 'pudo'), error: null };
     });
   }, []);
 
@@ -699,7 +730,9 @@ export function useHomeApp() {
       // which is its first (its sign-in works only on its own phones).
       handOff(account.role, account.did, account.email ?? '');
       if (account.email) saveShopDeviceKey(account.email, account.device);
-      setState((s) => ({ ...s, account, step: 'done' }));
+      // 2026-11-03 — a shop goes on to its papers, with the sign-in its account was just made with.
+      const shopSession = account.role === 'pudo' && account.token?.access_token ? { token: account.token.access_token } : null;
+      setState((s) => ({ ...s, account, shopSession, step: shopSession ? 'papers' : 'done' }));
     });
   }, [run]);
 
@@ -794,7 +827,7 @@ export function useHomeApp() {
 
   return {
     state,
-    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries, choosePin, uploadFleetPaper, sendDriverPapers, signUpAnother, resendPapers, submitFleet },
+    actions: { go, openStore, openProfile, findAgentsBy, startJoin, setForm, back, revisit, sendCode, confirmCode, advance, submit, restart, loadPoints, loadTruckSubtypes, setMarketQuery, lookUpMarket, setMarketReach, setMarketView, loadSeries, choosePin, uploadFleetPaper, sendDriverPapers, uploadShopPaper, sendShopPapers, signUpAnother, resendPapers, submitFleet },
   };
 }
 

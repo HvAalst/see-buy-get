@@ -3,6 +3,12 @@ import { createHash, randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { BlobStore, FsBlobStore } from '../../foundation/media/blob-store';
 import { decodeImage } from '../../foundation/media/decode-image';
+import { decodeDocument } from '../../foundation/media/decode-document';
+
+/** The small copy of a PDF: a page with the word PDF on it. Ours, fixed, and with nothing in it that runs. */
+const PDF_TILE = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 112 112"><rect width="112" height="112" fill="#eef1f6"/><path d="M32 18h34l16 16v60H32z" fill="#fff" stroke="#7a8599" stroke-width="3"/><text x="56" y="74" font-family="Arial,sans-serif" font-size="18" font-weight="700" text-anchor="middle" fill="#c0392b">PDF</text></svg>',
+);
 import { UPLOAD_LIMITS } from '../../foundation/media/upload-limits';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import {
@@ -56,11 +62,16 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
   }
 
   /** Store an uploaded image (a `data:<type>;base64,<...>` URL) + an optional thumbnail. Returns the id. */
-  upload(input: { ownerDid: string; kind: MediaKind; dataUrl: string; thumbDataUrl?: string }): { mediaId: string } {
+  /** 2026-11-03 — a person's ID or licence, a photo or a PDF, up to a company paper's size (the owner: "photo or pdf for both docs"). */
+  uploadPaper(input: { ownerDid: string; kind: 'kyc_id' | 'kyc_licence'; dataUrl: string }): { mediaId: string } {
+    return this.upload({ ownerDid: input.ownerDid, kind: input.kind, dataUrl: input.dataUrl, document: true });
+  }
+
+  upload(input: { ownerDid: string; kind: MediaKind; dataUrl: string; thumbDataUrl?: string; document?: boolean }): { mediaId: string } {
     if (!input.ownerDid) throw new GlosError('INVALID_INPUT', 'An owner is required to upload media');
     // Decode + validate BOTH parts BEFORE writing any bytes: a bad thumb must not leave the full image
     // orphaned on disk with no MediaRef (invisible to the retention sweep — an unreclaimable leak).
-    const { contentType, bytes } = this.decode(input.dataUrl);
+    const { contentType, bytes } = input.document ? decodeDocument(input.dataUrl, UPLOAD_LIMITS.document) : this.decode(input.dataUrl);
     const thumb = input.thumbDataUrl ? this.decode(input.thumbDataUrl, { maxBytes: UPLOAD_LIMITS.photoThumb }) : undefined;
 
     const mediaId = `med_${randomBytes(12).toString('hex')}`;
@@ -149,6 +160,8 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
     const ref = this.refs.get(mediaId);
     if (!ref) throw new GlosError('NOT_FOUND', 'No such media');
     if (ref.status === 'expired') throw new GlosError('MEDIA_EXPIRED', 'This media has passed its retention window and was removed');
+    // A PDF has no small copy: the strip that shows papers is given a tile that says PDF, and the tap opens the PDF itself.
+    if (variant === 'thumb' && !ref.hasThumb && ref.contentType === 'application/pdf') return { bytes: PDF_TILE, contentType: 'image/svg+xml' };
     const key = variant === 'thumb' && ref.hasThumb ? `${mediaId}.thumb` : mediaId;
     const bytes = this.blobs.get(key);
     if (!bytes) throw new GlosError('NOT_FOUND', 'Media bytes are unavailable');

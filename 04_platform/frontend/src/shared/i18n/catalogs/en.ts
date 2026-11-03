@@ -660,6 +660,10 @@ export const en = {
   'photo.uploading': 'Sending the photo…',
   'photo.saved': 'Photo saved — tap to retake',
   'photo.failed': 'The photo did not go — tap to try again',
+  // 2026-11-03 — a paper: a photo, or chosen from the phone as a photo or a PDF.
+  'photo.chooseFile': 'Or choose a photo or PDF from the phone',
+  'photo.pdfChosen': 'PDF: {name}',
+  'photo.paperSaved': 'Paper saved — tap to take a photo instead',
   'account.menu.address': 'Your address',
   'account.menu.addressNone': 'Not given',
   'account.menu.addressPh': 'Street, area, town',
