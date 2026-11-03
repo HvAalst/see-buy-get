@@ -363,7 +363,8 @@ export class VehicleBreakdownService {
     const taker = this.drivers.get(takerDid);
     const bookings = loads.filter((l) => l.kind === 'booking');
     const goodsKg = loads.filter((l) => ROAD_GOODS.has(l.kind)).reduce((n, l) => n + l.weightKg, 0);
-    this.dispatch.assertCanTakeLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), takerDid, bookings.reduce((n, l) => n + l.weightKg, 0) + goodsKg);
+    // 2026-11-03 — its bags too, against the cold loads already on the truck taking them over: one body, one temperature.
+    this.dispatch.assertCanTakeLoads(loads.filter((l) => l.kind === 'freight').map((l) => l.id), takerDid, bookings.reduce((n, l) => n + l.weightKg, 0) + goodsKg, loads.filter((l) => l.kind === 'bag').map((l) => l.id));
     // Bags take a space each in the hold, whatever they weigh.
     const bags = loads.filter((l) => l.kind === 'bag').length;
     const spaces = bags ? this.dispatch.remainingTotes(takerDid) : 0;

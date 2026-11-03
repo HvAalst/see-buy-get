@@ -366,6 +366,16 @@ export function LoadDetail({ row, start, business, client, act, onClose, onChang
                       <dt class="cons__factk">{t('business.loads.fact.weight')}</dt>
                       <dd class="cons__factv">{row.weightKg.toLocaleString()} kg</dd>
                     </div>
+                    {/* 2026-11-03 — kept cold: the range it is kept in, and whether it is the one the business gave. */}
+                    {row.keptBetween ? (
+                      <div class="cons__fact">
+                        <dt class="cons__factk">{t('business.post.k.temp')}</dt>
+                        <dd class="cons__factv">
+                          {t('business.post.v.temp', { min: String(row.keptBetween.minC), max: String(row.keptBetween.maxC) })}
+                          <span class="chint"> {t(row.keptBetween.own ? 'business.loads.fact.keptOwn' : 'business.loads.fact.keptUsual')}</span>
+                        </dd>
+                      </div>
+                    ) : null}
                     {row.contract ? (
                       <div class="cons__fact">
                         <dt class="cons__factk">{t('business.loads.fact.contract')}</dt>

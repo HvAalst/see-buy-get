@@ -27,6 +27,8 @@
  * times are those distances at one speed plus fixed minutes at each stop.
  */
 
+import { bandsOverlap } from './heavy-cargo';
+
 export interface PlanPoint {
   lat: number;
   lng: number;
@@ -47,6 +49,11 @@ export interface PlanOrder {
   window?: { fromMin?: number; toMin?: number };
   /** Collected at one of the fleet's own sites (PlanDock.id). Absent: somewhere else — a shipper's yard. */
   dock?: string;
+  /**
+   * 2026-11-03 — kept cold between these, in °C. A trip carries cold orders together only where their ranges meet: one
+   * body keeps one temperature. Between trips the truck is empty, so the next can be kept at another.
+   */
+  band?: { minC: number; maxC: number };
 }
 
 /**
@@ -394,6 +401,8 @@ function placeAs(o: Placed, days: Days, trucks: PlanTruck[], start: Starts, p: P
     day.forEach((trip, i) => {
       if (km(trip.pickup, o.pickup) > p.samePickupKm) return;
       if (trip.orders.reduce((sum, x) => sum + x.kg, 0) + o.kg > t.capacityKg + EPS) return;
+      // Two cold orders whose ranges do not meet never share a trip (2026-11-03): it goes on a trip of its own.
+      if (o.band && trip.orders.some((x) => x.band && !bandsOverlap(x.band, o.band!))) return;
       for (let at = 0; at <= trip.orders.length; at++) candidates.push(day.map((x, k) => (k === i ? { ...x, orders: [...x.orders.slice(0, at), o, ...x.orders.slice(at)] } : x)));
     });
     for (let at = 0; at <= day.length; at++) candidates.push([...day.slice(0, at), { pickup: o.pickup, orders: [o] }, ...day.slice(at)]);

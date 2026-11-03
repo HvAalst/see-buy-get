@@ -381,6 +381,8 @@ export const enDriver = {
   'driver.loads.pickConfirm': 'Yes, it is on board',
   'driver.loads.tempBreachedKeep': 'Temperature breached — keep {min}–{max}°C',
   'driver.loads.tempKeep': 'Keep {min}–{max}°C',
+  // 2026-11-03 — on the card before the load is collected: the body cooled to it before the doors open.
+  'driver.loads.tempBeforePickup': 'Kept between {min} and {max} °C — cool the body to it before you collect.',
   'driver.loads.tempLast': ' · last {temp}°C',
   'driver.loads.logTemp': 'Log temp',
   'driver.loads.logTempTitle': 'Log temperature',

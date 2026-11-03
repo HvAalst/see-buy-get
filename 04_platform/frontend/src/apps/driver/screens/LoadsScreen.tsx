@@ -109,6 +109,9 @@ export function LoadsScreen({ state, actions }: LoadsScreenProps) {
                   {c.lockedPrice != null ? <span class="load__earn">{t('driver.loads.youEarn', { amount: cash(c.lockedPrice, state.session.currency) })}</span> : null}
                   {/* FP5 — not their choice: said plainly, with whose it was. */}
                   {c.assignedBy ? <span class="load__meta">{t('driver.loads.assignedBy', { name: c.assignedBy.name ?? t('driver.loads.theOffice') })}</span> : null}
+                  {/* 2026-11-03 — a load kept cold, before it is collected: the range, so the body is cooled to it first. On the
+                      road the temperature strip below says it, with the last reading. */}
+                  {control === 'pickup' && c.tempBand ? <span class="load__meta">{t('driver.loads.tempBeforePickup', { min: c.tempBand.minC, max: c.tempBand.maxC })}</span> : null}
                   {/* FP7 — what the sender wrote for the door, on the card so it is read before the walk to the gate. */}
                   {hasInstructions(c.instructions) ? <InstructionsBlock view={c.instructions} compact /> : null}
                   {/* No papers, no loading: said on the card, before the drive to the gate. */}

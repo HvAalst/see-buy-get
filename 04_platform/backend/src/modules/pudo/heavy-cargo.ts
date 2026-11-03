@@ -130,6 +130,24 @@ export function freightBand(f: { natureCode: CargoNature; tempRange?: TempBand }
   return own && f.tempRange ? { minC: f.tempRange.minC, maxC: f.tempRange.maxC } : own;
 }
 
+/** Two ranges one cold body can keep at once: some temperature inside both — judged inclusive, as a reading is. */
+export function bandsOverlap(a: TempBand, b: TempBand): boolean {
+  return a.minC <= b.maxC && b.minC <= a.maxC;
+}
+
+/**
+ * 2026-11-03 — TWO COLD LOADS ON ONE TRUCK. A refrigerated or insulated body is kept at one temperature, so a cold load
+ * goes on beside the cold loads already on it only where their ranges meet — the goods table's own rule (cargo.types.ts:
+ * perishables together must share a temperature range), which waited for a load to carry a range of its own. Why it
+ * cannot, in words, or undefined: a range that overlaps rides together, and a load not carried cold rides with anything.
+ */
+export function coldClash(aboard: TempBand[], band: TempBand | null): string | undefined {
+  if (!band) return undefined;
+  const other = aboard.find((a) => !bandsOverlap(a, band));
+  if (!other) return undefined;
+  return `This truck already carries a load kept at ${other.minC} to ${other.maxC} °C; this one must be kept at ${band.minC} to ${band.maxC} °C. One body keeps one temperature: deliver that load first, or this one goes on another truck.`;
+}
+
 /** The coldest and warmest a shipper may ask a load kept at, in °C — as the air export and import ask it. */
 export const TEMP_RANGE_LIMIT_C = 30;
 

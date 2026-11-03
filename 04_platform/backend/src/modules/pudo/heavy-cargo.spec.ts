@@ -1,4 +1,4 @@
-import { COLD_CHAIN_BAND, freightBand, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, tempRangeGap, unloadSafetyItems } from './heavy-cargo';
+import { COLD_CHAIN_BAND, bandsOverlap, coldClash, freightBand, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, tempRangeGap, unloadSafetyItems } from './heavy-cargo';
 
 describe('heavy-cargo safety checklist (S33)', () => {
   const keys = (ctx: { bulk: boolean; fragile: boolean; requiredCapabilities: import('./cargo.types').VehicleCapability[] }) => requiredLoadKeys(ctx);
@@ -65,6 +65,19 @@ describe('cold-chain temperature (S33b)', () => {
     expect(freightBand({ natureCode: 'FOP' })).toEqual(COLD_CHAIN_BAND);
     expect(freightBand({ natureCode: 'GEN', tempRange: { minC: -25, maxC: -18 } })).toBeNull();
     expect(freightBand({ natureCode: 'GEN' })).toBeNull();
+  });
+
+  // 2026-11-03 — two cold loads on one truck.
+  it('coldClash says why a cold load cannot share a body with what is aboard — and nothing where the ranges meet', () => {
+    const frozen = { minC: -25, maxC: -18 };
+    expect(bandsOverlap(frozen, { minC: -22, maxC: -15 })).toBe(true);
+    expect(bandsOverlap({ minC: 2, maxC: 8 }, { minC: 8, maxC: 12 })).toBe(true); // 8 °C keeps both
+    expect(bandsOverlap(frozen, COLD_CHAIN_BAND)).toBe(false);
+    expect(coldClash([frozen], { minC: 2, maxC: 8 })).toBe('This truck already carries a load kept at -25 to -18 °C; this one must be kept at 2 to 8 °C. One body keeps one temperature: deliver that load first, or this one goes on another truck.');
+    expect(coldClash([frozen], { minC: -20, maxC: -10 })).toBeUndefined();
+    expect(coldClash([frozen], null)).toBeUndefined();
+    expect(coldClash([], { minC: 2, maxC: 8 })).toBeUndefined();
+    expect(coldClash([{ minC: 2, maxC: 8 }, frozen], { minC: 0, maxC: 4 })).toContain('kept at -25 to -18 °C');
   });
 
   it('tempRangeGap says in words what is wrong with a range, and nothing of a good one or of none', () => {

@@ -33,7 +33,8 @@ import {
   type SendIo,
 } from './postLoad';
 import { PostLoad, type PostStart } from './screens/PostLoad';
-import { LoadsScreen } from './screens/LoadsScreen';
+import { LoadDetail, LoadsScreen } from './screens/LoadsScreen';
+import type { PostedLoad } from './api';
 
 /*
  * THE OWNER, 2026-11-03: "the 'post a new load' is a pretty large page. It is in my opinion better if we chunk it up similar
@@ -680,6 +681,26 @@ describe('the load kept on the phone', () => {
     expect(html).toContain(`tabindex="-1">${t('business.post.t.goods')}`);
     expect(html).toContain('value="Coffee"');
     expect(html).toContain('step 2 of 6');
+  });
+});
+
+// 2026-11-03 — once posted, the load's own record says the range it is kept in, and whose range it is.
+describe('the load’s Overview, kept cold', () => {
+  const row = (over: Partial<PostedLoad> = {}) => ({ freightId: 'frt_9', code: 'FRT-9', description: 'Frozen tilapia', destLabel: 'Nakuru cold store', weightKg: 900, status: 'available', openProposals: 0, commitMode: 'instant', createdAt: '2026-11-03T08:00:00.000Z', ...over }) as unknown as PostedLoad;
+  const detail = (r: PostedLoad) => renderToString(<LoadDetail row={r} business={business()} client={null} act onClose={noop} onChanged={noop} />);
+  const facts = (html: string) => html.slice(html.indexOf('cons__facts'), html.indexOf('</dl>', html.indexOf('cons__facts')));
+
+  it('says “Kept between” in the Overview, after the weight — the business’s own range, or the usual one', () => {
+    const own = facts(detail(row({ keptBetween: { minC: -25, maxC: -18, own: true } })));
+    expect(own).toContain(`<dt class="cons__factk">${t('business.post.k.temp')}</dt>`);
+    expect(own).toContain('-25 °C and -18 °C');
+    expect(own).toContain(t('business.loads.fact.keptOwn'));
+    expect(own.indexOf(t('business.post.k.temp'))).toBeGreaterThan(own.indexOf(t('business.loads.fact.weight')));
+    const usual = facts(detail(row({ keptBetween: { minC: 2, maxC: 8, own: false } })));
+    expect(usual).toContain('2 °C and 8 °C');
+    expect(usual).toContain(t('business.loads.fact.keptUsual'));
+    expect(usual).not.toContain(t('business.loads.fact.keptOwn'));
+    expect(detail(row())).not.toContain(t('business.post.k.temp'));
   });
 });
 

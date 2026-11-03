@@ -1509,6 +1509,13 @@ export class ColdChainBreachView {
   @ApiPropertyOptional() receivedAt?: string;
 }
 
+/** 2026-11-03 — a load kept cold, as its sender reads it: the range it is kept in, and whether that is the sender's own (else the usual 2–8 °C). */
+export class KeptBetweenView {
+  minC: number;
+  maxC: number;
+  own: boolean;
+}
+
 /**
  * FB2b — one of MY posted loads, as the shop that posted it sees it.
  *
@@ -1615,6 +1622,8 @@ export class PostedFreightRow {
   @ApiPropertyOptional({ type: [LoadSealView] }) seals?: LoadSealView[];
   /** Round 25 — its cold chain broken on the road: the reading that broke it, and when. Absent on a load that never broke it. */
   @ApiPropertyOptional({ type: ColdChainBreachView }) coldChainBroken?: ColdChainBreachView;
+  /** 2026-11-03 — kept cold: the range it is kept in, the sender's own or the usual 2–8 °C. Absent on goods not carried cold. */
+  @ApiPropertyOptional({ type: KeptBetweenView }) keptBetween?: KeptBetweenView;
   /** Round 26 — in one country, on the road: when it is expected, and the pace that rests on. Absent where its carrier's plan has the hour. */
   @ApiPropertyOptional({ type: LoadArrival }) arrival?: LoadArrival;
   /** A match: the poster pays the driver directly, at the price agreed here — SeeBuyGet holds no money for it. */

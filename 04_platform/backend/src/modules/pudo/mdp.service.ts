@@ -93,6 +93,14 @@ export class MdpService {
     this.roomOf = fn;
   }
 
+  /** 2026-11-03 — why a bag cannot go beside the cold loads on a driver's vehicle (DispatchService.coldRefusal). */
+  private coldOf?: (driverDid: string, bagCode: string) => string | undefined;
+
+  /** Registered as the room is: dispatch knows what is aboard. Without it a bag of chilled parcels could join a frozen load. */
+  registerCold(fn: (driverDid: string, bagCode: string) => string | undefined): void {
+    this.coldOf = fn;
+  }
+
   /** The country this hub stands in — declared at registration, this deployment's home for older records. */
   countryOf(mdp: Mdp): string {
     return countryOfSite(mdp);
@@ -907,6 +915,9 @@ export class MdpService {
       for (const cap of this.toteRequiredCapabilities(pending)) {
         if (!fleet.vehicle[cap]) throw new GlosError('VEHICLE_MISSING_CAPABILITY', `A ${fleet.vehicle.vehicleClass} lacks ${cap} that bag ${code}'s cargo requires`);
       }
+      // 2026-11-03 — a bag of chilled parcels, beside a load aboard kept at a temperature the two cannot share one body at.
+      const cold = this.coldOf?.(fleet.driverDid, pending.code);
+      if (cold) throw new GlosError('CARGO_INCOMPATIBLE', `Bag ${code}: ${cold}`);
       if (kg > fleet.capacityKg) throw new GlosError('CAPACITY_EXCEEDED', `Bag ${code} (${kg}kg) exceeds this ${fleet.vehicle.vehicleClass}'s ${fleet.capacityKg}kg capacity`);
       // …and against what is aboard already: a counter loading by the driver's pass loads onto a vehicle that may be half
       // full, and a bag weighed against an empty one could overload it. A bag this driver already holds is counted in what

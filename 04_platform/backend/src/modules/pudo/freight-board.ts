@@ -105,6 +105,8 @@ export function blockersFor(
     release?: string;
     /** Live animals, and a vehicle not made for them (2026-10-30): the take's words. */
     animals?: string;
+    /** 2026-11-03 — kept cold at a temperature the cold loads already aboard cannot share one body with: the take's words. */
+    cold?: string;
     /** 2026-11-01 — built-up airline pallets, on a vehicle without a roller floor. */
     pallets?: string;
     /** 2026-11-01 — a load bigger than the vehicle's declared load space; and the space not on record at all. */
@@ -160,6 +162,8 @@ export function blockersFor(
   if (ctx.release) out.push({ kind: 'resolvable', code: 'NOT_RELEASED', message: ctx.release });
   // Live animals: a vehicle made for them (2026-10-30).
   if (ctx.animals) out.push({ kind: 'physical', code: 'ANIMALS_VEHICLE', message: ctx.animals });
+  // Two cold loads on one truck (2026-11-03): resolvable — once the load aboard is delivered, this one can go on.
+  if (ctx.cold) out.push({ kind: 'resolvable', code: 'COLD_RANGE_ABOARD', message: ctx.cold });
   if (ctx.pallets) out.push({ kind: 'physical', code: 'PALLETS_VEHICLE', message: ctx.pallets });
   if (ctx.volume) out.push({ kind: 'physical', code: 'OVER_VEHICLE_VOLUME', message: ctx.volume });
   if (ctx.volumeUnknown) out.push({ kind: 'unknown', code: 'VOLUME_UNKNOWN', message: ctx.volumeUnknown });

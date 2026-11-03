@@ -40,7 +40,7 @@ import { nearestPlace } from './geo-gazetteer';
 import { isPackaging, selfLoading, type Packaging } from './packaging';
 import { buildSeries, carriersOn } from './market-series';
 import { TruckSubtype } from './fleet.config';
-import { freightBand, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems } from './heavy-cargo';
+import { COLD_CHAIN_BAND, coldClash, freightBand, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems, type TempBand } from './heavy-cargo';
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
@@ -495,6 +495,8 @@ export class DispatchService {
     this.persons?.onNumberLeft((personDid, fromHash) => this.keepWith(personDid, fromHash));
     // The hub weighs a bag against what is aboard: the kilos left, when the driver has a vehicle to leave them on.
     this.mdps.registerRoom((did) => (this.fleet.vehicleForDriver(did) ? this.remainingCapacity(did) : undefined));
+    // …and a bag of chilled parcels against the cold loads aboard (2026-11-03): one body keeps one temperature.
+    this.mdps.registerCold((did, bagCode) => this.coldRefusal(did, 'tote', bagCode));
     // Round 38 — what a rider carries and has delivered, for the custody cap: each load counts as one.
     this.parcels?.registerRiderLoads((did) => {
       let carrying = 0;
@@ -909,7 +911,7 @@ export class DispatchService {
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
       .map((load) => ({ load, detour: this.router.detourKm(route.from, load.pickupLocation, route.to), minutesAway: this.minutes(route.from, load.pickupLocation) }))
-      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle))
+      .filter(({ load, detour, minutesAway }) => detour <= DISPATCH_MAX_DETOUR_KM && minutesAway <= DISPATCH_MAX_PICKUP_MIN && this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && this.borderRefusals(vehicle, driverDid, load).length === 0 && !this.bondRefusal(driverDid, load) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
       .sort((a, b) => a.detour - b.detour || a.minutesAway - b.minutesAway);
 
     const out: Offer[] = [];
@@ -1032,7 +1034,7 @@ export class DispatchService {
     const out: Offer[] = [];
     const matches = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
       .map((load) => ({ load, km: this.router.roadKm(from, load.pickupLocation) }))
       .filter(({ km }) => km <= radius)
       .sort((a, b) => a.km - b.km);
@@ -1084,7 +1086,7 @@ export class DispatchService {
 
     const candidates = this.availableLoads()
       .filter((load) => !(freightBarred && load.kind === 'freight'))
-      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle))
+      .filter((load) => this.vehicleCanCarry(vehicle, load, remaining, remainingTotes) && !this.coverRefusalFor(driverDid, load, now) && !this.railRefusalFor(load) && !this.securedRefusalFor(driverDid, load, vehicle) && !this.coldRefusal(driverDid, load.kind, load.ref))
       .map((load) => ({ load, km: this.router.roadKm(point, load.pickupLocation) }))
       // A rider who declared a patch is asking to hear about their whole patch; anyone else gets the tighter
       // interrupt-someone-driving radius. Either way the declaration below decides whether it is really theirs.
@@ -1278,6 +1280,9 @@ export class DispatchService {
     ) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your current vehicle lacks a capability or equipment this load requires — re-couple to a suitable vehicle');
     }
+    // 2026-11-03 — a bag or a load kept cold, beside a cold load already aboard at a temperature it cannot share.
+    const cold = this.coldRefusal(offer.driverDid, offer.kind, offer.ref);
+    if (cold) throw new GlosError('CARGO_INCOMPATIBLE', cold);
     this.requireBorderAllows(vehicle, offer.driverDid, offer.kind, offer.ref);
     // Round 39 — a bag claimed is a bag reserved: new work, so not without the declaration of whoever answers for the driver.
     this.declarations?.assertMayCarry(offer.driverDid, now);
@@ -1384,6 +1389,10 @@ export class DispatchService {
     // Built-up airline pallets (2026-11-01): only on a truck with a roller floor.
     const pallets = palletVehicleRefusal(f.airPallets, vehicle);
     if (pallets) throw new GlosError('FORBIDDEN', pallets);
+    // 2026-11-03 — kept cold, beside a cold load already on this truck at a temperature the two cannot share. Every door
+    // onto a load comes through here: a claim, an accepted price, an office's assignment, the day's plan.
+    const cold = this.coldRefusal(driverDid, 'freight', f.freightId);
+    if (cold) throw new GlosError('CARGO_INCOMPATIBLE', cold);
     // A load bigger than the vehicle's declared load space (2026-11-01): it does not fit, whatever it weighs.
     const tooBig = volumeRefusal(f.volumeM3, vehicle);
     if (tooBig) throw new GlosError('CAPACITY_EXCEEDED', tooBig);
@@ -1527,6 +1536,8 @@ export class DispatchService {
           rail: railRefusal(f),
           release: releaseRefusal(f),
           secured: input.driverDid ? this.securedRefusal(input.driverDid, f, vehicle) : undefined,
+          // 2026-11-03 — kept cold at a temperature the cold loads aboard cannot share: the take's own words.
+          cold: input.driverDid ? this.coldRefusal(input.driverDid, 'freight', f.freightId) : undefined,
           animals: animalVehicleRefusal(f.liveAnimals, vehicle),
           pallets: palletVehicleRefusal(f.airPallets, vehicle),
           volume: volumeRefusal(f.volumeM3, vehicle),
@@ -1758,6 +1769,9 @@ export class DispatchService {
     ) {
       throw new GlosError('VEHICLE_MISSING_CAPABILITY', 'Your vehicle lacks something this load needs, so the poster could never accept an offer from it');
     }
+    // 2026-11-03 — and not beside a cold load aboard at a temperature it cannot share: the accept would refuse it.
+    const cold = this.coldRefusal(input.driverDid, 'freight', f.freightId);
+    if (cold) throw new GlosError('CARGO_INCOMPATIBLE', cold);
     this.requireBorderAllows(vehicle, input.driverDid, 'freight', f.freightId);
     if (belowFloor(this.ratings.driverRating(input.driverDid))) throw new GlosError('REPUTATION_BELOW_FLOOR', 'Your rating is below the network minimum — freight is paused until it recovers.');
 
@@ -1882,6 +1896,8 @@ export class DispatchService {
         ...(this.seals?.of(f.freightId).length ? { seals: this.seals.views(f.freightId) } : {}),
         // Round 25 — its cold chain broken on the road: the reading that broke it, when, and whether we heard of it late.
         ...(coldChainBreachOf(f) ? { coldChainBroken: coldChainBreachOf(f) } : {}),
+        // 2026-11-03 — kept cold: the range it is kept in, the business's own or the usual 2–8 °C, and whether it gave it.
+        ...(bandOf(f) ? { keptBetween: { ...bandOf(f)!, own: Boolean(f.tempRange) } } : {}),
       }));
   }
 
@@ -2333,7 +2349,7 @@ export class DispatchService {
    * Could this driver's vehicle take these loads over — room for them all (and `alsoKg` more), and whatever each of
    * them needs? Asked before anything moves, so a handover that cannot take every load takes none.
    */
-  assertCanTakeLoads(freightIds: string[], driverDid: string, alsoKg = 0): void {
+  assertCanTakeLoads(freightIds: string[], driverDid: string, alsoKg = 0, bagCodes: string[] = []): void {
     const vehicle = this.fleet.vehicleForDriver(driverDid);
     if (!vehicle) throw new GlosError('NOT_COUPLED', 'That driver is not on a shift — loads go onto a vehicle somebody is out in');
     const loads = freightIds.map((id) => this.requireFreight(id));
@@ -2342,6 +2358,12 @@ export class DispatchService {
     if (kg > room) throw new GlosError('CAPACITY_EXCEEDED', `${vehicle.plate} has room for ${room.toLocaleString('en-GB')} kg — the loads weigh ${kg.toLocaleString('en-GB')} kg`);
     const cannot = loads.find((f) => !this.vehicleCanCarryFreight(vehicle, f.freightId));
     if (cannot) throw new GlosError('VEHICLE_MISSING_CAPABILITY', `${vehicle.plate} cannot carry ${cannot.code}: it lacks what that load needs`);
+    // 2026-11-03 — what is kept cold, beside the cold loads already on the truck taking it over: one body, one temperature.
+    // (What comes off the broken vehicle rode together there already.)
+    for (const [kind, ref, code] of [...loads.map((f) => ['freight', f.freightId, f.code] as const), ...bagCodes.map((c) => ['tote', c, `bag ${c}`] as const)]) {
+      const cold = this.coldRefusal(driverDid, kind, ref);
+      if (cold) throw new GlosError('CARGO_INCOMPATIBLE', `${vehicle.plate} cannot take ${code}: ${cold}`);
+    }
   }
 
   /**
@@ -3124,7 +3146,9 @@ export class DispatchService {
       need.capabilities.some((cap) => !vehicle[cap]) ||
       !DispatchService.hasEquipmentFor(vehicle, need.equipment) ||
       (need.bulk && !vehicle.carriesBulk) ||
-      (need.fragile && !vehicle.allowsFragile)
+      (need.fragile && !vehicle.allowsFragile) ||
+      // 2026-11-03 — nor pinged about a cold load the cold loads aboard could not share a body with.
+      Boolean(this.coldRefusal(driverDid, 'freight', freightId))
     );
   }
 
@@ -4804,6 +4828,43 @@ export class DispatchService {
     if (!required || required.length === 0) return true;
     const have = vehicle.equipment ?? [];
     return required.some((eq) => have.includes(eq));
+  }
+
+  /**
+   * 2026-11-03 — TWO COLD LOADS ON ONE TRUCK: why this load cannot go onto this driver's vehicle beside the cold loads
+   * already on it, or undefined (heavy-cargo.ts, coldClash). Asked by every door that puts a load or a bag on a vehicle —
+   * the offers, a claim, a price named and accepted, the office's assignment, the day's plan, a breakdown's handover, a
+   * hub loading a bag by the driver's pass — and marked on the board in the same words.
+   */
+  coldRefusal(driverDid: string, kind: ClaimableKind, ref: string): string | undefined {
+    const band = this.bandOfLoad(kind, ref);
+    return band ? coldClash(this.coldAboard(driverDid, ref), band) : undefined;
+  }
+
+  /** What a load is kept at: a freight its own range (or its cargo's 2–8 °C); a bag of chilled parcels 2–8 °C, a bag having no range of its own. */
+  private bandOfLoad(kind: ClaimableKind, ref: string): TempBand | null {
+    if (kind === 'tote') {
+      const t = this.totes.byCodeMaybe(ref);
+      return t && this.mdps.toteRequiredCapabilities(t).includes('coldChain') ? COLD_CHAIN_BAND : null;
+    }
+    const f = this.freights.get(ref);
+    return f ? freightBand(f) : null;
+  }
+
+  /**
+   * The ranges of the cold loads on this driver's vehicle — taken and not yet collected, riding, refused goods still kept,
+   * and the bags held — leaving out `ref` itself. A load only OFFERED holds no place, as it holds no kilos.
+   */
+  private coldAboard(driverDid: string, ref?: string): TempBand[] {
+    const out: TempBand[] = [];
+    for (const f of this.freights.values()) {
+      if (f.freightId === ref || f.claimedBy !== driverDid) continue;
+      if (!(f.status === 'claimed' || f.status === 'in_transit' || (f.status === 'delivered' && Boolean(f.refusal?.part) && !f.refusal?.decision))) continue;
+      const band = freightBand(f);
+      if (band) out.push(band);
+    }
+    for (const t of this.bagsHeldBy(driverDid)) if (t.code !== ref && this.mdps.toteRequiredCapabilities(t).includes('coldChain')) out.push(COLD_CHAIN_BAND);
+    return out;
   }
 
   /** Everything a claimable's cargo requires of a vehicle (tote via its parcels; freight from its record) —

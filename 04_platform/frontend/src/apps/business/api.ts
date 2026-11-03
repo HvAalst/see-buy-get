@@ -273,6 +273,8 @@ export interface PostedLoad {
   heldByAuthority?: HeldByAuthorityView;
   /** Round 25 — its cold chain broken on the road: the reading that broke it, the band, when — and when it reached us, if later. */
   coldChainBroken?: { celsius: number; at: string; minC: number; maxC: number; receivedAt?: string };
+  /** 2026-11-03 — kept cold: the range it is kept in; `own` when the business gave it, else the usual 2–8 °C. */
+  keptBetween?: { minC: number; maxC: number; own: boolean };
   /** A match: the business pays the driver directly — and, once the carrier says so, that it was paid (2026-10-27). */
   paysDriverDirect?: boolean;
   paidDirect?: PaidDirectView;

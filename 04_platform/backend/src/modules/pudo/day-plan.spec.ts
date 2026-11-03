@@ -34,6 +34,21 @@ describe('planning a day', () => {
     expect(route.trips[0].endMin).toBe(90);
   });
 
+  // 2026-11-03 — two cold loads on one truck: one body keeps one temperature.
+  it('never puts two cold orders whose ranges do not meet on one trip — an overlapping one, and dry goods, go with them', () => {
+    const frozen = { ...order('frozen', 1000, at(20)), band: { minC: -25, maxC: -18 } };
+    const chilled = { ...order('chilled', 1000, at(30)), band: { minC: 2, maxC: 8 } };
+    const alsoFrozen = { ...order('peas', 1000, at(25)), band: { minC: -22, maxC: -15 } };
+    const dry = order('flour', 1000, at(15));
+    const r = plan([frozen, chilled, alsoFrozen, dry], [truck('T1', 9000)]);
+    expect(r.unplanned).toEqual([]);
+    const trips = r.routes.flatMap((x) => x.trips.map((t) => t.stops.map((s) => s.orderId).sort()));
+    expect(trips.find((t) => t.includes('frozen'))).not.toContain('chilled');
+    expect(trips.find((t) => t.includes('frozen'))).toContain('peas');
+    // Without the ranges, one trip carries all four.
+    expect(plan([order('frozen', 1000, at(20)), order('chilled', 1000, at(30)), order('peas', 1000, at(25)), dry], [truck('T1', 9000)]).routes[0].trips).toHaveLength(1);
+  });
+
   it('never loads a truck past what it carries: three loads that do not share a truck are three trips', () => {
     const r = plan([order('a', 3000, at(20)), order('b', 3000, at(20)), order('c', 3000, at(20))], [truck('T1', 5000)]);
     expect(r.unplanned).toEqual([]);

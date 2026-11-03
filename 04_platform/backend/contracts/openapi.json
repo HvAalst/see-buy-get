@@ -66832,6 +66832,25 @@
           "maxC"
         ]
       },
+      "KeptBetweenView": {
+        "type": "object",
+        "properties": {
+          "minC": {
+            "type": "number"
+          },
+          "maxC": {
+            "type": "number"
+          },
+          "own": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "minC",
+          "maxC",
+          "own"
+        ]
+      },
       "PostedFreightRow": {
         "type": "object",
         "properties": {
@@ -67121,6 +67140,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/ColdChainBreachView"
+              }
+            ]
+          },
+          "keptBetween": {
+            "description": "2026-11-03 — kept cold: the range it is kept in, the sender's own or the usual 2–8 °C. Absent on goods not carried cold.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KeptBetweenView"
               }
             ]
           },

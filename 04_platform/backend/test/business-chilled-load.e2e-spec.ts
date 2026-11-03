@@ -66,7 +66,7 @@ describe('a business posts a load kept cold, at the temperature it says', () => 
   const post = (biz: string, body: object) => http().post('/v1/sbg/dispatch/freight').set(bearer(biz)).send(body);
   const offersTo = async (driver: { did: string; token: string }) =>
     (await http().post(`/v1/sbg/fleet/drivers/${encodeURIComponent(driver.did)}/suggest-work`).set(bearer(driver.token)).send({ from, to }).expect(201)).body.offers as Array<{ offerId: string; ref: string }>;
-  const posted = async (biz: string) => (await http().get('/v1/sbg/dispatch/posted').set(bearer(biz)).expect(200)).body.items as Array<{ freightId: string; coldChainBroken?: { celsius: number; minC: number; maxC: number } }>;
+  const posted = async (biz: string) => (await http().get('/v1/sbg/dispatch/posted').set(bearer(biz)).expect(200)).body.items as Array<{ freightId: string; coldChainBroken?: { celsius: number; minC: number; maxC: number }; keptBetween?: { minC: number; maxC: number; own: boolean } }>;
   const note = async (biz: string, freightId: string) => (await http().get(`/v1/sbg/dispatch/freight/${freightId}/consignment-note`).set(bearer(biz)).expect(200)).body as { instructions: string[]; goods: { temperatureBand?: string } };
   const labels = async (biz: string, freightId: string) => (await http().get(`/v1/sbg/dispatch/freight/${freightId}/package-labels.html`).set(bearer(biz)).expect(200)).text;
   /** On the road with this driver since three hours ago, as the cold-chain tests put it there. */
@@ -83,6 +83,8 @@ describe('a business posts a load kept cold, at the temperature it says', () => 
     const frozen = (await post(biz, load({ tempRange: { minC: -25, maxC: -18 }, commitMode: 'instant' })).expect(201)).body;
     expect(frozen).toMatchObject({ natureCode: 'FOP', tempRange: { minC: -25, maxC: -18 } });
     expect(frozen.requiredCapabilities).toContain('coldChain');
+    // 2026-11-03 — the business's own load says the range it is kept in, and that it is the one the business gave.
+    expect((await posted(biz)).find((r) => r.freightId === frozen.freightId)?.keptBetween).toEqual({ minC: -25, maxC: -18, own: true });
 
     // Offered to the refrigerated body; never to the box body.
     const offer = (await offersTo(reefer)).find((o) => o.ref === frozen.freightId);
@@ -151,11 +153,13 @@ describe('a business posts a load kept cold, at the temperature it says', () => 
     expect(papers.instructions).toContain('Keep between 2 °C and 8 °C');
     expect(papers.goods.temperatureBand).toBe('2 °C to 8 °C');
     expect(await labels(biz, fresh.freightId)).toContain('Keep 2 °C to 8 °C');
+    expect((await posted(biz)).find((r) => r.freightId === fresh.freightId)?.keptBetween).toEqual({ minC: 2, maxC: 8, own: false });
 
     const dry = (await post(biz, load({ description: 'Maize flour', natureCode: 'FOD', commitMode: 'instant' })).expect(201)).body;
     expect(dry.tempRange).toBeUndefined();
     expect(dry.requiredCapabilities).not.toContain('coldChain');
     expect((await note(biz, dry.freightId)).goods.temperatureBand).toBeUndefined();
+    expect((await posted(biz)).find((r) => r.freightId === dry.freightId)?.keptBetween).toBeUndefined();
     expect((await offersTo(box)).some((o) => o.ref === dry.freightId)).toBe(true);
   });
 });

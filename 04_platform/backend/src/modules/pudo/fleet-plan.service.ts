@@ -6,6 +6,7 @@ import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { isDay } from './carriage-contract.service';
 import { DEFAULT_PLAN_PARAMS, clockOf, planDay, type PlanDock, type PlanOrder, type PlanPoint, type PlanTruck } from './day-plan';
+import { freightBand } from './heavy-cargo';
 import { windowOf, windowWords, type DayWindow } from './delivery-window';
 import { DispatchService } from './dispatch.service';
 import { Freight } from './dispatch.types';
@@ -255,7 +256,9 @@ export class FleetPlanService implements OnModuleInit {
     };
     const planOrders: PlanOrder[] = pinned.map((f) => {
       const dock = collectedAt(f) ?? atShipper(f);
-      return { id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation!, ...(windows.has(f.freightId) ? { window: onTheDay(windows.get(f.freightId)!) } : {}), ...(dock ? { dock } : {}) };
+      // 2026-11-03 — what it is kept at, where it is kept cold: two orders whose ranges do not meet never share a trip.
+      const band = freightBand(f);
+      return { id: f.freightId, kg: f.weightKg, pickup: f.pickupLocation, drop: f.destLocation!, ...(windows.has(f.freightId) ? { window: onTheDay(windows.get(f.freightId)!) } : {}), ...(dock ? { dock } : {}), ...(band ? { band } : {}) };
     });
     // EACH TRUCK ONCE PER SHIFT of its site — one vehicle, two drivers, an early day and a late one — never out in two
     // shifts at once. Where its site has one shift, or none, it is the truck it always was.
