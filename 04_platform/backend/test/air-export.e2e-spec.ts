@@ -141,8 +141,8 @@ describe('an export by air, over the wire', () => {
     const keys = first.papers.map((p: { key: string }) => p.key);
     expect(keys).toEqual(expect.arrayContaining(['air_waybill', 'phytosanitary_certificate', 'shipping_instructions']));
     for (const k of ['bill_of_lading', 'weighbridge_ticket', 'consignment_security_declaration']) expect(keys).not.toContain(k);
-    // Its row in the list says it goes by air.
-    expect((await http().get('/v1/sbg/exports').set(bearer(g.token)).expect(200)).body.items.find((r: { exportId: string }) => r.exportId === made.exportId)).toMatchObject({ mode: 'air' });
+    // Its row in the list says it goes by air — and carries what the phone's search finds it by (2026-11-03).
+    expect((await http().get('/v1/sbg/exports').set(bearer(g.token)).expect(200)).body.items.find((r: { exportId: string }) => r.exportId === made.exportId)).toMatchObject({ mode: 'air', bookingReference: '706-12345675', flights: ['KQ 112'], airline: 'Kenya Airways', originCountry: 'KE', destCountry: 'NL', bookedWithName: expect.any(String) });
 
     // The sea's steps are refused by name: no box, no weighing, no bill of lading, no train, no FIATA bill.
     for (const [step, body] of [

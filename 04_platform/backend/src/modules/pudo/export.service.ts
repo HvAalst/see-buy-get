@@ -454,6 +454,13 @@ export class ExportService {
         you: this.sideOf(c, readerEntityId, opts.all),
         exporterName: this.nameOf(c.exporterEntityId),
         ...(c.agent ? { agentName: this.nameOf(c.agent.entityId) } : {}),
+        // 2026-11-03 — what the list is searched by, on the phone (ExportRow).
+        destCountry: c.destCountry,
+        originCountry: c.originCountry,
+        ...(c.booking.vessel ? { vessel: c.booking.vessel } : {}),
+        ...(c.booking.voyage ? { voyage: c.booking.voyage } : {}),
+        bookedWithName: c.booking.partyName,
+        ...(c.air ? { flights: c.air.flights.map((f) => f.flight), airline: c.air.airline, ...(c.air.houseNumber ? { houseNumber: c.air.houseNumber } : {}) } : {}),
       }));
   }
 

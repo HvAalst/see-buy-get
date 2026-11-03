@@ -286,6 +286,15 @@ export interface ExportRow {
   you: ExportReader;
   exporterName: string;
   agentName?: string;
+  /** 2026-11-03 — what the list is searched by (exportSearch.ts). */
+  destCountry?: string;
+  originCountry?: string;
+  vessel?: string;
+  voyage?: string;
+  bookedWithName?: string;
+  flights?: string[];
+  airline?: string;
+  houseNumber?: string;
 }
 
 export interface RegisterExportInput {

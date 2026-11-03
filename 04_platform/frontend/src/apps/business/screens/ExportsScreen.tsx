@@ -2,7 +2,7 @@ import { CountrySelect, useCountryAtlas } from '../../tower/screens/CountrySelec
 import { publicRequest } from '../../../lib/sbg';
 import { businessConfig } from '../api';
 import { useCallback, useEffect, useState } from 'preact/hooks';
-import { DocumentButton, PaperSheet, paperOfBlob, usePaper } from '../../../shared/ui';
+import { DocumentButton, Icon, PaperSheet, paperOfBlob, usePaper } from '../../../shared/ui';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useT, type MessageKey } from '../../../shared/i18n';
 import { openLinked } from '../../../shared/linkedLoad';
@@ -21,7 +21,8 @@ import { isDangerousNature, mayAct } from '../logic';
 import { RailNotePanel } from '../../tower/screens/RailNotePanel';
 import { ExportByRail } from './ExportByRail';
 import { AirWaybillPanel, RegisterAirExport } from './ExportByAir';
-import { exportJourney, JourneyStrip, ModeFilter, modesPresent, type LegMode } from '../../tower/screens/JourneyStrip';
+import { exportJourney, JourneyStrip } from '../../tower/screens/JourneyStrip';
+import { splitCounts, visibleExports, type ExportSplit } from '../exportSearch';
 import { FblPanel, FiataDirectoryHint, fileAsDataUrl } from '../../tower/screens/FblPanel';
 import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
 import { uploadHint } from '../../../shared/upload';
@@ -86,8 +87,13 @@ export function ExportsScreen({ business, client, asked, onAsked }: { business: 
   // Recording one: by sea through a port, or by air through an airport (2026-10-29).
   const [forming, setForming] = useState<'sea' | 'air' | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  // The list by its modes (2026-10-29): all, or those with a leg of one mode.
-  const [mode, setMode] = useState<LegMode | ''>('');
+  // 2026-11-03 — the list split by sea or by air, and searched as it is typed (the owner: "a split by sea / by air and a
+  // searchbox that looks for data in the exports to guarantee a quick lookup"; exportSearch.ts). It replaces the
+  // filter by legs: a rail leg is part of a sea export, and "rail" is found by the search.
+  const [split, setSplit] = useState<ExportSplit>('all');
+  const [query, setQuery] = useState('');
+  const atlas = useCountryAtlas(atlasApi);
+  const countryName = (code: string) => atlas.find((c) => c.code === code)?.name;
 
   const load = useCallback(async () => {
     if (!client) return;
@@ -119,7 +125,9 @@ export function ExportsScreen({ business, client, asked, onAsked }: { business: 
       keep: (items) => {
         setRows(items);
         setForming(null);
-        setMode('');
+        // A notice opens its export: nothing it is in may be hidden by the split or the search.
+        setSplit('all');
+        setQuery('');
         setError(null);
       },
       open: (row) => setOpenId(row.exportId),
@@ -173,14 +181,49 @@ export function ExportsScreen({ business, client, asked, onAsked }: { business: 
         <div class="cons__panelhead">
           <span class="cons__panelt">{t(sends ? 'business.exports.listTitle' : 'business.exports.listTitleAgent')}</span>
         </div>
-        <ModeFilter present={modesPresent(rows ?? [])} value={mode} onChange={setMode} />
+        {rows && rows.length > 0 ? (
+          <div class="biz-xfind">
+            <div class="twr-tabs" role="group" aria-label={t('business.exports.split.label')}>
+              {(['all', 'sea', 'air'] as const).map((s) => (
+                <button key={s} type="button" aria-pressed={split === s} class={`cbtn cbtn--sm ${split === s ? 'cbtn--on' : 'cbtn--ghost'}`} onClick={() => setSplit(s)}>
+                  {s === 'sea' ? <Icon name="ship" size={16} /> : s === 'air' ? <Icon name="plane" size={16} /> : null}
+                  {t(`business.exports.split.${s}`, { n: splitCounts(rows)[s] })}
+                </button>
+              ))}
+            </div>
+            <input
+              class="cinput biz-xfind__q"
+              type="search"
+              value={query}
+              onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+              placeholder={t('business.exports.search.placeholder')}
+              aria-label={t('business.exports.search.label')}
+              enterkeyhint="search"
+              autocomplete="off"
+            />
+          </div>
+        ) : null}
         {rows === null ? (
           <p class="cons__empty">{t('business.loading')}</p>
         ) : rows.length === 0 ? (
           <p class="cons__empty">{t(sends ? 'business.exports.none' : 'business.exports.noneAgent')}</p>
+        ) : visibleExports(rows, split, query, countryName).length === 0 ? (
+          <p class="cons__empty">
+            {query.trim() ? t('business.exports.search.none', { q: query.trim() }) : t(split === 'air' ? 'business.exports.split.noneAir' : 'business.exports.split.noneSea')}{' '}
+            <button
+              type="button"
+              class="cbtn cbtn--ghost cbtn--sm"
+              onClick={() => {
+                setQuery('');
+                setSplit('all');
+              }}
+            >
+              {t(query.trim() ? 'business.exports.search.clear' : 'business.exports.split.showAll')}
+            </button>
+          </p>
         ) : (
           <div class="crows">
-            {rows.filter((r) => !mode || (r.modes ?? []).includes(mode)).map((r) => {
+            {visibleExports(rows, split, query, countryName).map((r) => {
               const tag = timingTag(r.timing, t);
               const clock = boxTag(r.box, t);
               return (

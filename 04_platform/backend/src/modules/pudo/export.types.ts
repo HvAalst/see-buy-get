@@ -547,6 +547,18 @@ export class ExportRow {
   @ApiProperty({ enum: ['exporter', 'agent', 'staff'] }) you: 'exporter' | 'agent' | 'staff';
   @ApiProperty() exporterName: string;
   @ApiPropertyOptional() agentName?: string;
+  /**
+   * 2026-11-03 — what a person looks an export up by (the owner: "a searchbox that looks for data in the exports to
+   * guarantee a quick lookup"): where it goes and comes from, the ship or the flights, who it was booked with.
+   */
+  @ApiProperty() destCountry: string;
+  @ApiProperty() originCountry: string;
+  @ApiPropertyOptional() vessel?: string;
+  @ApiPropertyOptional() voyage?: string;
+  @ApiProperty() bookedWithName: string;
+  @ApiPropertyOptional({ type: [String] }) flights?: string[];
+  @ApiPropertyOptional() airline?: string;
+  @ApiPropertyOptional() houseNumber?: string;
 }
 
 /* ------------------------------------------------------------------ requests -- */

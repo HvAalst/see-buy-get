@@ -555,6 +555,19 @@
   overflow-x: clip;
 }
 
+/* 2026-11-03 — the exports list's split (by sea / by air) and its search, above the rows: the tabs and a full-width box. */
+.biz-xfind {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.biz-xfind__q {
+  width: 100%;
+}
+.biz-xfind .twr-tabs {
+  margin: 0;
+}
+
 /* ------------------------------------------------ posting a load, one step per screen (2026-11-03) -- */
 
 /* screens/PostLoad.tsx (the owner: "chunk it up similar to the sign up process … That would enable us to use a slightly

@@ -297,6 +297,9 @@ describe('an export to the port, over the wire', () => {
     expect(bell(agent.entityId)).toContain(`${made.code}: you are appointed to clear an export`);
     const row = (await http().get('/v1/sbg/exports').set(bearer(agent.token)).expect(200)).body.items.find((r: { exportId: string }) => r.exportId === made.exportId);
     expect(row).toMatchObject({ you: 'agent', exporterName: x.name });
+    // What the phone's search finds it by (2026-11-03): where it comes from and goes to, the ship, who it is booked with.
+    expect(row).toMatchObject({ originCountry: 'KE', destCountry: 'DE', vessel: 'MSC Nairobi', voyage: '044E', bookedWithName: 'Pwani Forwarders' });
+    expect(row).not.toHaveProperty('flights');
     const seen = await read(agent.token);
     expect(seen).toMatchObject({ you: 'agent', exporterName: x.name, documents: [] });
     const file = await http().get(`${path}/papers/commercial_invoice/file`).set(bearer(agent.token)).expect(200);
