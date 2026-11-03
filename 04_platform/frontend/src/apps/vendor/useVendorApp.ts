@@ -56,7 +56,7 @@ import {
   vendorSession,
   vendorConfig,
 } from './api';
-import { EMPTY_MINT, dimsComplete, fromHandoff, measureOf, money, type MintForm } from './logic';
+import { EMPTY_MINT, dimsComplete, fromHandoff, measureOf, mintDangerous, money, type MintForm } from './logic';
 import type {
   ApiKeyRow,
   CallbackRow,
@@ -1027,8 +1027,12 @@ export function useVendorApp() {
   const submitMint = useCallback(async () => {
     if (!client || !creds) return;
     const f = stateRef.current.form;
+    // 2026-11-03 — an order going as a load of its own: its dangerous goods, when it said it has them.
+    const dangerous = mintDangerous(f);
     await run('mint', async () => {
       const r = await client.api.mint({
+        ...(dangerous.natureCode ? { natureCode: dangerous.natureCode } : {}),
+        ...(dangerous.dangerousGoods ? { dangerousGoods: dangerous.dangerousGoods } : {}),
         vendorId: creds.vendorId,
         // Reading B — handed in at a hub, in bulk: the hub, and no shop.
         ...(hubOriginOf(f.originDid) ? { handInMdpId: hubOriginOf(f.originDid)! } : { originPudoDid: f.originDid }),

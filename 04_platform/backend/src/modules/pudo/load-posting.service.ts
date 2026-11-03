@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { dangerousGoodsGap } from './cargo.types';
+import { ruleRefuses } from '../../foundation/http/api-rules';
 import { tempRangeGap } from './heavy-cargo';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { PresenceService } from '../../foundation/presence/presence.service';
@@ -69,7 +70,9 @@ export class LoadPostingService {
     this.shipperCodes?.assertCanIssue(coder, dto.packages);
     // Dangerous goods come with their UN number from this door as from every other (the gaps check, 2026-10-29).
     const dangerous = dangerousGoodsGap(dto.natureCode, dto.dangerousGoods);
-    if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
+    // Registered as the API's rule 'dangerous-goods-un-number' (api-rules.ts), in force from release: a rule this door gains
+    // from now on is written there first, and a company's system is warned before it is refused.
+    if (dangerous && ruleRefuses('dangerous-goods-un-number')) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
     // 2026-11-03 — the range goods carried cold are kept in, where the sender gives one: kept on the load as the air
     // import's road leg keeps it, so the offers, the readings and the note hold it. Refused here, in words, rather than
     // kept on goods nobody carries cold, or dropped for a lowest that is not below the highest.

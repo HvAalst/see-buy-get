@@ -85,6 +85,8 @@ const KIND_ICON: Record<string, IconName> = {
   system_down: 'warning',
   // A version of the API its own system calls is stopping, with a year's notice and again a month before.
   api_version: 'clock',
+  // 2026-11-03 — a new rule inside a version of the API, announced ahead and said again before it refuses.
+  api_rule: 'clock',
   // A business's parcel waits at the shop for money for its last leg to the business's door.
   parcel_door_short: 'wallet',
   // Somebody joined or left a fleet's roster — whoever did not do it is told.

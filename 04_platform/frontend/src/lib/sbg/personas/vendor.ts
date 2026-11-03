@@ -187,6 +187,9 @@ export function createVendorApi(sbg: SbgClient) {
       deliveryWindow?: string;
       /** Round 13 — the commercial invoice, for a shipment that crosses a border. */
       invoice?: Record<string, unknown>;
+      /** 2026-11-03 — an order going as a load of its own: its goods' nature, and dangerous goods for box 9. */
+      natureCode?: string;
+      dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: 'I' | 'II' | 'III' };
     }) => sbg.request((c) => c.POST('/v1/sbg/inbound/orders', { body: body as never })),
 
     /** Round 13 — a crossing parcel's commercial invoice, three copies a page each: printed with the label. */

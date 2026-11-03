@@ -10,6 +10,7 @@
  * English literals. Enumerated presentation (status/size/nature/…) resolves catalog keys via `t`.
  */
 
+import { dangerousGoodsValue, isDangerousNature } from '../../shared/dangerousGoods';
 import { distanceLabel, haversineKm, type GeoPoint } from '../../shared/geo';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { cash } from '../../shared/money';
@@ -612,16 +613,8 @@ export function plannedPickupIso(f: Pick<AcceptForm, 'freightWhen' | 'freightDat
  * first missing thing is the next thing to do. No sticker and no proof photo — freight isn't scanned onto a
  * shelf; the tracking code IS the artefact. `now` is injected so this stays pure and testable.
  */
-/** The natures that are dangerous goods (ADR): chemical, biological, flammable. Hazardous dust has no UN number. */
-export const DANGEROUS_NATURES = ['HAZ-CHEM', 'HAZ-BIO', 'HAZ-FLAM'] as const;
-export const isDangerousNature = (code: string | undefined) => (DANGEROUS_NATURES as readonly string[]).includes(code ?? '');
-
-/** The dangerous goods as the clerk took them down, or nothing until all three are given. */
-export function dangerousGoodsValue(f: Pick<AcceptForm, 'dgUn' | 'dgName' | 'dgClass' | 'dgGroup'>): { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: 'I' | 'II' | 'III' } | undefined {
-  const un = /^\s*(UN)?\s*(\d{4})\s*$/i.exec(f.dgUn)?.[2];
-  if (!un || !f.dgName.trim() || !f.dgClass.trim()) return undefined;
-  return { unNumber: `UN${un}`, properShippingName: f.dgName.trim(), hazardClass: f.dgClass.trim(), ...(f.dgGroup ? { packingGroup: f.dgGroup } : {}) };
-}
+/** The natures that are dangerous goods, and the goods as the clerk took them down: one copy for every app (2026-11-03). */
+export { DANGEROUS_NATURES, isDangerousNature, dangerousGoodsValue } from '../../shared/dangerousGoods';
 
 export function bookFreightMissing(f: AcceptForm, now: number, t: Translate): string | null {
   if (!parseDims(f.dims)) return t('agent.logic.freightMeasure');

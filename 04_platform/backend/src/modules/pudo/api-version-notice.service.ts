@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { EntityService } from '../../foundation/entity/entity.service';
+import { API_RULE_CHANGES, lastNoticeAt, type ApiRuleChange } from '../../foundation/http/api-rules';
 import { API_VERSIONS, LAST_NOTICE_DAYS, type ApiVersion } from '../../foundation/http/api-versions';
 import { MailService } from '../../foundation/mail/mail.service';
 import { PersistentMap } from '../../foundation/store/persistent-map';
@@ -17,6 +18,9 @@ const SWEEP_MS = 6 * 3_600_000;
  * live key is told when a version is announced as stopping, and again a month before it stops — by email (a business's
  * owners, a fleet's contact email) and in its bell. Each notice once per company; a company whose first live key comes
  * after the announcement is told then.
+ *
+ * 2026-11-03 — a new rule inside a version the same way (the user: "Notice first, build now"; api-rules.ts): told when it is
+ * announced, and again a month (a safety rule: a week) before it starts refusing a system's call.
  */
 @Injectable()
 export class ApiVersionNoticeService implements OnModuleInit, OnModuleDestroy {
@@ -44,8 +48,8 @@ export class ApiVersionNoticeService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Send every notice that is due and not yet sent. How many went. */
-  async sweep(now: number = Date.now(), versions: readonly ApiVersion[] = API_VERSIONS): Promise<number> {
-    let told = 0;
+  async sweep(now: number = Date.now(), versions: readonly ApiVersion[] = API_VERSIONS, rules: readonly ApiRuleChange[] = API_RULE_CHANGES): Promise<number> {
+    let told = await this.sweepRules(now, rules);
     for (const v of versions) {
       if (!v.announcedAt || !v.retiresAt) continue;
       const announced = Date.parse(v.announcedAt);
@@ -63,6 +67,45 @@ export class ApiVersionNoticeService implements OnModuleInit, OnModuleDestroy {
       }
     }
     return told;
+  }
+
+  /** The rule changes' notices that are due: when one is announced, and shortly before it refuses. */
+  private async sweepRules(now: number, rules: readonly ApiRuleChange[]): Promise<number> {
+    let told = 0;
+    for (const r of rules) {
+      if (r.fromRelease) continue;
+      if (now < Date.parse(r.announcedAt) || now >= Date.parse(r.enforcedFrom)) continue;
+      // Close to the day, the last notice — and only that, for a company first told now.
+      const stage: 'announced' | 'soon' = now >= lastNoticeAt(r) ? 'soon' : 'announced';
+      for (const owner of this.keys.holders()) {
+        const key = `rule:${r.id}:${stage}:${owner.kind}:${owner.id}`;
+        if (this.sent.has(key)) continue;
+        if (await this.tellRule(owner, r, stage)) {
+          this.sent.set(key, { at: new Date(now).toISOString() });
+          told += 1;
+        }
+      }
+    }
+    return told;
+  }
+
+  private async tellRule(owner: { kind: CompanyKind; id: string }, r: ApiRuleChange, stage: 'announced' | 'soon'): Promise<boolean> {
+    const company = this.company(owner);
+    if (!company) return false;
+    const from = r.enforcedFrom.slice(0, 10);
+    try {
+      await this.notifications?.notify(company.did, {
+        kind: 'api_rule',
+        title: stage === 'soon' ? `A rule of the API starts on ${from}` : `A rule of the API changes on ${from}`,
+        body: `${r.summary} Until ${from} your system's calls are answered as before, and each one it would refuse says so in the header Sbg-Rule-Change.`,
+        link: '/',
+        data: { rule: r.id, version: r.version, enforcedFrom: r.enforcedFrom, stage },
+      });
+    } catch (err) {
+      this.logger.warn(`api_rule notice failed for ${owner.kind} ${owner.id}: ${(err as Error).message}`);
+    }
+    for (const to of company.addresses) void this.mail?.send('api-rule-change', to, { company: company.name, rule: r.id, summary: r.summary, version: r.version, enforcedFrom: r.enforcedFrom, stage, app: owner.kind });
+    return true;
   }
 
   private async tell(owner: { kind: CompanyKind; id: string }, v: ApiVersion, stage: 'announced' | 'month'): Promise<boolean> {

@@ -1,13 +1,13 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, CodeCard, ErrorNote, Icon, Info, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField } from '../../../shared/ui';
+import { Button, Card, Checklist, Choice, CodeCard, ErrorNote, Icon, Info, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { distanceLabel, haversineKm, type GeoPoint } from '../../../shared/geo';
 import { PhotoField } from './PhotoField';
 import { PapersCard } from './PapersCard';
 import { papersGaps } from '../papers';
-import { chargeOf, dimsComplete, feeLines, handoffLine, money, originRows, priceCards } from '../logic';
+import { chargeOf, dimsComplete, feeLines, handoffLine, mintDangerous, money, originRows, priceCards } from '../logic';
 import type { NetworkPoint } from '../types';
 import { HUB_ORIGIN, hoursLine, receivingHours, receivingWords, type HubOptionView } from '../hubs';
 import type { VendorActions, VendorState } from '../useVendorApp';
@@ -111,7 +111,9 @@ function SourceStep({ state, actions }: MintScreenProps) {
 function ParcelStep({ state, actions }: MintScreenProps) {
   const t = useT();
   const f = state.form;
-  const ready = dimsComplete(f) && Boolean(f.photoRef);
+  // 2026-11-03 — an order going as a load of its own, said to be dangerous, waits for its UN number, name and class.
+  const dangerous = mintDangerous(f);
+  const ready = dimsComplete(f) && Boolean(f.photoRef) && !dangerous.missing;
 
   return (
     <div class="scr">
@@ -201,12 +203,68 @@ function ParcelStep({ state, actions }: MintScreenProps) {
         <p class="card__note">{t('vendor.mint.freightHint')}</p>
       </Card>
 
+      {/* 2026-11-03 — CMR box 9, for the order that goes as a load of its own: whether its goods are dangerous, and if so
+          by their UN number, name and class (the gaps check of 2026-10-29 left this door open until a store needed it). */}
+      {f.dedicatedCargo ? (
+        <Card label={t('vendor.mint.dangerousTitle')}>
+          <p class="card__note" style="margin-top:0">{t('vendor.mint.dangerousLede')}</p>
+          <Choice
+            id="mint-dg-kind"
+            label={t('vendor.mint.dangerousKind')}
+            value={f.dgKind}
+            options={(
+              [
+                ['', 'vendor.mint.dangerousNone'],
+                ['HAZ-CHEM', 'vendor.mint.dangerousChem'],
+                ['HAZ-BIO', 'vendor.mint.dangerousBio'],
+                ['HAZ-FLAM', 'vendor.mint.dangerousFlam'],
+              ] as const
+            ).map(([kind, labelKey]) => ({ value: kind, label: t(labelKey) }))}
+            onChange={(kind) => actions.setForm({ dgKind: kind as '' | 'HAZ-CHEM' | 'HAZ-BIO' | 'HAZ-FLAM' })}
+          />
+          {f.dgKind ? (
+            <div style="margin-top:12px">
+              <p class="card__note">{t('vendor.mint.dgNote')}</p>
+              <div class="dims">
+                <div class="field">
+                  <label class="field__label" for="mint-dg-un">
+                    {t('vendor.mint.dgUn')}
+                  </label>
+                  <input id="mint-dg-un" class="input" maxLength={8} inputMode="numeric" value={f.dg.dgUn} onInput={(e) => actions.setForm({ dg: { ...f.dg, dgUn: e.currentTarget.value } })} placeholder="1075" autocomplete="off" />
+                </div>
+                <div class="field">
+                  <label class="field__label" for="mint-dg-class">
+                    {t('vendor.mint.dgClass')}
+                  </label>
+                  <input id="mint-dg-class" class="input" maxLength={8} value={f.dg.dgClass} onInput={(e) => actions.setForm({ dg: { ...f.dg, dgClass: e.currentTarget.value } })} placeholder="2.1" autocomplete="off" />
+                </div>
+              </div>
+              <div class="field" style="margin-top:12px">
+                <label class="field__label" for="mint-dg-name">
+                  {t('vendor.mint.dgName')}
+                </label>
+                <input id="mint-dg-name" class="input" maxLength={200} value={f.dg.dgName} onInput={(e) => actions.setForm({ dg: { ...f.dg, dgName: e.currentTarget.value } })} autocomplete="off" />
+              </div>
+              <div class="field" style="margin-top:12px">
+                <Choice
+                  id="mint-dg-group"
+                  label={t('vendor.mint.dgGroup')}
+                  value={f.dg.dgGroup}
+                  options={[{ value: '', label: t('vendor.mint.dgGroupNone') }, ...(['I', 'II', 'III'] as const).map((g) => ({ value: g, label: g }))]}
+                  onChange={(g) => actions.setForm({ dg: { ...f.dg, dgGroup: g as '' | 'I' | 'II' | 'III' } })}
+                />
+              </div>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
       <div class="scr__cta">
         {/* A handoff already carries the destination — Continue goes straight to pricing the drop-offs. */}
         <Button onClick={() => (f.checkoutId && f.destDid ? void actions.pickDest(f.destDid) : actions.toStep('dest'))} disabled={!ready}>
           {t('vendor.continue')}
         </Button>
-        {!ready ? <p class="hint" style="margin-top:8px">{t('vendor.mint.measurementsFirst')}</p> : null}
+        {!ready ? <p class="hint" style="margin-top:8px">{t(dimsComplete(f) && f.photoRef && dangerous.missing ? 'vendor.mint.dangerousFirst' : 'vendor.mint.measurementsFirst')}</p> : null}
       </div>
 
       {f.checkoutId && f.destDid ? <Note tone="info" icon="pin" title={t('vendor.mint.buyerChose')} /> : null}

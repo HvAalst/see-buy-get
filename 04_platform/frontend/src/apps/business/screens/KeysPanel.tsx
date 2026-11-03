@@ -2,7 +2,8 @@ import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { useT } from '../../../shared/i18n';
 import { keyLine, keysInOrder, keyTitle, type CompanyKey } from '../../../shared/companyKeys';
-import type { BusinessClient } from '../api';
+import { businessConfig, type BusinessClient } from '../api';
+import { apiChangeLines, useApiChanges } from '../../../shared/apiChanges';
 
 /**
  * KEYS FOR YOUR OWN SYSTEMS (the user, round 12: "An API for businesses and fleets"; "Post, send in, take at its price";
@@ -128,6 +129,41 @@ export function KeysPanel({ client, owner }: { client: BusinessClient | null; ow
       ) : (
         <p class="cons__empty">{t('business.keys.none')}</p>
       )}
+      <ApiChangesList />
     </section>
+  );
+}
+
+/** 2026-11-03 — the API's own list of changes, beside the keys: what changes, and from when (shared/apiChanges.ts). */
+function ApiChangesList() {
+  const t = useT();
+  const changes = useApiChanges(businessConfig());
+  if (changes === null) return null;
+  return (
+    <>
+      <div class="cons__panelhead" style="margin-top:18px">
+        <span class="cons__panelt">{t('apiChanges.title')}</span>
+      </div>
+      <p class="chint">{t('apiChanges.lede')}</p>
+      {changes === 'unavailable' ? (
+        <p class="chint">{t('apiChanges.unavailable')}</p>
+      ) : (
+        <table class="ctbl ctbl--stack">
+          <tbody>
+            {apiChangeLines(changes, Date.now(), t).map((line) => (
+              <tr key={line.key}>
+                <td>
+                  <span class="ctbl__strong">{line.title}</span>
+                  <span class="ctbl__sub" style="display:block">
+                    {line.detail}
+                  </span>
+                </td>
+                <td class="ctbl__num">{line.coming ? <span class="ctag ctag--warn">{t('apiChanges.comingTag')}</span> : null}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
   );
 }

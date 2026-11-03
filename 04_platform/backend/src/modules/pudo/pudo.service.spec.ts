@@ -8559,6 +8559,25 @@ describe('PUDO Light', () => {
     expect(res.freight?.maxSpend).toBe(25);
   });
 
+  // 2026-11-03 — the door the gaps check of 2026-10-29 left open on purpose: a store's heavy order of dangerous goods.
+  it('a store’s heavy order of dangerous goods gives their UN number, name and class, or is refused before anything is written', () => {
+    const origin = onboardAgent('Gas Origin', 'NorthTown', 50);
+    const dest = onboardAgent('Gas Dest', 'NorthTown', 50);
+    const vendor = vendors.register({ name: 'Gas Shop' });
+    vendors.topUp(vendor.vendorId, 500);
+    const order = { vendorId: vendor.vendorId, originPudoDid: origin.did, destPudoDid: dest.did, buyerMobile: '+254700', weightKg: 300, contentPhotoRef: photoOf(vendor.vendorId), natureCode: 'HAZ-FLAM' };
+    const before = dispatch.listFreight().length;
+    expect(() => controller.createInbound(order as never, { role: 'genesis', did: vendor.did } as never)).toThrow(/UN number, proper shipping name and class/);
+    expect(dispatch.listFreight().length).toBe(before);
+    const dg = { unNumber: 'UN1075', properShippingName: 'Petroleum gases, liquefied', hazardClass: '2.1' };
+    const res = controller.createInbound({ ...order, dangerousGoods: dg } as never, { role: 'genesis', did: vendor.did } as never) as { diverted?: boolean; freight?: { dangerousGoods?: unknown } };
+    expect(res.diverted).toBe(true);
+    expect(res.freight?.dangerousGoods).toMatchObject({ unNumber: 'UN1075', properShippingName: 'Petroleum gases, liquefied', hazardClass: '2.1' });
+    // Goods that are not dangerous carry none, whatever was sent with them.
+    const plain = controller.createInbound({ ...order, natureCode: 'GEN', dangerousGoods: dg } as never, { role: 'genesis', did: vendor.did } as never) as { freight?: { dangerousGoods?: unknown } };
+    expect(plain.freight?.dangerousGoods).toBeUndefined();
+  });
+
   it('S34c: a zero/negative budget means NO cap (never a load nobody can move)', () => {
     const pickup = { lat: -1.73, lng: 36.43 };
     const base = { description: 'C', pickupLocation: pickup, pickupLabel: 'D', destLabel: 'S', destLocation: pickup, weightKg: 1000, packaging: 'loose' } as const;
@@ -9973,6 +9992,20 @@ describe('PUDO Light', () => {
     // A perishable (cold-chain, tempBand != null) can't consolidate — it books freight directly.
     expect(() => consignments.open({ ownerDid: owner.did, natureCode: 'FOP', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 10000 })).toThrow(/perishable/);
     expect(() => consignments.open({ ownerDid: owner.did, natureCode: 'FOD', pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', targetKg: 0 })).toThrow(/target/);
+  });
+
+  // 2026-11-03 — the co-op lot's door (the gaps check of 2026-10-29 left it open on purpose until now).
+  it('a lot of dangerous goods is opened only with their UN number, name and class — and the load it becomes carries them', () => {
+    const owner = onboardAgent('Coop Pesticide', 'NorthTown', 50);
+    const base = { ownerDid: owner.did, natureCode: 'HAZ-CHEM' as const, pickupLabel: owner.shopName, pickupLocation: owner.location, destLabel: 'Merkato', destLocation: { lat: -1.28, lng: 36.82 }, targetKg: 1000 };
+    expect(() => consignments.open(base)).toThrow(/UN number, proper shipping name and class/);
+    const lot = consignments.open({ ...base, dangerousGoods: { unNumber: 'UN2588', properShippingName: 'Pesticide, solid, toxic, n.o.s.', hazardClass: '6.1', packingGroup: 'III' } });
+    const full = consignments.deposit(lot.code, 'member-1', 1000);
+    const f = dispatch.listFreight().find((x) => x.freightId === full.freightId)!;
+    expect(f.dangerousGoods).toMatchObject({ unNumber: 'UN2588', hazardClass: '6.1', packingGroup: 'III' });
+    // A lot that is not dangerous keeps none.
+    const maize = consignments.open({ ...base, natureCode: 'FOD', dangerousGoods: { unNumber: 'UN2588', properShippingName: 'x', hazardClass: '6.1' } });
+    expect(maize.dangerousGoods).toBeUndefined();
   });
 
   it('F3: deposits accumulate and a FULL lot auto-posts as one bulk, off-platform (no shipper) freight', () => {

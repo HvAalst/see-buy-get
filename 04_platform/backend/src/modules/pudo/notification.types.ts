@@ -248,6 +248,11 @@ export const NOTIFICATION_KINDS = [
    */
   'api_version',
   /**
+   * 2026-11-03 — a new rule inside a version of the API: announced, and said again shortly before it refuses a system's call
+   * (the user: "Notice first, build now"). To every company holding a live key; emailed too.
+   */
+  'api_rule',
+  /**
    * A business's parcel is ready at the shop for its last leg to the business's own door, and the parcel balance does not
    * cover the most it allows a driver (2026-10-29). To the business: top up and post it, or collect it at the shop.
    */

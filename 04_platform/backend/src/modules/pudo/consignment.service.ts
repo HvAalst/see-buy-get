@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
-import { CargoNature } from './cargo.types';
+import { CargoNature, DANGEROUS_GOODS_NATURES, dangerousGoodsGap } from './cargo.types';
 import { Consignment, GeoPoint } from './pudo.types';
 import { tempBand } from './heavy-cargo';
 import { DispatchService } from './dispatch.service';
@@ -55,6 +55,7 @@ export class ConsignmentService {
       destLocation?: GeoPoint;
       targetKg: number;
       maxSpend?: number;
+      dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
     },
     now: number = Date.now(),
   ): Consignment {
@@ -64,6 +65,11 @@ export class ConsignmentService {
     }
     if (!(input.targetKg > 0)) throw new GlosError('INVALID_INPUT', 'A consignment needs a positive truckload target (kg).');
     if (input.targetKg > MAX_CONSIGNMENT_TARGET_KG) throw new GlosError('INVALID_INPUT', `A consignment target cannot exceed ${MAX_CONSIGNMENT_TARGET_KG} kg.`);
+    // 2026-11-03 — a lot of dangerous goods gives their UN number, name and class before it is opened: the load it becomes
+    // carries them in box 9, as every other door's does (the gaps check, 2026-10-29). Goods that are not dangerous keep none.
+    const dangerous = dangerousGoodsGap(natureCode, input.dangerousGoods);
+    if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
+    const dangerousGoods = (DANGEROUS_GOODS_NATURES as readonly string[]).includes(natureCode) ? input.dangerousGoods : undefined;
 
     this.seq += 1;
     const lot: Consignment = {
@@ -81,6 +87,7 @@ export class ConsignmentService {
       deposits: [],
       // A positive, finite cap only (mirrors registerFreight): a zero/negative/NaN budget means "no cap".
       maxSpend: input.maxSpend != null && Number.isFinite(input.maxSpend) && input.maxSpend > 0 ? Math.round(input.maxSpend * 100) / 100 : undefined,
+      ...(dangerousGoods ? { dangerousGoods } : {}),
       openedAt: new Date(now).toISOString(),
     };
     this.lots.set(lot.consignmentId, lot);
@@ -152,6 +159,7 @@ export class ConsignmentService {
         // handling equipment and wanted a tipper.
         packaging: 'bagged',
         maxSpend: lot.maxSpend,
+        ...(lot.dangerousGoods ? { dangerousGoods: lot.dangerousGoods } : {}),
         // shipperDid intentionally omitted — off-platform cash settlement (the F2 model): no wallet is billed.
       },
       now,

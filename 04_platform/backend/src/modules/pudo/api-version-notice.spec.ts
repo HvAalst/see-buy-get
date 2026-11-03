@@ -89,4 +89,42 @@ describe('a version of the API stops only with notice', () => {
     // Once it has stopped there is nothing left to say.
     expect(await notices.sweep(Date.parse(retiring.retiresAt!) + DAY, [retiring])).toBe(0);
   });
+
+  // 2026-11-03 — a new rule inside a version, the same way (the user: "Notice first, build now").
+  it('tells every company holding a live key of a new rule when it is announced and shortly before it refuses — each once', async () => {
+    const holders = [
+      { kind: 'business' as const, id: 'ent_biz' },
+      { kind: 'fleet' as const, id: 'did:glos:fleet-a' },
+    ];
+    const keys = { holders: () => holders } as unknown as CompanyKeyService;
+    const entities = { find: (id: string) => (id === 'ent_biz' ? { name: 'Abebe Import', did: 'did:glos:biz', business: {} } : undefined) } as unknown as EntityService;
+    const businesses = { ownerAddresses: () => [{ address: 'owner@abebe.example', name: 'Abebe' }] } as unknown as BusinessService;
+    const managers = { get: (did: string) => ({ companyName: 'Pwani Hauliers', did, contactEmail: 'office@pwani.example' }) } as unknown as FleetManagerService;
+    const mails: Array<{ template: string; to: string; stage: string }> = [];
+    const mail = { send: (template: string, to: { address: string }, p: { stage: string }) => void mails.push({ template, to: to.address, stage: p.stage }) } as unknown as MailService;
+    const bells: Array<{ did: string; kind: string; title: string; stage: string }> = [];
+    const notifications = { notify: async (did: string, n: { kind: string; title: string; data: { stage: string } }) => void bells.push({ did, kind: n.kind, title: n.title, stage: n.data.stage }) } as unknown as NotificationService;
+    const notices = new ApiVersionNoticeService(keys, entities, businesses, managers, mail, notifications);
+    const rule = { id: 'packages-required', version: '1', summary: 'A load is refused without the number of its packages.', announcedAt: '2027-01-01T00:00:00Z', enforcedFrom: '2027-04-01T00:00:00Z' };
+    const at = (iso: string) => Date.parse(iso);
+
+    expect(await notices.sweep(at('2026-12-31T00:00:00Z'), API_VERSIONS, [rule])).toBe(0);
+    expect(await notices.sweep(at('2027-01-02T00:00:00Z'), API_VERSIONS, [rule])).toBe(2);
+    expect(await notices.sweep(at('2027-01-03T00:00:00Z'), API_VERSIONS, [rule])).toBe(0);
+    expect(bells.map((b) => [b.did, b.kind, b.title])).toEqual([
+      ['did:glos:biz', 'api_rule', 'A rule of the API changes on 2027-04-01'],
+      ['did:glos:fleet-a', 'api_rule', 'A rule of the API changes on 2027-04-01'],
+    ]);
+    expect(mails.map((m) => [m.template, m.to])).toEqual([
+      ['api-rule-change', 'owner@abebe.example'],
+      ['api-rule-change', 'office@pwani.example'],
+    ]);
+    // A month before: each once more; from the day it refuses, nothing.
+    expect(await notices.sweep(at('2027-03-05T00:00:00Z'), API_VERSIONS, [rule])).toBe(2);
+    expect(bells.slice(2).map((b) => b.stage)).toEqual(['soon', 'soon']);
+    expect(await notices.sweep(at('2027-03-06T00:00:00Z'), API_VERSIONS, [rule])).toBe(0);
+    expect(await notices.sweep(at('2027-04-02T00:00:00Z'), API_VERSIONS, [rule])).toBe(0);
+    // A rule in force from release is never announced: there was nobody to tell.
+    expect(await notices.sweep(at('2027-01-02T00:00:00Z'), API_VERSIONS, [{ ...rule, id: 'old', fromRelease: true as const }])).toBe(0);
+  });
 });

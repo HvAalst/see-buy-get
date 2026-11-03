@@ -693,6 +693,8 @@ export class Consignment {
   weightKg: number; // accumulated deposit weight
   deposits: ConsignmentDeposit[];
   maxSpend?: number; // optional cash budget cap for the eventual haul (→ the freight's maxSpend)
+  /** 2026-11-03 — CMR box 9 of the load it becomes: a lot of dangerous goods carries their UN number, name and class. */
+  dangerousGoods?: { unNumber: string; properShippingName: string; hazardClass: string; packingGroup?: string };
   openedAt: string;
   filledAt?: string; // when the FIRST deposit arrived — drives the aged-out publish (like a tote's filledAt); undefined until then
   postedAt?: string;

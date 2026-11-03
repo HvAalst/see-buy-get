@@ -31354,6 +31354,27 @@
         }
       }
     },
+    "/v1/sbg/api-changes": {
+      "get": {
+        "operationId": "ApiChanges.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiChangesView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "API"
+        ]
+      }
+    },
     "/v1/sbg/vendors/{id}/parcels/{parcelId}/invoice": {
       "get": {
         "operationId": "StorePapers.view",
@@ -59259,6 +59280,14 @@
                 "$ref": "#/components/schemas/ParcelInvoiceDto"
               }
             ]
+          },
+          "dangerousGoods": {
+            "description": "2026-11-03 — CMR box 9 for an order too big for the parcel network, which goes as a load of its own: dangerous goods\n(chemical, biological, flammable) by their UN number, proper shipping name and class. A heavy dangerous order without\nthem is refused, as at every other door a load comes in by.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightDangerousDto"
+              }
+            ]
           }
         },
         "required": [
@@ -67858,6 +67887,9 @@
           "maxSpend": {
             "type": "number",
             "minimum": 0
+          },
+          "dangerousGoods": {
+            "$ref": "#/components/schemas/FreightDangerousDto"
           }
         },
         "required": [
@@ -67929,6 +67961,27 @@
           "maxSpend": {
             "type": "number"
           },
+          "dangerousGoods": {
+            "type": "object",
+            "properties": {
+              "unNumber": {
+                "required": true,
+                "type": "string"
+              },
+              "properShippingName": {
+                "required": true,
+                "type": "string"
+              },
+              "hazardClass": {
+                "required": true,
+                "type": "string"
+              },
+              "packingGroup": {
+                "required": false,
+                "type": "string"
+              }
+            }
+          },
           "openedAt": {
             "type": "string"
           },
@@ -67954,6 +68007,7 @@
           "targetKg",
           "weightKg",
           "deposits",
+          "dangerousGoods",
           "openedAt"
         ]
       },
@@ -75298,6 +75352,87 @@
         },
         "required": [
           "driverDid"
+        ]
+      },
+      "ApiVersionView": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "releasedAt": {
+            "type": "string"
+          },
+          "announcedAt": {
+            "type": "string"
+          },
+          "retiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "releasedAt"
+        ]
+      },
+      "ApiRuleChangeView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "announcedAt": {
+            "type": "string"
+          },
+          "enforcedFrom": {
+            "type": "string"
+          },
+          "safety": {
+            "type": "boolean"
+          },
+          "noticeDays": {
+            "type": "number"
+          },
+          "fromRelease": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "summary",
+          "announcedAt",
+          "enforcedFrom",
+          "safety",
+          "noticeDays",
+          "fromRelease"
+        ]
+      },
+      "ApiChangesView": {
+        "type": "object",
+        "properties": {
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiVersionView"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiRuleChangeView"
+            }
+          }
+        },
+        "required": [
+          "versions",
+          "rules"
         ]
       },
       "PassageLocationDto": {

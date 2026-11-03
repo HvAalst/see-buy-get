@@ -5,6 +5,7 @@
  */
 
 import { EMPTY_PAPERS, type PapersForm } from './papers';
+import { EMPTY_DANGEROUS, dangerousGoodsValue, type DangerousGoodsFields, type DangerousNature } from '../../shared/dangerousGoods';
 import { toCsv } from '../../shared/csv';
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { cash } from '../../shared/money';
@@ -136,6 +137,12 @@ export interface MintForm {
   deliveryWindow: string;
   /** Round 13 — the commercial invoice a shipment crossing a border goes with. Sent only when the quote crosses one. */
   papers: PapersForm;
+  /**
+   * 2026-11-03 — CMR box 9 for an order too big for the parcel network, which goes as a load of its own: whether its goods
+   * are dangerous, and if so by their UN number, name and class. Asked only of such an order; empty means not dangerous.
+   */
+  dgKind: '' | DangerousNature;
+  dg: DangerousGoodsFields;
 }
 
 export const EMPTY_MINT: MintForm = {
@@ -157,6 +164,8 @@ export const EMPTY_MINT: MintForm = {
   instructions: '',
   deliveryWindow: '',
   papers: EMPTY_PAPERS,
+  dgKind: '',
+  dg: EMPTY_DANGEROUS,
 };
 
 /** All four measurements present and positive — the classify call's gate. */
@@ -395,4 +404,14 @@ export function callbackLine(c: CallbackRow, t: Translate): { text: string; warn
   if (c.state === 'failed') return { text: t('vendor.store.msg.gaveUp', { count: c.attempts ?? 0 }) + why, warn: true };
   if (!c.attempts) return { text: t('vendor.store.msg.sending'), warn: false };
   return { text: t('vendor.store.msg.retrying', { count: c.attempts, next: when(c.nextTryAt) }) + why, warn: true };
+}
+
+/**
+ * 2026-11-03 — an order going as a load of its own whose goods are said to be dangerous: what it sends for box 9, or
+ * nothing when it is not such an order. `missing`: dangerous, and the UN number, name or class not given yet.
+ */
+export function mintDangerous(f: Pick<MintForm, 'dedicatedCargo' | 'dgKind' | 'dg'>): { natureCode?: DangerousNature; dangerousGoods?: ReturnType<typeof dangerousGoodsValue>; missing: boolean } {
+  if (!f.dedicatedCargo || !f.dgKind) return { missing: false };
+  const value = dangerousGoodsValue(f.dg);
+  return { natureCode: f.dgKind, ...(value ? { dangerousGoods: value } : {}), missing: !value };
 }

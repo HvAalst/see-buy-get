@@ -163,6 +163,8 @@ export interface MailParams {
   'fleet-system-down': { fleet: string; count: number; since: string };
   /** A version of the API a company's key calls stops, announced a year ahead and said again a month before (round 12). */
   'api-version-retiring': { company: string; version: string; retiresAt: string; stage: 'announced' | 'month'; app: 'business' | 'fleet' };
+  /** 2026-11-03 — a new rule inside a version of the API, with the day it starts refusing a system's call (api-rules.ts). */
+  'api-rule-change': { company: string; rule: string; summary: string; version: string; enforcedFrom: string; stage: 'announced' | 'soon'; app: 'business' | 'fleet' };
   /**
    * A problem was reported on one of a store's shipments, and the store names an insurer on its shipping policy: the
    * damage claim report, by a link. Sent the moment the report is made. `by`: who reported the problem.
@@ -521,6 +523,28 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: `Open the ${APP_NAMES[p.app]}`, href: appUrl(p.app) },
       ],
       reason: `You are getting this email because your company holds a live key for the SeeBuyGet API. Every company holding one is told a year ahead and a month ahead.`,
+    }),
+  },
+
+  'api-rule-change': {
+    title: 'A rule of the API your system uses changes',
+    sentWhen: 'A new rule inside a version of the API is announced (90 days ahead, 30 for a safety rule), and again a month — or for a safety rule a week — before it starts refusing. To every company holding a live key: a business’s owners, a fleet’s contact email.',
+    wired: true,
+    // Late it is still ahead of the day: the notice has room for it.
+    sendLater: 48,
+    sample: { company: 'Pwani Hauliers Ltd', rule: 'example-rule', summary: 'A load is refused without the number of its packages.', version: '1', enforcedFrom: '2027-02-01T00:00:00Z', stage: 'announced', app: 'fleet' },
+    build: (p) => ({
+      subject: p.stage === 'soon' ? `${p.company}: a rule of the API starts on ${formatWhen(p.enforcedFrom)}` : `${p.company}: a rule of the API changes on ${formatWhen(p.enforcedFrom)}`,
+      preheader: `${p.summary} From ${formatWhen(p.enforcedFrom)}.`,
+      blocks: [
+        { kind: 'heading', text: p.stage === 'soon' ? 'A rule of the API starts soon' : 'A rule of the API changes' },
+        { kind: 'paragraph', text: `Your company holds a live key for its own system, which calls version ${p.version} of the API. From ${formatWhen(p.enforcedFrom)}: ${p.summary}` },
+        { kind: 'paragraph', text: `Until then your system’s calls are answered as before, and each call the rule would refuse says so in the header Sbg-Rule-Change (“${p.rule}; enforced-from=${p.enforcedFrom.slice(0, 10)}”). The list of changes is beside your keys in the app.` },
+        { kind: 'paragraph', text: p.stage === 'soon' ? 'This is the second and last notice: please change your system before that day.' : 'We will write once more shortly before that day.' },
+        { kind: 'facts', rows: [['Company', p.company], ['Version', p.version], ['Refuses from', formatWhen(p.enforcedFrom)]] },
+        { kind: 'button', label: `Open the ${APP_NAMES[p.app]}`, href: appUrl(p.app) },
+      ],
+      reason: `You are getting this email because your company holds a live key for the SeeBuyGet API. Every company holding one is told when a rule changes, and again before it starts.`,
     }),
   },
 

@@ -5,6 +5,8 @@ import { Button, Card, Chip, ErrorNote, Note } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { POSITION_EVERY, eventWords, messageLine, positionsLines, subjectOf, systemApi, type SystemView } from '../system';
 import { keyLine, keysInOrder, keyTitle, type CompanyKey } from '../../../shared/companyKeys';
+import { apiChangeLines, useApiChanges } from '../../../shared/apiChanges';
+import { fleetConfig } from '../api';
 
 /**
  * YOUR OWN SYSTEM (the user, round 11: the events recommended; a load's money only where we pay the fleet; where its
@@ -333,6 +335,38 @@ function KeysCard({ api }: { api: ReturnType<typeof systemApi> }) {
         </div>
       ))}
       <p class="hint">{t('fleet.keys.anyManager')}</p>
+      <ApiChangesList />
     </Card>
+  );
+}
+
+/** 2026-11-03 — the API's own list of changes, beside the keys: what changes, and from when (shared/apiChanges.ts). */
+function ApiChangesList() {
+  const t = useT();
+  const changes = useApiChanges(fleetConfig());
+  if (changes === null) return null;
+  return (
+    <div style="margin-top:16px">
+      <p class="card__note" style="margin-bottom:4px">
+        <b>{t('apiChanges.title')}</b>
+      </p>
+      <p class="hint">{t('apiChanges.lede')}</p>
+      {changes === 'unavailable' ? (
+        <p class="hint">{t('apiChanges.unavailable')}</p>
+      ) : (
+        apiChangeLines(changes, Date.now(), t).map((line) =>
+          line.coming ? (
+            <Note key={line.key} tone="warn" icon="clock" title={line.title} detail={line.detail} />
+          ) : (
+            <div key={line.key} style="margin-top:10px">
+              <p class="card__note" style="margin-bottom:0">
+                <b>{line.title}</b>
+              </p>
+              <p class="hint">{line.detail}</p>
+            </div>
+          ),
+        )
+      )}
+    </div>
   );
 }

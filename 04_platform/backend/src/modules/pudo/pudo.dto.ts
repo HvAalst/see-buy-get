@@ -1319,6 +1319,12 @@ export class InboundOrderDto {
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OrderItemDto) items?: OrderItemDto[];
   /** Round 13 — the commercial invoice, for a shipment that crosses a border: what customs reads, item by item. */
   @IsOptional() @ValidateNested() @Type(() => ParcelInvoiceDto) invoice?: ParcelInvoiceDto;
+  /**
+   * 2026-11-03 — CMR box 9 for an order too big for the parcel network, which goes as a load of its own: dangerous goods
+   * (chemical, biological, flammable) by their UN number, proper shipping name and class. A heavy dangerous order without
+   * them is refused, as at every other door a load comes in by.
+   */
+  @IsOptional() @ValidateNested() @Type(() => FreightDangerousDto) dangerousGoods?: FreightDangerousDto;
 }
 
 /** PG1 — a signed-in person's in-app peer-send mint (the Send app's parcel genesis). The sender's identity
@@ -3014,6 +3020,8 @@ export class OpenConsignmentDto {
   @IsOptional() @ValidateNested() @Type(() => GeoDto) destLocation?: GeoDto;
   @IsNumber() @Min(1) targetKg!: number; // the truckload target the lot fills toward
   @IsOptional() @IsNumber() @Min(0) maxSpend?: number; // optional cash budget cap for the eventual haul (0 = no cap)
+  /** 2026-11-03 — CMR box 9: a lot of dangerous goods (a pesticide, a fertiliser classed so) gives them, or is refused. */
+  @IsOptional() @ValidateNested() @Type(() => FreightDangerousDto) dangerousGoods?: FreightDangerousDto;
 }
 
 /** F3 — a member deposit (kg) into a consolidation lot. memberRef is a free label (thin attribution). */

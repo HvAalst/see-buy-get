@@ -173,7 +173,7 @@ import { CompanyPapersWatch } from '../../foundation/entity/company-papers-watch
 import { CompanyDeclarationService, COMPANY_PAPER_KINDS, PAPER_BOUND_SECTIONS, recordKeeper } from '../../foundation/entity/company-declarations.service';
 import { CompanyPaperReportService } from '../../foundation/entity/company-paper-reports.service';
 import { OperatorAccountService, staffIdOf } from '../../foundation/entity/operator-account.service';
-import { CARGO_LANES, dangerousGoodsGap } from './cargo.types';
+import { CARGO_LANES, DANGEROUS_GOODS_NATURES, dangerousGoodsGap } from './cargo.types';
 import { ReturnService } from './return.service';
 import { PayoutService } from '../../foundation/payouts/payout.service';
 import { FundingService } from '../../foundation/funding/funding.service';
@@ -4491,6 +4491,10 @@ export class SbgController {
       const origin = this.agents.get(dto.originPudoDid ?? '');
       const dest = this.agents.get(destPudoDid);
       for (const end of [origin, dest]) this.presence.require(this.agents.countryOf(end), 'takeIn'); // freight moves wherever goods may be taken in; a store no sister settles is not billed at claim
+      // 2026-11-03 — dangerous goods with their UN number, name and class, from this door too (the gaps check left it open
+      // on purpose until now): the load's consignment note prints them and the driver's papers need them.
+      const dangerous = dangerousGoodsGap(dto.natureCode, dto.dangerousGoods);
+      if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
       const freight = this.dispatch.registerFreight({
         description: `Order ${dto.externalOrderId ?? handoff?.externalOrderId ?? vendor.name} — ${cargoClass} dedicated cargo`,
         pickupLocation: origin.location,
@@ -4501,6 +4505,7 @@ export class SbgController {
         dimensionsCm: dimsCm,
         natureCode: dto.natureCode,
         fragile: dto.fragile,
+        ...(dto.dangerousGoods && (DANGEROUS_GOODS_NATURES as readonly string[]).includes(dto.natureCode ?? '') ? { dangerousGoods: dto.dangerousGoods } : {}),
         // FB5 — a diverted e-commerce order really is palletised: it was picked and packed in a warehouse,
         // which is the one origin where that is known rather than assumed. Stated, not defaulted.
         packaging: 'palletised',
@@ -7632,6 +7637,7 @@ export class SbgController {
       destLocation,
       targetKg: dto.targetKg,
       maxSpend: dto.maxSpend,
+      dangerousGoods: dto.dangerousGoods,
     });
   }
 

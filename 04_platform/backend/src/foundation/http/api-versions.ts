@@ -1,5 +1,6 @@
 import { CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common';
-import type { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
+import { runAsSystemsCall, ruleWarningHeader, type ApiRuleChange } from './api-rules';
 import { GlosError } from './glos-error';
 
 /**
@@ -60,6 +61,22 @@ export class ApiVersionInterceptor implements NestInterceptor {
       if (v.announcedAt) res.setHeader('Deprecation', `@${Math.floor(Date.parse(v.announcedAt) / 1000)}`);
       res.setHeader('Sunset', new Date(v.retiresAt).toUTCString());
     }
-    return next.handle();
+    // 2026-11-03 — the call runs as a company's system's (api-rules.ts): a rule not yet in force answers as before, and
+    // the answer names it, with the day it starts refusing.
+    const store = { warned: [] as ApiRuleChange[] };
+    return new Observable<unknown>((subscriber) =>
+      runAsSystemsCall(store, () =>
+        next
+          .handle()
+          .pipe(
+            map((body) => {
+              const warning = ruleWarningHeader(store.warned);
+              if (warning) res.setHeader('Sbg-Rule-Change', warning);
+              return body;
+            }),
+          )
+          .subscribe(subscriber),
+      ),
+    );
   }
 }
