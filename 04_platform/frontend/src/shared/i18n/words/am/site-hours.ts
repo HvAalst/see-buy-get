@@ -1,0 +1,25 @@
+// አማርኛ — version 1, written in for en.site-hours.ts (2026-11-03). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "fleet.sites.opens": "ይከፈታል",
+  "fleet.sites.closes": "ይዘጋል",
+  "fleet.sites.dayName.mon": "ሰኞ",
+  "fleet.sites.dayName.tue": "ማክሰኞ",
+  "fleet.sites.dayName.wed": "ረቡዕ",
+  "fleet.sites.dayName.thu": "ሐሙስ",
+  "fleet.sites.dayName.fri": "ዓርብ",
+  "fleet.sites.dayName.sat": "ቅዳሜ",
+  "fleet.sites.dayName.sun": "እሑድ",
+  "fleet.sites.day.mon": "ሰኞ",
+  "fleet.sites.day.tue": "ማክሰ",
+  "fleet.sites.day.wed": "ረቡዕ",
+  "fleet.sites.day.thu": "ሐሙስ",
+  "fleet.sites.day.fri": "ዓርብ",
+  "fleet.sites.day.sat": "ቅዳሜ",
+  "fleet.sites.day.sun": "እሑድ",
+  "fleet.sites.dayRun": "{from}–{to}",
+  "fleet.sites.openRun": "{days} {hours}",
+  "fleet.sites.closedRun": "{days} ዝግ",
+  "fleet.sites.baysCount": "{n, plural, one {# የመጫኛ ቦታ} other {# የመጫኛ ቦታዎች}}",
+  "fleet.sites.loadsLine": "የሚጫነው፦ {what}",
+};

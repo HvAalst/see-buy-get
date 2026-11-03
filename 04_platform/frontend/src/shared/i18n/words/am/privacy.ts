@@ -1,0 +1,28 @@
+// አማርኛ — version 1, written in for en.privacy.ts (2026-11-03). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "pages.notice.write": "ስለ መረጃዎ ይጻፉልን",
+  "pages.notice.version": "ስሪት {number}፣ የታተመው {date}",
+  "pages.notice.changed": "በዚህ ስሪት የተለወጠው፦ {note}",
+  "pages.notice.earlier": "የቀድሞ ስሪቶች",
+  "pages.notice.earlierNone": "ይህ የመጀመሪያው ስሪት ነው።",
+  "pages.notice.readVersion": "ስሪት {number}ን ያንብቡ",
+  "pages.notice.reading": "እያነበቡ ያሉት የ{date} ስሪት {number}ን ነው። ይህ ከእንግዲህ የአሁኑ ስሪት አይደለም።",
+  "pages.notice.current": "የአሁኑን ስሪት ያንብቡ",
+  "pages.notice.loading": "በመጫን ላይ…",
+  "pages.notice.unavailable": "ይህ ገጽ አሁን ሊጫን አልቻለም። ኔትወርክ ያስፈልገዋል፦ ትንሽ ቆይተው እንደገና ይሞክሩ።",
+  "pages.notice.countriesTitle": "አንድ አገር የሚጨምረው",
+  "pages.notice.countriesLede": "የአንድ አገር ሕግ ተጨማሪ በሚጠይቅበት ቦታ፣ ያ አገር የራሱ ጽሑፍም አለው። እዚያ ሁለቱም ተፈጻሚ ይሆናሉ።",
+  "pages.notice.forCountry": "{country} በአጠቃላዩ ጽሑፍ ላይ የሚጨምረው። በ{country} ሁለቱም ተፈጻሚ ይሆናሉ።",
+  "pages.notice.general": "አጠቃላዩን ጽሑፍ ያንብቡ",
+  "pages.notice.noneForCountry": "{country} እዚህ የራሱ ጽሑፍ የለውም፦ እንደ ሌላው ቦታ ሁሉ እዚያም አጠቃላዩ ጽሑፍ ተፈጻሚ ይሆናል።",
+  "pages.terms.metaTitle": "የአጠቃቀም ውሎች — SeeBuyGet",
+  "pages.terms.metaDescription": "በእርስዎና በSeeBuyGet መካከል ያለው ስምምነት፦ ከማን ጋር እንደሚስማሙ፣ መለያዎ፣ SeeBuyGet የሚያደርገውና የማያደርገው፣ እና እነዚህ ውሎች እንዴት እንደሚለወጡ።",
+  "pages.terms.title": "የአጠቃቀም ውሎች",
+  "pages.privacy.metaTitle": "መረጃዎ በSeeBuyGet — ምን እንደሚቀመጥ፣ ማን እንደሚያየው፣ ለምን ያህል ጊዜ",
+  "pages.privacy.metaDescription": "SeeBuyGet ጥቅል ለማጓጓዝ የሚያስቀምጠው ምን እንደሆነ፣ እንዴት እንደሚጠበቅ፣ ማን ሊያየው እንደሚችል፣ የትኞቹ ሌሎች ኩባንያዎች እንደሚይዙት፣ ለምን ያህል ጊዜ እንደሚቀመጥ እና እርስዎ ምን ማድረግ እንደሚችሉ።",
+  "pages.privacy.title": "መረጃዎ በSeeBuyGet",
+  "pages.cookies.metaTitle": "ኩኪዎች በSeeBuyGet — አንድም አይቀመጥም፣ እና በስልክዎ ላይ የሚቀመጠው",
+  "pages.cookies.metaDescription": "SeeBuyGet ምንም ኩኪ አያስቀምጥም፤ ምንም ዓይነት ክትትልም አያካሂድም። በምትኩ መተግበሪያዎቹ በአሳሽዎ ውስጥ የሚያስቀምጡት ምን እንደሆነ፣ ለምን፣ ከወጡ በኋላ የሚቀረው ምን እንደሆነ፣ እና እንዴት እንደሚያስወግዱት።",
+  "pages.cookies.title": "ኩኪዎች",
+};
