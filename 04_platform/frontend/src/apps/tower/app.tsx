@@ -1,6 +1,6 @@
 import { HelpLink } from '../../shared/guide/HelpLink';
 import { consoleArticles } from '../../shared/guide/staff-articles';
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { BrandMark } from '../../shared/ui';
 import { useT } from '../../shared/i18n';
 import { countryNameOf } from './presence';
@@ -190,6 +190,11 @@ export function App() {
     // The routes behind it answer either way, which is what the movers defect taught.
     'depots',
   ] as Screen[]).filter((s) => offered(s, staffRoles));
+  // 2026-11-03 — a proofreader lands on what is theirs (Languages), not on a screen that tells them it is somebody else's.
+  const landOn = staffRoles && !offered(state.screen, staffRoles) && state.screen !== 'settings' ? available[0] : undefined;
+  useEffect(() => {
+    if (landOn) actions.go(landOn);
+  }, [landOn]);
   const groups = groupsFor(available);
 
   /**

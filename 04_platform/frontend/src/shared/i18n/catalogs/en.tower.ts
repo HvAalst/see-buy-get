@@ -226,6 +226,8 @@ export const enTower = {
   'tower.roles.moneyCovers': 'payouts and books',
   'tower.roles.admin': 'Administration',
   'tower.roles.adminCovers': 'staff and settings',
+  'tower.roles.languages': 'Languages',
+  'tower.roles.languagesCovers': 'proofreading the apps’ words, for their country — nothing else',
   'tower.roles.none': 'no role',
   'tower.roles.col': 'Roles',
   // 2026-11-01 — staff separated by country.

@@ -1,3 +1,4 @@
+import { STAFF_ROLES } from '../../foundation/auth/staff-roles';
 import { TruckFlightDto } from './air-terminal.types';
 import { ParcelInvoiceDto } from './parcel-invoice.types';
 import { AddressPartsDto } from './address-parts.dto';
@@ -1733,10 +1734,10 @@ export class RefuseCarrierPaperDto {
  * unsettable here. `@ApiProperty` is spelled out because `@IsIn(..., { each: true })` publishes a SCALAR
  * enum into the schema, not an array of one — a trap this codebase has been caught by twice.
  */
-/** Round 38 — the roles a member of staff is to hold: at least one of support, vetting, money, admin. */
+/** Round 38 — the roles a member of staff is to hold: at least one of support, vetting, money, admin — or (2026-11-03) languages, a proofreader's. */
 export class StaffRolesDto {
-  @IsArray() @ArrayMinSize(1) @IsIn(['support', 'vetting', 'money', 'admin'], { each: true })
-  @ApiProperty({ type: [String], enum: ['support', 'vetting', 'money', 'admin'], isArray: true })
+  @IsArray() @ArrayMinSize(1) @IsIn([...STAFF_ROLES], { each: true })
+  @ApiProperty({ type: [String], enum: [...STAFF_ROLES], isArray: true })
   roles!: string[];
 }
 

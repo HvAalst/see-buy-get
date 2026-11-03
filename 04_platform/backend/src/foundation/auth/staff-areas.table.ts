@@ -7,12 +7,14 @@
  * A route not named here is refused to a named member of staff. test/staff-roles.e2e-spec.ts reads every route the
  * application has and fails on one missing from this table, or named here and gone.
  */
-export type StaffArea = 'support' | 'vetting' | 'money' | 'admin' | 'any' | 'none';
+// 2026-11-03 — `languages`: a proofreader's (the Languages screen, nothing else); `self`: a staff account's own doors, open to
+// every role a proofreader included — where `any` means any of the four working roles.
+export type StaffArea = 'support' | 'vetting' | 'money' | 'admin' | 'languages' | 'self' | 'any' | 'none';
 
 export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   // 2026-11-03 — a country's review of a language (the console's Languages screen): its texts are an admin's to set.
-  'GET sbg/words/:locale/:country/reviews': 'admin',
-  'PUT sbg/words/:locale/:country/:key': 'admin',
+  'GET sbg/words/:locale/:country/reviews': 'languages',
+  'PUT sbg/words/:locale/:country/:key': 'languages',
   'DELETE sbg/business/me/receiving/:siteId': 'none',
   'GET sbg/business/me/inbound': 'none',
   'GET sbg/business/me/directory': 'none',
@@ -377,7 +379,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/notifications/inbox': 'none',
   'GET sbg/offers/response': 'admin',
   'GET sbg/operators': 'admin',
-  'GET sbg/operators/me': 'any',
+  'GET sbg/operators/me': 'self',
   'GET sbg/ops/disposal-queue': 'support',
   'GET sbg/ops/tamper/:ref': 'support',
   'GET sbg/ops/trail/:ref': 'support',
@@ -918,8 +920,8 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/operators/:operatorId/countries': 'admin',
   'POST sbg/operators/:operatorId/two-step/reset': 'admin',
   'POST sbg/operators/:operatorId/welcome-link': 'admin',
-  'POST sbg/operators/me/two-step': 'any',
-  'POST sbg/operators/me/two-step/confirm': 'any',
+  'POST sbg/operators/me/two-step': 'self',
+  'POST sbg/operators/me/two-step/confirm': 'self',
   'POST sbg/operators/proposals': 'admin',
   'POST sbg/operators/proposals/:proposalId/approve': 'admin',
   'POST sbg/operators/proposals/:proposalId/decline': 'admin',

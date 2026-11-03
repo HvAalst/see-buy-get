@@ -10,9 +10,11 @@ import type { Screen } from './useTowerApp';
  * Only a NAMED member of staff is held to roles. The setup key on a laptop is nobody in particular and reaches what it
  * always reached; a company's administrator is not staff at all. Both carry no roles here, which means "not held".
  */
-export type StaffRole = 'support' | 'vetting' | 'money' | 'admin';
+export type StaffRole = 'support' | 'vetting' | 'money' | 'admin' | 'languages';
 
-export const STAFF_ROLES: readonly StaffRole[] = ['support', 'vetting', 'money', 'admin'];
+export const STAFF_ROLES: readonly StaffRole[] = ['support', 'vetting', 'money', 'admin', 'languages'];
+/** The four working roles; a proofreader (`languages`) holds none of them and is offered the Languages screen alone. */
+export const WORKING_ROLES: readonly StaffRole[] = ['support', 'vetting', 'money', 'admin'];
 
 /** Each role's name, and what it covers. */
 export const ROLE_WORDS: Record<StaffRole, { name: MessageKey; covers: MessageKey }> = {
@@ -20,6 +22,7 @@ export const ROLE_WORDS: Record<StaffRole, { name: MessageKey; covers: MessageKe
   vetting: { name: 'tower.roles.vetting', covers: 'tower.roles.vettingCovers' },
   money: { name: 'tower.roles.money', covers: 'tower.roles.moneyCovers' },
   admin: { name: 'tower.roles.admin', covers: 'tower.roles.adminCovers' },
+  languages: { name: 'tower.roles.languages', covers: 'tower.roles.languagesCovers' },
 };
 
 /** Whether whoever is signed in holds a role. No roles at all (`undefined`): not a named member of staff, so not held to them. */
@@ -64,8 +67,8 @@ export const SCREEN_ROLES: Partial<Record<Screen, readonly StaffRole[]>> = {
   staffreads: ['admin'],
   // What everybody agrees to at sign-up: administration writes and publishes it.
   documents: ['admin'],
-  // 2026-11-03 — a country's review of the apps' words: an admin's, as the country's texts are (staff-areas: admin).
-  languages: ['admin'],
+  // 2026-11-03 — a country's review of the apps' words: a proofreader's (the owner: "we have credits for the proofreader accounts").
+  languages: ['languages'],
   // Round 39 — rating a corridor or hub changes what the network asks there: administration's.
   risks: ['admin'],
   companies: ['admin'],
@@ -77,7 +80,9 @@ export const SCREEN_ROLES: Partial<Record<Screen, readonly StaffRole[]>> = {
 export function offered(screen: Screen, roles: readonly string[] | undefined): boolean {
   if (roles === undefined) return true;
   const need = SCREEN_ROLES[screen];
-  if (!need) return roles.length > 0;
+  // Somebody's own settings (their two-step sign-in, their password) are everybody's who holds a role, a proofreader's too.
+  if (screen === 'settings') return roles.length > 0;
+  if (!need) return WORKING_ROLES.some((r) => roles.includes(r));
   return need.some((r) => roles.includes(r));
 }
 

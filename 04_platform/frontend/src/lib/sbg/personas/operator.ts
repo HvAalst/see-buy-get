@@ -1067,12 +1067,12 @@ export function createOperatorApi(sbg: SbgClient) {
     /** The setup key's way: made at once. Refused to anybody with an account of their own — they ask. */
     createStaff: (body: { email: string; name: string }) => sbg.request((c) => c.POST('/v1/sbg/operators', { body })),
     /** A member of staff asks for an account, with the roles it holds; a second approves it or declines it. */
-    askStaff: (body: { email: string; name: string; roles: Array<'support' | 'vetting' | 'money' | 'admin'>; countries?: string[] }) => sbg.request((c) => c.POST('/v1/sbg/operators/proposals', { body })),
+    askStaff: (body: { email: string; name: string; roles: Array<'support' | 'vetting' | 'money' | 'admin' | 'languages'>; countries?: string[] }) => sbg.request((c) => c.POST('/v1/sbg/operators/proposals', { body })),
     /** 2026-11-01 — ask that a member of staff work in other countries; a second approves it, and they are signed out. */
     proposeStaffCountries: (operatorId: string, countries: string[]) =>
       sbg.request((c) => c.POST('/v1/sbg/operators/{operatorId}/countries', { params: { path: { operatorId } }, body: { countries } })),
     /** Round 38 — ask that a member of staff hold other roles; a second approves it, and they are signed out. */
-    proposeStaffRoles: (operatorId: string, roles: Array<'support' | 'vetting' | 'money' | 'admin'>) =>
+    proposeStaffRoles: (operatorId: string, roles: Array<'support' | 'vetting' | 'money' | 'admin' | 'languages'>) =>
       sbg.request((c) => c.POST('/v1/sbg/operators/{operatorId}/roles', { params: { path: { operatorId } }, body: { roles } })),
     approveStaff: (proposalId: string) => sbg.request((c) => c.POST('/v1/sbg/operators/proposals/{proposalId}/approve', { params: { path: { proposalId } } })),
     declineStaff: (proposalId: string, reason?: string) =>

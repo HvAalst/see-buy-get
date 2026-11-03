@@ -11,7 +11,9 @@ import { STAFF_AREAS, type StaffArea } from './staff-areas.table';
  * Only a NAMED member of staff is held to roles — a session of a staff account. The setup key and a sandbox's machine
  * key are no person: the setup key has its own narrow doors (setup-key.ts) and the machine key exists on a laptop only.
  */
-export const STAFF_ROLES = ['support', 'vetting', 'money', 'admin'] as const;
+export const STAFF_ROLES = ['support', 'vetting', 'money', 'admin', 'languages'] as const;
+/** The four working roles: `any` door is for whoever holds one of them, never for a proofreader alone. */
+export const WORKING_ROLES: readonly StaffRole[] = ['support', 'vetting', 'money', 'admin'];
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
 /** The words of each role, as a refusal says them. */
@@ -20,6 +22,8 @@ export const ROLE_WORDS: Record<StaffRole, string> = {
   vetting: 'vetting (joining and papers)',
   money: 'money (payouts and books)',
   admin: 'administration (staff and settings)',
+  // 2026-11-03 — the owner: "we have credits for the proofreader accounts": the Languages screen for their country, nothing else.
+  languages: 'languages (proofreading the apps’ words)',
 };
 
 /** A route as STAFF_AREAS names it: its method and its path, the controller's and the handler's joined, no slashes at the ends. */
@@ -44,14 +48,16 @@ export function staffAreaOf(context: ExecutionContext): StaffArea | undefined {
 /** May somebody holding these roles pass a door of this area? `any` for every role; `none` and a door not named for nobody. */
 export function staffMay(roles: readonly string[] | undefined, area: StaffArea | undefined): boolean {
   if (!area || area === 'none') return false;
-  if (area === 'any') return Boolean(roles?.length);
+  if (area === 'self') return Boolean(roles?.length);
+  if (area === 'any') return WORKING_ROLES.some((r) => roles?.includes(r));
   return Boolean(roles?.includes(area));
 }
 
 /** What a member of staff is told at a door that is not theirs: which role it is for. */
 export function staffRefusal(area: StaffArea | undefined): string {
   if (!area || area === 'none') return 'This is not a door for network staff.';
-  if (area === 'any') return 'Your staff account holds no role yet: an administrator gives you one, and a second approves it.';
+  if (area === 'any') return 'This is for staff who hold one of the working roles — support, vetting, money or administration. An administrator can give you one; a second approves it.';
+  if (area === 'self') return 'Your staff account holds no role yet: an administrator gives you one, and a second approves it.';
   return `This is for staff who hold the ${ROLE_WORDS[area]} role. An administrator can give it to you; a second one approves it.`;
 }
 

@@ -15,7 +15,7 @@ describe('staff separated by country, over the wire', () => {
   let http: () => ReturnType<typeof request>;
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
   const tag = String(Math.floor(Math.random() * 9_000_000) + 1_000_000);
-  const ALL = ['support', 'vetting', 'money', 'admin'];
+  const ALL = ['support', 'vetting', 'money', 'admin', 'languages'];
   const person = (name: string, countries?: string[]) => ({ email: `${name}-${tag}@sbg.test`, name: `${name} ${tag}`, roles: ALL, ...(countries ? { countries } : {}) });
   const signIn = async (email: string, password: string) => (await http().post('/v1/sbg/operators/login').send({ email, password }).expect(201)).body.token.access_token as string;
   const tokenOf = (link: string) => link.split('#welcome=')[1];
@@ -112,6 +112,18 @@ describe('staff separated by country, over the wire', () => {
     expect((await http().get('/v1/sbg/words/sw').query({ country: 'KE' }).expect(200)).body.words['common.save']).toBeUndefined();
     await http().put('/v1/sbg/words/sw/KE/common.save').set(bearer(zara.token)).send({ text: 'Hifadhi' }).expect(404);
     expect((await http().get('/v1/sbg/words/sw/ZM/reviews').set(bearer(zara.token)).expect(200)).body.items[0]).toMatchObject({ key: 'common.save', by: `zara ${tag}`, history: [{ text: 'Hifadhi hapa' }] });
+
+    // 2026-11-03 — a proofreader (the owner: "we have credits for the proofreader accounts"): the languages role, Ethiopia
+    // only. She signs in, sees her own account, reviews Amharic for Ethiopia — and nothing else opens to her.
+    const tsehay = await join({ ...person('tsehay', ['ET']), roles: ['languages'] }, second.token);
+    expect((await http().get('/v1/sbg/operators/me').set(bearer(tsehay.token)).expect(200)).body).toMatchObject({ roles: ['languages'], countries: ['ET'] });
+    await http().put('/v1/sbg/words/am/ET/common.save').set(bearer(tsehay.token)).send({ text: 'ያስቀምጡ' }).expect(200);
+    await http().get('/v1/sbg/words/am/ET/reviews').set(bearer(tsehay.token)).expect(200);
+    await http().put('/v1/sbg/words/am/KE/common.save').set(bearer(tsehay.token)).send({ text: 'x' }).expect(404);
+    for (const path of ['/v1/sbg/documents', '/v1/sbg/totes', '/v1/sbg/flag-cases', '/v1/sbg/interest']) {
+      const res = await http().get(path).set(bearer(tsehay.token));
+      expect({ path, status: res.status }).toEqual({ path, status: 403 });
+    }
 
     // Colleagues: she sees those who work in Zambia, and those who work everywhere — and gives only Zambia.
     const staff = (await http().get('/v1/sbg/operators').set(bearer(zara.token)).expect(200)).body.items as Array<{ operatorId: string; countries: string[] }>;

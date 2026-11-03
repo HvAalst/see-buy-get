@@ -20,7 +20,7 @@ describe('staff hold roles, over the wire', () => {
   const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
   const tag = String(Math.floor(Math.random() * 9_000_000) + 1_000_000);
   let setupKey = '';
-  const ALL = ['support', 'vetting', 'money', 'admin'];
+  const ALL = ['support', 'vetting', 'money', 'admin', 'languages'];
   const person = (name: string, roles: string[] = ALL) => ({ email: `${name}-${tag}@sbg.test`, name: `${name} ${tag}`, roles });
   const signIn = async (email: string, password: string) => (await http().post('/v1/sbg/operators/login').send({ email, password }).expect(201)).body.token.access_token as string;
   const tokenOf = (link: string) => link.split('#welcome=')[1];
