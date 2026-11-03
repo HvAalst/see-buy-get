@@ -4,7 +4,8 @@ import { EntityService } from '../../foundation/entity/entity.service';
 import { GlosError } from '../../foundation/http/glos-error';
 import { PersistentMap } from '../../foundation/store/persistent-map';
 import { randomBytes } from 'crypto';
-import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_SPEC, VehicleClass } from './fleet.config';
+import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, TRUCK_SUBTYPE_CATALOG, TruckSubtype, TruckSubtypeSpec, VEHICLE_ENERGIES, VEHICLE_SPEC, VehicleClass, VehicleEnergy, energyMisfit } from './fleet.config';
+import { ruleRefuses } from '../../foundation/http/api-rules';
 import { Vehicle, VehicleDocuments, VehicleOwnerType } from './fleet.types';
 import { Equipment } from './cargo.types';
 import { clampMultiplier } from './pricing';
@@ -21,6 +22,8 @@ interface RegisterVehicleInput {
   plate: string;
   vehicleClass: VehicleClass;
   truckSubtype?: TruckSubtype;
+  /** 2026-11-03 — what it runs on. Asked at every door (askEnergy); checked to fit the class here. */
+  energy?: VehicleEnergy;
   capacityKg?: number; // heavy registry may declare a real load capacity within class bounds
   toteCapacity?: number; // how many BAGS the hold takes (defaults per class — see VehicleClassSpec.defaultTotes)
   /** How high the loading deck stands, in metres. Declared: only the fleet can measure it, and a guess
@@ -122,6 +125,7 @@ export class VehicleService {
     if (input.vehicleClass === 'truck' && !input.truckSubtype) throw new GlosError('FIELD_REQUIRED', 'A truck needs a sub-type (e.g. flatbed / tipper / refrigerated / tanker / lowboy …)');
     if (input.truckSubtype && input.vehicleClass !== 'truck') throw new GlosError('INVALID_INPUT', 'Sub-types apply to trucks only');
     if (input.truckSubtype && !TRUCK_SUBTYPE_CATALOG[input.truckSubtype]) throw new GlosError('INVALID_TRUCK_SUBTYPE', `Unknown truck sub-type: ${input.truckSubtype}`);
+    if (input.energy != null) this.energyFits(input.vehicleClass, input.energy);
 
     const sub: TruckSubtypeSpec | undefined = input.truckSubtype ? TRUCK_SUBTYPE_CATALOG[input.truckSubtype] : undefined;
     const capacityKg = this.computeCapacity(input.vehicleClass, input.capacityKg, sub?.capacityKg);
@@ -134,6 +138,8 @@ export class VehicleService {
       plate: input.plate.trim().toUpperCase(),
       vehicleClass: input.vehicleClass,
       truckSubtype: input.truckSubtype,
+      // What it runs on, as its owner said. Absent only where it was not asked: never a class's guess.
+      ...(input.energy ? { energy: input.energy } : {}),
       capacityKg,
       // The other capacity: how many BAGS the hold takes. A declared figure is honoured (an owner knows their
       // own boot); otherwise the class default. Never zero — a vehicle that can carry nothing is not a vehicle.
@@ -203,6 +209,34 @@ export class VehicleService {
       return Math.min(declaredKg, ceiling);
     }
     return subtypeKg ?? spec.defaultCapacityKg;
+  }
+
+  /**
+   * 2026-11-03 — ASKED AT EVERY DOOR THAT REGISTERS A VEHICLE: what it runs on (fleet.config VEHICLE_ENERGIES). A person is
+   * asked from today; a company's system from the day the rule is in force (api-rules.ts `vehicle-energy`), answered as
+   * before until then. Called before anything is written.
+   */
+  askEnergy(vehicleClass: VehicleClass, energy: unknown, now: number = Date.now()): void {
+    if (energy == null || energy === '') {
+      if (!ruleRefuses('vehicle-energy', now)) return;
+      throw new GlosError('FIELD_REQUIRED', vehicleClass === 'bike' ? 'Say whether the bicycle is pedalled or electric' : 'Say what the vehicle runs on: petrol, diesel, electric, hybrid or gas', { field: 'energy' });
+    }
+    this.energyFits(vehicleClass, energy);
+  }
+
+  /** Its owner says what a vehicle runs on — one registered before it was asked, or a correction. */
+  setEnergy(vehicleId: string, energy: VehicleEnergy): Vehicle {
+    const v = this.require(vehicleId);
+    this.energyFits(v.vehicleClass, energy);
+    v.energy = energy;
+    this.vehicles.set(v.vehicleId, v);
+    return v;
+  }
+
+  private energyFits(vehicleClass: VehicleClass, energy: unknown): asserts energy is VehicleEnergy {
+    if (!VEHICLE_ENERGIES.includes(energy as VehicleEnergy)) throw new GlosError('INVALID_INPUT', `Unknown energy: ${String(energy)}. A vehicle runs on ${VEHICLE_ENERGIES.join(', ')}`, { field: 'energy' });
+    const misfit = energyMisfit(vehicleClass, energy as VehicleEnergy);
+    if (misfit) throw new GlosError('INVALID_INPUT', misfit, { field: 'energy' });
   }
 
   /** Attach / update documents — re-evaluates the verified (priority) flag. */

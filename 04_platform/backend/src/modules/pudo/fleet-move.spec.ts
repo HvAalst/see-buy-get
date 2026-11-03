@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { runAsSystemsCall, type ApiRuleChange } from '../../foundation/http/api-rules';
 import { AgentService } from './agent.service';
 import { MdpService } from './mdp.service';
 import { BagClosureService } from './bag-closure.service';
@@ -528,7 +529,7 @@ describe('a driver changing fleet', () => {
 
       const phone2 = '+254781999004';
       otp.verify(phone2, otp.request(phone2).code);
-      const sneaky = accounts().signup({ role: 'driver', email: 'sneaky@sbg.test', password: 'mkate-na-chai-1', phone: phone2, profile: { driver: { displayName: 'Sneaky', fullName: 'S S', nationalId: '88001144', mobile: phone2, licenceClasses: ['bike'], managerDid: kilima.did }, vehicle: { plate: 'KMSNK 1', vehicleClass: 'bike', managerDid: kilima.did } } });
+      const sneaky = accounts().signup({ role: 'driver', email: 'sneaky@sbg.test', password: 'mkate-na-chai-1', phone: phone2, profile: { driver: { displayName: 'Sneaky', fullName: 'S S', nationalId: '88001144', mobile: phone2, licenceClasses: ['bike'], managerDid: kilima.did }, vehicle: { plate: 'KMSNK 1', vehicleClass: 'bike', energy: 'pedal', managerDid: kilima.did } } });
       expect(drivers.get(sneaky.did).managerDid).toBeUndefined();
       expect(vehicles.list({ managerDid: kilima.did })).toHaveLength(0);
     });
@@ -657,7 +658,7 @@ describe('a driver changing fleet', () => {
       expect(terms).not.toHaveProperty('why');
       expect(terms.countries).toEqual(expect.arrayContaining([{ jurisdiction: 'KE', companyName: kenya.name }]));
 
-      const done = moves.rideAlone(r.driver.did, { country: 'ke', vehicleClass: 'bike', plate: 'kmdx 123a' });
+      const done = moves.rideAlone(r.driver.did, { country: 'ke', vehicleClass: 'bike', energy: 'pedal', plate: 'kmdx 123a' });
       const now = drivers.get(r.driver.did);
       // A COURIER: contracted where they live, by that country's company — and no longer "between fleets".
       expect(done.companyName).toBe(kenya.name);
@@ -684,7 +685,7 @@ describe('a driver changing fleet', () => {
       const r = aRider(kilima.did, ['bike']);
       moves.remove(kilima.did, r.driver.did, { reason: 'ended' });
       expect(moves.rideAloneTerms(r.driver.did)).toMatchObject({ offered: true, classes: ['bike'] });
-      moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'BLUE FRAME 7' });
+      moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'pedal', plate: 'BLUE FRAME 7' });
       expect(drivers.isIndependent(drivers.get(r.driver.did))).toBe(true);
     });
 
@@ -707,12 +708,12 @@ describe('a driver changing fleet', () => {
       expect(moves.rideAloneTerms(did)).toMatchObject({ offered: true, check: true, classes: ['truck'], bodies: expect.arrayContaining([{ id: 'flatbed', label: 'Flatbed (open)' }]) });
       const owned = ownedBy(did).length;
       // Refused before anything is written: no photographs, a truck with no body, somebody else's photograph.
-      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 001T' })).toThrow(/photograph of your ID card and one of your driving licence/);
-      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', plate: 'KCA 001T', ...papersOf(did) })).toThrow(/what body your truck has/);
-      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 001T', ...papersOf('did:glos:somebody-else') })).toThrow(/could not be attached/);
+      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'KCA 001T' })).toThrow(/photograph of your ID card and one of your driving licence/);
+      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', plate: 'KCA 001T', ...papersOf(did) })).toThrow(/what body your truck has/);
+      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'KCA 001T', ...papersOf('did:glos:somebody-else') })).toThrow(/could not be attached/);
       expect(drivers.get(did).courierAsk).toBeUndefined();
 
-      const done = moves.rideAlone(did, { country: 'ke', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'kca 001t', ...papersOf(did) });
+      const done = moves.rideAlone(did, { country: 'ke', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'kca 001t', ...papersOf(did) });
       expect(done.asked).toMatchObject({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 001T' });
       expect(done.vehicle).toBeUndefined();
       // Still in no fleet, still nobody's courier, no vehicle of their own yet.
@@ -726,14 +727,14 @@ describe('a driver changing fleet', () => {
       expect(moves.rideAloneTerms(did)).not.toHaveProperty('why');
       expect(drivers.kycQueue().map((d) => d.did)).toContain(did);
       // Asked twice: the one waiting stands.
-      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 002T', ...papersOf(did) })).toThrow(/asked already/);
+      expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'KCA 002T', ...papersOf(did) })).toThrow(/asked already/);
     });
 
     it('staff approve with their OWN record check, the vehicle is registered first, and the same record becomes a courier’s — told on their phone', async () => {
       const { did } = aTruckerOutOf('Kilima Logistics');
       const kept = { driverId: drivers.get(did).driverId, badgeId: drivers.get(did).badgeId };
       const papers = papersOf(did);
-      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'tipper', plate: 'KCB 777T', ...papers });
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'tipper', plate: 'KCB 777T', ...papers });
       // The fleet said its driver's record was clear; that is not the network's check of somebody it contracts itself.
       expect(drivers.get(did).criminalRecordClear).toBe(true);
       expect(() => moves.decideRideAlone(did, { approve: true, by: 'Amina Otieno' })).toThrow(/checked their record/);
@@ -760,10 +761,84 @@ describe('a driver changing fleet', () => {
       expect(notifications.inboxFor(did)[0].body).toContain(kenya.name);
     });
 
+    /**
+     * 2026-11-03 — WHAT THE VEHICLE RUNS ON (the owner, on ISO 14083: "go ahead"): asked at every door that registers one,
+     * refused before anything is written, kept on the vehicle — and a company's system warned before it is refused.
+     */
+    describe('what the vehicle runs on', () => {
+      it('riding alone at once: asked, refused before anything is written, and kept on the bicycle', () => {
+        const kilima = aFleet('Kilima Logistics');
+        const r = aRider(kilima.did);
+        moves.leave(r.driver.did);
+        expect(() => moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'KMEN 1' })).toThrow(/whether the bicycle is pedalled or electric/);
+        expect(() => moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'diesel', plate: 'KMEN 1' })).toThrow(/A bicycle is pedalled or electric/);
+        expect(() => moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'coal' as never, plate: 'KMEN 1' })).toThrow(/Unknown energy: coal/);
+        expect(drivers.isIndependent(drivers.get(r.driver.did))).toBe(false);
+        expect(ownedBy(r.driver.did)).toHaveLength(0);
+        const done = moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'electric', plate: 'KMEN 1' });
+        expect(done.vehicle).toMatchObject({ vehicleClass: 'bike', energy: 'electric' });
+      });
+
+      it('an ask carries it to the vehicle staff approve; an ask made before it was asked is approved without one', () => {
+        const { did } = aTruckerOutOf('Kilima Logistics');
+        expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCE 001T', ...papersOf(did) })).toThrow(/what the vehicle runs on/);
+        expect(() => moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'pedal', truckSubtype: 'flatbed', plate: 'KCE 001T', ...papersOf(did) })).toThrow(/Only a bicycle is pedalled/);
+        expect(drivers.get(did).courierAsk).toBeUndefined();
+        const asked = moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'electric', truckSubtype: 'flatbed', plate: 'KCE 001T', ...papersOf(did) });
+        expect(asked.asked).toMatchObject({ vehicleClass: 'truck', energy: 'electric' });
+        moves.decideRideAlone(did, { approve: true, by: 'Amina Otieno', criminalRecordClear: true });
+        expect(ownedBy(did)[0]).toMatchObject({ plate: 'KCE 001T', energy: 'electric' });
+
+        // Asked before 2026-11-03: the ask had no energy. Staff approve it as it is; the vehicle says it is not on record.
+        const old = aTruckerOutOf('Pwani Haulage');
+        moves.rideAlone(old.did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'tipper', plate: 'KCE 002T', ...papersOf(old.did) });
+        delete drivers.get(old.did).courierAsk!.energy;
+        moves.decideRideAlone(old.did, { approve: true, by: 'Amina Otieno', criminalRecordClear: true });
+        expect(ownedBy(old.did)[0]).toMatchObject({ plate: 'KCE 002T' });
+        expect(ownedBy(old.did)[0]).not.toHaveProperty('energy');
+      });
+
+      it('a courier signing up with their own vehicle is asked it before anything is written', () => {
+        const otp = moduleOtp();
+        const phone = '+254781999031';
+        otp.verify(phone, otp.request(phone).code);
+        const profile = (energy?: string) => ({ driver: { displayName: 'Wanjiru', fullName: 'W W', nationalId: '88003101', mobile: phone, licenceClasses: ['bike'] }, vehicle: { plate: 'KMEN 31', vehicleClass: 'bike', ...(energy ? { energy } : {}) } });
+        const before = drivers.list().length;
+        expect(() => accounts().signup({ role: 'driver', email: 'wanjiru@sbg.test', password: 'mkate-na-chai-1', phone, profile: profile() })).toThrow(/whether the bicycle is pedalled or electric/);
+        expect(() => accounts().signup({ role: 'driver', email: 'wanjiru@sbg.test', password: 'mkate-na-chai-1', phone, profile: profile('petrol') })).toThrow(/A bicycle is pedalled or electric/);
+        expect(drivers.list()).toHaveLength(before);
+        const opened = accounts().signup({ role: 'driver', email: 'wanjiru@sbg.test', password: 'mkate-na-chai-1', phone, profile: profile('electric') });
+        expect(ownedBy(opened.did)[0]).toMatchObject({ plate: 'KMEN 31', vehicleClass: 'bike', energy: 'electric' });
+      });
+
+      it('a company’s system is answered as before until the rule is in force, and told which rule and from when', () => {
+        const before = Date.parse('2027-01-31T12:00:00Z');
+        const after = Date.parse('2027-02-01T00:00:00Z');
+        const store: { warned: ApiRuleChange[] } = { warned: [] };
+        expect(() => runAsSystemsCall(store, () => vehicles.askEnergy('van', undefined, before))).not.toThrow();
+        expect(store.warned.map((r) => r.id)).toEqual(['vehicle-energy']);
+        expect(() => runAsSystemsCall({ warned: [] }, () => vehicles.askEnergy('van', undefined, after))).toThrow(/what the vehicle runs on/);
+        // A wrong answer is wrong at once, for a system too: only a missing one is given notice.
+        expect(() => runAsSystemsCall({ warned: [] }, () => vehicles.askEnergy('van', 'pedal', before))).toThrow(/Only a bicycle is pedalled/);
+        // A person in an app is asked from the day it ships.
+        expect(() => vehicles.askEnergy('van', '', before)).toThrow(/what the vehicle runs on/);
+      });
+
+      it('its owner adds it to a vehicle registered before it was asked, or corrects it', () => {
+        const kilima = aFleet('Kilima Logistics');
+        const van = vehicles.register({ plate: 'KDEN 1', vehicleClass: 'van', ownerName: 'Kilima', managerDid: kilima.did } as never);
+        expect(van).not.toHaveProperty('energy');
+        expect(() => vehicles.setEnergy(van.vehicleId, 'pedal')).toThrow(/Only a bicycle is pedalled/);
+        expect(vehicles.setEnergy(van.vehicleId, 'diesel')).toMatchObject({ energy: 'diesel' });
+        expect(vehicles.setEnergy(van.vehicleId, 'hybrid').energy).toBe('hybrid');
+        expect(vehicles.get(van.vehicleId).energy).toBe('hybrid');
+      });
+    });
+
     it('staff refuse with a reason the driver reads; they stay as they were, and may ask again', async () => {
       const { did } = aTruckerOutOf('Kilima Logistics');
       const papers = papersOf(did);
-      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papers });
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papers });
       expect(() => moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno' })).toThrow(/must say why/);
       expect(() => moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno', reason: '   ' })).toThrow(/must say why/);
       const no = moves.decideRideAlone(did, { approve: false, by: 'Amina Otieno', reason: 'The licence photograph is too dark to read.' });
@@ -778,7 +853,7 @@ describe('a driver changing fleet', () => {
       expect(notifications.inboxFor(did)[0]).toMatchObject({ kind: 'papers_checked', title: 'Your ask to ride for yourself was not approved' });
       expect(notifications.inboxFor(did)[0].body).toContain('The licence photograph is too dark to read.');
       // Asking again clears the refusal they read.
-      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papersOf(did) });
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'KCC 100T', ...papersOf(did) });
       expect(moves.rideAloneTerms(did)).not.toHaveProperty('refused');
     });
 
@@ -805,7 +880,7 @@ describe('a driver changing fleet', () => {
 
     it('taking a fleet’s place while the ask waits ends the ask: they chose', () => {
       const { did } = aTruckerOutOf('Kilima Logistics');
-      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCD 200T', ...papersOf(did) });
+      moves.rideAlone(did, { country: 'KE', vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', plate: 'KCD 200T', ...papersOf(did) });
       const pwani = aFleet('Pwani Haulage');
       moves.join(did, pwani.did);
       expect(drivers.get(did).courierAsk).toBeUndefined();
@@ -819,14 +894,14 @@ describe('a driver changing fleet', () => {
       drivers.get(both.driver.did).licence.classes = ['truck', 'bike'];
       moves.leave(both.driver.did);
       expect(moves.rideAloneTerms(both.driver.did)).toMatchObject({ offered: true, check: true });
-      expect(() => moves.rideAlone(both.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'KMEE 1' })).toThrow(/photograph of your ID card/);
+      expect(() => moves.rideAlone(both.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'pedal', plate: 'KMEE 1' })).toThrow(/photograph of your ID card/);
     });
 
     it('is refused by name — in a fleet, already a courier, suspended, no country, a country we are not in, a vehicle they are not cleared for, no plate — and a refusal leaves them as they were', () => {
       const kilima = aFleet('Kilima Logistics');
       const r = aRider(kilima.did);
       const ask = (over: Partial<{ country: string; vehicleClass: string; plate: string }> = {}) => () =>
-        moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'KMDY 456B', ...over } as never);
+        moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'pedal', plate: 'KMDY 456B', ...over } as never);
 
       // Still in a fleet: leaving is its own act, with its own questions.
       expect(ask()).toThrow('You drive for Kilima Logistics. Leave that fleet first: “Your fleet”, under your name');
@@ -867,7 +942,7 @@ describe('a driver changing fleet', () => {
       const pwani = aFleet('Pwani Haulage');
       const r = aRider(kilima.did);
       moves.leave(r.driver.did);
-      const { vehicle } = moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', plate: 'KMEA 111A' });
+      const { vehicle } = moves.rideAlone(r.driver.did, { country: 'KE', vehicleClass: 'bike', energy: 'pedal', plate: 'KMEA 111A' });
       joins(pwani.did, r);
       const now = drivers.get(r.driver.did);
       expect(now.managerDid).toBe(pwani.did);

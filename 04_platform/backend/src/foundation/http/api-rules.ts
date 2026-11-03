@@ -47,6 +47,14 @@ export const API_RULE_CHANGES: readonly ApiRuleChange[] = [
     safety: true,
     fromRelease: true,
   },
+  {
+    // 2026-11-03 — the emissions of a trip start from what the vehicle runs on (EN ISO 14083); fleet.config VEHICLE_ENERGIES.
+    id: 'vehicle-energy',
+    version: '1',
+    summary: 'A vehicle is registered with what it runs on (energy: petrol, diesel, electric, hybrid, gas, or pedal for a bicycle).',
+    announcedAt: '2026-11-03',
+    enforcedFrom: '2027-02-01',
+  },
 ];
 
 const DAY = 86_400_000;

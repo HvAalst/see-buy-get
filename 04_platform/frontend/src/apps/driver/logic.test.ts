@@ -719,7 +719,12 @@ describe('a rider who is in no fleet rides for themselves', () => {
     expect(rideAloneMissing({ country: '', vehicleClass: '', plate: '' }, terms)).toBe('driver.alone.needCountry');
     expect(rideAloneMissing({ country: 'KE', vehicleClass: '', plate: 'KMDX 1' }, terms)).toBe('driver.alone.needVehicle');
     expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: '   ' }, terms)).toBe('driver.alone.needPlate');
-    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDX 123A' }, terms)).toBeNull();
+    // 2026-11-03 — then what it runs on: asked, and only what fits (a bicycle is pedalled or electric).
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDX 123A' }, terms)).toBe('vehicle.energy.missing');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'bike', plate: 'BLUE 7' }, terms)).toBe('vehicle.energy.missingBike');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'bike', plate: 'BLUE 7', energy: 'petrol' }, terms)).toBe('vehicle.energy.missingBike');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'bike', plate: 'BLUE 7', energy: 'electric' }, terms)).toBeNull();
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDX 123A', energy: 'petrol' }, terms)).toBeNull();
     // A country or a vehicle that is not among what the server offers is not a choice, whatever the form holds.
     expect(rideAloneMissing({ country: 'TZ', vehicleClass: 'motorcycle', plate: 'T 1' }, terms)).toBe('driver.alone.needCountry');
     expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', plate: 'T 1' }, terms)).toBe('driver.alone.needVehicle');
@@ -727,16 +732,18 @@ describe('a rider who is in no fleet rides for themselves', () => {
 
   it('on anything heavier than a motorcycle it is an ask: a truck names its body, and staff are sent both photographs', () => {
     const heavy = { classes: ['van', 'truck'], countries: [kenya], check: true };
-    const van = { country: 'KE', vehicleClass: 'van', plate: 'KVAN 1' };
+    const van = { country: 'KE', vehicleClass: 'van', plate: 'KVAN 1', energy: 'diesel' };
     expect(rideAloneMissing(van, heavy)).toBe('driver.alone.needPapers');
     expect(rideAloneMissing({ ...van, idCopyRef: 'med_id' }, heavy)).toBe('driver.alone.needPapers');
     expect(rideAloneMissing({ ...van, idCopyRef: 'med_id', licenceCopyRef: 'med_lic' }, heavy)).toBeNull();
     // A truck: its body first, then the plate, then the photographs.
     expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', plate: '' }, heavy)).toBe('driver.alone.needBody');
     expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: '' }, heavy)).toBe('driver.alone.needPlate');
-    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 1' }, heavy)).toBe('driver.alone.needPapers');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 1' }, heavy)).toBe('vehicle.energy.missing');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 1', energy: 'pedal' }, heavy)).toBe('vehicle.energy.missing');
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'truck', truckSubtype: 'flatbed', plate: 'KCA 1', energy: 'diesel' }, heavy)).toBe('driver.alone.needPapers');
     // A rider is asked for no photographs: they ride at once.
-    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDX 1' }, { classes: ['motorcycle'], countries: [kenya], check: false })).toBeNull();
+    expect(rideAloneMissing({ country: 'KE', vehicleClass: 'motorcycle', plate: 'KMDX 1', energy: 'electric' }, { classes: ['motorcycle'], countries: [kenya], check: false })).toBeNull();
     expect(t('driver.alone.waiting', { day: '15 Oct', vehicle: 'van', plate: 'KVAN 1' })).toBe('On 15 Oct you asked to ride for yourself on your van (KVAN 1). You are told here when it is decided.');
   });
 

@@ -1,3 +1,4 @@
+import { energyWord } from '../../shared/vehicleEnergy';
 import { drain, onOutboxSent, outboxItems } from '../../shared/outbox';
 import { onLaunch } from '../../shared/launch';
 import { holdPhoto, mayHold } from '../../shared/heldPhotos';
@@ -1017,8 +1018,25 @@ export function useDriverApp() {
    * RIDE FOR THEMSELVES. Resolves to the refusal, so the sheet can show the server's sentence where the driver is
    * looking; null means they are a courier now. No new sign-in: the one they hold already names no fleet.
    */
+  /** 2026-11-03 — a courier's own vehicle registered before it was asked: what it runs on, one tap, saved at once. */
+  const sayOwnEnergy = useCallback(
+    async (vehicle: { vehicleId: string; plate: string }, energy: string) => {
+      if (!client) return;
+      setState((s) => ({ ...s, busy: `energy:${vehicle.vehicleId}` }));
+      const r = await client.api.setVehicleEnergy(vehicle.vehicleId, energy);
+      setState((s) => ({ ...s, busy: null }));
+      if (r.error) {
+        pushToast({ tone: 'warn', icon: 'warning', title: r.error.title, detail: r.error.detail });
+        return;
+      }
+      pushToast({ tone: 'ok', icon: 'check', title: t('vehicle.energy.saved', { plate: vehicle.plate, energy: energyWord(energy, t).toLowerCase() }) });
+      await refresh();
+    },
+    [client, pushToast, refresh],
+  );
+
   const rideAlone = useCallback(
-    async (body: { country: string; vehicleClass: string; plate: string; truckSubtype?: string; idCopyRef?: string; licenceCopyRef?: string }): Promise<SbgError | null> => {
+    async (body: { country: string; vehicleClass: string; plate: string; truckSubtype?: string; energy?: string; idCopyRef?: string; licenceCopyRef?: string }): Promise<SbgError | null> => {
       if (!client || !did) return null;
       setState((s) => ({ ...s, busy: 'ride-alone' }));
       const r = await client.api.rideAlone(did, body);
@@ -2188,6 +2206,7 @@ export function useDriverApp() {
       declineFleetOffer,
       leaveFleet,
       rideAlone,
+      sayOwnEnergy,
       sendIdPhoto,
       sendClearance,
       countries,

@@ -6,6 +6,7 @@
  * PWA and the old page can never disagree about what "72 / 800 kg" or "12% above" means.
  */
 
+import { energyFits } from '../../shared/vehicleEnergy';
 import { formatDate, type Translate } from '../../shared/i18n';
 import { cash, perKmText } from '../../shared/money';
 import type { GeoPoint } from '../../shared/geo';
@@ -185,6 +186,8 @@ export interface RideAloneForm {
   plate: string;
   /** A truck's body: a truck is registered with one. */
   truckSubtype?: string;
+  /** 2026-11-03 — what it runs on (shared/vehicleEnergy.ts). Asked: blank until they choose. */
+  energy?: string;
   /** Anything heavier than a motorcycle: their own photographs of their ID card and their licence, for staff to read. */
   idCopyRef?: string;
   licenceCopyRef?: string;
@@ -198,11 +201,12 @@ export function rideAloneStart(terms: { classes: string[]; countries: Array<{ ju
 export function rideAloneMissing(
   form: RideAloneForm,
   terms: { classes: string[]; countries: Array<{ jurisdiction: string }>; check?: boolean },
-): 'driver.alone.needCountry' | 'driver.alone.needVehicle' | 'driver.alone.needBody' | 'driver.alone.needPlate' | 'driver.alone.needPapers' | null {
+): 'driver.alone.needCountry' | 'driver.alone.needVehicle' | 'driver.alone.needBody' | 'driver.alone.needPlate' | 'vehicle.energy.missing' | 'vehicle.energy.missingBike' | 'driver.alone.needPapers' | null {
   if (!terms.countries.some((c) => c.jurisdiction === form.country)) return 'driver.alone.needCountry';
   if (!terms.classes.includes(form.vehicleClass)) return 'driver.alone.needVehicle';
   if (form.vehicleClass === 'truck' && !form.truckSubtype) return 'driver.alone.needBody';
   if (!form.plate.trim()) return 'driver.alone.needPlate';
+  if (!energyFits(form.vehicleClass, form.energy ?? '')) return form.vehicleClass === 'bike' ? 'vehicle.energy.missingBike' : 'vehicle.energy.missing';
   // Staff read both before they ride: an ask without them is no ask.
   if (terms.check && (!form.idCopyRef || !form.licenceCopyRef)) return 'driver.alone.needPapers';
   return null;

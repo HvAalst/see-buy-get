@@ -1,3 +1,4 @@
+import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Icon, Note, PhotoField, PlaceMap, PlaceWords, Sheet, ShopDetailSheet, PhoneField, StepList } from '../../../shared/ui';
 import { AddressFields } from '../../../shared/account/AddressFields';
@@ -901,6 +902,12 @@ function AboutStep({ state, actions }: JoinScreenProps) {
             </label>
             <input id="plate" class="input" value={f.vehiclePlate} onInput={(e) => actions.setForm({ vehiclePlate: e.currentTarget.value })} spellcheck={false} />
           </div>
+          {/* 2026-11-03 — what it runs on, for the class chosen: asked, never assumed. */}
+          {chosen ? (
+            <div style="margin-top:12px">
+              <EnergyChoice id="join-energy" vehicleClass={chosen} value={f.vehicleEnergy} onChange={(vehicleEnergy) => actions.setForm({ vehicleEnergy })} />
+            </div>
+          ) : null}
           {chosen === 'truck' ? (
             <div class="field" style="margin-top:12px">
               <span class="field__label">{t('home.join.about.truckSubtype')}</span>

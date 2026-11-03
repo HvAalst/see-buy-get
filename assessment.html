@@ -87,8 +87,8 @@
 
 <header>
   <h1>Logistics flow coordination — what is still open</h1>
-  <p class="sub">What is thin, what needs a decision of yours, and what is yours to set up — for deliveries, routes, real time, inbound supply, data, fleets, sites and shifts, and now tracking devices. Only what is open is on this page.</p>
-  <p class="stamp">Assessed 2026-10-15 against the code on <code>main</code>, brought up to date 2026-10-25. On 2026-11-03 everything built from it was taken off this page: each built item is a row on <a href="progress.html">progress.html</a>, where it already was. Tracking devices added the same day.</p>
+  <p class="sub">What is thin, what needs a decision of yours, and what is yours to set up — for deliveries, routes, real time, inbound supply, data, fleets, sites and shifts, and now tracking devices and the emissions of a shipment. Only what is open is on this page.</p>
+  <p class="stamp">Assessed 2026-10-15 against the code on <code>main</code>, brought up to date 2026-10-25. On 2026-11-03 everything built from it was taken off this page: each built item is a row on <a href="progress.html">progress.html</a>, where it already was. Tracking devices and the emissions of a shipment added the same day.</p>
   <nav class="toc" aria-label="On this page">
     <a href="#devices">Tracking devices</a>
     <a href="#now">Open at a glance</a>
@@ -97,6 +97,7 @@
     <a href="#central">Centralized data</a>
     <a href="#fleet">Fleet and assets</a>
     <a href="#resources">Sites and shifts</a>
+    <a href="#emissions">Emissions of a shipment</a>
     <a href="#compendium">Against the compendium</a>
     <a href="#out">Left out, by decision</a>
   </nav>
@@ -184,6 +185,7 @@
     <li>Trailers and site equipment as assets, a count of bags by place, a lost bag, and moving orders off a truck to avoid a wait for a bay.</li>
     <li>Bookable slots at a dock, once a hub or a dock actually queues trucks.</li>
     <li>Returns of parcels nobody collected.</li>
+    <li>An emissions statement per shipment, counted by ISO 14083, once a first European business customer asks (<a href="#emissions">below</a>).</li>
   </ul></div>
   <div class="card"><span class="tag t-ask">Yours, not code</span><h3>Settings on the server</h3><ul>
     <li>Real road distances in a fleet’s day plan: a routing server of the operator’s own (<code>GLOS_ROUTER_URL</code>).</li>
@@ -288,6 +290,27 @@
   <div class="card"><span class="tag t-partial">Partial</span><h3>Waiting for a bay</h3><p>Bays are handed out after the orders are placed on trucks. A wait that takes a truck past its shift is said, but the plan does not move orders to avoid it.</p></div>
   <div class="card"><span class="tag t-missing">Not built</span><h3>Trailers and equipment</h3><p>Trailers as assets of their own, and equipment at a site (a forklift that only some bays have) booked with a loading.</p></div>
   <div class="card"><span class="tag t-missing">Not built</span><h3>A forecast</h3><p>How many trucks and drivers next week may need, read from past orders. The plan works only from orders already placed.</p></div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────── emissions -->
+<h2 id="emissions">The emissions of a shipment</h2>
+<p class="lead">Your question, 2026-11-03: can ISO 14083 — the international standard for counting the greenhouse gas emissions of a transport chain — be ignored? Not for good — but there is nothing to build for it yet: nobody asks us for a figure, and we give none. Once we give one, a law of the European Union (EU) says how it is counted. Every vehicle has been asked what it runs on at registration since 2026-11-03. What is open:</p>
+
+<div class="card decision">
+  <p class="q">An emissions statement per shipment (ISO 14083)</p>
+  <dl>
+    <dt>What</dt><dd>For a business customer, the greenhouse gas emissions of each shipment, leg by leg, counted the EN ISO 14083:2023 way: well-to-wheel, so making the fuel counts as well as burning it. It says which share we measured and which is a default.</dd>
+    <dt>Why it matters</dt><dd>Under Regulation (EU) 2026/1030, giving a figure stays voluntary. But a figure given out for a transport service it covers — in a contract, an invoice or an app — must be counted by EN ISO 14083:2023. It names carriers, forwarders, transport organisers, hub operators and data intermediaries, among others. And large EU buyers ask their carriers for these figures: the Corporate Sustainability Reporting Directive (CSRD) makes them report their transport’s emissions — since the 2026 Omnibus, only companies of more than 1,000 staff. No shop, store or driver in East Africa asks yet.</dd>
+    <dt>When</dt><dd>When a first European business customer asks — and before 2 December 2030 at the latest, when most of the regulation applies.</dd>
+    <dt>What it takes</dt><dd><ul>
+      <li>Our own records as the measured part: vehicle class, odometer km, km loaded and empty, the weight carried, the mode of every leg (road, air, sea, rail), and what each vehicle runs on.</li>
+      <li>Still missing: the fuel actually used, and a hub’s energy use.</li>
+      <li>Defaults where we measured nothing: the Global Logistics Emissions Council (GLEC) Framework’s, until the EU’s own database of default figures is out (due December 2029), then the EU’s. Its emission factors for fuels are due by June 2028, a free calculation tool by June 2030.</li>
+      <li>Checked by an accredited body only where a SeeBuyGet company is not a small or medium-sized enterprise (SME). Whether ours are: L39 on <a href="legal.html">legal.html</a>.</li>
+    </ul></dd>
+    <dt>Meanwhile</dt><dd>No customer sees a carbon dioxide (CO₂) figure that was not counted the ISO 14083 way. The CO₂ panel in the operator console (<code>m7/carbon.service.ts</code>) stays parked and staff-only: ballpark factors, test shipments only.</dd>
+    <dt>Source</dt><dd>Regulation (EU) 2026/1030 (“CountEmissionsEU”), Official Journal of the EU, 12 May 2026: in force 1 June 2026, most of it applying from 2 December 2030.</dd>
+  </dl>
 </div>
 
 <!-- ─────────────────────────────────────────────────────── compendium -->

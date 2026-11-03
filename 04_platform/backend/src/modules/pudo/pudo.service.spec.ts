@@ -5771,7 +5771,7 @@ describe('PUDO Light', () => {
 
   it('signs up a self-employed driver (own vehicle); a fleet takes one on by offering a place, never by its code', () => {
     const ph1 = '+254700601'; otp.verify(ph1, otp.request(ph1).code);
-    const self = accounts.signup({ role: 'driver', email: 'boda@d.test', password: 'mkate-na-chai-1', phone: ph1, profile: { driver: { displayName: 'Boda', fullName: 'B', nationalId: 'ID-D1', mobile: ph1, licenceClasses: ['bike'] }, vehicle: { plate: 'BD-1', vehicleClass: 'bike', ownerName: 'B' } } });
+    const self = accounts.signup({ role: 'driver', email: 'boda@d.test', password: 'mkate-na-chai-1', phone: ph1, profile: { driver: { displayName: 'Boda', fullName: 'B', nationalId: 'ID-D1', mobile: ph1, licenceClasses: ['bike'] }, vehicle: { plate: 'BD-1', vehicleClass: 'bike', energy: 'pedal', ownerName: 'B' } } });
     expect(self.role).toBe('driver');
     expect(drivers.get(self.did).status).toBe('ACTIVE'); // light registry
     expect(vehicles.list().find((v) => v.plate === 'BD-1')).toMatchObject({ ownerDriverDid: self.did }); // own vehicle registered — theirs, and nobody else's to start on
@@ -5837,7 +5837,7 @@ describe('PUDO Light', () => {
           displayName: 'Owner', fullName: 'O Driver', nationalId: 'ID-OWN1', mobile: phone,
           licenceClasses: ['van'], licenceNumber: 'DL-OWN1', licenceExpiresAt: '2099-01-01', jurisdiction: 'KE',
         },
-        vehicle: { plate: 'KDD 001', vehicleClass: 'van' },
+        vehicle: { plate: 'KDD 001', vehicleClass: 'van', energy: 'diesel' },
       },
     });
 
@@ -5873,7 +5873,7 @@ describe('PUDO Light', () => {
         role: 'driver', email: 'mismatch@d.test', password: 'mkate-na-chai-1', phone,
         profile: {
           driver: { displayName: 'Mix', fullName: 'M X', nationalId: 'ID-MIX1', mobile: phone, licenceClasses: ['bike'] },
-          vehicle: { plate: 'KDD 002', vehicleClass: 'van' },
+          vehicle: { plate: 'KDD 002', vehicleClass: 'van', energy: 'diesel' },
         },
       }),
     ).toThrow(/not licence-cleared for a van/);
@@ -5895,7 +5895,7 @@ describe('PUDO Light', () => {
   it('S20 — one person, many roles: a driver who signs up can enroll as a consumer and send, under one account', () => {
     // A driver signs up through the existing PUDO account flow — which now links them to a person by phone.
     const phone = '+254700711'; otp.verify(phone, otp.request(phone).code);
-    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['bike'] }, vehicle: { plate: 'MU-1', vehicleClass: 'bike' } } });
+    const driver = accounts.signup({ role: 'driver', email: 'multi@d.test', password: 'mkate-na-chai-1', phone, profile: { driver: { displayName: 'Multi', fullName: 'M', nationalId: 'ID-M1', mobile: phone, licenceClasses: ['bike'] }, vehicle: { plate: 'MU-1', vehicleClass: 'bike', energy: 'pedal' } } });
 
     const linked = persons.findByPhone(phone);
     expect(linked).toBeDefined();
@@ -7666,14 +7666,14 @@ describe('PUDO Light', () => {
       }
       const officeA = as('fleet_manager', fleetA.did, fleetA.did);
       // The office of A, naming B: the vehicle is A's.
-      const van = controller.registerVehicle({ plate: 'WHO-1', vehicleClass: 'van', ownerName: 'A', managerDid: fleetB.did } as never, officeA) as { managerDid?: string; vehicleId: string };
+      const van = controller.registerVehicle({ plate: 'WHO-1', vehicleClass: 'van', energy: 'diesel', ownerName: 'A', managerDid: fleetB.did } as never, officeA) as { managerDid?: string; vehicleId: string };
       expect(van.managerDid).toBe(fleetA.did);
       expect(vehicles.list().filter((v) => v.managerDid === fleetB.did)).toEqual([]);
       // A sign-in with the office's role and no fleet behind it registers nothing.
       expect(() => controller.registerVehicle({ plate: 'WHO-2', vehicleClass: 'van', ownerName: 'X' } as never, as('fleet_manager'))).toThrow('A vehicle is registered by its fleet’s office');
       // Network staff name the fleet — or none, for a courier who answers to no fleet.
-      expect((controller.registerVehicle({ plate: 'WHO-3', vehicleClass: 'van', ownerName: 'B', managerDid: fleetB.did } as never, staff) as { managerDid?: string }).managerDid).toBe(fleetB.did);
-      expect((controller.registerVehicle({ plate: 'WHO-4', vehicleClass: 'bike', ownerName: 'Solo' } as never, staff) as { managerDid?: string }).managerDid).toBeUndefined();
+      expect((controller.registerVehicle({ plate: 'WHO-3', vehicleClass: 'van', energy: 'diesel', ownerName: 'B', managerDid: fleetB.did } as never, staff) as { managerDid?: string }).managerDid).toBe(fleetB.did);
+      expect((controller.registerVehicle({ plate: 'WHO-4', vehicleClass: 'bike', energy: 'pedal', ownerName: 'Solo' } as never, staff) as { managerDid?: string }).managerDid).toBeUndefined();
     });
 
     it('a store’s checkout is filed by that store, and a parcel’s rating by a shop that handled it', () => {

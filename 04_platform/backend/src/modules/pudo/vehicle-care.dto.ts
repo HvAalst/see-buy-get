@@ -1,11 +1,17 @@
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { VEHICLE_ENERGIES, type VehicleEnergy } from './fleet.config';
 import { BREAKDOWN_CAUSES, CHECK_ITEMS, DEFECT_ITEMS, OFF_ROAD_REASONS, SERVICE_KINDS, type BreakdownCause, type CheckItem, type DefectItem, type OffRoadReason, type ServiceKind } from './vehicle-care.types';
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** The largest odometer reading taken: a number past it is a typing slip, not a vehicle. */
 export const MAX_ODOMETER_KM = 9_999_999;
+
+/** 2026-11-03 — what a vehicle runs on, said by its owner (fleet.config VEHICLE_ENERGIES). */
+export class VehicleEnergyDto {
+  @IsIn(VEHICLE_ENERGIES) energy!: VehicleEnergy;
+}
 
 /** What the odometer says, in whole kilometres — by the office, at a service or when a meter is replaced. */
 export class RecordReadingDto {

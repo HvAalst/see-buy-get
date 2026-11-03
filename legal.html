@@ -57,7 +57,7 @@
 <div class="wrap">
   <h1>Legal questions — for the lawyer</h1>
   <p class="sub">Every question about the law that came up while building SeeBuyGet, in one place. Each says when it comes up in the product, for which countries, a case to make it concrete, what the product does until it is answered, and where it was raised. Nothing here is decided by the product: where a question is open, the product takes the cautious reading and says so on the screen.</p>
-  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included.</p>
+  <p class="stamp">Kept with the code (legal.html). Last brought together 29 October 2026, the air questions included; added to since, up to 3 November 2026 (counting emissions, L39).</p>
 
   <div class="bar" role="group" aria-label="When it is needed">
     <span class="lab">Needed</span>
@@ -113,6 +113,11 @@
       "key": "money",
       "title": "Money and tax",
       "lede": "What our companies must charge and show."
+    },
+    {
+      "key": "emissions",
+      "title": "Counting emissions",
+      "lede": "Where a law says how the greenhouse gas emissions of a transport are counted, and who must have the figure checked."
     }
   ],
   "questions": [
@@ -722,6 +727,23 @@
       "case": "Cargo on a trucked flight from Nairobi to Entebbe is damaged on the road. The airline’s customer claims under the air waybill; the fleet answers under its road note.",
       "meanwhile": "The owner’s choice (1 November 2026): carried as an ordinary road load under the law of the road. The air waybill and the flight are a reference only, said to the poster, to the driver and on the consignment note; nobody on SeeBuyGet acts for the airline. A court may still hold the air convention to apply, and then the fleet answers for more than the road law says.",
       "source": "The road-meets-air review, 1 November 2026. Montreal Convention 1999, Art. 18(4) (carriage by another mode substituted without the consignor’s consent is within the period of carriage by air)."
+    },
+    {
+      "id": "L39",
+      "area": "emissions",
+      "when": "before-country",
+      "status": "open",
+      "q": "Is SeeBuyGet a “transport organiser” or a “data intermediary” under Regulation (EU) 2026/1030 (CountEmissionsEU)? Does a SeeBuyGet company outside the European Union (EU) — the Kenyan one — fall under it for a leg in Kenya of a shipment that ends in the EU? And does each country’s SeeBuyGet company count as a small or medium-sized enterprise (SME), so that its figures need no verification?",
+      "moment": "Before we give any customer an emissions figure for transport bound for the EU — and before 2 December 2030 at the latest, when most of the regulation applies. Giving a figure is voluntary; a figure given, in a contract, an invoice or an app, must be counted by EN ISO 14083:2023 (well-to-wheel), and a company that is not an SME must have its figures verified by an accredited body. The regulation names carriers, logistics service providers, freight forwarders, transport organisers, hub operators, shippers, data intermediaries and the providers of calculation tools.",
+      "nations": [
+        "EU",
+        "NL",
+        "KE",
+        "all"
+      ],
+      "case": "A Dutch importer asks for the carbon dioxide (CO₂) of its flower air export from Nairobi to Amsterdam Schiphol, our truck from the farm to the airport in Nairobi included.",
+      "meanwhile": "No customer is shown a CO₂ figure. The CO₂ panel in the operator console is parked and staff-only. An emissions statement per shipment, counted the ISO 14083 way, is open work on assessment.html, for when a first European business customer asks.",
+      "source": "Regulation (EU) 2026/1030 (Official Journal of the EU, 12 May 2026; in force 1 June 2026, applies from 2 December 2030) and EN ISO 14083:2023. The owner’s question whether ISO 14083 can be ignored, 3 November 2026."
     }
   ]
 }
@@ -729,7 +751,7 @@
 <script>
 (function () {
   var data = JSON.parse(document.getElementById('data').textContent);
-  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', SO: 'Somalia', IN: 'India', RU: 'Russia', ID: 'Indonesia' };
+  var NATION = { all: 'Every country', KE: 'Kenya', UG: 'Uganda', TZ: 'Tanzania', RW: 'Rwanda', BI: 'Burundi', CD: 'DR Congo', SS: 'South Sudan', ET: 'Ethiopia', DJ: 'Djibouti', SO: 'Somalia', IN: 'India', RU: 'Russia', ID: 'Indonesia', EU: 'European Union', NL: 'The Netherlands' };
   var WHEN = { 'before-test': 'Before the first test', 'before-country': 'Before a country or feature opens', later: 'Later' };
   var STATUS = { open: 'Open', answered: 'Answered in principle', watch: 'To watch' };
   var state = { when: '', nation: '' };
@@ -737,7 +759,7 @@
 
   var nations = [];
   data.questions.forEach(function (q) { q.nations.forEach(function (n) { if (nations.indexOf(n) < 0) nations.push(n); }); });
-  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'SO', 'IN', 'RU', 'ID'];
+  var order = ['all', 'KE', 'UG', 'TZ', 'RW', 'BI', 'CD', 'SS', 'ET', 'DJ', 'SO', 'IN', 'RU', 'ID', 'EU', 'NL'];
   nations.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
   var box = document.getElementById('nations');
   [''].concat(nations.filter(function (n) { return n !== 'all'; })).forEach(function (n) {

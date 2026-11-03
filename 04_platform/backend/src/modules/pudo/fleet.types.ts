@@ -3,7 +3,7 @@
 // the MDP→PUDO feeder today and a van tomorrow, and a vehicle may change hands between drivers.
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TruckSubtype, VEHICLE_CLASSES, VehicleClass } from './fleet.config';
+import { TruckSubtype, VEHICLE_CLASSES, VEHICLE_ENERGIES, VehicleClass, VehicleEnergy } from './fleet.config';
 import { Equipment } from './cargo.types';
 import type { CarrierPaperKind, PaperKind } from './papers';
 import { GeoPoint } from './pudo.types';
@@ -241,6 +241,8 @@ export class Vehicle {
   plate: string;
   vehicleClass: VehicleClass;
   truckSubtype?: TruckSubtype; // only for class 'truck'
+  /** 2026-11-03 — what it runs on, as its owner said (fleet.config VEHICLE_ENERGIES). Absent: registered before it was asked. */
+  @ApiPropertyOptional({ enum: VEHICLE_ENERGIES }) energy?: VehicleEnergy;
   capacityKg: number; // system-computed (light) or operator-declared within class bounds (heavy)
   /**
    * HOW HIGH THE LOADING DECK STANDS, in metres — the other half of a bridge check.
@@ -404,6 +406,8 @@ export class CourierAsk {
   plate: string;
   /** A truck's body, which a truck is registered with. */
   @ApiPropertyOptional() truckSubtype?: TruckSubtype;
+  /** 2026-11-03 — what it runs on; the vehicle is registered with it when the ask is approved. Absent on asks made before. */
+  @ApiPropertyOptional({ enum: VEHICLE_ENERGIES }) energy?: VehicleEnergy;
   /** Their own photographs, sent with the ask: the ID card and the driving licence staff read. */
   idCopyRef: string;
   licenceCopyRef: string;

@@ -34515,6 +34515,38 @@
         }
       }
     },
+    "/v1/sbg/vehicles/{id}/energy": {
+      "post": {
+        "operationId": "VehicleCare.setEnergy",
+        "summary": "",
+        "description": "2026-11-03 — WHAT IT RUNS ON, said by its owner: a vehicle registered before it was asked, or a correction. Its own\noffice, or the courier who owns it — staff change none of a company's record.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleEnergyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/vehicles/{id}/readings": {
       "post": {
         "operationId": "VehicleCare.recordReading",
@@ -59270,6 +59302,17 @@
       "Vehicle": {
         "type": "object",
         "properties": {
+          "energy": {
+            "type": "string",
+            "enum": [
+              "petrol",
+              "diesel",
+              "electric",
+              "hybrid",
+              "gas",
+              "pedal"
+            ]
+          },
           "vehicleId": {
             "type": "string"
           },
@@ -63033,6 +63076,18 @@
               "tail_lift"
             ]
           },
+          "energy": {
+            "type": "string",
+            "description": "2026-11-03 — what it runs on: petrol, diesel, electric, hybrid, gas, or pedal (a bicycle only). Asked of a person from\ntoday; a company's system is refused without it from 2027-02-01 (api-rules.ts `vehicle-energy`), warned until then.",
+            "enum": [
+              "petrol",
+              "diesel",
+              "electric",
+              "hybrid",
+              "gas",
+              "pedal"
+            ]
+          },
           "capacityKg": {
             "type": "number",
             "minimum": 1
@@ -63210,6 +63265,18 @@
           "truckSubtype": {
             "type": "object",
             "description": "A truck's body, which a truck is registered with."
+          },
+          "energy": {
+            "type": "string",
+            "description": "2026-11-03 — what it runs on; the vehicle is registered with it when the ask is approved. Absent on asks made before.",
+            "enum": [
+              "petrol",
+              "diesel",
+              "electric",
+              "hybrid",
+              "gas",
+              "pedal"
+            ]
           },
           "country": {
             "type": "string",
@@ -63863,6 +63930,18 @@
             "type": "string",
             "description": "A truck's body — a truck is registered with one.",
             "maxLength": 32
+          },
+          "energy": {
+            "type": "string",
+            "description": "2026-11-03 — what it runs on (fleet.config VEHICLE_ENERGIES); asked.",
+            "enum": [
+              "petrol",
+              "diesel",
+              "electric",
+              "hybrid",
+              "gas",
+              "pedal"
+            ]
           },
           "idCopyRef": {
             "type": "string",
@@ -79591,6 +79670,25 @@
         },
         "required": [
           "reason"
+        ]
+      },
+      "VehicleEnergyDto": {
+        "type": "object",
+        "properties": {
+          "energy": {
+            "type": "string",
+            "enum": [
+              "petrol",
+              "diesel",
+              "electric",
+              "hybrid",
+              "gas",
+              "pedal"
+            ]
+          }
+        },
+        "required": [
+          "energy"
         ]
       },
       "RecordReadingDto": {

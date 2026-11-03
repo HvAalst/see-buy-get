@@ -17,7 +17,7 @@ import { AgreementDto } from '../../foundation/documents/documents.types';
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { DRIVER_ISSUES, DriverIssue } from './rating.service';
 import { MERCHANT_TAGS, MerchantTag } from './merchant-rating.service';
-import { TRUCK_SUBTYPES } from './fleet.config';
+import { TRUCK_SUBTYPES, VEHICLE_ENERGIES, type VehicleEnergy } from './fleet.config';
 import { CARRIER_PAPER_KINDS } from './papers';
 import { SITE_KINDS, type SiteKind } from './site.service';
 import { PACKAGING, type Packaging } from './packaging';
@@ -1908,6 +1908,8 @@ export class RideAloneDto {
   @IsString() @MaxLength(32) plate!: string;
   /** A truck's body — a truck is registered with one. */
   @IsOptional() @IsString() @MaxLength(32) truckSubtype?: string;
+  /** 2026-11-03 — what it runs on (fleet.config VEHICLE_ENERGIES); asked. */
+  @IsOptional() @IsIn(VEHICLE_ENERGIES) energy?: VehicleEnergy;
   /** Anything heavier than a motorcycle: their own photographs of their ID card and their driving licence, for staff to read. */
   @IsOptional() @IsString() @MaxLength(80) idCopyRef?: string;
   @IsOptional() @IsString() @MaxLength(80) licenceCopyRef?: string;
@@ -2408,6 +2410,11 @@ export class RegisterVehicleDto {
   @IsString() plate!: string;
   @IsIn(VEHICLE_CLASSES) vehicleClass!: VClass;
   @IsOptional() @IsIn(TRUCK_SUBTYPES) truckSubtype?: string;
+  /**
+   * 2026-11-03 — what it runs on: petrol, diesel, electric, hybrid, gas, or pedal (a bicycle only). Asked of a person from
+   * today; a company's system is refused without it from 2027-02-01 (api-rules.ts `vehicle-energy`), warned until then.
+   */
+  @IsOptional() @IsIn(VEHICLE_ENERGIES) energy?: VehicleEnergy;
   @IsOptional() @IsNumber() @Min(1) capacityKg?: number;
   /**
    * How high the loading deck stands, in metres — the other half of a bridge check.

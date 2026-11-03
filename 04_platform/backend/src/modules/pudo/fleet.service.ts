@@ -82,6 +82,10 @@ export interface RecentVehicle {
   busy: boolean;
   /** FP4 — the papers that have lapsed, in words. Non-empty: listed, marked, and refused at the coupling. */
   offRoad: string[];
+  /** 2026-11-03 — what it runs on, as its owner said; absent where it was registered before it was asked. */
+  energy?: string;
+  /** 2026-11-03 — the courier’s own: theirs to say what it runs on (POST vehicles/:id/energy). */
+  own?: true;
   /**
    * THE DASHBOARD STICKER — only for a vehicle NO FLEET OWNS.
    *
@@ -273,6 +277,8 @@ export class FleetService {
         verified: v.verified,
         busy: !!this.activeForVehicle(v.vehicleId),
         offRoad: this.vehicles.offRoadReasons(v.vehicleId),
+        ...(v.energy ? { energy: v.energy } : {}),
+        ...(!v.managerDid && v.ownerDriverDid === driverDid ? { own: true as const } : {}),
         ...(v.managerDid ? {} : { qr: v.qr }),
       }));
   }

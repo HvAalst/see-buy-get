@@ -1,3 +1,4 @@
+import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
 import { DarkSpellNote } from './DarkSpellNote';
 import { useState } from 'preact/hooks';
 import { Button, Card, Checklist, CodeBoxes, ErrorNote, Explainer, ExplainerBlock, GlanceNumber, Icon, Note, PhotoField, Pill, PushPrompt, QrBlock, ReadAloud, RefusalNote, ScanField, Sheet } from '../../../shared/ui';
@@ -147,6 +148,8 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
   // The vehicles no fleet owns — the server sends a dashboard code only for those, so this is both
   // "which are mine" and "which stickers am I allowed to see" in one read.
   const mine = state.vehicles.filter((v) => Boolean(v.qr));
+  // 2026-11-03 — the first of their own that does not say what it runs on (registered before it was asked).
+  const unsaid = state.vehicles.find((v) => v.own && !v.energy) ?? null;
   /*
    * WHAT THIS DRIVER ACTUALLY RIDES, and the sticker instruction that follows from it.
    *
@@ -233,6 +236,14 @@ function OffShift({ state, actions, onOpenFleet, sbg }: HomeScreenProps) {
           the driver has walked anywhere. One in use by someone else is shown and blocked, never hidden. */}
       {/* `title`, not `label`: `label` is only the section's aria-label and renders nothing, so this card
           asked "Which vehicle?" of nobody at all — the fourth instance of that same defect. */}
+      {/* 2026-11-03 — their own vehicle, registered before it was asked what it runs on: asked once, one tap saves it. */}
+      {unsaid ? (
+        <Card title={t('vehicle.energy.askTitle', { vehicle: vehicleWord(unsaid.vehicleClass, t) })}>
+          <p class="card__note">{t('vehicle.energy.askDetail')}</p>
+          <EnergyChoice id="own-energy" vehicleClass={unsaid.vehicleClass} value="" hint={false} onChange={(energy) => void actions.sayOwnEnergy(unsaid, energy)} />
+        </Card>
+      ) : null}
+
       {state.vehicles.length ? (
         <Card title={t('driver.home.whichVehicle')}>
           <div class="rows" role="list">

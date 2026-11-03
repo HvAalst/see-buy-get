@@ -125,7 +125,7 @@ describe('a hub declares its space, and a full hub is routed around, over the wi
     const u = `${tag}${seq}`;
     const d = (await http().post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Juma', fullName: 'Juma Rider', nationalId: `DRV-SPC-${u}`, mobile: `+2547${digits().slice(-6)}${seq}`, licenceClasses: ['bike'] }).expect(201)).body;
     declared(app, 'driver', d.did);
-    const moto = (await http().post('/v1/sbg/vehicles').set(operator).send({ plate: `SP-${u}`, vehicleClass: 'bike', ownerName: 'Juma' }).expect(201)).body;
+    const moto = (await http().post('/v1/sbg/vehicles').set(operator).send({ plate: `SP-${u}`, vehicleClass: 'bike', energy: 'pedal', ownerName: 'Juma' }).expect(201)).body;
     await http().post(`/v1/sbg/fleet/drivers/${d.did}/start-session`).set(operator).send({ vehicleId: moto.vehicleId }).expect(201);
     return async () =>
       ((await http().post(`/v1/sbg/fleet/drivers/${d.did}/suggest-nearby`).set(operator).send({ at: { lat: -1.286, lng: 36.817 }, radiusKm: 5 }).expect(201)).body.offers as Array<{ ref: string }>).map((o) => o.ref);

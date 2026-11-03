@@ -380,4 +380,30 @@ describe('a vehicle’s upkeep, over the wire', () => {
     expect(ended.body.odometer).toEqual({ kept: false, why: 'Staff standing in give no odometer reading: the driver does, from their own phone' });
     expect((await http().get(`/v1/sbg/vehicles/${x.truckId}/care`).set(staff)).body.readings).toEqual([]);
   });
+
+  /** 2026-11-03 — what a vehicle runs on (ISO 14083 groundwork): asked at the fleet's door, added later by its owner only. */
+  it('asks a fleet office what a vehicle runs on, and lets only its owner add it later: staff and another fleet refused', async () => {
+    const x = await aFleetDriver();
+    const y = await aFleetDriver();
+    const plate = `NRG ${digits().slice(-4)}`;
+    const refused = await http().post('/v1/sbg/vehicles').set(bearer(x.office)).send({ plate, vehicleClass: 'van', ownerName: 'Energy Fleet' }).expect(400);
+    expect(refused.body).toMatchObject({ code: 'FIELD_REQUIRED', params: { field: 'energy' } });
+    await http().post('/v1/sbg/vehicles').set(bearer(x.office)).send({ plate, vehicleClass: 'van', ownerName: 'Energy Fleet', energy: 'pedal' }).expect(400);
+    const van = (await http().post('/v1/sbg/vehicles').set(bearer(x.office)).send({ plate, vehicleClass: 'van', ownerName: 'Energy Fleet', energy: 'electric' }).expect(201)).body;
+    expect(van).toMatchObject({ plate, energy: 'electric' });
+    // Its truck was registered before it was asked: its own office adds it; nobody else may.
+    expect(app.get(VehicleService).get(x.truckId).energy).toBeUndefined();
+    const energy = (token: string, body: object) => http().post(`/v1/sbg/vehicles/${x.truckId}/energy`).set(bearer(token)).send(body);
+    await energy(y.office, { energy: 'diesel' }).expect(403);
+    await energy(x.token, { energy: 'diesel' }).expect(403);
+    await energy(operator, { energy: 'diesel' }).expect(403);
+    await energy(x.office, { energy: 'coal' }).expect(400);
+    await energy(x.office, { energy: 'pedal' }).expect(400);
+    expect((await energy(x.office, { energy: 'diesel' }).expect(201)).body).toEqual({ vehicleId: x.truckId, energy: 'diesel' });
+    expect(app.get(VehicleService).get(x.truckId).energy).toBe('diesel');
+    // A courier's own bicycle: theirs to say, not a fleet's.
+    const njeri = await aCourier();
+    await http().post(`/v1/sbg/vehicles/${njeri.vehicleId}/energy`).set(bearer(x.office)).send({ energy: 'electric' }).expect(403);
+    await http().post(`/v1/sbg/vehicles/${njeri.vehicleId}/energy`).set(bearer(njeri.token)).send({ energy: 'electric' }).expect(201);
+  });
 });

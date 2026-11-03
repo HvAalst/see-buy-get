@@ -8,7 +8,7 @@ import { DriverService } from './driver.service';
 import { FleetManagerService } from './fleet-manager.service';
 import { VehicleService } from './vehicle.service';
 import { VehicleCareService } from './vehicle-care.service';
-import { CareSettingsDto, CheckSheetQueryDto, DecideDefectDto, HandOverDto, RecordReadingDto, ReportBreakdownDto, ReportDefectDto, ResolveBreakdownDto, ServicePlanDto, ServiceRecordDto, TakeOffRoadDto, TakeOverDto, VehicleCheckDto } from './vehicle-care.dto';
+import { CareSettingsDto, CheckSheetQueryDto, DecideDefectDto, HandOverDto, RecordReadingDto, VehicleEnergyDto, ReportBreakdownDto, ReportDefectDto, ResolveBreakdownDto, ServicePlanDto, ServiceRecordDto, TakeOffRoadDto, TakeOverDto, VehicleCheckDto } from './vehicle-care.dto';
 import { BreakdownTaker, BreakdownToTakeOver, CareSettings, CheckResult, CheckSheet, TakeOverResult, VehicleBreakdown, VehicleCareView, VehicleDefect } from './vehicle-care.types';
 import { VehicleBreakdownService } from './vehicle-breakdown.service';
 import { FleetService } from './fleet.service';
@@ -56,6 +56,18 @@ export class VehicleCareController {
   @Post('vehicles/:id/back-on-road')
   backOnTheRoad(@Param('id') id: string, @Actor() actor: IntrospectionResult): VehicleCareView {
     return this.care.backOnTheRoad(id, this.ownerOf(id, actor));
+  }
+
+  /**
+   * 2026-11-03 — WHAT IT RUNS ON, said by its owner: a vehicle registered before it was asked, or a correction. Its own
+   * office, or the courier who owns it — staff change none of a company's record.
+   */
+  @Roles('fleet_manager', 'driver')
+  @Post('vehicles/:id/energy')
+  setEnergy(@Param('id') id: string, @Body() dto: VehicleEnergyDto, @Actor() actor: IntrospectionResult): { vehicleId: string; energy: string } {
+    this.ownerOf(id, actor);
+    const v = this.vehicles.setEnergy(id, dto.energy);
+    return { vehicleId: v.vehicleId, energy: dto.energy };
   }
 
   /** The office's reading: at a service, or a new meter (which may be lower than the last). */

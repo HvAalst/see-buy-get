@@ -16,6 +16,21 @@ export const VEHICLE_CLASSES = ['bike', 'motorcycle', 'tuktuk', 'car', 'van', 'b
 export type VehicleClass = (typeof VEHICLE_CLASSES)[number];
 
 /**
+ * 2026-11-03 — WHAT A VEHICLE RUNS ON (the owner, on ISO 14083: "go ahead"). Asked of every vehicle at registration: the
+ * emissions of a trip start from it (EN ISO 14083, the method Regulation (EU) 2026/1030 makes the EU's), and what a vehicle
+ * ran on cannot be asked of its past trips later. A bicycle is pedalled or electric; nothing with an engine is pedalled.
+ * ABSENT on a vehicle registered before it was asked: unknown, and said so — its owner may add it. Never guessed from the class.
+ */
+export const VEHICLE_ENERGIES = ['petrol', 'diesel', 'electric', 'hybrid', 'gas', 'pedal'] as const;
+export type VehicleEnergy = (typeof VEHICLE_ENERGIES)[number];
+
+/** Why a vehicle of this class cannot run on this, in words — or null when it can. */
+export function energyMisfit(vehicleClass: VehicleClass, energy: VehicleEnergy): string | null {
+  if (vehicleClass === 'bike') return energy === 'pedal' || energy === 'electric' ? null : 'A bicycle is pedalled or electric';
+  return energy === 'pedal' ? 'Only a bicycle is pedalled' : null;
+}
+
+/**
  * A truck "comes in many forms" — an extensive body/handling taxonomy (Ch 19), because heavy freight
  * is where GLOS ultimately scales. Each sub-type carries a default load + handling capabilities
  * (cold-chain / dry-bulk / liquid / hazmat / oversized) the system uses for capacity + future matching.

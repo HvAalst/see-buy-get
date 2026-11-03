@@ -3,7 +3,11 @@
  * app and the Fleet app say them alike: kept under their driver.* names; the Driver app has them through its own
  * catalog (en.driver.ts), the Fleet app adds them on its own (apps/fleet/english.ts).
  */
+import { enEnergy } from './en.energy';
+
 export const enVehicles = {
+  // 2026-11-03 — what a vehicle runs on (en.energy.ts), said alike wherever a vehicle is registered.
+  ...enEnergy,
   /* WHAT THE DRIVER ACTUALLY RIDES. The class is registered against the vehicle, so the word is derived
      rather than fixed — see vehicle-words.ts. The map there is complete by compilation: an eighth class
      on the server stops this app building until somebody writes its noun. */

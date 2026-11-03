@@ -61,8 +61,13 @@ export function createDriverApi(sbg: SbgClient) {
     /** A driver who is in no fleet becomes a courier, at once: where they live, and the vehicle of their own. */
     /** Round 39 — a light courier sends a photo of their ID; until it is seen their custody cap stays at its start. */
     sendIdPhoto: (did: string, photoRef: string) => sbg.request((c) => c.POST('/v1/sbg/fleet/drivers/{did}/id-photo', { params: { path: { did } }, body: { photoRef } })),
-    rideAlone: (did: string, body: { country: string; vehicleClass: string; plate: string; truckSubtype?: string; idCopyRef?: string; licenceCopyRef?: string }) =>
-      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/ride-alone', { params: { path: { did } }, body })),
+    rideAlone: (did: string, body: { country: string; vehicleClass: string; plate: string; truckSubtype?: string; energy?: string; idCopyRef?: string; licenceCopyRef?: string }) =>
+      // Cast: the generated body narrows `energy` to a closed union the form feeds as a checked string; the server checks it again.
+      sbg.request((c) => c.POST('/v1/sbg/drivers/{did}/ride-alone', { params: { path: { did } }, body: body as never })),
+
+    /** 2026-11-03 — a courier says what their own vehicle runs on: one registered before it was asked, or a correction. */
+    setVehicleEnergy: (vehicleId: string, energy: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/energy', { params: { path: { id: vehicleId } }, body: { energy: energy as never } })),
 
     /**
      * FP4 — a driver sends the renewed licence: the photo (an uploaded `kyc_licence` media id) and the date

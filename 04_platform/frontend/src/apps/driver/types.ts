@@ -151,6 +151,10 @@ export interface RecentVehicleView {
   offRoad?: string[];
   /** The dashboard sticker, present only for a vehicle no fleet owns — see RecentVehicle on the server. */
   qr?: string;
+  /** 2026-11-03 — what it runs on; absent where it was registered before it was asked. */
+  energy?: string;
+  /** 2026-11-03 — the courier's own: theirs to say what it runs on. */
+  own?: true;
 }
 
 /**

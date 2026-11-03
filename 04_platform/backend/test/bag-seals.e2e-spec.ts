@@ -225,7 +225,7 @@ describe('a bag closed on our own seal, and received by it, over the wire', () =
       const u = `${tag}${seq}`;
       const d = (await http().post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: name, fullName: `${name} Rider`, nationalId: `DRV-TK-${u}`, mobile: `+2547${digits().slice(-6)}${seq}`, licenceClasses: ['bike'] }).expect(201)).body;
       declared(app, 'driver', d.did);
-      const moto = (await http().post('/v1/sbg/vehicles').set(operator).send({ plate: `TK-${u}`, vehicleClass: 'bike', ownerName: name }).expect(201)).body;
+      const moto = (await http().post('/v1/sbg/vehicles').set(operator).send({ plate: `TK-${u}`, vehicleClass: 'bike', energy: 'pedal', ownerName: name }).expect(201)).body;
       await http().post(`/v1/sbg/fleet/drivers/${d.did}/start-session`).set(operator).send({ vehicleId: moto.vehicleId }).expect(201);
       return { did: d.did as string, token: bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: d.did, type: 'client_credentials' }).expect(201)).body.access_token) };
     };

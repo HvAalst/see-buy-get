@@ -130,7 +130,7 @@ describe('stepBlocker', () => {
     expect(stepBlocker(shop, 'about', { ...filled(), openFrom: '09:00', openTo: '18:00' }, t)).toBe(t('home.block.hours'));
     expect(stepBlocker(shop, 'about', { ...filled(), recordClear: false }, t)).toBe(t('home.block.record'));
     // Only a shop is asked: a driver's form is not held to a shop's requirements.
-    expect(stepBlocker(role('driver'), 'about', { ...filled(), androidVersion: '', vehicleClass: 'bike', vehiclePlate: 'KMA 1' }, t)).toBeNull();
+    expect(stepBlocker(role('driver'), 'about', { ...filled(), androidVersion: '', vehicleClass: 'bike', vehiclePlate: 'KMA 1', vehicleEnergy: 'pedal' }, t)).toBeNull();
     // The country comes first on this step: it decides which company contracts them, and it narrows the
     // areas offered below it. A wizard that never asked is how a shop in Addis ended up billed by Nairobi.
     expect(stepBlocker(shop, 'where', { ...filled(), country: '' }, t)).toContain('country');
@@ -156,7 +156,7 @@ describe('stepBlocker', () => {
    * refused was that they had to come in through a fleet — which is exactly what the user reported.
    */
   it('lets a bicycle courier through with no licence paperwork at all; a motorcycle is driven on a licence (2026-10-30)', () => {
-    const rider = { ...filled(), licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'BCY-1' };
+    const rider = { ...filled(), licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'BCY-1', vehicleEnergy: 'pedal' };
     expect(needsLicence(['bike'])).toBe(false);
     expect(needsLicence(['motorcycle'])).toBe(true);
     expect(stepBlocker(role('driver'), 'about', rider, t)).toBeNull();
@@ -172,7 +172,7 @@ describe('stepBlocker', () => {
     expect(stepsFor('driver')).toEqual(['phone', 'code', 'about', 'where', 'pin', 'done']);
     expect([nextStep('driver', 'pin', true), prevStep('driver', 'papers', true)]).toEqual(['papers', 'pin']);
 
-    const moto = filled({ licenceClasses: ['motorcycle'], vehicleClass: 'motorcycle', vehiclePlate: 'KMC 1', licenceNumber: 'DL-1', licenceExpiresAt: '2031-01-31' });
+    const moto = filled({ licenceClasses: ['motorcycle'], vehicleClass: 'motorcycle', vehiclePlate: 'KMC 1', vehicleEnergy: 'petrol', licenceNumber: 'DL-1', licenceExpiresAt: '2031-01-31' });
     expect(stepBlocker(role('driver'), 'papers', moto, t)).toBe(t('home.block.driverPapers'));
     expect(stepBlocker(role('driver'), 'papers', { ...moto, driverPapers: { idCopyRef: 'med_id', licenceCopyRef: '' } }, t)).toBe(t('home.block.driverPapers'));
     const sent = { ...moto, driverPapers: { idCopyRef: 'med_id', licenceCopyRef: 'med_lic' } };
@@ -189,7 +189,7 @@ describe('stepBlocker', () => {
     expect(needsLicence(['van'])).toBe(true);
     // Mixed: one heavy class among light ones still needs it — the registry is decided by the heaviest.
     expect(needsLicence(['bike', 'van'])).toBe(true);
-    const base = { ...filled(), licenceClasses: ['van'], vehicleClass: 'van', vehiclePlate: 'KDD 1' };
+    const base = { ...filled(), licenceClasses: ['van'], vehicleClass: 'van', vehiclePlate: 'KDD 1', vehicleEnergy: 'diesel' };
     expect(stepBlocker(role('driver'), 'about', base, t)).toContain('licence number');
     expect(stepBlocker(role('driver'), 'about', { ...base, licenceNumber: 'DL-9' }, t)).toContain('runs out');
     // An expiry already past is refused HERE, not after the account is otherwise built.
@@ -207,9 +207,14 @@ describe('stepBlocker', () => {
       vehicleClass: 'truck',
     });
     // And a truck is not registrable without its kind.
-    const trucker = { ...filled(), licenceClasses: ['truck'], vehicleClass: 'truck', vehiclePlate: 'T-1', licenceNumber: 'DL-9', licenceExpiresAt: '2099-01-01' };
+    const trucker = { ...filled(), licenceClasses: ['truck'], vehicleClass: 'truck', vehiclePlate: 'T-1', vehicleEnergy: 'diesel', licenceNumber: 'DL-9', licenceExpiresAt: '2099-01-01' };
     expect(stepBlocker(role('driver'), 'about', trucker, t)).toContain('kind of truck');
     expect(stepBlocker(role('driver'), 'about', { ...trucker, truckSubtype: 'flatbed' }, t)).toBeNull();
+    // 2026-11-03 — and what it runs on: asked, only what fits, and a fuel that no longer fits dropped with the class.
+    expect(stepBlocker(role('driver'), 'about', { ...trucker, truckSubtype: 'flatbed', vehicleEnergy: '' }, t)).toBe('Say what the vehicle runs on');
+    expect(stepBlocker(role('driver'), 'about', { ...base, vehiclePlate: 'B-1', vehicleEnergy: 'diesel' }, t)).toBe('Say whether the bike is pedalled or electric');
+    expect(pickedVehicle({ ...EMPTY_JOIN, licenceClasses: ['bike'], vehicleClass: 'bike', vehicleEnergy: 'pedal' }, 'van')).toMatchObject({ vehicleClass: 'van', vehicleEnergy: '' });
+    expect(pickedVehicle({ ...EMPTY_JOIN, licenceClasses: ['bike'], vehicleClass: 'bike', vehicleEnergy: 'electric' }, 'van')).not.toHaveProperty('vehicleEnergy');
   });
 
   it('DERIVES the vehicle from a single licence class, without waiting for a tap nobody knew to make', () => {
@@ -220,7 +225,7 @@ describe('stepBlocker', () => {
      * chips that looked like a repeat of the first.
      */
     expect(vehicleClassFor({ licenceClasses: ['van'], vehicleClass: '' })).toBe('van');
-    expect(stepBlocker(role('driver'), 'about', { ...filled(), licenceClasses: ['bike'], vehicleClass: '', vehiclePlate: 'B-1' }, t)).toBeNull();
+    expect(stepBlocker(role('driver'), 'about', { ...filled(), licenceClasses: ['bike'], vehicleClass: '', vehiclePlate: 'B-1', vehicleEnergy: 'pedal' }, t)).toBeNull();
     // With two, there is a real choice and it must be made.
     expect(vehicleClassFor({ licenceClasses: ['van', 'truck'], vehicleClass: '' })).toBe('');
     // An answer already given survives — deriving never overrides somebody's own choice.
@@ -244,19 +249,21 @@ describe('stepBlocker', () => {
 
   it('SENDS the licence and the vehicle, which is the half that was missing', () => {
     const body = signupBody(role('driver'), filled({
-      licenceClasses: ['van'], licenceNumber: 'DL-9', licenceExpiresAt: '2099-01-01', vehicleClass: 'van', vehiclePlate: ' kdd 1 ',
+      licenceClasses: ['van'], licenceNumber: 'DL-9', licenceExpiresAt: '2099-01-01', vehicleClass: 'van', vehiclePlate: ' kdd 1 ', vehicleEnergy: 'diesel',
     }), 'x') as { profile: { driver: Record<string, unknown>; vehicle: Record<string, unknown> } };
     expect(body.profile.driver.licenceNumber).toBe('DL-9');
     expect(body.profile.driver.licenceExpiresAt).toBe('2099-01-01');
-    expect(body.profile.vehicle).toEqual({ plate: 'kdd 1', vehicleClass: 'van' });
+    expect(body.profile.vehicle).toEqual({ plate: 'kdd 1', vehicleClass: 'van', energy: 'diesel' });
   });
 
   it('sends NO licence fields for a rider who needs none — an empty string is not "no licence"', () => {
-    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'B-1' }), 'x') as {
+    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'B-1', vehicleEnergy: 'pedal' }), 'x') as {
       profile: { driver: Record<string, unknown> };
     };
     expect(body.profile.driver.licenceNumber).toBeUndefined();
     expect(body.profile.driver.licenceExpiresAt).toBeUndefined();
+    // 2026-11-03 — what the bicycle runs on goes with it.
+    expect((body.profile as unknown as { vehicle: { energy?: string } }).vehicle.energy).toBe('pedal');
   });
 
   /*
@@ -565,7 +572,7 @@ describe('a driver signs up with their PIN', () => {
   });
 
   it('still sends the profile the driver door has always taken', () => {
-    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'BK 1' }), 'm') as { profile: { driver: { licenceClasses: string[] }; vehicle: { plate: string } } };
+    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: 'bike', vehiclePlate: 'BK 1', vehicleEnergy: 'pedal' }), 'm') as { profile: { driver: { licenceClasses: string[] }; vehicle: { plate: string } } };
     expect(body.profile.driver.licenceClasses).toEqual(['bike']);
     expect(body.profile.vehicle.plate).toBe('BK 1');
   });
@@ -573,7 +580,7 @@ describe('a driver signs up with their PIN', () => {
 
 describe('the vehicle a courier never tapped', () => {
   it('is sent as the class the step worked out, not as an empty one the server refuses', () => {
-    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: '', vehiclePlate: 'BK 2' }), 'm') as { profile: { vehicle: { vehicleClass: string } } };
+    const body = signupBody(role('driver'), filled({ licenceClasses: ['bike'], vehicleClass: '', vehiclePlate: 'BK 2', vehicleEnergy: 'pedal' }), 'm') as { profile: { vehicle: { vehicleClass: string } } };
     expect(body.profile.vehicle.vehicleClass).toBe('bike');
   });
 });

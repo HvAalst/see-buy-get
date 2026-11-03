@@ -13,7 +13,7 @@ import { ParcelService } from './parcel.service';
 import { PersonService } from './person.service';
 import { VehicleService } from './vehicle.service';
 import { betweenFleets } from './driver.service';
-import { TRUCK_SUBTYPE_CATALOG, type TruckSubtype, type VehicleClass } from './fleet.config';
+import { TRUCK_SUBTYPE_CATALOG, type TruckSubtype, type VehicleClass, type VehicleEnergy } from './fleet.config';
 import type { CourierAsk, FleetDriver, FleetRemovalReason, Vehicle } from './fleet.types';
 
 /** What riding for themselves would take, said to the driver before anything is asked of them. */
@@ -240,7 +240,7 @@ export class FleetMoveService {
    */
   rideAlone(
     driverDid: string,
-    input: { country: string; vehicleClass: VehicleClass; plate: string; truckSubtype?: TruckSubtype; idCopyRef?: string; licenceCopyRef?: string },
+    input: { country: string; vehicleClass: VehicleClass; plate: string; truckSubtype?: TruckSubtype; energy?: VehicleEnergy; idCopyRef?: string; licenceCopyRef?: string },
     now: number = Date.now(),
   ): { driver: FleetDriver; vehicle?: Vehicle; companyName?: string; asked?: CourierAsk } {
     const driver = this.drivers.get(driverDid);
@@ -257,6 +257,8 @@ export class FleetMoveService {
     if (input.vehicleClass === 'truck' && !TRUCK_SUBTYPE_CATALOG[input.truckSubtype as TruckSubtype]) {
       throw new GlosError('FIELD_REQUIRED', 'Say what body your truck has: flatbed, tipper, refrigerated…');
     }
+    // 2026-11-03 — what it runs on, asked whether they ride at once or ask first.
+    this.vehicles.askEnergy(input.vehicleClass, input.energy, now);
     // ANYTHING HEAVIER THAN A MOTORCYCLE ON THEIR LICENCE: an ask, read by staff before they ride — refused before
     // anything is written, and nothing about them changes while it waits.
     if (driver.registry === 'heavy') {
@@ -266,13 +268,14 @@ export class FleetMoveService {
         vehicleClass: input.vehicleClass,
         plate: input.plate.trim().toUpperCase(),
         ...(input.vehicleClass === 'truck' ? { truckSubtype: input.truckSubtype } : {}),
+        ...(input.energy ? { energy: input.energy } : {}),
         idCopyRef: input.idCopyRef ?? '',
         licenceCopyRef: input.licenceCopyRef ?? '',
       }, now);
       return { driver: asked, asked: asked.courierAsk, ...(where.companyName ? { companyName: where.companyName } : {}) };
     }
     // Theirs, and nobody else's: no fleet, and the courier recorded as the one who owns and drives it.
-    const vehicle = this.vehicles.register({ plate: input.plate, vehicleClass: input.vehicleClass, managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country } as never);
+    const vehicle = this.vehicles.register({ plate: input.plate, vehicleClass: input.vehicleClass, ...(input.energy ? { energy: input.energy } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country } as never);
     const rides = this.drivers.rideAlone(driverDid, country);
     // On their screen from the first morning: the vehicle list is a history, and they have none of their own yet.
     this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);
@@ -309,7 +312,7 @@ export class FleetMoveService {
     if (!this.drivers.courierCountries().some((c) => c.jurisdiction === ask.country)) {
       throw new GlosError('FORBIDDEN', `The network does not operate in ${ask.country} any more, so a courier cannot be registered there`);
     }
-    const vehicle = this.vehicles.register({ plate: ask.plate, vehicleClass: ask.vehicleClass, ...(ask.truckSubtype ? { truckSubtype: ask.truckSubtype } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country: ask.country } as never);
+    const vehicle = this.vehicles.register({ plate: ask.plate, vehicleClass: ask.vehicleClass, ...(ask.truckSubtype ? { truckSubtype: ask.truckSubtype } : {}), ...(ask.energy ? { energy: ask.energy } : {}), managerDid: undefined, ownerType: 'driver_owned', ownerName: driver.displayName, ownerDriverDid: driverDid, country: ask.country } as never);
     this.drivers.recordCourierCheck(driverDid, { at: ask.askedAt, ...(input.by ? { by: input.by } : {}) }, now);
     this.drivers.rideAlone(driverDid, ask.country);
     this.fleet.claimOwnVehicle(driverDid, vehicle.vehicleId);

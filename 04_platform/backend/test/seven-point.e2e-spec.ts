@@ -135,7 +135,7 @@ describe('the 7-point inspection — over the wire', () => {
   it('what is loaded is what the driver is on shift with: a box van on the claim, an open truck at the gate', async () => {
     const l = await aLoad('UG', { vehicleClass: 'truck', truckSubtype: 'box' });
     expect(l.claim.inspection).toEqual({ kind: 'closed', points: POINTS });
-    const flatbed = (await http().post('/v1/sbg/vehicles').set(bearer(setupKey)).send({ plate: `7P-${tag}`, vehicleClass: 'truck', truckSubtype: 'flatbed', ownerName: 'Kamau' }).expect(201)).body;
+    const flatbed = (await http().post('/v1/sbg/vehicles').set(bearer(setupKey)).send({ plate: `7P-${tag}`, vehicleClass: 'truck', energy: 'diesel', truckSubtype: 'flatbed', ownerName: 'Kamau' }).expect(201)).body;
     await http().post(`/v1/sbg/fleet/drivers/${driver.did}/start-session`).set(bearer(setupKey)).send({ vehicleId: flatbed.vehicleId }).expect(201);
     try {
       await pickup(l.freightId, await gate(l.claim)).expect(201);

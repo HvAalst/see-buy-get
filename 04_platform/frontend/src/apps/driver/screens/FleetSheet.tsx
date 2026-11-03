@@ -1,3 +1,5 @@
+import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
+import { energyFits } from '../../../shared/vehicleEnergy';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, Note, PhotoField, RefusalNote, Sheet } from '../../../shared/ui';
 import { formatDate, useT } from '../../../shared/i18n';
@@ -147,6 +149,7 @@ export function FleetSheet({ open, onClose, state, actions }: { open: boolean; o
                     vehicleClass: form.vehicleClass,
                     plate: form.plate.trim(),
                     ...(form.vehicleClass === 'truck' && form.truckSubtype ? { truckSubtype: form.truckSubtype } : {}),
+                    ...(form.energy ? { energy: form.energy } : {}),
                     ...(state.rideAlone?.check ? { idCopyRef: form.idCopyRef, licenceCopyRef: form.licenceCopyRef } : {}),
                   }),
                 true,
@@ -220,7 +223,7 @@ function RideAloneCard({
           <label class="field__label" for="alone-class">
             {t('driver.alone.vehicle')}
           </label>
-          <select id="alone-class" class="select" value={form.vehicleClass} onChange={(e) => setForm({ ...form, vehicleClass: e.currentTarget.value })}>
+          <select id="alone-class" class="select" value={form.vehicleClass} onChange={(e) => { const vehicleClass = e.currentTarget.value; setForm({ ...form, vehicleClass, ...(energyFits(vehicleClass, form.energy ?? '') ? {} : { energy: '' }) }); }}>
             {terms.classes.length === 1 ? null : <option value="">{t('driver.alone.choose')}</option>}
             {terms.classes.map((c) => (
               <option key={c} value={c}>
@@ -236,6 +239,8 @@ function RideAloneCard({
           <input id="alone-plate" class="input input--mono" value={form.plate} maxLength={32} autoComplete="off" spellcheck={false} onInput={(e) => setForm({ ...form, plate: e.currentTarget.value })} />
           {form.vehicleClass === 'bike' ? <p class="hint">{t('driver.alone.plateBike')}</p> : null}
         </div>
+        {/* 2026-11-03 — what it runs on, for the vehicle chosen: asked, never assumed. */}
+        {form.vehicleClass ? <EnergyChoice id="alone-energy" vehicleClass={form.vehicleClass} value={form.energy ?? ''} onChange={(energy) => setForm({ ...form, energy })} /> : null}
         {form.vehicleClass === 'truck' && terms.bodies?.length ? (
           <div class="field">
             <label class="field__label" for="alone-body">

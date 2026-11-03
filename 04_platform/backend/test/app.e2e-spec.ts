@@ -928,7 +928,7 @@ describe('GLOS backend (e2e)', () => {
     const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Boda', fullName: 'Boda B', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['bike'] }).expect(201);
     expect(driver.body.registry).toBe('light');
     expect(driver.body.status).toBe('ACTIVE');
-    const bike = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `BD-${u}`, vehicleClass: 'bike', ownerName: 'Boda B' }).expect(201);
+    const bike = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `BD-${u}`, vehicleClass: 'bike', energy: 'pedal', ownerName: 'Boda B' }).expect(201);
     expect(bike.body.capacityKg).toBe(20);
 
     // Couple driver ↔ bike on the corridor (flexible).
@@ -985,7 +985,7 @@ describe('GLOS backend (e2e)', () => {
 
     // A bicycle courier (light → ACTIVE) coupled to a bicycle.
     const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Moto', fullName: 'Mo', nationalId: `DRV-${u}`, mobile: `+254d${u}`, licenceClasses: ['bike'] }).expect(201);
-    const moto = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MT-${u}`, vehicleClass: 'bike', ownerName: 'Mo' }).expect(201);
+    const moto = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MT-${u}`, vehicleClass: 'bike', energy: 'pedal', ownerName: 'Mo' }).expect(201);
     await request(http).post(`/v1/sbg/fleet/drivers/${driver.body.did}/start-session`).set(auth).send({ vehicleId: moto.body.vehicleId }).expect(201);
 
     // Agent bags two parcels in an outbound tote bound for the hub, then releases it for claim.
@@ -1047,7 +1047,7 @@ describe('GLOS backend (e2e)', () => {
     const auth = { Authorization: `Bearer ${tokenRes.body.access_token}` };
     const u = Math.random().toString(16).slice(2, 10);
 
-    const veh = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `SS-${u}`, vehicleClass: 'bike', ownerName: 'Sh' }).expect(201);
+    const veh = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `SS-${u}`, vehicleClass: 'bike', energy: 'pedal', ownerName: 'Sh' }).expect(201);
     expect(veh.body.qr).toMatch(/^VEH-/);
     const driver = await request(http).post('/v1/sbg/drivers/onboard').set(auth).send({ displayName: 'Shift', fullName: 'Sh', nationalId: `SES-${u}`, mobile: `+254s${u}`, licenceClasses: ['bike'] }).expect(201);
 
@@ -1078,7 +1078,7 @@ describe('GLOS backend (e2e)', () => {
     expect(reg.body.status).toBe('DRAFT');
 
     // Cannot build a fleet until ACTIVE — an INVALID_STATE, not a generic bad request.
-    const tooEarly = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'A', managerDid: mDid }).expect(400);
+    const tooEarly = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', energy: 'diesel', ownerName: 'A', managerDid: mDid }).expect(400);
     expect(tooEarly.body.code).toBe('INVALID_STATE');
 
     await sendFleetPapers(mDid, auth);
@@ -1096,7 +1096,7 @@ describe('GLOS backend (e2e)', () => {
     expect(badCode.body.code).toBe('AUTH_CODE_INVALID');
 
     // Now the manager can register a vehicle, and the dashboard scopes to their fleet.
-    const veh = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', ownerName: 'Acme', managerDid: mDid }).expect(201);
+    const veh = await request(http).post('/v1/sbg/vehicles').set(auth).send({ plate: `MV-${u}`, vehicleClass: 'van', energy: 'diesel', ownerName: 'Acme', managerDid: mDid }).expect(201);
     expect(veh.body.managerDid).toBe(mDid);
     const dash = await request(http).get('/v1/sbg/fleet/dashboard').query({ manager: mDid }).set(auth).expect(200);
     expect(dash.body.managerDid).toBe(mDid);
@@ -1114,7 +1114,7 @@ describe('GLOS backend (e2e)', () => {
       await sendFleetPapers(m.did, operator);
       await request(http).post(`/v1/sbg/fleet/managers/${m.did}/kyc-decision`).set(operator).send({ approve: true, by: 'A second member of staff' }).expect(201);
       await request(http).post(`/v1/sbg/fleet/managers/${m.did}/bond`).set(operator).expect(201);
-      await request(http).post('/v1/sbg/vehicles').set(operator).send({ plate: `${name}-${u}`, vehicleClass: 'van', ownerName: name, managerDid: m.did }).expect(201);
+      await request(http).post('/v1/sbg/vehicles').set(operator).send({ plate: `${name}-${u}`, vehicleClass: 'van', energy: 'diesel', ownerName: name, managerDid: m.did }).expect(201);
       return m.did as string;
     };
     const mA = await onboardManager('AlphaCo');
@@ -1247,7 +1247,7 @@ describe('GLOS backend (e2e)', () => {
     const rider = (await request(http).post('/v1/sbg/drivers/onboard').set(operator).send({ displayName: 'Wanjiru', fullName: 'Wanjiru Rider', nationalId: `ALONE-${u}`, mobile: `+25474${u}3`, licenceClasses: ['bike'], managerDid: fleetDid }).expect(201)).body as { did: string };
     const inFleet = await as({ role: 'driver', did: rider.did, tenant: fleetDid });
     const terms = `/v1/sbg/drivers/${rider.did}/ride-alone`;
-    const body = { country: 'KE', vehicleClass: 'bike', plate: `kmal ${u}` };
+    const body = { country: 'KE', vehicleClass: 'bike', energy: 'pedal', plate: `kmal ${u}` };
 
     // IN A FLEET it is not offered, and says what comes first. Asking changes nothing.
     expect((await request(http).get(terms).set(inFleet).expect(200)).body).toMatchObject({ offered: false, why: 'You drive for AloneCo. Leave that fleet first: “Your fleet”, under your name', classes: [], countries: [] });
@@ -1307,9 +1307,9 @@ describe('GLOS backend (e2e)', () => {
     // OFFERED, with the check said before anything is asked of them.
     expect((await request(http).get(terms).set(asVan).expect(200)).body).toMatchObject({ offered: true, check: true, classes: ['van'] });
     const shot = async (kind: string) => (await request(http).post('/v1/sbg/media').set(asVan).send({ kind, dataUrl: PNG }).expect(201)).body.mediaId as string;
-    const ask = { country: 'KE', vehicleClass: 'van', plate: `kvan ${u}`, idCopyRef: await shot('kyc_id'), licenceCopyRef: await shot('kyc_licence') };
+    const ask = { country: 'KE', vehicleClass: 'van', energy: 'diesel', plate: `kvan ${u}`, idCopyRef: await shot('kyc_id'), licenceCopyRef: await shot('kyc_licence') };
     // Without the photographs it is no ask at all.
-    expect((await request(http).post(terms).set(asVan).send({ country: 'KE', vehicleClass: 'van', plate: `kvan ${u}` })).body.code).toBe('KYC_INCOMPLETE');
+    expect((await request(http).post(terms).set(asVan).send({ country: 'KE', vehicleClass: 'van', energy: 'diesel', plate: `kvan ${u}` })).body.code).toBe('KYC_INCOMPLETE');
     const asked = (await request(http).post(terms).set(asVan).send(ask).expect(201)).body;
     expect(asked).toMatchObject({ did: van.did, asked: { country: 'KE', vehicleClass: 'van', plate: `KVAN ${u}` } });
     expect(asked).not.toHaveProperty('vehicle');

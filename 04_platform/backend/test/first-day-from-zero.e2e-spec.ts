@@ -483,7 +483,7 @@ describe('the first day of a new installation, as it would be live', () => {
   });
 
   it('7 · a vehicle, a driver who signs in for themselves and starts their own shift, and the corridor they run', async () => {
-    const vehicle = await must(http().post('/v1/sbg/vehicles').set(bearer(office)).send({ plate: 'KMFA 001B', vehicleClass: 'bike', ownerName: 'Kilima Logistics', ownerType: 'fleet_owned', pricePerKm: 0.5 }));
+    const vehicle = await must(http().post('/v1/sbg/vehicles').set(bearer(office)).send({ plate: 'KMFA 001B', vehicleClass: 'bike', energy: 'pedal', ownerName: 'Kilima Logistics', ownerType: 'fleet_owned', pricePerKm: 0.5 }));
     vehicleId = vehicle.vehicleId;
     const phone = '+254711000301';
     const driver = await must(http().post('/v1/sbg/drivers/onboard').set(bearer(office)).send({ displayName: 'Amos K.', fullName: 'Amos Kariuki', nationalId: 'KE-ID-AMOS', mobile: phone, licenceClasses: ['bike'], managerDid: fleetDid }));

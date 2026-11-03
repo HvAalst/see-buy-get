@@ -1,3 +1,4 @@
+import { energyWord } from '../../shared/vehicleEnergy';
 import { triggerDownload } from '../../shared/download';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isUnknownIdentity, narrow, type SbgError } from '../../lib/sbg';
@@ -761,6 +762,7 @@ export function useFleetApp() {
         ownerType: f.ownerType,
         managerDid,
         ...(f.vehicleClass === 'truck' && f.truckSubtype ? { truckSubtype: f.truckSubtype } : {}),
+        ...(f.energy ? { energy: f.energy } : {}),
         ...(f.capacityKg ? { capacityKg: Number(f.capacityKg) } : {}),
         // Sent only when measured. There is no class default and there must not be one — see fleet.types.
         ...(f.deckM ? { deckM: Number(f.deckM) } : {}),
@@ -882,6 +884,20 @@ export function useFleetApp() {
         const r = await client.api.setVehiclePrice(vehicleId, price);
         if (r.error) return fail(r.error);
         pushToast({ tone: 'ok', icon: 'wallet', title: t('fleet.toast.rateUpdated'), detail: t('fleet.toast.rateUpdatedDetail', { price: perKmText(price, stateRef.current.dashboard?.currency) }) });
+        await refresh();
+      });
+    },
+    [client, run, fail, pushToast, refresh],
+  );
+
+  /** 2026-11-03 — what a vehicle runs on, said by its office: one registered before it was asked, or a correction. */
+  const setVehicleEnergy = useCallback(
+    async (vehicle: { vehicleId: string; plate: string }, energy: string) => {
+      if (!client) return;
+      await run(`energy:${vehicle.vehicleId}`, async () => {
+        const r = await client.api.setVehicleEnergy(vehicle.vehicleId, energy);
+        if (r.error) return fail(r.error);
+        pushToast({ tone: 'ok', icon: 'truck', title: t('vehicle.energy.saved', { plate: vehicle.plate, energy: energyWord(energy, t).toLowerCase() }) });
         await refresh();
       });
     },
@@ -1426,6 +1442,7 @@ export function useFleetApp() {
       submitKyc,
       setKyc,
       setVehiclePrice,
+      setVehicleEnergy,
       setVehiclePapers,
       sendOwnPaper,
       giveBackBooking,

@@ -4,6 +4,7 @@
  * the legacy fleet.js so console and PWA can never disagree about who may drive what.
  */
 
+import { energyMissing } from '../../shared/vehicleEnergy';
 import type { DepartureBookingRow, DepartureRow, WaitingRow } from './types';
 import type { MessageKey, Translate } from '../../shared/i18n';
 // The words for what a driver reports on a road live with the driver app, which is where they are reported.
@@ -39,6 +40,8 @@ export interface VehicleForm {
   plate: string;
   vehicleClass: VehicleClass;
   truckSubtype: string;
+  /** 2026-11-03 — what it runs on (shared/vehicleEnergy.ts). Asked: blank until somebody chooses. */
+  energy: string;
   ownerType: string;
   ownerName: string;
   capacityKg: string;
@@ -97,6 +100,7 @@ export const EMPTY_VEHICLE: VehicleForm = {
   plate: '',
   vehicleClass: 'bike',
   truckSubtype: '',
+  energy: '',
   ownerType: 'driver_owned',
   ownerName: '',
   capacityKg: '',
@@ -122,6 +126,8 @@ export function vehicleMissing(f: VehicleForm, t: Translate): string | null {
   if (!f.plate.trim()) return t('fleet.logic.vMissingPlate');
   if (!f.ownerName.trim()) return t('fleet.logic.vMissingOwner');
   if (f.vehicleClass === 'truck' && !f.truckSubtype) return t('fleet.logic.vMissingBody');
+  const energy = energyMissing(f.vehicleClass, f.energy, t);
+  if (energy) return energy;
   // S34 — the price corridor is set as a PAIR or not at all. A lone bound would be silently paired with the
   // other class default (a typed ceiling of 0.5 gets raised to the 0.8 floor), contradicting the on-screen
   // promise that the operator owns BOTH the floor and the ceiling — so require both, or neither.

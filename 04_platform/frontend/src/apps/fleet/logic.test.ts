@@ -77,11 +77,15 @@ describe('forms', () => {
     expect(vehicleMissing(EMPTY_VEHICLE, t)).toContain('plate');
     expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1' }, t)).toContain('owner');
     expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A', vehicleClass: 'truck' }, t)).toContain('truck body');
-    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A' }, t)).toBeNull();
+    // 2026-11-03 — then what it runs on: asked, and only what fits the class.
+    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A' }, t)).toBe('Say whether the bike is pedalled or electric');
+    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A', energy: 'diesel' }, t)).toBe('Say whether the bike is pedalled or electric');
+    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A', vehicleClass: 'van', energy: 'pedal' }, t)).toBe('Say what the vehicle runs on');
+    expect(vehicleMissing({ ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A', energy: 'pedal' }, t)).toBeNull();
   });
 
   it('vehicle form: the price-multiplier corridor is both-or-neither, and never inverted (S34)', () => {
-    const ok = { ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A' } as const;
+    const ok = { ...EMPTY_VEHICLE, plate: 'K 1', ownerName: 'A', energy: 'electric' } as const;
     expect(vehicleMissing({ ...ok, minMultiplier: '1.5', maxMultiplier: '0.8' }, t)).toContain('cannot be above'); // inverted
     expect(vehicleMissing({ ...ok, minMultiplier: '0.8', maxMultiplier: '1.5' }, t)).toBeNull(); // floor ≤ ceiling
     expect(vehicleMissing({ ...ok, minMultiplier: '1.2' }, t)).toContain('both'); // a lone bound would be silently paired

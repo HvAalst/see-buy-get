@@ -12,6 +12,8 @@ import type { FleetActions, FleetState } from '../useFleetApp';
 import type { SbgClient } from '../../../lib/sbg';
 import { VehicleCareSheet } from '../../../shared/upkeep/VehicleCare';
 import { UpkeepRulesCard } from './UpkeepRulesCard';
+import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
+import { energyFits, energyWord } from '../../../shared/vehicleEnergy';
 import { BrokenDownCard } from './BrokenDownCard';
 
 /**
@@ -109,6 +111,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
   const [priceFor, setPriceFor] = useState<VehicleRow | null>(null);
   const [qrFor, setQrFor] = useState<VehicleRow | null>(null);
   const [papersFor, setPapersFor] = useState<VehicleRow | null>(null);
+  const [energyFor, setEnergyFor] = useState<VehicleRow | null>(null);
   const f = state.vForm;
   const missing = vehicleMissing(f, t);
   const isTruck = f.vehicleClass === 'truck';
@@ -133,7 +136,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
             <label class="field__label" for="v-class">
               {t('fleet.vehicles.class')}
             </label>
-            <select id="v-class" class="select" value={f.vehicleClass} onChange={(e) => actions.setVForm({ vehicleClass: e.currentTarget.value as typeof f.vehicleClass, truckSubtype: '', equipment: [] })}>
+            <select id="v-class" class="select" value={f.vehicleClass} onChange={(e) => { const vehicleClass = e.currentTarget.value as typeof f.vehicleClass; actions.setVForm({ vehicleClass, truckSubtype: '', equipment: [], ...(energyFits(vehicleClass, f.energy) ? {} : { energy: '' }) }); }}>
               {VEHICLE_CLASSES.map((c) => (
                 <option key={c} value={c}>
                   {c}
@@ -176,6 +179,10 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
           )}
         </div>
         {subLine ? <p class="hint" style="margin-top:8px">{subLine}</p> : null}
+        {/* 2026-11-03 — what it runs on: asked of every vehicle, chosen by nobody but the office. */}
+        <div style="margin-top:12px">
+          <EnergyChoice id="v-energy" vehicleClass={f.vehicleClass} value={f.energy} onChange={(energy) => actions.setVForm({ energy })} />
+        </div>
         {isTruck ? (
           <div class="field" style="margin-top:12px">
             {/* Equipment is ticked, not chosen — there is no single selection and no "not sure", so the
@@ -385,8 +392,10 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
                 <span class="row__body">
                   <span class="row__t mono">{v.plate}</span>
                   <span class="row__s">
-                    {`${v.vehicleClass}${v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''} · ${v.capacityKg} kg · QR ${v.qr} · ${perKmText(Number(v.pricePerKm ?? 0), state.dashboard?.currency)}/km`}
+                    {`${v.vehicleClass}${v.truckSubtype ? ` · ${v.truckSubtype.replace(/_/g, ' ')}` : ''}${v.energy ? ` · ${energyWord(v.energy, t).toLowerCase()}` : ''} · ${v.capacityKg} kg · QR ${v.qr} · ${perKmText(Number(v.pricePerKm ?? 0), state.dashboard?.currency)}/km`}
                   </span>
+                  {/* Registered before it was asked: said as a gap, with the way to close it under the name. */}
+                  {v.energy ? null : <span class={paperLineClass('due')}>{t('vehicle.energy.notOnRecord')}</span>}
                   {/* FP4 — a paper that has lapsed, is running out, or was never dated. In date says nothing. */}
                   {papersToShow(v.papers).map((p) => (
                     <span key={p.kind} class={paperLineClass(p.state)}>
@@ -426,6 +435,9 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
                     </Button>
                     <Button variant="link" full={false} onClick={() => setCareFor(v)}>
                       {t('fleet.vehicles.careBtn')}
+                    </Button>
+                    <Button variant="link" full={false} onClick={() => setEnergyFor(v)}>
+                      {v.energy ? t('vehicle.energy.change') : t('vehicle.energy.add')}
                     </Button>
                   </span>
                 </span>
@@ -468,6 +480,7 @@ export function VehiclesScreen({ state, actions, sbg = null }: VehiclesScreenPro
       </Sheet>
 
       <PriceSheet vehicle={priceFor} onClose={() => setPriceFor(null)} state={state} actions={actions} />
+      <EnergySheet vehicle={energyFor} onClose={() => setEnergyFor(null)} state={state} actions={actions} />
       <PapersSheet vehicle={papersFor} onClose={() => setPapersFor(null)} state={state} actions={actions} />
       <VehicleCareSheet
         vehicle={careFor}
@@ -552,6 +565,38 @@ function PapersSheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow
         }}
       >
         {t('fleet.vehicles.savePapers')}
+      </Button>
+      <Button variant="link" onClick={close}>
+        {t('common.cancel')}
+      </Button>
+    </Sheet>
+  );
+}
+
+/** 2026-11-03 — what a vehicle runs on, said by its office: one registered before it was asked, or a correction. */
+function EnergySheet({ vehicle, onClose, state, actions }: { vehicle: VehicleRow | null; onClose: () => void; state: FleetState; actions: FleetActions }) {
+  const t = useT();
+  const [energy, setEnergy] = useState('');
+  const chosen = energy || vehicle?.energy || '';
+  const close = () => {
+    setEnergy('');
+    onClose();
+  };
+  return (
+    <Sheet open={Boolean(vehicle)} onClose={close} title={vehicle ? vehicle.plate : ''}>
+      {vehicle ? <EnergyChoice id="v-energy-later" vehicleClass={vehicle.vehicleClass} value={chosen} onChange={setEnergy} /> : null}
+      <Button
+        chevron={false}
+        disabled={!vehicle || !energy || energy === vehicle.energy}
+        busy={vehicle ? state.busy === `energy:${vehicle.vehicleId}` : false}
+        onClick={() => {
+          if (!vehicle || !energy) return;
+          const v = vehicle;
+          close();
+          void actions.setVehicleEnergy(v, energy);
+        }}
+      >
+        {t('vehicle.energy.save')}
       </Button>
       <Button variant="link" onClick={close}>
         {t('common.cancel')}

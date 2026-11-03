@@ -13,6 +13,7 @@ import type { Agreement, AgreementHere } from '../../shared/documents/documents'
 import type { MessageKey, Translate } from '../../shared/i18n';
 import { THIN_MARKET_LOADS } from '../../shared/market';
 import { pinGuessable } from '../../shared/account/pin';
+import { energyFits, energyMissing } from '../../shared/vehicleEnergy';
 
 /* ------------------------------------------------------------------ roles -- */
 
@@ -213,6 +214,8 @@ export interface JoinForm {
   vehiclePlate: string;
   vehicleClass: string;
   truckSubtype: string;
+  /** 2026-11-03 — what their vehicle runs on (shared/vehicleEnergy.ts). Asked: blank until they choose. */
+  vehicleEnergy: string;
   /*
    * A SHOP'S ANSWERS TO THE FRANCHISE REQUIREMENTS (compendium 18.1). The form used to send them FOR the applicant —
    * Android 13, reliable power, a licence number made from the ID, a clean record — so the checks behind them always
@@ -321,6 +324,7 @@ export const EMPTY_JOIN: JoinForm = {
   vehiclePlate: '',
   vehicleClass: '',
   truckSubtype: '',
+  vehicleEnergy: '',
   androidVersion: '',
   reliablePower: '',
   tradingLicence: '',
@@ -492,6 +496,8 @@ export function stepBlocker(role: RoleSpec, step: JoinStep, f: JoinForm, t: Tran
         if (!vehicle) return t('home.block.vehicleClass');
         if (!f.vehiclePlate.trim()) return t('home.block.vehiclePlate');
         if (vehicle === 'truck' && !f.truckSubtype.trim()) return t('home.block.truckSubtype');
+        const energy = energyMissing(vehicle, f.vehicleEnergy, t);
+        if (energy) return energy;
       }
       return null;
     case 'where':
@@ -598,6 +604,8 @@ export function signupBody(role: RoleSpec, f: JoinForm, deviceMarker: string): R
           plate: f.vehiclePlate.trim(),
           vehicleClass: vehicleClassFor(f),
           ...(vehicleClassFor(f) === 'truck' && f.truckSubtype ? { truckSubtype: f.truckSubtype } : {}),
+          // What it runs on — only one that fits the class it is sent with.
+          ...(energyFits(vehicleClassFor(f), f.vehicleEnergy) ? { energy: f.vehicleEnergy } : {}),
         },
       },
     };
@@ -830,9 +838,9 @@ export function vehicleClassFor(f: Pick<JoinForm, 'licenceClasses' | 'vehicleCla
  * grants the class rather than sending somebody back up the form to tick it first.
  */
 export function pickedVehicle(f: JoinForm, cls: string): Partial<JoinForm> {
-  if (f.vehicleClass === cls) return { vehicleClass: '', truckSubtype: '' };
+  if (f.vehicleClass === cls) return { vehicleClass: '', truckSubtype: '', vehicleEnergy: '' };
   const licenceClasses = f.licenceClasses.includes(cls) ? f.licenceClasses : [...f.licenceClasses, cls];
-  return { licenceClasses, vehicleClass: cls, ...(cls === 'truck' ? {} : { truckSubtype: '' }) };
+  return { licenceClasses, vehicleClass: cls, ...(cls === 'truck' ? {} : { truckSubtype: '' }), ...(energyFits(cls, f.vehicleEnergy) ? {} : { vehicleEnergy: '' }) };
 }
 
 /* ----------------------------------------------------------- the front page -- */

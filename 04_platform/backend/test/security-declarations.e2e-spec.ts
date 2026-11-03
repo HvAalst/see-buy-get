@@ -101,7 +101,7 @@ describe('the yearly security declaration — over the wire', () => {
     expect(before.find((r) => r.did === rider.did)).toMatchObject({ state: 'missing' });
     expect(before.findIndex((r) => r.state === 'signed')).toBeGreaterThan(before.findIndex((r) => r.did === rider.did));
     // Out on a bicycle, a hub loads a bag onto them: refused, in words for the hub, before anything is moved.
-    const moto = (await http().post('/v1/sbg/vehicles').set(staff).send({ plate: `DM-${u}`, vehicleClass: 'bike', ownerName: 'Rider' }).expect(201)).body;
+    const moto = (await http().post('/v1/sbg/vehicles').set(staff).send({ plate: `DM-${u}`, vehicleClass: 'bike', energy: 'pedal', ownerName: 'Rider' }).expect(201)).body;
     await http().post(`/v1/sbg/fleet/drivers/${rider.did}/start-session`).set(staff).send({ vehicleId: moto.vehicleId }).expect(201);
     const mdps = app.get(MdpService);
     const hub = mdps.register({ name: `Decl Sort ${u}`, zones: [`DS${u}`], country: 'KE', location: { lat: -1.29, lng: 36.82 } }, { approvedBy: 'Test' });

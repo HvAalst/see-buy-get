@@ -52,7 +52,7 @@ describe('a driver signs up with their PIN, over the wire', () => {
   /** What the front page sends for a courier on a bike: the same profile the email door took. */
   const profile = (phone: string, u: string) => ({
     driver: { displayName: `Amos ${u}`, fullName: 'Amos Kiprono', nationalId: `DRV-${u}`, mobile: phone, licenceClasses: ['bike'], jurisdiction: 'KE', homeZone: 'Z-A' },
-    vehicle: { plate: `BK ${u}`, vehicleClass: 'bike' },
+    vehicle: { plate: `BK ${u}`, vehicleClass: 'bike', energy: 'pedal' },
   });
 
   it('a motorcycle rider sends their ID and licence with the sign-up — their own photographs, or nothing is made', async () => {
@@ -66,7 +66,7 @@ describe('a driver signs up with their PIN, over the wire', () => {
     const moto = (kyc?: Record<string, string>) => ({
       ...(kyc ? { kyc } : {}),
       driver: { displayName: `Juma ${u}`, fullName: 'Juma Boda', nationalId: `DRV-M-${u}`, mobile: juma.phone, licenceClasses: ['motorcycle'], licenceNumber: `DL-${u}`, licenceExpiresAt: '2031-06-30', jurisdiction: 'KE', homeZone: 'Z-A' },
-      vehicle: { plate: `KMC ${u}`, vehicleClass: 'motorcycle' },
+      vehicle: { plate: `KMC ${u}`, vehicleClass: 'motorcycle', energy: 'petrol' },
     });
     const signUp = (body: Record<string, unknown>) => http().post('/v1/sbg/drivers/signups').set(juma.auth).send({ phone: juma.phone, profile: body });
 
@@ -107,7 +107,7 @@ describe('a driver signs up with their PIN, over the wire', () => {
     expect(welcome.map((m) => m.text).join(' ')).toContain('the PIN you chose when you signed up');
 
     // The same details again are refused by name — the answer the "already registered" note is built on.
-    const again = await signUp(other.auth, { phone: other.phone, profile: { ...profile(other.phone, u), vehicle: { plate: `BK ${u}x`, vehicleClass: 'bike' } } });
+    const again = await signUp(other.auth, { phone: other.phone, profile: { ...profile(other.phone, u), vehicle: { plate: `BK ${u}x`, vehicleClass: 'bike', energy: 'pedal' } } });
     expect(again.body).toMatchObject({ code: 'DUPLICATE', params: { field: 'nationalId' } });
   });
 
@@ -120,7 +120,7 @@ describe('a driver signs up with their PIN, over the wire', () => {
     const u = digits();
     await http().post('/v1/sbg/drivers/signups').set(taken.auth).send({ phone: taken.phone, profile: profile(taken.phone, u) }).expect(201);
     const prober = await aPerson();
-    const probe = () => http().post('/v1/sbg/drivers/signups').set(prober.auth).send({ phone: prober.phone, profile: { ...profile(prober.phone, u), vehicle: { plate: `BK ${digits()}`, vehicleClass: 'bike' } } });
+    const probe = () => http().post('/v1/sbg/drivers/signups').set(prober.auth).send({ phone: prober.phone, profile: { ...profile(prober.phone, u), vehicle: { plate: `BK ${digits()}`, vehicleClass: 'bike', energy: 'pedal' } } });
     for (let i = 0; i < MAX_DRIVER_REFUSALS_PER_DAY; i++) expect((await probe()).body.code).toBe('DUPLICATE');
     expect((await probe()).body.code).toBe('RATE_LIMITED');
   });

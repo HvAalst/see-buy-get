@@ -63,6 +63,8 @@ export interface VehicleRow {
   plate: string;
   vehicleClass: VehicleClass;
   truckSubtype?: string;
+  /** 2026-11-03 — what it runs on; absent where it was registered before it was asked. */
+  energy?: string;
   capacityKg: number;
   pricePerKm: number;
   verified: boolean;

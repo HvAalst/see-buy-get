@@ -56,6 +56,7 @@ export function createFleetApi(sbg: SbgClient) {
       ownerType: string;
       managerDid: string;
       truckSubtype?: string;
+      energy?: string; // 2026-11-03 — what it runs on
       capacityKg?: number;
       pricePerKm?: number;
       baseFee?: number; // S34 — freight flag-down fee (defaults per class)
@@ -68,6 +69,10 @@ export function createFleetApi(sbg: SbgClient) {
       // Cast: the generated body narrows vehicleClass/truckSubtype to closed unions the
       // form feeds as validated strings; the backend re-validates (S5a contract quirk).
     }) => sbg.request((c) => c.POST('/v1/sbg/vehicles', { body: body as never })),
+
+    /** 2026-11-03 — say what a vehicle runs on: one registered before it was asked, or a correction. */
+    setVehicleEnergy: (vehicleId: string, energy: string) =>
+      sbg.request((c) => c.POST('/v1/sbg/vehicles/{id}/energy', { params: { path: { id: vehicleId } }, body: { energy: energy as never } })),
 
     /** Set a vehicle's public per-km rate (open data). */
     setVehiclePrice: (vehicleId: string, price: number) =>

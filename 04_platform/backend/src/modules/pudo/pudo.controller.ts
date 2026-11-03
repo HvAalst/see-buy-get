@@ -5671,6 +5671,7 @@ export class SbgController {
     // independent courier's). It took any valid token and the typed fleet: any account could add vehicles to any fleet.
     const managerDid = actor?.role === 'operator' ? dto.managerDid : actingTenant(actor);
     if (actor?.role !== 'operator' && !managerDid) throw new GlosError('FORBIDDEN', 'A vehicle is registered by its fleet’s office');
+    this.vehicles.askEnergy(dto.vehicleClass, dto.energy);
     return this.vehicles.register({ ...dto, managerDid } as never);
   }
 
@@ -5905,7 +5906,7 @@ export class SbgController {
   @Post('drivers/:did/ride-alone')
   rideAlone(@Param('did') did: string, @Body() dto: RideAloneDto, @Actor() actor: IntrospectionResult) {
     this.assertDriverSelf(did, actor, 'Only the driver can choose to ride for themselves, from their own sign-in');
-    const { driver, vehicle, companyName, asked } = this.mover().rideAlone(did, { country: dto.country, vehicleClass: dto.vehicleClass as never, plate: dto.plate, truckSubtype: dto.truckSubtype as never, idCopyRef: dto.idCopyRef, licenceCopyRef: dto.licenceCopyRef });
+    const { driver, vehicle, companyName, asked } = this.mover().rideAlone(did, { country: dto.country, vehicleClass: dto.vehicleClass as never, plate: dto.plate, truckSubtype: dto.truckSubtype as never, energy: dto.energy, idCopyRef: dto.idCopyRef, licenceCopyRef: dto.licenceCopyRef });
     // An ask, waiting for staff: what was asked, and nothing else about them has changed.
     if (asked) return { did, asked: { country: asked.country, vehicleClass: asked.vehicleClass, plate: asked.plate, askedAt: asked.askedAt }, ...(companyName ? { companyName } : {}) };
     // No new sign-in: the one they hold already names no fleet, and nothing about who they are has changed.
