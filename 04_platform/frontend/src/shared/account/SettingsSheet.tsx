@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, CodeBoxes, ErrorNote, Icon, Note, RefusalNote, Sheet, PhoneField } from '../ui';
+import { Button, CodeBoxes, ErrorNote, Icon, LanguageSwitcher, Note, RefusalNote, Sheet, PhoneField } from '../ui';
 import type { IconName } from '../ui/Icon';
 import { useT } from '../i18n';
 import type { SbgError } from '../../lib/sbg';
@@ -157,6 +157,8 @@ export function SettingsSheet({ open, onClose, api, onSignOut, onChangePassword,
           ) : null}
           {/* A live fact about the account, said for as long as it is true — never something to dismiss. */}
           {me?.hasPin && recoveryEmailSays(me, t as never).bounced ? <Note tone="warn" icon="warning" title={t('account.settings.emailBounced.title')} detail={t('account.settings.emailBounced.detail', { email: me.email ?? '' })} /> : null}
+          {/* 2026-11-03 — the app's language, in every app's Settings: English and the languages written in. */}
+          <LanguageSwitcher />
           <div class="rows" role="list">
             {me?.hasPin ? (
               <Row icon="keypad" label={t('account.menu.pin')} sub={me.pinChangedAt ? undefined : t('account.menu.pinSub')} onClick={() => setView('pin')}>

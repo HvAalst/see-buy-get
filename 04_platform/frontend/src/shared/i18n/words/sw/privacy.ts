@@ -1,0 +1,28 @@
+// Kiswahili — version 1, written in for en.privacy.ts (2026-11-03). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "pages.notice.write": "Tuandikie kuhusu data yako",
+  "pages.notice.version": "Toleo la {number}, lilichapishwa {date}",
+  "pages.notice.changed": "Kilichobadilika katika toleo hili: {note}",
+  "pages.notice.earlier": "Matoleo ya awali",
+  "pages.notice.earlierNone": "Hili ndilo toleo la kwanza.",
+  "pages.notice.readVersion": "Soma toleo la {number}",
+  "pages.notice.reading": "Unasoma toleo la {number}, la {date}. Si toleo la sasa tena.",
+  "pages.notice.current": "Soma toleo la sasa",
+  "pages.notice.loading": "Inapakia…",
+  "pages.notice.unavailable": "Ukurasa huu haukuweza kupakiwa sasa hivi. Unahitaji mtandao: jaribu tena baada ya muda mfupi.",
+  "pages.notice.countriesTitle": "Kile ambacho nchi inaongeza",
+  "pages.notice.countriesLede": "Pale ambapo sheria ya nchi inadai zaidi, nchi hiyo ina maandishi yake yenyewe pia. Huko, yote mawili yanatumika.",
+  "pages.notice.forCountry": "Kile ambacho {country} inaongeza kwenye maandishi ya jumla. Nchini {country}, yote mawili yanatumika.",
+  "pages.notice.general": "Soma maandishi ya jumla",
+  "pages.notice.noneForCountry": "{country} haina maandishi yake yenyewe hapa: maandishi ya jumla yanatumika huko, kama kila mahali.",
+  "pages.terms.metaTitle": "Masharti ya matumizi — SeeBuyGet",
+  "pages.terms.metaDescription": "Makubaliano kati yako na SeeBuyGet: unakubaliana na nani, akaunti yako, kile ambacho SeeBuyGet hufanya na haifanyi, na jinsi masharti haya yanavyobadilika.",
+  "pages.terms.title": "Masharti ya matumizi",
+  "pages.privacy.metaTitle": "Data yako katika SeeBuyGet — kinachohifadhiwa, nani anakiona, kwa muda gani",
+  "pages.privacy.metaDescription": "Kile ambacho SeeBuyGet huhifadhi ili kubeba kifurushi, jinsi kinavyolindwa, nani anaweza kukiona, kampuni zipi nyingine zinakishughulikia, kinahifadhiwa kwa muda gani na unachoweza kufanya.",
+  "pages.privacy.title": "Data yako katika SeeBuyGet",
+  "pages.cookies.metaTitle": "Vidakuzi katika SeeBuyGet — hakuna kinachowekwa, na kinachohifadhiwa kwenye simu yako",
+  "pages.cookies.metaDescription": "SeeBuyGet haiweki vidakuzi vyovyote na haifanyi ufuatiliaji wowote. Badala yake, kile ambacho programu zake huhifadhi kwenye kivinjari chako, kwa nini, kinachobaki baada ya kutoka, na jinsi ya kukiondoa.",
+  "pages.cookies.title": "Vidakuzi",
+};

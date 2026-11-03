@@ -1,0 +1,25 @@
+// Kiswahili — version 1, written in for en.site-hours.ts (2026-11-03). Fetched only when the language is chosen
+// (shared/i18n/index.ts); a country's own review is laid over it, and this stays as written. Generated: edit the review, not this.
+export const words: Record<string, string> = {
+  "fleet.sites.opens": "Hufungua",
+  "fleet.sites.closes": "Hufunga",
+  "fleet.sites.dayName.mon": "Jumatatu",
+  "fleet.sites.dayName.tue": "Jumanne",
+  "fleet.sites.dayName.wed": "Jumatano",
+  "fleet.sites.dayName.thu": "Alhamisi",
+  "fleet.sites.dayName.fri": "Ijumaa",
+  "fleet.sites.dayName.sat": "Jumamosi",
+  "fleet.sites.dayName.sun": "Jumapili",
+  "fleet.sites.day.mon": "Jtt",
+  "fleet.sites.day.tue": "Jnn",
+  "fleet.sites.day.wed": "Jtn",
+  "fleet.sites.day.thu": "Alh",
+  "fleet.sites.day.fri": "Ijm",
+  "fleet.sites.day.sat": "Jms",
+  "fleet.sites.day.sun": "Jpl",
+  "fleet.sites.dayRun": "{from}–{to}",
+  "fleet.sites.openRun": "{days} {hours}",
+  "fleet.sites.closedRun": "{days} imefungwa",
+  "fleet.sites.baysCount": "{n, plural, one {sehemu # ya kupakia} other {sehemu # za kupakia}}",
+  "fleet.sites.loadsLine": "Upakiaji: {what}",
+};

@@ -1,4 +1,4 @@
-import { addEnglish, helpWordsAlso } from '../../shared/i18n';
+import { addEnglish, helpWordsAlso, wordsOf, helpWordsOf } from '../../shared/i18n';
 import { enMdp } from '../../shared/i18n/catalogs/en.mdp';
 import { enAbbr } from '../../shared/i18n/catalogs/en.abbr';
 import { enCounter } from '../../shared/i18n/catalogs/en.counter';
@@ -13,3 +13,7 @@ import { enSiteHours } from '../../shared/i18n/catalogs/en.site-hours';
  */
 addEnglish({ ...enMdp, ...enCounter, ...enSiteHours, ...enAbbr });
 helpWordsAlso(() => import('../../shared/i18n/catalogs/en.help-app').then((m) => m.enHelpApp));
+
+// 2026-11-03 — the same catalogues in the other languages, fetched only when one is chosen (shared/i18n/index.ts).
+wordsOf('mdp', 'abbr', 'counter', 'site-hours');
+helpWordsOf('help-app');

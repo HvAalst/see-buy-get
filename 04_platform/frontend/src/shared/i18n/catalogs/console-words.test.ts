@@ -26,7 +26,7 @@ function sources(dir: string): string[] {
 describe('the console’s words', () => {
   it('every tower.* word another app uses is in the catalog every app carries', () => {
     const slash = (p: string) => p.replace(/\\/g, '/');
-    const outside = sources(SRC).filter((f) => !slash(f).includes('src/apps/tower/') && !slash(f).includes('shared/i18n/catalogs/'));
+    const outside = sources(SRC).filter((f) => !slash(f).includes('src/apps/tower/') && !slash(f).includes('shared/i18n/catalogs/') && !slash(f).includes('shared/i18n/words/'));
     expect(outside.length).toBeGreaterThan(50);
     const used = new Map<string, string>();
     for (const f of outside) for (const m of readFileSync(f, 'utf8').matchAll(/['"`](tower\.[A-Za-z0-9_.]+)['"`]/g)) used.set(m[1], slash(f));

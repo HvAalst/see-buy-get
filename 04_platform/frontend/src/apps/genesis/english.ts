@@ -1,4 +1,4 @@
-import { addEnglish, helpWordsAlso } from '../../shared/i18n';
+import { addEnglish, helpWordsAlso, wordsOf, helpWordsOf } from '../../shared/i18n';
 import { enSend } from '../../shared/i18n/catalogs/en.send';
 import { enAbbr } from '../../shared/i18n/catalogs/en.abbr';
 
@@ -9,3 +9,7 @@ import { enAbbr } from '../../shared/i18n/catalogs/en.abbr';
  */
 addEnglish({ ...enSend, ...enAbbr });
 helpWordsAlso(() => import('../../shared/i18n/catalogs/en.help-app').then((m) => m.enHelpApp));
+
+// 2026-11-03 — the same catalogues in the other languages, fetched only when one is chosen (shared/i18n/index.ts).
+wordsOf('send', 'abbr');
+helpWordsOf('help-app');

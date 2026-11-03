@@ -1,4 +1,4 @@
-import { addEnglish, helpWordsAlso } from '../../shared/i18n';
+import { addEnglish, helpWordsAlso, wordsOf, helpWordsOf } from '../../shared/i18n';
 import { enBusiness } from '../../shared/i18n/catalogs/en.business';
 import { enAbbr } from '../../shared/i18n/catalogs/en.abbr';
 import { enGoods } from '../../shared/i18n/catalogs/en.goods';
@@ -18,3 +18,7 @@ import { enDirectoryCard } from '../../shared/i18n/catalogs/en.directory-card';
  */
 addEnglish({ ...enBusiness, ...enGoods, ...enSiteHours, ...enSpecialisms, ...enTowerBusiness, ...enAbbr, ...enRefusal, ...enDirectoryCard });
 helpWordsAlso(() => import('../../shared/i18n/catalogs/en.help-app').then((m) => m.enHelpApp));
+
+// 2026-11-03 — the same catalogues in the other languages, fetched only when one is chosen (shared/i18n/index.ts).
+wordsOf('business', 'abbr', 'goods', 'site-hours', 'specialisms', 'tower-business', 'refusal', 'directory-card');
+helpWordsOf('help-app');
