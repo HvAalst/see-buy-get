@@ -20,6 +20,7 @@ export const StoreScreen = screen(() => import('./screens/StoreScreen').then((m)
 export const ProfileScreen = screen(() => import('./screens/ProfileScreen').then((m) => m.ProfileScreen));
 export const AgentsScreen = screen(() => import('./screens/AgentsScreen').then((m) => m.AgentsScreen));
 export const SignInScreen = screen(() => import('./screens/SignInScreen').then((m) => m.SignInScreen));
+export const YesItIsMeScreen = screen(() => import('./screens/YesItIsMeScreen').then((m) => m.YesItIsMeScreen));
 export const NoteCheck = screen(() => import('../../shared/archive/NoteCheck').then((m) => m.NoteCheck));
 export const DocumentLinkPage = screen(() => import('../../shared/archive/DocumentLinkPage').then((m) => m.DocumentLinkPage));
 export const DamageReportLinkPage = screen(() => import('../../shared/damage/DamageReportLinkPage').then((m) => m.DamageReportLinkPage));

@@ -10,7 +10,7 @@ import { PublicShell } from './screens/PublicShell';
 import { welcomeSpoken } from './logic';
 import { lookAtDocumentLink, lookAtReportLink, takeDocumentLink, takeReportLink, verifyNote } from './api';
 // Not in the homepage's first download: each is fetched when it is opened (lazyScreens.ts).
-import { AgentsScreen, DamageReportLinkPage, DocumentLinkPage, JoinScreen, MarketScreen, NoteCheck, ProfileScreen, RolesScreen, SignInScreen, StoreScreen, directoryScreen, helpScreen, loadDirectoryPage, loadHelpPage } from './lazyScreens';
+import { AgentsScreen, DamageReportLinkPage, DocumentLinkPage, JoinScreen, MarketScreen, NoteCheck, ProfileScreen, RolesScreen, SignInScreen, StoreScreen, YesItIsMeScreen, directoryScreen, helpScreen, loadDirectoryPage, loadHelpPage } from './lazyScreens';
 import { roleMeta } from './logic';
 import { useHomeApp } from './useHomeApp';
 import '../../shared/screens.css';
@@ -131,6 +131,7 @@ export function App() {
           <DocumentLinkPage linkKey={state.docKey} look={lookAtDocumentLink} take={takeDocumentLink} onVerify={() => actions.go('verify')} />
         ) : null}
         {state.screen === 'report' && state.reportKey !== undefined ? <DamageReportLinkPage linkKey={state.reportKey} look={lookAtReportLink} take={takeReportLink} /> : null}
+        {state.screen === 'link' && state.linkToken !== undefined ? <YesItIsMeScreen token={state.linkToken} /> : null}
         {state.screen === 'town' && state.townSlug ? <TownScreen slug={state.townSlug} /> : null}
         {state.screen === 'info' && state.infoPage ? <InfoScreen page={state.infoPage} /> : null}
         </Suspense>

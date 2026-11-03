@@ -8419,6 +8419,29 @@
         }
       }
     },
+    "/v1/sbg/auth/link/confirm": {
+      "post": {
+        "operationId": "Sbg.confirmLink",
+        "summary": "",
+        "description": "2026-11-03 — \"YES, IT IS ME\" (the owner: \"a confirmation mail will ask the user to click the 'yes it is me' button\"): the\nbutton in the email links a second kind of account to the address it shares — its shop to its store — and it signs in.\nPublic: the email is the proof; the token is long, random and once.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmLinkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/unlock/options": {
       "post": {
         "operationId": "Sbg.accountUnlockOptions",
@@ -48859,6 +48882,16 @@
       "LoginDto": {
         "type": "object",
         "properties": {
+          "role": {
+            "type": "string",
+            "description": "2026-11-03 — the kind of account the app signs in to, where one email signs in to several (its shop, its hub, its store).",
+            "enum": [
+              "pudo",
+              "mdp",
+              "vendor",
+              "driver"
+            ]
+          },
           "email": {
             "type": "string"
           },
@@ -48878,6 +48911,18 @@
         },
         "required": [
           "email"
+        ]
+      },
+      "ConfirmLinkDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "token"
         ]
       },
       "AccountUnlockOptionsDto": {
@@ -48954,6 +48999,16 @@
       "ForgotDto": {
         "type": "object",
         "properties": {
+          "role": {
+            "type": "string",
+            "description": "2026-11-03 — of the kind the app is for, where one email signs in to several.",
+            "enum": [
+              "pudo",
+              "mdp",
+              "vendor",
+              "driver"
+            ]
+          },
           "email": {
             "type": "string"
           }
@@ -48980,6 +49035,16 @@
       "ChangePasswordDto": {
         "type": "object",
         "properties": {
+          "role": {
+            "type": "string",
+            "description": "2026-11-03 — of the kind the app is for, where one email signs in to several.",
+            "enum": [
+              "pudo",
+              "mdp",
+              "vendor",
+              "driver"
+            ]
+          },
           "email": {
             "type": "string",
             "maxLength": 120

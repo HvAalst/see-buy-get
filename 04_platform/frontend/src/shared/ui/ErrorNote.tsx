@@ -115,7 +115,7 @@ const OVERRIDE: Record<string, string> = {
  */
 // NEW_LABEL (2026-10-27): which new label goes over the old one is the server's to say — a parcel called off at a hub.
 // SET_ASIDE: which load's driver the box waits for, and where — a store's parcel called off at a hub, going to its door.
-const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED', 'PARCEL_LOST', 'COUNTRY_NOT_OPEN', 'AGREEMENT_REQUIRED', 'NEW_LABEL', 'SET_ASIDE']);
+const SERVER_SAYS = new Set<string>(['PASSWORD_LOCKED', 'LINK_PENDING', 'LINK_EXPIRED','PARCEL_LOST', 'COUNTRY_NOT_OPEN', 'AGREEMENT_REQUIRED', 'NEW_LABEL', 'SET_ASIDE']);
 
 export function errorSentence(error: SbgError): string {
   // A FILE refused for its size or its kind: said with the size and the most where the server gave them (2026-11-02).

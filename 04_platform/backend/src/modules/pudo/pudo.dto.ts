@@ -2129,6 +2129,8 @@ export class ChangePasswordDto {
   @IsString() @MaxLength(200) newPassword!: string;
   /** A shop changes its password only from a phone or browser it confirmed: this one's key. */
   @IsOptional() @IsString() @MaxLength(80) device?: string;
+  /** 2026-11-03 — of the kind the app is for, where one email signs in to several. */
+  @IsOptional() @IsIn(['pudo', 'mdp', 'vendor', 'driver']) @ApiPropertyOptional({ enum: ['pudo', 'mdp', 'vendor', 'driver'] }) role?: 'pudo' | 'mdp' | 'vendor' | 'driver';
 }
 
 /** Change your own PIN, proven with the current one. */
@@ -2157,6 +2159,13 @@ export class LoginDto {
   @IsOptional() @IsString() @MaxLength(80) unlock?: string;
   /** The key this phone or browser was given when it was confirmed — a shop's sign-in works only on those. */
   @IsOptional() @IsString() @MaxLength(80) device?: string;
+  /** 2026-11-03 — the kind of account the app signs in to, where one email signs in to several (its shop, its hub, its store). */
+  @IsOptional() @IsIn(['pudo', 'mdp', 'vendor', 'driver']) @ApiPropertyOptional({ enum: ['pudo', 'mdp', 'vendor', 'driver'] }) role?: 'pudo' | 'mdp' | 'vendor' | 'driver';
+}
+
+/** 2026-11-03 — the button in a "Yes, it is me" email (AccountService.confirmLink). */
+export class ConfirmLinkDto {
+  @IsString() @MaxLength(80) @ApiProperty() token!: string;
 }
 
 /** The code texted to the shop's number, typed on the phone or browser asking to be confirmed. */
@@ -2184,6 +2193,8 @@ export class ShopForgetOthersDto {
 
 export class ForgotDto {
   @IsString() email!: string;
+  /** 2026-11-03 — of the kind the app is for, where one email signs in to several. */
+  @IsOptional() @IsIn(['pudo', 'mdp', 'vendor', 'driver']) @ApiPropertyOptional({ enum: ['pudo', 'mdp', 'vendor', 'driver'] }) role?: 'pudo' | 'mdp' | 'vendor' | 'driver';
 }
 
 export class ResetDto {

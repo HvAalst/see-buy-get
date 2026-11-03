@@ -243,7 +243,7 @@ describe('the people at a shop’s counter, over the wire', () => {
         // 2026-10-29 — a business’s parcel on the shelf for its own door: handed to its last leg’s driver by their pass
         'GET sbg/agents/:did/door-handovers', 'POST sbg/agents/:did/door-handovers/:parcelId',
         // photographs, a parcel's damage report, a word with the receiver, the shop's inbox
-        'POST sbg/media//', 'GET sbg/media/:id',
+        'POST sbg/media//', 'POST sbg/media/paper', 'GET sbg/media/:id',
         'GET sbg/parcels/:id/damage-report', 'GET sbg/parcels/:id/damage-report/file', 'GET sbg/parcels/:id/damage-report/links', 'POST sbg/parcels/:id/damage-report/links',
         'POST sbg/parcels/:id/damage-report/links/:linkId/cancel', 'POST sbg/parcels/:id/damage-report/notes',
         'GET sbg/conversations//', 'POST sbg/conversations//', 'GET sbg/conversations/:id/messages', 'POST sbg/conversations/:id/messages', 'GET sbg/conversations/:id/voice/:voiceId',

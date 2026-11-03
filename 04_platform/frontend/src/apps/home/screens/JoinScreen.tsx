@@ -1172,6 +1172,10 @@ function DoneStep({ state, actions }: JoinScreenProps) {
     <>
       <h1 class="scr__title">{t('home.join.done.title')}</h1>
       <p class="scr__lede">{role.id === 'vendor' ? t('home.join.done.ledeVendor', { email: store?.email ?? state.form.email }) : t('home.join.done.ledeWelcome', { name: state.form.displayName })}</p>
+      {/* 2026-11-03 — the address signs in to another kind of account already: it signs in here once its owner said yes. */}
+      {acc?.linkPending || store?.linkPending ? (
+        <Note tone="info" icon="mail" title={t('home.join.done.linkTitle')} detail={t('home.join.done.linkSays', { email: acc?.email ?? store?.email ?? state.form.email, app: roleMeta(role, t).appNoun })} />
+      ) : null}
 
       {store ? (
         <>

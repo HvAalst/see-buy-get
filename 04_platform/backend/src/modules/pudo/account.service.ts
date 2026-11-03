@@ -1,4 +1,4 @@
-import type { MailApp } from '../../foundation/mail/mail.templates';
+import { appUrl, type MailApp } from '../../foundation/mail/mail.templates';
 import { standInCode } from '../../foundation/runtime/standin-code';
 import { MailService } from '../../foundation/mail/mail.service';
 import { Injectable, Logger, OnApplicationBootstrap, Optional } from '@nestjs/common';
@@ -51,9 +51,27 @@ interface Account {
   resetExpires?: number;
   /** When the password was last changed by its holder — for "change it regularly", and for review. */
   passwordChangedAt?: string;
+  /**
+   * 2026-11-03 — A SECOND KIND OF ACCOUNT UNDER ONE EMAIL (the owner: a shop "with the same email as my business account" …
+   * "the email would then be linked … a confirmation mail will ask the user to click the 'yes it is me' button"). The first
+   * account an email signs in to is kept under the address; another kind under the same one is kept beside it
+   * (`address#role`, storeKeyOf) and signs in only once its owner clicked "Yes, it is me" in the email it was sent.
+   */
+  alias?: true;
+  linkPending?: { token: string; askedAt: string; name?: string };
+  linkedAt?: string;
+}
+
+/** Where an account is kept: the address, or — a second kind under the same address — the address and its kind. */
+function storeKeyOf(account: Pick<Account, 'email' | 'role' | 'alias'>): string {
+  return account.alias ? `${account.email}#${account.role}` : account.email;
 }
 
 const RESET_TTL_MS = 30 * 60 * 1000;
+/** A week to click "Yes, it is me". */
+const LINK_TTL_MS = 7 * 24 * 3_600_000;
+/** Signing in before the click sends the email again, at most once an hour: a lost or late email is not a dead end. */
+const LINK_RESEND_MS = 3_600_000;
 
 /**
  * THE ACCOUNTS WHOSE SIGN-IN WORKS ONLY ON A PHONE OR BROWSER THEY CONFIRMED (the user, 2026-10-18: "who is at the
@@ -111,7 +129,7 @@ export class AccountService implements OnApplicationBootstrap {
    */
   private readonly unlocks = new UnlockTickets();
   /** A code texted for a browser asking to be confirmed: ten minutes, five tries. In memory, like every code here. */
-  private readonly deviceCodes = new Map<string, { email: string; code: string; sentAt: number; expires: number; attempts: number; needsPhone?: boolean; phone?: string }>();
+  private readonly deviceCodes = new Map<string, { email: string; key?: string; code: string; sentAt: number; expires: number; attempts: number; needsPhone?: boolean; phone?: string }>();
 
   constructor(
     private readonly agents: AgentService,
@@ -204,7 +222,7 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** Create a participant account + its domain entity from the sign-up wizard. Requires a verified phone. */
-  signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken; device?: string } {
+  signup(input: { role: AccountRole; email: string; password: string; phone: string; profile: Record<string, unknown> }): { accountId: string; role: AccountRole; did: string; email: string; entityStatus?: string; token: AccessToken; device?: string; linkPending?: boolean } {
     const email = (input.email || '').trim().toLowerCase();
     if (!email.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
     assertPassword(input.password, [email, welcomeName(input.role, input.profile)]);
@@ -216,9 +234,12 @@ export class AccountService implements OnApplicationBootstrap {
      * and that makes it an answer about somebody else's ID too. So a verification allows a few, and then the
      * next attempt has to verify the phone again: one verified phone cannot walk through every ID there is.
      */
-    if (this.accounts.has(email)) {
+    let second: boolean;
+    try {
+      second = this.secondKind(email, input.role);
+    } catch (err) {
       this.otp.noteRefusal(input.phone);
-      throw new GlosError('DUPLICATE', 'An account with this email already exists', { field: 'email', register: 'account' });
+      throw err;
     }
 
     let provisioned: { did: string; entityStatus?: string; tenant?: string };
@@ -234,14 +255,15 @@ export class AccountService implements OnApplicationBootstrap {
     this.persons.tryAttachRole(input.phone, ACCOUNT_TO_PERSON_ROLE[input.role], did, tenant);
     this.otp.consume(input.phone); // one verification → one account
     const salt = randomBytes(16).toString('hex');
-    const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, tenant, phoneHash: hashPhone(input.phone), createdAt: new Date().toISOString() };
+    const account: Account = { accountId: `acc_${randomBytes(8).toString('hex')}`, email, role: input.role, salt, hash: this.hash(input.password, salt), did, tenant, phoneHash: hashPhone(input.phone), createdAt: new Date().toISOString(), ...(second ? { alias: true as const } : {}) };
+    if (second) this.askYesItIsMe(account, welcomeName(input.role, input.profile));
     // Round 40 — a hub's codes go to the number it verified here: its DID carries its name, not a number.
     if (this.isBound(account)) this.keepCodePhone(account, input.phone);
-    this.accounts.set(email, account);
-    void this.mail?.send('welcome', { address: email }, { name: welcomeName(input.role, input.profile), email, role: WELCOME_ROLE[input.role] });
+    this.accounts.set(storeKeyOf(account), account);
+    if (!second) void this.mail?.send('welcome', { address: email }, { name: welcomeName(input.role, input.profile), email, role: WELCOME_ROLE[input.role] });
     // The phone that signs up is the first one the account works on: the number was proven by a code on it moments ago.
     const device = this.isBound(account) ? this.devices.add(account.accountId) : undefined;
-    return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account), ...(device ? { device } : {}) };
+    return { accountId: account.accountId, role: account.role, did, email, entityStatus, token: this.mint(account), ...(device ? { device } : {}), ...(second ? { linkPending: true } : {}) };
   }
 
   /**
@@ -296,7 +318,7 @@ export class AccountService implements OnApplicationBootstrap {
     for (const account of this.accounts.values()) {
       if (account.phoneHash !== fromHash) continue;
       account.phoneHash = toHash;
-      this.accounts.set(account.email, account);
+      this.accounts.set(storeKeyOf(account), account);
     }
   }
 
@@ -304,7 +326,7 @@ export class AccountService implements OnApplicationBootstrap {
     for (const account of this.accounts.values()) {
       if (account.did !== did || account.tenant === tenant) continue;
       account.tenant = tenant;
-      this.accounts.set(account.email, account);
+      this.accounts.set(storeKeyOf(account), account);
     }
   }
 
@@ -324,14 +346,30 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** Verify credentials → an actor-scoped token (S2). Replaces the old ?<role>=<did> URL "session". */
-  async login(email: string, password: string | undefined, device?: string, now: number = Date.now(), unlock?: string): Promise<AccountSignIn> {
+  async login(email: string, password: string | undefined, device?: string, now: number = Date.now(), unlock?: string, role?: AccountRole): Promise<AccountSignIn> {
     // The password — or, 2026-11-02, the ticket a fingerprint or face on this phone was just checked for, in its place.
-    const account = this.passwordRight(email, password, { unlock, device });
+    // 2026-11-03 — of the kind the app is for, where one address signs in to several (its shop, its hub, its store).
+    const account = this.passwordRight(email, password, { unlock, device, role });
+    this.refuseUntilLinked(account, now);
     // A store signs in at its own door (storeLogin): one answer there for every account that is not a store's, and here the same.
     // The password was right, and is not enough on a phone or browser this shop never confirmed: a code goes to its number.
     if (this.isBound(account) && !this.devices.knows(account.accountId, device, now)) throw await this.deviceUnknown(account, now);
     if (device) this.devices.used(account.accountId, device, now);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account) };
+  }
+
+  /**
+   * A SECOND KIND UNDER AN ADDRESS, NOT YET CLICKED "Yes, it is me": refused, after the right password, with the email sent
+   * again if the last one is an hour old (or past its week) — a lost or late email is not a dead end.
+   */
+  private refuseUntilLinked(account: Account, now: number): void {
+    if (!account.linkPending) return;
+    const again = now - Date.parse(account.linkPending.askedAt) > LINK_RESEND_MS;
+    if (again) {
+      this.askYesItIsMe(account, account.linkPending.name ?? '', now);
+      this.accounts.set(storeKeyOf(account), account);
+    }
+    throw new GlosError('LINK_PENDING', `This email signs in to another SeeBuyGet account too. Click “Yes, it is me” in the email ${again ? 'we have just sent again' : 'we sent'} to ${account.email}, then sign in here.`, { email: account.email, sentAgain: again });
   }
 
   /**
@@ -350,7 +388,7 @@ export class AccountService implements OnApplicationBootstrap {
     const key = (email || '').trim().toLowerCase();
     // A locked sign-in answers nobody — asked before the password is looked at, so the right one learns nothing either.
     this.tries.check(key);
-    const account = this.accounts.get(key);
+    const account = this.find(key, opts.role);
     if (opts.unlock) {
       const grant = this.unlocks.take(opts.unlock);
       if (!account || !grant || !opts.device || grant.owner !== account.accountId || grant.address !== hashEmail(key) || grant.deviceHash !== deviceHashOf(opts.device) || (opts.role && account.role !== opts.role)) {
@@ -377,11 +415,19 @@ export class AccountService implements OnApplicationBootstrap {
     for (const account of [...this.accounts.values()]) {
       if (account.phoneHash !== phoneHash) continue;
       this.devices.forgetAll(account.accountId);
-      this.accounts.delete(account.email);
+      this.accounts.delete(storeKeyOf(account));
       this.auth.revokeAll(account.did);
       gone += 1;
     }
     return gone;
+  }
+
+  /** The account an address signs in to — of this kind, where a door is one kind's (2026-11-03: one address, several kinds). */
+  private find(email: string, role?: AccountRole): Account | undefined {
+    const key = (email || '').trim().toLowerCase();
+    const first = this.accounts.get(key);
+    if (!role || first?.role === role) return first;
+    return this.accounts.get(`${key}#${role}`);
   }
 
   private isBound(account: Account): boolean {
@@ -402,7 +448,7 @@ export class AccountService implements OnApplicationBootstrap {
        * the number it gives now is the one its codes go to from now on — proven by a code to it before anything is kept.
        */
       const challenge = `dp_${randomBytes(12).toString('hex')}`;
-      this.deviceCodes.set(challenge, { email: account.email, code: '', sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0, needsPhone: true });
+      this.deviceCodes.set(challenge, { email: account.email, key: storeKeyOf(account), code: '', sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0, needsPhone: true });
       return new GlosError('DEVICE_NOT_KNOWN', `This ${party} has no phone number yet. Give it one: a code goes to it now, and from then on a new phone or browser is confirmed by a code to that number.`, { challenge, needsPhone: true });
     }
     const ending = phone.replace(/\D/g, '').slice(-3);
@@ -417,7 +463,7 @@ export class AccountService implements OnApplicationBootstrap {
       if (!standIn && texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', `Codes are not texted to the ${party}’s number in that country.`);
       challenge = `dc_${randomBytes(12).toString('hex')}`;
       code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
-      this.deviceCodes.set(challenge, { email: account.email, code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
+      this.deviceCodes.set(challenge, { email: account.email, key: storeKeyOf(account), code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
       try {
         if (!standIn) await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
       } catch (err) {
@@ -475,12 +521,12 @@ export class AccountService implements OnApplicationBootstrap {
       throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     }
     this.deviceCodes.delete(challenge);
-    const account = this.accounts.get(asked.email);
+    const account = this.accounts.get(asked.key ?? asked.email);
     if (!account) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     // Round 40 — the number an account without one gave, proven by this code: its codes go there from now on.
     if (asked.needsPhone && asked.phone && !this.codePhoneOf(account)) {
       this.keepCodePhone(account, asked.phone);
-      this.accounts.set(account.email, account);
+      this.accounts.set(storeKeyOf(account), account);
     }
     const device = this.devices.add(account.accountId, now);
     return { accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), device };
@@ -559,12 +605,52 @@ export class AccountService implements OnApplicationBootstrap {
    * WHAT STOPS A STORE'S ACCOUNT BEING MADE — asked BEFORE the store itself is registered, so that an email somebody
    * already holds does not leave a store behind it with no way in.
    */
-  checkNewAccount(email: string | undefined, password: string | undefined, name?: string): string {
+  checkNewAccount(email: string | undefined, password: string | undefined, name?: string, role: AccountRole = 'vendor'): string {
     const address = (email || '').trim().toLowerCase();
     if (!address.includes('@')) throw new GlosError('EMAIL_INVALID', 'A valid email is required');
     assertPassword(password, [address, name]);
-    if (this.accounts.has(address)) throw new GlosError('DUPLICATE', 'An account with this email already exists', { field: 'email', register: 'account' });
+    this.secondKind(address, role);
     return address;
+  }
+
+  /**
+   * 2026-11-03 — WHETHER AN ADDRESS SIGNS IN TO ANOTHER KIND OF ACCOUNT ALREADY. Then this one is kept beside it, and signs in
+   * once its owner clicked "Yes, it is me" in the email (askYesItIsMe). The same kind twice is refused, saying which.
+   */
+  private secondKind(email: string, role: AccountRole): boolean {
+    const first = this.accounts.get(email);
+    if (first?.role === role || this.accounts.has(`${email}#${role}`)) {
+      throw new GlosError('DUPLICATE', `This email already signs in to a SeeBuyGet ${PARTY[role]}. Sign in to it, or use another email.`, { field: 'email', register: 'account', kind: PARTY[role] });
+    }
+    return Boolean(first);
+  }
+
+  /** The email that asks its owner "Is this you?": its button links this account to the one the address had already. */
+  private askYesItIsMe(account: Account, name: string, now: number = Date.now()): void {
+    const token = randomBytes(24).toString('base64url');
+    account.linkPending = { token, askedAt: new Date(now).toISOString(), ...(name ? { name } : {}) };
+    const first = this.accounts.get(account.email);
+    void this.mail?.send('yes-it-is-me', { address: account.email }, { email: account.email, name, kind: PARTY[account.role], other: first ? PARTY[first.role] : 'account', url: `${appUrl('home')}#link=${token}` });
+  }
+
+  /**
+   * The click on "Yes, it is me" (the front page, #link=…): the second kind under the address is its owner's, and signs in
+   * from now on. A week to click it; once used it is spent.
+   */
+  confirmLink(token: string, now: number = Date.now()): { email: string; kind: string; role: AccountRole } {
+    for (const account of this.accounts.values()) {
+      if (!account.linkPending || account.linkPending.token !== token) continue;
+      if (now - Date.parse(account.linkPending.askedAt) > LINK_TTL_MS) throw new GlosError('LINK_EXPIRED', 'This link is more than a week old. Sign in with the email and password you chose, and a new one is sent.');
+      const name = account.linkPending.name;
+      account.linkPending = undefined;
+      account.linkedAt = new Date(now).toISOString();
+      this.accounts.set(storeKeyOf(account), account);
+      // The click proved the address: email to it works, and the welcome held back at sign-up follows.
+      this.mail?.addressWorks(account.email);
+      void this.mail?.send('welcome', { address: account.email }, { name: name || account.email, email: account.email, role: WELCOME_ROLE[account.role as keyof typeof WELCOME_ROLE] ?? 'store' });
+      return { email: account.email, kind: PARTY[account.role], role: account.role };
+    }
+    throw new GlosError('NOT_FOUND', 'This link has been used already, or is not one of ours.');
   }
 
   /**
@@ -579,8 +665,9 @@ export class AccountService implements OnApplicationBootstrap {
    * No phone is asked for: a store is a business with an inbox. Where its operator gave their number, the account
    * carries it, and the same person is one person across the apps.
    */
-  setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string; phoneVerified?: boolean }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken; device?: string } {
+  setUpStore(input: { did: string; name: string; email: string; password: string; phone?: string; phoneVerified?: boolean }): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken; device?: string; linkPending?: boolean } {
     const email = this.checkNewAccount(input.email, input.password, input.name);
+    const second = Boolean(this.accounts.get(email));
     if (this.emailForDid(input.did)) throw new GlosError('CONFLICT', 'This store already has an account: sign in with its email and password');
     const salt = randomBytes(16).toString('hex');
     const account: Account = {
@@ -592,7 +679,9 @@ export class AccountService implements OnApplicationBootstrap {
       did: input.did,
       ...(input.phone?.trim() ? { phoneHash: hashPhone(input.phone) } : {}),
       createdAt: new Date().toISOString(),
+      ...(second ? { alias: true as const } : {}),
     };
+    if (second) this.askYesItIsMe(account, input.name);
     // Round 40 — a number verified at sign-up is where this store's codes go, and the phone or browser that signed up is its first.
     // `phoneVerified`: the caller read it before the store's person was made (pudo.controller registerVendor).
     const verified = Boolean(input.phone?.trim() && (input.phoneVerified ?? this.otp.isVerified(input.phone)));
@@ -600,10 +689,10 @@ export class AccountService implements OnApplicationBootstrap {
       this.keepCodePhone(account, input.phone!);
       this.otp.consume(input.phone!);
     }
-    this.accounts.set(email, account);
-    void this.mail?.send('welcome', { address: email }, { name: input.name, email, role: 'store' });
+    this.accounts.set(storeKeyOf(account), account);
+    if (!second) void this.mail?.send('welcome', { address: email }, { name: input.name, email, role: 'store' });
     const device = verified ? this.devices.add(account.accountId) : undefined;
-    return { accountId: account.accountId, role: account.role, did: account.did, email, token: this.mint(account), ...(device ? { device } : {}) };
+    return { accountId: account.accountId, role: account.role, did: account.did, email, token: this.mint(account), ...(device ? { device } : {}), ...(second ? { linkPending: true } : {}) };
   }
 
   /**
@@ -615,6 +704,7 @@ export class AccountService implements OnApplicationBootstrap {
     // as a wrong password does. It is the same count as the shops' own door — one address, one set of tries. And it is
     // the same check (2026-11-02): the password, or the ticket a fingerprint or face on this device unlocked.
     const account = this.passwordRight(email, password, { unlock, device, role: 'vendor' });
+    this.refuseUntilLinked(account, now);
     // Round 40 — the password was right, and is not enough on a phone or browser this store never confirmed.
     if (!this.devices.knows(account.accountId, device, now)) throw await this.deviceUnknown(account, now);
     if (device) this.devices.used(account.accountId, device, now);
@@ -643,12 +733,13 @@ export class AccountService implements OnApplicationBootstrap {
   }
 
   /** Issue a password-reset token (returned for the sandbox — would be emailed in production). */
-  forgot(email: string): { sent: boolean; resetToken?: string } {
-    const account = this.accounts.get((email || '').trim().toLowerCase());
+  forgot(email: string, role?: AccountRole): { sent: boolean; resetToken?: string } {
+    // 2026-11-03 — of the kind the app is for, where one address signs in to several.
+    const account = this.find(email, role);
     if (!account) return { sent: false }; // do not reveal which emails exist
     account.resetToken = newResetCode();
     account.resetExpires = Date.now() + RESET_TTL_MS;
-    this.accounts.set(account.email, account); // persist the reset token
+    this.accounts.set(storeKeyOf(account), account); // persist the reset token
     void this.mail?.send('password-reset', { address: account.email }, { email: account.email, code: account.resetToken!, minutes: RESET_TTL_MS / 60_000, app: ACCOUNT_APP[account.role] });
     return { sent: true, resetToken: account.resetToken };
   }
@@ -658,11 +749,11 @@ export class AccountService implements OnApplicationBootstrap {
    * counter is not proof that the person at it holds the account. Every other session is signed out, and the
    * device that made the change is handed a fresh sign-in.
    */
-  changePassword(email: string, current: string, next: string, device?: string): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
+  changePassword(email: string, current: string, next: string, device?: string, role?: AccountRole): { accountId: string; role: AccountRole; did: string; email: string; token: AccessToken } {
     const key = (email || '').trim().toLowerCase();
     // This route proves itself with the current password, so it is a place to guess it: the same count as the sign-in.
     this.tries.check(key);
-    const account = this.accounts.get(key);
+    const account = this.find(key, role);
     if (!account || !this.verify(current, account)) throw this.wrongPassword(key, account, current);
     this.tries.forget(key);
     // It hands back a sign-in, so for a bound account it is a door like any other: only on a phone the shop confirmed.
@@ -677,7 +768,7 @@ export class AccountService implements OnApplicationBootstrap {
     account.passwordChangedAt = new Date().toISOString();
     account.resetToken = undefined;
     account.resetExpires = undefined;
-    this.accounts.set(account.email, account);
+    this.accounts.set(storeKeyOf(account), account);
     this.auth.revokeAll(account.did);
     this.dropPasskeys(account);
     this.tellPasswordChanged(account);
@@ -696,7 +787,7 @@ export class AccountService implements OnApplicationBootstrap {
     account.resetToken = undefined;
     account.resetExpires = undefined;
     account.passwordChangedAt = new Date().toISOString();
-    this.accounts.set(account.email, account); // persist the new password hash
+    this.accounts.set(storeKeyOf(account), account); // persist the new password hash
     // Whoever had the old password — which is presumably why it was reset — is signed out everywhere, and no fingerprint
     // they may have turned on with it opens the account any more.
     this.auth.revokeAll(account.did);

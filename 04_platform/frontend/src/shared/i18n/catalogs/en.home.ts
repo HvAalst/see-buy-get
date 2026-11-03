@@ -648,6 +648,20 @@ export const enHome = {
   'home.join.done.shopPapersSent': 'Your papers are with SeeBuyGet staff: the shop opens once they have checked them, and you are told in the Shop app',
   'home.join.done.openApp': 'Open the {name} app',
   'home.join.done.restart': 'Back to the start',
+  // 2026-11-03 — one email, several kinds of account: the sign-up's last step, and the page the email's button opens.
+  'home.join.done.linkTitle': 'One more step: your email',
+  'home.join.done.linkSays': '{email} signs in to another SeeBuyGet account already. We sent it an email: tap “Yes, it is me” in it, then sign in to the {app} app.',
+  'home.link.title': 'Is this you?',
+  'home.link.lede': 'A SeeBuyGet account was just signed up with your email, which signs in to another SeeBuyGet account already. If it was you, say so: both then sign in with this email.',
+  'home.link.yes': 'Yes, it is me',
+  'home.link.notMe': 'Not you? Close this page. Without your tap, the new account does not sign in with your email.',
+  'home.link.doneTitle': 'Your email is linked',
+  'home.link.doneSays': 'Your {kind} signs in with {email} now.',
+  'home.link.doneNext': 'Sign in to its app with this email and the password you chose for it. Your other SeeBuyGet account stays as it is.',
+  'home.link.notOurs': 'This link has been used already, or is not one of ours',
+  'home.link.notOursNext': 'Used already? Then your email is linked: sign in to the app. Otherwise open the newest “Is this you?” email we sent you.',
+  'home.link.expired': 'This link is more than a week old',
+  'home.link.expiredNext': 'Sign in to the app with this email and the password you chose: a new “Is this you?” email is sent to you.',
 
   // Join wizard — invite-only branch (fleet).
 

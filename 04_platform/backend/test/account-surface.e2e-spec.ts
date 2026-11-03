@@ -107,7 +107,8 @@ describe('the account, reached from a role app', () => {
     const format = (await http().get('/v1/sbg/account/address-format/nl').set(as).expect(200)).body;
     expect(format).toMatchObject({ country: 'NL', postcodeExample: '1015 CJ' });
     expect(format.fields.map((x: { key: string }) => x.key)).toEqual(['street', 'number', 'addition', 'postcode', 'town']);
-    await http().get('/v1/sbg/account/address-format/nl').expect(401);
+    // 2026-11-03 — asked before an account exists too: a shop's sign-up asks its address the way its country writes it.
+    await http().get('/v1/sbg/account/address-format/nl').expect(200);
 
     const bad = await http().patch('/v1/sbg/account/profile').set(as).send({ addressParts: { country: 'NL', street: 'Keizersgracht', number: '123', postcode: '10155', town: 'Amsterdam' } }).expect(400);
     expect(bad.body).toMatchObject({ code: 'VALIDATION_FAILED', params: { field: 'postcode' } });

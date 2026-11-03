@@ -96,6 +96,19 @@ export interface SignupView {
   token?: { access_token: string; expires_in?: number };
   /** A shop's first phone: the key of the one it signed up on. */
   device?: string;
+  /** 2026-11-03 — the email signs in to another kind of SeeBuyGet account: its "Yes, it is me" email was sent. */
+  linkPending?: boolean;
+}
+
+/** 2026-11-03 — the tap on "Yes, it is me": the account that now signs in with the address, and of what kind. */
+export interface LinkConfirmed {
+  email: string;
+  kind: string;
+  role: 'pudo' | 'mdp' | 'vendor' | 'driver';
+}
+
+export function confirmEmailLink(token: string): Promise<Result<LinkConfirmed>> {
+  return publicRequest<LinkConfirmed>(homeConfig(), '/v1/sbg/auth/link/confirm', { body: { token } });
 }
 
 export function signup(body: Record<string, unknown>): Promise<Result<SignupView>> {
@@ -212,6 +225,8 @@ export interface VendorRegisteredView {
   email?: string;
   /** Round 40 — the browser it was made on is the store's first. */
   device?: string;
+  /** 2026-11-03 — the email signs in to a shop or a hub already: its "Yes, it is me" email was sent. */
+  linkPending?: boolean;
 }
 
 /** A store is registered WITH its account: the email and password its people sign in to the Store app with. */

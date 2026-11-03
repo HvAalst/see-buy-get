@@ -234,11 +234,21 @@ export interface LoginView {
   device?: string;
 }
 
+/**
+ * 2026-11-03 — THE KIND OF ACCOUNT AN APP SIGNS IN TO, where one email signs in to several (a shop, a hub, a store: the owner,
+ * "Sign up to any app that requires email"). Read from the app the config was made for, so every sign-in, forgotten password
+ * and changed password of the Shop, Hub and Store apps names its own — and an app that is none of them names none.
+ */
+export function accountRoleOf(config: SbgConfig): { role: 'pudo' | 'mdp' | 'vendor' } | Record<string, never> {
+  const app = config.clientId.split('/')[0];
+  return app === 'agent' ? { role: 'pudo' } : app === 'mdp' ? { role: 'mdp' } : app === 'vendor' ? { role: 'vendor' } : {};
+}
+
 /** Email + password; for a shop, this phone's key with it (a shop's sign-in works only on its own phones). */
 export function sbgLogin(config: SbgConfig, email: string, password: string, f?: typeof fetch, device?: string): Promise<Result<LoginView>> {
   // 2026-11-02 — a fingerprint-or-face unlock ticket (`unl_…`, shared/account/unlock.ts) goes as `unlock`, in the password's place.
   const secret = password.startsWith('unl_') ? { unlock: password } : { password };
-  return publicRequest<LoginView>(config, '/v1/sbg/auth/login', { body: { email, ...secret, ...(device ? { device } : {}) }, fetch: f });
+  return publicRequest<LoginView>(config, '/v1/sbg/auth/login', { body: { email, ...secret, ...(device ? { device } : {}), ...accountRoleOf(config) }, fetch: f });
 }
 
 /** The code texted to the shop's number, typed on this phone: it is one of the shop's from now, and signed in. */
@@ -256,11 +266,11 @@ export function sbgDevicePhone(config: SbgConfig, challenge: string, phone: stri
  * out; the answer carries a fresh sign-in for this device, which the caller seeds so it stays in.
  */
 export function sbgChangePassword(config: SbgConfig, email: string, password: string, newPassword: string, f?: typeof fetch, device?: string): Promise<Result<LoginView>> {
-  return publicRequest<LoginView>(config, '/v1/sbg/auth/password', { body: { email, password, newPassword, ...(device ? { device } : {}) }, fetch: f });
+  return publicRequest<LoginView>(config, '/v1/sbg/auth/password', { body: { email, password, newPassword, ...(device ? { device } : {}), ...accountRoleOf(config) }, fetch: f });
 }
 
 export function sbgForgot(config: SbgConfig, email: string, f?: typeof fetch): Promise<Result<{ sent: boolean; resetToken?: string }>> {
-  return publicRequest(config, '/v1/sbg/auth/forgot', { body: { email }, fetch: f });
+  return publicRequest(config, '/v1/sbg/auth/forgot', { body: { email, ...accountRoleOf(config) }, fetch: f });
 }
 
 export function sbgReset(config: SbgConfig, token: string, password: string, f?: typeof fetch): Promise<Result<{ ok: boolean }>> {

@@ -162,7 +162,7 @@ import { AcceptParcelDto, BookFreightDto, OpenConsignmentDto, ConsignmentDeposit
   CompanyDeclarationDto,
   CompanyDocumentDto,
   DocumentDecisionDto,
-  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto } from './pudo.dto';
+  StoreAccountDto, BorderRuleDto, BagBaysDto, CollectionPointDto, OpenDockBagDto, DeclineOfferDto, SuggestVehicleDto, CarrierPlaceDto, ReservationAnswerDto, SendDriverCoverDto, RecordDriverCoverDto, DeclareAreaDto, DeclareLegDto, DeclineReturnDto, DerivedLegDto, NudgeMinEarnDto, PayoutFailureDto, PayoutSettleDto, PayoutStaffDto, SnoozeDto, SuggestNearbyDto, DisputeDto, DriverDto, DriverKycDecisionDto, DriverKycDto, IdPhotoDto, IdPhotoDecisionDto, DriverPayoutDto, DropBagDto, EntityAdminDto, EntityAdminLoginDto, StaffLoginDto, TwoStepCodeDto, StaffProposalDeclineDto, StaffWelcomeCheckDto, StaffWelcomeDto, EntityAdminPasswordDto, EntityFeeDto, EntityInsuranceDto, CarrierPapersDto, SealRulesDto, CustodyCapsDto, StaffProposalDto, StaffRolesDto, StaffCountriesDto, CarrierPapersRecordDto, SendCarrierPaperDto, RefuseCarrierPaperDto, CancelBookingDto, SwapVehicleDto, BookDepartureDto, AddOwnLoadDto, DeliverDepartureDto, SecureDepartureDto, OpenBookingClaimDto, AnswerBookingClaimDto, DeclareDepartureDto, DepartureStatusDto, AssignDepartureDriverDto, WaitingStopDto, WaiveWaitingDto, EntityAmountsDto, EntityRatesDto, EntityTaxDto, EntityTopUpFeeDto, InterestDto, OpenBagDto, SealBagDto, FillToteDto, HandoverDto, HandoverManifestDto, InboundOrderDto, IntakeDto, CancelParcelDto, ForgotDto, KycDecisionDto, LoadBagDto, LocateDto, LoginDto, ConfirmLinkDto, ManagerKycDecisionDto, ManagerKycDto, ManagerLoginDto, ManagerSessionDto, ManagerChoicesDto, DriverSessionDto, FleetOfferDto, FleetOfferView, DriverOfferView, RemoveDriverDto, RideAloneDto, FleetMoveView, FleetLeaveView, ChangePasswordDto, RotateSecretDto, PhoneRequestDto, PhoneVerifyDto, ReceiveBagDto, ResetDto, SignupDto, PickupDto, PlanJourneyDto, RateDto, RateDriverDto, ReissueReleaseDto, RegisterAgentDto, RegisterDriverDto, RegisterFleetManagerDto, RegisterFreightDto, RegisterMdpDto, RegisterVehicleDto, RegisterVendorDto, ResolveDisputeDto, SetHoursDto, SetLocationDto, SetPriceDto, SetFxRateDto, IssueApiKeyDto, ShelfDto, ShopfrontDto, ShelveDto, SortParcelDto, StartSessionDto, EndSessionDto, SubmitKycDto, SuggestRouteDto, SurgeRuleDto, TopUpDto, UpdateVendorDto, VendorLoginDto, VehicleDocsDto, VoidDto, FreightActionDto, CancelFreightDto, FreightDeliveryFailedDto, DecideRefusalDto, AnswerNotPaidDto, OpenFreightClaimDto, FreightBoardQueryDto, MarketQueryDto, MarketSeriesQueryDto, LaneCarriersQueryDto, DeclareSiteDto, SiteLoadingDto, SitesQueryDto, ProposeFreightDto, WithdrawProposalDto, RecordTempDto, VendorOrdersQueryDto, VendorLedgerQueryDto, AgentParcelsQueryDto, AgentLedgerQueryDto, DriverJobsQueryDto, FleetEarningsQueryDto, WriteOffParcelDto, ReportConstraintDto, RefuteConstraintDto, ConfirmConstraintDto, ClearConstraintDto, ConstraintsNearQueryDto, ConstraintsRouteQueryDto, RenewLicenceDto, SendLicenceRenewalDto, RefuseLicenceRenewalDto, ShopLicenceRenewalDto, ShopLicenceRecordDto, FleetDispatchQueryDto, FleetAssignDto, RateFreightDto, FreightInstructionsDto, HandBackDto, NoteArchiveQueryDto, VerifyNoteDto, ConnectDestinationDto, AccountDeviceDto, AccountDevicePhoneDto } from './pudo.dto';
 import { UnclaimedService } from './unclaimed.service';
 import { MerchantRatingService } from './merchant-rating.service';
 import { classifySize, measuredFactor, NETWORK_CURRENCY, NETWORK_JURISDICTION, SIZE_WEIGHT_KG } from './pudo.config';
@@ -471,7 +471,20 @@ export class SbgController {
   @Post('auth/login')
   authLogin(@Body() dto: LoginDto) {
     // The password — or, 2026-11-02, the ticket a fingerprint or face on this phone was just checked for, in its place.
-    return this.accounts.login(dto.email, dto.password, dto.device, Date.now(), dto.unlock);
+    return this.accounts.login(dto.email, dto.password, dto.device, Date.now(), dto.unlock, dto.role);
+  }
+
+  /**
+   * 2026-11-03 — "YES, IT IS ME" (the owner: "a confirmation mail will ask the user to click the 'yes it is me' button"): the
+   * button in the email links a second kind of account to the address it shares — its shop to its store — and it signs in.
+   * Public: the email is the proof; the token is long, random and once.
+   */
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit(30, 15 * 60)
+  @Post('auth/link/confirm')
+  confirmLink(@Body() dto: ConfirmLinkDto) {
+    return this.accounts.confirmLink(dto.token);
   }
 
   /**
@@ -543,7 +556,7 @@ export class SbgController {
   @RateLimit(20, 15 * 60)
   @Post('auth/forgot')
   authForgot(@Body() dto: ForgotDto) {
-    const issued = this.accounts.forgot(dto.email);
+    const issued = this.accounts.forgot(dto.email, dto.role);
     return isSandbox() ? issued : { sent: true };
   }
 
@@ -564,7 +577,7 @@ export class SbgController {
   @RateLimit(20, 15 * 60)
   @Post('auth/password')
   changeAccountPassword(@Body() dto: ChangePasswordDto) {
-    return this.accounts.changePassword(dto.email, dto.password, dto.newPassword, dto.device);
+    return this.accounts.changePassword(dto.email, dto.password, dto.newPassword, dto.device, dto.role);
   }
 
   @SignedIn()
@@ -3483,7 +3496,7 @@ export class SbgController {
     if (!withAccount) return vendor;
     // ITS OWN ACCOUNT, in the same act: the store signs in with these from now on, and never with its secret.
     const account = this.accounts.setUpStore({ did: vendor.did, name: vendor.name, email: email ?? '', password: password ?? '', phone: dto.ownerPhone, phoneVerified });
-    return { ...vendor, email: account.email, token: account.token, ...(account.device ? { device: account.device } : {}) };
+    return { ...vendor, email: account.email, token: account.token, ...(account.device ? { device: account.device } : {}), ...(account.linkPending ? { linkPending: true } : {}) };
   }
 
   /**
@@ -3519,7 +3532,7 @@ export class SbgController {
     const vendor = this.vendors.get(id);
     if (!actor?.did || actor.did !== vendor.did || actor.role === 'operator') throw new GlosError('FORBIDDEN', 'A store sets up its own account, signed in as that store');
     const account = this.accounts.setUpStore({ did: vendor.did, name: vendor.name, email: dto.email, password: dto.password });
-    return { vendorId: vendor.vendorId, email: account.email, hasAccount: true, token: account.token };
+    return { vendorId: vendor.vendorId, email: account.email, hasAccount: true, token: account.token, ...(account.linkPending ? { linkPending: true } : {}) };
   }
 
   /**

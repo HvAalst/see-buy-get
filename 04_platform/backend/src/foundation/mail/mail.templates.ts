@@ -165,6 +165,8 @@ export interface MailParams {
   'api-version-retiring': { company: string; version: string; retiresAt: string; stage: 'announced' | 'month'; app: 'business' | 'fleet' };
   /** 2026-11-03 — a new rule inside a version of the API, with the day it starts refusing a system's call (api-rules.ts). */
   'api-rule-change': { company: string; rule: string; summary: string; version: string; enforcedFrom: string; stage: 'announced' | 'soon'; app: 'business' | 'fleet' };
+  /** 2026-11-03 — a second kind of account under an address that has one: its owner's "Yes, it is me" links them (AccountService). */
+  'yes-it-is-me': { email: string; name: string; kind: string; other: string; url: string };
   /**
    * A problem was reported on one of a store's shipments, and the store names an insurer on its shipping policy: the
    * damage claim report, by a link. Sent the moment the report is made. `by`: who reported the problem.
@@ -523,6 +525,26 @@ export const MAIL_TEMPLATES: { [K in MailTemplateId]: MailTemplate<MailParams[K]
         { kind: 'button', label: `Open the ${APP_NAMES[p.app]}`, href: appUrl(p.app) },
       ],
       reason: `You are getting this email because your company holds a live key for the SeeBuyGet API. Every company holding one is told a year ahead and a month ahead.`,
+    }),
+  },
+
+  'yes-it-is-me': {
+    title: 'Is this you? One email for your SeeBuyGet accounts',
+    sentWhen: 'A shop, hub or store signs up with an email that already signs in to another kind of SeeBuyGet account. Its button links the two; until it is clicked, the new one does not sign in.',
+    wired: true,
+    // A week to click it: worth having late, as long as it is inside the week.
+    sendLater: 72,
+    sample: { email: 'amani@example.com', name: 'Mama Amani Shop', kind: 'shop', other: 'store', url: 'https://seebuyget.com/#link=a-sample-token-that-links-nothing-00000' },
+    build: (p) => ({
+      subject: `Is this you? ${p.name} uses your email too`,
+      preheader: `A ${p.kind} was signed up with ${p.email}, which signs in to your ${p.other} already.`,
+      blocks: [
+        { kind: 'heading', text: 'Is this you?' },
+        { kind: 'paragraph', text: `A SeeBuyGet ${p.kind}, ${p.name}, was just signed up with ${p.email}. That email signs in to your ${p.other} already. If it was you, say so: the ${p.kind} then signs in with this email too, and both are yours.` },
+        { kind: 'button', label: 'Yes, it is me', href: p.url },
+        { kind: 'paragraph', text: `If it was not you, do nothing: without this, the ${p.kind} does not sign in with your email. The button works for a week.` },
+      ],
+      reason: `You are getting this email because ${p.email} signs in to a SeeBuyGet ${p.other}, and a ${p.kind} was signed up with it.`,
     }),
   },
 

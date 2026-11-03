@@ -40,9 +40,10 @@ import { driverSendsPapers, EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink,
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 import { isPinReset } from '../../shared/account/recovery';
 import { captureInvite } from '../../shared/invite';
+import { readEmailLink } from './emailLink';
 import { enrollPerson, mySignups, sendPapersAgain, sendShopPapers as sendShopPapersApi, signUpDriver, signUpFleet, uploadPaper, uploadShopPaper as uploadShopPaperApi, type FleetSignupView, type PersonSession } from './api';
 
-export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'town' | 'help' | 'info' | 'directory';
+export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'link' | 'town' | 'help' | 'info' | 'directory';
 
 /** FB3b — how far the visitor cares to look. `null` IS a choice: the whole market. */
 export type MarketReach = number | null;
@@ -56,6 +57,8 @@ export interface HomeState {
   docKey?: string;
   /** The key of a link to a damage claim report, carried in on #report= and taken out of the address the same way. */
   reportKey?: string;
+  /** 2026-11-03 — the key of a "Yes, it is me" email, carried in on #link= and taken out of the address the same way. */
+  linkToken?: string;
   role: RoleSpec | null;
   step: JoinStep;
   form: JoinForm;
@@ -392,6 +395,21 @@ export function useHomeApp() {
       /* a browser that refuses the rewrite still shows the report */
     }
     setState((s) => ({ ...s, screen: 'report', reportKey: key }));
+  }, []);
+
+  /**
+   * #link=<key> — the button in a "Yes, it is me" email (2026-11-03). Read once and taken out of the address, as a note's
+   * key is: it links an account to the address, and an address bar is photographed, bookmarked and synced.
+   */
+  useEffect(() => {
+    const token = readEmailLink(globalThis.location?.hash);
+    if (token === undefined) return;
+    try {
+      history.replaceState(null, '', `${location.pathname}${location.search}`);
+    } catch {
+      /* a browser that refuses the rewrite still asks */
+    }
+    setState((s) => ({ ...s, screen: 'link', linkToken: token }));
   }, []);
 
   /*

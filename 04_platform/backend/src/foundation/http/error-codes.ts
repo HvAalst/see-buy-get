@@ -201,6 +201,9 @@ export const ERROR_CODES = {
   // Five wrong passwords at one account: the sign-in answers nobody for a while. A 403, because it is asked from
   // inside an app too (changing a password, replacing a store's secret) and a 401 there would sign the person out.
   PASSWORD_LOCKED: { status: 403, title: 'Too many wrong passwords' },
+  // A second kind of account under an address that has one (2026-11-03): it signs in once its owner clicked
+  // "Yes, it is me" in the email. A 403, not a 401: the password was right.
+  LINK_PENDING: { status: 403, title: 'Click “Yes, it is me” in the email first' },
   ROLE_NOT_HELD: { status: 403, title: 'You do not hold that role' },
   // A counter was shown a driver's badge NUMBER: a driver of ours shows the badge from their own phone, with the code
   // of the shift they are on. What only a driver can do needs something only the driver holds.
@@ -235,6 +238,7 @@ export const ERROR_CODES = {
   // --- 410 / 413 / 415: media upload + retention -----------------------------------------------
   MEDIA_EXPIRED: { status: 410, title: 'This media has passed its retention window' },
   API_VERSION_RETIRED: { status: 410, title: 'This version of the API has stopped' },
+  LINK_EXPIRED: { status: 410, title: 'This link is more than a week old' },
   // A FILE, not only an image (2026-11-02): a paper, a recording and a sheet are refused with these too. `params` carries
   // `bytes` and `maxBytes` where the size is known, `accepts` where the kind was wrong: what an app needs to say it.
   MEDIA_TOO_LARGE: { status: 413, title: 'The file is too large' },
