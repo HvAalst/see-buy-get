@@ -61,13 +61,6 @@
   .tag::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   .t-strong { color: var(--ship); } .t-partial { color: var(--now); } .t-missing { color: var(--gap); } .t-ask { color: var(--ask); }
 
-  .area { display: grid; grid-template-columns: 1fr; gap: 14px; }
-  .area .card h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-  .area .card h3 .tag { margin: 0; }
-  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 22px; margin-top: 4px; }
-  .cols h4 { margin: 10px 0 0; font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-
-  .readings { counter-reset: r; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
   .decision { margin-top: 14px; }
   .decision .q { font-size: 16.5px; font-weight: 600; margin: 0; }
   .decision dl { margin: 10px 0 0; display: grid; grid-template-columns: 150px 1fr; gap: 8px 18px; font-size: 15px; }
@@ -82,8 +75,8 @@
   .num { display: inline-block; min-width: 2.4em; color: var(--accent); font-variant-numeric: tabular-nums; }
   .group { margin-top: 34px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 
-  ol.order { padding-left: 22px; max-width: 74ch; }
-  ol.order li + li { margin-top: 8px; }
+  ul.plain { max-width: 74ch; padding-left: 22px; }
+  ul.plain li + li { margin-top: 6px; }
   .note { font-size: 14px; color: var(--muted); }
   code { font: 13.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--line) 60%, transparent); padding: 1px 5px; border-radius: 5px; }
   a { color: var(--accent); }
@@ -93,523 +86,229 @@
 <div class="wrap">
 
 <header>
-  <h1>Logistics flow coordination — where we stand</h1>
-  <p class="sub">How good SeeBuyGet is at organising deliveries, routes and inbound supply flows in real time across many places and shift patterns. What is built, what is thin, and what is missing. The longest part is about inbound supply: the decisions to make before anything is built.</p>
-  <p class="stamp">Assessed 2026-10-15 against the code on <code>main</code>; brought up to date 2026-10-25, with what was built since marked where it stands. Read with <a href="progress.html">progress.html</a>, which tracks each item as it is built.</p>
+  <h1>Logistics flow coordination — what is still open</h1>
+  <p class="sub">What is thin, what needs a decision of yours, and what is yours to set up — for deliveries, routes, real time, inbound supply, data, fleets, sites and shifts, and now tracking devices. Only what is open is on this page.</p>
+  <p class="stamp">Assessed 2026-10-15 against the code on <code>main</code>, brought up to date 2026-10-25. On 2026-11-03 everything built from it was taken off this page: each built item is a row on <a href="progress.html">progress.html</a>, where it already was. Tracking devices added the same day.</p>
   <nav class="toc" aria-label="On this page">
-    <a href="#now">Where it stands now</a>
-    <a href="#verdict">The short answer</a>
-    <a href="#areas">Area by area</a>
-    <a href="#inbound">Inbound supply: the decisions</a>
-    <a href="#order">The order to decide in</a>
-    <a href="#built">Built from this assessment</a>
+    <a href="#devices">Tracking devices</a>
+    <a href="#now">Open at a glance</a>
+    <a href="#areas">Still thin</a>
+    <a href="#inbound">Inbound supply</a>
     <a href="#central">Centralized data</a>
     <a href="#fleet">Fleet and assets</a>
     <a href="#resources">Sites and shifts</a>
     <a href="#compendium">Against the compendium</a>
+    <a href="#out">Left out, by decision</a>
   </nav>
 </header>
 
-<!-- ─────────────────────────────────────────────────────── where it stands now -->
-<h2 id="now">Where it stands now</h2>
-<p class="lead">Checked against the code on 2026-10-25. What this page recommended without needing a decision is built. What was left needed a decision of yours: you answered the three that come first the same day, all as recommended, and they are being built in this order — the live view (built), the broken-down bike (built), inbound supply (reading A built; reading B’s first step built 2026-10-26).</p>
+<!-- ─────────────────────────────────────────────────────── tracking devices -->
+<h2 id="devices">Tracking devices for sensitive shipments</h2>
+<p class="lead">Your question, 2026-11-03: “what does it take to wire in iot devices? for tracking sensitive shipments (at extra cost and specialized settings for the users who demand it)”. Most of what is inside the system is there already. What is missing is a way for a device’s readings to reach a load, the settings and the price around it — and a few rules outside the code. Three decisions come first.</p>
+
 <div class="grid">
-  <div class="card"><span class="tag t-strong">Built since 2026-10-15</span><h3>What was done</h3><ul>
-    <li>The two recommendations that needed no decision: who drives on which day, and a parcel running late is told (<a href="#built">below</a>).</li>
-    <li>Centralized data: lots that survive a restart, every record in Postgres, webhooks for every party (P1), an API for businesses and fleets (P2), and a shipper's own GS1 code on every package label (half of P3).</li>
-    <li>Fleet and assets: all six slices, and on 2026-10-25 a courier's own vehicle and the broken-down vehicle on the live map.</li>
-    <li>Planning across sites and shifts: all six, with your four answers. That also gave a fleet early and late shifts, and two drivers sharing a truck in a day.</li>
-    <li>The compendium check, all its rounds of answers, then the ISO 28000 check.</li>
+  <div class="card"><span class="tag t-strong">There already</span><h3>What a device would build on</h3><ul>
+    <li>A cold load keeps the range it must be kept at. Each reading is judged by it; a reading outside marks the cold chain broken, and the shipper and the carrying fleet are told at once. A reading made with no signal keeps the time it was made. <b>Today every reading is typed by the driver.</b></li>
+    <li>Positions come only from the driver’s phone on a shift; the fleet’s map reads them every 45 seconds.</li>
+    <li>A business’s and a fleet’s own systems are told each step of their loads, and work with their own keys.</li>
+    <li>Every photo and paper is fingerprinted; the consignment note is frozen at each signature.</li>
   </ul></div>
-  <div class="card"><span class="tag t-strong">Your answers, 2026-10-25</span><h3>What was left to decide first</h3><ul>
-    <li><b>One live view</b> (P4), “Console and fleet offices”: <b>built</b>. The console never refreshed by itself — a new sign-up, or a colleague's request to approve, sat unseen until somebody pressed Refresh. Now it and a fleet office's screens are told the moment something they show changes (<a href="#central">below</a>).</li>
-    <li><b>Bags and parcels on a broken-down vehicle</b>, “Split by the road”: <b>built</b>. The couriers near a broken-down courier are told; one takes the bags and loose parcels over at the bike with the six digits, all or none, and the road is paid once — the first courier for the stretch driven, at the takeover; the second for the rest, on arrival. A fleet truck's bags now move with its loads (<a href="#fleet">below</a>).</li>
-    <li><b>Inbound supply</b>, “Yes, A then B”: being built on the recommendations for D1–D14 as written (<a href="#inbound">below</a>) — first a business sees and receives what is coming to its own sites (<b>built</b>: what is coming in, and the receiving moment on the place’s own clock), then one hub breaks bulk into parcels (<b>first step built 2026-10-26</b>: a store hands its parcels in at a hub in bulk). A hub’s receiving days, hours and doors came with it; a time booked at a dock two carriers share comes with bookable slots.</li>
+  <div class="card"><span class="tag t-missing">Missing</span><h3>1. A way in for a device’s readings</h3><p>A device is paired to a load: the driver scans the device’s code at pickup, and it stays on that load until delivery. Its readings land on the load’s record — temperature, position, shock, light (the box was opened) and battery — each with the device’s own time, since a device keeps its readings while it has no signal. Each says it came <b>from the device</b>, never mixed with what the driver typed. Three ways in:</p><ul>
+    <li><b>The maker’s own system passes the readings to us</b> (Tive, Sensitech, Controlant, Roambee and the like). The easiest: a small translator per maker, and we never touch the radio.</li>
+    <li><b>Bluetooth loggers read by the Driver app</b> at each handover: cheap, no SIM card, good for thin networks — sent on when there is a signal. Android only; an iPhone’s browser cannot read Bluetooth.</li>
+    <li><b>The truck’s own tracker or fridge unit</b> (Teltonika, Carrier, Thermo King): the fleet connects its own. Best for full truckloads.</li>
   </ul></div>
-  <div class="card"><span class="tag t-partial">Later</span><h3>What I would leave until after the first test</h3><ul>
-    <li>An accounting export (the rest of P3), a reporting copy (P5), other carriers' feeds (P6).</li>
+  <div class="card"><span class="tag t-missing">Missing</span><h3>2. Settings, for those who ask for it</h3><p>“Track with a device” as a step in Post a load: what to watch and the limits (the temperature range is there already; shock and opening are new), how often a reading is taken, and who is told — the bell and the phone’s notifications, never a text. A fleet says “We carry devices”, and a tracked load is offered only to such fleets.</p></div>
+  <div class="card"><span class="tag t-missing">Missing</span><h3>3. The extra cost</h3><p>Whoever posts the load pays, as for the load itself: a charge for the device and our fee, shown before it is posted. A device the shipper or the fleet owns costs only our fee: we read it, nothing more. A device we rent out means stock, a deposit and getting it back after every trip.</p></div>
+  <div class="card"><span class="tag t-ask">Outside the code</span><h3>4. Rules that are not ours to write</h3><ul>
+    <li><b>Air:</b> an airline accepts only trackers it has approved on board, and lithium-battery rules apply. To legal.html, with its sources, when the first version starts.</li>
+    <li><b>A device we supply:</b> radio approval in each country, and a SIM card that keeps working across borders.</li>
+    <li><b>Privacy:</b> a device’s positions are location data; the privacy pages say so once it is built.</li>
+    <li><b>Medicines:</b> the main reason people buy trackers, and refused until L29 is settled.</li>
+  </ul></div>
+</div>
+
+<p class="group">The three decisions</p>
+
+<div class="card decision">
+  <p class="q"><span class="num">T1</span>Whose devices come first?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Devices we own are stock: bought, lent with a deposit, brought back after every trip (a return leg of its own, like the empties), approved for radio in every country, each with a SIM card. A device the shipper or the fleet already owns needs none of that.</dd>
+    <dt>Options</dt><dd><ul><li>The shipper’s own device, read through its maker’s system.</li><li>The fleet’s truck tracker or fridge unit.</li><li>Devices we rent out.</li><li>All three at once.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">The shipper’s own and the fleet’s first: no stock, no returns. Renting our own later, once a customer asks for it and how they come back is decided.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">T2</span>Who may switch it on?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Whoever posts a load pays for it, unless we only match the two sides. Tracking is a service on top, so its price is said before posting, like the platform fee a business already sees.</dd>
+    <dt>Options</dt><dd><ul><li>Any business, as a paid option.</li><li>Only for some goods (cold, high-value, fragile, dangerous).</li><li>Only under a contract with a fleet.</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">Any business, paid — offered first where it matters most: cold, high-value and fragile goods.</dd>
+  </dl>
+</div>
+
+<div class="card decision">
+  <p class="q"><span class="num">T3</span>Which maker first?</p>
+  <dl>
+    <dt>Why it matters</dt><dd>Each maker’s system says things its own way. Inside, we keep one general way of saying a reading, and a small translator per maker — open formats, not a maker’s product dressed as ours. A translator is only proven on real readings from a real customer.</dd>
+    <dt>Options</dt><dd><ul><li>Whichever a first customer already uses.</li><li>The most widely sold one.</li><li>Bluetooth loggers first (no SIM card, no maker’s system).</li></ul></dd>
+    <dt>Recommendation</dt><dd class="rec">Whichever a first real customer already uses. Do you know a shipper or a fleet that uses one?</dd>
+  </dl>
+</div>
+
+<div class="grid" style="margin-top:14px">
+  <div class="card"><span class="tag t-partial">Once answered</span><h3>The first version</h3><p>Pairing at pickup; readings on the load’s record, said as the device’s; alerts on the range already kept, and on shock and opening; a broken cold chain on the consignment note as a driver’s reading is now; the setting and its price in Post a load; “We carry devices” for fleets; the business’s own system told; one maker’s translator and the general format. No hardware bought. About the size of the cold-load work.</p></div>
+  <div class="card"><span class="tag t-ask">Never</span><h3>What a device will not do here</h3><ul>
+    <li>Judge a claim: a reading stands beside a damage report as evidence; damage is reported, not judged.</li>
+    <li>Score how a driver drives (left out, by decision — below).</li>
+    <li>Pass as our product: every reading names the device and its maker.</li>
+    <li>Send a text: alerts go to the bell and the phone’s notifications.</li>
+  </ul></div>
+</div>
+
+<!-- ─────────────────────────────────────────────────────── open at a glance -->
+<h2 id="now">Open at a glance</h2>
+<p class="lead">Everything else on this page, in four piles.</p>
+<div class="grid">
+  <div class="card"><span class="tag t-ask">Your decision</span><h3>Waiting for an answer</h3><ul>
+    <li>Tracking devices: T1–T3 (above).</li>
+    <li>Whether we ever keep stock for a store (reading C, <a href="#inbound">below</a>).</li>
+    <li>Whether a receiving place can have people of its own (D14).</li>
+    <li>Which accounting systems the first customers use, which decides the accounting export (P3).</li>
+    <li>Who reads reports, and how fresh they must be (P5).</li>
+  </ul></div>
+  <div class="card"><span class="tag t-partial">Later</span><h3>After the first test</h3><ul>
+    <li>An accounting export (the rest of P3), a reporting copy (P5), other carriers’ feeds (P6).</li>
     <li>Re-planning during the day, a timetable between hubs, a forecast from past orders.</li>
-    <li>Trailers and site equipment as assets, a count of bags by place, and moving orders off a truck to avoid a wait for a bay.</li>
+    <li>Trailers and site equipment as assets, a count of bags by place, a lost bag, and moving orders off a truck to avoid a wait for a bay.</li>
+    <li>Bookable slots at a dock, once a hub or a dock actually queues trucks.</li>
+    <li>Returns of parcels nobody collected.</li>
   </ul></div>
   <div class="card"><span class="tag t-ask">Yours, not code</span><h3>Settings on the server</h3><ul>
-    <li>Real road distances in a fleet's day plan: a routing server of the operator's own (<code>GLOS_ROUTER_URL</code>).</li>
-    <li>The plan's AI adviser: an Anthropic key on the server. It has never answered for real.</li>
+    <li>Real road distances in a fleet’s day plan: a routing server of the operator’s own (<code>GLOS_ROUTER_URL</code>).</li>
+    <li>The plan’s AI adviser: an Anthropic key on the server. It has never answered for real.</li>
+  </ul></div>
+  <div class="card"><span class="tag t-missing">Not built</span><h3>Known and not started</h3><ul>
+    <li>A receiver’s expected arrival from a supplier on its own transport (D4, D6).</li>
+    <li>The console’s overview reading the digital twin (P4).</li>
+    <li>More than one server at once.</li>
   </ul></div>
 </div>
 
-<!-- ───────────────────────────────────────────────────────────── the verdict -->
-<h2 id="verdict">The short answer</h2>
-<p class="lead">We are strong at planning a fleet's day and at tracking who holds a parcel at every handover. Real-time handling is partial. Inbound supply flows, in the warehouse sense, are close to missing. What is missing there is decisions, not code.</p>
+<!-- ─────────────────────────────────────────────────────── still thin -->
+<h2 id="areas">What is still thin, area by area</h2>
+<p class="lead">What exists in each area is on progress.html. What is thin there, as it stands on 2026-11-03.</p>
 <div class="grid">
-  <div class="card"><span class="tag t-strong">Strong</span><h3>Planning a fleet's day</h3><p>Orders from contract shippers or a spreadsheet are planned onto trucks by weight, driver hours, delivery windows and trips chained together. What does not fit goes to partner fleets, then the open board. Shippers are told when an order is left out or running late.</p></div>
-  <div class="card"><span class="tag t-strong">Strong</span><h3>Many places, one custody record</h3><p>Shops, hubs, store docks and yards record every handover, so the network always knows who holds a parcel. Alarms fire for parcels never dropped off or never collected.</p></div>
-  <div class="card"><span class="tag t-strong">Strong</span><h3>A driver's shift</h3><p>Start and end of shift with a chosen vehicle, the 13-hour limit and 9-hour rest said in advance, a snooze for new offers, and each fleet on its own clock.</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>Real time</h3><p>Positions from phones on shift, a map that updates every 45 seconds, push from a live server. Nothing re-plans during the day. A parcel's lateness was only measured after it arrived (now told as it happens, see <a href="#built">Built from this assessment</a>).</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>Routes</h3><p>The order of stops is optimised. Distances are straight lines times 1.35 at one speed, except in a fleet's day plan, which can use real roads if the operator runs a routing server. No traffic.</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>Shift patterns</h3><p>Driver shifts are handled. The day plan counted every active driver, not who works that day (now a roster). A fleet's sites now keep shift patterns, loading bays and opening hours, and the plan says how many drivers each shift needs (see “Planning across sites and shifts”). Shops have opening hours; hubs have none, and no hub or shop has staff shifts.</p></div>
-  <div class="card"><span class="tag t-missing">Missing</span><h3>Inbound supply</h3><p>No expected-arrival notices, no receiving appointments, no counting goods in against what was expected, no storage. A store's dock is outbound only, by design.</p></div>
-  <div class="card"><span class="tag t-missing">Missing</span><h3>Coordination across the network</h3><p>Planning happens per fleet, per day. Nobody plans the parcel network as a whole: bags move when a driver chooses to claim them, and there is no timetable between hubs.</p></div>
+  <div class="card"><span class="tag t-partial">Deliveries</span><h3>One plan a day, and parcels not planned</h3><ul>
+    <li>One plan per fleet per day, started at 07:00 unless the office says otherwise.</li>
+    <li>The AI adviser over the plan has never answered for real: it needs a key on the server.</li>
+    <li>Parcels are not planned at all: a bag goes when a driver claims it.</li>
+  </ul></div>
+  <div class="card"><span class="tag t-partial">Routes</span><h3>Straight lines, by default</h3><ul>
+    <li>Outside a fleet’s day plan, distance is a straight line times 1.35, at one speed.</li>
+    <li>No routing server is set up for production.</li>
+    <li>Parcel arrival times are optimistic by decision.</li>
+  </ul></div>
+  <div class="card"><span class="tag t-partial">Real time</span><h3>Nothing re-plans during the day</h3><ul>
+    <li>A late truck does not reshuffle the rest of its day.</li>
+    <li>A tracking page says a parcel or a load is running late, but keeps the planned hour: nothing estimates it again from where the truck is.</li>
+    <li>The console and a fleet office have a live connection; everybody on a phone is on push (your answer, 2026-10-25).</li>
+  </ul></div>
+  <div class="card"><span class="tag t-missing">Many places</span><h3>Nothing above one fleet</h3><ul>
+    <li>No view or plan across fleets and hubs together. The old control tower was built for an overseas forwarder and is parked.</li>
+    <li>No timetable between hubs.</li>
+  </ul></div>
 </div>
 
-<!-- ─────────────────────────────────────────────────────────── area by area -->
-<h2 id="areas">Area by area</h2>
-<p class="lead">Each area with what exists, what is thin, and what would move it.</p>
-<div class="area">
-
-  <div class="card">
-    <h3>Deliveries <span class="tag t-strong">Strong</span></h3>
-    <div class="cols">
-      <div><h4>What exists</h4><ul>
-        <li>Contract orders from the Business app, or a CSV or Excel sheet the fleet office uploads, with every refused line said in words.</li>
-        <li>A day plan worked out by ordinary math: weight, equipment, driver hours, delivery windows (planned late rather than refused), trips chained from the last door, orders split when heavier than any truck, how many trucks to hire.</li>
-        <li>Overflow to partner fleets first, then the open board. Trips go out one at a time as trucks become free.</li>
-        <li>Shippers told when an order is left out, planned outside its window, running late, or delivered.</li>
-      </ul></div>
-      <div><h4>What is thin</h4><ul>
-        <li>One plan per fleet per day, started at 07:00 unless the office says otherwise.</li>
-        <li>The AI adviser over the plan has never answered for real: it needs an API key on the server.</li>
-        <li>Parcels are not planned at all: a bag goes when a driver claims it.</li>
-      </ul></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Routes <span class="tag t-partial">Partial</span></h3>
-    <div class="cols">
-      <div><h4>What exists</h4><ul>
-        <li>The order of stops on each trip is optimised, and trips are chained.</li>
-        <li>A fleet's day plan can use real road distances from a routing server the operator runs (open protocol, no Google).</li>
-        <li>Drivers report road hazards (low bridges, weight limits, closures). The fleet map shows them.</li>
-        <li>Turn-by-turn is the driver's own maps app, opened from ours.</li>
-      </ul></div>
-      <div><h4>What is thin</h4><ul>
-        <li>Everywhere else, distance is a straight line times 1.35, at one speed.</li>
-        <li>No routing server is set up for production.</li>
-        <li>No traffic, by decision: it needs a paid provider.</li>
-        <li>Parcel arrival times are optimistic by decision ("ETA realism" is parked).</li>
-      </ul></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Real time <span class="tag t-partial">Partial</span></h3>
-    <div class="cols">
-      <div><h4>What exists</h4><ul>
-        <li>Positions come from drivers' phones during a shift. The fleet map updates every 45 seconds while it is open.</li>
-        <li>Push from a live server, an inbox in every app, email by link.</li>
-        <li>Drivers nudged about loads near their road as they drive.</li>
-        <li>Freight running late is told to the shipper on the carrier's own clock.</li>
-      </ul></div>
-      <div><h4>What is thin</h4><ul>
-        <li>Nothing re-plans during the day: a late truck does not reshuffle the rest of its day.</li>
-        <li>A tracking page keeps the planned hour even when the truck is late.</li>
-        <li>The app asks the server again on a timer. There is no live connection.</li>
-      </ul></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Many places <span class="tag t-strong">Strong</span> <span class="tag t-missing">Missing above one fleet</span></h3>
-    <div class="cols">
-      <div><h4>What exists</h4><ul>
-        <li>Shops, hubs, store docks, yards and container depots, each recording every handover in one custody chain.</li>
-        <li>A shop's opening hours decide when a parcel will be ready to collect.</li>
-        <li>Carriers advertise space on runs that leave anyway (departures).</li>
-      </ul></div>
-      <div><h4>What is missing</h4><ul>
-        <li>No view or plan across fleets and hubs together. The old control tower was built for an overseas forwarder and is parked.</li>
-        <li>No timetable between hubs. Hubs have no opening hours and no receiving capacity.</li>
-      </ul></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>Shift patterns <span class="tag t-partial">Partial</span></h3>
-    <div class="cols">
-      <div><h4>What exists</h4><ul>
-        <li>A driver's shift: vehicle, hours on duty, the limit and the rest, told before they bite.</li>
-        <li>Each fleet's own time zone. A plan's start hour and day length set by the office.</li>
-        <li>Shops' weekly opening hours.</li>
-      </ul></div>
-      <div><h4>What was missing</h4><ul>
-        <li>Different start times within one fleet (an early and a late shift), and two drivers sharing one truck in a day: the plan had one start and one length for every truck. <b>Built 2026-10-17</b> as shifts at a site (<code>3a1e7df</code>, see <a href="#resources">Planning across sites and shifts</a>).</li>
-        <li>Staff shifts at shops and hubs: <b>left out</b> by your answer of 2026-10-17, drivers' shifts only.</li>
-        <li>Hub receiving hours: <b>built 2026-10-26</b> for stores’ parcels in bulk — the days and hours a hub receives, on its own clock, and its doors (D8). Its opening hours too, <b>built 2026-10-26</b> (“hub has open hours as well?”): its week, whether it is open now on its own clock, who to ask for, its gate and a button that calls it — for the drivers and stores working with it, and on its public page as far as it ticks. Its bulk hours stay inside them.</li>
-      </ul></div>
-    </div>
-  </div>
-</div>
-
-<!-- ─────────────────────────────────────────────────────── inbound decisions -->
-<h2 id="inbound">Inbound supply flows: the decisions before the build</h2>
-<p class="lead">"Inbound supply" means goods coming INTO a place from a supplier: what is expected, when it arrives, what is counted, what happens with what is missing or broken, and who holds it afterwards. None of that exists yet. Most of it touches rules already set (who owns goods, who pays, who is told, who may see what), so it has to be decided before it is built. Each decision below gives the question, why it matters here, the options and my recommendation. <b>Decided 2026-10-25:</b> your answer “Yes, A then B” takes every recommendation below as written — reading A first, then B at one hub.</p>
-
-<h3 style="margin-top:28px">Built so far</h3>
+<!-- ─────────────────────────────────────────────────────── inbound -->
+<h2 id="inbound">Inbound supply flows</h2>
+<p class="lead">D1–D14 were answered on 2026-10-25 (“Yes, A then B”, every recommendation as written) and are built: reading A — a business sees and receives what is coming to its own places — and reading B’s first step — a hub takes stores’ parcels in bulk — with the hub’s fees, goods from abroad, the empties and refused goods. Each is a row on progress.html. What is still open:</p>
 <div class="grid">
-  <div class="card"><span class="tag t-strong">Built 2026-10-25</span><h3>Reading A, first step: what is coming in</h3><p>A business that receives goods at its own places has a <b>Coming in</b> screen. Each place of its own can receive, with a code (like <code>7KQ3-PX9M</code>) the business gives its suppliers itself. A supplier posting a load writes the code as “Deliver to”, and may add the receiver's order number; the load goes to that place by its name. The receiver sees it coming: its order number, who from, packages, weight, where it is, who is bringing it and when it is expected — never the price (D2, D7). Its bell says when it is coming, on its way, delivered, not delivered or withdrawn, and its own system hears the same (D14). The code names the place and opens nothing else; a new code retires the old.</p></div>
-  <div class="card"><span class="tag t-strong">Built 2026-10-25</span><h3>Reading A, second step: the receiving moment</h3><p>At the door the driver writes down, with the receiver, what is not as the note says: packages <b>short</b>, <b>more</b> than the note says, <b>damaged</b> (always with a photo) or <b>not the goods</b> on the note. It is counted against the note's own count and goes in box 24 beside the receiver's name, frozen with the note (D9); goods found damaged are no longer ticked “Cargo intact”. The sender is told: its bell, its email, its Loads, its own system. The receiver's Coming in keeps what did not come, or came and is not the goods, under <b>Still expected</b> until one of its people closes it, “it came” or “not coming”. When a load is expected, and whether it is late, is read on the receiving place's own clock, named where the reader's clock is another (D10).</p><p class="note">Found while building it, and built: a business claims on its own delivered load from the Business app (before, only a shop at its counter could). Your answer, 2026-10-26, “Its copy, no carriage price”: built — the receiving business reads its own copy of the note (no carriage price unless the term makes the carriage its to pay), and claims where the trade term puts the loss on it. Then reading B at one hub: its first step is built (next card).</p></div>
-  <div class="card"><span class="tag t-strong">Built 2026-10-26</span><h3>Reading B: the hub's fee per handling unit (D12)</h3><p>A hub says what it charges to take in a pallet, a carton, a cage or a sack — its own fee, in its own money. A store sees what a unit costs it, with its company's fee and tax on top as for a parcel, and pays for the units it books when it books them, or is told to top up first. At the door the hub is paid its own fee for the units it counts; units booked and not counted go back to the store, and units beyond the booking are charged then or not taken in. Withdrawn, or not come: all of it goes back. Found on the way, and decided by you the same day (“Its own fee”): a hub had been paid its company's list figure for sorting while stores were charged its own fee — it is now paid its own.</p></div>
-  <div class="card"><span class="tag t-strong">Built 2026-10-26</span><h3>Reading B, first step: a hub as a cross-dock</h3><p>A hub's owner says, in the Hub app's new <b>Coming in</b> tab, that it takes stores' parcels in bulk: the days and hours it receives on its own clock, and how many vans it can unload at once (D8). A store shipping a parcel may choose such a hub as where it starts, priced from the hub: its sort fee and the shop's at the far end, with no shop and no road before it, so it costs less than a counter. On its Dock screen the store books an <b>arrival</b>: which of those parcels, on how many pallets, cartons, cages or sacks (handling units, D5), and which day the hub receives, from today on the hub's clock to a month ahead (D4, D10). At the door the hub counts what came, with a line for what it saw, then scans each parcel in, by our QR, its tracking key or the store's own barcode (SSCC). From that scan the hub holds it, its journey is promised from the hub, and it is sorted like any other parcel. The last parcel ends the arrival; ended by hand, what was not on it stays the store's, which is told and books it again (D9). What the hub saw at its door goes to the store, and the store’s own system hears how each arrival ended. An arrival whose day is over with nothing at the door: the hub says it did not come, and the store is told.</p><p class="note">Found and fixed on the way: a store parcel's barcode was found only once it stood at a hub, so it could not be scanned in off a pallet. Section headings in the Shop, Driver, Fleet and Store apps had no style of their own. The hub's fee per handling unit (D12): <b>built 2026-10-26</b> (next card). Goods from abroad (D13): <b>built 2026-10-26</b>, on reading A’s Coming in. Not yet: load carriers before bookable slots (D11).</p></div>
+  <div class="card"><span class="tag t-ask">Your decision</span><h3>Reading C: stock kept for a store</h3><p>A store keeps its stock at a hub, and orders are picked from it. This is warehousing: storage, stock records, picking, and liability for goods at rest. The recommendation stands (D1, D3): decide it as a business question, on its own — and if ever, only as a service a hub declares and offers (its space, its price per unit per day, its terms), never one the network runs.</p></div>
+  <div class="card"><span class="tag t-partial">Thin</span><h3>Reading D: gathering from the field</h3><p>Farmers deposit at a co-op until a truckload is reached: built thinly as consolidation lots, which survive a restart. The co-op settles with its farmers off the platform.</p></div>
+  <div class="card"><span class="tag t-missing">Not built</span><h3>A supplier on its own transport</h3><p>A receiver sees what is coming only where it travels on our notes. A supplier that delivers with its own truck has no note with us. The recommendation (D4, D6): an expected arrival of the receiver’s own, pointing at no load, sent in by the same sheet reader as fleet orders or by the API — typed by hand last. A supplier is invited, never texted.</p></div>
+  <div class="card"><span class="tag t-partial">Later</span><h3>Bookable slots at a dock</h3><p>A hub declares its receiving days, hours and doors, and a store books a day. A time at a door is not booked: two carriers coming to one dock at 08:00 do not know about each other. The recommendation (D8): bookable slots once a hub or a dock actually queues trucks; a no-show clock starts from the booking.</p></div>
+  <div class="card"><span class="tag t-ask">Your decision, when it arises</span><h3>People of a receiving place</h3><p>A receiving place’s people may not be members of the business that ordered. Decide whether a place can have people of its own before staff at a place are built (D14). And a business group seeing its members’ arrivals: only when a real group asks (D7).</p></div>
 </div>
-
-<h3 style="margin-top:28px">First: what "inbound" would mean for us</h3>
-<p class="note" style="margin-top:0">Four different businesses hide under one word. Each reading is a different product.</p>
-<div class="readings">
-  <div class="card"><span class="tag t-ask">Reading A</span><h3>A business receiving at its own sites</h3><p>A builder's yard expects bricks and cement from its suppliers. The goods already travel on our consignment notes; the receiver has no screen for what is coming. <b>Smallest step:</b> no new custody, money or liability.</p></div>
-  <div class="card"><span class="tag t-ask">Reading B</span><h3>A hub as a cross-dock</h3><p>A supplier sends a pallet of 200 web orders to an SBG hub; the hub breaks it down into parcels for many receivers. <b>The natural next step for the parcel network:</b> bulk in, parcels out.</p></div>
-  <div class="card"><span class="tag t-ask">Reading C</span><h3>Stock kept for a store</h3><p>A store keeps its stock at a hub, and orders are picked from it. <b>This is warehousing:</b> storage, stock records, picking, liability for goods at rest. A different company's product unless decided otherwise.</p></div>
-  <div class="card"><span class="tag t-ask">Reading D</span><h3>Gathering from the field</h3><p>Farmers deposit at a co-op until a truckload is reached. <b>Already built thinly</b> as consolidation lots; the co-op settles with its farmers off the platform.</p></div>
-</div>
-
-<p class="group">Scope — what we are</p>
-
-<div class="card decision">
-  <p class="q"><span class="num">D1</span>Which reading do we build, and in what order?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>Each reading brings different custody, money and liability. Building "inbound" without choosing builds the largest one by accident.</dd>
-    <dt>Options</dt><dd><ul><li>A only — the receiver's view of what is already on our notes.</li><li>A, then B — the receiver's view, then hubs that break bulk into parcels.</li><li>A, B and C — become a warehouse operator as well.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">A, then B. Decide C on its own, later, as a business question (D3), not as a feature.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D2</span>Do we hold the commercial order (purchase orders, lines, prices)?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>Our rule is quotations, never payments: we never handle businesses' payments, and a price between outside parties is theirs. A purchase order with prices on our record pulls us into their dispute when goods are short.</dd>
-    <dt>Options</dt><dd><ul><li>Hold the full purchase order.</li><li>Hold the logistics half: a reference both sides understand, the expected handling units and weights, the expected day. No prices.</li><li>Hold a reference only.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">The logistics half. A reference, never a price.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D3</span>Do we store goods, or only pass them through?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>Today custody always has an end in view: a shop holds a parcel for collection with a free window and then a daily holding fee; a hub holds a bag for hours and is flagged when it holds it longer. Storage is custody with no end date, and brings liability for goods at rest (damage is reported, not judged, and a company pays only where it has stated cover), a fee per unit per day, stock records, and papers such as a warehouse licence that each company keeps itself.</dd>
-    <dt>Options</dt><dd><ul><li>Pass-through only: custody time-limited and flagged when exceeded.</li><li>Storage as a service a hub declares (its space, its price per unit per day, its terms), the way a shop declares its shelf and price.</li><li>We run the warehousing ourselves.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Pass-through first. Storage only ever as something a hub declares and offers, never something the network runs.</dd>
-  </dl>
-</div>
-
-<p class="group">Records — what is written down</p>
-
-<div class="card decision">
-  <p class="q"><span class="num">D4</span>What is the record of an expected arrival?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>The consignment note is the source of truth for anything we carry. A supplier who uses its own transport has no note with us. Two records stating the same facts drift apart.</dd>
-    <dt>Options</dt><dd><ul><li>Inbound is a view over loads whose destination is the receiver's site — nothing new is stored.</li><li>A new "expected arrival" record, the receiver's expectation, linked to zero or more loads (zero when the supplier delivers itself).</li><li>Both: build the view first, add the record when B needs it.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Both, in that order. The expected arrival never copies what the note says; it points at it. <b>Built:</b> the view for reading A (2026-10-25); the record for reading B (2026-10-26) — a store’s arrival at a hub names its parcels, its handling units and its day, and copies nothing of them.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D5</span>What is counted when goods come in: handling units or item lines?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>We know parcels, bags and loads (weight, packaging, pieces). We have no product data, and pallets and trolleys as things we track are an idea not yet built (the hub would declare its own carrier; capacity is derived, never typed).</dd>
-    <dt>Options</dt><dd><ul><li>Handling units: pallets, cartons, pieces, as on the note.</li><li>Item lines: product codes and quantities.</li><li>Both.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Handling units. Counting items belongs to the receiver's own stock system, and needs product data we do not have and should not own. <b>Built 2026-10-26:</b> a hub arrival is booked and counted at the door in pallets, cartons, cages or sacks.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D6</span>How do expected arrivals reach us?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>Suppliers rarely hold our app. The fleet office already uploads orders as CSV or Excel with every refused line said in words, and store systems already sign their requests to us.</dd>
-    <dt>Options</dt><dd><ul><li>Typed by hand by the receiver.</li><li>The same sheet reader as fleet orders.</li><li>An API for systems.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">The sheet reader and the API first; typing by hand last. A supplier is invited, never texted.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D7</span>Who may see an expected arrival?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>An identifier opens nothing; a tenant is not a role; staff do not read a store's records except on a report. A hub that sees a supplier's prices, or one supplier who sees another's deliveries, breaks all three.</dd>
-    <dt>Options</dt><dd><ul><li>Supplier and receiver each see their own; a hub sees what is addressed to it, without prices; staff on a report.</li><li>Wider sharing within a business group.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">The first. Decide groups only when a real group asks.</dd>
-  </dl>
-</div>
-
-<p class="group">The place — where goods come in</p>
-
-<div class="card decision">
-  <p class="q"><span class="num">D8</span>Who says how much a place can receive, and when?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>Participants declare and the network reads: a shop declares its shelf and bag bays, a hub its zones and sort fee. A hub has no opening hours, no doors and no receiving capacity today. A country sets its own office hours; a place should set its own receiving hours.</dd>
-    <dt>Options</dt><dd><ul><li>No appointments: first come, first served.</li><li>Declared receiving hours and doors, which carriers and the day plan read (delivery windows already exist in the planner).</li><li>Bookable slots per door, with no-show rules.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Declared hours and doors first. Bookable slots once a hub actually queues trucks. A no-show clock starts from the booking, never from a fixed date (a lesson paid for once already). <b>Built 2026-10-26</b> for stores’ parcels in bulk: a hub declares its receiving days, hours and doors; a store books a day it receives; the hub says an arrival did not come only once its booked day is over.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D9</span>What happens at the moment goods are received?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>The delivery signature on the note is the handover. A damage claim report is frozen at handover, later findings are notes beside it, and the sender has a copy. Each signed note is frozen and hashed in the archive. A partial delivery must leave the rest still expected, and a finished one must stay finished.</dd>
-    <dt>Options</dt><dd><ul><li>Refuse the delivery when anything is wrong.</li><li>Accept with exceptions noted at the handover: short, over, damaged, wrong goods, with photos, on the same note.</li><li>Accept everything and file a claim later.</li></ul></dd>
-    <dt>Recommendation</dt><dd class="rec">Accept with exceptions noted at handover. A damage report follows the rule we already have. What is short stays expected until the receiver closes it. <b>Built 2026-10-25</b> (Built so far, above).</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D10</span>Whose clock decides "today" and "late" at a receiving place?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>A fleet has its own time zone; a delivery window is read on the carrier's clock even where the door is in another zone. A receiving place in another country than its supplier has a third clock.</dd>
-    <dt>Recommendation</dt><dd class="rec">The receiving place's clock decides its own day and lateness. One clock per answer. <b>Built 2026-10-25</b> for what is coming in: the place's country's one clock; a place in a country of several clocks is not guessed at.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D11</span>What happens to pallets, crates and trolleys, and to refused goods?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>A network bag is interchangeable and can stay wherever it was emptied. A bakery's trolley belongs to the bakery and must go home: a return leg with no revenue and a custody chain for something that is not a parcel. Returns of parcels are half built.</dd>
-    <dt>Recommendation</dt><dd class="rec">Decide load carriers before bookable receiving at hubs. Refused goods go back as a return with their own custody, never as a status on the original delivery. <b>Your answer, 2026-10-26:</b> a store’s own pallets, cages and sacks go back with whoever brought them, on the same visit — <b>built</b>: the hub counts them out at its door, and nothing more is tracked. Your answers, 2026-10-27, on the rest: a hub’s own pallets or roll cages, after a move between hubs, “back with the driver, or abandoned or select separate return trip” — the hub whose carriers they are chooses; and refused goods: <b>the sender</b> is asked, decides where they go, and pays the way back, which travels as a new consignment with its own custody, while the first delivery closes as refused, with the reason — <b>built</b> (the details, also your answers: the same driver carries them; with no answer in 48 hours back to the pickup, the sender told first; given up, the carrier disposes at the sender’s cost). A hub saying what it moves bags on — <b>built</b>; the three ways back for its carriers on a move between hubs, the return a job the owning hub posts and pays — <b>built</b>. Your answers, 2026-10-27, on what was still open: a <b>part</b> refused at the handover follows the refusal rules for that part — the rest delivered and signed for, the part the sender’s to decide within 48 hours, carried back by the same driver as a new load — <b>built</b>; a store’s parcel called off at a hub comes back to the shop it was handed in at, as a new parcel the store pays for, nothing refunded — <b>built</b>; and, never handed in at a shop, the store picks where it comes back to — a shop, or its own door as a load at a driver’s price, at most what it allows (“let the store pick”, “As a load to its door”) — <b>built</b>; the store’s door for a parcel handed in at a shop too (“parcel return to a door should be optional too”) — <b>built</b>; a load to its door that no driver takes, sent to a shop instead, the store told after a day (“Switch to a shop”) — <b>built</b>; a person’s parcel withdrawn by staff at a hub goes back to the shop it was handed in at, its sender paying the way back in cash there (“Back to its shop, sender pays”) — <b>built</b>; a person’s own door instead, paid by mobile money first, the rest back to their number (“Mobile money first”) — <b>built</b>; and who pays for a load: whoever posts it, unless we only match them and they settle between themselves (“anybody who posts loads will pay unless we match”) — <b>built</b>. <b>Your answers, 2026-10-27 evening, all as recommended — all built:</b> the payout run raised by the system every morning, one member of staff approving it; the driver (or their fleet’s office) says a matched load was paid, and the shipper sees it; a door in another country than the hub refused by the pin’s country (100 km where the map service cannot say); a person raises the most for their door by a second M-Pesa ask. Returns of parcels nobody collected stay off until after the first test.</dd>
-  </dl>
-</div>
-
-<p class="group">Money, borders and telling</p>
-
-<div class="card decision">
-  <p class="q"><span class="num">D12</span>Who pays for receiving, handling and (if ever) storage?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>Fees follow custody events: whoever did the work is paid for it. Hubs declare their own sort fee. Our sister companies sell to the public; between businesses the price is a quotation between them.</dd>
-    <dt>Recommendation</dt><dd class="rec">Receiving at a hub is a fee the hub declares per handling unit, charged to whoever booked the inbound. Between two outside businesses it stays between them. <b>Built 2026-10-26</b>, with your answer that day, “Its own fee”: the hub is paid the fee it declares — for receiving, and now for sorting too. The store pays for the units it books when it books, its company's fee and tax on top; the hub is paid at its door for the units it counts; what was not counted goes back.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D13</span>What changes when goods come in from abroad?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>The note already carries the Incoterm and the clearance state, and says who may claim. We never work out duty or classify goods for customs.</dd>
-    <dt>Recommendation</dt><dd class="rec">An expected arrival from abroad shows whether it has cleared, from the note. Nothing more is computed. <b>Built 2026-10-26</b>, as recommended: a business’s Coming in says, for a load from another country, whether customs let it go or holds it (as the clearing agent recorded), whether its driver said it is at or has cleared the border, whether it is under bond — and, until it has cleared, who clears it in under the term.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">D14</span>Who is told what, and where?</p>
-  <dl>
-    <dt>Why it matters</dt><dd>Nobody is texted about goods; a business reads its bell in the app (no push for a business yet); store systems hear by webhook; documents go by link. A receiving site's staff may not be members of the business that ordered.</dd>
-    <dt>Recommendation</dt><dd class="rec">The receiver's business inbox and its systems' webhook. Decide whether a "site" can have its own people before site staff are built.</dd>
-  </dl>
-</div>
-
-<!-- ─────────────────────────────────────────────────────────── the order -->
-<h2 id="order">The order to decide in</h2>
-<p class="lead">Some answers change the questions after them.</p>
-<ol class="order">
-  <li><b>D1 and D3</b> — which reading, and whether we ever store. Everything else depends on these two.</li>
-  <li><b>D2 and D5</b> — what we write down about the goods: a reference and handling units, or more.</li>
-  <li><b>D4, D7 and D14</b> — the record, who sees it, and who is told. With these, reading A can be built: a business sees what is coming to its sites.</li>
-  <li><b>D8, D9 and D10</b> — the place: its hours and doors, the receiving moment, its clock. With these, reading B can start at one hub (started 2026-10-26).</li>
-  <li><b>D11, D12 and D13</b> — empties and returns, money, borders. Needed before B runs at more than one hub.</li>
-</ol>
-<p class="note">What we would not do in any reading: handle payment between businesses, compute customs duty, classify goods for customs, or keep a supplier's prices.</p>
-
-<!-- ─────────────────────────────────────────────────────────── built -->
-<h2 id="built">Built from this assessment</h2>
-<p class="lead">The two smaller recommendations, built on 2026-10-15. Neither needed a decision above. Both are rows on progress.html.</p>
-<div class="grid" id="built-cards">
-  <div class="card"><span class="tag t-strong">Built</span><h3>Who drives on which day</h3>
-    <p>On the plan board for a day, the office ticks who drives and saves. The plan counts those drivers instead of every active one and names them; where nobody has said, it says it counted everybody. A driver put on a day or taken off one is told, and sees their coming days under “Your fleet”.</p>
-    <ul><li>A planning fact only: no hours, no pay, and anybody can still start a shift.</li><li>Built since, 2026-10-17: different start times within one fleet, and two drivers sharing a truck in a day, as a site's shifts (<code>3a1e7df</code>).</li></ul>
-    <p class="note">Commit <code>83c5f84</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>A parcel running late is told</h3>
-    <p>A parcel is running late when the network holds it on its way and the time it was promised to be ready is more than two hours behind it. The receiver and a person who sent it are told once, in the app; a store hears on its systems. The tracking page, the parcel's screen and the list say it too.</p>
-    <ul><li>Never before it was handed in, and not once it has arrived.</li><li>The two hours is because the promise is optimistic by decision.</li></ul>
-    <p class="note">Commit <code>a306058</code>.</p></div>
-</div>
+<p class="note">What we would not do in any reading: handle payment between businesses, work out customs duty, classify goods for customs, or keep a supplier’s prices.</p>
 
 <!-- ─────────────────────────────────────────────────────── centralized data -->
 <h2 id="central">Centralized logistics data</h2>
-<p class="lead">Connecting warehouse, transport and accounting systems (WMS, TMS, ERP) and field data into one operational view, with no manual reconciliation. Assessed 2026-10-15. Inside SeeBuyGet the data is already one; with other companies' systems it is far.</p>
-<div class="grid">
-  <div class="card"><span class="tag t-strong">Near</span><h3>One record per thing, inside</h3><p>One server holds every parcel, load, run, fleet, driver, shop, hub and money entry, and every app reads those same records — our own apps need no reconciliation. Every company and person has one identity that ties their records together.</p></div>
-  <div class="card"><span class="tag t-strong">Near</span><h3>Field data joins as it happens</h3><p>Phone positions on shift, scans at counters and hubs, photos at drop-off and delivery, the waiting-time taps at gates, road reports and signatures on consignment notes all land on the same records the moment they happen.</p></div>
-  <div class="card"><span class="tag t-strong">Near</span><h3>Money in the same system</h3><p>Fees are booked in double-entry accounts from the handovers that earn them. Ledgers export as CSV; document bundles go to a customer's own storage (S3, WebDAV or a webhook). One tracking link answers for parcels, loads and booked space.</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>Other companies' systems</h3><p>A store's, a business's and a fleet's own systems are told each step by signed messages, and a business's or a fleet's posts loads, sends orders in and takes loads with its own key (rounds 9–12, <code>8624da2</code>). Books still leave as CSV that someone imports by hand. No standard formats, no warehouse system, no carrier feeds.</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>One view, live</h3><p>The apps re-ask on a timer; there is no live connection. The console reads across everything, but there is no single control view; the digital twin built for one is fed and read by nothing. Parcels, loads, run bookings, lots and bags are separate kinds of record.</p></div>
-</div>
-
-<h3 style="margin-top:28px">Done</h3>
-<div class="grid">
-  <div class="card"><span class="tag t-strong">Done</span><h3>1. Consolidation lots survive a restart</h3><p>A cooperative's lots and its members' deposits were held in memory alone: a restart lost them. They are kept now, found by their code again after a restart, and a LOT number is never given twice.</p><p class="note">Commit <code>e82d08c</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Done</span><h3>2. The records are in Postgres</h3><p>Every record is kept in Postgres (one table, a row per record, exact JSON text, in the order written), and a write is kept before the request is answered. The Docker stack runs it; a server refuses to start if it cannot reach it. A store on files moves in by itself. Releases dump it before they restart. Reporting can now query the records where they are.</p><ul><li>Checked: the whole server, with the sandbox's 19,161 records moved in, answers as the file store did, and keeps a write through a hard kill.</li><li>Not yet: a reporting copy apart from the live database, and more than one server at once.</li></ul><p class="note">Commit <code>f47c27f</code>.</p></div>
-</div>
-
-<h3 style="margin-top:28px">Priorities</h3>
-<p class="note" style="margin-top:0">In this order. Each starts with the decisions named, which are yours.</p>
+<p class="lead">Connecting warehouse, transport and accounting systems and field data into one view, with nothing re-keyed. Inside SeeBuyGet the data is one. Built and on progress.html: the records in Postgres, lots that survive a restart, webhooks for every party (P1), an API for businesses and fleets (P2), a shipper’s own GS1 code on every package label, and the live connection (P4). What is left, in this order:</p>
 
 <div class="card decision">
-  <p class="q"><span class="num">P1</span>Signed webhooks for every party, on every handover</p>
+  <p class="q"><span class="num">P3</span>Standards where they are cheap — the rest</p>
   <dl>
-    <dt>What</dt><dd>Before: only a store's systems heard, and only five events at the end of a journey. Every party with systems of its own — a store, a business, a fleet — would subscribe to what concerns it: taken in, loaded, at a hub, delivered, a problem reported, money settled. Signed, retried, in order, and readable back as a log, so their systems keep step with ours and nobody re-keys anything.</dd>
-    <dt>Decisions</dt><dd><ul><li>Which events, and what each may carry for whom (a fleet must not learn a store's prices; a store must not learn a driver's position). <b>Your answers, rounds 9–11:</b> the store first; each party's system is told only what its own app shows it; a fleet's hears a load's money only where we pay the fleet, and where its vehicles are only when the fleet turns that on, with the driver told. <b>Built</b> (<code>5d8df21b</code>, <code>170f4831</code>, <code>64e2c10</code>).</li><li>How long failed deliveries are retried, and who is told when a subscriber stays down. <b>Built:</b> every message signed, tried again for about two days, readable back and sent again by hand; its owners or managers are told once a day while its system stays down.</li></ul></dd>
-    <dt>Builds on</dt><dd>The store webhooks and their signing (vendor callbacks); the custody chain, which already records every handover as an event.</dd>
+    <dt>What</dt><dd>An accounting export an accounting system imports as it is — journal lines with their accounts, not a ledger somebody retypes. Books still leave as CSV that someone imports by hand. And pallet labels with a code of their own: packages carry a GS1 code (SSCC) already; a pallet does not.</dd>
+    <dt>Decisions</dt><dd><ul><li>Which accounting systems our companies and the first customers use, per country — that decides the format.</li><li>Whether a pallet gets a label of its own.</li></ul></dd>
   </dl>
 </div>
 
 <div class="card decision">
-  <p class="q"><span class="num">P2</span>An API for businesses and fleets</p>
+  <p class="q"><span class="num">P4</span>One live view — the rest</p>
   <dl>
-    <dt>What</dt><dd>A business's system posts loads and reads their status; a fleet's own transport system sends orders in and takes its day's plan out. The same keys stores already have (a key per system, revocable, sandbox and live), with what each key may do written on it.</dd>
-    <dt>Decisions</dt><dd><ul><li>Which acts a key may do without a person (post a load: yes; accept a plan, or a price: probably not). <b>Your answers, rounds 11–12:</b> post, send in, take at its price; never accept a plan, agree a price, money or people. <b>Built</b> (<code>8624da2</code>).</li><li>Limits per key, and how a version of the API is retired. <b>Your answer, round 12:</b> a limit per key as stores have; a year's notice, every company with a live key told then and a month before. <b>Built</b>.</li></ul></dd>
-    <dt>Builds on</dt><dd>The store API keys; the contract (756 operations, published); the order sheet reader, whose refusals in words would answer a system too.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">P3</span>Standards where they are cheap</p>
-  <dl>
-    <dt>What</dt><dd>An accounting export an ERP imports as it is — journal lines with accounts, not a ledger to retype — and GS1 serial shipping container codes (SSCC) on pallet labels, so a receiving warehouse scans our labels into its own system.</dd>
-    <dt>Decisions</dt><dd><ul><li>Which accounting systems the first customers use, per country (that decides the format).</li><li>Pallet codes wait on the load-carrier decision (the hub declares its carrier; see D11 above). <b>Built since, for packages:</b> a shipper's own GS1 code (SSCC) on every package label beside ours, for stores and a forwarder's clients too, found by every scan box, and every label for thermal printers (<code>349349d</code>, <code>16c3959</code>, <code>89a8889</code>, <code>9404440</code>, <code>f5a8245</code>, <code>58a5e37</code>, <code>4876e12</code>).</li></ul></dd>
-    <dt>Builds on</dt><dd>The double-entry books; the label service.</dd>
-  </dl>
-</div>
-
-<div class="card decision">
-  <p class="q"><span class="num">P4</span>One live view</p>
-  <dl>
-    <dt>What</dt><dd>A live connection from the server to the console and the fleet office, instead of asking again on a timer; and the console's overview reading the digital twin, which is already fed by every parcel event and read by nothing.</dd>
-    <dt>Decisions</dt><dd><ul><li>Who needs live (the console and fleet offices) and who is fine on push (everybody on a phone). <b>Your answer, 2026-10-25:</b> “Console and fleet offices”. <b>Built:</b> signed in, they keep a connection open to the server, which says by name only that something they show may have changed; the screen reads it again through its usual doors. The console hears of every change and reads its counts and the screen in front again, at most every five seconds — a record somebody opened by its name stays as opened until Refresh, so it does not count as opened again. A fleet office hears only of its own. “Live” in the console's header says it is on, “Reconnecting…” when it dropped; it comes back by itself and reads once.</li><li>Still open: the console's overview reading the digital twin.</li></ul></dd>
+    <dt>What</dt><dd>The console’s overview reading the digital twin, which every parcel event feeds and nothing reads. Parcels, loads, run bookings, lots and bags stay separate kinds of record.</dd>
   </dl>
 </div>
 
 <div class="card decision">
   <p class="q"><span class="num">P5</span>Reporting on its own copy</p>
   <dl>
-    <dt>What</dt><dd>Now the records are in Postgres, reports can be asked of them. Asked of the live database they compete with the counter; a read-only copy (a replica, or a nightly export) keeps them apart.</dd>
-    <dt>Decisions</dt><dd><ul><li>Who reads reports, and how fresh they must be (that decides replica or nightly).</li></ul></dd>
+    <dt>What</dt><dd>Reports asked of the live database compete with the counter. A read-only copy — a replica, or a nightly export — keeps them apart.</dd>
+    <dt>Decisions</dt><dd><ul><li>Who reads reports, and how fresh they must be: that decides replica or nightly.</li></ul></dd>
   </dl>
 </div>
 
 <div class="card decision">
-  <p class="q"><span class="num">P6</span>Other carriers' feeds, and one kind of movement</p>
+  <p class="q"><span class="num">P6</span>Other carriers’ feeds, and one kind of movement</p>
   <dl>
-    <dt>What</dt><dd>A parser for carrier tracking feeds exists and nothing uses it: connect it where a load leaves our network on someone else's truck. And parcels, loads, run bookings, lots and bags read as one kind of movement for anything that looks across them ("movement unification", an old open item).</dd>
+    <dt>What</dt><dd>A reader for carrier tracking feeds exists and nothing uses it: connect it where a load leaves our network on someone else’s truck. And parcels, loads, run bookings, lots and bags read as one kind of movement for anything that looks across them.</dd>
     <dt>Decisions</dt><dd><ul><li>Which carriers, if any, before testing — probably none.</li></ul></dd>
   </dl>
 </div>
 
+<div class="grid" style="margin-top:14px">
+  <div class="card"><span class="tag t-missing">Not built</span><h3>More than one server at once</h3><p>One server writes the records, and a second refuses to start. The server is never run twice until that changes.</p></div>
+</div>
+
 <!-- ─────────────────────────────────────────────────────── fleet and assets -->
 <h2 id="fleet">Fleet and asset management</h2>
-<p class="lead">Keeping vehicles fit to go out, and knowing at once when one is not. Assessed 2026-10-15, built 2026-10-15 and 16. Before: vehicles were managed for their legal fitness (papers with expiry dates) and what they can carry (class, capacity, equipment), not their condition. Nothing kept a reading, a service schedule, a defect or a breakdown, and a grounded vehicle had no way back. Your words: “Build availability, checks, defects, service due dates and breakdowns. Leave out parts stock, mechanics' time, and workshop invoices or payments (quotations, never payments).”</p>
-
-<h3 style="margin-top:28px">Built</h3>
+<p class="lead">The six slices of 2026-10-15 and 16 — off the road and back, the odometer, the daily check and defects, service due dates, a breakdown, the loads going on in another truck — and the open items since (a courier’s own vehicle, bags on a broken-down vehicle, a reload on the note, staff reading upkeep, the live map) are built, each a row on progress.html. Open:</p>
 <div class="grid">
-  <div class="card"><span class="tag t-strong">Built</span><h3>1. Off the road, and back</h3><p>A vehicle goes off the road with a reason (in the workshop, in for a service, after an accident, other), from a day until a day or until it is put back, and comes back by itself the day after. Every door reads it: a shift does not start in it, a plan for one of those days leaves it out, and the driver's list of vehicles says why. A vehicle grounded the old way can be put back.</p><p class="note">Commit <code>af6a94b</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>2. The odometer</h3><p>The driver gives a reading as a shift starts and as it ends. One lower than the last is refused before the shift starts; at the end a reading never stands in the way — a slip is not kept, and the driver is told why. A jump bigger than a vehicle could drive (1,500 km a day) is kept and marked doubtful. The office records a new meter.</p><p class="note">Commit <code>e6dbe20</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>3. The daily check, and defects</h3><p>A checklist for each class of vehicle: four items for a bike, nine for a truck; brakes, tyres and lights are safety-critical on all of them. A problem is said in words or a photo. A safety-critical one keeps the vehicle off the road until the office marks it fixed, or safe to drive as it is, always with a reason, and the driver is told which. A driver reports a problem at any time; a fleet can require the check before every shift.</p><p class="note">Commit <code>1a8ae6a</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>4. Service due dates</h3><p>Every so many km or months, whichever comes first: a truck every 15,000 km or 6 months, a bike every 3 months, or the office's own schedule for a vehicle. Counted from the last service, adding the km reading by reading, so a new meter does not lose the count. The office is told once when one comes due (a fortnight before, or a tenth of the km) and once when it is overdue. Each fleet chooses: overdue only warns (the default), or keeps the vehicle off the road. What was done is kept — a service, a repair, tyres, an inspection — with the day, the km, the workshop and a photo of its job card. Never a price or a part.</p><p class="note">Commit <code>edb2c29</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>5. A breakdown on the road</h3><p>The driver reports it from the vehicle with where the phone is (or the shift's last known position) and a photo; the office can record one it heard of by telephone. The vehicle is off the road at once. The office is told with the position, and the shippers of what is aboard, or on its way to be collected, are told by their load, never by the plate. Today's planned trips for it are held, and the plan no longer sends a trip to any vehicle that is off the road. The office says how it ended: back on the road, or into the workshop until a day.</p><p class="note">Commit <code>5cf8e41</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>6. The loads go on in another truck</h3><p>Another driver of the same fleet takes everything over at the vehicle with the six digits on the other driver's phone (the pass counters already check, wrong tries counted). All of it moves, or none of it: room and what each load needs are asked first, and a run that has left goes on in the new truck. When the driver with the loads has gone home, the office moves them. Who took what, in which truck, when, where and on whose word is written on the consignment note (box 18) and nowhere else; box 16 keeps the truck the goods were taken over in, and the note is frozen in the archive as it read at the reload.</p><p class="note">Commit <code>942544b</code>.</p></div>
+  <div class="card"><span class="tag t-missing">Not built</span><h3>Other assets</h3><p>Trailers as assets of their own, with papers and inspections that move between tractors; a count of bags by place (a hub counts its own floor since 2026-11-02; shops and vehicles do not) and a lost bag; the condition of a hub’s equipment. From the list before building, not asked for yet.</p></div>
 </div>
 
-<h3 style="margin-top:28px">Left out, by decision</h3>
-<div class="grid">
-  <div class="card"><span class="tag t-ask">Out</span><h3>The workshop's own business</h3><p>Parts stock, mechanics' time, workshop invoices and payments. A job card is kept as a photo of what was done; what it cost is between the fleet and its workshop (quotations, never payments).</p></div>
-  <div class="card"><span class="tag t-ask">Out</span><h3>Costs per km</h3><p>Fuel and upkeep cost per km would help a fleet set its own price floor. Not recorded.</p></div>
-  <div class="card"><span class="tag t-ask">Out</span><h3>Scoring how people drive</h3><p>Harsh braking and speeding from trackers is monitoring of people, close to the line we do not cross (no employment). A deliberate decision if it ever comes, not a feature.</p></div>
-</div>
-
-<h3 style="margin-top:28px">Not as I first said it</h3>
-<ul>
-  <li>The odometer is checked against what a vehicle could drive in the time since the last reading, not against GPS distance. There is no photo of the dashboard, and no engine hours.</li>
-  <li>The shippers of a broken-down truck's loads get a breakdown notice of their own, not the running-late one. The plan holds the truck's trips; it does not re-plan by itself — the office plans the day again.</li>
-  <li>The daily check is words and photos; it is not read aloud.</li>
-</ul>
-
-<h3 style="margin-top:28px">Open</h3>
-<div class="grid">
-  <div class="card"><span class="tag t-strong">Built</span><h3>A courier's own vehicle</h3><p>The Driver app opens the upkeep sheet a fleet's office has for each vehicle that is the courier's own: off the road and back, readings, services and when one is due, the daily check's defects, and how a breakdown ended (2026-10-25). Moving loads to another driver stays the office's. The sheet and its words are fetched when first opened.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>Bags and parcels on a broken-down vehicle</h3><p>Was: they did not move in a handover — only loads and run bookings did — and a courier's bike breaking down with parcels had no way to pass them on.</p><p><b>Your answer, 2026-10-25:</b> “Split by the road”. <b>Built:</b> the couriers on a shift within 25 km of a broken-down courier are told, by what there is and how far; one goes there and takes every bag and loose parcel over with the six digits on the first courier's phone, all or none, after their room is asked. Each parcel's chain of hands says so. The road is paid once: the first courier for the stretch driven (the trip less what was left from the bike), at the takeover; whoever hands the bag in for the rest; where nobody's phone said where, that stretch is not paid, and the bag says so. A fleet truck's bags move with its loads to another of its trucks. A courier's freight load stays with them: its note names them.</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>A reload on the consignment note</h3><p>Your words, 2026-10-16: “moving goods to another truck can be written on the consignment note only.” Built: the reload is kept on the load (or the run) where its note reads it, and box 18 says it — when, onto which truck and driver, after which broke down, where, and on whose word. The breakdown keeps no copy; it reads the loads. Box 16 keeps the truck the goods were taken over in; the tracking link shows the truck coming now. Each note is frozen in the archive at the reload, a new moment in its list. A change of truck before the goods were taken over is not written on the note.</p><p class="note">Commit <code>5725e0d</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Staff and a fleet's upkeep</h3><p>Your words, 2026-10-16: “Staff should not be able to change upkeep records.” Built: staff read a fleet's upkeep and change none of it. No upkeep write route lets staff in, and each check refuses them in words as well. Standing in for a driver, staff may still start or end a shift, but give no odometer reading.</p><p class="note">Commit <code>5725e0d</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>The live map</h3><p>A broken-down vehicle is a red dot on the fleet's live map, labelled so, with no line onward; one with nobody on shift in it stands where it was reported, and a tap says what happened (2026-10-25). The office also sees them on a map of their own at the top of Vehicles, and on each vehicle's sheet.</p></div>
-  <div class="card"><span class="tag t-missing">Not built</span><h3>Other assets</h3><p>Trailers as assets of their own (papers and inspections that move between tractors), a count of bags by place and a lost bag, and the condition of hub equipment — from the list before building, not asked for this time.</p></div>
-</div>
-
-<!-- ─────────────────────────────────────────────── planning across sites and shifts -->
+<!-- ─────────────────────────────────────────────────────── sites and shifts -->
 <h2 id="resources">Planning across sites and shifts</h2>
-<p class="lead">Drivers, loading places and vehicles, planned for a fleet that works from more than one place. Assessed 2026-10-16, built 2026-10-16 and 17. Your words: “Logistics resource optimization / Planning workforce, dock capacity, and equipment utilization efficiently across every site and shift. This is for fleets that operate from different locations.” Before: a fleet had one depot, typed when it signed up, and every truck in the day plan started there. A shift was only a driver's own start and end, never a pattern. Nothing said how much each vehicle was used.</p>
-
-<h3 style="margin-top:28px">Built, in the order you agreed</h3>
+<p class="lead">The six steps of 2026-10-16 and 17 — a fleet’s sites, how the vehicles were used, shifts at a site, loading bays and hours, a site short of trucks, a shipper’s own loading place — and your four answers are built, each a row on progress.html. Open:</p>
 <div class="grid">
-  <div class="card"><span class="tag t-strong">Built</span><h3>1. A fleet's sites</h3><p>The office adds its depots and yards on a map, says which vehicles and drivers work from each, and closes a site once nobody works from it. The depot the fleet signed up with is its first site. In the day plan each truck starts from its own site, and no more trucks leave a site than drivers start there. The roster can say a driver starts at another site for a day. Staff read the sites and change none of them.</p><p class="note">Commit <code>32aac5e</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>2. How the vehicles were used</h3><p>A week at a time, for each vehicle, each site and the whole fleet: days out, days off the road, days standing idle, shifts and hours on shift, km driven where readings were given, loads delivered and their weight, how much of the distance ran loaded, and runs. Only from what was recorded: nothing is estimated, and nothing about how anybody drives.</p><p class="note">Commit <code>191c876</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>3. Shifts at a site</h3><p>A site keeps up to six shifts, each with a start time and a length. The roster says which shift each driver starts on. The plan offers each truck once per shift of its site, so one truck can go out early with one driver and late with another, but never on two shifts that overlap. Its trips are numbered through as one day. For each shift the plan says how many drivers are rostered and how many it needs.</p><p class="note">Commit <code>3a1e7df</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>4. Loading bays and opening hours</h3><p>A site keeps how many trucks can load there at once, and when it is open for loading, day by day. An order collected at one of the fleet's own sites loads while the site is open; a truck that comes early waits at the gate. No more trucks load at once than the site has bays: the next one waits, and its trip says how long. A truck still loading at closing time is planned all the same, and the plan says so. On a day the site is closed nothing is collected there, and the plan says why. For each site the plan says how many trucks load there, how many waited for a bay, and the longest wait.</p><p class="note">Commit <code>b567504</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>5. A site short of trucks</h3><p>Your answer: the plan says it, and the office moves the truck. When orders near one site are left with no room in any truck's day, and none of that site's own trucks stands idle that could carry them, the plan tries them on the fleet's trucks standing idle at other sites, as if those started there for the day. It names the ones that would carry them: “Mombasa yard is short of trucks: KST 402T, standing at Depot, would carry 1 order left here.” It moves nothing. The office changes where a truck works from on Sites, and rosters a driver there. A site short of a driver, not a truck, is not said to be short of trucks.</p><p class="note">Commit <code>c4f6495</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>6. A shipper's own loading place</h3><p>Your answer: shippers' docks too, kept by them. Under Business details, a business gives each place of its own its loading hours, day by day, and how many trucks load there at once. Only the business changes them: staff are refused, and a viewer reads them. When a fleet's order is collected at that place, the plan loads within those hours and bays, the same way it does at the fleet's own sites. The shipper is the business that placed the order, or the one that linked the contract. On a day the shipper says the place is closed, nothing is collected there; the fleet sees why, and the shipper is told it is its own hours.</p><p class="note">Commit <code>f7aabda</code>.</p></div>
-</div>
-
-<h3 style="margin-top:28px">Your four answers, 2026-10-17</h3>
-<p>I built with my recommended answers first, then asked again. Two of your answers differ from those defaults, and both are now built (cards 5 and 6).</p>
-<div class="grid">
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Whose loading places</h3><p>Your answer: “Also shippers' docks, kept by them.” Built as card 6.</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>A site short of trucks</h3><p>Your answer: “Plan says it, office moves.” Built as card 5. A truck still starts from its home site; the roster moves drivers for a day.</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>How far workforce planning goes</h3><p>Your answer: drivers' shifts only. Who starts where and on which shift. Never pay, contracts, or hours counted for pay, and no staff counts at hubs or shops.</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>What use is counted</h3><p>Your answer: recorded facts only. Days out, idle and off the road, hours on shift, km, loads, runs. Counted, never judged: no flags, no costs.</p></div>
-</div>
-
-<h3 style="margin-top:28px">Not as I first said it</h3>
-<ul>
-  <li>Bays are handed out after the orders are placed on trucks, in the order trucks come for them, not while placing. When a wait for a bay takes a truck past its shift, the plan says so on that truck and at the top of the plan. It does not move orders off the truck to avoid it.</li>
-  <li>A site where the office has not said how many bays it has sets no limit. At first, a site nobody had set had two.</li>
-  <li>Opening hours are for loading only. A truck may still leave a closed site, or start its shift there.</li>
-  <li>An order counts as collected at a site when its collection point is within 300 m of the site, measured in a straight line.</li>
-</ul>
-
-<h3 style="margin-top:28px">Open</h3>
-<div class="grid">
-  <div class="card"><span class="tag t-partial">Partial</span><h3>Bays shared between carriers</h3><p>A shipper's bays are counted for each fleet's own trucks only. Two carriers planning trucks to the same dock at 08:00 do not know about each other. Booking a time at the dock (a receiving or loading appointment) would fix it, and belongs with the inbound decisions.</p></div>
-  <div class="card"><span class="tag t-partial">Partial</span><h3>A shipper the plan cannot name</h3><p>A shipper's hours are read only when the plan knows who the shipper is: the business that placed the order, or the one that linked the contract. An order a fleet types in for a shipper that has not linked its contract is planned without those hours.</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>Bays shared between carriers</h3><p>A shipper’s bays are counted for each fleet’s own trucks only. Two carriers planning trucks to the same dock at 08:00 do not know about each other. Bookable slots at a dock would fix it (<a href="#inbound">inbound</a>).</p></div>
+  <div class="card"><span class="tag t-partial">Partial</span><h3>A shipper the plan cannot name</h3><p>A shipper’s hours are read only when the plan knows who the shipper is: the business that placed the order, or the one that linked the contract. An order a fleet types in for a shipper that has not linked its contract is planned without them.</p></div>
   <div class="card"><span class="tag t-partial">Partial</span><h3>Waiting for a bay</h3><p>Bays are handed out after the orders are placed on trucks. A wait that takes a truck past its shift is said, but the plan does not move orders to avoid it.</p></div>
-  <div class="card"><span class="tag t-missing">Not built</span><h3>Trailers and equipment</h3><p>Trailers as assets of their own, and equipment at a site (a forklift that only some bays have) booked with a loading. From the list before building.</p></div>
+  <div class="card"><span class="tag t-missing">Not built</span><h3>Trailers and equipment</h3><p>Trailers as assets of their own, and equipment at a site (a forklift that only some bays have) booked with a loading.</p></div>
   <div class="card"><span class="tag t-missing">Not built</span><h3>A forecast</h3><p>How many trucks and drivers next week may need, read from past orders. The plan works only from orders already placed.</p></div>
 </div>
 
-
-<!-- ───────────────────────────────────────────────────────────── the compendium -->
+<!-- ─────────────────────────────────────────────────────── compendium -->
 <h2 id="compendium">Against the compendium</h2>
-<p class="lead">The GLOS PUDO Unified Compendium (June 2026) checked requirement by requirement against the code, 2026-10-18. In full, with every row and where it was found, on <a href="compendium-gaps.html">compendium-gaps.html</a>.</p>
+<p class="lead">The GLOS PUDO Unified Compendium was checked requirement by requirement on 2026-10-18, then supply-chain security against ISO 28000 on 2026-10-20. Every answer you gave on them — thirty-three rounds, then ISO 28000’s — is built, each a row on progress.html. What is left is in full on <a href="compendium-gaps.html">compendium-gaps.html</a> and <a href="iso28000-gaps.html">iso28000-gaps.html</a>; the largest part is one card:</p>
 <div class="grid">
-  <div class="card"><span class="tag t-strong">Close</span><h3>The light edition</h3><p>PUDO Light (chapters 12–17) is close to fully built, and the product goes well beyond it for freight, fleets and papers that cross a border. Of 572 requirements: 175 built, 261 partly, 78 missing, 35 declined by your decisions, 23 not applicable.</p></div>
-  <div class="card"><span class="tag t-partial">Two copies</span><h3>The mother OS</h3><p>M1–M7, SSE and the gateway each have an engine built early that keeps its state in memory, is closed to all but staff outside a sandbox, and is called by no app. The product built its own where it needed to. Most “partly” rows are that.</p></div>
-  <div class="card"><span class="tag t-strong">Built</span><h3>The two gaps you noticed</h3><p>The global barcode beside ours (a shipper's own GS1 SSCC on each package label, under its GS1 company prefix) and the commercial invoice (written and signed by the shipper, three copies for the pouch). Commit <code>349349d</code>.</p></div>
-  <div class="card"><span class="tag t-strong">Fixed</span><h3>Three things that were wrong</h3><p>Shopkeepers' and drivers' phone numbers were readable on a public route (<code>70194c5</code>); shop and driver ratings were lost at every restart (<code>49b4563</code>); the public store page counted unjudged damage reports as upheld claims (<code>0aea927</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Your answers</span><h3>Built the same day</h3><p>Your four answers, 2026-10-18: the old engine's HS-code and UN-number guessing removed (<code>bc494d2</code>); a business's load crossing a border is not taken over without its signed invoice, or its own paper said to travel (<code>2bf4ada</code>); store parcels declared under DAP with one value (<code>c6ac473</code>); and the counter without signal begun: a take-in finishes with no signal (<code>79c96dc</code>), which found the outbox had stopped queueing any write with no signal (<code>f43d96d</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your second four answers, all built</h3><p>Releasing a parcel stays online, and with no signal the counter says so first (<code>05dad05</code>). The shop sign-up asks the applicant the franchise requirements, and staff review the answers (<code>ad3a235</code>). A payout run is raised by one member of staff and approved by another (<code>e103ece</code>). Every automatic flag is a case staff take, note and close with a reason; one nobody takes is escalated (<code>32ac9a1</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your third answers, built</h3><p>How a payee is paid is each country's own: Kenya by M-Pesa to a number the payee set and confirmed, every other country by hand (<code>c47ecb0</code>, <code>47d5e4f</code>). A driver's breakdown and hazard reports wait on the phone with no signal and are dated when they were made; sign-in and top-up say first that they need one (<code>00d2e5b</code>). An escalated case stays in the console for now.</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your fourth answers, built</h3><p>Who is at the counter: a shop's sign-in works only on its own phones, a new one confirmed by a code to the shop's number (<code>e9ed1de</code>). Its people sign in on the shop's phone with their own number and PIN, and every act is kept under their name for the owner. The server lets them through the counter's doors only, so money, prices, hours, people and the shop's account stay the owner's (<code>8e2dc15</code>). <code>/start</code> and <code>/stop</code> work on Windows (<code>5969ec2</code>); a bus handover no longer holds the server for minutes (<code>7f11b67</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your fifth answers, built</h3><p>A parcel is lost when staff declare it: a week without a scan opens a search case, staff declare it from there with where they looked, the sender holds the damage claim report, and it can be found again (<code>fd676c1</code>). The console's "The pilot" shows the compendium's four numbers each week against their targets, each finished week frozen (<code>93492b5</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your sixth answers, built</h3><p>At the bus, the driver's pass brings up the bus's list and each parcel is scanned onto it with a green or red beep (<code>2c97a6c</code>). The pilot's Monday review: each number off target in the week just ended opens a case that somebody takes before lunch, closed for good once handled (<code>78475c5</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your seventh answers, built</h3><p>Evidence that lasts: the anchor behind every fingerprint is kept and chained, so it survives a restart and a broken one is found; one server writes the store, and a second refuses to start (<code>4f1c27e</code>). A lost parcel's fee: report only for now, as built.</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your eighth answers, built</h3><p>KRA eTIMS invoices, for Kenya only: every sale and every sale given back is a tax invoice, built to KRA's interface and tested, and not sent to KRA until the company is registered (<code>77dec19</code>). Found on the way: two servers starting in the same instant could both claim the store; now they cannot (<code>deb7659</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your ninth answers, built</h3><p>A Kenyan shop's or store's KRA PIN on its tax invoices, asked in no other country, and the top-up fee with the company's own VAT (<code>3b9dcfd</code>). Webhooks for every party, the store first: it sees whether each message arrived and sends one again (<code>5d8df21b</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your tenth answers, built</h3><p>A business's own system is told each step of its loads — only what it sees in its app, signed, read back, sent again — and its owners are told once a day when it stays down (<code>170f4831</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your eleventh answers, built</h3><p>A fleet's own system is told each step of its orders, loads, vehicles, runs and plan, as its own screens show them; a load's money only where we pay the fleet; where its vehicles are only when the fleet turns it on, and the driver is told (<code>64e2c10</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twelfth answers, built</h3><p>An API for businesses and fleets: a business's system posts, withdraws and reads its loads; a fleet's sends orders in, reads its plan and the board, and takes a load at its price — keys made by owners or managers, a test key that keeps nothing, a year's notice before a version stops (<code>8624da2</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your thirteenth answers, built</h3><p>A store parcel's papers abroad: its commercial invoice item by item, as a shipper's has it; the buyer's address carried exactly as the store and the buyer settled it, or the shop it is collected from; three copies printed by the store with the label; the shop ticks that they are in the pouch before it takes the parcel in (<code>edbb110</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your fourteenth answers, built</h3><p>A load at a border or a hub: the driver says at the post, cleared it, at a hub, by a tap — with or without a signal; the shipper, its system, the fleet's system and the tracking page are told; each post's measured wait becomes its promise once five loads have cleared it, said as measured, and until then the standard 4 h, said as such (<code>03f7100</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your fifteenth answers, built</h3><p>A seal on a load: written by the shipper with its ISO 17712 class and three photographs, read off the door by the driver at pickup (a wrong number and it does not leave, checked on the phone with or without a signal), said again at a border when customs re-seals, reported at once when found broken, looked at with the receiver; every seal and what became of it on the consignment note (<code>a9fcc1e</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your sixteenth answers, built</h3><p>A vehicle standing still: a truck on a shift that stands longer than its fleet allows (45 minutes to start, each fleet its own) away from its stops, its fleet’s sites, the network’s hubs and shops and any border it has said it is at, opens a case for the fleet’s managers — bell, own system, dashboard — who call the driver and say how it was (<code>b2cf08b</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your seventeenth answers, built</h3><p>A phone gone silent: a phone heard on a shift that then says nothing for longer than its fleet allows (an hour to start, each fleet its own), last heard where it had no reason to be, opens a case for the fleet’s managers with where it was last heard — bell, own system, dashboard — and ends by itself when the phone is heard again, saying where. The watch on vehicles standing still stays on for every fleet, as you confirmed (<code>4928888</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your eighteenth answers, built</h3><p>The SSCC hole closed: a GS1 prefix is shared only under different extension digits, no number is ever printed twice, and a business that says a prefix another uses is its own sends its GS1 licence — the business using it sends its own, two members of staff decide, and both read the reason (<code>16c3959</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your nineteenth answers, built</h3><p>A scan finds the load: a package’s SSCC, in every scan box we have, finds its load and which package for whoever may open it — the driver’s “Is this one of mine?” opens the pickup, a shop opens a load it posted, a hub says loads are not handled there, the console shows the load with its consignment note; nobody else learns anything (<code>9404440</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twentieth answers, built</h3><p>A client’s own GS1 prefix: the forwarder enters it on the client’s record, every load posted for the client carries the client’s SSCCs (never the forwarder’s), round 18’s rules hold for it, and a dispute about it is answered by the forwarder for its client (<code>89a8889</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-first answers, built</h3><p>The promise learns the road: a crossing load is expected at the pace its lane’s own trips kept — the middle of the last ninety days’, once there are five, on its town pair or else its country pair — and says what that rests on; fewer trips, and the standard holds, said as such (<code>772d83c</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-second answers, built</h3><p>An offline handover keeps its time: a pickup or delivery confirmed with no signal is dated by the phone at the moment it was done, within limits, with when it reached us kept beside it and said on the consignment note (<code>1063947</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-third answers, built</h3><p>A counter’s step keeps its time: a take-in, the hand-over to the bus, an arrival, and a bag filled, sealed or loaded with no signal are dated when they were done, within limits, with when they reached us kept beside them and said on the damage claim report (<code>7a4a412</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-fourth answers, built</h3><p>A cold-chain reading and a shift’s end kept with no signal are dated when they were made; a breach heard of late says when it happened and that it came late, on the console’s flag and the consignment note; a shift’s end is never dated before its phone was last heard from (<code>5e41dca</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-fifth answers, built</h3><p>A cold chain broken is told: the shipper and the carrying fleet hear at once in their bell and on their systems, with the reading, when it was read and whether it came late; the shipper’s load shows it; a copy of the note is kept then. The store’s lock no longer blocks a start after a stop (<code>299549c</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-sixth answers, built</h3><p>A load in one country is promised a time on the road: at the standard pace with the half hour at the door, said as standard, until its lane has five measured trips — then the lane’s own pace. On the business’s load, the tracking page and its system (<code>acc7f96</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-seventh answers, built</h3><p>Every label prints on a thermal label printer too (ZPL, 203 dpi, 100 × 150 mm): the counter’s parcel label, a store’s order label and a business’s package labels with their GS1-128 codes. A store sees its label once it pays and prints it again from the order (<code>4876e12</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-eighth answers, built</h3><p>A store’s own system asks the shipping API for a shipment’s label again, and with <code>format=zpl</code> as ZPL for its warehouse’s thermal printers — request by request, with a secret key, once paid (<code>32b205c</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your twenty-ninth answers, built</h3><p>A store gives its GS1 company prefix in the Store app; each of its parcels, once paid, carries an SSCC under it — on its labels, its order and to its own system — held to a business’s rules and disputes (<code>f5a8245</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your thirtieth answers, built</h3><p>A store’s photo of what it packed is kept for real: uploaded from the Store app or sent by its own system, required before an order is made, the store’s own and that parcel’s alone — the “before” in every damage claim report (<code>da35b8f</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your thirty-first answers, built</h3><p>Every evidence photo — at the counter, on a load, in the Send app — is one we hold, taken by whoever did that step, for it alone; anything else is refused by name before a step is written (<code>d22eec9</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your thirty-second answers, built</h3><p>A store parcel’s GS1 barcode finds its parcel at every scan box — the shop’s, the hub’s, the console’s — for whoever handles it now, and for nobody else (<code>58a5e37</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Answered</span><h3>Your thirty-third answers, built</h3><p>A business’s own system writes, reads and takes off the seals on its loads with its key, through the Business app’s own checks; a test key keeps nothing (<code>395c913</code>).</p></div>
-  <div class="card"><span class="tag t-strong">Then</span><h3>Against ISO 28000</h3><p>After the thirty-third answers, supply-chain security was checked point by point against ISO 28000/28001 (2026-10-20), and your answers on it were built through 2026-10-22. In full, with what is left there, on <a href="iso28000-gaps.html">iso28000-gaps.html</a>.</p></div>
-  <div class="card"><span class="tag t-ask">Your choice</span><h3>What matters most</h3><p>The thirty gaps are built. What comes next is asked with my recommendations.</p></div>
+  <div class="card"><span class="tag t-partial">Two copies</span><h3>The mother OS</h3><p>M1–M7, SSE and the gateway each have an engine built early that keeps its state in memory, is closed to all but staff outside a sandbox, and is called by no app. The product built its own where it needed to. Most “partly” rows on the compendium page are that.</p></div>
 </div>
+
+<!-- ─────────────────────────────────────────────────────── left out -->
+<h2 id="out">Left out, by decision</h2>
+<p class="lead">Not open: decided against, so they are not built by accident.</p>
+<ul class="plain">
+  <li><b>The workshop’s own business</b> — parts stock, mechanics’ time, workshop invoices and payments. A job card is kept as a photo; what it cost is between the fleet and its workshop (quotations, never payments).</li>
+  <li><b>Costs per km</b> — fuel and upkeep per km. Not recorded.</li>
+  <li><b>Scoring how people drive</b> — harsh braking and speeding from trackers is monitoring of people, close to the line we do not cross (no employment). A deliberate decision if it ever comes, not a feature. This holds for tracking devices too.</li>
+  <li><b>Workforce beyond drivers’ shifts</b> — your answer, 2026-10-17: who starts where and on which shift; never pay, contracts or hours counted for pay, and no staff counts or shifts at hubs or shops.</li>
+  <li><b>Judging how vehicles were used</b> — your answer, 2026-10-17: recorded facts only, counted and never judged; no flags, no costs.</li>
+  <li><b>Traffic, and the road itself</b> — traffic needs a paid provider; the road is the driver’s, so a lane has two ends, never a drawn route.</li>
+</ul>
+
 </div>
 </body>
 </html>
