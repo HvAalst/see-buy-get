@@ -1002,6 +1002,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'POST sbg/vehicles/:id/off-road': 'none',
   'POST sbg/vehicles/:id/off-road/:spellId/end': 'none',
   'POST sbg/vehicles/:id/readings': 'none',
+  'POST sbg/vehicles/:id/energy': 'none', // 2026-11-03 — what it runs on: its owner's, staff change none of it
   'POST sbg/vehicles/:id/retire': 'vetting',
   'POST sbg/vehicles/:id/service-plan': 'none',
   'POST sbg/vehicles/:id/services': 'none',
