@@ -31375,6 +31375,138 @@
         ]
       }
     },
+    "/v1/sbg/words/{locale}": {
+      "get": {
+        "operationId": "WordReview.words",
+        "parameters": [
+          {
+            "name": "locale",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewedWordsView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Languages"
+        ]
+      }
+    },
+    "/v1/sbg/words/{locale}/{country}/reviews": {
+      "get": {
+        "operationId": "WordReview.list",
+        "parameters": [
+          {
+            "name": "locale",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WordReviewList"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Languages"
+        ]
+      }
+    },
+    "/v1/sbg/words/{locale}/{country}/{key}": {
+      "put": {
+        "operationId": "WordReview.review",
+        "parameters": [
+          {
+            "name": "locale",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "country",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewWordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WordReviewView"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Languages"
+        ]
+      }
+    },
     "/v1/sbg/vendors/{id}/parcels/{parcelId}/invoice": {
       "get": {
         "operationId": "StorePapers.view",
@@ -75434,6 +75566,114 @@
           "versions",
           "rules"
         ]
+      },
+      "ReviewedWordsView": {
+        "type": "object",
+        "properties": {
+          "locale": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          },
+          "words": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "locale",
+          "country",
+          "words"
+        ]
+      },
+      "WordReviewStepView": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "kept": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "at"
+        ]
+      },
+      "WordReviewView": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "kept": {
+            "type": "boolean"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WordReviewStepView"
+            }
+          }
+        },
+        "required": [
+          "country",
+          "locale",
+          "key",
+          "by",
+          "at",
+          "history"
+        ]
+      },
+      "WordReviewList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WordReviewView"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ReviewWordDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "keep": {
+            "type": "boolean"
+          }
+        }
       },
       "PassageLocationDto": {
         "type": "object",

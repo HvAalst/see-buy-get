@@ -53,6 +53,10 @@ export function createOperatorApi(sbg: SbgClient) {
      * written by one member of staff and published by a different one, or declined with a reason.
      */
     documents: () => sbg.request((c) => c.GET('/v1/sbg/documents', {})),
+    /** 2026-11-03 — a country's review of a language (version 2), phrase by phrase, with its history: the Languages screen. */
+    wordReviews: (locale: string, country: string) => sbg.request((c) => c.GET('/v1/sbg/words/{locale}/{country}/reviews', { params: { path: { locale, country } } })),
+    reviewWord: (locale: string, country: string, key: string, body: { text?: string; keep?: boolean }) =>
+      sbg.request((c) => c.PUT('/v1/sbg/words/{locale}/{country}/{key}', { params: { path: { locale, country, key } }, body })),
     proposeDocument: (kind: string, body: { title: string; body: string; changeNote: string; askAgain: boolean; country?: string; by?: string }) =>
       sbg.request((c) => c.POST('/v1/sbg/documents/{kind}/versions', { params: { path: { kind } }, body })),
     /** 2026-10-25 — a first text for a country's terms, naming its company of ours from the company's record ({} where none). */

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { DEFAULT_LOCALE, LOCALES as LOCALES_ALL, isLocale, isRTL, type Locale } from './locales';
+import { resolveBaseUrl } from '../../lib/sbg/config';
+import { firstGuess } from '../phone/dial';
 import { en, type MessageKey, type Messages } from './catalogs/en';
 import { sw } from './catalogs/sw';
 import { am } from './catalogs/am';
@@ -82,9 +84,31 @@ function fetchWords(l: Locale, names: Iterable<string>): Promise<void> {
 }
 const coming = new Map<string, Promise<void>>();
 
-/** The words a language needs here now: the app's, and the help's once the help is here. */
+/** The words a language needs here now: the app's, and the help's once the help is here — and the country's review. */
 function fetchFor(l: Locale): Promise<void> {
+  void fetchReviewed(l);
   return fetchWords(l, helpWordsHere() ? [...speaks, ...helpSpeaks] : speaks);
+}
+
+/**
+ * VERSION 2 FOR THE PEOPLE OF A COUNTRY: the country's own review of the language, read without signing in, for the country
+ * of the number a person typed (else the phone's region). Once per language; with no signal, version 1 stands.
+ */
+const reviewedAsked = new Set<string>();
+async function fetchReviewed(l: Locale): Promise<void> {
+  if (l === 'en' || typeof fetch !== 'function' || typeof window === 'undefined') return;
+  const country = firstGuess();
+  const ask = `${l}|${country}`;
+  if (reviewedAsked.has(ask)) return;
+  reviewedAsked.add(ask);
+  try {
+    const res = await fetch(`${resolveBaseUrl()}/v1/sbg/words/${l}?country=${encodeURIComponent(country)}`);
+    if (!res.ok) return;
+    const body = (await res.json()) as { words?: Record<string, string> };
+    if (body.words && Object.keys(body.words).length) reviewedWords(l, body.words);
+  } catch {
+    reviewedAsked.delete(ask);
+  }
 }
 
 /**

@@ -15,6 +15,7 @@ import { PresenceScreen } from './screens/PresenceScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { StaffReadsScreen } from './screens/StaffReadsScreen';
 import { DocumentsScreen } from './screens/DocumentsScreen';
+import { LanguagesScreen } from './screens/LanguagesScreen';
 import { MessagesScreen } from './screens/MessagesScreen';
 import { messagesWaiting } from './messages';
 import { HazardsScreen } from './screens/HazardsScreen';
@@ -176,7 +177,7 @@ export function App() {
      * company administrator saw on signing in. COMPANY moved out, because their own record is theirs to
      * keep — an operator picks a company from a list, an administrator IS one.
      */
-    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections', 'staffreads', 'risks', 'messages', 'documents'] as Screen[]) : []),
+    ...(isOperator ? (['network', 'pilot', 'stores', 'cases', 'hazards', 'claims', 'disposal', 'approvals', 'businesses', 'accountmoves', 'iddisputes', 'paperreports', 'papers', 'reports', 'support', 'corridors', 'presence', 'pictures', 'borders', 'movers', 'rates', 'connections', 'staffreads', 'risks', 'messages', 'documents', 'languages'] as Screen[]) : []),
     ...(manyCompanies ? (['companies'] as Screen[]) : []),
     // Their own books and what they are owed — never the network's ledger, which is not theirs to read.
     'money',
@@ -316,6 +317,8 @@ export function App() {
             <StaffReadsScreen state={state} actions={actions} />
           ) : state.screen === 'documents' ? (
             <DocumentsScreen state={state} actions={actions} />
+          ) : state.screen === 'languages' ? (
+            <LanguagesScreen state={state} actions={actions} />
           ) : state.screen === 'corridors' ? (
             <CorridorsScreen state={state} actions={actions} />
           ) : state.screen === 'support' ? (

@@ -178,6 +178,9 @@ export const COUNTRY_SOURCES: Readonly<Record<string, CountrySource>> = {
   'POST sbg/documents/versions/:versionId/publish': every('publishing a text: not yet split by country'),
   'POST sbg/documents/versions/:versionId/decline': every('publishing a text: not yet split by country'),
   'GET sbg/fleet/assignments': list({ row: { of: 'driver', id: 'driverDid' } }),
+  // A country's review of a language: that country's company's.
+  'GET sbg/words/:locale/:country/reviews': { country: 'param', name: 'country' },
+  'PUT sbg/words/:locale/:country/:key': { country: 'param', name: 'country' },
 };
 
 /**

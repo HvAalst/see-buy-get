@@ -10,6 +10,9 @@
 export type StaffArea = 'support' | 'vetting' | 'money' | 'admin' | 'any' | 'none';
 
 export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
+  // 2026-11-03 — a country's review of a language (the console's Languages screen): its texts are an admin's to set.
+  'GET sbg/words/:locale/:country/reviews': 'admin',
+  'PUT sbg/words/:locale/:country/:key': 'admin',
   'DELETE sbg/business/me/receiving/:siteId': 'none',
   'GET sbg/business/me/inbound': 'none',
   'GET sbg/business/me/directory': 'none',

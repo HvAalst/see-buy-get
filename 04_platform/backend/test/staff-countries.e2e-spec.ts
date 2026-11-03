@@ -105,6 +105,14 @@ describe('staff separated by country, over the wire', () => {
     // A file of every country's notes stays with somebody who works in every country.
     await http().get('/v1/sbg/consignment-notes/export').set(bearer(zara.token)).expect(403);
 
+    // 2026-11-03 — a language reviewed per country (the owner: "languages are reviewed per country sbg company"): she writes
+    // Zambia's version 2, the apps read it without signing in, and Kenya's is not hers to write.
+    await http().put('/v1/sbg/words/sw/ZM/common.save').set(bearer(zara.token)).send({ text: 'Hifadhi hapa' }).expect(200);
+    expect((await http().get('/v1/sbg/words/sw').query({ country: 'ZM' }).expect(200)).body.words).toMatchObject({ 'common.save': 'Hifadhi hapa' });
+    expect((await http().get('/v1/sbg/words/sw').query({ country: 'KE' }).expect(200)).body.words['common.save']).toBeUndefined();
+    await http().put('/v1/sbg/words/sw/KE/common.save').set(bearer(zara.token)).send({ text: 'Hifadhi' }).expect(404);
+    expect((await http().get('/v1/sbg/words/sw/ZM/reviews').set(bearer(zara.token)).expect(200)).body.items[0]).toMatchObject({ key: 'common.save', by: `zara ${tag}`, history: [{ text: 'Hifadhi hapa' }] });
+
     // Colleagues: she sees those who work in Zambia, and those who work everywhere — and gives only Zambia.
     const staff = (await http().get('/v1/sbg/operators').set(bearer(zara.token)).expect(200)).body.items as Array<{ operatorId: string; countries: string[] }>;
     expect(staff.every((a) => a.countries.includes('ZM') || a.countries.includes('*'))).toBe(true);
