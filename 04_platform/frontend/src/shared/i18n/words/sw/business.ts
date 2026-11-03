@@ -1551,7 +1551,6 @@ export const words: Record<string, string> = {
   "business.parcels.lede": "Tuma vifurushi kutoka duka moja hadi jingine, vinavyolipiwa kutoka salio lako la vifurushi. Anayekichukua huonyesha nambari ya siri unayompa; hakuna anayemtumia ujumbe mfupi.",
   "business.parcels.openTitle": "Akaunti ya vifurushi",
   "business.parcels.openStep1": "Ifungue mara moja. Ni salio kwa SeeBuyGet katika nchi yako, kama la duka la mtandaoni.",
-  "business.parcels.openStep2": "Liongeze kwa M-Pesa au benki. Malipo huhesabiwa pindi mtoa huduma ya malipo anapoyathibitisha.",
   "business.parcels.openStep3": "Kila kifurushi hulipiwa kutoka humo unapokituma. Lebo yake huchapishwa kikishalipiwa, na pesa zinazorudishwa hurudi humo.",
   "business.parcels.open": "Fungua akaunti ya vifurushi",
   "business.parcels.opened": "Akaunti yako ya vifurushi imefunguliwa. Ongeza salio ili kutuma.",
@@ -1810,4 +1809,7 @@ export const words: Record<string, string> = {
   "business.post.keptNothing": "bado hakuna kilichosemwa kuhusu ni nini",
   "business.post.carryOn": "Endelea na mzigo ulioanza",
   "business.post.startAgain": "Anza upya",
+  "business.parcels.openStep2": "Iongezee salio kwa benki au huduma nyingine ya malipo. Malipo huhesabiwa mara mtoa huduma wa malipo anapoyathibitisha.",
+  "business.parcels.notYetNext": "Unachoweza kufanya sasa: tangaza mzigo. Mzigo hulipwa kati yako na msafirishaji, si kutoka kwenye salio letu, kwa hiyo unafanya kazi hapa tayari.",
+  "business.parcels.toLoads": "Nenda kwenye Mizigo",
 };

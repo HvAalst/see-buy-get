@@ -1521,4 +1521,5 @@ export const words: Record<string, string> = {
   "apiChanges.ruleInForce": "Inakataa tangu {from}; ilitangazwa {announced}, {days, plural, one {siku # kabla} other {siku # kabla}}.",
   "apiChanges.unavailable": "Orodha ya mabadiliko haiwezi kusomwa kwa sasa.",
   "apiChanges.comingTag": "Inakuja",
+  "common.otherLanguages": "Lugha nyingine",
 };

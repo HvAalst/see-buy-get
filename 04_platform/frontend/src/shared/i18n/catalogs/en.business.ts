@@ -1605,7 +1605,11 @@ export const enBusiness = {
   'business.parcels.lede': 'Send parcels from one shop to another, paid from your parcel balance. The person collecting it shows the code you pass on; nobody sends them a text.',
   'business.parcels.openTitle': 'A parcel account',
   'business.parcels.openStep1': 'Open it once. It is a balance with SeeBuyGet in your country, like a store’s.',
-  'business.parcels.openStep2': 'Top it up by M-Pesa or bank. A payment counts once the payment provider confirms it.',
+  // 2026-11-03 — the owner: how money comes in differs by country (M-Pesa in Kenya; elsewhere a bank or another service), so not named here.
+  'business.parcels.openStep2': 'Top it up by bank or another payment service. A payment counts once the payment provider confirms it.',
+  // 2026-11-03 — where no SeeBuyGet company holds money yet: what this business can do now, and where.
+  'business.parcels.notYetNext': 'What you can do now: post a load. A load is paid between you and the carrier, not from a balance with us, so it works here already.',
+  'business.parcels.toLoads': 'Go to Loads',
   'business.parcels.openStep3': 'Each parcel is paid from it when you send it. Its label prints once paid, and money back goes back into it.',
   'business.parcels.open': 'Open a parcel account',
   'business.parcels.opened': 'Your parcel account is open. Top it up to send.',

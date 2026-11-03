@@ -10,7 +10,7 @@ import { pageOfSvg } from '../../../shared/ui/paperPreview';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { SitePicker } from '../../tower/screens/SitePicker';
 import type { BusinessClient, BusinessView } from '../api';
-import { mayAct } from '../logic';
+import { mayAct, sectionsFor, type Section } from '../logic';
 import {
   bookWord,
   EMPTY_PARCEL,
@@ -47,7 +47,7 @@ const when = (iso: string) => formatDate(iso, { day: 'numeric', month: 'short', 
  * first — its balance, a top-up waiting to be confirmed — then sending one from a shop to a shop, and the parcels sent:
  * where each stands, the code for its receiver, its label, paying for one the balance did not cover, and calling one off.
  */
-export function ParcelsScreen({ business, client }: { business: BusinessView; client: BusinessClient | null }) {
+export function ParcelsScreen({ business, client, onGo }: { business: BusinessView; client: BusinessClient | null; onGo?: (section: Section) => void }) {
   const t = useT();
   const works = mayAct(business.you.role);
   const api = client ? parcelsApi(client.client.sbg) : null;
@@ -127,7 +127,21 @@ export function ParcelsScreen({ business, client }: { business: BusinessView; cl
             <li>{t('business.parcels.openStep3')}</li>
           </ol>
           {!account.canOpen ? (
-            <p class="chint">{account.whyNot}</p>
+            <>
+              <p class="chint">{account.whyNot}</p>
+              {/* 2026-11-03 — the owner: "it is not clear how to open a parcel account so that is an open end": say where to go
+                  next. A load is settled between the business and its carrier, so it works where we hold no money yet. */}
+              {onGo && sectionsFor(business.activities).includes('loads') ? (
+                <>
+                  <p class="chint">{t('business.parcels.notYetNext')}</p>
+                  <div class="twr-panelend">
+                    <button type="button" class="cbtn cbtn--primary" onClick={() => onGo('loads')}>
+                      {t('business.parcels.toLoads')}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </>
           ) : !works ? (
             <p class="chint">{t('business.parcels.viewerNoOpen')}</p>
           ) : (

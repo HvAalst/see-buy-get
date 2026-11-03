@@ -415,6 +415,8 @@ export const en = {
   'common.no': 'No',
   'common.language': 'Language',
   'common.chooseLanguage': 'Choose your language',
+  // 2026-11-03 — the languages that do not count in this country, a step further.
+  'common.otherLanguages': 'Other languages',
   'common.greeting': 'Hi, {name}',
 
   // Account screen

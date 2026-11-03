@@ -224,7 +224,7 @@ export function App() {
           ) : section === 'runs' ? (
             <RunsScreen business={business} actions={actions} client={client} asked={asked?.section === 'runs' ? asked.run : null} onAsked={answered} />
           ) : section === 'parcels' ? (
-            <ParcelsScreen business={business} client={client} />
+            <ParcelsScreen business={business} client={client} onGo={actions.go} />
           ) : section === 'contracts' ? (
             <ContractsScreen business={business} actions={actions} client={client} />
           ) : section === 'clients' ? (
