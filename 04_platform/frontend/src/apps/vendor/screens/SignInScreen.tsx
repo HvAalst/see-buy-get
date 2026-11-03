@@ -51,7 +51,7 @@ export function SignInScreen({ state, actions, error }: SignInScreenProps) {
   };
 
   // Round 40 — a browser new to the store: the code to its number, or first a number to send it to.
-  if (state.deviceAsk) return <ConfirmDevice ask={state.deviceAsk} party="store" busy={state.busy === 'signin'} error={error} onConfirm={(code) => void actions.confirmDevice(code)} onGivePhone={(phone) => void actions.giveDevicePhone(phone)} onBack={actions.cancelDeviceAsk} />;
+  if (state.deviceAsk) return <ConfirmDevice ask={state.deviceAsk} party="store" busy={state.busy === 'signin'} error={error} onConfirm={(code) => void actions.confirmDevice(code)} onGivePhone={(phone) => void actions.giveDevicePhone(phone)} onBack={actions.cancelDeviceAsk} pair={{ config: vendorConfig(), onLinked: (signedIn) => void actions.devicePaired(signedIn) }} />;
 
   return (
     <form class="scr" onSubmit={submit}>

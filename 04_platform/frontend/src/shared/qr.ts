@@ -422,6 +422,6 @@ export function qrPath(matrix: boolean[][]): string {
 /** The payload scheme for everything this network prints — one place, so scanners agree. */
 export const QR_SCHEME = 'sbg';
 
-export function qrPayload(kind: 'parcel' | 'tote' | 'vehicle' | 'badge' | 'collect' | 'track', value: string): string {
+export function qrPayload(kind: 'parcel' | 'tote' | 'vehicle' | 'badge' | 'collect' | 'track' | 'pair', value: string): string {
   return `${QR_SCHEME}:${kind}:${value}`;
 }

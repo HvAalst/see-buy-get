@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { isMintSourced, isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, type SbgError } from '../../lib/sbg';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import { myAppsApi, readHandOver, takeHandOverFromAddress } from '../../shared/account/myApps';
+import type { Paired } from '../../shared/account/pairing';
 import { t } from '../../shared/i18n'; // plain t(): toasts/notes are built at action time in the store's active locale
 import { onLaunch } from '../../shared/launch';
 import { openLinkedLoad } from '../../shared/linkedLoad';
@@ -619,6 +620,17 @@ export function useVendorApp() {
     const sent = r.data;
     setState((s) => ({ ...s, busy: null, deviceAsk: s.deviceAsk ? { ...s.deviceAsk, challenge: sent.challenge, sentTo: sent.sentTo, needsPhone: false, ...(sent.code ? { code: sent.code } : {}) } : null }));
   }, []);
+
+  /** 2026-11-03 — linked by a phone the store already uses (pairing.ts): this browser is the store's from now, and signed in. */
+  const devicePaired = useCallback(
+    async (signedIn: Paired) => {
+      const ask = stateRef.current.deviceAsk;
+      if (!signedIn.vendorId) return;
+      saveShopDeviceKey(signedIn.email || ask?.email || '', signedIn.device, 'store');
+      await enter(signedIn.vendorId, signedIn.token, signedIn.email || ask?.email);
+    },
+    [enter],
+  );
 
   /** Back to the email and password: another store, or another try. */
   const cancelDeviceAsk = useCallback(() => setState((s) => ({ ...s, deviceAsk: null, error: null })), []);
@@ -1619,6 +1631,7 @@ export function useVendorApp() {
       exportLedger,
       signIn,
       confirmDevice,
+      devicePaired,
       giveDevicePhone,
       cancelDeviceAsk,
       storeDevices,

@@ -44,6 +44,8 @@ export interface PinDevicesApi {
    * on them, in place of its password. Settings offers it from here; a person's PIN has its own (useAccount).
    */
   passkey?: PasskeyApi;
+  /** 2026-11-03 — an account's own phones: a new phone linked from this one, by the code it shows (pairing.ts). */
+  pair?: (code: string) => Promise<Result<{ linked: true }>>;
 }
 
 /**

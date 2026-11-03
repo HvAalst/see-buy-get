@@ -79,11 +79,15 @@ export interface DeviceAsk {
   sentTo: string;
   code?: string;
   needsPhone?: boolean;
+  /** 2026-11-03 — no code could be texted: the new phone is linked by one the account already uses (pairing.ts), or not at all. */
+  pairOnly?: boolean;
 }
 
 export function deviceAskOf(error: SbgError | null | undefined): DeviceAsk | null {
+  const p = error?.params ?? {};
+  // 2026-11-03 — no code could be texted to the account's number, but the password was right: a challenge that only pairs.
+  if ((error?.code === 'SMS_NOT_SENT' || error?.code === 'PHONE_NOT_SERVED') && p.pairOnly === true && typeof p.challenge === 'string') return { challenge: p.challenge, sentTo: '', pairOnly: true };
   if (error?.code !== 'DEVICE_NOT_KNOWN') return null;
-  const p = error.params ?? {};
   if (typeof p.challenge !== 'string') return null;
   return { challenge: p.challenge, sentTo: typeof p.sentTo === 'string' ? p.sentTo : '', ...(typeof p.code === 'string' ? { code: p.code } : {}), ...(p.needsPhone === true ? { needsPhone: true } : {}) };
 }
@@ -112,5 +116,7 @@ export function shopDevicesApi(post: Post, email: () => string | null, party: De
     },
     // 2026-11-02 (the owner: "ok go ahead with the fingerprint") — on these phones, a fingerprint or face in place of the password.
     passkey: accountPasskeyApi(post, email, key, party),
+    // 2026-11-03 — a new phone linked from this one: the code it shows, scanned or typed here (pairing.ts).
+    pair: (code) => post<{ linked: true }>('/v1/sbg/account/pair', { code, device: key() }),
   };
 }

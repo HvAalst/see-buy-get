@@ -38,6 +38,7 @@ import type { NotPaidView, PaidAnswerView, PaidDirectView } from '../../shared/p
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import { myAppsApi, readHandOver, takeHandOverFromAddress } from '../../shared/account/myApps';
 import type { LoginView } from '../../lib/sbg/appclient';
+import type { Paired } from '../../shared/account/pairing';
 import type {
   AgentLedgerRow,
   AgentParcelRow,
@@ -676,6 +677,15 @@ export function useAgentApp() {
     }
     saveShopDeviceKey(ask.email, r.data.device, 'shop');
     await enter(r.data, ask.email);
+  }, []);
+
+  /** 2026-11-03 — linked by a phone the shop already uses (pairing.ts): this phone is the shop's from now, and signed in. */
+  const devicePaired = useCallback(async (signedIn: Paired) => {
+    const ask = stateRef.current.deviceAsk;
+    saveShopDeviceKey(signedIn.email || ask?.email || '', signedIn.device, 'shop');
+    await enter(signedIn, signedIn.email || ask?.email || '');
+    // `enter` is declared below and never changes (useCallback with no deps): read when the phone is linked, not now.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Back to the email and password: another shop, or another try. */
@@ -2631,6 +2641,7 @@ export function useAgentApp() {
       refresh,
       signIn,
       confirmDevice,
+      devicePaired,
       cancelDeviceAsk,
       enterAsStaff,
       shopDevices,

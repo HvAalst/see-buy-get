@@ -5,6 +5,9 @@ import type { SbgError } from '../../lib/sbg';
 import type { DeviceAsk } from './shopDevice';
 import type { GuideApp } from '../guide/articles';
 import { SignedOutBar } from '../ui/SignedOutBar';
+import type { SbgConfig } from '../../lib/sbg';
+import type { Paired } from './pairing';
+import { PairThisPhone } from './PairThisPhone';
 
 /** Whose sign-in it is: what the account is called on the screen. */
 export type BoundParty = 'shop' | 'hub' | 'store';
@@ -27,6 +30,7 @@ export function ConfirmDevice({
   onConfirm,
   onGivePhone,
   onBack,
+  pair,
 }: {
   ask: DeviceAsk;
   party: BoundParty;
@@ -35,6 +39,8 @@ export function ConfirmDevice({
   onConfirm: (code: string) => void;
   onGivePhone: (phone: string) => void;
   onBack: () => void;
+  /** 2026-11-03 — linked by a phone the account already uses instead of the code (pairing.ts): signed in, as after a code. */
+  pair?: { config: SbgConfig; onLinked: (signedIn: Paired) => void };
 }) {
   const t = useT();
   const [code, setCode] = useState('');
@@ -43,6 +49,19 @@ export function ConfirmDevice({
   // 2026-11-02 — still signed out, so the bar every sign-in screen has stays (the owner: "a sticky footer for as long as
   // the page goes"): Back to the password, Help — the app's own "Trouble signing in?" — this screen read aloud, the apps.
   const bar = (spoken: string) => <SignedOutBar onBack={onBack} help={{ app: PARTY_APP[party] }} aloud={() => spoken} />;
+
+  // 2026-11-03 — no code could be texted to the account's number: linked by one of its phones, or not at all.
+  if (ask.pairOnly && pair) {
+    return (
+      <div class="scr">
+        <h1 class="scr__title">{t('account.pair.onlyTitle')}</h1>
+        <p class="scr__lede">{t('account.pair.onlyLede', { party: who })}</p>
+        {error ? <ErrorNote error={error} /> : null}
+        <PairThisPhone config={pair.config} challenge={ask.challenge} party={party} auto onLinked={pair.onLinked} />
+        {bar(`${t('account.pair.onlyTitle')}. ${t('account.pair.onlyLede', { party: who })}`)}
+      </div>
+    );
+  }
 
   if (ask.needsPhone) {
     const ok = /^\+?\d{7,15}$/.test(phone.replace(/[\s()-]/g, ''));
@@ -97,6 +116,7 @@ export function ConfirmDevice({
       <Button type="submit" chevron={false} busy={busy} disabled={busy || code.length !== 6}>
         {t('account.bound.confirm')}
       </Button>
+      {pair ? <PairThisPhone config={pair.config} challenge={ask.challenge} party={party} onLinked={pair.onLinked} /> : null}
       {bar(`${t('account.bound.title')}. ${t('account.bound.lede', { party: who, sentTo: ask.sentTo })}`)}
     </form>
   );

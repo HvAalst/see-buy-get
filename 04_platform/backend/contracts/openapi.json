@@ -8525,6 +8525,59 @@
         }
       }
     },
+    "/v1/sbg/auth/device/pair": {
+      "post": {
+        "operationId": "Sbg.startPairing",
+        "summary": "",
+        "description": "2026-11-03 — A NEW PHONE'S PAIRING CODE (AccountService.startPairing): shown as a QR code for a phone the account already\nuses to scan. Public, as the sign-in is: the challenge came from the right password.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairChallengeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/auth/device/pair/status": {
+      "post": {
+        "operationId": "Sbg.pairingStatus",
+        "summary": "",
+        "description": "The new phone asking, every few seconds, whether its code was scanned: then signed in, answered as a confirmed phone is.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairChallengeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/hand-over": {
       "post": {
         "operationId": "Sbg.takeHandOver",
@@ -25531,6 +25584,29 @@
         "parameters": [],
         "responses": {
           "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/pair": {
+      "post": {
+        "operationId": "Account.approvePairing",
+        "summary": "",
+        "description": "2026-11-03 — A NEW PHONE LINKED FROM THIS ONE: the code it shows, scanned or typed here (AccountService.approvePairing).\nThe account's own act, on one of its own phones; staff link nobody's.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovePairingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": ""
           }
         }
@@ -49045,6 +49121,18 @@
           "code"
         ]
       },
+      "PairChallengeDto": {
+        "type": "object",
+        "properties": {
+          "challenge": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "challenge"
+        ]
+      },
       "TakeHandOverDto": {
         "type": "object",
         "properties": {
@@ -69340,6 +69428,22 @@
             "maxLength": 80
           }
         }
+      },
+      "ApprovePairingDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "device": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "code"
+        ]
       },
       "HandOverDto": {
         "type": "object",

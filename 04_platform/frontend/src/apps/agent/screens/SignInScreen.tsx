@@ -10,6 +10,7 @@ import { StaffSignIn } from './StaffSignIn';
 import { UnlockFirst, useUnlockFirst } from '../../../shared/account/UnlockFirst';
 import { shopDeviceKey } from '../../../shared/account/shopDevice';
 import { agentConfig } from '../api';
+import { PairThisPhone } from '../../../shared/account/PairThisPhone';
 
 /** 2026-11-02 — the shop's own fingerprint or face: by its address, with the key this phone holds for it. */
 const SHOP_PHONE = { keyOf: (email: string) => shopDeviceKey(email, 'shop') };
@@ -41,6 +42,18 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
 function ConfirmPhone({ actions, error, busy, ask }: { actions: AgentActions; error: SbgError | null; busy: boolean; ask: NonNullable<AgentState['deviceAsk']> }) {
   const t = useT();
   const [code, setCode] = useState('');
+  // 2026-11-03 — no code could be texted to the shop's number: linked by one of its phones, or not at all.
+  if (ask.pairOnly) {
+    return (
+      <div class="scr">
+        <h1 class="scr__title">{t('account.pair.onlyTitle')}</h1>
+        <p class="scr__lede">{t('account.pair.onlyLede', { party: t('account.bound.party.shop') })}</p>
+        {error ? <ErrorNote error={error} /> : null}
+        <PairThisPhone config={agentConfig()} challenge={ask.challenge} party="shop" auto onLinked={(signedIn) => void actions.devicePaired(signedIn)} />
+        <SignedOutBar onBack={() => actions.cancelDeviceAsk()} help={{ app: 'agent' }} aloud={() => `${t('account.pair.onlyTitle')}. ${t('account.pair.onlyLede', { party: t('account.bound.party.shop') })}`} />
+      </div>
+    );
+  }
   return (
     <form
       class="scr"
@@ -64,6 +77,8 @@ function ConfirmPhone({ actions, error, busy, ask }: { actions: AgentActions; er
       <Button type="submit" chevron={false} busy={busy} disabled={busy || code.length !== 6}>
         {t('agent.signin.deviceConfirm')}
       </Button>
+      {/* 2026-11-03 — or linked by a phone the shop already uses (pairing.ts). */}
+      <PairThisPhone config={agentConfig()} challenge={ask.challenge} party="shop" onLinked={(signedIn) => void actions.devicePaired(signedIn)} />
       {/* 2026-11-02 — still signed out, so the bar stays: Back to the password, Help, this screen read aloud, the apps. */}
       <SignedOutBar onBack={() => actions.cancelDeviceAsk()} help={{ app: 'agent' }} aloud={() => `${t('agent.signin.deviceTitle')}. ${t('agent.signin.deviceLede', { sentTo: ask.sentTo })}`} />
     </form>

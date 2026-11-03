@@ -9,6 +9,8 @@ import { hasContract } from './contract';
 import { CredentialAge } from './CredentialAge';
 import { canForgetOthers, deviceLine, devicesLede, type PinDevices, type PinDevicesApi } from './devices';
 import { PARTY_WORD } from './ConfirmDevice';
+import { Scanner } from '../ui/Scanner';
+import { shownPairCode, typedPairCode } from './pairing';
 import { EmailStep } from './EmailStep';
 import { IdDisputeCase } from './IdDisputeCase';
 import { settingsIdSays } from './idDispute';
@@ -326,7 +328,7 @@ function DevicesForm({ devices, onSignedOut }: { devices: PinDevicesApi; onSigne
   // Whose phones: the shop's, the hub's or the store's — said in every sentence about them.
   const party = t(PARTY_WORD[devices.party ?? 'shop']);
   const [seen, setSeen] = useState<PinDevices | null>(null);
-  const [step, setStep] = useState<'list' | 'others' | 'this'>('list');
+  const [step, setStep] = useState<'list' | 'others' | 'this' | 'link'>('list');
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SbgError | null>(null);
@@ -381,6 +383,21 @@ function DevicesForm({ devices, onSignedOut }: { devices: PinDevicesApi; onSigne
     );
   }
 
+  if (step === 'link' && devices.pair) {
+    return (
+      <LinkNewPhone
+        party={party}
+        pair={devices.pair}
+        onDone={async () => {
+          // The list again: the new phone is in it now.
+          const r = await devices.read();
+          if (r.data) setSeen(r.data);
+        }}
+        onBack={() => setStep('list')}
+      />
+    );
+  }
+
   if (step === 'this') {
     return (
       <>
@@ -424,11 +441,83 @@ function DevicesForm({ devices, onSignedOut }: { devices: PinDevicesApi; onSigne
           {t('account.devices.forgetOthers')}
         </Button>
       ) : null}
+      {/* 2026-11-03 — a new phone linked from this one (pairing.ts): only from one of the account's own phones. */}
+      {devices.pair && seen.here ? (
+        <Button variant="outline" chevron={false} onClick={() => setStep('link')}>
+          {t('account.pair.linkNew')}
+        </Button>
+      ) : null}
       {seen.here ? (
         <Button variant="outline" chevron={false} onClick={() => setStep('this')}>
           {t('account.devices.forgetThis')}
         </Button>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * 2026-11-03 — LINK A NEW PHONE FROM THIS ONE (the owner: "like the dutch digid with a qr and a couple code"). The new phone,
+ * its password right, shows a code: scanned here with the camera, or typed. Linked, the new phone signs itself in.
+ */
+function LinkNewPhone({ party, pair, onDone, onBack }: { party: string; pair: NonNullable<PinDevicesApi['pair']>; onDone: () => void; onBack: () => void }) {
+  const t = useT();
+  const [typed, setTyped] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<SbgError | null>(null);
+  const [linked, setLinked] = useState(false);
+  const link = async (raw: string) => {
+    const code = typedPairCode(raw);
+    if (!code) return;
+    setBusy(true);
+    setError(null);
+    const r = await pair(code);
+    setBusy(false);
+    if (r.error) return setError(r.error);
+    setLinked(true);
+    onDone();
+  };
+  if (linked) {
+    return (
+      <>
+        <Note tone="ok" icon="check" title={t('account.pair.linked', { party })} />
+        <Button variant="link" full={false} onClick={onBack}>
+          {t('account.pair.backToPhones')}
+        </Button>
+      </>
+    );
+  }
+  return (
+    <>
+      <p class="t-body">{t('account.pair.linkLede', { party })}</p>
+      <Button chevron={false} busy={busy && !typed} onClick={() => setScanning(true)}>
+        {t('account.pair.scan')}
+      </Button>
+      <div class="field">
+        <label class="field__label" for="acct-pair-code">
+          {t('account.pair.typeLabel')}
+        </label>
+        <input id="acct-pair-code" class="input mono-t" autocomplete="off" autocapitalize="characters" spellcheck={false} maxLength={9} placeholder="ABCD-2345" value={typed} disabled={busy} onInput={(e) => { setTyped(e.currentTarget.value); setError(null); }} />
+      </div>
+      <Refused error={error} />
+      <Button variant="outline" chevron={false} busy={busy && Boolean(typed)} disabled={!typedPairCode(typed)} onClick={() => void link(typed)}>
+        {t('account.pair.link')}
+      </Button>
+      <Button variant="link" full={false} onClick={onBack}>
+        {t('common.cancel')}
+      </Button>
+      <Scanner
+        open={scanning}
+        expect="pair"
+        title={t('account.pair.scanTitle')}
+        onResult={(value) => {
+          setScanning(false);
+          setTyped(shownPairCode(value));
+          void link(value);
+        }}
+        onClose={() => setScanning(false)}
+      />
     </>
   );
 }

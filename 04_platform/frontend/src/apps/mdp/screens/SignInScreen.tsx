@@ -36,7 +36,7 @@ export function SignInScreen({ actions, error, busy, deviceAsk }: SignInScreenPr
   // 2026-11-02 (the owner: "ok go ahead with the fingerprint") — where it was turned on for this hub on this phone, the
   // first choice; the password one tap away. Never for the hub's people: they sign in as themselves, by PIN.
   const unlock = useUnlockFirst(email, HUB_PHONE);
-  if (deviceAsk) return <ConfirmDevice ask={deviceAsk} party="hub" busy={busy} error={error} onConfirm={(code) => void actions.confirmDevice(code)} onGivePhone={(phone) => void actions.giveDevicePhone(phone)} onBack={actions.cancelDeviceAsk} />;
+  if (deviceAsk) return <ConfirmDevice ask={deviceAsk} party="hub" busy={busy} error={error} onConfirm={(code) => void actions.confirmDevice(code)} onGivePhone={(phone) => void actions.giveDevicePhone(phone)} onBack={actions.cancelDeviceAsk} pair={{ config: mdpConfig(), onLinked: (signedIn) => void actions.devicePaired(signedIn) }} />;
   if (asStaff) return <StaffSignIn place="hub" config={mdpConfig()} words={HUB_STAFF_WORDS} onBack={() => setAsStaff(false)} onSession={actions.enterAsStaff} />;
 
   const submit = (e: JSX.TargetedEvent<HTMLFormElement>) => {

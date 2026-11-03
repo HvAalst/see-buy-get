@@ -2194,6 +2194,17 @@ export class HandOverDto {
   @IsOptional() @IsString() @MaxLength(80) targetDevice?: string;
 }
 
+/** 2026-11-03 — a new phone's pairing: the challenge its sign-in was answered with. */
+export class PairChallengeDto {
+  @IsString() @MaxLength(80) @ApiProperty() challenge!: string;
+}
+
+/** The code the new phone shows, scanned or typed on one of the account's own phones; that phone's key. */
+export class ApprovePairingDto {
+  @IsString() @MaxLength(40) @ApiProperty() code!: string;
+  @IsOptional() @IsString() @MaxLength(80) device?: string;
+}
+
 /** The hand-over, taken by the other app. */
 export class TakeHandOverDto {
   @IsString() @MaxLength(80) @ApiProperty() code!: string;

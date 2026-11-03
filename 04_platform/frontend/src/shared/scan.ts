@@ -11,9 +11,10 @@
 
 import { QR_SCHEME } from './qr';
 
-export type ScanKind = 'parcel' | 'tote' | 'vehicle' | 'badge' | 'collect' | 'track' | 'load';
+// 2026-11-03 — 'pair': the code a new phone shows, to be linked by a phone the account already uses (account/pairing.ts).
+export type ScanKind = 'parcel' | 'tote' | 'vehicle' | 'badge' | 'collect' | 'track' | 'load' | 'pair';
 
-const KINDS: readonly ScanKind[] = ['parcel', 'tote', 'vehicle', 'badge', 'collect', 'track', 'load'];
+const KINDS: readonly ScanKind[] = ['parcel', 'tote', 'vehicle', 'badge', 'collect', 'track', 'load', 'pair'];
 
 export interface ScanResult {
   /** The namespaced kind, or null for a bare code with no scheme. */
@@ -79,6 +80,8 @@ export function kindLabel(kind: ScanKind | null): string {
       return 'tracking';
     case 'load':
       return 'load label';
+    case 'pair':
+      return 'new phone';
     default:
       return 'code';
   }

@@ -9,7 +9,7 @@ import { addressFormatFor } from '../../foundation/countries/address-format';
 import { AddressFormatView } from './pudo.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto, HandOverDto } from './pudo.dto';
+import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto, HandOverDto, ApprovePairingDto } from './pudo.dto';
 import { AccountService } from './account.service';
 import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
@@ -216,6 +216,16 @@ export class AccountController {
   @Get('my-apps')
   myApps(@Actor() actor: IntrospectionResult) {
     return { apps: this.accounts.kindsOf(shopOf(actor)) };
+  }
+
+  /**
+   * 2026-11-03 — A NEW PHONE LINKED FROM THIS ONE: the code it shows, scanned or typed here (AccountService.approvePairing).
+   * The account's own act, on one of its own phones; staff link nobody's.
+   */
+  @Roles('agent', 'mdp', 'genesis')
+  @Post('pair')
+  approvePairing(@Body() dto: ApprovePairingDto, @Actor() actor: IntrospectionResult) {
+    return this.accounts.approvePairing(shopOf(actor), dto.code, dto.device);
   }
 
   /** One of them opened in its app on this phone: a one-time hand-over, two minutes. */

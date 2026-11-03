@@ -74,6 +74,17 @@ const LINK_TTL_MS = 7 * 24 * 3_600_000;
 const LINK_RESEND_MS = 3_600_000;
 /** A hand-over from one app to another on the same phone: long enough to open the other app, and once. */
 const HANDOVER_TTL_MS = 2 * 60_000;
+/** A pairing code on a new phone: long enough to fetch the other phone and scan it. */
+const PAIR_TTL_MS = 2 * 60_000;
+/** Eight of these: nothing that reads as another (no 0/O, 1/I/L). */
+const PAIR_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function newPairCode(): string {
+  let out = '';
+  for (let i = 0; i < 8; i++) out += PAIR_ALPHABET[randomInt(0, PAIR_ALPHABET.length)];
+  return out;
+}
+/** As typed: any case, with or without the dash or spaces. */
+const pairCodeOf = (typed: string): string => String(typed ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 /**
  * THE ACCOUNTS WHOSE SIGN-IN WORKS ONLY ON A PHONE OR BROWSER THEY CONFIRMED (the user, 2026-10-18: "who is at the
@@ -131,7 +142,7 @@ export class AccountService implements OnApplicationBootstrap {
    */
   private readonly unlocks = new UnlockTickets();
   /** A code texted for a browser asking to be confirmed: ten minutes, five tries. In memory, like every code here. */
-  private readonly deviceCodes = new Map<string, { email: string; key?: string; code: string; sentAt: number; expires: number; attempts: number; needsPhone?: boolean; phone?: string }>();
+  private readonly deviceCodes = new Map<string, { email: string; key?: string; code: string; sentAt: number; expires: number; attempts: number; needsPhone?: boolean; phone?: string; pairOnly?: true; pair?: { code: string; expires: number; approved: boolean } }>();
 
   constructor(
     private readonly agents: AgentService,
@@ -462,15 +473,15 @@ export class AccountService implements OnApplicationBootstrap {
       return new GlosError('DEVICE_NOT_KNOWN', `This ${party} has no phone number yet. Give it one: a code goes to it now, and from then on a new phone or browser is confirmed by a code to that number.`, { challenge, needsPhone: true });
     }
     const ending = phone.replace(/\D/g, '').slice(-3);
-    const waiting = [...this.deviceCodes.entries()].find(([, c]) => c.email === account.email && c.expires > now && now - c.sentAt < DEVICE_CODE_COOLDOWN_MS);
+    const waiting = [...this.deviceCodes.entries()].find(([, c]) => (c.key ?? c.email) === storeKeyOf(account) && !c.pairOnly && c.expires > now && now - c.sentAt < DEVICE_CODE_COOLDOWN_MS);
     let challenge = waiting?.[0];
     let code = waiting?.[1].code;
     if (!challenge || !code) {
       const texts = this.sms?.sends() ?? false;
       // The owner's stand-in code: the number's own, as if texted (foundation/runtime/standin-code.ts).
       const standIn = standInCode(phone, texts);
-      if (!standIn && !texts && !isSandbox()) return new GlosError('SMS_NOT_SENT', `This phone or browser has to be confirmed by a code to the ${party}’s number, and codes cannot be texted from this server yet.`);
-      if (!standIn && texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', `Codes are not texted to the ${party}’s number in that country.`);
+      if (!standIn && !texts && !isSandbox()) return new GlosError('SMS_NOT_SENT', `This phone or browser has to be confirmed by a code to the ${party}’s number, and codes cannot be texted from this server yet. Link it with a phone the ${party} already uses instead.`, this.pairOnly(account, now));
+      if (!standIn && texts && !this.sms?.mayGoTo(phone)) return new GlosError('PHONE_NOT_SERVED', `Codes are not texted to the ${party}’s number in that country. Link this phone with a phone the ${party} already uses instead.`, this.pairOnly(account, now));
       challenge = `dc_${randomBytes(12).toString('hex')}`;
       code = standIn ?? String(randomInt(0, 1_000_000)).padStart(6, '0');
       this.deviceCodes.set(challenge, { email: account.email, key: storeKeyOf(account), code, sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0 });
@@ -478,7 +489,7 @@ export class AccountService implements OnApplicationBootstrap {
         if (!standIn) await this.sms?.sendCode(phone, code, DEVICE_CODE_TTL_MS / 60_000);
       } catch (err) {
         this.deviceCodes.delete(challenge);
-        return new GlosError('SMS_NOT_SENT', notSentWords(err, `The code to the ${party}’s number could not be texted. Try again in a minute.`));
+        return new GlosError('SMS_NOT_SENT', notSentWords(err, `The code to the ${party}’s number could not be texted. Try again in a minute.`), this.pairOnly(account, now));
       }
     }
     return new GlosError('DEVICE_NOT_KNOWN', `This phone or browser has not signed in to this ${party} before. A code went to the ${party}’s number ending ${ending}: type it here.`, {
@@ -486,6 +497,56 @@ export class AccountService implements OnApplicationBootstrap {
       sentTo: `•••${ending}`,
       ...(isSandbox() ? { code } : {}),
     });
+  }
+
+  /** A challenge that can only be paired — no code went: its id, for the new phone's "link it with a phone the account uses". */
+  private pairOnly(account: Account, now: number): { challenge: string; pairOnly: true } {
+    const challenge = `dq_${randomBytes(12).toString('hex')}`;
+    this.deviceCodes.set(challenge, { email: account.email, key: storeKeyOf(account), code: '', sentAt: now, expires: now + DEVICE_CODE_TTL_MS, attempts: 0, pairOnly: true });
+    return { challenge, pairOnly: true };
+  }
+
+  /**
+   * 2026-11-03 — A NEW PHONE LINKED BY ONE THE ACCOUNT ALREADY USES (the owner: "A different device can be linked like the
+   * dutch digid with a qr and a couple code or something similar"). The password was right on the new phone and its sign-in
+   * was answered with a challenge; on it, a pairing code — eight letters and digits, two minutes — shown as a QR code and in
+   * words. One of the account's own phones, signed in, scans it or types it (approvePairing); the new phone, asking after it
+   * (pairingStatus), is then signed in and one of the account's phones. No code to the number is needed, so it works where
+   * none can be texted. `phones`: how many phones the account has that could do it — none, and the screen says so.
+   */
+  startPairing(challenge: string, now: number = Date.now()): { pairCode: string; expiresIn: number; phones: number } {
+    const asked = this.deviceCodes.get(challenge);
+    const account = asked && asked.expires > now ? this.accounts.get(asked.key ?? asked.email) : undefined;
+    if (!asked || !account) throw new GlosError('OTP_INVALID', 'This sign-in has run out. Sign in again with the email and password.');
+    asked.pair = { code: newPairCode(), expires: now + PAIR_TTL_MS, approved: false };
+    asked.expires = Math.max(asked.expires, asked.pair.expires);
+    return { pairCode: asked.pair.code, expiresIn: PAIR_TTL_MS / 1000, phones: this.devices.list(account.accountId, undefined, now).length };
+  }
+
+  /** On one of the account's own phones, signed in: the code the new phone shows, scanned or typed — and that phone is linked. */
+  approvePairing(did: string, typed: string, device: string | undefined, now: number = Date.now()): { linked: true } {
+    const account = this.boundAccountOf(did);
+    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `Link a new phone from one the ${PARTY[account.role]} already uses: this one is not, yet.`);
+    const code = pairCodeOf(typed);
+    const found = code.length === 8 ? [...this.deviceCodes.values()].find((c) => c.pair?.code === code && (c.key ?? c.email) === storeKeyOf(account) && c.pair.expires >= now) : undefined;
+    if (!found?.pair) throw new GlosError('NOT_FOUND', `No new phone shows this code for this ${PARTY[account.role]}. Check the code, or show a new one on the new phone.`);
+    found.pair.approved = true;
+    return { linked: true };
+  }
+
+  /** The new phone asking after its pairing: waiting, run out — or linked, and signed in, once. */
+  pairingStatus(challenge: string, now: number = Date.now()): { linked: false; expiresIn: number } | (AccountSignIn & { linked: true }) {
+    const asked = this.deviceCodes.get(challenge);
+    if (!asked?.pair) throw new GlosError('OTP_INVALID', 'This sign-in has run out. Sign in again with the email and password.');
+    if (!asked.pair.approved) {
+      if (asked.pair.expires < now) throw new GlosError('OTP_INVALID', 'The code ran out before a phone of the account scanned it. Show a new one.');
+      return { linked: false, expiresIn: Math.ceil((asked.pair.expires - now) / 1000) };
+    }
+    this.deviceCodes.delete(challenge);
+    const account = this.accounts.get(asked.key ?? asked.email);
+    if (!account) throw new GlosError('OTP_INVALID', 'This sign-in has run out. Sign in again with the email and password.');
+    const device = this.devices.add(account.accountId, now);
+    return { linked: true, accountId: account.accountId, role: account.role, did: account.did, email: account.email, token: this.mint(account), device };
   }
 
   /**
@@ -522,6 +583,8 @@ export class AccountService implements OnApplicationBootstrap {
     }
     // No number given yet, so no code was sent: nothing to check, and the sign-in still waits for its number.
     if (asked.needsPhone && !asked.phone) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
+    // 2026-11-03 — nor a challenge that only pairs: it carries no code, and an empty one must open nothing.
+    if (asked.pairOnly || !asked.code) throw new GlosError('OTP_INVALID', 'Wrong or expired code');
     if (!safeEqualText(asked.code, String(code ?? '').trim())) {
       asked.attempts += 1;
       if (asked.attempts >= DEVICE_CODE_TRIES) {

@@ -3,6 +3,7 @@ import { isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, sbgForgot, 
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
 import { myAppsApi, readHandOver, takeHandOverFromAddress } from '../../shared/account/myApps';
 import type { LoginView } from '../../lib/sbg/appclient';
+import type { Paired } from '../../shared/account/pairing';
 import type { IconName } from '../../shared/ui/Icon';
 import { signal } from '../../shared/feedback';
 import { t } from '../../shared/i18n';
@@ -336,6 +337,15 @@ export function useMdpApp() {
     if (r.error || !r.data) return setState((s) => ({ ...s, busy: null, error: r.error ?? null }));
     const sent = r.data;
     setState((s) => ({ ...s, busy: null, deviceAsk: s.deviceAsk ? { ...s.deviceAsk, challenge: sent.challenge, sentTo: sent.sentTo, needsPhone: false, ...(sent.code ? { code: sent.code } : {}) } : null }));
+  }, []);
+
+  /** 2026-11-03 — linked by a phone the hub already uses (pairing.ts): this phone is the hub's from now, and signed in. */
+  const devicePaired = useCallback(async (signedIn: Paired) => {
+    const ask = stateRef.current.deviceAsk;
+    saveShopDeviceKey(signedIn.email || ask?.email || '', signedIn.device, 'hub');
+    await enter(signedIn, signedIn.email || ask?.email || '');
+    // `enter` is declared below and never changes (useCallback with no deps): read when the phone is linked, not now.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Back to the email and password: another hub, or another try. */
@@ -992,6 +1002,7 @@ export function useMdpApp() {
       refresh,
       signIn,
       confirmDevice,
+      devicePaired,
       giveDevicePhone,
       cancelDeviceAsk,
       hubDevices,
