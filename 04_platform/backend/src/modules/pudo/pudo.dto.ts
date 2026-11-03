@@ -52,6 +52,16 @@ export class FreightAmountDto {
   @IsString() @MaxLength(3) currency!: string;
 }
 
+/**
+ * 2026-11-03 — the temperature the goods are kept between, in °C, as the shipper says it: chilled 2 to 8, frozen -18 or
+ * colder. The same bounds the air export and import ask (-30 to 30); that the lowest is below the highest is said by the
+ * posting itself, in words (tempRangeGap).
+ */
+export class FreightTempRangeDto {
+  @IsNumber() @Min(-30, { message: 'A temperature is between -30 °C and 30 °C' }) @Max(30, { message: 'A temperature is between -30 °C and 30 °C' }) minC!: number;
+  @IsNumber() @Min(-30, { message: 'A temperature is between -30 °C and 30 °C' }) @Max(30, { message: 'A temperature is between -30 °C and 30 °C' }) maxC!: number;
+}
+
 /** CMR box 9 — dangerous goods by their generally recognised description, as the sender declares them. */
 export class FreightDangerousDto {
   @Matches(/^\s*(UN)?\s*\d{4}\s*$/i, { message: 'A UN number is UN and four digits, like UN1263' }) unNumber!: string;
@@ -2719,6 +2729,12 @@ export class RegisterFreightDto {
   @IsOptional() @ValidateNested() @Type(() => TruckFlightDto) truckFlight?: TruckFlightDto;
   /** 2026-11-01 — how much space the load takes, in cubic metres: light, bulky cargo fills a body before it weighs it down. */
   @IsOptional() @IsNumber() @Min(0.01) @Max(150) volumeM3?: number;
+  /**
+   * 2026-11-03 — goods carried cold (fresh or frozen food) kept between these, in °C: offered only to a refrigerated or
+   * insulated body, as every such load is, its readings judged against this range and the note printing it. Absent, a
+   * cold load keeps the network's 2–8 °C. Refused on goods that are not carried cold.
+   */
+  @IsOptional() @ValidateNested() @Type(() => FreightTempRangeDto) tempRange?: FreightTempRangeDto;
 }
 
 /** F2 — the PUDO counter books a too-big (dedicated, P4+) walk-up as FREIGHT instead of refusing it. The

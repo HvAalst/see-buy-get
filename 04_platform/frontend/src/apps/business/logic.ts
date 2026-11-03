@@ -222,6 +222,15 @@ export interface LoadForm {
 export const DANGEROUS_NATURES = ['HAZ-CHEM', 'HAZ-BIO', 'HAZ-FLAM'] as const;
 export const isDangerousNature = (code: string | undefined) => (DANGEROUS_NATURES as readonly string[]).includes(code ?? '');
 
+/**
+ * 2026-11-03 — THE KINDS OF GOODS CARRIED COLD, which are asked the temperature they are kept at: fresh or frozen food, the
+ * one kind the network offers only to a refrigerated or insulated truck and whose temperature the driver logs (the
+ * backend's NATURE_CAPABILITY, FOP → coldChain; post-load.test.tsx holds the two together). Medicine or aid is not among
+ * them: the network does not carry it cold yet, so a range given for it would be printed and kept by nobody.
+ */
+export const COLD_NATURES = ['FOP'] as const;
+export const isColdNature = (code: string | undefined) => (COLD_NATURES as readonly string[]).includes(code ?? '');
+
 export function loadGaps(form: LoadForm): Array<keyof LoadForm> {
   const gaps: Array<keyof LoadForm> = [];
   if (!form.description.trim()) gaps.push('description');

@@ -345,6 +345,8 @@ export interface NewLoad {
   truckFlight?: { awb: string; flight: string; airline?: string };
   /** 2026-11-01 — the space the load takes, in cubic metres. */
   volumeM3?: number;
+  /** 2026-11-03 — fresh or frozen food kept between these, in °C. Absent, it is kept at the network's 2–8 °C. */
+  tempRange?: { minC: number; maxC: number };
   /** How many packages: each gets a label, and an SSCC under the business's GS1 prefix. */
   packages?: number;
   natureCode?: string;

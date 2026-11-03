@@ -17,7 +17,7 @@ import type { LoadPassageView } from './load-passage.types';
 import { DriverService } from './driver.service';
 import { ImportService } from './import.service';
 import { FleetManagerService } from './fleet-manager.service';
-import { tempBand } from './heavy-cargo';
+import { freightBand } from './heavy-cargo';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { roadRegimeOf, type RoadRegime } from '../../foundation/carriage-law/catalogue';
 import { coverLine } from './papers';
@@ -164,7 +164,8 @@ export class ConsignmentNoteService implements OnModuleInit {
     // Which law: from the two countries, as they stood on the day the note was made out.
     const lane = roadRegimeOf(f.pickupCountry, f.destCountry, f.createdAt.slice(0, 10));
     const volume = f.dimensionsCm ? Math.round(((f.dimensionsCm[0] * f.dimensionsCm[1] * f.dimensionsCm[2]) / 1_000_000) * 1000) / 1000 : undefined;
-    const band = tempBand(f.natureCode);
+    // The range the shipper asked it kept in, where it asked one (2026-11-03) — the one its readings are judged against.
+    const band = freightBand(f);
     const documents: string[] = [];
     /*
      * THE CLEARANCE PACK FIRST, because that is what box 5 is for: the papers that travel WITH the

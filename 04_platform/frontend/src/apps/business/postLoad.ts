@@ -1,5 +1,5 @@
 import type { NewLoad } from './api';
-import { isDangerousNature, loadGaps, nextDay, type LoadForm } from './logic';
+import { isColdNature, isDangerousNature, loadGaps, nextDay, type LoadForm } from './logic';
 
 /*
  * 2026-11-03 — POSTING A LOAD, ONE STEP AT A TIME (the owner: "the 'post a new load' is a pretty large page. It is in my
@@ -47,9 +47,12 @@ export type PostForm = LoadForm & {
   contractId: string;
   deliverOn: string;
   orderRef: string;
+  /** 2026-11-03 — fresh or frozen food: the lowest and the highest it is kept at, in °C, as typed. Both empty is 2–8 °C. */
+  tempMinC: string;
+  tempMaxC: string;
 };
 
-export const EMPTY_POST: PostForm = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '' };
+export const EMPTY_POST: PostForm = { volumeM3: '', truckFlight: false, flightAwb: '', flightNo: '', flightAirline: '', declaredValue: '', specialInterest: '', valueCurrency: '', noTranshipment: false, coverRequired: false, consigneeName: '', consigneeAddress: '', unNumber: '', properShippingName: '', hazardClass: '', packingGroup: '', customsInstructions: '', description: '', fromSiteId: '', toSiteId: '', receivingPoint: '', receiverRef: '', weightKg: '', packaging: '', packages: '', destCountry: '', natureCode: 'GEN', fragile: false, commitMode: 'negotiate', instructions: '', contactName: '', contactPhone: '', deliveryWindow: '', pickupOn: '', forClientId: '', contractId: '', deliverOn: '', orderRef: '', tempMinC: '', tempMaxC: '' };
 
 /** A new load's first answers, as the one page had them: going within the business's own country, arriving tomorrow. */
 export const startForm = (country: string, now: Date = new Date()): PostForm => ({ ...EMPTY_POST, destCountry: country, deliverOn: nextDay(now) });
@@ -109,7 +112,7 @@ export function postFields(step: PostStep, contract: boolean): Array<keyof PostF
     case 'route':
       return ['fromSiteId', 'toSiteId', 'receivingPoint', 'receiverRef', 'destCountry', 'consigneeName', 'consigneeAddress', 'customsInstructions'];
     case 'goods':
-      return ['description', 'natureCode', 'unNumber', 'hazardClass', 'properShippingName', 'packingGroup', 'weightKg', 'packaging', 'packages', 'volumeM3', 'fragile'];
+      return ['description', 'natureCode', 'unNumber', 'hazardClass', 'properShippingName', 'packingGroup', 'tempMinC', 'tempMaxC', 'weightKg', 'packaging', 'packages', 'volumeM3', 'fragile'];
     case 'when':
       return ['pickupOn', 'deliveryWindow'];
     case 'value':
@@ -128,7 +131,10 @@ export function postFields(step: PostStep, contract: boolean): Array<keyof PostF
  * and at most 150 m³ (the box's `min`/`max`, and the server's); and a collection day gone, which the server would quietly
  * turn into "as soon as a carrier can". With a load kept on the phone for days, a day that has gone is likely.
  */
-export type PostGap = keyof LoadForm | 'deliverOn' | 'deliverOnGone' | 'pickupOnGone' | 'volumeM3';
+export type PostGap = keyof LoadForm | 'deliverOn' | 'deliverOnGone' | 'pickupOnGone' | 'volumeM3' | TempGap;
+
+/** 2026-11-03 — a temperature range given for fresh or frozen food: one end without the other, past -30 or 30, or upside down. */
+export type TempGap = 'tempRange' | 'tempBounds' | 'tempOrder';
 
 const GAP_STEP: Record<PostGap, PostStep> = {
   description: 'goods',
@@ -152,6 +158,9 @@ const GAP_STEP: Record<PostGap, PostStep> = {
   deliverOnGone: 'carrier',
   pickupOnGone: 'when',
   volumeM3: 'goods',
+  tempRange: 'goods',
+  tempBounds: 'goods',
+  tempOrder: 'goods',
 };
 
 export interface PostCtx {
@@ -175,8 +184,34 @@ export function postGaps(form: PostForm, ctx: PostCtx): PostGap[] {
   gaps.push(...loadGaps({ ...form, crossing: ctx.crossing }));
   const m3 = Number(form.volumeM3);
   if (form.volumeM3.trim() && !(m3 >= 0.01 && m3 <= 150)) gaps.push('volumeM3');
+  gaps.push(...tempGaps(form));
   if (!ctx.contract && form.pickupOn && form.pickupOn < ctx.today) gaps.push('pickupOnGone');
   return gaps;
+}
+
+/** The coldest and warmest that can be asked, in °C — the server's own bounds (as the air export and import have them). */
+export const TEMP_LIMIT_C = 30;
+
+/**
+ * 2026-11-03 — WHAT A TEMPERATURE RANGE STILL NEEDS, said in words beside it rather than by the server: both ends or
+ * neither (neither keeps the usual 2–8 °C), each within -30 to 30 °C, and the lowest below the highest — the server's
+ * own rules (heavy-cargo.ts, tempRangeGap). Asked of fresh or frozen food only; on other goods nothing is asked or sent.
+ */
+export function tempGaps(form: Pick<PostForm, 'natureCode' | 'tempMinC' | 'tempMaxC'>): TempGap[] {
+  if (!isColdNature(form.natureCode)) return [];
+  const lo = form.tempMinC.trim();
+  const hi = form.tempMaxC.trim();
+  if (!lo && !hi) return [];
+  if (!lo || !hi || !Number.isFinite(Number(lo)) || !Number.isFinite(Number(hi))) return ['tempRange'];
+  if (Math.abs(Number(lo)) > TEMP_LIMIT_C || Math.abs(Number(hi)) > TEMP_LIMIT_C) return ['tempBounds'];
+  if (!(Number(lo) < Number(hi))) return ['tempOrder'];
+  return [];
+}
+
+/** The range it is kept in, as it is sent: only for fresh or frozen food, only once both ends are given and right. */
+export function tempRangeOf(form: Pick<PostForm, 'natureCode' | 'tempMinC' | 'tempMaxC'>): { minC: number; maxC: number } | null {
+  if (!isColdNature(form.natureCode) || !form.tempMinC.trim() || !form.tempMaxC.trim() || tempGaps(form).length) return null;
+  return { minC: Number(form.tempMinC), maxC: Number(form.tempMaxC) };
 }
 
 /** What this step still needs: only its own — a step never stops on another's answer. */
@@ -187,7 +222,7 @@ export function stepGaps(step: PostStep, form: PostForm, ctx: PostCtx): PostGap[
 export const gapStep = (gap: PostGap): PostStep => GAP_STEP[gap];
 
 /** The words a gap is said in, beside its field. */
-export const gapWords = (gap: PostGap): string => (gap === 'deliverOn' || gap === 'deliverOnGone' || gap === 'pickupOnGone' || gap === 'volumeM3' ?`business.post.need.${gap}` : `business.loads.need.${gap}`);
+export const gapWords = (gap: PostGap): string => (gap === 'deliverOn' || gap === 'deliverOnGone' || gap === 'pickupOnGone' || gap === 'volumeM3' || gap === 'tempRange' || gap === 'tempBounds' || gap === 'tempOrder' ?`business.post.need.${gap}` : `business.loads.need.${gap}`);
 
 /** A place a load is collected from or delivered to, as the board and the consignment note carry it. */
 export interface LoadEnd {
@@ -205,6 +240,9 @@ export function loadEnds(sites: Array<LoadEnd & { siteId: string }>, form: Pick<
 /**
  * THE REQUEST, as the one page built it — moved here unchanged, key for key in the same order (the test compares the two
  * byte for byte). `receiving` is the receiving point looked up by its code; `contract` the one it is ordered under.
+ *
+ * 2026-11-03 — one key more than the page sent, and only when it is given: the range fresh or frozen food is kept in.
+ * A load without one is the page's request still, byte for byte.
  */
 export function loadBody(form: PostForm, at: { country: string; from: LoadEnd; to: LoadEnd; receiving: { code: string } | null; contract: { contractId: string } | null }): NewLoad {
   const { from, to, receiving, contract } = at;
@@ -213,6 +251,7 @@ export function loadBody(form: PostForm, at: { country: string; from: LoadEnd; t
   // Across a border the consignment note asks more of the form (the CMR check, 2026-10-28).
   const crossing = Boolean(form.destCountry && form.destCountry !== at.country);
   const dangerous = isDangerousNature(form.natureCode);
+  const kept = tempRangeOf(form);
   return {
     description: form.description.trim(),
     pickupLabel: from.name,
@@ -228,6 +267,7 @@ export function loadBody(form: PostForm, at: { country: string; from: LoadEnd; t
     natureCode: form.natureCode,
     ...(form.consigneeName.trim() && !receiving ? { consignee: { name: form.consigneeName.trim(), ...(form.consigneeAddress.trim() ? { address: form.consigneeAddress.trim() } : {}) } } : {}),
     ...(dangerous ? { dangerousGoods: { unNumber: form.unNumber.trim(), properShippingName: form.properShippingName.trim(), hazardClass: form.hazardClass.trim(), ...(form.packingGroup ? { packingGroup: form.packingGroup } : {}) } } : {}),
+    ...(kept ? { tempRange: kept } : {}),
     ...(crossing && form.customsInstructions.trim() ? { customsInstructions: form.customsInstructions.trim() } : {}),
     fragile: form.fragile,
     ...(form.coverRequired ? { coverRequired: true } : {}),

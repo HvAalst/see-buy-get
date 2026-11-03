@@ -1,4 +1,4 @@
-import { COLD_CHAIN_BAND, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
+import { COLD_CHAIN_BAND, freightBand, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, tempRangeGap, unloadSafetyItems } from './heavy-cargo';
 
 describe('heavy-cargo safety checklist (S33)', () => {
   const keys = (ctx: { bulk: boolean; fragile: boolean; requiredCapabilities: import('./cargo.types').VehicleCapability[] }) => requiredLoadKeys(ctx);
@@ -57,5 +57,27 @@ describe('cold-chain temperature (S33b)', () => {
     expect(isTempBreach(1.9, band)).toBe(true);
     expect(isTempBreach(8.1, band)).toBe(true);
     expect(isTempBreach(-18, band)).toBe(true); // frozen is a breach of the chilled band
+  });
+
+  // 2026-11-03 — a business says the range its own goods are kept in, from the door it posts them through.
+  it('freightBand is the shipper’s own range on goods carried cold, else the cargo’s — never a range on goods nobody keeps cold', () => {
+    expect(freightBand({ natureCode: 'FOP', tempRange: { minC: -25, maxC: -18 } })).toEqual({ minC: -25, maxC: -18 });
+    expect(freightBand({ natureCode: 'FOP' })).toEqual(COLD_CHAIN_BAND);
+    expect(freightBand({ natureCode: 'GEN', tempRange: { minC: -25, maxC: -18 } })).toBeNull();
+    expect(freightBand({ natureCode: 'GEN' })).toBeNull();
+  });
+
+  it('tempRangeGap says in words what is wrong with a range, and nothing of a good one or of none', () => {
+    expect(tempRangeGap('FOP', { minC: 2, maxC: 8 })).toBeUndefined();
+    expect(tempRangeGap('FOP', { minC: -30, maxC: 30 })).toBeUndefined();
+    expect(tempRangeGap('FOP', undefined)).toBeUndefined();
+    expect(tempRangeGap('GEN', undefined)).toBeUndefined();
+    expect(tempRangeGap('GEN', { minC: 2, maxC: 8 })).toMatch(/for goods carried cold/);
+    expect(tempRangeGap(undefined, { minC: 2, maxC: 8 })).toMatch(/for goods carried cold/);
+    expect(tempRangeGap('HUM', { minC: 2, maxC: 8 })).toMatch(/for goods carried cold/);
+    expect(tempRangeGap('FOP', { minC: 8, maxC: 2 })).toBe('The lowest temperature must be below the highest');
+    expect(tempRangeGap('FOP', { minC: 4, maxC: 4 })).toBe('The lowest temperature must be below the highest');
+    expect(tempRangeGap('FOP', { minC: -31, maxC: -18 })).toBe('A temperature is between -30 °C and 30 °C.');
+    expect(tempRangeGap('FOP', { minC: 2, maxC: Number.NaN })).toBe('A temperature is between -30 °C and 30 °C.');
   });
 });

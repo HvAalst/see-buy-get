@@ -12,7 +12,7 @@ import { CommercialInvoice, CommercialInvoiceView, OwnInvoicePaper } from './com
 import { DispatchService } from './dispatch.service';
 import { ConsignmentNoteService } from './consignment-note.service';
 import { Freight } from './dispatch.types';
-import { tempBand } from './heavy-cargo';
+import { freightBand } from './heavy-cargo';
 import { packageLabelsHtml, packageLabelsZpl, type PackageLabelInput } from './package-labels';
 import { CommercialInvoiceDto, OwnInvoicePaperDto } from './shipping-papers.dto';
 import { PackageLabelsView } from './shipping-papers.types';
@@ -84,7 +84,8 @@ export class ShippingPapersController {
   private labelInput(f: Freight): PackageLabelInput {
     const note = this.notes.noteFor(f.freightId);
     const issued = this.codes.codesFor(f.freightId);
-    const band = tempBand(f.natureCode);
+    // The shipper's own range where it gave one (2026-11-03), as the note prints it — never 2–8 °C on a frozen load.
+    const band = freightBand(f);
     const invoice = this.invoices.current(f.freightId);
     return {
       loadCode: f.code,

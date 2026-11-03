@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
 import { GlosError } from '../../foundation/http/glos-error';
 import { dangerousGoodsGap } from './cargo.types';
+import { tempRangeGap } from './heavy-cargo';
 import { incotermEntry } from '../../foundation/incoterms/catalogue';
 import { PresenceService } from '../../foundation/presence/presence.service';
 import { BusinessClientService } from './business-client.service';
@@ -69,6 +70,11 @@ export class LoadPostingService {
     // Dangerous goods come with their UN number from this door as from every other (the gaps check, 2026-10-29).
     const dangerous = dangerousGoodsGap(dto.natureCode, dto.dangerousGoods);
     if (dangerous) throw new GlosError('FIELD_REQUIRED', dangerous, { field: 'dangerousGoods' });
+    // 2026-11-03 — the range goods carried cold are kept in, where the sender gives one: kept on the load as the air
+    // import's road leg keeps it, so the offers, the readings and the note hold it. Refused here, in words, rather than
+    // kept on goods nobody carries cold, or dropped for a lowest that is not below the highest.
+    const cold = tempRangeGap(dto.natureCode, dto.tempRange);
+    if (cold) throw new GlosError('VALIDATION_FAILED', cold, { field: 'tempRange' });
     const posted = this.dispatch.registerFreight(
       { ...load, dimensionsCm, ...this.contractOrder(actor, contractId, deliverOn, orderRef), ...(receiving ? { receiver: receiving.receiver, ...(receiverRef ? { receiverRef } : {}) } : {}), bodyHint: dto.bodyHint as never, excludedBodies: dto.excludedBodies as never, postedByDid: actor?.did, ...(actor?.role === 'business' && actor.actorName ? { postedByName: actor.actorName } : {}), ...this.onBehalfOf(actor, forClientId) },
       Date.now(),

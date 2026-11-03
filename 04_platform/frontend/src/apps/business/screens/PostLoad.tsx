@@ -13,7 +13,7 @@ import { ConsolePick } from '../../tower/ConsolePick';
 import { CurrencySelect } from '../../tower/screens/CurrencySelect';
 import { CountrySelect, useCountryAtlas, type CountryOption } from '../../tower/screens/CountrySelect';
 import { businessConfig, type BusinessClient, type BusinessView, type CarriageContract, type Client } from '../api';
-import { isDangerousNature, nextDay, orderableContracts } from '../logic';
+import { isColdNature, isDangerousNature, nextDay, orderableContracts } from '../logic';
 import { codeOf, type ReceivingPointNamed } from '../inbound';
 import {
   draftOwner,
@@ -30,6 +30,7 @@ import {
   startForm,
   stepGaps,
   stepIn,
+  tempRangeOf,
   todayIn,
   waitsUntil,
   type LoadDraft,
@@ -166,6 +167,7 @@ export function PostLoad({
   // Across a border the consignment note asks more of the form (the CMR check, 2026-10-28).
   const crossing = Boolean(form.destCountry && form.destCountry !== business.country);
   const dangerous = isDangerousNature(form.natureCode);
+  const cold = isColdNature(form.natureCode);
   const ctx = { crossing, contract: Boolean(contract), today: todayIn(start?.now) };
   const gaps = step === 'done' ? [] : stepGaps(step, form, ctx);
   const back = postBack(step, steps);
@@ -459,6 +461,29 @@ export function PostLoad({
                   options={[{ value: '', label: t('business.loads.f.packingGroupNone') }, ...(['I', 'II', 'III'] as const).map((g) => ({ value: g, label: g }))]}
                   onChange={(packingGroup) => set({ packingGroup })}
                 />
+              </div>
+            </div>
+          ) : null}
+          {/* 2026-11-03 — the temperature fresh or frozen food is kept at, straight under the kind of goods that asks it.
+              Both left empty keeps the usual 2–8 °C, and the request is the one it always was. No inputMode: a phone's
+              number pad has no minus sign, and frozen goods need one. */}
+          {cold ? (
+            <div class="biz-post__more">
+              <h2 class="cons__panelt" id="biz-post-temp">
+                {t('business.post.temp.title')}
+              </h2>
+              <p class="chint">{t('business.post.temp.hint')}</p>
+              <div class="cfield" role="group" aria-labelledby="biz-post-temp">
+                <span class="biz-post__range">
+                  <span>{t('business.post.temp.between')}</span>
+                  <input class="cinput" type="number" step="0.5" min={-30} max={30} aria-label={t('business.post.temp.lowest')} value={form.tempMinC} onInput={(e) => set({ tempMinC: (e.target as HTMLInputElement).value })} />
+                  <span>{t('business.post.temp.and')}</span>
+                  <input class="cinput" type="number" step="0.5" min={-30} max={30} aria-label={t('business.post.temp.highest')} value={form.tempMaxC} onInput={(e) => set({ tempMaxC: (e.target as HTMLInputElement).value })} />
+                  <span>{t('business.post.temp.unit')}</span>
+                </span>
+                {gap('tempRange')}
+                {gap('tempBounds')}
+                {gap('tempOrder')}
               </div>
             </div>
           ) : null}
@@ -772,6 +797,14 @@ function CheckStep({
       if (isDangerousNature(form.natureCode)) {
         const dg = [form.unNumber.trim(), form.properShippingName.trim(), form.hazardClass.trim() ? t('business.post.v.class', { cls: form.hazardClass.trim() }) : '', form.packingGroup ? t('business.post.v.group', { pg: form.packingGroup }) : ''];
         out.push([t('business.exports.sli.dangerous'), dg.filter(Boolean).join(' · ')]);
+      }
+      // Fresh or frozen food: the range it is kept in — or, none given, the usual one it will be kept in. Half given or
+      // wrong, it is shown as typed, with what it still needs said under the part: never as the usual range.
+      if (isColdNature(form.natureCode)) {
+        const kept = tempRangeOf(form);
+        const lo = form.tempMinC.trim();
+        const hi = form.tempMaxC.trim();
+        out.push([t('business.post.k.temp'), kept ? t('business.post.v.temp', { min: String(kept.minC), max: String(kept.maxC) }) : lo || hi ? t('business.post.v.temp', { min: lo || '—', max: hi || '—' }) : t('business.post.v.tempUsual')]);
       }
       out.push([t('business.post.k.weight'), Number(form.weightKg) >= 1 ? `${Number(form.weightKg).toLocaleString()} kg` : '']);
       out.push([t('business.loads.f.packaging'), form.packaging ? t((PACKAGING_HELP.find((p) => p.value === form.packaging)?.labelKey ?? 'agent.accept.packagingChoose') as MessageKey) : '']);

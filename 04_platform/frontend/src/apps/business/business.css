@@ -644,6 +644,16 @@
 .biz-post__more > .chint {
   margin: 4px 0 16px;
 }
+/* 2026-11-03 — "Keep it between __ and __ °C", read as the one sentence it is; it wraps on a narrow phone. */
+.biz-post__range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.biz-post__range .cinput {
+  width: 6.5em;
+}
 .biz-post__kept {
   margin-top: 4px;
 }

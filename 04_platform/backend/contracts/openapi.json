@@ -65201,6 +65201,25 @@
           "flight"
         ]
       },
+      "FreightTempRangeDto": {
+        "type": "object",
+        "properties": {
+          "minC": {
+            "type": "number",
+            "minimum": -30,
+            "maximum": 30
+          },
+          "maxC": {
+            "type": "number",
+            "minimum": -30,
+            "maximum": 30
+          }
+        },
+        "required": [
+          "minC",
+          "maxC"
+        ]
+      },
       "RegisterFreightDto": {
         "type": "object",
         "properties": {
@@ -65500,6 +65519,14 @@
             "description": "2026-11-01 — how much space the load takes, in cubic metres: light, bulky cargo fills a body before it weighs it down.",
             "minimum": 0.01,
             "maximum": 150
+          },
+          "tempRange": {
+            "description": "2026-11-03 — goods carried cold (fresh or frozen food) kept between these, in °C: offered only to a refrigerated or\ninsulated body, as every such load is, its readings judged against this range and the note printing it. Absent, a\ncold load keeps the network's 2–8 °C. Refused on goods that are not carried cold.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FreightTempRangeDto"
+              }
+            ]
           }
         },
         "required": [

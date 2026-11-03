@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'preact-render-to-string';
 import { t } from '../../shared/i18n';
 import type { BusinessView, CarriageContract, Client, NewLoad } from './api';
-import { isDangerousNature, loadGaps, nextDay, orderableContracts, type LoadForm } from './logic';
+import { COLD_NATURES, isColdNature, isDangerousNature, loadGaps, nextDay, orderableContracts, type LoadForm } from './logic';
+import { NATURES } from '../agent/logic';
 import {
   DRAFT_KEEP_MS,
   EMPTY_POST,
@@ -24,6 +25,8 @@ import {
   sendLoad,
   startForm,
   stepGaps,
+  tempGaps,
+  tempRangeOf,
   todayIn,
   type PostForm,
   type PostStep,
@@ -132,12 +135,28 @@ describe('posting a load, one step per screen, in an order that suits the load',
     expect(at({ step: 'goods', form: form({ natureCode: 'HAZ-FLAM' }) })).toContain('step 2 of 6');
   });
 
-  it('gives perishable goods no step or field of their own: the page asked no temperature, and the request carries none', () => {
+  // 2026-11-03 — the page asked no temperature; a business posting fresh or frozen food now says the one it is kept at.
+  it('asks fresh or frozen food the temperature it is kept at — straight under the kind of goods, on no step of its own, and no other goods', () => {
     const cold = at({ step: 'goods', form: form({ natureCode: 'FOP' }) });
     expect(cold).toContain('step 2 of 6');
-    expect(cold).not.toMatch(/°C|temperature/i);
-    const body = loadBody(form({ natureCode: 'FOP', description: 'Avocados', weightKg: '900', fromSiteId: 's1', toSiteId: 's2' }), { country: 'KE', from: SITES[0], to: SITES[1], receiving: null, contract: null });
-    expect(Object.keys(body)).not.toContain('tempRange');
+    for (const words of ['business.post.temp.title', 'business.post.temp.hint', 'business.post.temp.between', 'business.post.temp.lowest', 'business.post.temp.highest'] as const) expect(cold).toContain(t(words));
+    expect(cold).toContain('Chilled goods: between 2 and 8. Frozen: -18 or colder');
+    expect(cold.indexOf(t('business.post.temp.title'))).toBeGreaterThan(cold.indexOf(t('business.loads.f.nature')));
+    expect(cold.indexOf(t('business.post.temp.title'))).toBeLessThan(cold.indexOf(t('business.loads.f.weight')));
+    // A phone's number pad has no minus sign, and frozen goods need one: the two boxes ask no number pad.
+    expect(cold.match(/<input class="cinput" type="number" step="0.5" min="-30" max="30" aria-label="[^"]+"/g)).toHaveLength(2);
+    for (const n of NATURES.filter((x) => x.key !== 'FOP')) expect(at({ step: 'goods', form: form({ natureCode: n.key }) }), n.key).not.toContain(t('business.post.temp.title'));
+    expect(COLD_NATURES).toEqual(['FOP']);
+  });
+
+  it('asks it of exactly the goods the network carries cold — the backend’s own list, read', () => {
+    const source = readFileSync('../backend/src/modules/pudo/cargo.types.ts', 'utf8');
+    const block = source.slice(source.indexOf('export const NATURE_CAPABILITY'), source.indexOf('};', source.indexOf('export const NATURE_CAPABILITY')));
+    const coldChain = [...block.matchAll(/'?([A-Z-]+)'?: 'coldChain'/g)].map((m) => m[1]);
+    expect(block).toContain("FOP: 'coldChain'");
+    expect(coldChain).toEqual([...COLD_NATURES]);
+    expect(isColdNature('FOP')).toBe(true);
+    for (const n of ['GEN', 'FOD', 'HUM', 'HAZ-BIO', '', undefined]) expect(isColdNature(n)).toBe(false);
   });
 
   it('asks a trucked flight’s waybill and flight only once it is ticked', () => {
@@ -228,6 +247,51 @@ describe('each step’s checks, said beside the field', () => {
     // What loadGaps says, it still says: nothing of it dropped.
     const full = form({ destCountry: 'UG', natureCode: 'HAZ-BIO', declaredValue: '5' });
     expect(postGaps(full, ctx(full)).filter((g) => g !== 'volumeM3')).toEqual(loadGaps({ ...full, crossing: true }));
+  });
+
+  // 2026-11-03 — the server's own rules for a range (heavy-cargo.ts, tempRangeGap), said beside it before Next.
+  it('checks the temperature in words: both ends or neither, -30 to 30 °C, the lowest below the highest — of cold goods only', () => {
+    const fresh = (over: Partial<PostForm>) => form({ natureCode: 'FOP', description: 'Fish', weightKg: '900', ...over });
+    const f = form();
+    expect(stepGaps('goods', fresh({}), ctx(f))).toEqual([]);
+    expect(stepGaps('goods', fresh({ tempMinC: '-25', tempMaxC: '-18' }), ctx(f))).toEqual([]);
+    expect(stepGaps('goods', fresh({ tempMinC: ' 2 ', tempMaxC: '8' }), ctx(f))).toEqual([]);
+    expect(stepGaps('goods', fresh({ tempMinC: '-30', tempMaxC: '30' }), ctx(f))).toEqual([]);
+    expect(stepGaps('goods', fresh({ tempMinC: '-25' }), ctx(f))).toEqual(['tempRange']);
+    expect(stepGaps('goods', fresh({ tempMaxC: '8' }), ctx(f))).toEqual(['tempRange']);
+    expect(stepGaps('goods', fresh({ tempMinC: 'cold', tempMaxC: '8' }), ctx(f))).toEqual(['tempRange']);
+    expect(stepGaps('goods', fresh({ tempMinC: '-40', tempMaxC: '-18' }), ctx(f))).toEqual(['tempBounds']);
+    expect(stepGaps('goods', fresh({ tempMinC: '2', tempMaxC: '31' }), ctx(f))).toEqual(['tempBounds']);
+    expect(stepGaps('goods', fresh({ tempMinC: '8', tempMaxC: '2' }), ctx(f))).toEqual(['tempOrder']);
+    expect(stepGaps('goods', fresh({ tempMinC: '4', tempMaxC: '4' }), ctx(f))).toEqual(['tempOrder']);
+    // Only the goods step stops on it, and the check with it.
+    for (const s of ['route', 'when', 'value', 'day'] as const) expect(stepGaps(s, fresh({ tempMinC: '8', tempMaxC: '2' }), ctx(f))).not.toContain('tempOrder');
+    expect(stepGaps('check', fresh({ tempMinC: '8', tempMaxC: '2' }), ctx(f))).toContain('tempOrder');
+    // A range typed, then the goods changed to ones not carried cold: nothing asked, nothing sent.
+    expect(tempGaps(form({ natureCode: 'GEN', tempMinC: '8', tempMaxC: '2' }))).toEqual([]);
+    expect(tempRangeOf(form({ natureCode: 'GEN', tempMinC: '2', tempMaxC: '8' }))).toBeNull();
+    expect(tempRangeOf(fresh({ tempMinC: '-25', tempMaxC: '-18' }))).toEqual({ minC: -25, maxC: -18 });
+    expect(tempRangeOf(fresh({ tempMinC: '-25' }))).toBeNull();
+    // Said beside the boxes once Next is tapped, and not before.
+    const wrong = fresh({ tempMinC: '8', tempMaxC: '2' });
+    expect(at({ step: 'goods', form: wrong, tried: true })).toContain(t('business.post.need.tempOrder'));
+    expect(at({ step: 'goods', form: wrong })).not.toContain(t('business.post.need.tempOrder'));
+    expect(at({ step: 'goods', form: fresh({ tempMinC: '-25' }), tried: true })).toContain(t('business.post.need.tempRange'));
+    expect(at({ step: 'goods', form: fresh({ tempMinC: '-45', tempMaxC: '-18' }), tried: true })).toContain(t('business.post.need.tempBounds'));
+  });
+
+  it('shows on the check the range it is kept in — or, none given, the usual 2 to 8 °C — for cold goods only', () => {
+    const ready = form({ natureCode: 'FOP', description: 'Fish', fromSiteId: 's1', toSiteId: 's2', weightKg: '900' });
+    const kept = at({ step: 'check', form: { ...ready, tempMinC: '-25', tempMaxC: '-18' }, sites: SITES });
+    expect(kept).toMatch(new RegExp(`id="biz-post-goods"[\\s\\S]*${t('business.post.k.temp')}[\\s\\S]*-25 °C and -18 °C[\\s\\S]*id="biz-post-when"`));
+    expect(kept).not.toContain(t('business.post.v.tempUsual'));
+    expect(at({ step: 'check', form: ready, sites: SITES })).toContain(t('business.post.v.tempUsual'));
+    // Half given: shown as typed, with what it needs under the part — never as the usual range.
+    const half = at({ step: 'check', form: { ...ready, tempMinC: '-25' }, sites: SITES });
+    expect(half).toContain('-25 °C and — °C');
+    expect(half).not.toContain(t('business.post.v.tempUsual'));
+    expect(half).toContain(t('business.post.need.tempRange'));
+    expect(at({ step: 'check', form: { ...ready, natureCode: 'FOD', tempMinC: '-25', tempMaxC: '-18' }, sites: SITES })).not.toContain(t('business.post.k.temp'));
   });
 
   it('says what is missing beside its field once Next is tapped, and not before', () => {
@@ -393,13 +457,33 @@ const CASES: Array<{ name: string; answers: Partial<PostForm>; business?: Busine
   },
   { name: 'to another business’s receiving point, by its code', receiving: RECEIVING, answers: { description: 'Wheat', fromSiteId: 's1', receivingPoint: '7KQ3-PX9M', receiverRef: 'ORD-55', weightKg: '20000', commitMode: 'negotiate' }, walked: ['route', 'goods', 'when', 'value', 'day'] },
   { name: 'a trucked flight ticked with no waybill: left out, as the page left it', answers: { description: 'Flowers', fromSiteId: 's1', toSiteId: 's2', weightKg: '300', truckFlight: true, flightNo: 'KQ100' }, walked: ['route', 'goods', 'when', 'value', 'day'] },
+  // 2026-11-03 — loads with no temperature given send the page's request still, byte for byte.
+  { name: 'fresh food with no temperature given: kept at the usual 2–8 °C, the page’s request', answers: { description: 'Avocados', fromSiteId: 's1', toSiteId: 's2', weightKg: '900', natureCode: 'FOP', packaging: 'palletised', packages: '12' }, walked: ['route', 'goods', 'when', 'value', 'day'] },
+  { name: 'a range typed, then the goods changed to ones not carried cold: the range is not sent', answers: { description: 'Rice', fromSiteId: 's1', toSiteId: 's2', weightKg: '900', natureCode: 'FOD', tempMinC: '-25', tempMaxC: '-18' }, walked: ['route', 'goods', 'when', 'value', 'day'] },
 ];
 
 describe('the same request as the one page, for the same answers', () => {
-  it('starts from the same answers the page started from', () => {
-    expect(EMPTY_POST).toEqual(OLD_EMPTY);
-    expect(Object.keys(EMPTY_POST)).toEqual(Object.keys(OLD_EMPTY));
-    expect(startForm('KE', NOW)).toEqual({ ...OLD_EMPTY, destCountry: 'KE', deliverOn: '2026-11-04' });
+  it('starts from the same answers the page started from — and the temperature, which it never asked, empty', () => {
+    expect(EMPTY_POST).toEqual({ ...OLD_EMPTY, tempMinC: '', tempMaxC: '' });
+    expect(Object.keys(EMPTY_POST)).toEqual([...Object.keys(OLD_EMPTY), 'tempMinC', 'tempMaxC']);
+    expect(startForm('KE', NOW)).toEqual({ ...OLD_EMPTY, destCountry: 'KE', deliverOn: '2026-11-04', tempMinC: '', tempMaxC: '' });
+  });
+
+  // 2026-11-03 — the one key the page never sent: the range fresh or frozen food is kept in, when it is given.
+  it('sends a cold load the page’s request and its range — the range the one key more', () => {
+    const env = { business: business(), contracts: [], clients: [], receiving: null };
+    const answers = { description: 'Frozen tilapia', fromSiteId: 's1', toSiteId: 's2', weightKg: '900', natureCode: 'FOP', packaging: 'palletised', packages: '40', commitMode: 'instant' as const, tempMinC: '-25', tempMaxC: '-18' };
+    const old = onePage(answers as Partial<OldForm>, env)!;
+    const { body, walked } = stepByStep(answers, env);
+    expect(walked).toEqual(['route', 'goods', 'when', 'value', 'day']);
+    const { tempRange, ...rest } = body;
+    expect(tempRange).toEqual({ minC: -25, maxC: -18 });
+    expect(JSON.stringify(rest)).toBe(JSON.stringify(old));
+    // Said with the goods, after what kind they are.
+    expect(Object.keys(body).indexOf('tempRange')).toBe(Object.keys(body).indexOf('natureCode') + 1);
+    // Under a contract as on the board: an order carries it too.
+    const order = stepByStep({ ...answers, contractId: 'c1', deliverOn: '2026-11-05' }, { ...env, contracts: [CONTRACT] });
+    expect(order.body).toMatchObject({ contractId: 'c1', tempRange: { minC: -25, maxC: -18 } });
   });
 
   for (const c of CASES) {
@@ -448,6 +532,16 @@ describe('nothing is sent before Post the load', () => {
     expect(post).toHaveBeenCalledTimes(1);
     expect(post).toHaveBeenCalledWith(loadBody(ready, { country: 'KE', from: SITES[0], to: SITES[1], receiving: null, contract: null }));
     expect(keptLoadDraft(owner, NOW.getTime(), store)).toBeNull();
+  });
+
+  it('sends a cold load’s range with it, and nothing while the range still needs something', async () => {
+    const cold = { ...ready, natureCode: 'FOP', tempMinC: '1', tempMaxC: '4' };
+    const { io: x, post } = io();
+    await sendLoad(x, cold, { country: 'KE', ctx: ctx(cold), receiving: null, contract: null, owner, store: memoryStore() });
+    expect(post).toHaveBeenCalledWith(expect.objectContaining({ natureCode: 'FOP', tempRange: { minC: 1, maxC: 4 } }));
+    const upside = io();
+    expect(await sendLoad(upside.io, { ...cold, tempMinC: '4', tempMaxC: '1' }, { country: 'KE', ctx: ctx(cold), receiving: null, contract: null, owner, store: memoryStore() })).toEqual({ refused: 'gaps' });
+    expect(upside.post).not.toHaveBeenCalled();
   });
 
   it('keeps the load on the phone when the server refuses it, and says a place gone before sending anything', async () => {

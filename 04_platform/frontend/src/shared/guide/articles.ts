@@ -108,7 +108,7 @@ export const ARTICLE_SPECS: ArticleSpec[] = [
   { id: 'notices-bell', apps: ['agent', 'mdp', 'fleet', 'driver', 'vendor', 'send'], group: 'daily', steps: 3, notes: ['careful', 'note'] },
   // A business's parcels (the user, 2026-10-29: "Billed to the business"; "A prepaid balance").
   { id: 'business-parcels', apps: ['business'], group: 'daily', steps: 4, notes: ['why', 'note', 'note', 'note', 'note', 'note'] },
-  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 7, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note'] },
+  { id: 'business-loads', apps: ['business'], group: 'freight', steps: 7, notes: ['why', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note', 'note'] },
   // Coming in (inbound, reading A): what suppliers send to the business's own places, never its price.
   { id: 'business-coming-in', apps: ['business'], group: 'freight', steps: 5, notes: ['note', 'note', 'why'] },
   // Exports to the port (the user, 2026-10-27): the road and the papers, never the sea.

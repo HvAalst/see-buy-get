@@ -40,7 +40,7 @@ import { nearestPlace } from './geo-gazetteer';
 import { isPackaging, selfLoading, type Packaging } from './packaging';
 import { buildSeries, carriersOn } from './market-series';
 import { TruckSubtype } from './fleet.config';
-import { isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, tempBand, unloadSafetyItems } from './heavy-cargo';
+import { freightBand, isTempBreach, loadSafetyItems, missingKeys, requiredLoadKeys, requiredUnloadKeys, unloadSafetyItems } from './heavy-cargo';
 import { MediaService } from './media.service';
 import { MarketPulseStore } from './market-pulse.store';
 import { DEFAULT_MAX_MULTIPLIER, DEFAULT_MIN_MULTIPLIER, toteCapacityOf, VEHICLE_SPEC } from './fleet.config';
@@ -403,11 +403,11 @@ export interface DetentionHooks {
 /** Vehicles with nothing to lock or seal: secured air cargo never rides them (2026-10-29). */
 const UNLOCKED_CLASSES: string[] = ['bike', 'motorcycle', 'tuktuk'];
 
-/** The range a load's readings are judged against: the shipper's own, else its cargo's (2–8 °C for cold-chain goods). */
-function bandOf(f: Pick<Freight, 'natureCode' | 'tempRange'>): { minC: number; maxC: number } | null {
-  const own = tempBand(f.natureCode);
-  return own && f.tempRange ? { minC: f.tempRange.minC, maxC: f.tempRange.maxC } : own;
-}
+/**
+ * The range a load's readings are judged against: the shipper's own, else its cargo's (2–8 °C for cold-chain goods).
+ * 2026-11-03 — said once, in heavy-cargo.ts, so the consignment note and the labels print the range the readings are held to.
+ */
+const bandOf: (f: Pick<Freight, 'natureCode' | 'tempRange'>) => { minC: number; maxC: number } | null = freightBand;
 
 @Injectable()
 export class DispatchService {

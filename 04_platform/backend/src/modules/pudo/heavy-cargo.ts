@@ -120,6 +120,33 @@ export function tempBand(natureCode: CargoNature): TempBand | null {
   return NATURE_CAPABILITY[natureCode] === 'coldChain' ? COLD_CHAIN_BAND : null;
 }
 
+/**
+ * The range a LOAD is kept in: the shipper's own, for goods that are carried cold, else its cargo's (2–8 °C). Said once,
+ * here, so the readings, the driver's card, the consignment note and the labels all hold the same one (2026-11-03: the
+ * note and the labels printed 2–8 °C on a load the shipper had asked to keep at 1–4 °C).
+ */
+export function freightBand(f: { natureCode: CargoNature; tempRange?: TempBand }): TempBand | null {
+  const own = tempBand(f.natureCode);
+  return own && f.tempRange ? { minC: f.tempRange.minC, maxC: f.tempRange.maxC } : own;
+}
+
+/** The coldest and warmest a shipper may ask a load kept at, in °C — as the air export and import ask it. */
+export const TEMP_RANGE_LIMIT_C = 30;
+
+/**
+ * 2026-11-03 — why a temperature range given with a load cannot be kept as it stands, or undefined. A range is for goods
+ * carried cold — the kind the network offers only to a refrigerated or insulated body, and whose readings it judges; on
+ * any other goods it would be printed and promised by nobody. Its lowest is below its highest, as the air export and
+ * import ask it: a single figure is a set-point, and a reading a tenth off it would be a breach.
+ */
+export function tempRangeGap(natureCode: CargoNature | undefined, range: TempBand | undefined): string | undefined {
+  if (!range) return undefined;
+  if (!tempBand(natureCode ?? 'GEN')) return 'A temperature range is for goods carried cold: say the goods are fresh or frozen food, or leave the range out.';
+  if (!Number.isFinite(range.minC) || !Number.isFinite(range.maxC) || Math.abs(range.minC) > TEMP_RANGE_LIMIT_C || Math.abs(range.maxC) > TEMP_RANGE_LIMIT_C) return `A temperature is between -${TEMP_RANGE_LIMIT_C} °C and ${TEMP_RANGE_LIMIT_C} °C.`;
+  if (!(range.minC < range.maxC)) return 'The lowest temperature must be below the highest';
+  return undefined;
+}
+
 /** True when a reading is outside the safe band (a cold-chain breach). */
 export function isTempBreach(celsius: number, band: TempBand): boolean {
   return celsius < band.minC || celsius > band.maxC;
