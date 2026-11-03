@@ -69,25 +69,25 @@ describe('a version of the API stops only with notice', () => {
     const notices = new ApiVersionNoticeService(keys, entities, businesses, managers, mail, notifications);
 
     // Before it is announced: nothing.
-    expect(await notices.sweep(announced - DAY, [retiring])).toBe(0);
+    expect(await notices.sweep(announced - DAY, [retiring], [])).toBe(0);
     // Announced: each company once, however often it looks.
-    expect(await notices.sweep(announced + DAY, [retiring])).toBe(2);
-    expect(await notices.sweep(announced + 2 * DAY, [retiring])).toBe(0);
+    expect(await notices.sweep(announced + DAY, [retiring], [])).toBe(2);
+    expect(await notices.sweep(announced + 2 * DAY, [retiring], [])).toBe(0);
     expect(mails).toEqual([
       { to: 'owner@abebe.example', stage: 'announced' },
       { to: 'office@pwani.example', stage: 'announced' },
     ]);
     // A company whose first live key comes later is told then; one with no email still hears it in its bell.
     holders = [...holders, { kind: 'fleet', id: 'did:glos:fleet-b' }];
-    expect(await notices.sweep(announced + 100 * DAY, [retiring])).toBe(1);
+    expect(await notices.sweep(announced + 100 * DAY, [retiring], [])).toBe(1);
     expect(bells.map((b) => b.did)).toEqual(['did:glos:biz', 'did:glos:fleet-a', 'did:glos:fleet-b']);
     // A month before it stops: each once more.
     const monthBefore = Date.parse(retiring.retiresAt!) - 29 * DAY;
-    expect(await notices.sweep(monthBefore, [retiring])).toBe(3);
-    expect(await notices.sweep(monthBefore + DAY, [retiring])).toBe(0);
+    expect(await notices.sweep(monthBefore, [retiring], [])).toBe(3);
+    expect(await notices.sweep(monthBefore + DAY, [retiring], [])).toBe(0);
     expect(mails.filter((m) => m.stage === 'month').map((m) => m.to)).toEqual(['owner@abebe.example', 'office@pwani.example']);
     // Once it has stopped there is nothing left to say.
-    expect(await notices.sweep(Date.parse(retiring.retiresAt!) + DAY, [retiring])).toBe(0);
+    expect(await notices.sweep(Date.parse(retiring.retiresAt!) + DAY, [retiring], [])).toBe(0);
   });
 
   // 2026-11-03 — a new rule inside a version, the same way (the user: "Notice first, build now").
