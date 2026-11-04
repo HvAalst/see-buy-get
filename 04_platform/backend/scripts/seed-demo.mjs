@@ -48,7 +48,7 @@ async function req(method, path, { token, body } = {}) {
 /** EVERY SIGN-UP AGREES (2026-10-25): to the versions of the terms of use, the data notice and the cookie statement in force. */
 let agreedOnce;
 function agreed() {
-  agreedOnce ??= req('GET', '/v1/sbg/agreement').then((r) => ({ agreement: Object.fromEntries((r.data?.documents ?? []).map((d) => [d.kind, d.number])) }));
+  agreedOnce ??= req('GET', '/v1/sbg/agreement').then((r) => ({ agreement: { versions: Object.fromEntries((r.data?.documents ?? []).map((d) => [d.kind, d.number])) } }));
   return agreedOnce;
 }
 
@@ -111,7 +111,7 @@ const need = (r, what) => {
 async function declare(token, label) {
   const mine = need(await req('GET', '/v1/sbg/declarations/mine', { token }), `declaration ${label}`);
   if (!mine.required || mine.state === 'signed') return;
-  need(await req('POST', '/v1/sbg/declarations/mine/sign', { token, body: { version: mine.version, by: label } }), `sign ${label}`);
+  need(await req('POST', '/v1/sbg/declarations/mine/sign', { token, body: { version: mine.version, by: label, confirmed: (mine.lines ?? []).map((_, i) => i) } }), `sign ${label}`);
   say(`security declaration signed: ${label}`);
 }
 
@@ -367,7 +367,7 @@ const run = async () => {
     return need(
       await req('POST', '/v1/sbg/vehicles', {
         token: fm,
-        body: { plate, vehicleClass, ownerName: 'Kilima Owner', ownerType: 'fleet_owned', managerDid: mgr.did, pricePerKm },
+        body: { plate, vehicleClass, energy: vehicleClass === 'bike' ? 'pedal' : vehicleClass === 'motorcycle' ? 'petrol' : 'diesel', ownerName: 'Kilima Owner', ownerType: 'fleet_owned', managerDid: mgr.did, pricePerKm },
       }),
       `vehicle ${plate}`,
     );
