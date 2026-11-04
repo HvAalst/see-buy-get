@@ -188,3 +188,48 @@ describe('no table cell is given a class that stops it being a cell', () => {
     expect({ file, cellsThatAreNotCells: bad }).toEqual({ file, cellsThatAreNotCells: [] });
   });
 });
+
+/**
+ * THE SECTIONS LOOK GOES ONE APP AT A TIME (2026-11-04). Cards become sections with a line between them, lists of rows
+ * become one panel — and the owner approves each app from before-and-after pictures before the next one changes. So
+ * every rule of the look is scoped to `.app--sections`, and only the apps already approved wear that class. A rule
+ * written without the scope would restyle all seven apps at once, the Hub and the Driver included, with nobody having
+ * looked at them; an app given the class early would change before its round.
+ */
+describe('the sections look stays on the apps that wear it', () => {
+  // The apps whose round is done, in the order they were done. Add the next one with its round.
+  const WEARING = ['agent'];
+  const MARK = 'THE SECTIONS LOOK';
+  const shared = SHEETS['src/shared/screens.css'] ?? '';
+  // From the comment that opens the block, not from inside it: a sentence read as CSS takes its apostrophes for quotes.
+  const after = shared.indexOf(MARK) === -1 ? '' : shared.slice(shared.lastIndexOf('/*', shared.indexOf(MARK)));
+  const scoped = rules(after);
+  const elsewhere = FILES.filter((f) => f !== 'src/shared/screens.css').flatMap((f) => rules(SHEETS[f]).filter((r) => r.prelude.includes('app--sections')).map((r) => ({ file: f, ...r })));
+
+  it('reads the look — the block in the shared sheet and the rules beside it', () => {
+    expect(after.length).toBeGreaterThan(0);
+    expect(scoped.length).toBeGreaterThan(10);
+    expect(elsewhere.length).toBeGreaterThan(0);
+  });
+
+  it('scopes every selector of the look to .app--sections', () => {
+    const loose = [...scoped.map((r) => ({ file: 'src/shared/screens.css', ...r })), ...elsewhere].flatMap((r) =>
+      r.prelude
+        .split(/,(?![^(]*\))/)
+        .map((s) => s.trim())
+        .filter((s) => !s.startsWith('.app--sections '))
+        .map((s) => `${r.file}: ${s}`),
+    );
+    expect(loose).toEqual([]);
+  });
+
+  it('is worn by the approved apps, on every root they draw, and by no other', () => {
+    const SOURCES = readAll('.tsx');
+    const roots = Object.entries(SOURCES)
+      .filter(([f]) => /^src\/apps\/[^/]+\/app\.tsx$/.test(f))
+      .flatMap(([f, tsx]) => [...tsx.matchAll(/<div class="(app(?: [^"]*)?)">/g)].map((m) => ({ app: f.split('/')[2], wears: m[1].split(' ').includes('app--sections') })));
+    expect(roots.length).toBeGreaterThan(8);
+    const wrong = roots.filter((r) => r.wears !== WEARING.includes(r.app)).map((r) => `${r.app} ${r.wears ? 'wears it before its round' : 'has a root without it'}`);
+    expect(wrong).toEqual([]);
+  });
+});

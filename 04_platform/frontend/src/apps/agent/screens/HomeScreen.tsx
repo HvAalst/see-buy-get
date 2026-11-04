@@ -197,7 +197,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       {/* 2026-11-04 — not open in this shop's country: the way to ask SeeBuyGet to open there. */}
       {!staff && state.gate?.code === 'COUNTRY_NOT_OPEN' ? <AskToOpen country={agent?.country} kind="shop" config={agentConfig()} /> : null}
 
-      {/* Quick actions — the counter jobs. */}
+      {/* Quick actions — the counter jobs, under their own heading as the settings below them have theirs. */}
+      <Card title={t('agent.home.jobsTitle')}>
       <div class="rows" role="list">
         {JOBS.filter((j) => !(staff && j.owner)).map((j) => {
           const disabled = j.gated ? !canAccept(state.gate) : false;
@@ -218,6 +219,7 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
           );
         })}
       </div>
+      </Card>
 
       {/* Shop settings — each opens its own sheet (or the shelf screen). The owner's, all of them. */}
       {staff ? null : <Card title={t('agent.home.shopSettings')}>

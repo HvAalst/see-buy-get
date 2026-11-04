@@ -661,3 +661,26 @@
   flex: 1 1 100%;
   overflow-wrap: anywhere;
 }
+
+/* -------------------------------------------- the sections look (2026-11-04) --
+   The shop's shelf and rating, under the wallet: two columns with a line between them, not two more cards. */
+.app--sections .healthstrip {
+  gap: 0;
+  margin-top: -4px;
+}
+.app--sections .health {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 16px 0 0;
+}
+.app--sections .health + .health {
+  border-left: 1px solid var(--bd);
+  padding: 0 0 0 16px;
+}
+/* 14px, the floor of the kit (it was 12px here, and the wallet's own label above it is 14px). */
+.app--sections .health__label {
+  font-size: 14px;
+  letter-spacing: 0.07em;
+}

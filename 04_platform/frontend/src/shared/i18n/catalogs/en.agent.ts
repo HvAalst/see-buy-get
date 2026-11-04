@@ -234,6 +234,7 @@ export const enAgent = {
   'agent.bag.toastSealedDetail': '{count, plural, one {# parcel} other {# parcels}} ready for the driver.',
   'agent.bag.aloud': 'Scan each parcel for one place into the bag, then close the bag. The driver scans the bag once.',
   'agent.home.shopSettings': 'Shop settings',
+  'agent.home.jobsTitle': 'At the counter',
   'agent.home.locationRow': 'Where your shop is',
   'agent.home.locationSub': 'Move your pin, set your three words',
   'agent.home.hoursRow': 'Opening hours',

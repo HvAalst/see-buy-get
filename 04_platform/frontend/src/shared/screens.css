@@ -766,3 +766,120 @@
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
+
+/* ==========================================================================
+   THE SECTIONS LOOK — the field apps, one app per round (2026-11-04; round 1: the Shop).
+
+   The console's rule (f382a143), brought to the phone: a card with a border, a radius, a shadow and a gap
+   spent all of it saying "this is a different subject from the last one". A hairline and an 18px heading say
+   it for one pixel. The grey ground stays; the shadow existed to lift a card off it, and with no card there is
+   nothing to lift. The last section carries no rule — a line under the final block promises more below it.
+
+   What stays a box, and why:
+     - a list of rows you TAP is one white panel with a hairline between its rows: a row needs a surface to be
+       pressed on, but fifteen separate cards for fifteen rows was fifteen borders and fifteen gaps;
+     - a tinted note (soft card, Note, the push ask) stays tinted: it is the one block on the screen that is
+       meant to stand out, and a box is how it does.
+
+   Scoped to `.app--sections` while the round goes app by app, so each app is approved before the next changes.
+   When the seventh is done, the scope folds away and these become the rules.
+   ========================================================================== */
+
+/* A card is a section: no box. */
+.app--sections .card:not(.card--soft):not(.card--flat),
+.app--sections .glance {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* …and a line above it when a section came straight before. */
+.app--sections :is(.card:not(.card--soft):not(.card--flat), .glance, .sect) + :is(.card:not(.card--soft):not(.card--flat), .glance, .sect) {
+  border-top: 1px solid var(--bd);
+  padding-top: 20px;
+}
+
+/* A block that is a section without being a card (the shop's shelf and rating, a heading over a list). */
+.app--sections .sect {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The heading of a section that is not a card: the same 18px step as a card's title. */
+.app--sections .sect__title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--navy);
+  line-height: 1.3;
+}
+
+/* A tinted note keeps its tint and loses only the lift. */
+.app--sections .card--soft {
+  box-shadow: none;
+}
+
+/* A row standing alone (not in a list) is still a surface to press — without the lift. */
+.app--sections .row {
+  box-shadow: none;
+}
+
+/* A LIST OF ROWS IS ONE PANEL. Only a list made of nothing but rows: one with a heading, a note or a pager inside
+   keeps its separate rows, rather than wrapping them in a panel that was never drawn for them. */
+.app--sections .rows:not(:has(> :not(.row))) {
+  gap: 0;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+
+.app--sections .rows:not(:has(> :not(.row))) > .row {
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  margin-top: 0;
+}
+
+/* The hairline between two rows starts where the words do, as a list on a phone draws it. */
+.app--sections .rows:not(:has(> :not(.row))) > .row + .row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 72px;
+  border-top: 1px solid var(--bd-soft);
+}
+
+/* …and from the edge when the row has no picture to start from. */
+.app--sections .rows:not(:has(> :not(.row))) > .row + .row:not(:has(> .row__ic))::before {
+  left: 16px;
+}
+
+/* The row a notice named, inside a panel: the bar on its edge and a tint, since the panel has no border to colour. */
+.app--sections .rows > .row--sought {
+  background: var(--blue-soft);
+  box-shadow: inset 4px 0 0 var(--blue);
+}
+
+/* A picked row (the shop a parcel goes to): tinted, so the choice is seen and not only its tick read. */
+.app--sections .row[aria-pressed='true'] {
+  background: var(--blue-soft);
+}
+
+/* A big figure's label and its link (the wallet and Top up) on one line: the link is a thumb tall and the label is
+   not, so they are centred on each other rather than both hung from the top. */
+.app--sections .glance .card__head {
+  align-items: center;
+}
+
+/* ONE STEP OF SPACE between the parts of a section. A card's body was a stack of whatever each screen put in it,
+   each spaced by its own margin or none: a button sat flush under the box it acts on (Hand to the bus), a hint
+   touched the box above it and the button below it (Packaging cut). One rule says it once. A part that sets its
+   own space inline keeps it; margins between blocks collapse, so a part already spaced is not spaced twice. */
+.app--sections .card > * + * {
+  margin-top: 12px;
+}

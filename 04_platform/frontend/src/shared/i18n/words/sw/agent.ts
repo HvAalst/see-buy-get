@@ -195,6 +195,7 @@ export const words: Record<string, string> = {
   "agent.bag.toastSealedDetail": "{count, plural, one {Kifurushi # kiko tayari} other {Vifurushi # viko tayari}} kwa dereva.",
   "agent.bag.aloud": "Changanua kila kifurushi cha mahali pamoja kiingie kwenye mfuko, kisha funga mfuko. Dereva anachanganua mfuko mara moja.",
   "agent.home.shopSettings": "Mipangilio ya duka",
+  "agent.home.jobsTitle": "Kwenye kaunta",
   "agent.home.locationRow": "Duka lako liko wapi",
   "agent.home.locationSub": "Sogeza pini yako, weka maneno yako matatu",
   "agent.home.hoursRow": "Saa za kufungua",

@@ -83,7 +83,7 @@ export function App() {
 
   if (state.phase === 'signin') {
     return (
-      <div class="app">
+      <div class="app app--sections">
         <TopBar title={t('agent.appTitle')} subtitle={t('agent.signInSubtitle')} />
         <main class="app__scroll app__scroll--nonav">
           {/* 2026-11-02 — what every installed app has: the call to install, what is shared to it, its gestures. */}
@@ -109,7 +109,7 @@ export function App() {
   return (
     <LoadFinderContext.Provider value={loadFinder}>
     <ParcelFinderContext.Provider value={parcelFinder}>
-    <div class="app">
+    <div class="app app--sections">
       <TopBar
         title={t('agent.appTitle')}
         subtitle={agentWorkLine(state.agent, state.shopParcels, t)}
