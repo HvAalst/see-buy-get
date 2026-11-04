@@ -25679,6 +25679,29 @@
         }
       }
     },
+    "/v1/sbg/account/carry": {
+      "post": {
+        "operationId": "Account.carryOutPerson",
+        "summary": "",
+        "description": "2026-11-04 — the same from the Driver, Fleet, Business and Send apps: the person signed in with a phone and PIN, the number\nonly where it is theirs (AccountService.carryOutPerson).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarryPersonDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/account/shop-devices/forget-others": {
       "post": {
         "operationId": "Account.forgetOtherShopDevices",
@@ -69598,6 +69621,15 @@
           "device": {
             "type": "string",
             "maxLength": 80
+          }
+        }
+      },
+      "CarryPersonDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
+            "type": "string",
+            "maxLength": 32
           }
         }
       },

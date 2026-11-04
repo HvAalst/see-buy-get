@@ -212,7 +212,8 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
       ) : null}
 
       <ProfileSheet open={sheet === 'profile'} onClose={() => setSheet(null)} api={api} />
-      <AppsSheet open={sheet === 'apps'} onClose={() => setSheet(null)} myApps={myApps} />
+      {/* 2026-11-04 — an app opened from here carries this sign-in's details to its sign-up: the Driver's and the Fleet's as the person. */}
+      <AppsSheet open={sheet === 'apps'} onClose={() => setSheet(null)} myApps={myApps} carry={() => api.carry()} />
       <ShareSheet open={sheet === 'share'} onClose={() => setSheet(null)} api={api} />
       {installs ? <InstallGuideSheet open={sheet === 'install'} onClose={() => setSheet(null)} app={installs} /> : null}
       <AddressSheet open={sheet === 'address'} onClose={() => setSheet(null)} api={api} />

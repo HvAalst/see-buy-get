@@ -7,6 +7,46 @@
  * itself in. What follows # in an address never reaches a server.
  */
 
+import { publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
+
+/** What a signed-in app carried, as the sign-up takes it. */
+export interface Carried {
+  email?: string;
+  phone?: string;
+  name?: string;
+  country?: string;
+  /** The number came checked: the sign-up asks no text code for it. */
+  phoneChecked: boolean;
+  /** The number already opens with a PIN: the sign-up asks for that one — never a new one in its place. */
+  hasPin?: boolean;
+}
+
+/** Taken once, by whichever sign-up was opened with it. */
+export function takeCarry(config: SbgConfig, code: string): Promise<Result<Carried>> {
+  return publicRequest<Carried>(config, '/v1/sbg/auth/join-carry', { body: { code } });
+}
+
+/**
+ * Where an app's own sign-up starts with it (Business, Send): the number and the email filled in — and, for a number that
+ * already opens with a PIN, that PIN asked; for a checked number without one, straight to choosing it; else at the number.
+ */
+export function carriedEntry(c: Carried): { phone: string; email: string; start: 'signin' | 'choose' | 'phone' } {
+  const phone = c.phone ?? '';
+  return { phone, email: c.email ?? '', start: phone && c.hasPin ? 'signin' : phone && c.phoneChecked ? 'choose' : 'phone' };
+}
+
+/** Reads #carry= out of this page's address — the address cleaned of it — and takes it: undefined where there is none. */
+export function takeCarryFromAddress(config: SbgConfig): Promise<Result<Carried>> | undefined {
+  const code = readCarry(globalThis.location?.hash);
+  if (!code) return undefined;
+  try {
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+  } catch {
+    /* a browser that refuses the rewrite still fills the form */
+  }
+  return takeCarry(config, code);
+}
+
 const KEY = 'sbg-carry';
 /** As long as the server holds it. */
 export const CARRY_KEEP_MS = 10 * 60_000;

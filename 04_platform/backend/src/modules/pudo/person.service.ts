@@ -339,8 +339,20 @@ export class PersonService {
     // Is this a device the PIN already worked on? Asked BEFORE anything is forgotten below.
     const known = this.devices.knows(before?.personDid, deviceKey);
     const person = this.attachRole(phone, 'consumer', ''); // entityDid resolved to personDid inside
-    const replaced = pin !== undefined && hadPin;
-    if (pin !== undefined) {
+    // 2026-11-04 — THE PIN THEY ALREADY HAVE, typed again: a sign-in on this device, not a replacement. Somebody signing up for
+    // a second app (a carried sign-up, or a code) types the PIN they use; it must not put every other phone of theirs out.
+    const same = pin !== undefined && hadPin && before !== undefined && this.verifyPin(pin, before);
+    const replaced = pin !== undefined && hadPin && !same;
+    if (same) {
+      // A lock from wrong tries is lifted by the code, as a new PIN lifts it; nothing else about the PIN changes — its
+      // fingerprint unlocks and car keys stay, and every phone it works on still does.
+      const held = this.requireByDid(person.personDid);
+      held.pinAttempts = 0;
+      held.pinLockedAt = undefined;
+      held.pinLockedUntil = undefined;
+      this.save(held);
+    }
+    if (pin !== undefined && !same) {
       this.setPin(person.personDid, pin);
       // A PIN replaced by a code — forgotten, or locked by wrong tries — is a PIN somebody may have been guessing
       // at, or a phone that changed hands. Every device it worked on has to be confirmed again; this one is, below.

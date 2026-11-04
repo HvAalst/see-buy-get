@@ -57,9 +57,38 @@ describe('a sign-up carried from a signed-in app, over the wire', () => {
     const taken = (await http().post('/v1/sbg/auth/join-carry').send({ code }).expect(201)).body;
     // The picture menu has no name for a shop: its owner's, as the shop was signed up with.
     expect(me.displayName).toBeUndefined();
-    expect(taken).toEqual({ email, phone, name: 'Wanjiku Njeri', country: 'KE', phoneChecked: true });
+    expect(taken).toEqual({ email, phone, name: 'Wanjiku Njeri', country: 'KE', phoneChecked: true, hasPin: false });
     expect(otp.isVerified(phone)).toBe(true);
     expect((await http().post('/v1/sbg/auth/join-carry').send({ code }).expect(400)).body.code).toBe('OTP_INVALID');
     expect((await http().post('/v1/sbg/auth/join-carry').send({ code: 'jc_made-up' }).expect(400)).body.code).toBe('OTP_INVALID');
+  });
+
+  /** 2026-11-04 — the owner: "I want those apps too. it strengthens the app family bond" — an app signed in with a phone and PIN. */
+  it('carries a driver’s own number — found from the role, never a number the app merely says — their email and their name', async () => {
+    const operator = (await http().post('/v1/auth/token').send({ role: 'operator', type: 'client_credentials' }).expect(201)).body.access_token as string;
+    const u = digits();
+    const phone = `+2547${u}7`;
+    const PIN = '48261';
+    await http().post('/v1/sbg/drivers/onboard').set({ authorization: `Bearer ${operator}` }).send({ displayName: 'Baraka', fullName: 'Baraka Mwangi', nationalId: `ID-JC-${u}`, mobile: phone, licenceClasses: ['bike'], jurisdiction: 'KE' }).expect(201);
+    const asked = await http().post('/v1/sbg/auth/phone/request').send({ phone }).expect(201);
+    await http().post('/v1/sbg/auth/phone/verify').send({ phone, code: asked.body.code }).expect(201);
+    const email = `baraka.${u}@example.com`;
+    const mailed = await http().post('/v1/sbg/identity/email/request').send({ email }).expect(201);
+    const enrolled = await http().post('/v1/sbg/identity/enroll').send({ ...AGREED, phone, pin: PIN, email, emailCode: mailed.body.code }).expect(201);
+    const session = await http().post('/v1/sbg/drivers/session').send({ phone, pin: PIN, device: enrolled.body.device }).expect(201);
+    const bearer = { authorization: `Bearer ${session.body.token.access_token}` };
+    const me = (await http().get('/v1/sbg/account/me').set(bearer).expect(200)).body;
+
+    // Staff are nobody's person: nothing is carried for them.
+    await http().post('/v1/sbg/account/carry').set({ authorization: `Bearer ${operator}` }).send({}).expect(403);
+    // A number the app says that is not theirs is not taken for theirs: their own, the driver's, is.
+    const { code } = (await http().post('/v1/sbg/account/carry').set(bearer).send({ phone: '+254700000001' }).expect(201)).body;
+    expect(code).toMatch(/^jc_/);
+    const taken = (await http().post('/v1/sbg/auth/join-carry').send({ code }).expect(201)).body;
+    // Their number opens with a PIN: the sign-up asks for that one, never a new one in its place.
+    expect(taken).toEqual({ phone, email, name: me.displayName ?? 'Baraka', phoneChecked: true, hasPin: true });
+    // Said by the app and theirs: the same.
+    const again = (await http().post('/v1/sbg/account/carry').set(bearer).send({ phone }).expect(201)).body.code;
+    expect((await http().post('/v1/sbg/auth/join-carry').send({ code: again }).expect(201)).body.phone).toBe(phone);
   });
 });

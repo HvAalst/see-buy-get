@@ -568,6 +568,7 @@ export const STAFF_AREAS: Readonly<Record<string, StaffArea>> = {
   'GET sbg/account/my-apps': 'none',
   'POST sbg/account/my-apps/hand-over': 'none',
   'POST sbg/account/my-apps/carry': 'none', // 2026-11-04 — another sign-up started from a signed-in app: its owner's
+  'POST sbg/account/carry': 'none', // 2026-11-04 — the same from an app signed in with a phone and PIN: the person's own
   // 2026-11-03 — a new phone linked from one the account already uses: its own act, never staff's.
   'POST sbg/account/pair': 'none',
   'POST sbg/account/shop-devices/forget-others': 'none',

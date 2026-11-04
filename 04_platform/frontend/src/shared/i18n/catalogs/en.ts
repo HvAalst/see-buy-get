@@ -396,6 +396,8 @@ export const en = {
   'launcher.app.genesis': 'Send',
   'launcher.here': 'This app',
   'launcher.signedIn': 'Opens signed in',
+  // 2026-11-04 — a sign-up opened from another app of theirs, for a number that already opens with a PIN.
+  'account.carry.samePin': 'You already have a SeeBuyGet PIN: type the one you use.',
   'common.signUp': 'New here? Sign up',
   // 2026-11-02 — the bar pinned to the bottom of every screen before signing in (SignedOutBar): a short word under each
   // picture, as the tab bar has; the longer name stays the button's title. Back and Help are common.back and guide.link.

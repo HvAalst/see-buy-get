@@ -2217,6 +2217,11 @@ export class CarryOutDto {
   @IsOptional() @IsString() @MaxLength(80) device?: string;
 }
 
+/** 2026-11-04 — another sign-up started from an app signed in with a phone and PIN: the number it signed in with, if it knows it. */
+export class CarryPersonDto {
+  @IsOptional() @IsString() @MaxLength(32) phone?: string;
+}
+
 /** The front page takes what a signed-in app carried, once. */
 export class TakeCarryDto {
   @IsString() @MaxLength(80) @ApiProperty() code!: string;

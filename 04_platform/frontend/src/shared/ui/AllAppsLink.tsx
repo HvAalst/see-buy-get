@@ -1,3 +1,4 @@
+import type { Result } from '../../lib/sbg';
 import { useState } from 'preact/hooks';
 import { useT } from '../i18n';
 import { frontDoorLink } from '../frontDoor';
@@ -17,7 +18,7 @@ export { frontDoorLink, frontDoorUrl, isInstalledApp } from '../frontDoor';
  * 2026-11-04 (the owner: "it redirects to the homepage. that is a bit cheap way out") — it opens the apps themselves, as
  * their icons (AppLauncher.tsx); the front page is the first of them.
  */
-export function AllAppsLink({ buttonClass = 'btn btn--link', myApps }: { buttonClass?: string; myApps?: MyAppsApi } = {}) {
+export function AllAppsLink({ buttonClass = 'btn btn--link', myApps, carry }: { buttonClass?: string; myApps?: MyAppsApi; carry?: () => Promise<Result<{ code: string }>> } = {}) {
   const t = useT();
   const [open, setOpen] = useState(false);
   return (
@@ -25,7 +26,7 @@ export function AllAppsLink({ buttonClass = 'btn btn--link', myApps }: { buttonC
       <button type="button" class={buttonClass} aria-haspopup="dialog" onClick={() => setOpen(true)}>
         {t('common.allApps')}
       </button>
-      <AppsSheet open={open} onClose={() => setOpen(false)} myApps={myApps} />
+      <AppsSheet open={open} onClose={() => setOpen(false)} myApps={myApps} carry={carry} />
     </>
   );
 }

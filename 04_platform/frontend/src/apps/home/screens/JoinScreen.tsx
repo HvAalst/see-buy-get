@@ -401,6 +401,8 @@ function PinStep({ state, actions }: JoinScreenProps) {
     <>
       <h1 class="scr__title">{t(state.pinEmail === 'reset' ? 'account.safety.resetTitle' : state.pinEmail ? 'home.join.pin.emailTitle' : driver ? 'home.join.pin.titleDriver' : 'home.join.pin.title')}</h1>
       <p class="scr__lede">{state.pinEmail === 'reset' ? t('account.safety.resetLede') : state.pinEmail ? t('home.join.pin.emailLede') : t('home.join.pin.lede', { app: roleMeta(role, t).appNoun })}</p>
+      {/* 2026-11-04 — came from another app of theirs: the PIN they use, not a new one. */}
+      {state.carriedPin && !state.pinEmail ? <p class="hint">{t('account.carry.samePin')}</p> : null}
 
       <Card>
         <div class="field">

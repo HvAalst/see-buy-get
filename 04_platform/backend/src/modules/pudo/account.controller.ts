@@ -9,7 +9,7 @@ import { addressFormatFor } from '../../foundation/countries/address-format';
 import { AddressFormatView } from './pudo.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto, HandOverDto, ApprovePairingDto, CarryOutDto } from './pudo.dto';
+import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto, HandOverDto, ApprovePairingDto, CarryOutDto, CarryPersonDto } from './pudo.dto';
 import { AccountService } from './account.service';
 import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
@@ -244,6 +244,16 @@ export class AccountController {
   carryOut(@Body() dto: CarryOutDto, @Actor() actor: IntrospectionResult) {
     const person = actor?.personDid ? this.persons.findByDid(actor.personDid) : undefined;
     return this.accounts.carryOut(shopOf(actor), dto.device, person ? this.persons.profile(person).displayName : undefined);
+  }
+
+  /**
+   * 2026-11-04 — the same from the Driver, Fleet, Business and Send apps: the person signed in with a phone and PIN, the number
+   * only where it is theirs (AccountService.carryOutPerson).
+   */
+  @SignedIn()
+  @Post('carry')
+  carryOutPerson(@Body() dto: CarryPersonDto, @Actor() actor: IntrospectionResult) {
+    return this.accounts.carryOutPerson(actingPerson(actor), dto.phone);
   }
 
   /** Every other phone forgotten, with the password: each needs the code to the shop's number again, its sign-in ended. */

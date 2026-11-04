@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CARRY_KEEP_MS, keptCarry, readCarry, withCarry } from './carry';
+import { CARRY_KEEP_MS, carriedEntry, keptCarry, readCarry, withCarry } from './carry';
 import { myAppsApi } from './myApps';
 import { saveShopDeviceKey } from './shopDevice';
 import { carriedForm, carriedStep, EMPTY_JOIN } from '../../apps/home/logic';
@@ -78,6 +78,11 @@ describe('the sign-up it fills in', () => {
     expect(carriedForm({ ...EMPTY_JOIN, country: 'NL' }, { email: 'a@b.example' })).toMatchObject({ phone: '', fullName: '', country: 'NL' });
   });
 
+  it('reads the country from the number where the account keeps none — a driver’s, a sender’s', () => {
+    expect(carriedForm({ ...EMPTY_JOIN, country: 'UG' }, { email: 'a@b.example', phone: '+31612345678' }).country).toBe('NL');
+    expect(carriedForm({ ...EMPTY_JOIN, country: 'UG' }, { phone: '+254712345678', country: 'TZ' }).country).toBe('TZ');
+  });
+
   it('starts past the number and its code when the number came checked — and asks them where it did not', () => {
     expect(carriedStep('fleet', 'phone', carried)).toBe('pin');
     expect(carriedStep('driver', 'phone', carried)).toBe('about');
@@ -86,5 +91,13 @@ describe('the sign-up it fills in', () => {
     expect(carriedStep('fleet', 'phone', { phoneChecked: true })).toBe('phone');
     // Somebody already further on is not moved.
     expect(carriedStep('fleet', 'about', carried)).toBe('about');
+  });
+});
+
+describe('an app’s own sign-up (Business, Send) opened with it', () => {
+  it('signs in with the PIN a number already has, chooses one for a checked number without, and else asks the number', () => {
+    expect(carriedEntry({ phone: '+254712345678', email: 'a@b.example', phoneChecked: true, hasPin: true })).toEqual({ phone: '+254712345678', email: 'a@b.example', start: 'signin' });
+    expect(carriedEntry({ phone: '+254712345678', phoneChecked: true, hasPin: false })).toEqual({ phone: '+254712345678', email: '', start: 'choose' });
+    expect(carriedEntry({ email: 'a@b.example', phoneChecked: false })).toEqual({ phone: '', email: 'a@b.example', start: 'phone' });
   });
 });

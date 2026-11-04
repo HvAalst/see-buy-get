@@ -163,6 +163,14 @@ describe('PersonService — the identity spine (S20)', () => {
       expect(refused(() => persons.loginWithPin(PHONE, '73914', again.device))).toBe('let in');
     });
 
+    it('the PIN they already have, typed again after a code, is a sign-in: no device is put out, and nobody is told of a new PIN', () => {
+      const { device: phone, person } = persons.enroll(PHONE, true, '24689');
+      const tablet = persons.trustDevice(PHONE);
+      const again = persons.enroll(PHONE, true, '24689');
+      expect(persons.deviceCount(person.personDid)).toBe(3);
+      for (const key of [phone, tablet, again.device]) expect(refused(() => persons.loginWithPin(PHONE, '24689', key))).toBe('let in');
+    });
+
     it('keeps ten devices to a person: the eleventh puts the oldest out', () => {
       const { device: first, person } = persons.enroll(PHONE, true, '24689');
       let last = first;

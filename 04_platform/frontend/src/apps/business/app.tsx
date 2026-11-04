@@ -1,3 +1,5 @@
+import { AppsSheet } from '../../shared/ui/AppLauncher';
+import { readPhone } from './api';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useRegisterSW } from 'virtual:pwa-register/preact';
 import { onLaunch } from '../../shared/launch';
@@ -70,6 +72,8 @@ export function App() {
   const { state, actions } = useBusinessApp();
   const wide = useWideScreen();
   const [settings, setSettings] = useState(false);
+  // 2026-11-04 — "All SeeBuyGet apps", as in every other app's menu.
+  const [apps, setApps] = useState(false);
   // 2026-11-01 — share SeeBuyGet, as every app's settings offer it.
   const [sharing, setSharing] = useState(false);
   // 2026-11-02 — "Get the most out of the app": the install bar's guide, from the menu, as every app that installs has it.
@@ -178,6 +182,7 @@ export function App() {
               // 2026-11-02 — installing, and letting its notifications through, kept here once the home's bar has gone.
               { key: 'install', icon: 'bell', label: t('install.menu'), onGo: () => setGuide(true) },
               { key: 'switch', icon: 'repeat', label: t('business.menu.switch'), onGo: () => void actions.backToList() },
+              { key: 'apps', icon: 'grid', label: t('common.allApps'), onGo: () => setApps(true) },
               { key: 'help', icon: 'info', label: t('guide.link'), onGo: () => setHelpOpen(true) },
               { key: 'out', icon: 'lock', label: t('business.signOut'), danger: true, onGo: actions.signOut },
             ]}
@@ -275,6 +280,7 @@ export function App() {
       )}
 
       <SettingsSheet open={settings} onClose={() => setSettings(false)} api={account} onSignOut={actions.signOut} />
+      <AppsSheet open={apps} onClose={() => setApps(false)} carry={() => account.carry(readPhone() ?? undefined)} />
       <ShareSheet open={sharing} onClose={() => setSharing(false)} api={account} />
       <InstallGuideSheet open={guide} onClose={() => setGuide(false)} app="business" />
       {/* What they agreed to, asked again when a version since asks it (2026-10-25). */}

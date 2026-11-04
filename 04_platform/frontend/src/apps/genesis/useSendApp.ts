@@ -1,3 +1,5 @@
+import { carriedEntry, takeCarryFromAddress } from '../../shared/account/carry';
+import { sendConfig } from './api';
 import { captureInvite } from '../../shared/invite';
 import { onLaunch } from '../../shared/launch';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -258,6 +260,22 @@ export function useSendApp() {
   useEffect(() => {
     const remembered = readPhone();
     setState((s) => ({ ...s, recent: recentKeys(), authPhone: remembered ?? '', phoneKnown: Boolean(remembered) }));
+    // 2026-11-04 — opened from another app of theirs, signed out here: what it carried (shared/account/carry.ts) fills the
+    // sign-in — a number that opens with a PIN signs in with it; a checked one without chooses one; else the number is asked.
+    void takeCarryFromAddress(sendConfig())?.then((r) => {
+      if (!r.data || readDid()) return;
+      const entry = carriedEntry(r.data);
+      setState((s) => ({
+        ...s,
+        screen: 'account',
+        authMode: entry.start === 'signin' ? 'login' : 'enroll',
+        authStep: entry.start === 'phone' ? 'phone' : 'pin',
+        authPhone: entry.phone || s.authPhone,
+        phoneKnown: entry.start === 'signin',
+        ...(entry.email ? { authEmail: entry.email } : {}),
+        authError: null,
+      }));
+    });
   }, []);
 
   // S24: opened via an invite link (/send/?invite=<token>). A device that already holds a session is a

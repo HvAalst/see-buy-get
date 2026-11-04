@@ -125,6 +125,8 @@ export interface HomeState {
   shopPapersSent: boolean;
   /** The PIN step asks for a recovery email too: a first PIN (`first`), or a PIN replaced on a new device (`reset`). */
   pinEmail: 'first' | 'reset' | null;
+  /** 2026-11-04 — a carried sign-up whose number already opens with a PIN: that PIN is asked, not a new one. */
+  carriedPin: boolean;
   /** The fleets this person signed up before, read after the PIN. Null until then. */
   fleetSignups: FleetSignupView[] | null;
   /** They have a sign-up already and chose to sign up another fleet. */
@@ -179,6 +181,7 @@ const INITIAL: HomeState = {
   shopSession: null,
   shopPapersSent: false,
   pinEmail: null,
+  carriedPin: false,
   fleetSignups: null,
   fleetAnother: false,
   resendFor: null,
@@ -457,7 +460,7 @@ export function useHomeApp() {
           return;
         }
         carriedRef.current = carried;
-        setState((s) => (s.screen === 'join' && s.role ? { ...s, form: carriedForm(s.form, carried), step: carriedStep(s.role.kind, s.step, carried, s.role.id === 'pudo') } : s));
+        setState((s) => (s.screen === 'join' && s.role ? { ...s, form: carriedForm(s.form, carried), step: carriedStep(s.role.kind, s.step, carried, s.role.id === 'pudo'), carriedPin: Boolean(carried.hasPin) } : { ...s, carriedPin: Boolean(carried.hasPin) }));
       });
     }
     const link = readDeepLink(globalThis.location?.search ?? '');

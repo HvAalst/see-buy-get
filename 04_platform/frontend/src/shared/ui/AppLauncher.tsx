@@ -4,7 +4,7 @@ import { Sheet } from './Sheet';
 import { ErrorNote } from './ErrorNote';
 import { frontDoorLink, frontDoorUrl, goToApp } from '../frontDoor';
 import type { AppRole, MyApp, MyAppsApi } from '../account/myApps';
-import type { SbgError } from '../../lib/sbg';
+import type { Result, SbgError } from '../../lib/sbg';
 import { withCarry } from '../account/carry';
 
 export type LauncherApp = 'home' | 'agent' | 'mdp' | 'vendor' | 'driver' | 'fleet' | 'business' | 'genesis';
@@ -48,7 +48,7 @@ export const launcherIcon = (path: string): string => `${frontDoorUrl()}${path}i
  * account this email has, once "Yes, it is me" was tapped for them, open signed in (a hand-over, myApps.ts); this app is
  * shown where it stands and only closes the sheet.
  */
-export function AppsSheet({ open, onClose, myApps, here = appHere(globalThis.location?.pathname) }: { open: boolean; onClose: () => void; myApps?: MyAppsApi; here?: LauncherApp | null }) {
+export function AppsSheet({ open, onClose, myApps, carry, here = appHere(globalThis.location?.pathname) }: { open: boolean; onClose: () => void; myApps?: MyAppsApi; carry?: () => Promise<Result<{ code: string }>>; here?: LauncherApp | null }) {
   const t = useT();
   const [mine, setMine] = useState<MyApp[]>([]);
   const [busy, setBusy] = useState<AppRole | null>(null);
@@ -76,8 +76,10 @@ export function AppsSheet({ open, onClose, myApps, here = appHere(globalThis.loc
   const door = frontDoorLink();
   // 2026-11-04 — from a signed-in app, an app opened here carries this account's details to its sign-up (carry.ts):
   // whoever signs up there finds the number, email, name and country filled in, and no text code to type.
+  // A Shop, Hub or Store asks from one of its own phones (myApps); an app signed in with a phone and PIN, as that person.
+  const carrier = myApps?.carry ?? carry;
   const openCarrying = async (href: string) => {
-    const r = myApps?.carry ? await myApps.carry() : undefined;
+    const r = carrier ? await carrier() : undefined;
     goToApp(withCarry(href, r?.data?.code));
   };
 
@@ -122,7 +124,7 @@ export function AppsSheet({ open, onClose, myApps, here = appHere(globalThis.loc
                 target={door.target}
                 rel={door.rel}
                 onClick={(e) => {
-                  if (!myApps?.carry) return;
+                  if (!carrier) return;
                   e.preventDefault();
                   void openCarrying(tile.href);
                 }}

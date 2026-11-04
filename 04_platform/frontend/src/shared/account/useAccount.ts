@@ -110,6 +110,8 @@ export interface AccountApi {
    * `error` above: a refusal belongs in the sheet where the person typed, not on the menu behind it.
    */
   sendEmailCode: (email: string) => Promise<Result<Sent>>;
+  /** 2026-11-04 — another sign-up started from here (shared/account/carry.ts): the number this app signed in with, if it knows it. */
+  carry: (phone?: string) => Promise<Result<{ code: string }>>;
   /** The PIN again, and the code sent to the NEW address. The menu redraws from what the server stored. */
   setEmail: (pin: string, email: string, code: string) => Promise<Result<unknown>>;
   sendPhoneCode: (phone: string) => Promise<Result<Sent>>;
@@ -167,6 +169,7 @@ const IDLE: AccountApi = {
   createInvite: async () => NO_CLIENT,
   loadMedia: async () => ({ data: null, error: null }),
   sendEmailCode: async () => NO_CLIENT,
+  carry: async () => NO_CLIENT,
   setEmail: async () => NO_CLIENT,
   sendPhoneCode: async () => NO_CLIENT,
   confirmPhoneCode: async () => NO_CLIENT,
@@ -342,6 +345,7 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
     [post, loadContract],
   );
   const sendEmailCode = useCallback((email: string) => post<Sent>('/v1/sbg/identity/email/request', { email }), [post]);
+  const carry = useCallback((phone?: string) => post<{ code: string }>('/v1/sbg/account/carry', phone ? { phone } : {}), [post]);
   const sendPhoneCode = useCallback((phone: string) => post<Sent>('/v1/sbg/auth/phone/request', { phone }), [post]);
   const confirmPhoneCode = useCallback((phone: string, code: string) => post<unknown>('/v1/sbg/auth/phone/verify', { phone, code }), [post]);
   const changeNumber = useCallback(
@@ -422,5 +426,5 @@ export function useAccount(client: SbgClient | null, enabled = true): AccountApi
   );
 
   if (!client) return IDLE;
-  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber };
+  return { account, contract, reportContractPaper, loading, error, busy, reload, save, addressFormat, countries, changePin, saveAvatar, myInvites, createInvite, loadMedia, sendEmailCode, carry, setEmail, sendPhoneCode, confirmPhoneCode, changeNumber, blockOldNumber, stopMove, setMuted, closing, closeAccount, idDispute, ownId, devices, passkey, car, payout, sendPayoutCode, savePayoutNumber };
 }

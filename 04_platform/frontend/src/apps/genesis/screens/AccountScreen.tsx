@@ -1,3 +1,4 @@
+import { readPhone } from '../api';
 import { HelpLink } from '../../../shared/guide/HelpLink';
 import { AllAppsLink } from '../../../shared/ui/AllAppsLink';
 import { SettingsSheet } from '../../../shared/account/SettingsSheet';
@@ -140,7 +141,7 @@ export function AccountScreen({ state, actions, account, guideAsked = 0, onGuide
 
       <div class="scr__foot">
         <HelpLink app="send" />
-        <AllAppsLink />
+        <AllAppsLink carry={() => account.carry(state.authPhone || readPhone() || undefined)} />
       </div>
 
       <Card>

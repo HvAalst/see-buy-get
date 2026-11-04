@@ -421,7 +421,7 @@ export function readyLine(role: RoleSpec, t: Translate): string {
  * the sign-in, the company's contact and the recovery address), the person's name — only where nothing is typed yet — and
  * the country, over the page's own guess. The company is never carried: the new one is another.
  */
-export function carriedForm(f: JoinForm, c: { email: string; phone?: string; name?: string; country?: string }): JoinForm {
+export function carriedForm(f: JoinForm, c: { email?: string; phone?: string; name?: string; country?: string }): JoinForm {
   const fill = (now: string, carried: string | undefined) => (now.trim() || !carried ? now : carried);
   return {
     ...f,
@@ -430,7 +430,8 @@ export function carriedForm(f: JoinForm, c: { email: string; phone?: string; nam
     email: fill(f.email, c.email),
     contactEmail: fill(f.contactEmail, c.email),
     recoveryEmail: fill(f.recoveryEmail, c.email),
-    country: c.country ?? f.country,
+    // The country kept with the account; else the number's own — a driver's or a sender's — over the page's guess.
+    country: c.country ?? (c.phone ? countryOfNumber(c.phone) : undefined) ?? f.country,
   };
 }
 

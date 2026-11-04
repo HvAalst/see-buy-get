@@ -1,3 +1,5 @@
+import { carriedEntry, takeCarryFromAddress, type Carried } from '../../shared/account/carry';
+import { businessConfig } from './api';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { Agreement, MyAgreement } from '../../shared/documents/documents';
 import type { Result, SbgError } from '../../lib/sbg';
@@ -127,7 +129,15 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
 
   const patch = (p: Partial<BusinessState>) => setState((s) => ({ ...s, ...p }));
 
+  // 2026-11-04 — opened from another app of theirs: what it carried (shared/account/carry.ts), once taken.
+  const carriedRef = useRef<Carried | null>(null);
+  const fromCarried = (c: Carried): Partial<BusinessState> => {
+    const entry = carriedEntry(c);
+    // A number that opens with a PIN signs in with it; a checked one without chooses one; else the number is asked.
+    return { phase: 'signin', step: entry.start === 'signin' ? 'login' : entry.start === 'choose' ? 'pin' : 'phone', phone: entry.phone, phoneKnown: entry.start === 'signin', ...(entry.email ? { email: entry.email } : {}), busy: false };
+  };
   const toSignIn = () => {
+    if (carriedRef.current) return patch(fromCarried(carriedRef.current));
     const remembered = readPhone();
     patch({ phase: 'signin', step: remembered ? 'login' : 'phone', phone: remembered ?? '', phoneKnown: Boolean(remembered), busy: false });
   };
@@ -182,6 +192,13 @@ export function useBusinessApp(): { state: BusinessState; actions: BusinessActio
 
   // Coming back: an open business first, then the person's list, then the door.
   useEffect(() => {
+    const carried = takeCarryFromAddress(businessConfig());
+    void carried?.then((r) => {
+      if (!r.data) return;
+      carriedRef.current = r.data;
+      const c = r.data;
+      setState((s) => (s.phase === 'signin' ? { ...s, ...fromCarried(c) } : s));
+    });
     void (async () => {
       const me = await biz.current.me();
       if (!me.error && me.data) return enterBusiness(me.data);

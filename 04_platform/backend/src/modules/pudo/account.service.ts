@@ -15,7 +15,7 @@ import { PASSWORD_WORDS, PasswordTries, keptLocks, spendTime } from '../../found
 import { assertPassword, newResetCode, readResetCode } from '../../foundation/auth/password-rules';
 import { AccessToken } from '../../foundation/auth/auth.types';
 import { DidService } from '../../foundation/did/did.service';
-import { hashEmail, hashPhone, isPlausiblePhone } from '../../foundation/identity/phone';
+import { hashEmail, hashPhone, isPlausiblePhone, normalizePhone } from '../../foundation/identity/phone';
 import { FieldEncryption } from '../../foundation/data-firewall/field-encryption.service';
 import { AgentService } from './agent.service';
 import { DriverService } from './driver.service';
@@ -659,16 +659,49 @@ export class AccountService implements OnApplicationBootstrap {
     this.carries.set(code, { email: account.email, ...(phone ? { phone } : {}), ...(owner ? { name: owner } : {}), ...(country ? { country } : {}), expires: now + CARRY_TTL_MS });
     return { code, expiresIn: CARRY_TTL_MS / 1000 };
   }
-  private readonly carries = new Map<string, { email: string; phone?: string; name?: string; country?: string; expires: number }>();
+  private readonly carries = new Map<string, { email?: string; phone?: string; name?: string; country?: string; expires: number }>();
+
+  /**
+   * 2026-11-04 — THE SAME, FROM AN APP SIGNED IN WITH A PHONE AND PIN — the Driver, Fleet, Business and Send apps (the owner:
+   * "I want those apps too. it strengthens the app family bond"). A person keeps no number in the clear: it is the one the app
+   * says it signed in with, or the one a role of theirs was registered with (a driver's, a fleet's) — either only once it is
+   * found to be this person's own. The name under their picture (else a driver's), their recovery email. The country is
+   * the number's own, read by the sign-up.
+   */
+  carryOutPerson(personDid: string, said: string | undefined, now: number = Date.now()): { code: string; expiresIn: number } {
+    const person = this.persons.requireByDid(personDid);
+    const own = (phone: string | undefined): string | undefined => {
+      const number = phone?.trim() ? normalizePhone(phone) : undefined;
+      return number && this.persons.findByPhone(number)?.personDid === person.personDid ? number : undefined;
+    };
+    const phone = own(said) ?? person.roles.map((r) => own(this.phoneForDid(r.entityDid))).find((p): p is string => Boolean(p));
+    const name = this.persons.profile(person).displayName ?? this.driverNameOf(person);
+    const email = this.persons.emailOf(person);
+    for (const [code, held] of this.carries) if (held.expires < now) this.carries.delete(code);
+    const code = `jc_${randomBytes(24).toString('base64url')}`;
+    this.carries.set(code, { ...(email ? { email } : {}), ...(phone ? { phone } : {}), ...(name ? { name } : {}), expires: now + CARRY_TTL_MS });
+    return { code, expiresIn: CARRY_TTL_MS / 1000 };
+  }
+
+  private driverNameOf(person: { roles: Array<{ role: string; entityDid: string }> }): string | undefined {
+    const role = person.roles.find((r) => r.role === 'driver');
+    if (!role) return undefined;
+    try {
+      return this.drivers.get(role.entityDid).displayName?.trim() || undefined;
+    } catch {
+      return undefined;
+    }
+  }
 
   /** Taken by the front page's sign-up, once: the details, and the number counted as checked by its code. */
-  takeCarry(code: string, now: number = Date.now()): { email: string; phone?: string; name?: string; country?: string; phoneChecked: boolean } {
+  takeCarry(code: string, now: number = Date.now()): { email?: string; phone?: string; name?: string; country?: string; phoneChecked: boolean; hasPin: boolean } {
     const held = this.carries.get(code);
     this.carries.delete(code);
     if (!held || held.expires < now) throw new GlosError('OTP_INVALID', 'These details ran out or were used. Start the sign-up again from the app you are signed in to.');
     if (held.phone) this.otp.vouch(held.phone);
     const { expires: _expires, ...details } = held;
-    return { ...details, phoneChecked: Boolean(held.phone) };
+    // Whether the number already opens with a PIN: the sign-up then asks for that PIN, never a new one in its place.
+    return { ...details, phoneChecked: Boolean(held.phone), hasPin: Boolean(held.phone && this.persons.findByPhone(held.phone)?.pinHash) };
   }
 
   private ownerNameOfAccount(account: Account): string | undefined {

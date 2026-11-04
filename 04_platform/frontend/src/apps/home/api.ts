@@ -1,3 +1,4 @@
+import { takeCarry as takeCarryShared, type Carried } from '../../shared/account/carry';
 import type { AddressFormat } from '../../shared/account/address';
 import { makeConfig, publicDownload, publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
 import type { Agreement, MyAgreement } from '../../shared/documents/documents';
@@ -108,16 +109,9 @@ export interface LinkConfirmed {
 }
 
 /** 2026-11-04 — what a signed-in app carried to this sign-up, taken once (shared/account/carry.ts). */
-export interface Carried {
-  email: string;
-  phone?: string;
-  name?: string;
-  country?: string;
-  /** The number came checked: the sign-up asks no text code for it. */
-  phoneChecked: boolean;
-}
+export type { Carried } from '../../shared/account/carry';
 export function takeCarry(code: string): Promise<Result<Carried>> {
-  return publicRequest<Carried>(homeConfig(), '/v1/sbg/auth/join-carry', { body: { code } });
+  return takeCarryShared(homeConfig(), code);
 }
 
 export function confirmEmailLink(token: string): Promise<Result<LinkConfirmed>> {
