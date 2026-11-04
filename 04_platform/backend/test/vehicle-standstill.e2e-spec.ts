@@ -169,6 +169,10 @@ describe('a vehicle standing still, over the wire', () => {
     const store = (app.get(DispatchService) as unknown as { freights: { get(id: string): Record<string, unknown>; set(id: string, f: Record<string, unknown>): void } }).freights;
     store.set(freightId, { ...store.get(freightId), status: 'claimed', claimedBy: driver.did, claimedAt: new Date().toISOString() });
 
+    // Whatever the set-up published (a driver moved, stamped with the real clock) lands before this test's own clock starts:
+    // on a slow machine one arrived after two simulated hours and read as a phone gone silent (CI, 2026-11-04).
+    const settled = () => new Promise((r) => setTimeout(r, 150));
+    await settled();
     // Waiting at the yard for the load: its pickup is its next stop.
     const t0 = Date.now();
     for (let m = 0; m <= 52; m += 4) watch.track(driver.did, { lat: pickup.lat + 0.001, lng: pickup.lng }, t0 + m * 60_000);
@@ -179,6 +183,7 @@ describe('a vehicle standing still, over the wire', () => {
     const pickedUpAt = new Date(t0 - 10 * 3_600_000).toISOString();
     store.set(freightId, { ...store.get(freightId), status: 'in_transit', pickedUpAt, carriage: { vehicleId: 'veh_s', plate: driver.plate, vehicleClass: 'truck', driverDid: driver.did, at: pickedUpAt } });
     await http().post(`/v1/sbg/dispatch/freight/${freightId}/passages`).set(bearer(driver.token)).send({ kind: 'at_border', post: 'Malaba' }).expect(201);
+    await settled();
     const malaba = { lat: 0.635, lng: 34.28 };
     for (let m = 60; m <= 120; m += 4) watch.track(driver.did, malaba, t0 + m * 60_000);
     expect(mine(watch.sweep(t0 + 120 * 60_000))).toEqual([]);
