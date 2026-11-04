@@ -74,6 +74,8 @@ const LINK_TTL_MS = 7 * 24 * 3_600_000;
 const LINK_RESEND_MS = 3_600_000;
 /** A hand-over from one app to another on the same phone: long enough to open the other app, and once. */
 const HANDOVER_TTL_MS = 2 * 60_000;
+/** What a sign-up started from a signed-in app carries to the front page: long enough to read the next app's sign-in. */
+const CARRY_TTL_MS = 10 * 60_000;
 /** A pairing code on a new phone: long enough to fetch the other phone and scan it. */
 const PAIR_TTL_MS = 2 * 60_000;
 /** Eight of these: nothing that reads as another (no 0/O, 1/I/L). */
@@ -636,6 +638,57 @@ export class AccountService implements OnApplicationBootstrap {
     return { code, expiresIn: HANDOVER_TTL_MS / 1000 };
   }
   private readonly handovers = new Map<string, { key: string; device?: string; expires: number }>();
+
+  /**
+   * 2026-11-04 — ANOTHER SIGN-UP, STARTED FROM THIS SIGNED-IN APP ON THIS PHONE (the owner: "I am in the hub, click 'all sbg
+   * apps' then select fleet and sign up. The phone number, name etc is not prefilled" — then: "Phone, name, email, country"
+   * and the text code skipped). What the new sign-up is filled in with — the number this account's codes go to, its email,
+   * the owner's name, its country — held ten minutes under a one-time code, asked only from one of its own phones. The front
+   * page takes it (takeCarry), and the number counts as checked there, as after a code typed. The company is not carried:
+   * the new one is another.
+   */
+  carryOut(did: string, device: string | undefined, name: string | undefined, now: number = Date.now()): { code: string; expiresIn: number } {
+    const account = this.boundAccountOf(did);
+    if (!this.devices.knows(account.accountId, device, now)) throw new GlosError('DEVICE_NOT_KNOWN', `This phone or browser is not one of the ${PARTY[account.role]}’s: sign in on it first.`);
+    for (const [code, held] of this.carries) if (held.expires < now) this.carries.delete(code);
+    const code = `jc_${randomBytes(24).toString('base64url')}`;
+    const phone = this.codePhoneOf(account);
+    const country = this.countryOfAccount(account);
+    // The name the picture menu shows; a shop's owner, else, as the shop was signed up with. A hub and a store keep none.
+    const owner = name?.trim() || this.ownerNameOfAccount(account);
+    this.carries.set(code, { email: account.email, ...(phone ? { phone } : {}), ...(owner ? { name: owner } : {}), ...(country ? { country } : {}), expires: now + CARRY_TTL_MS });
+    return { code, expiresIn: CARRY_TTL_MS / 1000 };
+  }
+  private readonly carries = new Map<string, { email: string; phone?: string; name?: string; country?: string; expires: number }>();
+
+  /** Taken by the front page's sign-up, once: the details, and the number counted as checked by its code. */
+  takeCarry(code: string, now: number = Date.now()): { email: string; phone?: string; name?: string; country?: string; phoneChecked: boolean } {
+    const held = this.carries.get(code);
+    this.carries.delete(code);
+    if (!held || held.expires < now) throw new GlosError('OTP_INVALID', 'These details ran out or were used. Start the sign-up again from the app you are signed in to.');
+    if (held.phone) this.otp.vouch(held.phone);
+    const { expires: _expires, ...details } = held;
+    return { ...details, phoneChecked: Boolean(held.phone) };
+  }
+
+  private ownerNameOfAccount(account: Account): string | undefined {
+    try {
+      return account.role === 'pudo' ? this.agents.ownerNameOf(account.did) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The country a shop or a hub stands in; a store's is not kept with its account. */
+  private countryOfAccount(account: Account): string | undefined {
+    try {
+      if (account.role === 'pudo') return this.agents.countryOf(this.agents.get(account.did));
+      const hub = account.role === 'mdp' ? this.mdps.list().find((m) => m.did === account.did) : undefined;
+      return hub ? this.mdps.countryOf(hub) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
 
   /** The hand-over taken by the other app: signed in there, and this phone one of that account's from now. */
   takeHandOver(code: string, now: number = Date.now()): AccountSignIn {

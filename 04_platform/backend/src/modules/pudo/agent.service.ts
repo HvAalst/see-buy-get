@@ -595,6 +595,14 @@ export class AgentService {
    * Hold the new number for this registration and put it in the vault. The OLD number stays held too — its key is
    * returned — so for the 24 hours a change can be undone nobody else can register with it.
    */
+  /** 2026-11-04 — the owner's own name, as the shop was signed up with: carried, by the shop itself, to another sign-up of theirs. */
+  ownerNameOf(did: string): string | undefined {
+    const agent = this.require(did);
+    if (!agent.vaultRef || !this.vault.exists(agent.vaultRef)) return undefined;
+    const pii = this.vault.reveal(agent.vaultRef, { purpose: 'self-carry', requesterDid: did });
+    return typeof pii.fullName === 'string' && pii.fullName.trim() ? pii.fullName.trim() : undefined;
+  }
+
   moveMobile(did: string, newPhone: string): string {
     const agent = this.require(did);
     this.assertPhoneFree(did, newPhone);

@@ -107,6 +107,19 @@ export interface LinkConfirmed {
   role: 'pudo' | 'mdp' | 'vendor' | 'driver';
 }
 
+/** 2026-11-04 — what a signed-in app carried to this sign-up, taken once (shared/account/carry.ts). */
+export interface Carried {
+  email: string;
+  phone?: string;
+  name?: string;
+  country?: string;
+  /** The number came checked: the sign-up asks no text code for it. */
+  phoneChecked: boolean;
+}
+export function takeCarry(code: string): Promise<Result<Carried>> {
+  return publicRequest<Carried>(homeConfig(), '/v1/sbg/auth/join-carry', { body: { code } });
+}
+
 export function confirmEmailLink(token: string): Promise<Result<LinkConfirmed>> {
   return publicRequest<LinkConfirmed>(homeConfig(), '/v1/sbg/auth/link/confirm', { body: { token } });
 }

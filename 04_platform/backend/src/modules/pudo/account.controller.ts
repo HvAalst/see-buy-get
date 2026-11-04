@@ -9,7 +9,7 @@ import { addressFormatFor } from '../../foundation/countries/address-format';
 import { AddressFormatView } from './pudo.types';
 import { PersonService } from './person.service';
 import { HandleService } from '../../foundation/handle/handle.service';
-import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto, HandOverDto, ApprovePairingDto } from './pudo.dto';
+import { AccountCloseDto, AccountProfileDto, AccountPinDto, AccountEmailDto, BlockOldNumberDto, ChangeNumberDto, ForgetOtherDevicesDto, PinDevicesDto, ShopDevicesDto, ShopForgetOthersDto, HandOverDto, ApprovePairingDto, CarryOutDto } from './pudo.dto';
 import { AccountService } from './account.service';
 import { AccountMoveService } from './account-move.service';
 import { IdDisputeService } from './id-dispute.service';
@@ -233,6 +233,17 @@ export class AccountController {
   @Post('my-apps/hand-over')
   handOver(@Body() dto: HandOverDto, @Actor() actor: IntrospectionResult) {
     return this.accounts.handOver(shopOf(actor), dto.role, dto.device, dto.targetDevice);
+  }
+
+  /**
+   * 2026-11-04 — another sign-up started from here, on this phone: a one-time code that carries the number, the email, the
+   * owner's name and the country to the front page's sign-up (AccountService.carryOut).
+   */
+  @Roles('agent', 'mdp', 'genesis')
+  @Post('my-apps/carry')
+  carryOut(@Body() dto: CarryOutDto, @Actor() actor: IntrospectionResult) {
+    const person = actor?.personDid ? this.persons.findByDid(actor.personDid) : undefined;
+    return this.accounts.carryOut(shopOf(actor), dto.device, person ? this.persons.profile(person).displayName : undefined);
   }
 
   /** Every other phone forgotten, with the password: each needs the code to the shop's number again, its sign-in ended. */

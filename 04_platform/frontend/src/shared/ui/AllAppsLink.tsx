@@ -3,6 +3,7 @@ import { useT } from '../i18n';
 import { frontDoorLink } from '../frontDoor';
 import { AppsSheet } from './AppLauncher';
 import type { MyAppsApi } from '../account/myApps';
+import { keptCarry, withCarry } from '../account/carry';
 
 // Where the front door is, and how a link to it opens: shared/frontDoor.ts (kept importable from here, where they were).
 export { frontDoorLink, frontDoorUrl, isInstalledApp } from '../frontDoor';
@@ -37,8 +38,10 @@ export function AllAppsLink({ buttonClass = 'btn btn--link', myApps }: { buttonC
 export function SignUpLink({ role }: { role: 'pudo' | 'driver' | 'mdp' | 'fleet' | 'vendor' }) {
   const t = useT();
   const door = frontDoorLink();
+  // 2026-11-04 — opened from a signed-in app's "All SeeBuyGet apps": what it carried goes on to the sign-up (carry.ts).
+  const [carry] = useState(() => keptCarry());
   return (
-    <a class="btn btn--link" {...door} href={`${door.href}?join=${role}`}>
+    <a class="btn btn--link" {...door} href={withCarry(`${door.href}?join=${role}`, carry)}>
       {t('common.signUp')}
     </a>
   );

@@ -1,3 +1,4 @@
+import { readCarry } from '../../shared/account/carry';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { joinRestored, joinSnapshot, readJoinMemory, writeJoinMemory } from './joinMemory';
 import { t } from '../../shared/i18n';
@@ -36,12 +37,12 @@ import { infoPageOf, type InfoPage } from './pages';
 import { directoryPageOf, type DirectoryPage } from './directory';
 import { readLinkKey } from '../../shared/archive/documentLink';
 import { readReportKey } from '../../shared/damage/damageReport';
-import { driverSendsPapers, EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
+import { carriedForm, carriedStep, driverSendsPapers, EMPTY_JOIN, fleetSignupBody, nextStep, readDeepLink, normalizePhone, onlyJoinable, prevStep, roleById, signupBody, stepBlocker, type JoinForm, type JoinStep, type RoleSpec } from './logic';
 import { saveShopDeviceKey } from '../../shared/account/shopDevice';
 import { isPinReset } from '../../shared/account/recovery';
 import { captureInvite } from '../../shared/invite';
 import { readEmailLink } from './emailLink';
-import { enrollPerson, mySignups, sendPapersAgain, sendShopPapers as sendShopPapersApi, signUpDriver, signUpFleet, uploadPaper, uploadShopPaper as uploadShopPaperApi, type FleetSignupView, type PersonSession } from './api';
+import { takeCarry, type Carried, enrollPerson, mySignups, sendPapersAgain, sendShopPapers as sendShopPapersApi, signUpDriver, signUpFleet, uploadPaper, uploadShopPaper as uploadShopPaperApi, type FleetSignupView, type PersonSession } from './api';
 
 export type Screen = 'welcome' | 'roles' | 'join' | 'signin' | 'market' | 'store' | 'profile' | 'agents' | 'verify' | 'document' | 'report' | 'link' | 'town' | 'help' | 'info' | 'directory';
 
@@ -441,6 +442,24 @@ export function useHomeApp() {
    * followable by a search engine). Read once and stripped, like the store link: a refresh must not re-run a join.
    */
   useEffect(() => {
+    // 2026-11-04 — a sign-up started from a signed-in app: its details, taken once and laid in (the address cleaned of it).
+    const carry = readCarry(globalThis.location?.hash);
+    if (carry) {
+      try {
+        history.replaceState(null, '', `${location.pathname}${location.search}`);
+      } catch {
+        /* a browser that refuses the rewrite still fills the form */
+      }
+      void takeCarry(carry).then((r) => {
+        const carried = r.data;
+        if (!carried) {
+          setState((s) => (s.screen === 'join' ? { ...s, error: r.error } : s));
+          return;
+        }
+        carriedRef.current = carried;
+        setState((s) => (s.screen === 'join' && s.role ? { ...s, form: carriedForm(s.form, carried), step: carriedStep(s.role.kind, s.step, carried, s.role.id === 'pudo') } : s));
+      });
+    }
     const link = readDeepLink(globalThis.location?.search ?? '');
     if (!link) return;
     try {
@@ -471,16 +490,19 @@ export function useHomeApp() {
     void openStore(id);
   }, [openStore]);
 
+  // 2026-11-04 — what a signed-in app carried to this sign-up (shared/account/carry.ts), once taken.
+  const carriedRef = useRef<Carried | null>(null);
   const startJoin = useCallback(
     (roleId: string) => {
       const role = roleById(roleId);
       if (!role) return;
+      const carried = carriedRef.current;
       setState((s) => ({
         ...s,
         screen: 'join',
         role,
-        step: 'phone',
-        form: { ...EMPTY_JOIN },
+        step: carried ? carriedStep(role.kind, 'phone', carried, role.id === 'pudo') : 'phone',
+        form: carried ? carriedForm({ ...EMPTY_JOIN }, carried) : { ...EMPTY_JOIN },
         ...NO_FLEET,
         issuedCode: null,
         account: null,

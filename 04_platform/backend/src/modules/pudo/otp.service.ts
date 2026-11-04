@@ -145,6 +145,17 @@ export class OtpService {
     return { verified: true };
   }
 
+  /**
+   * 2026-11-04 — A NUMBER PROVEN ANOTHER WAY THAN BY A CODE TYPED: the number a signed-in app's codes already go to, carried
+   * to a sign-up on the same phone (AccountService.takeCarry). It counts as a code typed, for as long.
+   */
+  vouch(phone: string): void {
+    const p = this.norm(phone);
+    this.verified.set(p, Date.now() + VERIFIED_TTL_MS);
+    this.refusals.delete(p);
+    this.byReview.delete(p);
+  }
+
   isVerified(phone: string): boolean {
     const p = this.norm(phone);
     const expires = this.verified.get(p);

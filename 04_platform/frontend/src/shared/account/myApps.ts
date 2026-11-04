@@ -30,6 +30,8 @@ export interface MyAppsApi {
   list: () => Promise<Result<{ apps: MyApp[] }>>;
   /** The hand-over to that app: where to go, or why not. */
   open: (role: AppRole) => Promise<Result<{ href: string }>>;
+  /** 2026-11-04 — another sign-up started from here: a one-time code that carries this account's details (carry.ts). */
+  carry?: () => Promise<Result<{ code: string }>>;
 }
 
 type Get = <T>(path: string) => Promise<Result<T>>;
@@ -45,6 +47,7 @@ export function myAppsApi(get: Get, post: Post, email: () => string | null, part
       if (r.error) return r;
       return { data: { href: `${frontDoorUrl()}${APP_OF[role].path}#handover=${encodeURIComponent(r.data.code)}` }, error: null, status: r.status };
     },
+    carry: () => post<{ code: string }>('/v1/sbg/account/my-apps/carry', { device: shopDeviceKey(email(), party) }),
   };
 }
 

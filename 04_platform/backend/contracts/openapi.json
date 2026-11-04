@@ -8578,11 +8578,32 @@
         }
       }
     },
+    "/v1/sbg/auth/join-carry": {
+      "post": {
+        "operationId": "Sbg.takeCarry",
+        "summary": "",
+        "description": "2026-11-03 — A HAND-OVER TAKEN: the app of the other kind, opened from \"Your SeeBuyGet apps\" on the same phone, signs in\nwith the one-time code the first app was given. Answered as a confirmed phone is, so each app enters as it always does.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeCarryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/v1/sbg/auth/hand-over": {
       "post": {
         "operationId": "Sbg.takeHandOver",
-        "summary": "",
-        "description": "2026-11-03 — A HAND-OVER TAKEN: the app of the other kind, opened from \"Your SeeBuyGet apps\" on the same phone, signs in\nwith the one-time code the first app was given. Answered as a confirmed phone is, so each app enters as it always does.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -25624,6 +25645,29 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/HandOverDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/sbg/account/my-apps/carry": {
+      "post": {
+        "operationId": "Account.carryOut",
+        "summary": "",
+        "description": "2026-11-04 — another sign-up started from here, on this phone: a one-time code that carries the number, the email, the\nowner's name and the country to the front page's sign-up (AccountService.carryOut).",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CarryOutDto"
               }
             }
           }
@@ -49165,6 +49209,18 @@
           "challenge"
         ]
       },
+      "TakeCarryDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
       "TakeHandOverDto": {
         "type": "object",
         "properties": {
@@ -69535,6 +69591,15 @@
         "required": [
           "toDriverDid"
         ]
+      },
+      "CarryOutDto": {
+        "type": "object",
+        "properties": {
+          "device": {
+            "type": "string",
+            "maxLength": 80
+          }
+        }
       },
       "ShopForgetOthersDto": {
         "type": "object",

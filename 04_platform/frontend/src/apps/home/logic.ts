@@ -416,6 +416,30 @@ export function readyLine(role: RoleSpec, t: Translate): string {
   return t(key[role.id]);
 }
 
+/**
+ * 2026-11-04 — WHAT A SIGNED-IN APP CARRIED, LAID INTO THIS SIGN-UP (shared/account/carry.ts): the number, the email (as
+ * the sign-in, the company's contact and the recovery address), the person's name — only where nothing is typed yet — and
+ * the country, over the page's own guess. The company is never carried: the new one is another.
+ */
+export function carriedForm(f: JoinForm, c: { email: string; phone?: string; name?: string; country?: string }): JoinForm {
+  const fill = (now: string, carried: string | undefined) => (now.trim() || !carried ? now : carried);
+  return {
+    ...f,
+    phone: fill(f.phone, c.phone),
+    fullName: fill(f.fullName, c.name),
+    email: fill(f.email, c.email),
+    contactEmail: fill(f.contactEmail, c.email),
+    recoveryEmail: fill(f.recoveryEmail, c.email),
+    country: c.country ?? f.country,
+  };
+}
+
+/** Where a carried sign-up stands: past the number and its code when the number came checked, at the step after them. */
+export function carriedStep(kind: JoinKind, step: JoinStep, c: { phone?: string; phoneChecked: boolean }, shop = false): JoinStep {
+  if (!c.phoneChecked || !c.phone || (step !== 'phone' && step !== 'code')) return step;
+  return nextStep(kind, 'code', false, shop);
+}
+
 export function nextStep(kind: JoinKind, step: JoinStep, papers = false, shop = false): JoinStep {
   const steps = stepsFor(kind, papers, shop);
   return steps[Math.min(steps.indexOf(step) + 1, steps.length - 1)];

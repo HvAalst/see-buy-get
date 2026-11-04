@@ -18,7 +18,8 @@ const ROOTS = ['src/apps', 'src/shared'];
 function filesUnder(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const path = join(dir, e.name);
-    if (e.isDirectory()) return filesUnder(path);
+    // A build's throwaway output (the front page's pre-render writes one under node_modules) is not our code.
+    if (e.isDirectory()) return e.name === 'node_modules' ? [] : filesUnder(path);
     return /\.(tsx?|jsx?)$/.test(e.name) && !/\.(test|spec)\./.test(e.name) ? [path.replace(/\\/g, '/')] : [];
   });
 }
