@@ -278,7 +278,8 @@ export class UploadMediaDto {
 
 /** 2026-11-03 — a person's ID or licence as a photo or a PDF (MediaController.uploadPaper). */
 export class UploadPaperDto {
-  @IsIn(['kyc_id', 'kyc_licence']) @ApiProperty({ enum: ['kyc_id', 'kyc_licence'] }) kind!: 'kyc_id' | 'kyc_licence';
+  /** 2026-11-04 — and the shop's front, a photo chosen or a PDF too (the owner: "could also come by choice or pdf"). */
+  @IsIn(['kyc_id', 'kyc_licence', 'shop']) @ApiProperty({ enum: ['kyc_id', 'kyc_licence', 'shop'] }) kind!: 'kyc_id' | 'kyc_licence' | 'shop';
   @IsString() @ApiProperty() dataUrl!: string; // data:application/pdf;base64,… or an image
 }
 

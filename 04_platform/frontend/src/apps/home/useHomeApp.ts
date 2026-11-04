@@ -671,7 +671,8 @@ export function useHomeApp() {
   const uploadShopPaper = useCallback(async (kind: 'kyc_id' | 'kyc_licence' | 'shop', file: File): Promise<Uploaded> => {
     const session = stateRef.current.shopSession;
     if (!session) return { failed: t('upload.failed') };
-    return kind === 'shop' ? uploadPaper(session, 'shop', file) : uploadShopPaperApi(session, kind, file);
+    // 2026-11-04 — the shop's front by the same door as its papers: a photo taken or chosen, or a PDF.
+    return uploadShopPaperApi(session, kind, file);
   }, []);
 
   /** The shop's papers to staff — or, skipped, the done screen saying the shop waits for them. */

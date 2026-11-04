@@ -821,5 +821,7 @@ export const enHome = {
   'home.join.shopPapers.front': 'A photo of the shop, from the front',
   'home.join.shopPapers.send': 'Send them to be checked',
   'home.join.shopPapers.skip': 'Skip for now',
+  // 2026-11-04 — where a paper goes that is uploaded and not sent (the owner: "So where did it go?").
+  'home.join.shopPapers.keptNote': 'A paper you upload here but do not send waits for you in the Shop app for 48 hours. After that it is deleted.',
   'home.join.shopPapers.skipNote': 'Your shop is made either way. Skipped, it waits until you send them from the Shop app’s home screen.',
 };

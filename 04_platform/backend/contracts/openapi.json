@@ -49024,6 +49024,12 @@
           },
           "by": {
             "type": "string"
+          },
+          "confirmed": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
           }
         },
         "required": [
@@ -71592,9 +71598,11 @@
         "properties": {
           "kind": {
             "type": "string",
+            "description": "2026-11-04 — and the shop's front, a photo chosen or a PDF too (the owner: \"could also come by choice or pdf\").",
             "enum": [
               "kyc_id",
-              "kyc_licence"
+              "kyc_licence",
+              "shop"
             ]
           },
           "dataUrl": {

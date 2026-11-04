@@ -147,6 +147,7 @@ export const DOCUMENT_SEEDS: Record<DocumentKind, { title: string; body: string;
       '- Photos added to a dispute are deleted 180 days after the dispute is settled.',
       '- Photos from a face-and-ID check are deleted 30 days after the decision.',
       '- An ID document is kept as long as the account; one that was replaced is deleted 30 days later.',
+      '- A photo or a paper uploaded and never sent with anything — a sign-up left half-way — is deleted 48 hours after it was uploaded. Until then it is attached to nothing, and no screen of SeeBuyGet’s staff shows it.',
       '- When a photo is deleted, a note that it existed stays with the record — not the photo.',
       '- A SeeBuyGet consignment note is deleted 365 days after its load is finished, with a warning 30 days before; its fingerprint stays, so a copy can still be checked.',
       '- A message to SeeBuyGet is deleted, with its email address, 180 days after it is closed.',

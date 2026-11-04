@@ -646,7 +646,26 @@ function Papers({ state, actions }: HomeScreenProps) {
   const [idCopy, setIdCopy] = useState('');
   const [licence, setLicence] = useState('');
   const [shopFront, setShopFront] = useState('');
+  // 2026-11-04 — what was uploaded at sign-up and not sent: found, shown, and in the sheet already (logic.ts unsentPapersOf).
+  const [waiting, setWaiting] = useState<{ count: number; until?: string } | null>(null);
   const step = papersStep(state.agent);
+  const asks = Boolean(step && step.kind !== 'with_staff' && step.kind !== 'pay_in');
+  useEffect(() => {
+    if (!asks) return;
+    let live = true;
+    void actions.unsentPapers().then((found) => {
+      if (!live) return;
+      if (found.idCopy) setIdCopy((v) => v || found.idCopy!);
+      if (found.licence) setLicence((v) => v || found.licence!);
+      if (found.shopFront) setShopFront((v) => v || found.shopFront!);
+      const count = [found.idCopy, found.licence, found.shopFront].filter(Boolean).length;
+      setWaiting(count ? { count, until: found.until } : null);
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asks]);
   if (!step) return null;
 
   if (step.kind === 'with_staff') return <Note tone="info" icon="check" title={t('agent.papers.pendingTitle')} detail={t('agent.papers.pendingBody')} />;
@@ -659,6 +678,7 @@ function Papers({ state, actions }: HomeScreenProps) {
       ) : (
         <Note tone="warn" icon="badge" title={t('agent.papers.needTitle')} detail={t('agent.papers.needBody')} />
       )}
+      {waiting ? <Note tone="info" icon="clock" title={t('agent.papers.waitingTitle', { count: waiting.count })} detail={t('agent.papers.waitingBody', { day: waiting.until ? formatDate(waiting.until, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '' })} /> : null}
       <Button variant="outline" onClick={() => setOpen(true)}>
         {t(step.refusedWhy ? 'agent.papers.sendAgain' : 'agent.papers.send')}
       </Button>
@@ -668,7 +688,8 @@ function Papers({ state, actions }: HomeScreenProps) {
           <p class="t-body">{t('agent.papers.sheetBody')}</p>
           <PaperField id="papers-id" document value={idCopy} label={t('agent.papers.idPhoto')} upload={(file) => actions.uploadPaper('kyc_id', file)} onCapture={setIdCopy} />
           <PaperField id="papers-licence" document value={licence} label={t('agent.papers.licencePhoto')} upload={(file) => actions.uploadPaper('kyc_licence', file)} onCapture={setLicence} />
-          <PhotoField id="papers-shop" value={shopFront} label={t('agent.papers.shopPhoto')} upload={(file) => actions.uploadPhoto('shop', file)} onCapture={setShopFront} />
+          {/* 2026-11-04 — the shop's front taken, chosen from the phone, or a PDF (the camera alone failed on a phone low on memory). */}
+          <PaperField id="papers-shop" document value={shopFront} label={t('agent.papers.shopPhoto')} upload={(file) => actions.uploadPaper('shop', file)} onCapture={setShopFront} />
           <Button
             chevron={false}
             disabled={!papersReady({ idCopy, licence, shopFront })}

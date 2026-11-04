@@ -165,7 +165,7 @@ export async function uploadPaper(session: PersonSession, kind: string, file: Fi
  * sign-in the moment its account is made. A photo is made smaller on this phone, as every photo is; a PDF goes as it is,
  * to the door that takes a company paper's size.
  */
-export async function uploadShopPaper(session: PersonSession, kind: 'kyc_id' | 'kyc_licence', file: File): Promise<Uploaded> {
+export async function uploadShopPaper(session: PersonSession, kind: 'kyc_id' | 'kyc_licence' | 'shop', file: File): Promise<Uploaded> {
   try {
     // The one checked path for a paper: a PDF as it is, a photo made smaller where it must be (shared/media.ts).
     const dataUrl = await paperForUpload(file);

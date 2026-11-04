@@ -41,7 +41,7 @@ export function createMediaApi(sbg: SbgClient) {
       sbg.request((c) => c.POST('/v1/sbg/media', { body: { kind, dataUrl, ...(thumbDataUrl ? { thumbDataUrl } : {}) } })),
 
     /** 2026-11-03 — a person's ID or licence as a photo or a PDF, prepared by paperForUpload (shared/media.ts). */
-    uploadPaper: (kind: 'kyc_id' | 'kyc_licence', dataUrl: string) => sbg.request((c) => c.POST('/v1/sbg/media/paper', { body: { kind, dataUrl } })),
+    uploadPaper: (kind: 'kyc_id' | 'kyc_licence' | 'shop', dataUrl: string) => sbg.request((c) => c.POST('/v1/sbg/media/paper', { body: { kind, dataUrl } })),
 
     /**
      * The bytes for one media as a Blob (authenticated) — feed to URL.createObjectURL for an <img>.

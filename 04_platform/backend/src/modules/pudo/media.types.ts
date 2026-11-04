@@ -116,6 +116,8 @@ export interface MediaView {
   createdAt: string;
   expiresAt?: string;
   status: MediaStatus;
+  /** 2026-11-04 — used by nothing yet: deleted at this moment unless it is sent with something first. */
+  unusedUntil?: string;
 }
 
 /** How long each bin keeps bytes AFTER its clock starts. Nothing is kept forever. */

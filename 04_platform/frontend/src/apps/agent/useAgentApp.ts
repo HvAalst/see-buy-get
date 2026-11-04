@@ -1,3 +1,4 @@
+import { unsentPapersOf } from './logic';
 import type { InstructionsView } from '../../shared/instructions';
 import { onLaunch, type RunAsked } from '../../shared/launch';
 import { bookingNamed, openLinked, openLinkedLoad } from '../../shared/linkedLoad';
@@ -836,7 +837,7 @@ export function useAgentApp() {
 
   /** 2026-11-03 — the shop's ID or trading licence as a photo or a PDF (the owner: "photo or pdf for both docs"). */
   const uploadPaper = useCallback(
-    async (kind: 'kyc_id' | 'kyc_licence', file: File): Promise<Uploaded> => {
+    async (kind: 'kyc_id' | 'kyc_licence' | 'shop', file: File): Promise<Uploaded> => {
       if (!client) return { failed: t('upload.failed') };
       try {
         const r = await client.api.uploadPaper(kind, await paperForUpload(file));
@@ -1560,6 +1561,14 @@ export function useAgentApp() {
     },
     [client, did, run, fail, pushToast, refresh],
   );
+
+  /** 2026-11-04 — the papers this shop uploaded and has not sent (logic.ts unsentPapersOf): its sign-up's, kept 48 hours. */
+  const unsentPapers = useCallback(async () => {
+    if (!client) return {};
+    const r = await client.api.myMedia();
+    const items = narrow<Array<{ mediaId: string; kind: string; link?: unknown; status?: string; createdAt: string; unusedUntil?: string }>>(r.data);
+    return Array.isArray(items) ? unsentPapersOf(items) : {};
+  }, [client]);
 
   /**
    * The shop sends its papers. Each is the id of a picture it has just taken (see PhotoField): the server takes
@@ -2688,6 +2697,7 @@ export function useAgentApp() {
       saveHours,
       sendPapers,
       uploadPaper,
+      unsentPapers,
       sendLicenceRenewal,
       saveShopfront,
       submitAccept,

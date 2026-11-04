@@ -123,6 +123,9 @@ export const enAgent = {
   'agent.licence.dateLabel': 'Valid until',
   'agent.licence.dateHint': 'The last day, as written on the licence.',
   'agent.papers.needTitle': 'Send your papers to be approved',
+  // 2026-11-04 — papers uploaded at sign-up and not sent (the owner: "So where did it go?").
+  'agent.papers.waitingTitle': '{count, plural, one {# paper you uploaded is here, not sent yet} other {# papers you uploaded are here, not sent yet}}',
+  'agent.papers.waitingBody': 'It is attached to nothing yet, and no screen of SeeBuyGet’s staff shows it. Send your papers before {day}: after that, what you uploaded is deleted.',
   'agent.papers.needBody': 'Before your shop can take parcels, SeeBuyGet needs to see three things: your ID, your trading licence and a photo of your shop.',
   'agent.papers.refusedTitle': 'Your papers were not accepted',
   'agent.papers.refusedBody': 'SeeBuyGet wrote: “{reason}”. Put that right and send them again.',

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from '../../shared/i18n'; // English is the base catalog, so the real `t` yields the English literals
 import {
+  unsentPapersOf,
   takeInTermsNotice,
   termsBlock,
   termsNeedTelling,
@@ -645,5 +646,26 @@ describe('what the counter says before it takes a parcel that nothing covers', (
     expect(termsBlock(terms(), 'ready', true, t)).toBeNull();
     // A parcel the company has stated cover for needs no tick at all.
     expect(termsBlock(terms({ coverLimit: 300, coverBasis: 'free-limit' }), 'ready', false, t)).toBeNull();
+  });
+});
+
+/* 2026-11-04 — the owner: "I uploaded my passport image, but after signing in it did not indicate that the picture was saved. So where did it go?" */
+describe('the papers uploaded and not sent', () => {
+  const now = Date.parse('2026-11-04T12:00:00Z');
+  const at = (h: number) => new Date(now - h * 3_600_000).toISOString();
+  const until = (h: number) => new Date(now + h * 3_600_000).toISOString();
+  it('finds the newest of each kind that nothing uses and is still kept, and the first moment one is deleted', () => {
+    const found = unsentPapersOf(
+      [
+        { mediaId: 'med_old_id', kind: 'kyc_id', status: 'active', createdAt: at(30), unusedUntil: until(18) },
+        { mediaId: 'med_new_id', kind: 'kyc_id', status: 'active', createdAt: at(2), unusedUntil: until(46) },
+        { mediaId: 'med_sent_licence', kind: 'kyc_licence', status: 'active', createdAt: at(3), link: { type: 'agent', id: 'x' }, unusedUntil: until(45) },
+        { mediaId: 'med_gone_front', kind: 'shop', status: 'active', createdAt: at(49), unusedUntil: until(-1) },
+        { mediaId: 'med_avatar', kind: 'avatar', status: 'active', createdAt: at(1), unusedUntil: until(47) },
+      ],
+      now,
+    );
+    expect(found).toEqual({ idCopy: 'med_new_id', until: until(46) });
+    expect(unsentPapersOf([], now)).toEqual({});
   });
 });

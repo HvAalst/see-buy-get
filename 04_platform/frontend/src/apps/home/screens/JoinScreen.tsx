@@ -643,7 +643,8 @@ function ShopPapersStep({ state, actions }: JoinScreenProps) {
       </Card>
       <Card label={t('home.join.shopPapers.front')}>
         <p class="t-label">{t('home.join.shopPapers.front')}</p>
-        <PhotoField id="shop-front" value={f.shopPapers.shopPhotoRef} label={t('home.fleet.papers.take')} upload={(file) => actions.uploadShopPaper('shop', file)} onCapture={(mediaId) => set('shopPhotoRef', mediaId)} />
+        {/* 2026-11-04 — taken, or chosen from the phone, or a PDF (the owner: the camera alone failed on a phone low on memory). */}
+        <PhotoField id="shop-front" document value={f.shopPapers.shopPhotoRef} label={t('home.fleet.papers.take')} upload={(file) => actions.uploadShopPaper('shop', file)} onCapture={(mediaId) => set('shopPhotoRef', mediaId)} />
       </Card>
       <div class="scr__cta">
         <Button onClick={() => void actions.sendShopPapers()} disabled={Boolean(blocker)} busy={state.busy === 'submit'}>
@@ -654,6 +655,7 @@ function ShopPapersStep({ state, actions }: JoinScreenProps) {
           {t('home.join.shopPapers.skip')}
         </Button>
         <p class="card__note">{t('home.join.shopPapers.skipNote')}</p>
+        <p class="card__note">{t('home.join.shopPapers.keptNote')}</p>
       </div>
     </>
   );

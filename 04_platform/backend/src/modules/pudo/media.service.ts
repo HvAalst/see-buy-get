@@ -63,7 +63,7 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
 
   /** Store an uploaded image (a `data:<type>;base64,<...>` URL) + an optional thumbnail. Returns the id. */
   /** 2026-11-03 — a person's ID or licence, a photo or a PDF, up to a company paper's size (the owner: "photo or pdf for both docs"). */
-  uploadPaper(input: { ownerDid: string; kind: 'kyc_id' | 'kyc_licence'; dataUrl: string }): { mediaId: string } {
+  uploadPaper(input: { ownerDid: string; kind: 'kyc_id' | 'kyc_licence' | 'shop'; dataUrl: string }): { mediaId: string } {
     return this.upload({ ownerDid: input.ownerDid, kind: input.kind, dataUrl: input.dataUrl, document: true });
   }
 
@@ -187,6 +187,9 @@ export class MediaService implements OnApplicationBootstrap, OnModuleDestroy {
       createdAt: r.createdAt,
       expiresAt: r.expiresAt,
       status: r.status,
+      // 2026-11-04 — an upload nobody has used yet, and until when it is kept before the sweep deletes it: so its owner's
+      // app can say where a paper uploaded at sign-up went, and that it goes if it is never sent.
+      ...(!r.link && r.status === 'active' ? { unusedUntil: new Date(Date.parse(r.createdAt) + ORPHAN_GRACE_MS).toISOString() } : {}),
     };
   }
 

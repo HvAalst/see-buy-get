@@ -25,6 +25,17 @@ describe('a paper, a photo or a PDF', () => {
     expect(() => media.uploadPaper({ ownerDid: 'did:x', kind: 'kyc_licence', dataUrl: 'data:text/html;base64,PGgxPmhpPC9oMT4=' })).toThrow();
   });
 
+  it('takes the shop’s front as a PDF too, and says until when an upload nobody has used is kept — and nothing once it is', () => {
+    const media = new MediaService();
+    const shop = 'did:glos:pudo-agent:front';
+    const { mediaId } = media.uploadPaper({ ownerDid: shop, kind: 'shop', dataUrl: pdf });
+    expect(media.blob(mediaId).contentType).toBe('application/pdf');
+    const [unused] = media.listForOwner(shop);
+    expect(Date.parse(unused.unusedUntil!) - Date.parse(unused.createdAt)).toBe(48 * 3_600_000);
+    media.link(mediaId, { type: 'agent', id: shop }, 'shop');
+    expect(media.listForOwner(shop)[0].unusedUntil).toBeUndefined();
+  });
+
   it('is sent to a door that takes a company paper’s size', () => {
     expect(bodyLimitFor('/v1/sbg/media/paper').most).toBe(UPLOAD_LIMITS.document);
     expect(bodyLimitFor('/v1/sbg/media').most).toBe(UPLOAD_LIMITS.photo);
