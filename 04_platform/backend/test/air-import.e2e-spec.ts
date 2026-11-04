@@ -156,7 +156,7 @@ describe('an import by air, over the wire', () => {
     const slotTo = new Date(Date.now() + 6 * H);
     const slotted = (await http().post(`${path}/air/slot`).set(bearer(agent.token)).send({ from: slotFrom.toISOString(), to: slotTo.toISOString(), reference: 'SWP-C-7' }).expect(201)).body;
     expect(slotted.air.slot).toEqual({ from: slotFrom.toISOString(), to: slotTo.toISOString(), reference: 'SWP-C-7' });
-    expect(freight().instructions?.text).toMatch(/Your slot at the shed: \d{2}:\d{2}–.* \(slot SWP-C-7\)\. Come inside it/);
+    expect(freight().instructions?.text).toMatch(/Your slot at the shed: \d{2}:\d{2}(–| UTC on ).* \(slot SWP-C-7\)\. Come inside it/);
     expect((await http().post(`${path}/air/slot`).set(bearer(operator)).send({ from: slotFrom.toISOString(), to: slotTo.toISOString() })).status).toBe(403);
     expect(String((await http().post(`${path}/air/slot`).set(bearer(agent.token)).send({ from: slotTo.toISOString(), to: slotFrom.toISOString() })).body.detail)).toBe('The slot must end after it starts');
     expect((await http().post(`${path}/air/slot`).set(bearer(imp.token)).send({ from: '', to: '', clear: true }).expect(201)).body.air.slot).toBeUndefined();
