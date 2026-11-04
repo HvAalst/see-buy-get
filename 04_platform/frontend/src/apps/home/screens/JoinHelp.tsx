@@ -2,7 +2,7 @@ import { Button, Sheet } from '../../../shared/ui';
 import { useHelpWords, useT } from '../../../shared/i18n';
 import { siteArticles, type GuideApp, type GuideArticle } from '../../../shared/guide/articles';
 import { GuideArticles } from '../../../shared/guide/GuideArticles';
-import { frontDoorUrl } from '../../../shared/ui/AllAppsLink';
+import { frontDoorUrl } from '../../../shared/frontDoor';
 
 /** Who is joining, as the help names them: the app the account opens, and the reader the help centre filters for. */
 const JOINING: Record<string, { app: GuideApp; reader: string }> = {

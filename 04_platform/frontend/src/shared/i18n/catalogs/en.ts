@@ -385,6 +385,17 @@ export const en = {
   'common.close': 'Close',
   'common.back': 'Back',
   'common.allApps': 'All SeeBuyGet apps',
+  // 2026-11-04 — the apps under "All SeeBuyGet apps", each as its icon (shared/ui/AppLauncher.tsx). App names stay as on the phone.
+  'launcher.app.home': 'SeeBuyGet',
+  'launcher.app.agent': 'Shop',
+  'launcher.app.mdp': 'Hub',
+  'launcher.app.vendor': 'Store',
+  'launcher.app.driver': 'Driver',
+  'launcher.app.fleet': 'Fleet',
+  'launcher.app.business': 'Business',
+  'launcher.app.genesis': 'Send',
+  'launcher.here': 'This app',
+  'launcher.signedIn': 'Opens signed in',
   'common.signUp': 'New here? Sign up',
   // 2026-11-02 — the bar pinned to the bottom of every screen before signing in (SignedOutBar): a short word under each
   // picture, as the tab bar has; the longer name stays the button's title. Back and Help are common.back and guide.link.

@@ -3,7 +3,7 @@ import { createPortal } from 'preact/compat';
 import { Sheet } from '../ui';
 import { useHelpWords, useT, type MessageKey } from '../i18n';
 import { HELP_GROUPS, articlesFor, type GuideApp, type GuideArticle } from './articles';
-import { frontDoorUrl } from '../ui/AllAppsLink';
+import { frontDoorUrl } from '../frontDoor';
 import { GuideArticles } from './GuideArticles';
 
 /**

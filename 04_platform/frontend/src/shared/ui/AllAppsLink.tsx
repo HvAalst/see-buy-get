@@ -1,45 +1,31 @@
+import { useState } from 'preact/hooks';
 import { useT } from '../i18n';
+import { frontDoorLink } from '../frontDoor';
+import { AppsSheet } from './AppLauncher';
+import type { MyAppsApi } from '../account/myApps';
 
-/**
- * Where the front door is: the site's root once deployed (every app lives under it, at /send/, /driver/ …); in
- * development each app has a server of its own, and the front door's is 5180 (vite.config.ts), which proxies the others.
- * With no page around it (a test, the build) it is the root.
- */
-export function frontDoorUrl(loc: Pick<Location, 'protocol' | 'hostname'> | undefined = globalThis.location, dev: boolean = import.meta.env.DEV): string {
-  return dev && loc ? `${loc.protocol}//${loc.hostname}:5180/` : '/';
-}
-
-/** Is this app running installed — its own window, from the phone's home screen — rather than in a browser tab? */
-export function isInstalledApp(): boolean {
-  try {
-    const nav = globalThis.navigator as (Navigator & { standalone?: boolean }) | undefined;
-    return Boolean(globalThis.matchMedia?.('(display-mode: standalone)').matches || nav?.standalone);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * HOW A LINK TO THE FRONT DOOR OPENS (the user, 2026-10-22: "can't return to homepage when I am in the browser except
- * through the chrome back arrow"). In a browser tab it is an ordinary link: the front page, in the same tab, and Back
- * returns. In an installed app it opens in the browser, a tab of its own, so the app stays the one app it is.
- */
-export function frontDoorLink(): { href: string; target?: string; rel?: string } {
-  return isInstalledApp() ? { href: frontDoorUrl(), target: '_blank', rel: 'noopener' } : { href: frontDoorUrl() };
-}
+// Where the front door is, and how a link to it opens: shared/frontDoor.ts (kept importable from here, where they were).
+export { frontDoorLink, frontDoorUrl, isInstalledApp } from '../frontDoor';
 
 /**
  * THE WAY BACK TO THE OTHER APPS (the user, 2026-10-22: "once installed, there is no other way to get out of it ... there
  * should be an option on the app homepage to return to the browser version homepage and access the other apps").
- * Beside Help: on every sign-in screen, and at the foot of the account menu. The mark in the top bar goes there too.
+ * Beside Help: on every sign-in screen, and at the foot of the account menu. The mark in the top bar goes to the front page.
  * `buttonClass` lets an app drawn in the console's buttons (Business) draw it in its own.
+ *
+ * 2026-11-04 (the owner: "it redirects to the homepage. that is a bit cheap way out") — it opens the apps themselves, as
+ * their icons (AppLauncher.tsx); the front page is the first of them.
  */
-export function AllAppsLink({ buttonClass = 'btn btn--link' }: { buttonClass?: string } = {}) {
+export function AllAppsLink({ buttonClass = 'btn btn--link', myApps }: { buttonClass?: string; myApps?: MyAppsApi } = {}) {
   const t = useT();
+  const [open, setOpen] = useState(false);
   return (
-    <a class={buttonClass} {...frontDoorLink()}>
-      {t('common.allApps')}
-    </a>
+    <>
+      <button type="button" class={buttonClass} aria-haspopup="dialog" onClick={() => setOpen(true)}>
+        {t('common.allApps')}
+      </button>
+      <AppsSheet open={open} onClose={() => setOpen(false)} myApps={myApps} />
+    </>
   );
 }
 

@@ -14,7 +14,7 @@ import { Icon } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { ExplainerReset } from '../ui/Explainer';
 import { HelpLink } from '../guide/HelpLink';
-import { AllAppsLink } from '../ui/AllAppsLink';
+import { AppsSheet } from '../ui/AppLauncher';
 import type { GuideApp } from '../guide/articles';
 import { SettingsSheet, hasSettings } from './SettingsSheet';
 import type { PinDevicesApi } from './devices';
@@ -80,7 +80,7 @@ export interface AccountMenuProps {
 export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onChangePassword, extra, rows, devices, myApps }: AccountMenuProps) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const [sheet, setSheet] = useState<'profile' | 'settings' | 'address' | 'share' | 'install' | null>(null);
+  const [sheet, setSheet] = useState<'profile' | 'settings' | 'address' | 'share' | 'install' | 'apps' | null>(null);
   // 2026-11-02 — an app that installs keeps its guide here once the call to install has gone.
   const installs: InstallApp | null = app === 'agent' || app === 'mdp' || app === 'driver' || app === 'fleet' || app === 'vendor' ? app : null;
   const wrap = useRef<HTMLDivElement>(null);
@@ -196,8 +196,10 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
 
           <div class="acct__foot">
             <HelpLink app={app} />
-            {/* An installed app has no address bar: this is its way to the front door and the other apps. */}
-            <AllAppsLink />
+            {/* An installed app has no address bar: this is its way to the other apps — their icons, the front page first. */}
+            <Button variant="link" full={false} onClick={() => { setOpen(false); setSheet('apps'); }}>
+              {t('common.allApps')}
+            </Button>
             {/* Restoring dismissed teaching belongs to the person, not to a screen — and it renders
                 nothing at all when they have not put anything away. */}
             <ExplainerReset who={me?.personId} />
@@ -210,6 +212,7 @@ export function AccountMenu({ api, app, onSignOut, onOpenHandle, onInvite, onCha
       ) : null}
 
       <ProfileSheet open={sheet === 'profile'} onClose={() => setSheet(null)} api={api} />
+      <AppsSheet open={sheet === 'apps'} onClose={() => setSheet(null)} myApps={myApps} />
       <ShareSheet open={sheet === 'share'} onClose={() => setSheet(null)} api={api} />
       {installs ? <InstallGuideSheet open={sheet === 'install'} onClose={() => setSheet(null)} app={installs} /> : null}
       <AddressSheet open={sheet === 'address'} onClose={() => setSheet(null)} api={api} />

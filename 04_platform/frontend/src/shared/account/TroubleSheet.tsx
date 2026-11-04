@@ -12,7 +12,7 @@ import { PIN_LENGTH, pinGuessable } from './pin';
 import { PinGuessHint } from './PinGuessHint';
 import { asksForNationalId, type RecoveryApi } from './recovery';
 import { articlesFor, type GuideApp, type GuideArticle } from '../guide/articles';
-import { frontDoorUrl } from '../ui/AllAppsLink';
+import { frontDoorUrl } from '../frontDoor';
 import { GuideArticles } from '../guide/GuideArticles';
 
 /** The articles about getting in — signing in, the PIN or the password, getting back in — out of an app's help. */

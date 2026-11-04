@@ -4,7 +4,7 @@ import { useT } from '../i18n';
 import { Icon } from './Icon';
 import { BackStep } from './BackStep';
 import { useReadAloud } from './ReadAloud';
-import { frontDoorLink } from './AllAppsLink';
+import { AppsSheet } from './AppLauncher';
 import { TroubleSheet } from '../account/TroubleSheet';
 import type { RecoveryApi } from '../account/recovery';
 import type { GuideApp, GuideArticle } from '../guide/articles';
@@ -53,12 +53,19 @@ export interface SignedOutBarProps {
 export function SignedOutBar({ onBack, help, aloud, allApps = true, inline = false, backKey }: SignedOutBarProps) {
   const t = useT();
   const [helping, setHelping] = useState(false);
+  const [apps, setApps] = useState(false);
   const speech = useReadAloud(aloud ?? (() => ''));
   const keyboard = useKeyboardUp();
   const signIn = 'open' in help ? null : help;
   // Into the page, not inside the bar: the bar is fixed, so it makes a layer of its own, and a sheet drawn in it would be
   // painted under everything a sheet should cover (HelpLink.tsx found the same, 2026-10-30).
-  const sheet = signIn ? <TroubleSheet open={helping} onClose={() => setHelping(false)} app={signIn.app} api={signIn.api} articles={signIn.articles} /> : null;
+  const trouble = signIn ? <TroubleSheet open={helping} onClose={() => setHelping(false)} app={signIn.app} api={signIn.api} articles={signIn.articles} /> : null;
+  const sheet = trouble || allApps ? (
+    <>
+      {trouble}
+      {allApps ? <AppsSheet open={apps} onClose={() => setApps(false)} /> : null}
+    </>
+  ) : null;
   const away = keyboard && !inline;
 
   return (
@@ -89,10 +96,10 @@ export function SignedOutBar({ onBack, help, aloud, allApps = true, inline = fal
           </button>
         ) : null}
         {allApps ? (
-          <a class="bnav__item" title={t('common.allApps')} {...frontDoorLink()}>
+          <button type="button" class="bnav__item" aria-haspopup="dialog" title={t('common.allApps')} onClick={() => setApps(true)}>
             <Icon name="grid" size={25} />
             <span class="bnav__label">{t('common.bar.allApps')}</span>
-          </a>
+          </button>
         ) : null}
       </nav>
       {sheet ? typeof document === 'undefined' ? sheet : createPortal(sheet, document.body) : null}

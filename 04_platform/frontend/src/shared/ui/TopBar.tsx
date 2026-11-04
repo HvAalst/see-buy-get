@@ -1,7 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { BrandMark } from './BrandMark';
 import { Icon } from './Icon';
-import { frontDoorLink } from './AllAppsLink';
+import { frontDoorLink } from '../frontDoor';
 import { useT } from '../i18n';
 
 export interface TopBarProps {

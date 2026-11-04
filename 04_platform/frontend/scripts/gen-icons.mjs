@@ -193,40 +193,107 @@ const union =
 
 /* ------------------------------------------------------------------ apps ---- */
 
+/** Some shapes with others cut out of them — the field shows through the cut, so a detail costs no second colour. */
+const minus =
+  (shape, ...cuts) =>
+  (x, y) =>
+    shape(x, y) && !cuts.some((c) => c(x, y));
+
+/** Only the part of a shape inside a box. */
+const clip = (shape, x0, y0, x1, y1) => (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1 && shape(x, y);
+
+/** A line with round ends, `w` thick. */
+const capsule = (x0, y0, x1, y1, w) => (x, y) => {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const t = Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy)));
+  return (x0 + t * dx - x) ** 2 + (y0 + t * dy - y) ** 2 <= (w / 2) ** 2;
+};
+
+/** The band between two circles. */
+const ring = (cx, cy, r0, r1) => (x, y) => {
+  const d = (x - cx) ** 2 + (y - cy) ** 2;
+  return d >= r0 * r0 && d <= r1 * r1;
+};
+
+/** Any straight-sided shape, by its corners in order (even-odd). */
+const polygon = (pts) => (x, y) => {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+
+/**
+ * A delivery truck, side on, in the box (ox, oy) to (ox + s, oy + s): the load box, the cab with its window, two wheels
+ * with the field around them so they read as wheels and not as a blob.
+ */
+function truck(ox, oy, s) {
+  const X = (v) => ox + v * s;
+  const Y = (v) => oy + v * s;
+  const body = union(
+    roundRect(X(0), Y(0.2), X(0.6), Y(0.7), 0.04 * s),
+    polygon([
+      [X(0.63), Y(0.34)],
+      [X(0.83), Y(0.34)],
+      [X(1), Y(0.53)],
+      [X(1), Y(0.7)],
+      [X(0.63), Y(0.7)],
+    ]),
+  );
+  const window = polygon([
+    [X(0.68), Y(0.4)],
+    [X(0.81), Y(0.4)],
+    [X(0.92), Y(0.52)],
+    [X(0.68), Y(0.52)],
+  ]);
+  const wheel = (cx) => disc(X(cx), Y(0.74), 0.105 * s);
+  const wheelRoom = (cx) => disc(X(cx), Y(0.74), 0.15 * s);
+  return union(minus(body, window, wheelRoom(0.24), wheelRoom(0.8)), wheel(0.24), wheel(0.8));
+}
+
 const GLYPHS = {
-  // Counter + head: someone standing behind a PUDO desk.
+  // 2026-11-04 — a picture each, so six of them side by side on a phone are six different things.
+  // The Shop: a shopfront — a scalloped awning over two windows and a door.
   agent: union(
-    disc(0.5, 0.27, 0.155),
-    roundRect(0.24, 0.5, 0.76, 0.62, 0.06),
-    roundRect(0.12, 0.68, 0.88, 0.84, 0.08),
+    roundRect(0.06, 0.12, 0.94, 0.3, 0.05),
+    ...[0.17, 0.39, 0.61, 0.83].map((cx) => clip(disc(cx, 0.3, 0.11), 0, 0.3, 1, 1)),
+    minus(roundRect(0.13, 0.48, 0.87, 0.9, 0.04), roundRect(0.21, 0.57, 0.36, 0.71, 0.025), roundRect(0.64, 0.57, 0.79, 0.71, 0.025), roundRect(0.43, 0.6, 0.57, 0.91, 0.025)),
   ),
-  // A vehicle on the road: the body over two wheels. The one app used while MOVING.
-  driver: union(
-    roundRect(0.1, 0.28, 0.9, 0.62, 0.09),
-    disc(0.3, 0.72, 0.115),
-    disc(0.7, 0.72, 0.115),
+  // The Driver: a delivery truck.
+  driver: truck(0, 0.03, 1),
+  // Send: a parcel on its way — taped, with the lines of its going behind it.
+  genesis: union(
+    minus(roundRect(0.34, 0.24, 0.94, 0.84, 0.06), roundRect(0.6, 0.24, 0.68, 0.48, 0)),
+    capsule(0.08, 0.4, 0.24, 0.4, 0.075),
+    capsule(0.02, 0.54, 0.24, 0.54, 0.075),
+    capsule(0.12, 0.68, 0.24, 0.68, 0.075),
   ),
-  // Arrow up: hand a parcel to the network.
-  genesis: union(triangle(0.5, 0.1, 0.46, 0.34), roundRect(0.4, 0.42, 0.6, 0.9, 0.09)),
-  // Three bars, longest at the bottom: the fleet at a glance.
-  fleet: union(
-    roundRect(0.14, 0.18, 0.6, 0.34, 0.08),
-    roundRect(0.14, 0.42, 0.86, 0.58, 0.08),
-    roundRect(0.14, 0.66, 0.72, 0.82, 0.08),
+  // The Fleet: more than one truck.
+  fleet: union(truck(0, -0.05, 0.6), truck(0.4, 0.39, 0.6)),
+  // The Hub: a hub and its spokes — bags come in from every side and go out again.
+  mdp: (() => {
+    const ends = Array.from({ length: 6 }, (_, i) => {
+      const a = (i * Math.PI) / 3 - Math.PI / 2;
+      return [0.5 + 0.36 * Math.cos(a), 0.5 + 0.36 * Math.sin(a)];
+    });
+    return union(disc(0.5, 0.5, 0.15), ...ends.map(([x, y]) => disc(x, y, 0.095)), ...ends.map(([x, y]) => capsule(0.5, 0.5, x, y, 0.065)));
+  })(),
+  // The Store: a shopping bag — somebody who sells online.
+  vendor: union(roundRect(0.14, 0.36, 0.86, 0.92, 0.07), clip(ring(0.5, 0.36, 0.14, 0.215), 0, 0, 1, 0.36)),
+  // Business: a business card — a face, a name and two lines.
+  business: minus(
+    roundRect(0.03, 0.2, 0.97, 0.8, 0.07),
+    disc(0.26, 0.42, 0.085),
+    clip(disc(0.26, 0.7, 0.155), 0, 0, 1, 0.7),
+    capsule(0.5, 0.37, 0.85, 0.37, 0.075),
+    capsule(0.5, 0.51, 0.79, 0.51, 0.055),
+    capsule(0.5, 0.63, 0.7, 0.63, 0.055),
   ),
-  // Four tiles: the hub dashboard.
-  mdp: union(
-    roundRect(0.14, 0.14, 0.46, 0.46, 0.08),
-    roundRect(0.54, 0.14, 0.86, 0.46, 0.08),
-    roundRect(0.14, 0.54, 0.46, 0.86, 0.08),
-    roundRect(0.54, 0.54, 0.86, 0.86, 0.08),
-  ),
-  // Storefront: the awning over the shop body — the merchant console.
-  vendor: union(roundRect(0.1, 0.14, 0.9, 0.34, 0.09), roundRect(0.18, 0.44, 0.82, 0.88, 0.09)),
-  // A shipping container side on, its ribs cut through: the goods a business sends, imports and clears (2026-11-02, when
-  // the Business app began to install; until then it wore the console's tab icon).
-  business: (x, y) => roundRect(0.08, 0.26, 0.92, 0.74, 0.07)(x, y) && !([0.29, 0.43, 0.57, 0.71].some((c) => Math.abs(x - c) < 0.028) && y > 0.35 && y < 0.65),
-  // A tower: the cab on its stalk, on its base. The one app nobody in the field uses.
+  // The console (a tab only, never installed): a desk with a screen.
   tower: union(
     roundRect(0.3, 0.12, 0.7, 0.3, 0.06),
     roundRect(0.43, 0.3, 0.57, 0.76, 0.05),

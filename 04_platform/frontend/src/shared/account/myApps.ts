@@ -1,5 +1,5 @@
 import { publicRequest, type Result, type SbgConfig } from '../../lib/sbg';
-import { frontDoorUrl, isInstalledApp } from '../ui/AllAppsLink';
+import { frontDoorUrl } from '../frontDoor';
 import { shopDeviceKey, type DeviceParty } from './shopDevice';
 
 /*
@@ -48,11 +48,8 @@ export function myAppsApi(get: Get, post: Post, email: () => string | null, part
   };
 }
 
-/** Go there: this tab, or — from an installed app, which has no address bar — a tab of its own, as the front door opens. */
-export function goToApp(href: string): void {
-  if (isInstalledApp()) globalThis.open?.(href, '_blank', 'noopener');
-  else globalThis.location?.assign(href);
-}
+/** Go there (shared/frontDoor.ts, where the launcher finds it without the rest of this file). */
+export { goToApp } from '../frontDoor';
 
 /** The hand-over out of the address — `#handover=<code>` — or undefined when the address carries none. */
 export function readHandOver(hash: string | undefined): string | undefined {

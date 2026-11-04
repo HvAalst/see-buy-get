@@ -3950,3 +3950,63 @@ a.btn {
 .secs__pane[hidden] {
   display: none;
 }
+
+/* 2026-11-04 — "All SeeBuyGet apps": the apps as their home-screen icons, four to a row (AppLauncher.tsx). */
+.apps-grid {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 4px;
+}
+.apps-grid__tile {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 8px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: none;
+  color: var(--tx);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.apps-grid__tile:active:not(:disabled) {
+  background: var(--bd-soft);
+}
+.apps-grid__tile:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.apps-grid__tile--here {
+  background: var(--bg);
+}
+.apps-grid__tile[aria-busy='true'] {
+  opacity: 0.6;
+}
+/* The picture on the phone, its corners rounded as a launcher rounds them; the field shows if it has not loaded. */
+.apps-grid__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--org);
+  object-fit: cover;
+}
+.apps-grid__name {
+  font-size: 13px;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.apps-grid__sub {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--tx2);
+  text-align: center;
+}
