@@ -29,9 +29,19 @@ export function readDeclaration(sbg: SbgClient): Promise<Result<DeclarationView>
   return sbg.request((c) => c.GET('/v1/sbg/declarations/mine', {})) as Promise<Result<DeclarationView>>;
 }
 
-/** Signed — the wording they were shown. */
-export function signDeclaration(sbg: SbgClient, version: number): Promise<Result<DeclarationView>> {
-  return sbg.request((c) => c.POST('/v1/sbg/declarations/mine/sign', { body: { version } })) as Promise<Result<DeclarationView>>;
+/** Signed — the wording they were shown, each of its lines ticked (by its number from 0). */
+export function signDeclaration(sbg: SbgClient, version: number, confirmed: number[]): Promise<Result<DeclarationView>> {
+  return sbg.request((c) => c.POST('/v1/sbg/declarations/mine/sign', { body: { version, confirmed } })) as Promise<Result<DeclarationView>>;
+}
+
+/**
+ * 2026-11-04 — HOW MANY LINES ARE STILL TO TICK (the owner: "i want them to tick them individually, it's a small step but it
+ * keeps the eyes a little longer on the text"). Only the lines of the wording shown count: a tick kept from an older one does not.
+ */
+export function declarationLeft(lines: readonly string[] | undefined, ticked: readonly string[]): number {
+  const n = lines?.length ?? 0;
+  const on = new Set(ticked.filter((k) => /^\d+$/.test(k) && Number(k) < n));
+  return n - on.size;
 }
 
 /** Does it ask for their hand now: none signed, lapsed, a new wording, or due within the month. Signed and quiet: no. */

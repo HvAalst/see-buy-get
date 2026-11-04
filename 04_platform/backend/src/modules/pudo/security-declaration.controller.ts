@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ruleRefuses } from '../../foundation/http/api-rules';
 import { Actor } from '../../foundation/auth/actor.decorator';
 import { actingTenant } from '../../foundation/auth/acting';
 import type { IntrospectionResult } from '../../foundation/auth/auth.types';
@@ -16,6 +17,8 @@ import { DECLARATION_KINDS, SecurityDeclarationService, type DeclarationKind, ty
 export class SignDeclarationDto {
   @ApiProperty() @IsInt() @Min(1) version!: number;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120) by?: string;
+  /** 2026-11-04 — the lines ticked one by one, by their number from 0: every line of the wording in force. */
+  @ApiPropertyOptional({ type: [Number] }) @IsOptional() @IsArray() @ArrayMaxSize(50) @IsInt({ each: true }) @Min(0, { each: true }) confirmed?: number[];
 }
 
 /** Where a partner stands under the security declaration, or — a fleet's driver — whose declaration covers them. */
@@ -76,7 +79,7 @@ export class SecurityDeclarationController {
     const who = this.declarer(actor);
     if ('coveredBy' in who) throw new GlosError('INVALID_STATE', `${who.coveredBy} signs the security declaration for its drivers: you sign nothing of your own`);
     const by = actor?.actorName?.trim() || dto.by?.trim() || who.name;
-    return { required: true, ...this.declarations.sign(who.kind, who.did, dto.version, by) };
+    return { required: true, ...this.declarations.sign(who.kind, who.did, dto.version, by, Date.now(), { lines: dto.confirmed, required: ruleRefuses('declaration-each-line') }) };
   }
 
   /** Every partner and where they stand, for staff: the shops, the hubs, the fleets and the riders in no fleet. */

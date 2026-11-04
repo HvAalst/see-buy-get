@@ -80,6 +80,8 @@ export interface DeclarationSigned {
   signedAt: string;
   signedBy: string;
   until: string;
+  /** 2026-11-04 — how many of its lines were ticked one by one when it was signed. Absent: signed before each was asked. */
+  linesTicked?: number;
 }
 
 /** Where a partner stands: the declaration in force, and whether theirs is signed, due, lapsed, outdated or missing. */
@@ -128,13 +130,20 @@ export class SecurityDeclarationService {
    * SIGNED — by the partner, of the wording they were shown (`version`), for a year from now. Signing again while it holds
    * starts the year again; the wording they read must be the one in force, so nobody signs what they were not shown.
    */
-  sign(kind: DeclarationKind, did: string, version: number, by: string, now: number = Date.now()): DeclarationStanding {
+  sign(kind: DeclarationKind, did: string, version: number, by: string, now: number = Date.now(), ticked?: { lines?: number[]; required: boolean }): DeclarationStanding {
     const current = DECLARATIONS[kind];
     if (version !== current.version) throw new GlosError('CONFLICT', 'The declaration has changed since it was shown to you: read the one in force, and sign that');
     const who = by.trim();
     if (!who) throw new GlosError('FIELD_REQUIRED', 'Say who is signing', { field: 'by' });
+    // 2026-11-04 — EACH LINE TICKED (the owner: "it keeps the eyes a little longer on the text"): every line of the wording in
+    // force, by its number — asked of a person from today, of a company's system from the day the rule holds (api-rules.ts).
+    const count = new Set((ticked?.lines ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < current.lines.length)).size;
+    const left = current.lines.length - count;
+    if (ticked?.required && left > 0) {
+      throw new GlosError('FIELD_REQUIRED', left === 1 ? 'Tick each line of the declaration: one is not ticked yet' : `Tick each line of the declaration: ${left} are not ticked yet`, { field: 'confirmed', left });
+    }
     const signedAt = new Date(now).toISOString();
-    this.signatures.set(key(kind, did), { kind, did, version, signedAt, signedBy: who.slice(0, 120), until: new Date(now + DECLARATION_VALID_DAYS * DAY).toISOString() });
+    this.signatures.set(key(kind, did), { kind, did, version, signedAt, signedBy: who.slice(0, 120), until: new Date(now + DECLARATION_VALID_DAYS * DAY).toISOString(), ...(ticked?.lines ? { linesTicked: count } : {}) });
     return this.standing(kind, did, now);
   }
 

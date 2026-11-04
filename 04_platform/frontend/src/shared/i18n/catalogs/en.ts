@@ -519,6 +519,9 @@ export const en = {
   'common.declaration.due': 'Your security declaration runs out on {day}: sign it again before then.',
   'common.declaration.how': 'Signed in your name, today, for a year. Each line is a promise SeeBuyGet holds you to.',
   'common.declaration.sign': 'I declare this — sign',
+  // 2026-11-04 — each line ticked by itself (the owner: "it keeps the eyes a little longer on the text").
+  'common.declaration.tickEach': 'Read each line, and tick it to say you hold to it.',
+  'common.declaration.toGo': '{n, plural, one {Tick # more line to sign} other {Tick # more lines to sign}}',
   'common.declaration.thanks': 'Signed — thank you',
   'common.declaration.until': 'Your security declaration holds until {day}. You are asked to sign it again a month before.',
   'common.seal.overPackage': 'over the package {sscc}',

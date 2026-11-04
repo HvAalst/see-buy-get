@@ -337,7 +337,7 @@ describe('the first day of a new installation, as it would be live', () => {
       // Approved, it reads its security declaration and signs it from its own sign-in: nothing is taken in until it has.
       const declaration = await must(http().get('/v1/sbg/declarations/mine').set(bearer(shop.token)), 200);
       expect(declaration).toMatchObject({ required: true, kind: 'shop', state: 'missing' });
-      await must(http().post('/v1/sbg/declarations/mine/sign').set(bearer(shop.token)).send({ version: declaration.version }));
+      await must(http().post('/v1/sbg/declarations/mine/sign').set(bearer(shop.token)).send({ version: declaration.version, confirmed: declaration.lines.map((_: string, i: number) => i) }));
       await must(http().post(`${own}/deposit`).set(bearer(amina)));
       // Approved, and still not able to take a parcel in: there is no money in its float.
       expect(await must(http().get(`${own}/can-transact`).set(bearer(shop.token)), 200)).toMatchObject({ canTransact: false, code: 'AGENT_LOCKED', balance: 0 });
@@ -479,7 +479,7 @@ describe('the first day of a new installation, as it would be live', () => {
     // Its office signs the fleet's security declaration, from its own sign-in: it answers for every driver it puts on a load.
     const declaration = await must(http().get('/v1/sbg/declarations/mine').set(bearer(office)), 200);
     expect(declaration).toMatchObject({ required: true, kind: 'fleet', state: 'missing' });
-    await must(http().post('/v1/sbg/declarations/mine/sign').set(bearer(office)).send({ version: declaration.version }));
+    await must(http().post('/v1/sbg/declarations/mine/sign').set(bearer(office)).send({ version: declaration.version, confirmed: declaration.lines.map((_: string, i: number) => i) }));
   });
 
   it('7 · a vehicle, a driver who signs in for themselves and starts their own shift, and the corridor they run', async () => {

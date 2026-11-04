@@ -43,6 +43,11 @@ describe('the yearly security declaration', () => {
     const did = `did:hub:${Math.random()}`;
     expect(() => svc.sign('hub', did, DECLARATIONS.hub.version + 1, 'Grace', t0)).toThrow(/has changed since it was shown to you/);
     expect(() => svc.sign('hub', did, DECLARATIONS.hub.version, '   ', t0)).toThrow(/Say who is signing/);
+    // 2026-11-04 — each line ticked, by its number: none, some, or a number that is no line are not every line.
+    const all = DECLARATIONS.hub.lines.map((_, i) => i);
+    expect(() => svc.sign('hub', did, DECLARATIONS.hub.version, 'Grace', t0, { lines: [], required: true })).toThrow(/Tick each line of the declaration/);
+    expect(() => svc.sign('hub', did, DECLARATIONS.hub.version, 'Grace', t0, { lines: [...all.slice(1), 99, 0.5], required: true })).toThrow(/one is not ticked yet/);
+    expect(svc.sign('hub', did, DECLARATIONS.hub.version, 'Grace', t0, { lines: [...all, ...all], required: true }).state).toBe('signed');
   });
 
   it('asks everybody to sign again when the wording changes', () => {

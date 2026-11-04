@@ -3268,16 +3268,6 @@ a.nitem {
   flex: 1;
 }
 
-/* Round 39 — the security declaration's promises, one to a line. */
-.declaration__lines {
-  margin: 10px 0 8px;
-  padding-left: 22px;
-  list-style: decimal;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 /* A PHONE NUMBER AND ITS COUNTRY'S CODE (PhoneField, 2026-10-25): the code shown short, "+256", beside the number; a
    tap on it opens the native list of every country, which sits invisibly over it. Matches the box beside it in either
    style — the apps' `input`, the console's `cinput`. */

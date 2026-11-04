@@ -125,7 +125,7 @@ describe('a hub is vetted before it works, over the wire', () => {
     expect(approved.papers.idCopyRef).toBeUndefined();
     // Approved, it signs its security declaration from its own sign-in, as a hub does before it opens a bag (round 39).
     const declaration = (await http().get('/v1/sbg/declarations/mine').set(hub).expect(200)).body;
-    await http().post('/v1/sbg/declarations/mine/sign').set(hub).send({ version: declaration.version }).expect(201);
+    await http().post('/v1/sbg/declarations/mine/sign').set(hub).send({ version: declaration.version, confirmed: declaration.lines.map((_: string, i: number) => i) }).expect(201);
     await new Promise((r) => setImmediate(r));
     expect(app.get(NotificationService).inboxFor(signed.did)[0]).toMatchObject({ kind: 'papers_checked', title: `${name} is approved` });
     await decide({ approve: true }).expect(400);

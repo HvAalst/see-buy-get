@@ -76,9 +76,14 @@ describe('the yearly security declaration — over the wire', () => {
     expect(refused.body.detail).toBe('Mama Neema has not signed its security declaration: nothing new is taken on until it has. It is signed in the Shop app, on the home screen.');
 
     // Not staff's to sign, and only the wording in force.
-    await http().post('/v1/sbg/declarations/mine/sign').set(staff).send({ version: first.version }).expect(403);
+    await http().post('/v1/sbg/declarations/mine/sign').set(staff).send({ version: first.version, confirmed: first.lines.map((_: string, i: number) => i) }).expect(403);
     await http().post('/v1/sbg/declarations/mine/sign').set(shop.token).send({ version: first.version + 1 }).expect(409);
-    const signed = (await http().post('/v1/sbg/declarations/mine/sign').set(shop.token).send({ version: first.version, by: 'Neema Wanjiru' }).expect(201)).body;
+    // 2026-11-04 — each line ticked by its number (the owner: "it keeps the eyes a little longer on the text"): none, or one short, is no signature.
+    const untouched = await http().post('/v1/sbg/declarations/mine/sign').set(shop.token).send({ version: first.version }).expect(400);
+    expect(untouched.body).toMatchObject({ code: 'FIELD_REQUIRED', params: { field: 'confirmed', left: first.lines.length } });
+    const short = await http().post('/v1/sbg/declarations/mine/sign').set(shop.token).send({ version: first.version, confirmed: first.lines.map((_: string, i: number) => i).slice(1) }).expect(400);
+    expect(short.body.detail).toBe('Tick each line of the declaration: one is not ticked yet');
+    const signed = (await http().post('/v1/sbg/declarations/mine/sign').set(shop.token).send({ version: first.version, by: 'Neema Wanjiru', confirmed: first.lines.map((_: string, i: number) => i) }).expect(201)).body;
     expect(signed).toMatchObject({ required: true, state: 'signed', signedBy: 'Neema Wanjiru', until: expect.any(String) });
     expect(Date.parse(signed.until) - Date.parse(signed.signedAt)).toBe(365 * 86_400_000);
 
@@ -108,7 +113,7 @@ describe('the yearly security declaration — over the wire', () => {
     declared(app, 'hub', hub.did);
     const bag = mdps.registerTote(hub.mdpId);
     expect(() => mdps.loadBag(bag.code, rider.badgeId)).toThrow(/^This rider has not signed their security declaration: nothing new is taken on until they have/);
-    await http().post('/v1/sbg/declarations/mine/sign').set(riderToken).send({ version: own.version }).expect(201);
+    await http().post('/v1/sbg/declarations/mine/sign').set(riderToken).send({ version: own.version, confirmed: own.lines.map((_: string, i: number) => i) }).expect(201);
     expect((await http().get('/v1/sbg/declarations/mine').set(riderToken).expect(200)).body.state).toBe('signed');
     // Riding for themselves, the rider is the carrier on its notes: an address, or a pin of its station (2026-10-28) —
     // its own to give, never staff's to write in its name, and one of the two at least.
@@ -155,13 +160,13 @@ describe('the yearly security declaration — over the wire', () => {
     const office = bearer((await http().post('/v1/auth/token').send({ role: 'fleet_manager', did: m.did, tenant: m.did, type: 'client_credentials' }).expect(201)).body.access_token);
     const theirs = (await http().get('/v1/sbg/declarations/mine').set(office).expect(200)).body;
     expect(theirs).toMatchObject({ required: true, kind: 'fleet', state: 'missing', title: expect.stringMatching(/as a SeeBuyGet fleet/) });
-    await http().post('/v1/sbg/declarations/mine/sign').set(office).send({ version: theirs.version }).expect(201);
+    await http().post('/v1/sbg/declarations/mine/sign').set(office).send({ version: theirs.version, confirmed: theirs.lines.map((_: string, i: number) => i) }).expect(201);
     const fleet = { did: m.did, companyName: m.companyName };
     // A fleet's driver: covered by the fleet, and nothing of their own to sign.
     const fleetDriver = (await http().post('/v1/sbg/drivers/onboard').set(staff).send({ displayName: `Fleet ${v.slice(-3)}`, fullName: `Fleet Driver ${v}`, nationalId: `ID-FD-${v}`, mobile: `+2547${v}6`, licenceClasses: ['bike'], licenceNumber: `L-${v}`, licenceExpiresAt: '2031-01-01', managerDid: fleet.did }).expect(201)).body;
     const fleetToken = bearer((await http().post('/v1/auth/token').send({ role: 'driver', did: fleetDriver.did, type: 'client_credentials' }).expect(201)).body.access_token);
     expect((await http().get('/v1/sbg/declarations/mine').set(fleetToken).expect(200)).body).toEqual({ required: false, coveredBy: fleet.companyName });
-    expect((await http().post('/v1/sbg/declarations/mine/sign').set(fleetToken).send({ version: own.version }).expect(400)).body.detail).toMatch(/signs the security declaration for its drivers/);
+    expect((await http().post('/v1/sbg/declarations/mine/sign').set(fleetToken).send({ version: own.version, confirmed: own.lines.map((_: string, i: number) => i) }).expect(400)).body.detail).toMatch(/signs the security declaration for its drivers/);
   });
 
   it('a hub opens no new tote, and a fleet’s driver takes no load, until the hub — and the fleet — has signed', async () => {
@@ -174,7 +179,7 @@ describe('the yearly security declaration — over the wire', () => {
     expect(refused).toMatchObject({ code: 'DECLARATION_REQUIRED' });
     expect(refused.detail).toMatch(/has not signed its security declaration: nothing new is taken on until it has\. It is signed in the Hub app/);
     const hubs = (await http().get('/v1/sbg/declarations/mine').set(hubToken).expect(200)).body;
-    await http().post('/v1/sbg/declarations/mine/sign').set(hubToken).send({ version: hubs.version }).expect(201);
+    await http().post('/v1/sbg/declarations/mine/sign').set(hubToken).send({ version: hubs.version, confirmed: hubs.lines.map((_: string, i: number) => i) }).expect(201);
     await tote().expect(201);
 
     // A fleet's driver out in its truck: the office puts no load on them until the fleet has signed.
@@ -216,7 +221,7 @@ describe('the yearly security declaration — over the wire', () => {
     };
     expect(assign()).toBe('DECLARATION_REQUIRED: Your fleet has not signed its security declaration: nothing new is taken on until it has. It is signed in the Fleet app, on the home screen.');
     const fleets = (await http().get('/v1/sbg/declarations/mine').set(office).expect(200)).body;
-    await http().post('/v1/sbg/declarations/mine/sign').set(office).send({ version: fleets.version }).expect(201);
+    await http().post('/v1/sbg/declarations/mine/sign').set(office).send({ version: fleets.version, confirmed: fleets.lines.map((_: string, i: number) => i) }).expect(201);
     expect(assign()).toBe('assigned');
 
     /*

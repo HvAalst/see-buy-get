@@ -55,6 +55,14 @@ export const API_RULE_CHANGES: readonly ApiRuleChange[] = [
     announcedAt: '2026-11-03',
     enforcedFrom: '2027-02-01',
   },
+  {
+    // 2026-11-04 — the owner: "i want them to tick them individually … it keeps the eyes a little longer on the text".
+    id: 'declaration-each-line',
+    version: '1',
+    summary: 'A security declaration is signed with each of its lines ticked (confirmed: the number of every line, from 0).',
+    announcedAt: '2026-11-04',
+    enforcedFrom: '2027-02-02',
+  },
 ];
 
 const DAY = 86_400_000;

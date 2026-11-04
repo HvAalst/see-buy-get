@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { t } from './i18n';
-import { declarationAsks, declarationWhy, type DeclarationView } from './declaration';
+import { declarationAsks, declarationLeft, declarationWhy, signDeclaration, type DeclarationView } from './declaration';
 import { declarationCounts, type DeclarationRow } from '../apps/tower/screens/DeclarationsPanel';
 
 const day = (iso: string) => iso.slice(0, 10);
@@ -31,5 +31,25 @@ describe('the security declaration on a partner’s home screen (round 39)', () 
       { kind: 'shop', did: 'e', name: 'E', state: 'signed' },
     ];
     expect(declarationCounts(rows)).toEqual({ stopped: 3, due: 1, signed: 1 });
+  });
+});
+
+/* 2026-11-04 — the owner: "i want them to tick them individually, it's a small step but it keeps the eyes a little longer on the text". */
+describe('each line ticked', () => {
+  const lines = ['Parcels are kept out of reach.', 'A parcel goes only to the person the app names.', 'We open no parcel.'];
+  it('counts the lines still to tick — only lines of the wording shown, each once', () => {
+    expect(declarationLeft(lines, [])).toBe(3);
+    expect(declarationLeft(lines, ['0', '2'])).toBe(1);
+    expect(declarationLeft(lines, ['0', '1', '2', '2'])).toBe(0);
+    // A tick kept from a longer, older wording is not a line of this one.
+    expect(declarationLeft(lines, ['0', '1', '7'])).toBe(1);
+    expect(declarationLeft(undefined, [])).toBe(0);
+  });
+
+  it('sends the lines ticked with the signature', async () => {
+    let sent: unknown;
+    const sbg = { request: (fn: (c: unknown) => unknown) => fn({ POST: (_path: string, init: { body: unknown }) => { sent = init.body; return Promise.resolve({ data: null, error: null }); } }) } as never;
+    await signDeclaration(sbg, 2, [0, 1, 2]);
+    expect(sent).toEqual({ version: 2, confirmed: [0, 1, 2] });
   });
 });
