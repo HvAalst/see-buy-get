@@ -181,21 +181,8 @@ export function papersStep(agent: { status: AgentStatus; kycRejection?: { reason
 }
 
 /** Nothing is sent until all three are there: a shop told "something is missing" has to guess which. */
-/**
- * 2026-11-04 — THE PAPERS UPLOADED AND NOT SENT (the owner: "I uploaded my passport image, but after signing in it did not
- * indicate that the picture was saved. So where did it go?"): the newest of each kind that nothing uses yet and is still
- * kept, and the earliest moment one of them is deleted. Found in the shop's own media, so the papers sheet starts with them.
- */
-export function unsentPapersOf(
-  media: ReadonlyArray<{ mediaId: string; kind: string; link?: unknown; status?: string; createdAt: string; unusedUntil?: string }>,
-  now: number = Date.now(),
-): { idCopy?: string; licence?: string; shopFront?: string; until?: string } {
-  const kept = media.filter((m) => !m.link && (m.status ?? 'active') === 'active' && m.unusedUntil && Date.parse(m.unusedUntil) > now).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  const newest = (kind: string) => kept.find((m) => m.kind === kind);
-  const found = { id: newest('kyc_id'), licence: newest('kyc_licence'), front: newest('shop') };
-  const untils = [found.id, found.licence, found.front].filter((m): m is NonNullable<typeof m> => Boolean(m)).map((m) => m.unusedUntil!).sort();
-  return { ...(found.id ? { idCopy: found.id.mediaId } : {}), ...(found.licence ? { licence: found.licence.mediaId } : {}), ...(found.front ? { shopFront: found.front.mediaId } : {}), ...(untils[0] ? { until: untils[0] } : {}) };
-}
+// 2026-11-04 — the papers uploaded and not sent: shared with the Hub app (shared/papers.ts).
+export { unsentPapersOf } from '../../shared/papers';
 
 export function papersReady(papers: { idCopy: string; licence: string; shopFront: string }): boolean {
   return Boolean(papers.idCopy && papers.licence && papers.shopFront);
@@ -799,7 +786,8 @@ export function priceBand(pricePerParcel: number | null | undefined, benchmark: 
 export function homeSummary(agent: AgentView | null, gate: GateView | null, t: Translate): string {
   if (!agent) return t('agent.logic.homeConnecting');
   const canScan = Boolean(gate?.ok);
-  const bits = [t('agent.logic.homeWallet', { balance: money(agent.balance, agent.currency) })];
+  // 2026-11-04 — where no money is held for the shop, no wallet figure in the bar either.
+  const bits = [agent.balance === null ? t('agent.home.noFloat') + '.' : t('agent.logic.homeWallet', { balance: money(agent.balance, agent.currency) })];
   bits.push(canScan ? t('agent.logic.homeCanAccept') : gate?.code === 'COUNTRY_NOT_OPEN' ? t('agent.logic.gateNotOpenTitle') : t('agent.logic.homeTopUp'));
   if (agent.openState === 'closed') bits.push(t('agent.logic.homeClosed'));
   return bits.join(' ');

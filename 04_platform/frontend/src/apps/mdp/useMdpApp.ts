@@ -1,3 +1,5 @@
+import { unsentPapersOf } from '../../shared/papers';
+import { paperForUpload } from '../../shared/media';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { isSignInRequired, narrow, sbgConfirmDevice, sbgDevicePhone, sbgForgot, sbgLogin, sbgReset, type SbgError } from '../../lib/sbg';
 import { deviceAskOf, saveShopDeviceKey, shopDeviceKey, shopDevicesApi, type DeviceAsk } from '../../shared/account/shopDevice';
@@ -690,6 +692,29 @@ export function useMdpApp() {
   }, []);
 
   /** Round 35 — a photograph for the tamper report: prepared on the phone; with no signal it waits here and goes with the report. */
+  /** 2026-11-04 — a hub's paper, taken, chosen from the phone or a PDF (the owner: "to avoid the low memory issue"). */
+  const uploadPaper = useCallback(
+    async (kind: 'kyc_id' | 'kyc_licence' | 'shop', file: File): Promise<Uploaded> => {
+      if (!client) return { failed: t('upload.failed') };
+      try {
+        const r = await client.api.uploadPaper(kind, await paperForUpload(file));
+        if (r.error) return { failed: uploadFailureSentence(r.error, 'photo') };
+        return narrow<{ mediaId: string }>(r.data)?.mediaId ?? { failed: t('upload.failed') };
+      } catch (e) {
+        return { failed: uploadFailureSentence(e, 'photo') };
+      }
+    },
+    [client],
+  );
+
+  /** The papers this hub uploaded and has not sent (shared/papers.ts): kept 48 hours, then deleted. */
+  const unsentPapers = useCallback(async () => {
+    if (!client) return {};
+    const r = await client.api.myMedia();
+    const items = narrow<Array<{ mediaId: string; kind: string; link?: unknown; status?: string; createdAt: string; unusedUntil?: string }>>(r.data);
+    return Array.isArray(items) ? unsentPapersOf(items) : {};
+  }, [client]);
+
   const uploadPhoto = useCallback(
     async (file: File, kind: 'tamper' | 'seal' | 'kyc_id' | 'kyc_licence' | 'shop' = 'tamper'): Promise<Uploaded> => {
       if (!client) return { failed: t('upload.failed') };
@@ -1019,6 +1044,8 @@ export function useMdpApp() {
       openTamper,
       setTamper,
       uploadPhoto,
+      uploadPaper,
+      unsentPapers,
       submitTamper,
       pickLoadCode,
       submitDrop,

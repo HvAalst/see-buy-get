@@ -1,3 +1,5 @@
+import { AskToOpen } from '../../../shared/opening/AskToOpen';
+import { driverConfig } from '../api';
 import { EnergyChoice } from '../../../shared/ui/EnergyChoice';
 import { energyFits } from '../../../shared/vehicleEnergy';
 import { useEffect, useState } from 'preact/hooks';
@@ -219,6 +221,8 @@ function RideAloneCard({
         </div>
         {/* WHO THEY WOULD CONTRACT WITH, the moment the country says it — the thing this choice decides. */}
         {form.country ? <Note tone="info" icon="badge" title={company ? t('driver.alone.company', { company }) : t('driver.alone.noCompany', { country: countryName(form.country) })} detail={t(company ? 'driver.alone.companyDetail' : 'driver.alone.noCompanyDetail')} /> : null}
+        {/* 2026-11-04 — no company of ours there: the way to ask SeeBuyGet to open in that country. */}
+        {form.country && !company ? <AskToOpen country={form.country} kind="carrier" config={driverConfig()} /> : null}
         <div class="field">
           <label class="field__label" for="alone-class">
             {t('driver.alone.vehicle')}

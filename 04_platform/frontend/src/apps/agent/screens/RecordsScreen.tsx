@@ -262,7 +262,9 @@ function Earnings({ state, actions }: RecordsScreenProps) {
     <>
       {/* The BALANCE is the live wallet (state.agent), never the summary's fetch-time snapshot — a top-up on
           another screen must not leave a stale figure here. The summary drives only the in/out/net sub-line. */}
-      <GlanceNumber label={t('agent.records.walletBalance')} value={money(state.agent?.balance, state.agent?.currency)} sub={sum ? t('agent.records.viewSummary', { in: money(sum.in, sum.currency), out: money(sum.out, sum.currency), net: netLabel(sum.net, sum.currency) }) : t('agent.records.summaryHint')} />
+      {/* 2026-11-04 — where SeeBuyGet holds no money for this shop, no figure: "0,00" read as a wallet that is not there. */}
+      {state.agent && state.agent.balance === null ? <GlanceNumber label={t('agent.home.noFloat')} value="—" sub={t('agent.home.noFloatSub')} /> : null}
+      {state.agent && state.agent.balance === null ? null : <GlanceNumber label={t('agent.records.walletBalance')} value={money(state.agent?.balance, state.agent?.currency)} sub={sum ? t('agent.records.viewSummary', { in: money(sum.in, sum.currency), out: money(sum.out, sum.currency), net: netLabel(sum.net, sum.currency) }) : t('agent.records.summaryHint')} />}
 
       <Card title={t('agent.records.earnings')} aside={<span class="row__count">{state.ledgerTotal}</span>}>
         <div class="reg__controls">

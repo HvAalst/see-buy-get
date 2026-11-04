@@ -132,7 +132,7 @@ export function App() {
         {/* Said above every screen until it is done: a store still signing in with its secret sets its account up. */}
         <AccountSetup state={state} actions={actions} />
         {/* Signed up before its country opened (COMING, 2026-10-25): said above every screen, as nothing ships yet. */}
-        <OpensSoonNote country={state.vendor?.country} detail={t('opening.store')} />
+        <OpensSoonNote country={state.vendor?.country} detail={t('opening.store')} ask={{ kind: 'store', config: vendorConfig() }} />
         <NavScreen nav={nav}>
           <ScreenRouter screen={state.screen} state={state} actions={actions} archive={archive} destination={destination} client={sbg} />
         </NavScreen>

@@ -1,3 +1,5 @@
+import { AskToOpen } from '../../../shared/opening/AskToOpen';
+import { agentConfig } from '../api';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { AuthImage, Button, Card, ErrorNote, GlanceNumber, Icon, NeedsSignalNote, Note, Pill, PlaceMap, PlaceWords, PushPrompt, ReadAloud, Sheet, TopUpCostNote, type IconName, PhoneField } from '../../../shared/ui';
 import { capLine, type CustodyCapView } from '../../../shared/custodyCap';
@@ -192,6 +194,8 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
       {/* Round 38 — a new shop's custody cap: what it holds, the most it may now, how it grows. A live fact, never dismissed. */}
       <CapNote view={state.custodyCap} />
       {gate ? <Note tone={gate.tone} icon={gate.tone === 'danger' ? 'lock' : gate.tone === 'info' ? 'clock' : 'wallet'} title={gate.title} detail={gate.detail} /> : null}
+      {/* 2026-11-04 — not open in this shop's country: the way to ask SeeBuyGet to open there. */}
+      {!staff && state.gate?.code === 'COUNTRY_NOT_OPEN' ? <AskToOpen country={agent?.country} kind="shop" config={agentConfig()} /> : null}
 
       {/* Quick actions — the counter jobs. */}
       <div class="rows" role="list">
@@ -678,7 +682,7 @@ function Papers({ state, actions }: HomeScreenProps) {
       ) : (
         <Note tone="warn" icon="badge" title={t('agent.papers.needTitle')} detail={t('agent.papers.needBody')} />
       )}
-      {waiting ? <Note tone="info" icon="clock" title={t('agent.papers.waitingTitle', { count: waiting.count })} detail={t('agent.papers.waitingBody', { day: waiting.until ? formatDate(waiting.until, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '' })} /> : null}
+      {waiting ? <Note tone="info" icon="clock" title={t('common.papers.waitingTitle', { count: waiting.count })} detail={t('common.papers.waitingBody', { day: waiting.until ? formatDate(waiting.until, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '' })} /> : null}
       <Button variant="outline" onClick={() => setOpen(true)}>
         {t(step.refusedWhy ? 'agent.papers.sendAgain' : 'agent.papers.send')}
       </Button>

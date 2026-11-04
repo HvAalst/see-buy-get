@@ -1,3 +1,4 @@
+import { AskToOpen } from '../../../shared/opening/AskToOpen';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField } from '../../../shared/ui';
@@ -58,6 +59,9 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   const [booking, setBooking] = useState(false);
   // Only a SETTLED preview drives the confirm card — never a stale one still resolving under a new scan.
   const pm = state.preMintState === 'ready' ? state.preMint : null;
+  // 2026-11-04 — NOTHING CAN BE TAKEN IN HERE (the owner: "it should rather move to the top"): said first, with the way to ask
+  // SeeBuyGet to open in this country — not above the button that cannot work.
+  const closedHere = terms?.promise === 'none' ? terms : pm?.terms?.promise === 'none' ? pm.terms : null;
   // Round 13 — which parcel's papers the counter saw in the pouch: a tick belongs to one parcel, never the next one scanned.
   const [papersSeen, setPapersSeen] = useState<string | null>(null);
   const booked = pm && (pm.kind === 'peer_send' || pm.kind === 'vendor_order');
@@ -83,6 +87,12 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
   return (
     <div class="scr">
       <h1 class="scr__title">{t('agent.accept.title')}</h1>
+      {closedHere ? (
+        <>
+          <TermsNote terms={closedHere} />
+          {state.staff ? null : <AskToOpen country={closedHere.jurisdiction} kind="shop" config={agentConfig()} />}
+        </>
+      ) : null}
       <Explainer who={state.agent?.did} id="agent.accept.how" text={t('agent.accept.lede')} />
 
       {state.error ? <ErrorNote error={state.error} /> : null}
@@ -122,7 +132,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
             <Note tone="info" icon="wallet" title={t('agent.accept.prepaidTitle')} detail={t('agent.accept.prepaidDetail')} />
           )}
 
-          {pm.terms ? <TermsNote terms={pm.terms} /> : null}
+          {pm.terms && pm.terms.promise !== 'none' ? <TermsNote terms={pm.terms} /> : null}
 
           <Card label={pm.kind === 'peer_send' ? t('agent.accept.bookedInApp') : t('agent.accept.storeOrder')}>
             <div class="kv">
@@ -282,7 +292,7 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
           {t('agent.tryAgain')}
         </Button>
       ) : null}
-      {terms ? <TermsNote terms={terms} /> : null}
+      {terms && terms.promise !== 'none' ? <TermsNote terms={terms} /> : null}
       {termsNeedTelling(terms) ? (
         <label class="checkline" style="margin-top:12px">
           <input type="checkbox" checked={state.termsTold} onChange={(e) => actions.setTermsTold(e.currentTarget.checked)} />

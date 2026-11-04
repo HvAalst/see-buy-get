@@ -74,5 +74,10 @@ describe('a hub and a shop where no company of ours stands are shown their count
     const own = (await http().get(`/v1/sbg/agents/${did}`).set(shop).expect(200)).body as { currency: string; parcelPrice: number };
     expect(own.currency).toBe('EUR');
     expect(own.parcelPrice).toEqual(expect.any(Number));
+    // 2026-11-04 — and its register in euros too, and no balance where no money of it is held (the owner: "The wallet
+    // balance is 0,00 in KES, but I am in the euro zone" — the register's line read shillings under a balance in euros).
+    const summary = (await http().get(`/v1/sbg/agents/${did}/ledger/summary`).set(shop).expect(200)).body as { currency: string; balance: number | null };
+    expect(summary.currency).toBe('EUR');
+    expect(summary.balance).toBeNull();
   });
 });

@@ -1,7 +1,8 @@
-import { useState } from 'preact/hooks';
+import { mdpConfig } from '../api';
+import { useEffect, useState } from 'preact/hooks';
 import { Button, Card, ErrorNote, Note, PhotoField, ReadAloud, Sheet } from '../../../shared/ui';
 import { OpensSoonNote } from '../../../shared/opening/OpensSoonNote';
-import { useT } from '../../../shared/i18n';
+import { formatDate, useT } from '../../../shared/i18n';
 import { PlaceView } from '../../../shared/ui/PlaceView';
 import { bagLine, fillPercent, fillingBags, floorOpen, freeBags, homeSummary, hubPapersStep, money, swatchIndex, unsortedAt } from '../logic';
 import type { MdpActions, MdpState } from '../useMdpApp';
@@ -31,7 +32,26 @@ function HubPapers({ state, actions }: HomeScreenProps) {
   const [idCopy, setIdCopy] = useState('');
   const [licence, setLicence] = useState('');
   const [premises, setPremises] = useState('');
+  // 2026-11-04 — what was uploaded and not sent: found, shown, and in the sheet already (shared/papers.ts).
+  const [waiting, setWaiting] = useState<{ count: number; until?: string } | null>(null);
   const step = hubPapersStep(state.hub);
+  const asks = Boolean(step && step.kind !== 'with_staff' && !state.staff);
+  useEffect(() => {
+    if (!asks) return;
+    let live = true;
+    void actions.unsentPapers().then((found) => {
+      if (!live) return;
+      if (found.idCopy) setIdCopy((v) => v || found.idCopy!);
+      if (found.licence) setLicence((v) => v || found.licence!);
+      if (found.shopFront) setPremises((v) => v || found.shopFront!);
+      const count = [found.idCopy, found.licence, found.shopFront].filter(Boolean).length;
+      setWaiting(count ? { count, until: found.until } : null);
+    });
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asks]);
   if (!step) return null;
   if (step.kind === 'with_staff') return <Note tone="info" icon="check" title={t('mdp.papers.pendingTitle')} detail={t('mdp.papers.pendingBody')} />;
   if (state.staff) return <Note tone="warn" icon="badge" title={t('mdp.papers.notYetTitle')} detail={t('mdp.papers.staffBody')} />;
@@ -43,6 +63,7 @@ function HubPapers({ state, actions }: HomeScreenProps) {
       ) : (
         <Note tone="warn" icon="badge" title={t('mdp.papers.needTitle')} detail={t('mdp.papers.needBody')} />
       )}
+      {waiting ? <Note tone="info" icon="clock" title={t('common.papers.waitingTitle', { count: waiting.count })} detail={t('common.papers.waitingBody', { day: waiting.until ? formatDate(waiting.until, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '' })} /> : null}
       <Button variant="outline" onClick={() => setOpen(true)}>
         {t(step.refusedWhy ? 'mdp.papers.sendAgain' : 'mdp.papers.send')}
       </Button>
@@ -50,9 +71,10 @@ function HubPapers({ state, actions }: HomeScreenProps) {
       {open ? (
         <Sheet open onClose={() => setOpen(false)} title={t('mdp.papers.send')}>
           <p class="t-body">{t('mdp.papers.sheetBody')}</p>
-          <PhotoField id="papers-id" value={idCopy} label={t('mdp.papers.idPhoto')} upload={(file) => actions.uploadPhoto(file, 'kyc_id')} onCapture={setIdCopy} />
-          <PhotoField id="papers-licence" value={licence} label={t('mdp.papers.licencePhoto')} upload={(file) => actions.uploadPhoto(file, 'kyc_licence')} onCapture={setLicence} />
-          <PhotoField id="papers-premises" value={premises} label={t('mdp.papers.premisesPhoto')} upload={(file) => actions.uploadPhoto(file, 'shop')} onCapture={setPremises} />
+          {/* 2026-11-04 — taken, chosen from the phone, or a PDF (the owner: "to avoid the low memory issue"). */}
+          <PhotoField id="papers-id" document value={idCopy} label={t('mdp.papers.idPhoto')} upload={(file) => actions.uploadPaper('kyc_id', file)} onCapture={setIdCopy} />
+          <PhotoField id="papers-licence" document value={licence} label={t('mdp.papers.licencePhoto')} upload={(file) => actions.uploadPaper('kyc_licence', file)} onCapture={setLicence} />
+          <PhotoField id="papers-premises" document value={premises} label={t('mdp.papers.premisesPhoto')} upload={(file) => actions.uploadPaper('shop', file)} onCapture={setPremises} />
           <Button
             chevron={false}
             disabled={!(idCopy && licence && premises)}
@@ -97,7 +119,7 @@ export function HomeScreen({ state, actions, sbg }: HomeScreenProps) {
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
       {/* Signed up before its country opened (COMING, 2026-10-25): why the floor does nothing yet, and when it will. */}
-      <OpensSoonNote country={hub?.country} detail={t('opening.hub')} />
+      <OpensSoonNote country={hub?.country} detail={t('opening.hub')} ask={state.staff ? undefined : { kind: 'hub', config: mdpConfig() }} />
       {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
       {state.staff ? null : <DeclarationCard sbg={sbg ?? null} />}
 

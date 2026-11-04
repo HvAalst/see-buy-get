@@ -680,15 +680,18 @@ export class WalletGateService {
     return agentLedgerSummaryOf(filterAgentLedger(this.entries({ did }), q), this.agentCurrency(did));
   }
 
-  /** The money a shop keeps: its company's. The network's for a shop no company of ours holds. */
+  /**
+   * The money a shop keeps: its company's — and, where no company of ours holds it, its own country's, as its float and its
+   * prices are said (AgentService.amountsOf). It was the network's there: a Dutch shop's register read shillings under a
+   * balance in euros (the owner, 2026-11-04: "The wallet balance is 0,00 in KES, but I am in the euro zone").
+   */
   private agentCurrency(did: string): string {
-    let entityId: string | undefined;
     try {
-      entityId = this.agents.entityIdOrNone(this.agents.get(did));
+      return this.agents.amountsOf(did).currency ?? NETWORK_CURRENCY;
     } catch {
       // Not a shop on record: its register is empty, and the network's money is as good a name as any for nothing.
+      return NETWORK_CURRENCY;
     }
-    return (entityId ? this.entities.get(entityId).currency : undefined) ?? NETWORK_CURRENCY;
   }
 
   agentLedgerCsv(did: string, q: AgentLedgerQuery): string {

@@ -1,3 +1,4 @@
+import { fleetConfig } from '../api';
 import { CredentialAge } from '../../../shared/account/CredentialAge';
 import { pinChangeBlocker } from '../../../shared/account/password';
 import { useState, useEffect, useMemo } from 'preact/hooks';
@@ -57,7 +58,7 @@ export function DashboardScreen({ state, actions, sbg }: DashboardScreenProps) {
     <div class="scr">
       {state.error ? <ErrorNote error={state.error} onRetry={actions.refresh} /> : null}
       {/* Signed up before its country opened (COMING, 2026-10-25): why no driver starts a shift yet, and when they will. */}
-      <OpensSoonNote country={d?.country} detail={t('opening.fleet')} />
+      <OpensSoonNote country={d?.country} detail={t('opening.fleet')} ask={{ kind: 'carrier', config: fleetConfig() }} />
       {/* Round 39 — the security declaration, while it asks for their hand: at joining, and every year. */}
       <DeclarationCard sbg={sbg ?? null} />
 

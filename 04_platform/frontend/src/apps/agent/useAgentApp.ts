@@ -1,4 +1,4 @@
-import { unsentPapersOf } from './logic';
+import { unsentPapersOf } from '../../shared/papers';
 import type { InstructionsView } from '../../shared/instructions';
 import { onLaunch, type RunAsked } from '../../shared/launch';
 import { bookingNamed, openLinked, openLinkedLoad } from '../../shared/linkedLoad';

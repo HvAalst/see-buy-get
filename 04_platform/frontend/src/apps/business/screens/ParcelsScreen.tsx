@@ -1,3 +1,5 @@
+import { AskToOpen } from '../../../shared/opening/AskToOpen';
+import { businessConfig } from '../api';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useCallback, useEffect, useState } from 'preact/hooks';
 import { formatDate, useT } from '../../../shared/i18n';
@@ -129,6 +131,8 @@ export function ParcelsScreen({ business, client, onGo }: { business: BusinessVi
           {!account.canOpen ? (
             <>
               <p class="chint">{account.whyNot}</p>
+              {/* 2026-11-04 — and the way to ask SeeBuyGet to open where this business is. */}
+              <AskToOpen country={business.country} kind="other" config={businessConfig()} />
               {/* 2026-11-03 — the owner: "it is not clear how to open a parcel account so that is an open end": say where to go
                   next. A load is settled between the business and its carrier, so it works where we hold no money yet. */}
               {onGo && sectionsFor(business.activities).includes('loads') ? (

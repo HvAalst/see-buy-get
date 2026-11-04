@@ -203,6 +203,23 @@ export const en = {
   'notify.showLess': 'Show less',
   // COMING (2026-10-25) — an account signed up before SeeBuyGet opened in its country (shared/opening).
   'opening.title': 'SeeBuyGet is not open in {country} yet',
+  // 2026-11-04 — asking SeeBuyGet to open in a country, beside every "not open here yet" (shared/opening/AskToOpen.tsx).
+  'opening.ask.button': 'Ask SeeBuyGet to open in {country}',
+  'opening.ask.title': 'Ask SeeBuyGet to open in {country}',
+  'opening.ask.lede': 'Tell us what your business does and why SeeBuyGet is needed in {country}. Every request is counted, country by country, when SeeBuyGet decides where to open next. You get an email now, and another the day {country} opens.',
+  'opening.ask.business': 'What does your business do?',
+  'opening.ask.businessPh': 'For example: a phone shop that sends to its customers',
+  'opening.ask.why': 'Why is SeeBuyGet needed in {country}?',
+  'opening.ask.whyPh': 'What you would send or carry, for whom, and how often',
+  'opening.ask.email': 'Your email',
+  'opening.ask.send': 'Send my request',
+  'opening.ask.sent': 'Thank you: we wrote to {email}',
+  'opening.ask.sentDetail': 'You hear from us again the day SeeBuyGet opens in {country}.',
+  'opening.ask.asked': 'You asked SeeBuyGet to open in {country} on {day}.',
+  'opening.ask.change': 'Change what you told us',
+  // 2026-11-04 — papers uploaded and not sent, in the Shop and Hub apps (shared/papers.ts).
+  'common.papers.waitingTitle': '{count, plural, one {# paper you uploaded is here, not sent yet} other {# papers you uploaded are here, not sent yet}}',
+  'common.papers.waitingBody': 'It is attached to nothing yet, and no screen of SeeBuyGet’s staff shows it. Send your papers before {day}: after that, what you uploaded is deleted.',
   'opening.hub': 'Your hub is signed up. Its floor opens the day SeeBuyGet opens here: nothing is received, sorted or loaded until then. You are told that day, by email.',
   'opening.store': 'Your store is signed up. You can send parcels from the day SeeBuyGet opens here, and you are told that day.',
   'opening.fleet': 'Your fleet is signed up. Your drivers start shifts the day SeeBuyGet opens here, and you are told that day.',
