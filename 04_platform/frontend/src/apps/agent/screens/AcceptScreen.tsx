@@ -1,7 +1,7 @@
 import { AskToOpen } from '../../../shared/opening/AskToOpen';
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField } from '../../../shared/ui';
+import { Button, Card, CheckGate, ErrorNote, Explainer, GlanceNumber, Icon, Note, OptionPicker, OsmCredit, Pill, PlaceMap, ReadAloud, ScanField, Sheet, PhoneField, WeightInput } from '../../../shared/ui';
 import { agentConfig } from '../api';
 import { useT, type Translate } from '../../../shared/i18n';
 import { BODY_HINTS, NATURES, acceptMissing, freightStepMissing, money, parcelStatusWord, pointDistance, selectablePoints, sizeMeta, takeInTermsNotice, termsBlock, termsNeedTelling } from '../logic';
@@ -193,7 +193,6 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
               ['l', t('agent.accept.dimL')],
               ['w', t('agent.accept.dimW')],
               ['h', t('agent.accept.dimH')],
-              ['kg', t('agent.accept.dimKg')],
             ] as const
           ).map(([k, label]) => (
             <div key={k} class="field">
@@ -213,6 +212,13 @@ export function AcceptScreen({ state, actions }: AcceptScreenProps) {
               />
             </div>
           ))}
+          {/* 2026-11-05 — the weight in kilograms or grams; the form still holds kilograms. */}
+          <div class="field">
+            <label class="field__label" for="accept-dim-kg">
+              {t('agent.accept.dimKg')}
+            </label>
+            <WeightInput id="accept-dim-kg" value={f.dims.kg} onInput={(kg) => actions.setDims({ kg } as never)} onBlur={() => void actions.deriveSize()} />
+          </div>
         </div>
         {state.acceptDerived ? (
           <Pill tone={state.acceptDerived.dedicated ? 'warn' : 'info'}>

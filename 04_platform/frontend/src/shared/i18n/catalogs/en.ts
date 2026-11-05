@@ -379,6 +379,15 @@ export const en = {
   'common.chat.dispute.done': 'Report shared with SeeBuyGet.',
   'common.chat.dispute.sharedLine': 'Shared a report with SeeBuyGet (messages chosen: {n}).',
   'common.retry': 'Try again',
+  // 2026-11-05 — a parcel's weight in kilograms or grams (WeightInput).
+  'common.weight.unit': 'Weigh in',
+  'common.weight.kg': 'kg',
+  'common.weight.g': 'g',
+  'common.weight.kilograms': 'Kilograms',
+  'common.weight.grams': 'Grams',
+  'common.weight.inKg': 'Weight in kilograms',
+  'common.weight.inG': 'Weight in grams',
+  'common.weight.atLeast': 'At least 10 g — weigh a lighter letter as 10 g.',
   'common.cancel': 'Cancel',
   // Round 12 — a company's keys for its own systems, said the same way in the Business app and the Fleet app.
   'companyKeys.live': 'Live key',

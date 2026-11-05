@@ -776,6 +776,67 @@
   align-items: flex-start;
 }
 
+/* -------------------------------------------------------- WeightInput -- */
+/* Here and not in ui/ui.css: the Business app (console-styled) loads this sheet and not that one. */
+/* 2026-11-05 — a parcel's weight in kilograms or grams: the unit sits inside the box, on its right, so the weight box
+   stays the height of the three size boxes beside it in the grid. A segmented pair, not a call to action: the chosen
+   unit is raised white on a grey well, as the map's Map / Simple is. */
+.wfield {
+  position: relative;
+}
+
+.wfield__input {
+  padding-right: 96px;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.wfield__input::-webkit-inner-spin-button,
+.wfield__input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.wfield__unit {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: calc(var(--r-ctl) - 3px);
+  background: var(--panel);
+}
+
+.wfield__btn {
+  min-width: 42px;
+  padding: 0 8px;
+  border-radius: calc(var(--r-ctl) - 5px);
+  background: none;
+  color: var(--tx2);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wfield__btn--on {
+  background: var(--bg);
+  color: var(--navy);
+  box-shadow: var(--sh-sm);
+}
+
+.wfield__btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* The console's box is shorter than a field app's: the pair keeps its 2px inside it. */
+.wfield--console .wfield__unit {
+  top: 4px;
+  right: 4px;
+  bottom: 4px;
+}
+
 /* ==========================================================================
    THE SECTIONS LOOK — the field apps, one app per round (2026-11-04; round 1: the Shop).
 

@@ -1594,7 +1594,7 @@ export const words: Record<string, string> = {
   "business.parcels.f.length": "Urefu, cm",
   "business.parcels.f.width": "Upana, cm",
   "business.parcels.f.height": "Kimo, cm",
-  "business.parcels.f.weight": "Uzito, kg",
+  "business.parcels.f.weight": "Uzito",
   "business.parcels.f.fragile": "Kinavunjika kwa urahisi: ni wasafirishaji wanaopokea bidhaa zinazovunjika pekee wanaokibeba",
   "business.parcels.f.photo": "Picha ya kilichomo ndani",
   "business.parcels.f.photoHint": "Kile ambacho ripoti ya uharibifu hulinganishwa nacho. Picha moja kwa kila kifurushi.",

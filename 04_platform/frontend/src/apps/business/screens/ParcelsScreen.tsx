@@ -7,7 +7,7 @@ import { CodeCard } from '../../../shared/ui/CodeCard';
 import { downscaleImage } from '../../../shared/media';
 import { uploadFailureSentence } from '../../../shared/ui/ErrorNote';
 import { failedWords, mediaIdOf, type Uploaded } from '../../../shared/upload';
-import { PaperSheet, usePaper } from '../../../shared/ui';
+import { PaperSheet, usePaper, WeightInput } from '../../../shared/ui';
 import { pageOfSvg } from '../../../shared/ui/paperPreview';
 import { ConsolePick } from '../../tower/ConsolePick';
 import { SitePicker } from '../../tower/screens/SitePicker';
@@ -617,10 +617,12 @@ function SendForm({ api, shops, places, collection, balance, onSent, onCancel }:
               <input class="cinput" inputMode="decimal" value={form[k]} onInput={(e) => set({ [k]: (e.target as HTMLInputElement).value } as Partial<ParcelForm>)} />
             </label>
           ))}
-          <label class="cfield">
-            <span class="chint">{t('business.parcels.f.weight')}</span>
-            <input class="cinput" inputMode="decimal" value={form.kg} onInput={(e) => set({ kg: (e.target as HTMLInputElement).value })} />
-          </label>
+          {/* 2026-11-05 — the weight in kilograms or grams; the form still holds kilograms. Not wrapped in a <label>: the
+              unit buttons are controls of their own, and a label may hold only the one it names. */}
+          <div class="cfield">
+            <label class="chint" for="biz-parcel-kg">{t('business.parcels.f.weight')}</label>
+            <WeightInput id="biz-parcel-kg" console value={form.kg} onInput={(kg) => set({ kg })} />
+          </div>
         </div>
       </fieldset>
       <label class="cfield--check">

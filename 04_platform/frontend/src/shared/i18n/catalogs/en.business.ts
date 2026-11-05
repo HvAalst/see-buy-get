@@ -1653,7 +1653,7 @@ export const enBusiness = {
   'business.parcels.f.length': 'Length, cm',
   'business.parcels.f.width': 'Width, cm',
   'business.parcels.f.height': 'Height, cm',
-  'business.parcels.f.weight': 'Weight, kg',
+  'business.parcels.f.weight': 'Weight',
   'business.parcels.f.fragile': 'Fragile: only carriers that take fragile goods carry it',
   'business.parcels.f.photo': 'Photo of what is inside',
   'business.parcels.f.photoHint': 'What a damage report is read against. One photo for each parcel.',

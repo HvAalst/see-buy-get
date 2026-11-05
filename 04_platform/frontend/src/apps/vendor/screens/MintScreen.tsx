@@ -1,6 +1,6 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useState } from 'preact/hooks';
-import { Button, Card, Checklist, Choice, CodeCard, ErrorNote, Icon, Info, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField } from '../../../shared/ui';
+import { Button, Card, Checklist, Choice, CodeCard, ErrorNote, Icon, Info, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField, WeightInput } from '../../../shared/ui';
 import { useT, type Translate } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import { distanceLabel, haversineKm, type GeoPoint } from '../../../shared/geo';
@@ -130,7 +130,6 @@ function ParcelStep({ state, actions }: MintScreenProps) {
               ['l', 'vendor.mint.dimL'],
               ['w', 'vendor.mint.dimW'],
               ['h', 'vendor.mint.dimH'],
-              ['kg', 'vendor.mint.dimKg'],
             ] as const
           ).map(([k, labelKey]) => (
             <div key={k} class="field">
@@ -150,6 +149,13 @@ function ParcelStep({ state, actions }: MintScreenProps) {
               />
             </div>
           ))}
+          {/* 2026-11-05 — the weight in kilograms or grams; the form still holds kilograms. */}
+          <div class="field">
+            <label class="field__label" for="dim-kg">
+              {t('vendor.mint.dimKg')}
+            </label>
+            <WeightInput id="dim-kg" value={f.kg} onInput={(kg) => actions.setForm({ kg } as never)} onBlur={() => void actions.classify()} />
+          </div>
         </div>
         {f.derivedSize ? <Pill tone="info">{t('vendor.mint.sizeTier', { size: f.derivedSize })}</Pill> : <p class="card__note">{t('vendor.mint.fillAll')}</p>}
         {f.dedicatedCargo ? (

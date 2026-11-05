@@ -186,7 +186,7 @@ export const words: Record<string, string> = {
   "send.parcel.dimL": "ርዝመት cm",
   "send.parcel.dimW": "ስፋት cm",
   "send.parcel.dimH": "ቁመት cm",
-  "send.parcel.dimKg": "ክብደት kg",
+  "send.parcel.dimKg": "ክብደት",
   "send.parcel.fillHint": "አራቱንም ይሙሉ፣ ከዚያ ይቀጥሉ — የመጠን ደረጃው ለእርስዎ ይሰላል።",
   "send.parcel.fragile": "ተሰባሪ — በሁለት ጎማ ተሽከርካሪ አይጓጓዝ",
   "send.parcel.dedicatedTitle": "ለጥቅል አውታረ መረቡ በጣም ትልቅ ነው",

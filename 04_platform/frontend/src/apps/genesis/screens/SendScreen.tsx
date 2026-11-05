@@ -1,6 +1,6 @@
 import { Abbreviated } from '../../../shared/ui/Abbr';
 import { useEffect, useState } from 'preact/hooks';
-import { Button, Card, Checklist, ErrorNote, Icon, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField } from '../../../shared/ui';
+import { Button, Card, Checklist, ErrorNote, Icon, Note, OsmCredit, PlaceMap, Pill, ReadAloud, ShopDetailSheet, PhoneField, WeightInput } from '../../../shared/ui';
 import { useT } from '../../../shared/i18n';
 import { fromPlaceWords } from '../../../shared/placewords';
 import type { GeoPoint } from '../../../shared/geo';
@@ -84,7 +84,6 @@ function ParcelStep({ state, actions }: SendScreenProps) {
               ['l', 'send.parcel.dimL'],
               ['w', 'send.parcel.dimW'],
               ['h', 'send.parcel.dimH'],
-              ['kg', 'send.parcel.dimKg'],
             ] as const
           ).map(([k, labelKey]) => (
             <div key={k} class="field">
@@ -103,6 +102,13 @@ function ParcelStep({ state, actions }: SendScreenProps) {
               />
             </div>
           ))}
+          {/* 2026-11-05 — the weight in kilograms or grams (a letter is 20 g, not 0.02 kg); the form still holds kilograms. */}
+          <div class="field">
+            <label class="field__label" for="send-dim-kg">
+              {t('send.parcel.dimKg')}
+            </label>
+            <WeightInput id="send-dim-kg" value={state.dims.kg} onInput={(kg) => actions.setDims({ kg } as never)} />
+          </div>
         </div>
         {derived ? <Pill tone={derived.dedicated ? 'warn' : 'info'}>{`${sizeMeta(derived.size, t).label} — ${sizeMeta(derived.size, t).hint}`}</Pill> : <p class="card__note">{t('send.parcel.fillHint')}</p>}
         <label class="checkline" style="margin-top:12px">

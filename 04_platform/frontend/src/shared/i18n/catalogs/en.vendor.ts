@@ -542,7 +542,7 @@ export const enVendor = {
   'vendor.mint.dimL': 'Length cm',
   'vendor.mint.dimW': 'Width cm',
   'vendor.mint.dimH': 'Height cm',
-  'vendor.mint.dimKg': 'Weight kg',
+  'vendor.mint.dimKg': 'Weight',
   'vendor.mint.sizeTier': 'Size tier {size}',
   'vendor.mint.fillAll': 'Fill all four and the tier appears.',
   'vendor.mint.tooBigTitle': 'Too big for the parcel network',

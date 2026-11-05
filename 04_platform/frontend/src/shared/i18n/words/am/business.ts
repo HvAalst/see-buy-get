@@ -1594,7 +1594,7 @@ export const words: Record<string, string> = {
   "business.parcels.f.length": "ርዝመት፣ cm",
   "business.parcels.f.width": "ስፋት፣ cm",
   "business.parcels.f.height": "ቁመት፣ cm",
-  "business.parcels.f.weight": "ክብደት፣ kg",
+  "business.parcels.f.weight": "ክብደት",
   "business.parcels.f.fragile": "ተሰባሪ፦ የሚያጓጉዙት ተሰባሪ ዕቃዎችን የሚወስዱ አጓጓዦች ብቻ ናቸው",
   "business.parcels.f.photo": "የውስጡ ፎቶ",
   "business.parcels.f.photoHint": "የጉዳት ሪፖርት የሚመሳከርበት። ለእያንዳንዱ ጥቅል አንድ ፎቶ።",

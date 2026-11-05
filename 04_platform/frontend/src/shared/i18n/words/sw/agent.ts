@@ -340,7 +340,7 @@ export const words: Record<string, string> = {
   "agent.accept.dimL": "Urefu cm",
   "agent.accept.dimW": "Upana cm",
   "agent.accept.dimH": "Kimo cm",
-  "agent.accept.dimKg": "Uzito kg",
+  "agent.accept.dimKg": "Uzito",
   "agent.accept.sizePill": "Ukubwa {label} — {hint}",
   "agent.accept.dimsNote": "Jaza vyote vinne — ukubwa unakokotolewa kwa ajili yako, hivyo hakuna cha kubishana baadaye.",
   "agent.accept.fragileCheck": "Kinavunjika — kisibebwe kwa vyombo vya magurudumu mawili",

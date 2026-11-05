@@ -186,7 +186,7 @@ export const words: Record<string, string> = {
   "send.parcel.dimL": "Urefu cm",
   "send.parcel.dimW": "Upana cm",
   "send.parcel.dimH": "Kimo cm",
-  "send.parcel.dimKg": "Uzito kg",
+  "send.parcel.dimKg": "Uzito",
   "send.parcel.fillHint": "Jaza vyote vinne, kisha endelea — daraja la ukubwa linahesabiwa kwa ajili yako.",
   "send.parcel.fragile": "Kinavunjika kwa urahisi — kisibebwe kwa magurudumu mawili",
   "send.parcel.dedicatedTitle": "Kikubwa mno kwa mtandao wa vifurushi",

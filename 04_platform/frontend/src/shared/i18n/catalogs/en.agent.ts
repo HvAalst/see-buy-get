@@ -404,7 +404,7 @@ export const enAgent = {
   'agent.accept.dimL': 'Length cm',
   'agent.accept.dimW': 'Width cm',
   'agent.accept.dimH': 'Height cm',
-  'agent.accept.dimKg': 'Weight kg',
+  'agent.accept.dimKg': 'Weight',
   'agent.accept.sizePill': 'Size {label} — {hint}',
   'agent.accept.dimsNote': 'Fill all four — the size is worked out for you, so there is nothing to argue about later.',
   'agent.accept.fragileCheck': 'Fragile — keep it off two-wheelers',

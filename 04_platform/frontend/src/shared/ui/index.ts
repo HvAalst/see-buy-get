@@ -56,6 +56,7 @@ export { CodeCard, type CodeCardProps } from './CodeCard';
 export { PlaceMap, type PlaceMapLine, type PlaceMapPin, type PlaceMapProps } from './PlaceMap';
 export { OsmCredit } from './OsmCredit';
 export { PhoneField, type PhoneFieldProps } from './PhoneField';
+export { WeightInput, readWeightUnit, weightIn, weightKg, type WeightInputProps, type WeightUnit } from './WeightField';
 export { PlacePicker, type PlaceNote, type PlacePickerProps } from './PlacePicker';
 export { PlaceView, PlaceWords, type PlaceViewProps, type PlaceWordsProps } from './PlaceView';
 export { StaticMap, type StaticMapProps } from './StaticMap';

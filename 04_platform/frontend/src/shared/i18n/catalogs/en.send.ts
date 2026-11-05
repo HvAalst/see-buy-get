@@ -227,7 +227,7 @@ export const enSend = {
   'send.parcel.dimL': 'Length cm',
   'send.parcel.dimW': 'Width cm',
   'send.parcel.dimH': 'Height cm',
-  'send.parcel.dimKg': 'Weight kg',
+  'send.parcel.dimKg': 'Weight',
   'send.parcel.fillHint': 'Fill all four, then continue — the size tier is worked out for you.',
   'send.parcel.fragile': 'Fragile — keep it off two-wheelers',
   'send.parcel.dedicatedTitle': 'Too big for the parcel network',
