@@ -903,3 +903,39 @@
 .app--sections .pill--idle {
   background: var(--bd-soft);
 }
+
+/* A LIST OF ROWS WITH A TICK BOX EACH (the Store's shipments and its books) is one panel too. The tick box is a sibling
+   of the row's button (a button cannot hold a button), so the panel holds the pair: the box inside its left edge, the
+   row's own border and tint gone, a line between pairs from where the words start, a picked pair tinted whole. */
+.app--sections .rows:not(:has(> :not(.orow))) {
+  gap: 0;
+  background: var(--card);
+  border: 1px solid var(--bd-soft);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+
+.app--sections .rows:not(:has(> :not(.orow))) > .orow {
+  position: relative;
+  gap: 0;
+  padding-left: 14px;
+}
+
+.app--sections .rows:not(:has(> :not(.orow))) > .orow > .orow__row {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.app--sections .rows:not(:has(> :not(.orow))) > .orow + .orow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 110px;
+  border-top: 1px solid var(--bd-soft);
+}
+
+.app--sections .rows:not(:has(> :not(.orow))) > .orow--on {
+  background: var(--blue-soft);
+}
